@@ -70,6 +70,10 @@
       '.#........#.',
       '.####..####.',
     ],
+    collapse: [
+      '...#....#...', '...#....#...', '...#....#...', '####....####',
+      '............', '............', '####....####', '...#....#...', '...#....#...', '...#....#...',
+    ],
     ball: [
       '....####....',
       '..##...###..',
@@ -600,6 +604,7 @@
       ['Grab / throw', 'U', 'M', 'Y'],
       ['Pause', 'Esc', 'Esc', 'Start'],
     ];
+    if (nativeScreen) rows.push(['Fullscreen', 'F', 'F', '—']);
     const table =
       '<table class="control-table"><thead><tr><th>Action</th><th>P1</th><th>P2</th><th>Gamepad</th></tr></thead><tbody>' +
       rows.map((r) => '<tr>' + r.map((c) => '<td>' + c + '</td>').join('') + '</tr>').join('') +
@@ -897,19 +902,63 @@
   }
   $('lobby-moves').onclick = () => showMoves(settings[editing ? 'p2' : 'p1']);
   $('training-moves').onclick = () => showMoves(world.dogs[0].kind);
-  $('fullscreen').hidden = !document.fullscreenEnabled;
-  $('fullscreen').onclick = async () => {
-    try {
-      if (document.fullscreenElement) await document.exitFullscreen();
-      else await document.documentElement.requestFullscreen();
-    } catch {
-      announce('Fullscreen is unavailable in this window.');
+  const screenRoot = document.documentElement;
+  const nativeScreen = !!((document.fullscreenEnabled && screenRoot.requestFullscreen) ||
+    (document.webkitFullscreenEnabled && screenRoot.webkitRequestFullscreen));
+  const embeddedScreen = !nativeScreen && window.self !== window.top;
+  const inFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  let triedFullscreen = false, switchingScreen = false;
+  function screenLabel() {
+    if (embeddedScreen) return 'Open game in new tab';
+    return inFullscreen() ? 'Exit fullscreen' : 'Enter fullscreen';
+  }
+  function updateFullscreen() {
+    const button = $('fullscreen'), active = inFullscreen(), label = screenLabel();
+    button.hidden = !nativeScreen && !embeddedScreen;
+    button.setAttribute('aria-label', label);
+    button.title = label + ' (F)';
+    button.innerHTML = icon(active ? 'collapse' : 'expand') + '<span>' +
+      (embeddedScreen ? 'Open game' : active ? 'Exit fullscreen' : 'Fullscreen') + '</span>';
+    for (const action of document.querySelectorAll('[data-do="fullscreen"]')) action.textContent = label;
+  }
+  function screenAction() {
+    return nativeScreen || embeddedScreen ?
+      '<button class="utility" type="button" data-do="fullscreen">' + screenLabel() + '</button>' : '';
+  }
+  async function toggleFullscreen(explicit = true) {
+    if (switchingScreen) return;
+    if (!nativeScreen) {
+      if (explicit && embeddedScreen) window.open(location.href, '_blank', 'noopener');
+      return;
     }
-  };
-  document.addEventListener('fullscreenchange', () => {
-    const s = document.fullscreenElement ? 'Exit fullscreen' : 'Enter fullscreen';
-    $('fullscreen').setAttribute('aria-label', s);
-    $('fullscreen').title = s;
+    triedFullscreen = true;
+    switchingScreen = true;
+    try {
+      if (inFullscreen()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+      else if (screenRoot.requestFullscreen) await screenRoot.requestFullscreen({ navigationUI: 'hide' });
+      else await screenRoot.webkitRequestFullscreen();
+    } catch {
+      if (explicit) announce('The game fills this window. Browser fullscreen is unavailable here.');
+    } finally {
+      switchingScreen = false;
+      updateFullscreen();
+    }
+  }
+  $('fullscreen').onclick = () => toggleFullscreen();
+  document.addEventListener('fullscreenchange', updateFullscreen);
+  document.addEventListener('webkitfullscreenchange', updateFullscreen);
+  updateFullscreen();
+  // Use the first play gesture. Leaving fullscreen is respected for the rest of this visit.
+  document.addEventListener('click', (e) => {
+    if (triedFullscreen || !nativeScreen || inFullscreen() || navigator.userActivation?.isActive === false) return;
+    const start = e.target.closest?.('#start, #dispatch-start, [data-stop], [data-reel]');
+    if (start && !start.disabled && (e.isTrusted || navigator.userActivation?.isActive)) toggleFullscreen(false);
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (e.code !== 'KeyF' || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey ||
+      e.target.closest?.('input, textarea, select, [contenteditable=true]')) return;
+    e.preventDefault();
+    if (!e.repeat) toggleFullscreen();
   });
   function updateHUD() {
     if (world.mode === 'adventure') return updateDispatchHUD();
@@ -1093,7 +1142,7 @@
           world.layout.name +
           ' · ' +
           world.objective +
-          '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button><button class="utility" data-do="dispatch-retry">Retry checkpoint</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="moves">Move list</button></div><div class="dialog-actions"><button class="utility" data-do="route">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
+          '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button><button class="utility" data-do="dispatch-retry">Retry checkpoint</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div><div class="dialog-actions"><button class="utility" data-do="route">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
       );
       document.querySelector('[data-do=resume]').focus();
       return;
@@ -1105,7 +1154,7 @@
         icon('play') +
         'Resume</button><button class="utility" data-do="controls">' +
         icon('keyboard') +
-        'Controls</button><button class="utility" data-do="moves">Move list</button></div><div class="dialog-actions"><button class="utility" data-do="rematch">' +
+        'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div><div class="dialog-actions"><button class="utility" data-do="rematch">' +
         icon('reset') +
         'Restart match</button><button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
     );
@@ -1175,6 +1224,7 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if (action === 'fullscreen') toggleFullscreen();
     if (action === 'home') showHome();
     if (action === 'route') showRoute();
     if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpointLit, world.dogs[0].kind);
@@ -2041,6 +2091,11 @@
     if (page === 'match' && !paused && world?.end === null) showPause();
   }
   window.addEventListener('blur', onBlur);
+  const redrawPausedStage = () => {
+    if (page === 'match' && paused && world && view) view.draw($('game'), world, 0, world.time);
+  };
+  if (window.ResizeObserver) new ResizeObserver(redrawPausedStage).observe($('game'));
+  else window.addEventListener('resize', redrawPausedStage);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) onBlur();
   });

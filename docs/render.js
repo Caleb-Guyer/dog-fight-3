@@ -152,12 +152,11 @@
     const ctx = canvas.getContext('2d');
     ctx.save();
     ctx.imageSmoothingEnabled = false;
-    ctx.translate(
-      Math.round(viewportWidth / 2 - center),
-      Math.round(viewportHeight * (picnic ? 0.69 : 0.8) - podiums[0].y),
-    );
-    window.ArenaArt.draw(ctx, config.stage, stageTime);
-    const scale = clamp((viewportHeight * (picnic ? 0.56 : 0.49)) / 77, 1.55, 3.1);
+    const left = Math.round(center - width / 2);
+    const top = Math.round(podiums[0].y - height * (picnic ? 0.69 : 0.8));
+    ctx.translate(-left, -top);
+    window.ArenaArt.draw(ctx, config.stage, stageTime, { left, top, right: left + width, bottom: top + height });
+    const scale = clamp((viewportHeight * (picnic ? 0.56 : 0.49)) / 77, 0.8, 3.1);
     [config.p1, config.p2].forEach((kind, i) => {
       const x = snap(positions[i]),
         y = podiums[i].y;
@@ -1734,7 +1733,7 @@
     ctx.font = '19px "Brawl Pixel", monospace';
     const width = Math.ceil(Math.max(ctx.measureText('Unsteered').width, ctx.measureText(second).width)) + 48;
     const scale = Math.min(clamp(820 / (displayedWidth || 820), 1, 2.15), 460 / width);
-    ctx.translate(28, 18);
+    ctx.translate(28, Math.max(18, Math.ceil((64 * ctx.canvas.width) / (displayedWidth || 1200))));
     ctx.scale(scale, scale);
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
@@ -1826,6 +1825,17 @@
       this.zoom = 1;
       this.cx = 600;
       this.cy = 337.5;
+    }
+    fitCanvas(canvas) {
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      if (!w || !h) return false;
+      // Size the world camera to the display. A single scale keeps the art pixels square.
+      const scale = Math.min(Math.max(675 / h, 720 / w), 2880 / Math.max(w, h));
+      const width = Math.max(1, Math.round(w * scale)), height = Math.max(1, Math.round(h * scale));
+      if (canvas.width === width && canvas.height === height) return false;
+      canvas.width = width;
+      canvas.height = height;
+      return true;
     }
     add(type, x, y, color, life, size, face = 1, details) {
       const behind = type === 'smoke' || type === 'land' || type === 'skid';
@@ -1981,6 +1991,8 @@
       }
     }
     draw(canvas, world, dt, time) {
+      const resized = this.fitCanvas(canvas);
+      const { width, height } = canvas;
       const ctx = canvas.getContext('2d'),
         [a, b] = world.dogs;
       const practice = world.mode === 'training' && world.end === null && world.launchPractice;
@@ -1992,25 +2004,31 @@
       const spread = Math.abs(a.x - b.x);
       const vertical = Math.abs(a.y - b.y);
       const off = [a, b].some((f) => f.x < 155 || f.x > 1045 || f.y > 490 || f.y < 80);
-      const targetZoom =
-        off || reduced.matches ? 1 : clamp(Math.min(1200 / (spread + 505), 675 / (vertical + 345)), 1, 1.5);
-      const blend = 1 - Math.exp(-dt * (targetZoom < this.zoom ? 7.5 : 4));
+      const wideShot = Math.min(1, width / 1200, height / 675);
+      const targetZoom = off || reduced.matches ? wideShot :
+        clamp(Math.min(width / (spread + 505), height / (vertical + 345)), wideShot, 1.5);
+      const blend = resized ? 1 : 1 - Math.exp(-dt * (targetZoom < this.zoom ? 7.5 : 4));
       this.zoom += (targetZoom - this.zoom) * blend;
-      const halfW = 600 / this.zoom,
-        halfH = 337.5 / this.zoom;
-      this.cx += (clamp((a.x + b.x) / 2, halfW, 1200 - halfW) - this.cx) * blend;
-      this.cy += (clamp((a.y + b.y) / 2 - 67, halfH, 675 - halfH) - this.cy) * blend;
+      const halfW = width / (2 * this.zoom), halfH = height / (2 * this.zoom);
+      const centerX = halfW >= 600 ? 600 : clamp((a.x + b.x) / 2, halfW, 1200 - halfW);
+      const centerY = halfH >= 337.5 ? 337.5 : clamp((a.y + b.y) / 2 - 67, halfH, 675 - halfH);
+      this.cx += (centerX - this.cx) * blend;
+      this.cy += (centerY - this.cy) * blend;
       const steady = reduced.matches || this.shakeEnabled === false;
       const sx = steady ? 0 : snap(Math.sin(time * 97) * this.shake, 2),
         sy = steady ? 0 : snap(Math.cos(time * 81) * this.shake * 0.55, 2);
       this.shake = Math.max(0, this.shake - 62 * dt);
       ctx.save();
       ctx.fillStyle = ink;
-      ctx.fillRect(0, 0, 1200, 675);
-      ctx.translate(600 + sx, 337 + sy);
+      ctx.fillRect(0, 0, width, height);
+      ctx.translate(width / 2 + sx, height / 2 + sy);
       ctx.scale(this.zoom, this.zoom);
       ctx.translate(-Math.round(this.cx), -Math.round(this.cy));
-      window.ArenaArt.draw(ctx, world.stage, world.time);
+      const left = Math.round(this.cx) - halfW - sx / this.zoom;
+      const top = Math.round(this.cy) - halfH - sy / this.zoom;
+      window.ArenaArt.draw(ctx, world.stage, world.time, {
+        left, top, right: left + 2 * halfW, bottom: top + 2 * halfH,
+      });
       if (this.launchTrace) launchDirections(ctx, this.launchTrace);
       if (spread > 14) this.leftFighter = a.x < b.x ? 0 : 1;
       fighterTags(ctx, world, this.leftFighter);
@@ -2054,11 +2072,9 @@
       this.effects = this.effects.filter((e) => e.life > 0);
       ctx.restore();
       for (const f of world.dogs) {
-        const x = (f.x - this.cx) * this.zoom + 600,
-          y = (f.y - 35 - this.cy) * this.zoom + 337.5;
-        if (f.stocks <= 0 || (x >= 10 && x <= 1190 && y >= 0 && y <= 679)) continue;
-        const px = clamp(x, 27, 1173),
-          py = clamp(y, 26, 646);
+        const x = (f.x - left) * this.zoom, y = (f.y - 35 - top) * this.zoom;
+        if (f.stocks <= 0 || (x >= 10 && x <= width - 10 && y >= 0 && y <= height + 4)) continue;
+        const px = clamp(x, 27, width - 27), py = clamp(y, 26, height - 29);
         ctx.fillStyle = ink;
         ctx.fillRect(px - 23, py - 23, 46, 46);
         ctx.fillStyle = team[f.index];

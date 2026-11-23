@@ -5,6 +5,7 @@
   const cell = 3;
   const skyWidth = 400;
   const skyHeight = 225;
+  const skyWing = 200;
   const panoramaWidth = 1000;
   const ink = '#252337';
   const cream = '#fff1c7';
@@ -188,9 +189,11 @@
     depot: ['#29324c', '#303a54', '#38465d', '#42536a', '#4d6075', '#5c7081', '#687d89', '#758795'],
   };
   function paintSky(room) {
-    const p = new Brush(skyWidth, skyHeight),
+    const span = skyWidth + skyWing * 2;
+    const p = new Brush(span, skyHeight),
       band = skies[room];
-    p.r(0, 0, skyWidth, skyHeight, band[7]);
+    p.g.translate(skyWing, 0);
+    p.r(-skyWing, 0, span, skyHeight, band[7]);
     const stops = [0, 19, 36, 53, 71, 88, 105, 123, skyHeight];
     const channels = band.map((hex) => [1, 3, 5].map((a) => parseInt(hex.slice(a, a + 2), 16)));
     for (let i = 0; i < band.length - 1; i++) {
@@ -198,7 +201,7 @@
         const y = Math.round(stops[i] + ((stops[i + 1] - stops[i]) * step) / 4);
         const end = Math.round(stops[i] + ((stops[i + 1] - stops[i]) * (step + 1)) / 4);
         const tone = channels[i].map((a, j) => Math.round(a + ((channels[i + 1][j] - a) * step) / 4));
-        p.r(0, y, skyWidth, end - y, 'rgb(' + tone.join(',') + ')');
+        p.r(-skyWing, y, span, end - y, 'rgb(' + tone.join(',') + ')');
       }
     }
     const rng = seeded(room === 'alley' ? 5 : 18);
@@ -216,6 +219,8 @@
       p.r(231, 23, 22, 1, '#b09da9');
       p.r(244, 21, 12, 1, '#b09da9');
       p.r(120, 66, 47, 1, '#dbaba3');
+      cloud(p, -163, 49, 86, 9, '#dab0a7', '#bf9fa5');
+      cloud(p, 468, 19, 66, 9, '#c6a9b0', '#a89baa');
     } else {
       const moonX = room === 'bridge' ? 97 : 244,
         moonY = room === 'bridge' ? 43 : 31;
@@ -232,6 +237,12 @@
       cloud(p, 9, 66, 88, 7, band[4], band[3]);
       cloud(p, 148, 40, 62, 7, band[3], band[2]);
       cloud(p, 305, 58, 107, 10, band[4], band[3]);
+      cloud(p, -145, 51, 64, 7, band[3], band[2]);
+      cloud(p, 480, 25, 46, 6, band[2], band[1]);
+      for (let i = 0; i < 24; i++) {
+        const x = i % 2 ? -skyWing + 12 + Math.floor(rng() * 162) : skyWidth + 21 + Math.floor(rng() * 151);
+        p.dot(x, Math.floor(rng() * 69), i % 4 ? '#8193a1' : '#aeafb1');
+      }
     }
     return p.canvas;
   }
@@ -1570,16 +1581,163 @@
     const floor = terrain.find((s) => !s.thin && x >= s.x1 && x <= s.x2);
     return floor?.y ?? terrain.find((s) => x >= s.x1 && x <= s.x2)?.y;
   }
-  function pan(ctx, bitmap, cameraX, pace, width, height) {
+  const upperHeight = 132,
+    lowerHeight = 136;
+  const upperTone = { alley: '#747b98', bridge: '#2d3c5b', depot: '#39394b' };
+  const lowerTone = { alley: '#81737e', bridge: '#536576', depot: '#373949' };
+
+  function upperYard(room) {
+    const depot = room === 'depot';
+    return piece(room + '-upper', depot ? panoramaWidth : 480, upperHeight, (p) => {
+      const w = p.canvas.width,
+        h = upperHeight;
+      p.r(0, 0, w, h, upperTone[room]);
+      if (depot) {
+        p.r(0, h - 59, w, 59, '#403e50');
+        for (let x = -17; x < w; x += 121) {
+          p.r(x, 0, 6, h, '#353849');
+          p.r(x + 4, 0, 2, h, '#535061');
+          p.line(x + 6, h - 24, x + 69, h - 64, '#343746', 3);
+          p.line(x + 7, h - 24, x + 68, h - 62, '#504e5e');
+          p.line(x + 69, h - 64, x + 120, h - 25, '#343746', 3);
+          p.r(x + 1, h - 27, 2, 2, '#72646b');
+        }
+        p.r(0, h - 64, w, 5, '#343646');
+        p.r(0, h - 63, w, 1, '#4c4959');
+        for (const x of [47, 282, 439, 659, 876]) {
+          p.line(x, h - 62, x, h - 38, '#56505a', 2);
+          p.r(x - 5, h - 39, 13, 3, '#645761');
+          p.r(x - 3, h - 36, 9, 2, '#8e756b');
+        }
+        return;
+      }
+      const bands =
+        room === 'alley'
+          ? ['#777d9a', '#797f9b', '#7c809c', skies.alley[0]]
+          : ['#2f3f5e', '#324261', '#344565', skies.bridge[0]];
+      bands.forEach((tone, i) => p.r(0, Math.round(((i + 1) * h) / 5), w, h, tone));
+      if (room === 'alley') {
+        cloud(p, 34, 82, 59, 5, '#9890a7', '#8c89a1');
+        cloud(p, 289, 42, 44, 5, '#87859e', '#7e819c');
+        p.r(95, 86, 16, 1, '#9290a6');
+      } else {
+        const rng = seeded(621);
+        for (let i = 0; i < 37; i++)
+          p.dot(
+            1 + Math.floor(rng() * (w - 3)),
+            3 + Math.floor(rng() * (h - 6)),
+            i % 4 ? '#697b91' : '#9da9ae',
+          );
+      }
+    });
+  }
+
+  function lowerYard(room, middle) {
+    return piece(room + '-below', panoramaWidth, lowerHeight, (p) => {
+      const w = panoramaWidth,
+        h = lowerHeight,
+        warm = room === 'alley',
+        depot = room === 'depot';
+      const rng = seeded(warm ? 741 : 91);
+      const light = depot ? '#4e4859' : warm ? '#92818a' : '#667789';
+      const dark = depot ? '#323644' : warm ? '#786c78' : '#4f6172';
+      // Pillars and facades continue down from their actual positions in the
+      // parallax layer. Further back, paving and rails lead away in perspective.
+      p.g.drawImage(middle, 0, skyHeight - 1, w, 1, 0, 0, w, 22);
+      const top = depot ? 0 : 13;
+      const shape = [[0, top + 5]];
+      for (let x = 0; x <= w; x += 25)
+        shape.push([x, top + Math.round(3 * Math.cos(x / 113) + 2 * Math.sin(x / 58))]);
+      shape.push([w, h], [0, h]);
+      p.poly(shape, lowerTone[room]);
+      if (depot) {
+        p.r(0, 0, w, 12, '#403e50');
+        for (let x = -17; x < w; x += 121) {
+          p.r(x, 0, 6, 43, '#353849');
+          p.r(x + 4, 0, 2, 42, '#535061');
+          p.r(x - 4, 42, 14, 3, '#444455');
+          p.r(x + 17, 19, 41, 18, '#3a3b4d');
+          for (let s = 0; s < 4; s++) p.r(x + 20, 23 + 3 * s, 35, 1, '#4d495a');
+        }
+      } else {
+        const rail = warm ? '#726a76' : '#4a5d70';
+        for (const [y, slope] of [
+          [32, 14],
+          [62, 23],
+        ]) {
+          for (let x = -4; x < w; x += 10) {
+            const yy = y + Math.round((x * slope) / w);
+            p.line(x, yy - 2, x + 5, yy + 3, dark);
+          }
+          p.line(0, y, w, y + slope, rail);
+          p.line(0, y + 3, w, y + slope + 3, light);
+        }
+        for (const [x, y] of [
+          [90, 33],
+          [480, 39],
+          [787, 43],
+        ]) {
+          p.line(x, y, x + 42, y + 13, rail);
+          p.line(x + 42, y + 13, x + 66, y + 30, rail);
+          p.line(x + 4, y, x + 46, y + 13, light);
+          p.line(x + 46, y + 13, x + 70, y + 30, light);
+          p.r(x + 14, y + 10, 6, 3, dark);
+        }
+        for (const x of [83, 394, 729]) {
+          p.oval(x, 92, 12, 3, dark);
+          p.r(x - 7, 91, 11, 1, light);
+          for (let i = -6; i < 7; i += 4) p.r(x + i, 92, 1, 2, light);
+        }
+      }
+      for (let i = 0; i < 310; i++) {
+        const x = Math.floor(rng() * w),
+          y = 24 + Math.floor(rng() * (h - 24));
+        p.r(x, y, 2 + Math.floor(rng() * 5), 1, i % 3 ? dark : light);
+      }
+    });
+  }
+
+  function distantTile(room, high) {
+    const depot = room === 'depot',
+      warm = room === 'alley';
+    return piece(room + (high ? '-rafters' : '-ballast'), depot ? panoramaWidth : 360, 110, (p) => {
+      const w = p.canvas.width,
+        rng = seeded(high ? 231 : 395);
+      p.r(0, 0, w, 110, high ? upperTone[room] : lowerTone[room]);
+      if (high && depot) {
+        for (let x = -17; x < w; x += 121) {
+          p.r(x, 0, 6, 110, '#353849');
+          p.r(x + 4, 0, 2, 110, '#535061');
+          p.line(x + 4, 35, x + 42, 8, '#353849', 2);
+          p.r(x, 34, 121, 3, '#353849');
+          p.dot(x + 2, 40, '#625866');
+        }
+      } else if (high && warm) {
+        cloud(p, 22, 72, 47, 4, '#83839c', '#7b8099');
+        p.r(233, 44, 16, 1, '#7f829c');
+      } else {
+        const light = high ? '#8b9bab' : depot ? '#484655' : warm ? '#8e7e86' : '#617385';
+        const low = high ? '#566b84' : depot ? '#333543' : warm ? '#7a6f79' : '#4f6172';
+        for (let i = 0; i < (high ? 23 : 88); i++) {
+          const x = Math.floor(rng() * w),
+            y = Math.floor(rng() * 110);
+          p.r(x, y, high ? 1 : 2 + Math.floor(rng() * 5), 1, i % 3 ? low : light);
+        }
+      }
+    });
+  }
+
+  function pan(ctx, bitmap, cameraX, pace, width, y = 0) {
     const span = bitmap.width * cell;
     const shift = Math.round((cameraX * pace) / cell) * cell;
     let x = -(((shift % span) + span) % span);
-    for (; x < width; x += span) ctx.drawImage(bitmap, x, 0, span, height);
+    for (; x < width; x += span) ctx.drawImage(bitmap, x, y, span, bitmap.height * cell);
   }
   function draw(ctx, view) {
     const {
       terrain = [],
       cameraX = 0,
+      top = 0,
       time = 0,
       checkpointX,
       checkpointLit,
@@ -1598,12 +1756,70 @@
         middle: room === 'alley' ? alleyMiddle() : room === 'bridge' ? bridgeMiddle() : depotMiddle(),
       });
     const art = roomArt.get(room);
+    const skyLeft = Math.round((width - skyWidth * cell) / 2);
+    const pace = room === 'alley' ? 0.64 : room === 'bridge' ? 0.68 : 0.79;
+    const bottom = top + height,
+      sceneBottom = skyHeight * cell;
     ctx.save();
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(art.sky, 0, 0, width, height);
-    if (art.town) pan(ctx, art.town, cameraX, 0.23, width, height);
+    ctx.fillStyle = top < 0 ? upperTone[room] : lowerTone[room];
+    ctx.fillRect(0, top, width, height);
+    for (const high of [true, false]) {
+      const edge = high ? -upperHeight * cell : sceneBottom + lowerHeight * cell;
+      const begin = high ? top : Math.max(top, edge),
+        end = high ? Math.min(bottom, edge) : bottom;
+      if (end <= begin) continue;
+      const tile = distantTile(room, high),
+        step = tile.height * cell;
+      for (let y = edge + Math.floor((begin - edge) / step) * step; y < end; y += step)
+        pan(ctx, tile, cameraX, high && room !== 'depot' ? 0.08 : pace, width, y);
+    }
+    if (top < 0 && bottom > -upperHeight * cell)
+      pan(ctx, upperYard(room), cameraX, room === 'depot' ? pace : 0.08, width, -upperHeight * cell);
+    if (bottom > sceneBottom && top < sceneBottom + lowerHeight * cell) {
+      ctx.fillStyle = lowerTone[room];
+      ctx.fillRect(0, sceneBottom, width, lowerHeight * cell);
+      if (art.town) {
+        const base = piece(room + '-footings', panoramaWidth, 22, (p) =>
+          p.g.drawImage(art.town, 0, skyHeight - 1, panoramaWidth, 1, 0, 0, panoramaWidth, 22),
+        );
+        pan(ctx, base, cameraX, 0.23, width, sceneBottom);
+      }
+      pan(ctx, lowerYard(room, art.middle), cameraX, pace, width, sceneBottom);
+    }
+    if (width > art.sky.width * cell) {
+      // Fill the remaining width with only the outer sky. The sun and moon
+      // each belong to the middle of one composition.
+      const margin = skyLeft - skyWing * cell,
+        tileWidth = 146,
+        stride = tileWidth * cell;
+      for (const side of [-1, 1]) {
+        const edge = side < 0 ? margin : margin + art.sky.width * cell;
+        const reach = side < 0 ? edge : width - edge;
+        for (let i = 0; i * stride < reach; i++) {
+          const x = side < 0 ? edge - (i + 1) * stride : edge + i * stride;
+          ctx.save();
+          ctx.translate(i % 2 ? x : x + stride, 0);
+          if (i % 2 === 0) ctx.scale(-1, 1);
+          ctx.drawImage(
+            art.sky,
+            side < 0 ? 0 : art.sky.width - tileWidth,
+            0,
+            tileWidth,
+            skyHeight,
+            0,
+            0,
+            stride,
+            sceneBottom,
+          );
+          ctx.restore();
+        }
+      }
+    }
+    ctx.drawImage(art.sky, skyLeft - skyWing * cell, 0, art.sky.width * cell, sceneBottom);
+    if (art.town) pan(ctx, art.town, cameraX, 0.23, width);
     if (room !== 'depot') {
       const t = motion?.matches ? 2 : time;
       const distance = (t * 6.4 + 72 - (cameraX * 0.11) / cell) % (skyWidth + 86);
@@ -1617,14 +1833,14 @@
         const bird = flightBird(room, frame);
         ctx.drawImage(
           bird,
-          (x * width) / skyWidth,
-          Math.round(((y + Math.sin(t * 0.5 + offset)) * height) / skyHeight),
+          skyLeft + x * cell,
+          Math.round((y + Math.sin(t * 0.5 + offset)) * cell),
           bird.width * cell,
           bird.height * cell,
         );
       }
     }
-    pan(ctx, art.middle, cameraX, room === 'alley' ? 0.64 : room === 'bridge' ? 0.68 : 0.79, width, height);
+    pan(ctx, art.middle, cameraX, pace, width);
     const place = (bitmap, x, y, anchor) => {
       const left = Math.round(x - cameraX - anchor * cell);
       if (left + bitmap.width * cell >= 0 && left <= width)

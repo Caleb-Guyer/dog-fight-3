@@ -52,19 +52,25 @@
         this.shake = Math.max(this.shake, 5);
     }
     draw(canvas, world, dt) {
+      this.fitCanvas(canvas);
+      const { width, height } = canvas;
+      world.setCameraWidth(width);
       const ctx = canvas.getContext('2d'),
         t = world.time,
         l = world.layout;
       const shake =
         reduced.matches || this.shakeEnabled === false ? 0 : Math.sin(t * 86) * Math.min(5, this.shake);
-      const x = Math.round(Math.max(0, Math.min(l.length - 1200, world.cameraX + shake)));
+      const travel = l.length - width;
+      const x = Math.round(travel <= 0 ? travel / 2 : Math.max(0, Math.min(travel, world.cameraX + shake)));
+      const top = height >= 675 ? Math.round((675 - height) / 2) :
+        Math.round(Math.max(0, Math.min(675 - height, world.dogs[0].y - height * 0.65)));
       this.shake = Math.max(0, this.shake - 52 * dt);
       ctx.save();
       ctx.imageSmoothingEnabled = false;
+      ctx.translate(0, -top);
       window.YardArt.draw(ctx, {
         cameraX: x,
-        width: 1200,
-        height: 675,
+        top, width, height,
         time: reduced.matches ? 0 : t,
         terrain: world.terrain,
         room: l.id,

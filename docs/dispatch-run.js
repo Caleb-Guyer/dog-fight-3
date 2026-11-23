@@ -23,8 +23,18 @@
         f.ground = this.floorAt(f.x);
         f.y = this.terrain[f.ground].y;
       }
-      this.cameraX = clamp(f.x - 438, 0, layout.length - 1200);
+      this.cameraWidth = 1200;
+      this.cameraX = this.cameraTarget();
       this.parkOpponent();
+    }
+    cameraTarget() {
+      const travel = this.layout.length - this.cameraWidth;
+      return travel <= 0 ? travel / 2 : clamp(this.dogs[0].x - this.cameraWidth * 0.365, 0, travel);
+    }
+    setCameraWidth(width) {
+      if (width === this.cameraWidth) return;
+      this.cameraWidth = width;
+      this.cameraX = this.cameraTarget();
     }
     floorAt(x) {
       return this.terrain.findIndex((p) => !p.thin && x >= p.x1 && x <= p.x2);
@@ -285,12 +295,7 @@
       }
       this.checkSignal();
       if (!this.gateClosed && hero.ground >= 0 && hero.x >= this.layout.exit - 12) this.finished = 'exit';
-      this.cameraX = clamp(
-        this.cameraX +
-          (clamp(hero.x - 438, 0, this.layout.length - 1200) - this.cameraX) * (1 - Math.exp(-dt * 9)),
-        0,
-        this.layout.length - 1200,
-      );
+      this.cameraX += (this.cameraTarget() - this.cameraX) * (1 - Math.exp(-dt * 9));
     }
   }
   window.DispatchRun = DispatchRun;

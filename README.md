@@ -10,6 +10,8 @@ From the main menu, choose **Adventure**, **Solo fight**, **Local versus**, or *
 
 Each dog starts with three stocks. Dealing damage makes the next hit launch a rival farther. Knock a dog beyond the arena boundary to take a stock. When a hard hit sends you tumbling, you can bend the launch and choose how to land. A midair jump and **Up + Special** can bring you back to the ledge.
 
+The game fills the browser window. On browsers with fullscreen support, starting your first fight or chapter also hides the browser controls. Select **Fullscreen** or press **F** to switch at any time. On a phone, rotate to landscape for a wider view with the touch controls over the arena.
+
 ## The Last Dispatch
 
 Choose **Adventure → Begin chapter** to play Chapter 1, **The Silent Yard**. The six o’clock train rolls past without ringing the depot bell. Follow Noodle’s turquoise envelope through three connected stops.

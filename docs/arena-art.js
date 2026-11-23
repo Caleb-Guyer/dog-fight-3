@@ -488,7 +488,7 @@
   }
 
   function ground(p) {
-    p.r(0, 142, 400, 84, '#91a779');
+    p.r(0, 142, 400, H - 142, '#91a779');
     p.poly(
       [
         0, 147, 44, 146, 57, 147, 87, 146, 110, 148, 165, 148, 186, 146, 228, 146, 264, 148, 314, 147, 354,
@@ -611,8 +611,7 @@
     });
   }
 
-  function buildPicnic() {
-    const p = new Pixels(W, H);
+  function buildPicnic(p = new Pixels(W, H)) {
     distantGarden(p);
     fan(p, 22, 110, '#665c53', '#caab82', '#8c735e', '#b66d58');
     fan(p, 35, 112, '#68746a', '#c5c1a1', '#929b84', '#68948a', true);
@@ -741,7 +740,7 @@
     p.poly([x - 8, y - 12, x - 2, y - 17, x + 1, y - 17, x + 8, y - 12], sh);
   }
 
-  function city(p) {
+  function city(p, depth) {
     p.r(0, 0, 400, 225, '#e4a58e');
     p.poly(
       [
@@ -803,7 +802,7 @@
       [324, 100, 32],
       [356, 87, 20],
       [377, 98, 27],
-    ].forEach(([x, y, w]) => cityBuilding(p, x, y, w, 225, far, false));
+    ].forEach(([x, y, w]) => cityBuilding(p, x, y, w, depth, far, false));
     tower(p, 68, 101);
     tower(p, 330, 108);
     [
@@ -823,7 +822,7 @@
       [324, 122, 39],
       [361, 108, 19],
       [380, 118, 29],
-    ].forEach(([x, y, w]) => cityBuilding(p, x, y, w, 225, mid, true));
+    ].forEach(([x, y, w]) => cityBuilding(p, x, y, w, depth, mid, true));
     mast(p, 110, 110, '#9f8b8f');
     mast(p, 262, 101, '#9c8a8e');
     [
@@ -843,7 +842,7 @@
       [332, 158, 32],
       [364, 151, 24],
       [387, 161, 20],
-    ].forEach(([x, y, w]) => cityBuilding(p, x, y, w, 225, near, true));
+    ].forEach(([x, y, w]) => cityBuilding(p, x, y, w, depth, near, true));
     // A row of pitched slate roofs between the flat brick terraces.
     [
       [1, 153],
@@ -922,9 +921,8 @@
     });
   }
 
-  function buildLaundry() {
-    const p = new Pixels(W, H);
-    city(p);
+  function buildLaundry(p = new Pixels(W, H), depth = H) {
+    city(p, depth);
     clothesWire(
       p,
       [-3, 29, 18, 34, 40, 36, 60, 34, 88, 25, 107, 13, 128, -2],
@@ -1136,12 +1134,309 @@
     });
   }
 
-  function draw(ctx, stageId, seconds = 0) {
+  // The center and the two open sidelines share a pixel grid. Only these outer
+  // neighborhoods repeat when the viewport extends beyond the painted panorama.
+  const wing = 246,
+    above = 112,
+    below = 133;
+
+  function sidelines(p, laundry) {
+    const tone = laundry ? '#84757c' : '#778373';
+    for (const [x, lean] of [
+      [-43, -4],
+      [445, 5],
+    ]) {
+      p.poly([x - 2, 134, x + lean - 1, -46, x + lean + 1, -46, x + 1, 134], tone);
+      p.r(x + lean - 3, -46, 7, 2, tone);
+    }
+    const cord = laundry ? '#8e7c83' : '#80928b';
+    const tie = laundry ? '#776774' : '#645c64';
+    const points = [-47, -45, 16, -37, 100, -31, 165, -28, 207, -27, 239, -28, 333, -32, 402, -38, 450, -45];
+    for (let i = 2; i < points.length; i += 2) p.line(...points.slice(i - 2, i + 2), cord);
+    p.line(laundry ? 128 : 127, laundry ? -2 : -1, 165, -28, tie);
+    p.line(laundry ? 273 : 290, laundry ? -3 : -1, 239, -28, tie);
+    p.line(-47, laundry ? 13 : -16, laundry ? -3 : -8, laundry ? 29 : 6, tie);
+    p.line(405, laundry ? 25 : 14, 449, laundry ? 11 : -4, tie);
+    if (laundry) {
+      p.line(-45, 64, -4, 76, '#8b7d82');
+      p.line(403, 78, 448, 65, '#8b7d82');
+    }
+  }
+
+  function widerGarden(p) {
+    const left = -wing,
+      right = W + wing,
+      bottom = H + below;
+    p.r(left, -above, right - left, bottom + above, '#8bbfc2');
+    p.poly([left, 74, -120, 70, 0, 78, 400, 68, 521, 75, right, 69, right, 150, left, 150], '#a8ccbd');
+    cloud(p, -198, 30, 0.83, '#e6e8c9', '#b9cfc0', cream);
+    cloud(p, 485, 9, 1.1, '#eeebcf', '#bdd3c1', cream);
+    cloud(p, 73, -77, 0.76, '#c4d9ce', '#a0c8c6', '#d6e4d5', true);
+    birds(p, -92, 45, '#7da2a0');
+    birds(p, 469, -48, '#8caeab');
+    const rng = random(3139);
+    for (let x = left - 22; x < right; x += 37) {
+      crown(
+        p,
+        x,
+        82 + Math.floor(rng() * 9),
+        56,
+        35,
+        ['#88aa94', '#97b49a', '#abc3a2', '#b6c9a5'],
+        rng() > 0.5,
+      );
+    }
+    for (const [x, y, w] of [
+      [-227, 97, 43],
+      [-163, 92, 52],
+      [-84, 98, 42],
+      [411, 99, 50],
+      [474, 92, 43],
+      [558, 96, 51],
+    ]) {
+      house(p, x, y, w, '#82938b', '#c2c3a2', '#9ea88e');
+      if (w > 48) gable(p, x + 12, y - 6, '#809388', '#c2c2a1', '#a0a891');
+    }
+    for (let x = left - 15; x < right; x += 35) {
+      crown(
+        p,
+        x,
+        100 + Math.floor(rng() * 8),
+        49,
+        33,
+        ['#688b78', '#789b7f', '#91ac88', '#a1b28b'],
+        rng() > 0.5,
+      );
+    }
+    sidelines(p, false);
+    for (const x of [-208, -111, 500, 611]) {
+      trunk(p, x, 144, 1, '#657464', '#918f70');
+      crown(p, x - 31, 58 + Math.round(rng() * 12), 65, 51, ['#596f68', '#708c71', '#8da67b', '#aabd91']);
+    }
+    for (const offset of [-W, W]) {
+      p.g.save();
+      p.g.translate(offset, 0);
+      fence(p);
+      p.g.restore();
+    }
+    p.r(left, 142, right - left, bottom - 142, '#91a779');
+    for (const [a, b, c] of [
+      [147, 148, '#849a70'],
+      [171, 160, '#78916c'],
+      [208, 181, '#6d8466'],
+    ]) {
+      p.poly(
+        [left, a - 4, -116, a + 2, 0, a, W, b, 498, b + 3, right, b - 1, right, bottom, left, bottom],
+        c,
+      );
+    }
+    for (let i = 0; i < 325; i++) {
+      const x = left + Math.floor(rng() * (right - left)),
+        y = 147 + Math.floor(rng() * (bottom - 147));
+      if (i % 5 === 0) grass(p, x, y, 1, '#627b5e', '#90a171');
+      else if (i % 19 === 0) flower(p, x, y, '#d6cfa0', false);
+      else p.r(x, y, 2 + Math.floor(rng() * 5), 1, i % 2 ? '#758b68' : '#697f63');
+    }
+    // Continue the four specific A-frame members off the old crop and bury
+    // their bevelled ends in the lawn.
+    for (const [xl, xr, dx, h, front] of [
+      [162, 184, 8, 10, 0],
+      [210, 230, -8, 10, 0],
+      [93, 115, -20, 26, 1],
+      [285, 309, 21, 26, 1],
+    ]) {
+      p.disk(Math.round((xl + xr) / 2 + dx + 5), 226 + h, front ? 23 : 17, 2, '#62795e');
+      p.poly(
+        [xl, 226, xr, 226, xr + dx, 226 + h, xl + dx + 2, 227 + h, xl + dx, 225 + h],
+        front ? ink : '#634e48',
+      );
+      p.poly(
+        [xl + (front ? 3 : 2), 226, xr - (front ? 2 : 4), 226, xr + dx - 3, 224 + h, xl + dx + 3, 225 + h],
+        front ? '#b27a52' : '#84634d',
+      );
+      if (front) {
+        const stripe = dx < 0 ? 6 : 14;
+        p.poly(
+          [xl + stripe, 226, xl + stripe + 4, 226, xl + stripe + dx + 4, 224 + h, xl + stripe + dx, 224 + h],
+          '#d69a61',
+        );
+        grass(p, xl + dx + 3, 228 + h, 1, '#536f59', '#92a173');
+      }
+    }
+    buildPicnic(p);
+  }
+
+  function widerCity(p) {
+    const left = -wing,
+      right = W + wing,
+      bottom = H + below;
+    p.r(left, -above, right - left, bottom + above, '#e4a58e');
+    for (const [a, b, tone] of [
+      [24, 22, '#e9ad90'],
+      [40, 36, '#edb68e'],
+      [55, 50, '#efbf93'],
+      [69, 63, '#f3c895'],
+    ]) {
+      p.poly(
+        [left, a - 1, -98, a + 2, 0, a, W, b, 512, b - 3, right, b + 1, right, bottom, left, bottom],
+        tone,
+      );
+    }
+    cloud(p, -174, 32, 0.74, '#edc1a1', '#d7a799', '#f3ccaa');
+    cloud(p, 483, 44, 0.99, '#f3c9a4', '#dcad97', '#f9d5a7');
+    cloud(p, 143, -64, 0.73, '#e9b49f', '#daa195', '#efbfa7', true);
+    birds(p, 523, 9, '#bb9890');
+    const rng = random(3221);
+    for (const [base, colors, detail] of [
+      [95, ['#c7aa9a', '#d6b5a0', '#bea499', '#ddbea6'], false],
+      [118, ['#a89494', '#bb9f96', '#9f8c91', '#c7aaa0'], true],
+      [157, ['#84838a', '#a39592', '#777987', '#b6a196'], true],
+    ]) {
+      let x = left - 14;
+      while (x < right) {
+        const w = 16 + Math.floor(rng() * 25),
+          y = base + Math.round(rng() * 17 - 8);
+        cityBuilding(p, x, y, w, bottom, colors, detail);
+        if (base === 118 && w > 34) tower(p, x + 12, y - 2);
+        x += w;
+      }
+    }
+    sidelines(p, true);
+    buildLaundry(p, bottom);
+    // Rows of distant windows end at the far pavement. Slant the cobbles
+    // into the street so this plane reads behind the foreground rooftops.
+    const street = [
+      left,
+      259,
+      -143,
+      255,
+      -51,
+      254,
+      52,
+      249,
+      139,
+      248,
+      233,
+      243,
+      328,
+      242,
+      401,
+      238,
+      513,
+      237,
+      right,
+      232,
+    ];
+    p.poly([...street, right, bottom, left, bottom], '#8d8890');
+    const gutter = street.map((v, i) => (i % 2 ? v + 9 : v));
+    p.poly([...gutter, right, bottom, left, bottom], '#817f89');
+    for (let i = 0; i < 145; i++) {
+      const x = left + Math.floor(rng() * (right - left)),
+        y = 262 + Math.floor(rng() * (bottom - 262));
+      p.r(x, y, 2 + Math.floor(rng() * 7), 1, i % 3 ? '#87838c' : '#797984');
+    }
+    for (const [x, y] of [
+      [-181, 291],
+      [-62, 278],
+      [179, 295],
+      [392, 264],
+      [505, 311],
+    ]) {
+      p.disk(x, y, 11, 3, '#767781');
+      p.r(x - 8, y + 2, 13, 1, '#989098');
+      for (let k = -5; k < 6; k += 3) p.r(x + k, y - 1, 1, 2, '#918b93');
+    }
+    for (const [x, cool] of [
+      [43, false],
+      [227, true],
+    ]) {
+      const dark = cool ? '#65767a' : '#946f6e',
+        shade = cool ? '#576771' : '#80636b';
+      p.poly([x + 8, 268, x + 121, 269, x + 134, 275, x + 161, 280, x + 35, 280, x - 3, 274], '#777580');
+      p.r(x + 4, 226, 122, 9, dark);
+      p.r(x + 7, 234, 117, 28, shade);
+      p.r(x + 8, 262, 114, 13, shade);
+      for (let bx = 12; bx < 112; bx += 24) {
+        p.r(x + bx, 240, 12, 16, cool ? '#556370' : '#765f69');
+        p.r(x + bx + 1, 241, 2, 13, cool ? '#738186' : '#9b7973');
+        p.r(x + bx, 257, 13, 1, dark);
+      }
+      p.r(x + 9, 271, 112, 4, cool ? '#576572' : '#7d646c');
+    }
+  }
+
+  function surroundings(ctx, key, b) {
+    const laundry = key === 'laundry',
+      edge = wing * 3,
+      top = -above * 3,
+      bottom = (H + below) * 3;
+    const art = sprite(key + '-surroundings', W + 2 * wing, H + above + below, (p) => {
+      p.g.translate(wing, above);
+      if (laundry) widerCity(p);
+      else widerGarden(p);
+    });
+    if (b.top < top || b.bottom > bottom) {
+      for (const high of [true, false]) {
+        const begin = high ? b.top : Math.max(bottom, b.top);
+        const end = high ? Math.min(top, b.bottom) : b.bottom;
+        if (end <= begin) continue;
+        const tile = sprite(key + (high ? '-height' : '-depth'), 256, 96, (p) => {
+          const rng = random(high ? 990 : 112);
+          p.r(0, 0, 256, 96, high ? (laundry ? '#e4a58e' : '#8bbfc2') : laundry ? '#817f89' : '#6d8466');
+          for (let i = 0; i < (high ? 4 : 58); i++) {
+            const x = Math.floor(rng() * 237),
+              y = Math.floor(rng() * 88);
+            if (high) p.r(x, y, 6 + Math.floor(rng() * 12), 1, laundry ? '#eab29b' : '#9fc9c6');
+            else if (laundry) p.r(x, y, 3 + Math.floor(rng() * 6), 1, i % 3 ? '#87838c' : '#797984');
+            else grass(p, x, y, 1, '#647b5f', '#81946c');
+          }
+        });
+        const anchor = high ? top : bottom,
+          w = tile.width * 3,
+          h = tile.height * 3;
+        for (let y = anchor + Math.floor((begin - anchor) / h) * h; y < end; y += h) {
+          for (let x = Math.floor(b.left / w) * w; x < b.right; x += w) ctx.drawImage(tile, x, y, w, h);
+        }
+      }
+    }
+    if (b.top >= bottom || b.bottom <= top) return;
+    ctx.drawImage(art, -edge, top, art.width * 3, art.height * 3);
+    // Only the outer 144 pixels are distant, repeatable neighborhood art.
+    const tileWidth = 144,
+      stride = tileWidth * 3;
+    for (const side of [-1, 1]) {
+      const boundary = side < 0 ? -edge : 1200 + edge;
+      const reach = side < 0 ? boundary - b.left : b.right - boundary;
+      const first = Math.max(0, Math.floor((side < 0 ? boundary - b.right : b.left - boundary) / stride));
+      for (let i = first; i * stride < reach; i++) {
+        const x = side < 0 ? boundary - (i + 1) * stride : boundary + i * stride;
+        ctx.save();
+        ctx.translate(i % 2 ? x : x + stride, top);
+        if (i % 2 === 0) ctx.scale(-1, 1);
+        ctx.drawImage(
+          art,
+          side < 0 ? 0 : art.width - tileWidth,
+          0,
+          tileWidth,
+          art.height,
+          0,
+          0,
+          stride,
+          art.height * 3,
+        );
+        ctx.restore();
+      }
+    }
+  }
+
+  function draw(ctx, stageId, seconds = 0, bounds) {
     const laundry = stageId === 'laundry',
       key = laundry ? 'laundry' : 'picnic';
     if (!scenes.has(key)) scenes.set(key, laundry ? buildLaundry() : buildPicnic());
     ctx.save();
     ctx.imageSmoothingEnabled = false;
+    if (bounds && (bounds.left < 0 || bounds.top < 0 || bounds.right > 1200 || bounds.bottom > 675))
+      surroundings(ctx, key, bounds);
     ctx.drawImage(scenes.get(key), 0, 0, 1200, 675);
     if (laundry) {
       ctx.drawImage(roof(false), 130, 450, 390, 228);

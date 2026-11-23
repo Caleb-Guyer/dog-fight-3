@@ -103,8 +103,7 @@ i[data-icon] svg {
   height: 100%;
 }
 .shell {
-  width: min(1152px, calc(100% - 64px));
-  margin-inline: auto;
+  width: 100%;
 }
 .bar-content {
   min-height: 86px;
@@ -581,8 +580,6 @@ body.playing .tools .utility,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: min(100%, calc((100svh - 153px) * 16 / 9));
-  margin: 3px auto 7px;
 }
 .match-top > div {
   display: flex;
@@ -602,12 +599,7 @@ body.playing .tools .utility,
 .play-window {
   position: relative;
   isolation: isolate;
-  width: min(100%, calc((100svh - 153px) * 16 / 9));
-  aspect-ratio: 16/9;
-  margin: auto;
   overflow: hidden;
-  border: 3px solid #100f1b;
-  outline: 1px solid #6b6074;
   background: var(--ink);
 }
 #game {
@@ -616,10 +608,6 @@ body.playing .tools .utility,
   height: 100%;
   outline: none;
   touch-action: none;
-}
-.training-active .play-window,
-.training-active .match-top {
-  width: min(100%, calc((100svh - 197px) * 16 / 9));
 }
 .hud {
   position: absolute;
@@ -1039,9 +1027,6 @@ dialog[data-view='moves'] {
   }
 }
 @media (max-width: 930px) {
-  .shell {
-    width: calc(100% - 32px);
-  }
   .coin-panel {
     gap: 13px;
     grid-template-columns: minmax(180px, 1fr) auto minmax(145px, 0.65fr);
@@ -1081,9 +1066,6 @@ dialog[data-view='moves'] {
   }
 }
 @media (max-width: 740px) {
-  .shell {
-    width: calc(100% - 24px);
-  }
   .bar-content {
     min-height: 65px;
     padding-block: 9px;
@@ -1206,12 +1188,6 @@ dialog[data-view='moves'] {
   .toggle-value {
     font-size: 10px;
   }
-  .match-top,
-  .play-window,
-  .training-active .play-window,
-  .training-active .match-top {
-    width: 100%;
-  }
   .match-top h1 {
     font-size: 17px;
   }
@@ -1255,9 +1231,6 @@ dialog[data-view='moves'] {
   .cabinet {
     border-width: 3px;
     box-shadow: 3px 3px #a99b82;
-  }
-  .full-button {
-    display: none;
   }
   .tools .utility {
     font-size: 12px;
@@ -1310,9 +1283,6 @@ dialog[data-view='moves'] {
   }
 }
 @media (max-width: 350px) {
-  .shell {
-    width: calc(100% - 14px);
-  }
   .wordmark {
     width: 148px;
   }
@@ -1386,64 +1356,6 @@ dialog[data-view='moves'] {
   }
   .play-hints {
     display: none;
-  }
-}
-@media (max-height: 540px) and (orientation: landscape) {
-  body.playing .topbar {
-    display: none;
-  }
-  body.playing main {
-    width: 100%;
-    max-width: 100%;
-  }
-  .match-top {
-    position: absolute;
-    z-index: 2;
-    top: 3px;
-    right: 4px;
-    width: auto;
-    margin: 0;
-  }
-  .match-top > div {
-    display: none;
-  }
-  .match-top .utility {
-    min-height: 28px;
-  }
-  .play-window {
-    width: min(100%, calc((100svh - 4px) * 16 / 9));
-  }
-  .play-hints {
-    display: none;
-  }
-  .touch-pad {
-    position: absolute;
-    bottom: 2px;
-    left: 1%;
-    right: 1%;
-    width: 98%;
-    max-width: none;
-    margin: 0;
-    pointer-events: none;
-  }
-  .touch-pad button {
-    pointer-events: auto;
-  }
-  .hud {
-    top: 3%;
-    bottom: auto;
-    right: 15%;
-  }
-  .training-active .match-top {
-    width: auto;
-  }
-  .training-active .play-window {
-    width: min(100%, calc((100svh - 54px) * 16 / 9));
-  }
-  .training-readouts {
-    right: 50%;
-    transform: translateX(50%);
-    justify-items: center;
   }
 }
 @media (prefers-reduced-motion: reduce) {

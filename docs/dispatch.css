@@ -3,9 +3,6 @@
   background: #202331;
   background-image: repeating-linear-gradient(135deg, #242735 0 2px, transparent 2px 13px);
 }
-.menu-screen .shell {
-  width: min(1172px, calc(100% - 64px));
-}
 .menu-screen .bar-content {
   min-height: 92px;
 }
@@ -305,9 +302,6 @@
 .cinema-active {
   background: #171a26;
 }
-.cinema-active .shell {
-  width: min(1050px, calc(100% - 32px), max(53vw, calc((100svh - 285px) * 16 / 9)));
-}
 .cinema-active .bar-content {
   min-height: 45px;
   padding-block: 5px;
@@ -571,9 +565,6 @@
   min-width: 4ch;
 }
 @media (max-width: 760px) {
-  .menu-screen .shell {
-    width: calc(100% - 28px);
-  }
   .menu-screen .bar-content {
     min-height: 65px;
   }
@@ -599,9 +590,6 @@
   }
 }
 @media (max-width: 600px) {
-  .menu-screen .shell {
-    width: calc(100% - 20px);
-  }
   .menu-screen .bar-content {
     min-height: 54px;
     padding: 8px 0;
@@ -671,7 +659,6 @@
   .route-print > div {
     padding: 8px 12px;
   }
-  .cinema-active .shell { width: calc(100% - 12px); }
   .route-actions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
   .film-heading, .film-controls { padding: 8px; gap: 6px; }
   .film-controls { flex-wrap: wrap; }
@@ -706,35 +693,5 @@
   }
   .feature-caption strong {
     font-size: clamp(23px, 7vw, 28px);
-  }
-}
-@media (max-height: 540px) and (orientation: landscape) {
-  .cinema-active .topbar { position: absolute; right: 3px; top: 3px; z-index: 1; border: 0; background: none; }
-  .cinema-active .topbar .shell { width: auto; min-height: 0; padding: 0; }
-  .cinema-active .topbar .tools { flex-direction: column; }
-  .cinema-active .topbar .wordmark, .cinema-active #controls { display: none; }
-  .cinema-active .shell { width: min(100% - 86px, max(405px, calc((100svh - 150px) * 16 / 9))); }
-  .cinema-active .story-board { margin: 2px auto; }
-  .film-heading, .film-controls { padding: 3px 8px; }
-  .film-heading h1 { font-size: 18px; }
-  .film-heading button, .film-controls button { min-height: 26px; padding-block: 4px; }
-  .film-caption { min-height: 0; padding: 4px 8px; }
-  .film-caption p { font-size: 15px; line-height: 1.15; }
-  .adventure-active .play-window {
-    width: min(100%, calc((100svh - 34px) * 16 / 9));
-  }
-  .adventure-active .dispatch-orders {
-    position: absolute;
-    bottom: 0;
-    left: 24%;
-    right: 24%;
-    justify-content: center;
-    padding: 4px;
-  }
-  .adventure-active #dispatch-marks {
-    display: none;
-  }
-  .adventure-active .machine-meter {
-    margin-right: 45px;
   }
 }
