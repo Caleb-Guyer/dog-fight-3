@@ -12,13 +12,13 @@
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="./style.css?v=screen-1" />
-    <link rel="stylesheet" href="./dispatch.css?v=stocks-1" />
+    <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=missions-1" />
     <script defer src="./fighters-art.js?v=dispatch-1"></script>
     <script defer src="./arena-art.js?v=screen-1"></script>
     <script defer src="./engine.js?v=stocks-1"></script>
     <script defer src="./render.js?v=stocks-1"></script>
-    <script defer src="./dispatch-script.js?v=stocks-1"></script>
+    <script defer src="./dispatch-script.js?v=chapter-lead-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
     <script defer src="./dispatch-covers.js?v=missions-1"></script>
@@ -28,9 +28,9 @@
     <script defer src="./film-ending.js?v=widefilm-1"></script>
     <script defer src="./dispatch-film.js?v=widefilm-1"></script>
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
-    <script defer src="./dispatch-run.js?v=stocks-1"></script>
+    <script defer src="./dispatch-run.js?v=chapter-lead-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./app.js?v=stocks-1"></script>
+    <script defer src="./app.js?v=chapter-lead-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -122,7 +122,10 @@
           <div class="route-manifest">
             <h2>Route sheet</h2>
             <ol id="route-stops"></ol>
-            <div id="route-crew" class="route-crew" role="group" aria-label="Choose a runner"></div>
+            <div class="route-runner">
+              <img id="route-runner-portrait" width="28" height="28" alt="" />
+              <span>Playing as <strong id="route-runner-name"></strong></span>
+            </div>
           </div>
         </div>
         <div class="board-foot">

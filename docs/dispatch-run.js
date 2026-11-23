@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const { Battle, idleInput, clamp } = window.DogFight;
-  const { rooms, fightStocks } = window.DispatchScript;
+  const { rooms, chapterFighter, fightStocks } = window.DispatchScript;
   const machines = {
     clipper: { name: 'Ticket Clipper', width: 26, height: 64, weight: 1.03, speed: 157, reach: 59,
       windup: 0.53, damage: 7, base: 155, growth: 3.6 },
@@ -18,11 +18,11 @@
     enemy.duration = duration;
   }
   class DispatchRun extends Battle {
-    constructor({ room = 0, checkpoint = 0, hero = 'pip', stamps = 0, atCheckpoint = null }, emit = () => {}) {
+    constructor({ room = 0, checkpoint = 0, stamps = 0, atCheckpoint = null }, emit = () => {}) {
       const script = rooms[room], saved = script.checkpoints[checkpoint - 1];
       const bridge = script.signals ? new window.DispatchBridge(script, checkpoint) : null;
       const layout = bridge ? { ...script, terrain: bridge.geometry(0) } : script;
-      super({ stage: 'dispatch', layout, mode: 'adventure', p1: hero, p2: 'brisket', fetch: false }, emit);
+      super({ stage: 'dispatch', layout, mode: 'adventure', p1: chapterFighter, p2: 'brisket', fetch: false }, emit);
       this.roomIndex = room;
       this.atCheckpoint = saved && !bridge ? atCheckpoint : null;
       const runner = this.dogs[0];

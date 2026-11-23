@@ -2,6 +2,7 @@
   'use strict';
   const solid = (x1, x2, y) => ({ x1, x2, y, thin: false });
   const shelf = (x1, x2, y) => ({ x1, x2, y, thin: true });
+  const chapterFighter = 'pip';
   const fightStocks = 3;
   const foe = (kind, x, stocks = 1) => ({ kind, x, stocks });
   const rooms = [
@@ -17,7 +18,7 @@
       id: 'weighhouse', name: 'The Weigh House', type: 'Rival duel',
       length: 1120, start: 438, terrain: [solid(145, 975, 508), shelf(235, 419, 407), shelf(698, 883, 407)],
       rules: 'duel',
-      objective: 'Take Brisket’s three stocks. Recover if he knocks you off the scale.',
+      objective: 'Take Brisket’s three stocks to win the freight ticket.',
       waves: [[foe('brisket', 682, fightStocks)]],
       dispatch: 'Brisket yields the weigh ticket. Across the tracks, the idle sorting belts roar back to life.',
     },
@@ -88,7 +89,6 @@
     rescue: {
       art: 'rescue',
       stop: 'weighhouse',
-      chooseRunner: true,
       title: 'Return to sender',
       pages: [
         [
@@ -157,7 +157,6 @@
     return {
       version: 2, started: raw.started === true, room, checkpoint, pending,
       atCheckpoint: checkpoint && rooms[room].rules ? checkpointFighter(raw.atCheckpoint) : null,
-      hero: room > 0 && raw.hero === 'noodle' ? 'noodle' : 'pip',
       stamps: Number.isInteger(raw.stamps) ? raw.stamps & ((1 << rooms.length) - 1) : 0,
       complete: room === lastRoom && raw.complete === true,
     };
@@ -179,9 +178,8 @@
     }
     if (event.pending !== undefined && (!fresh.checkpoint || !event.pending) && (!fresh.complete || !event.pending))
       fresh.pending = event.pending;
-    if (event.hero && fresh.room > 0) fresh.hero = event.hero;
     if (event.complete) fresh.complete = true;
     return fresh;
   }
-  window.DispatchScript = { rooms, scenes, saveKey, lastRoom, fightStocks, readSave, record };
+  window.DispatchScript = { rooms, scenes, saveKey, lastRoom, chapterFighter, fightStocks, readSave, record };
 })();

@@ -1228,8 +1228,8 @@
     if (action === 'fullscreen') toggleFullscreen();
     if (action === 'home') showHome();
     if (action === 'route') showRoute();
-    if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.dogs[0].kind, world.atCheckpoint);
-    if (action === 'dispatch-rematch') beginRun(world.roomIndex, 0, world.dogs[0].kind);
+    if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.atCheckpoint);
+    if (action === 'dispatch-rematch') beginRun(world.roomIndex, 0);
     if (action === 'option-sound' || action === 'option-shake') {
       const key = action === 'option-sound' ? 'sound' : 'shake';
       settings[key] = !settings[key];
@@ -1598,8 +1598,7 @@
     storage = window.localStorage;
   } catch {}
   let progress = campaign.readSave(storage),
-    stored = !!storage,
-    runner = progress.hero;
+    stored = !!storage;
   let film = null,
     afterStory = null,
     inLibrary = false,
@@ -1651,7 +1650,6 @@
   function showRoute() {
     menuScreen('dispatch-route');
     afterStory = null;
-    runner = progress.hero;
     window.DispatchCovers.draw($('route-cover'), 'route', progress.room);
     const stops = $('route-stops');
     stops.replaceChildren();
@@ -1675,22 +1673,8 @@
       li.append(button);
       stops.append(li);
     }
-    $('route-crew').innerHTML = (progress.room > 0 ? ['pip', 'noodle'] : ['pip'])
-      .map(
-        (kind) =>
-          '<button type="button" data-runner="' +
-          kind +
-          '" aria-pressed="' +
-          (runner === kind) +
-          '" aria-label="Run as ' +
-          fighters[kind].name +
-          '"><img alt="" src="' +
-          portrait(kind) +
-          '">' +
-          fighters[kind].name +
-          '</button>',
-      )
-      .join('');
+    $('route-runner-portrait').src = portrait(campaign.chapterFighter);
+    $('route-runner-name').textContent = fighters[campaign.chapterFighter].name;
     $('route-progress').textContent = progress.complete
       ? 'Chapter clear'
       : progress.started
@@ -1772,7 +1756,7 @@
       [speaker, line] = scene.pages[part];
     $('story-speaker').textContent = speaker;
     $('story-text').textContent = line;
-    const finalAction = scene.completesChapter ? 'Chapter results' : scene.chooseRunner ? 'Choose runner' : 'Set out';
+    const finalAction = scene.completesChapter ? 'Chapter results' : 'Set out';
     $('story-next').textContent =
       part + 1 < scene.pages.length ? 'Next' : inLibrary ? 'Done' : finalAction;
   }
@@ -1797,15 +1781,6 @@
     film = null;
     if (next) next();
   }
-  function chooseRunner() {
-    showRoute();
-    showDialog(
-      'dispatch-crew',
-      'Noodle joined the crew',
-      '<p>Brisket guards the weigh scale. Choose who will fight him for a freight ticket.</p><div class="dialog-actions"><button class="primary" data-crew="noodle">Run as Noodle</button><button class="utility" data-crew="pip">Run as Pip</button></div>',
-    );
-    document.querySelector('[data-crew=noodle]').focus();
-  }
   function chapterClear() {
     saveProgress({ room: campaign.lastRoom, pending: '', complete: true });
     showRoute();
@@ -1826,8 +1801,7 @@
     if (!progress.complete) saveProgress({ room, pending: key, complete: !!scene.completesChapter });
     story(key, () => {
       if (scene.completesChapter) return chapterClear();
-      if (scene.chooseRunner) return chooseRunner();
-      beginRun(room, 0, room === 0 ? 'pip' : runner);
+      beginRun(room, 0);
     });
   }
   function enterStop(index, checkpoint = 0) {
@@ -1835,9 +1809,9 @@
     sound('menu');
     const intro = campaign.rooms[index].intro;
     if (!checkpoint && intro) playScene(intro);
-    else beginRun(index, checkpoint, index === 0 ? 'pip' : runner, checkpoint ? progress.atCheckpoint : null);
+    else beginRun(index, checkpoint, checkpoint ? progress.atCheckpoint : null);
   }
-  function beginRun(index, checkpoint, hero, atCheckpoint = null) {
+  function beginRun(index, checkpoint, atCheckpoint = null) {
     dismiss();
     page = 'match';
     drillSide = null;
@@ -1861,14 +1835,12 @@
     $('countdown').textContent = '';
     document.body.classList.remove('menu-screen', 'training-active', 'cinema-active');
     document.body.classList.add('playing', 'adventure-active');
-    hero = index === 0 ? 'pip' : hero;
-    runner = hero;
-    saveProgress({ room: index, checkpoint, pending: '', hero: index > 0 ? hero : undefined });
+    saveProgress({ room: index, checkpoint, pending: '' });
     view = new window.DispatchView();
     view.shakeEnabled = settings.shake;
     noticeUntil = 0;
     $('dispatch-notice').hidden = true;
-    world = new window.DispatchRun({ room: index, checkpoint, hero, atCheckpoint, stamps: progress.stamps }, (name, e) => {
+    world = new window.DispatchRun({ room: index, checkpoint, atCheckpoint, stamps: progress.stamps }, (name, e) => {
       view.event(name, e);
       if (name === 'dispatchCheckpoint') {
         saveProgress({ room: index, checkpoint: e.checkpoint, atCheckpoint: e.atCheckpoint });
@@ -1901,8 +1873,8 @@
     });
     $('match-mode').textContent = 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
     $('match-stage').textContent = world.layout.name;
-    $('runner-portrait').src = portrait(hero);
-    $('runner-name').textContent = fighters[hero].name;
+    $('runner-portrait').src = portrait(world.dogs[0].kind);
+    $('runner-name').textContent = world.dogs[0].stats.name;
     updateDispatchHUD();
     view.draw($('game'), world, 0, 0);
     $('game').focus({ preventScroll: true });
@@ -1983,12 +1955,12 @@
       const { layout, roomIndex } = world;
       if (layout.outro) playScene(layout.outro);
       else {
-        const next = roomIndex + 1, hero = world.dogs[0].kind;
-        saveProgress({ room: next, pending: '', hero });
+        const next = roomIndex + 1;
+        saveProgress({ room: next, pending: '' });
         showRoute();
         showDialog('dispatch-next', layout.name + ' clear',
           '<p>' + layout.dispatch + '</p><div class="dialog-actions"><button class="primary" data-next-stop="' +
-          next + '" data-hero="' + hero + '">Continue to ' + campaign.rooms[next].name + '</button>' +
+          next + '">Continue to ' + campaign.rooms[next].name + '</button>' +
           '<button class="utility" data-do="route">Route map</button></div>');
         document.querySelector('[data-next-stop]').focus();
       }
@@ -2035,10 +2007,8 @@
     }
   });
   $('dialog-body').addEventListener('click', (e) => {
-    const pick = e.target.closest('[data-crew]');
-    if (pick) beginRun(1, 0, pick.dataset.crew);
     const next = e.target.closest('[data-next-stop]');
-    if (next) beginRun(Number(next.dataset.nextStop), 0, next.dataset.hero);
+    if (next) beginRun(Number(next.dataset.nextStop), 0);
   });
   $('home-adventure').onclick = () => {
     audioReady();
@@ -2066,14 +2036,6 @@
   $('route-stops').onclick = (e) => {
     const b = e.target.closest('[data-stop]');
     if (b && !b.disabled) enterStop(Number(b.dataset.stop));
-  };
-  $('route-crew').onclick = (e) => {
-    const b = e.target.closest('[data-runner]');
-    if (!b) return;
-    runner = b.dataset.runner;
-    if (progress.room > 0) saveProgress({ room: progress.room, hero: runner });
-    showRoute();
-    document.querySelector('[data-runner="' + runner + '"]').focus();
   };
   $('dispatch-start').onclick = () => {
     audioReady();

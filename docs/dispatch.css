@@ -176,8 +176,7 @@
   padding: 14px 20px;
   background: #2a2e3e;
 }
-.ticket-tools,
-.route-crew {
+.ticket-tools {
   display: flex;
   flex-wrap: wrap;
   gap: 9px;
@@ -260,23 +259,19 @@
   font-size: 13px;
   color: #ccc7c0;
 }
-.route-crew button {
+.route-runner {
   display: flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 7px;
-  background: #292d3b;
-  border: 2px solid #656373;
+  gap: 8px;
+  color: #d3cfca;
   font-size: 14px;
 }
-.route-crew button[aria-pressed='true'] {
-  border-color: #e9b864;
+.route-runner strong {
   color: #f9dfa7;
 }
-.route-crew img {
-  width: 28px;
-  height: 28px;
+.route-runner img {
   object-fit: contain;
+  image-rendering: pixelated;
 }
 .route-save {
   display: grid;
