@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <meta name="theme-color" content="#252337" />
+    <meta
+      name="description"
+      content="Pick your dog and brawl for the Golden Tennis Ball in this original browser platform fighter. Play solo, local versus, or training."
+    />
+    <title>Dog Fight 3 · Backyard Brawl</title>
+    <link rel="icon" href="./assets/favicon.png" type="image/png" />
+    <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="stylesheet" href="./style.css" />
+    <script defer src="./fighters-art.js"></script>
+    <script defer src="./arena-art.js"></script>
+    <script defer src="./engine.js"></script>
+    <script defer src="./render.js"></script>
+    <script defer src="./app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="shell bar-content">
+        <img class="wordmark" src="./assets/wordmark.png" alt="Dog Fight 3" />
+        <nav class="tools" aria-label="Game tools">
+          <button
+            id="sound"
+            class="utility icon-button"
+            type="button"
+            aria-label="Mute sound"
+            title="Mute sound"
+          >
+            <i data-icon="sound"></i>
+          </button>
+          <button id="controls" class="utility" type="button">
+            <i data-icon="keyboard"></i><span>Controls</span>
+          </button>
+          <button
+            id="fullscreen"
+            class="utility icon-button full-button"
+            type="button"
+            aria-label="Enter fullscreen"
+            title="Enter fullscreen"
+          >
+            <i data-icon="expand"></i>
+          </button>
+        </nav>
+      </div>
+    </header>
+    <main class="shell">
+      <section id="lobby" class="cabinet" aria-label="Fighter select">
+        <div class="selection-bar">
+          <h1>Fighter select</h1>
+          <div class="mode-tabs" role="group" aria-label="Game mode">
+            <button type="button" data-mode="solo" aria-pressed="true">Solo</button>
+            <button type="button" data-mode="local" aria-pressed="false">Local versus</button>
+            <button type="button" data-mode="training" aria-pressed="false">Training</button>
+          </div>
+        </div>
+        <section class="versus-screen" aria-label="Matchup">
+          <canvas id="preview" width="1200" height="370" role="img" aria-label="Matchup preview"></canvas>
+          <img class="versus-mark" src="./assets/versus.png" alt="Versus" />
+          <span class="stock-tag" id="rules-label"></span>
+          <div id="slots" class="slots" role="group" aria-label="Choose whose fighter to change"></div>
+        </section>
+        <section class="selection-deck" aria-labelledby="picking">
+          <div class="pick-title">
+            <h2 id="picking">Choose for P1</h2>
+            <span class="deck-rule" aria-hidden="true"></span>
+            <button id="lobby-moves" class="utility move-link" type="button">Move list</button>
+          </div>
+          <div id="roster" class="roster" role="group" aria-label="Choose a fighter"></div>
+          <div class="signature"><i data-icon="spark"></i><span id="signature"></span></div>
+        </section>
+        <div class="coin-panel">
+          <button
+            id="choose-stage"
+            type="button"
+            class="arena-control"
+            aria-label="Change arena"
+            title="Change arena"
+          >
+            <canvas id="stage-mini" width="96" height="54" aria-hidden="true"></canvas>
+            <span><small>Arena</small><strong id="stage-title">Picnic Table</strong></span>
+            <i data-icon="chevron"></i>
+          </button>
+          <div class="ball-control">
+            <div>
+              <button
+                id="fetch-switch"
+                class="switch"
+                type="button"
+                role="switch"
+                aria-label="Fetch Ball"
+                aria-checked="true"
+              >
+                <i data-icon="ball"></i><span>Fetch Ball</span><b class="toggle-value">On</b>
+              </button>
+              <button
+                id="ball-info"
+                class="info"
+                type="button"
+                aria-label="About the Fetch Ball"
+                title="About the Fetch Ball"
+              >
+                <i data-icon="info"></i>
+              </button>
+            </div>
+          </div>
+          <button class="primary start" id="start" type="button">
+            <i data-icon="play"></i><span>Start fight</span>
+          </button>
+        </div>
+      </section>
+      <section id="match" aria-label="Match" hidden>
+        <div class="match-top">
+          <div>
+            <span class="mode-label" id="match-mode">Solo</span>
+            <h1 id="match-stage">Picnic Table</h1>
+          </div>
+          <button id="pause" class="utility" type="button"><i data-icon="pause"></i>Pause</button>
+        </div>
+        <div class="play-window" id="play-window">
+          <canvas
+            id="game"
+            width="1200"
+            height="675"
+            tabindex="-1"
+            aria-label="Dog Fight 3 arena. Keyboard controls are available from the Controls button."
+          ></canvas>
+          <div id="hud" class="hud"></div>
+          <div class="training-readouts">
+            <output id="training-move" aria-label="Last move" hidden></output>
+            <output id="training-combo" aria-label="Last combo" hidden></output>
+          </div>
+          <div id="countdown" class="countdown" aria-hidden="true"></div>
+        </div>
+        <div id="training-tools" class="training-tools" hidden>
+          <label for="dummy-damage"
+            >Dummy damage <output id="damage-output" for="dummy-damage">0%</output></label
+          ><input
+            id="dummy-damage"
+            aria-label="Dummy damage"
+            type="range"
+            min="0"
+            max="200"
+            value="0"
+            step="5"
+          />
+          <button id="reset-training" type="button" class="utility">
+            <i data-icon="reset"></i>Reset positions
+          </button>
+          <button id="ledge-training" type="button" class="utility">
+            <i data-icon="ledge"></i>Left ledge
+          </button>
+          <button id="ledge-right" type="button" class="utility"><i data-icon="ledge"></i>Right ledge</button>
+          <button id="training-moves" type="button" class="utility">Move list</button>
+        </div>
+        <div class="touch-pad" aria-label="Touch controls">
+          <div class="dpad">
+            <button type="button" data-touch="up-left" aria-label="Aim up and left">↖</button
+            ><button type="button" data-touch="up" aria-label="Aim up">▲</button
+            ><button type="button" data-touch="up-right" aria-label="Aim up and right">↗</button
+            ><button type="button" data-touch="left" aria-label="Move left">◀</button
+            ><button type="button" data-touch="down" aria-label="Aim down">▼</button
+            ><button type="button" data-touch="right" aria-label="Move right">▶</button>
+          </div>
+          <div class="touch-actions">
+            <button type="button" data-touch="jump">Jump</button
+            ><button type="button" data-touch="attack">Attack</button
+            ><button type="button" data-touch="special">Special</button
+            ><button type="button" data-touch="shield">Shield</button
+            ><button type="button" data-touch="grab">Grab</button>
+          </div>
+        </div>
+        <p id="recovery-tip" hidden></p>
+        <div class="play-hints">
+          <span><kbd>A</kbd><kbd>D</kbd> Move</span><span><kbd>Space</kbd> Jump</span
+          ><span><kbd>J</kbd> Attack</span><span><kbd>K</kbd> Special</span><span><kbd>L</kbd> Shield</span
+          ><span><kbd>U</kbd> Grab</span><span><kbd>Esc</kbd> Pause</span>
+        </div>
+      </section>
+    </main>
+    <dialog id="dialog" aria-labelledby="dialog-title">
+      <div class="dialog-inner">
+        <div class="dialog-heading">
+          <h2 id="dialog-title"></h2>
+          <button id="dialog-close" type="button" class="utility icon-button" aria-label="Close dialog">
+            <i data-icon="close"></i>
+          </button>
+        </div>
+        <div id="dialog-body"></div>
+      </div>
+    </dialog>
+    <div id="announce" role="status" aria-live="polite" class="sr-only"></div>
+    <noscript>Enable JavaScript to play Dog Fight 3.</noscript>
+  </body>
+</html>
