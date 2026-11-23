@@ -94,6 +94,7 @@
   const kits = {
     pip: {
       ground: ['pipJab', 'pipCross', 'pipHeel'],
+      tilts: { forward: 'pipStampKick', up: 'pipChinFlick', down: 'pipDewclaw' },
       dashAttack: 'pipGrassSkid',
       grab: 'pipCollarTag',
       dashGrab: 'pipTagDash',
@@ -119,6 +120,7 @@
     },
     brisket: {
       ground: ['brisketCheck', 'brisketLift'],
+      tilts: { forward: 'brisketGateCheck', up: 'brisketCrownLift', down: 'brisketDoorstop' },
       dashAttack: 'brisketYardBuster',
       grab: 'brisketBearHug',
       dashGrab: 'brisketFreightHug',
@@ -155,6 +157,7 @@
     },
     noodle: {
       ground: ['noodleTrip', 'noodleReel', 'noodleSnap'],
+      tilts: { forward: 'noodleKnotPoke', up: 'noodleLoopLift', down: 'noodleTailBroom' },
       dashAttack: 'noodleLeadSweep',
       grab: 'noodleLeadLoop',
       dashGrab: 'noodleRunningLoop',
@@ -185,6 +188,7 @@
     },
     clover: {
       ground: ['cloverTap', 'cloverSet'],
+      tilts: { forward: 'cloverOneTwoPass', up: 'cloverCanopyTap', down: 'cloverBackspin' },
       dashAttack: 'cloverRimRush',
       grab: 'cloverDiscHook',
       dashGrab: 'cloverScoopSlide',
@@ -217,6 +221,147 @@
   // Frames are [startup, active, recovery] at 60 Hz. Boxes are [forward, down from feet, half-width, half-height].
   // The launch angle is measured above horizontal. Negative angles spike an airborne opponent.
   const moves = {
+    pipStampKick: {
+      label: 'Stamp Kick',
+      hint: 'Plant one foot and snap the other straight out. The quick recovery lets you chase the low launch.',
+      frames: [3, 4, 7],
+      box: [42, -31, 29, 17],
+      dmg: 5,
+      base: 144,
+      growth: 2.85,
+      angle: 26,
+    },
+    pipChinFlick: {
+      label: 'Chin Flick',
+      hint: 'Flick a paw under the chin. On contact, press Jump, Forward and Attack together to follow with Flying Kick.',
+      frames: [4, 4, 8],
+      box: [19, -74, 32, 33],
+      dmg: 5,
+      base: 210,
+      growth: 2.4,
+      angle: 76,
+      stun: 0.27,
+      jumpCancel: true,
+    },
+    pipDewclaw: {
+      label: 'Dewclaw',
+      hint: 'Crouch and rake the rival’s ankles. At close range, release Down and tap Attack again for Quick Paw.',
+      frames: [3, 3, 6],
+      box: [34, -12, 29, 13],
+      dmg: 4,
+      base: 84,
+      growth: 1.45,
+      angle: 14,
+      stun: 0.32,
+    },
+    brisketGateCheck: {
+      label: 'Gate Check',
+      hint: 'Shove with the broad side of your forearm. The flat launch pushes rivals toward the edge.',
+      frames: [7, 5, 13],
+      box: [44, -38, 39, 23],
+      dmg: 10,
+      base: 218,
+      growth: 3.85,
+      angle: 22,
+    },
+    brisketCrownLift: {
+      label: 'Crown Lift',
+      hint: 'Drive the top of your head upward. It catches landings over either shoulder.',
+      frames: [6, 6, 12],
+      box: [4, -78, 41, 33],
+      dmg: 9,
+      base: 239,
+      growth: 3.6,
+      angle: 83,
+      around: true,
+    },
+    brisketDoorstop: {
+      label: 'Doorstop',
+      hint: 'Stamp one foot just ahead of you. It pops a grounded rival up in front of your paws.',
+      frames: [6, 4, 11],
+      box: [39, -9, 32, 17],
+      dmg: 8,
+      base: 178,
+      growth: 2.8,
+      angle: 64,
+    },
+    noodleKnotPoke: {
+      label: 'Knot Poke',
+      hint: 'Poke straight out with the lead. The line deals 5%, and the knot at the tip deals 7%.',
+      frames: [5, 4, 10],
+      box: [65, -34, 53, 13],
+      dmg: 5,
+      base: 143,
+      growth: 2.7,
+      angle: 29,
+      sweetSpot: { box: [110, -35, 14, 26], bonus: 2, launch: 1.12 },
+    },
+    noodleLoopLift: {
+      label: 'Loop Lift',
+      hint: 'Send a narrow loop high above your head. It catches a falling rival and lifts them close.',
+      frames: [6, 5, 10],
+      box: [16, -78, 30, 48],
+      dmg: 6,
+      base: 205,
+      growth: 2.45,
+      angle: 82,
+      pull: true,
+      lift: 245,
+      stun: 0.26,
+    },
+    noodleTailBroom: {
+      label: 'Tail Broom',
+      hint: 'Sweep your tail along the floor. It pops a standing rival up and knocks an airborne rival downward just off the ledge.',
+      frames: [4, 5, 9],
+      box: [48, -5, 43, 14],
+      dmg: 5,
+      base: 155,
+      growth: 2.95,
+      angle: -24,
+    },
+    cloverOneTwoPass: {
+      label: 'One-Two Pass',
+      hint: 'Tap once to check with your free paw for 2%, then flick the disc forward for another 4%.',
+      frames: [4, 3, 14],
+      box: [34, -37, 23, 17],
+      dmg: 2,
+      base: 63,
+      growth: 0.7,
+      angle: 23,
+      pull: true,
+      stun: 0.2,
+      secondPose: 'cloverOneTwoPassFinish',
+      second: {
+        start: 10 / 60,
+        active: 4 / 60,
+        box: [50, -39, 35, 23],
+        dmg: 4,
+        base: 157,
+        growth: 2.95,
+        angle: 31,
+      },
+    },
+    cloverCanopyTap: {
+      label: 'Canopy Tap',
+      hint: 'Meet the rival with the flat of the disc overhead. The nearly straight-up launch keeps them above you.',
+      frames: [5, 5, 8],
+      box: [12, -83, 41, 30],
+      dmg: 6,
+      base: 226,
+      growth: 2.85,
+      angle: 88,
+    },
+    cloverBackspin: {
+      label: 'Backspin',
+      hint: 'Hook the rim low and flick it back toward you. Catch the rival close to send them behind you.',
+      frames: [5, 4, 10],
+      box: [41, -15, 31, 16],
+      dmg: 6,
+      base: 375,
+      growth: 2.25,
+      angle: 42,
+      reverse: true,
+    },
     pipGrassSkid: {
       label: 'Grass Skid',
       hint: 'Slide in heel-first for a quick, low kick. Pip recovers fast enough to chase.',
@@ -1392,6 +1537,11 @@
     if (Math.abs(x) > 0.28) return x * facing > 0 ? 'forward' : 'back';
     return 'neutral';
   }
+  function groundDirection(x, y) {
+    const side = airDirection(x, y, 1);
+    return side === 'back' ? 'forward' : side;
+  }
+  const verticalAim = (side) => (side === 'up' ? -1 : side === 'down' ? 1 : 0);
   const platform = (x1, x2, y, thin = false) => ({ x1, x2, y, thin });
   function platforms(stage, time) {
     if (stage === 'picnic')
@@ -1437,7 +1587,7 @@
       shieldHP: 1,
       dodge: 0,
       charge: -1,
-      chargeAim: 0,
+      chargeDirection: 'neutral',
       chargeReleased: false,
       smashCharge: null,
       grip: null,
@@ -1468,6 +1618,7 @@
   };
   function cancelCharge(f) {
     f.charge = -1;
+    f.chargeDirection = 'neutral';
     f.chargeReleased = false;
     f.smashCharge = null;
   }
@@ -1490,10 +1641,7 @@
         throws[moveId]
       : attacks[name];
     f.attack = { name, moveId, aim, power, time: 0, hitBeat: -1, ballHit: false, fired: false, ...move };
-    const common = {
-      quick: aim < 0 ? 'Up Tilt' : aim > 0 ? 'Low Tilt' : 'Quick Strike',
-      recover: 'Up Special',
-    };
+    const common = { quick: 'Quick Strike', recover: 'Up Special' };
     f.lastMove = move.label || common[name] || f.stats.move;
   }
   function trackGroundRun(f, axis, dt) {
@@ -1519,15 +1667,16 @@
     if (style !== 'standing') f.vx = runFace * Math.max(0, f.vx * runFace) * attack.carry;
     else if (f.ground >= 0 && attack.step) f.vx = f.face * Math.max(attack.step, f.vx * f.face);
   }
-  function groundStrike(f, aim, heldFor) {
+  function groundStrike(f, side, heldFor) {
     const step = f.chainWindow > 0 ? f.chainNext : 0;
     const chain = f.kit.ground;
-    const moveId = aim === 0 ? chain[step] : null;
-    const name = !moveId ? 'quick' : step === 0 ? 'jab' : step === chain.length - 1 ? 'finisher' : 'jab2';
-    beginAttack(f, name, aim, 0, moveId);
+    const tilt = f.kit.tilts[side];
+    const name = tilt ? 'tilt' : step === 0 ? 'jab' : step === chain.length - 1 ? 'finisher' : 'jab2';
+    beginAttack(f, name, verticalAim(side), 0, tilt || chain[step]);
     // The windup begins on the press, including a tap released during recovery.
     f.attack.time = Math.min(heldFor, f.attack.start - 1 / 60);
-    if (moveId && step < chain.length - 1) {
+    if (tilt) f.attack.tiltSide = side;
+    else if (step < chain.length - 1) {
       f.chainNext = step + 1;
       f.chainWindow = f.attack.end + 0.23;
     }
@@ -1540,7 +1689,6 @@
   function lockSmash(f, button, aim, face) {
     const side = aim < 0 ? 'up' : aim > 0 ? 'down' : 'side';
     f.smashCharge = { moveId: f.kit.smashes[side], side, face: face || f.face, button };
-    f.chargeAim = aim;
     f.face = f.smashCharge.face;
     f.vx = 0;
     f.shield = false;
@@ -1550,7 +1698,7 @@
     const { moveId, side, face } = f.smashCharge;
     const power = smashPower(f.charge);
     f.face = face;
-    beginAttack(f, 'heavy', f.chargeAim, power, moveId);
+    beginAttack(f, 'heavy', verticalAim(side), power, moveId);
     f.attack.smashSide = side;
     f.lastSmashPower = power;
   }
@@ -1770,16 +1918,18 @@
         const x = type === 'smash' ? (input.smashX ?? input.x) : type === 'grab' ? grabX : input.x;
         const y = type === 'smash' ? (input.smashY ?? input.y) : input.y;
         const side = airDirection(x, y, f.face);
+        const groundX = type === 'attack' && f.ground >= 0 ? grabX : x;
         f.command = {
           type,
-          aim: type === 'smash' ? (side === 'up' ? -1 : side === 'down' ? 1 : 0) : aimFor(y),
-          face: Math.abs(x) > 0.2 ? Math.sign(x) : 0,
+          aim: type === 'smash' ? verticalAim(side) : aimFor(y),
+          face: Math.abs(groundX) > 0.2 ? Math.sign(groundX) : 0,
           facing: f.face,
           airSide: side,
           life: inputWindow,
           heldFor: 0,
           released: !input[type],
         };
+        if (type === 'attack') f.command.groundDirection = groundDirection(groundX, y);
         if (
           (type === 'grab' || type === 'attack') &&
           f.run &&
@@ -1868,7 +2018,7 @@
       )
         f.attack = null;
       if (grounded && current?.connected && current.time + 1e-8 >= current.start + (current.link || 0) / 60) {
-        const chainTap = attackTap && f.command.aim === 0 && f.chainWindow > 0;
+        const chainTap = attackTap && f.command.groundDirection === 'neutral' && f.chainWindow > 0;
         const jumpFollow =
           jumpTap && (current.jumpCancel || (current.hitBeat === 1 && current.second?.jumpCancel));
         const ropeFollow =
@@ -1938,14 +2088,13 @@
         if (f.charge >= 0 && (f.smashCharge || !command || command.type === 'attack')) {
           const before = f.charge;
           if (!f.chargeReleased) f.charge += dt;
-          if (!f.smashCharge) {
-            if (Math.abs(input.x) > 0.28) f.face = Math.sign(input.x);
-            if (direction || Math.abs(input.x) > 0.28) {
-              const side = airDirection(input.x, input.y, f.face);
-              f.chargeAim = side === 'up' ? -1 : side === 'down' ? 1 : 0;
-            }
+          if (!f.smashCharge && !f.chargeReleased) {
+            const x = input.grabX ?? input.x;
+            const side = groundDirection(x, input.y);
+            if (Math.abs(x) > 0.28) f.face = Math.sign(x);
+            if (side !== 'neutral') f.chargeDirection = side;
             if (f.charge >= attackHold) {
-              lockSmash(f, 'attack', f.chargeAim, f.face);
+              lockSmash(f, 'attack', verticalAim(f.chargeDirection), f.face);
               this.emit('smashCharge', { f });
             }
           }
@@ -1955,7 +2104,7 @@
             if (f.smashCharge) {
               releaseSmash(f);
               this.emit('smashRelease', { f });
-            } else groundStrike(f, f.chargeAim, f.charge);
+            } else groundStrike(f, f.chargeDirection, f.charge);
           }
         } else if (command && (command.type !== 'smash' || f.ground >= 0)) {
           f.throwBounce = null;
@@ -1978,10 +2127,10 @@
             f.face = command.runFace;
             beginAttack(f, 'dash', 0, 0, f.kit.dashAttack);
             f.vx = f.face * Math.max(0, f.vx * f.face) * f.attack.carry;
-          } else if (command.released) groundStrike(f, command.aim, command.heldFor);
+          } else if (command.released) groundStrike(f, command.groundDirection, command.heldFor);
           else {
             f.charge = command.heldFor;
-            f.chargeAim = command.aim;
+            f.chargeDirection = command.groundDirection;
             f.chargeReleased = false;
           }
         }
@@ -2014,7 +2163,8 @@
         f.vx = toward(f.vx, 0, f.attack.brake * dt);
       } else if (f.dodge <= 0 && !sliding) {
         const onFloor = f.ground >= 0;
-        const mobility = f.shield || f.charge >= 0 ? 0 : f.attack ? (onFloor ? 0.12 : 0.65) : 1;
+        const planted = f.shield || f.charge >= 0 || (onFloor && f.attack?.tiltSide);
+        const mobility = planted ? 0 : f.attack ? (onFloor ? 0.12 : 0.65) : 1;
         const steppingJab = f.attack?.step && f.attack.time < f.attack.start;
         const drag = onFloor ? (steppingJab ? 560 : 2630) : Math.abs(input.x) > 0.1 ? f.kit.airAccel : 155;
         f.vx = toward(f.vx, input.x * f.stats.speed * mobility, drag * dt);
@@ -3226,12 +3376,9 @@
         brain.pulse = {};
         const above = f.y - foe.y;
         const smashReach = f.kind === 'clover' ? 220 : f.kind === 'noodle' ? 153 : 86;
+        const canStrike = f.ground >= 0 && !f.attack && !f.stun && f.charge < 0 && !foe.shield;
         if (
-          f.ground >= 0 &&
-          !f.attack &&
-          !f.stun &&
-          f.charge < 0 &&
-          !foe.shield &&
+          canStrike &&
           far < smashReach &&
           above > -20 &&
           above < 120 &&
@@ -3249,6 +3396,29 @@
           brain.hold = brain.guard = 0;
           brain.hop = null;
           return result;
+        }
+        if (canStrike && !result.jump && !foe.invuln && far < 155) {
+          const face = Math.sign(dx) || f.face;
+          const closing = foe.vx * face < -40;
+          const aimLow = above < -6 || (far < 75 && (closing || foe.attack));
+          const side = above > 24 ? 'up' : aimLow ? 'down' : 'forward';
+          const tilt = moves[f.kit.tilts[side]];
+          const [x, y, rx, ry] = tilt.box;
+          const height = foe.y + foe.vy * tilt.start - foe.stats.height * 0.52 - f.y;
+          if (
+            (side !== 'forward' || !f.run) &&
+            Math.abs(far + foe.vx * face * tilt.start - x) <= rx + foe.stats.width &&
+            Math.abs(height - y) <= ry + foe.stats.height * 0.4 &&
+            this.random() < 0.36
+          ) {
+            brain.hold = brain.guard = 0;
+            brain.hop = null;
+            result.x = face;
+            result.y = verticalAim(side);
+            result.attack = true;
+            result.tapped = { attack: true };
+            return result;
+          }
         }
         if (foe.y < f.y - 52 && far < 240 && f.jumps > 0) brain.pulse.jump = true;
         if (f.ground >= 0 && this.terrain[f.ground].thin && foe.y > f.y + 70 && far < 240) {

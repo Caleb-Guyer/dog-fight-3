@@ -560,10 +560,15 @@
       'controls',
       'Controls',
       table +
-        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack from a standstill for your dog’s combo. Press Attack while running left or right for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
+        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
   $('controls').onclick = showControls;
+  const tiltInputs = {
+    forward: 'Forward tilt · Side + Attack',
+    up: 'Up tilt · Up + Attack',
+    down: 'Down tilt · Down + Attack',
+  };
   const airInputs = {
     neutral: 'Attack alone',
     forward: 'Forward + Attack',
@@ -681,7 +686,11 @@
         kit.ground.map((id) => moves[id].label).join(' / ') +
         '</div><p>' +
         kit.combo +
-        '</p><h3 class="guide-section">Dash attack</h3><ul class="move-rows guide-dash">' +
+        '</p><h3 class="guide-section">Ground tilts</h3><p>Aim and tap Attack. For a forward tilt, tap before your dog gets running.</p><ul class="move-rows guide-tilts">' +
+        Object.entries(kit.tilts)
+          .map(([side, id]) => guideMoveRow(moves[id], tiltInputs[side], side, 'tilts'))
+          .join('') +
+        '</ul><h3 class="guide-section">Dash attack</h3><ul class="move-rows guide-dash">' +
         guideMoveRow(moves[kit.dashAttack], 'Run + Attack', 'dash', 'dash') +
         '</ul>' +
         '<h3 class="guide-section">Aerial attacks</h3><p>Forward follows the way your dog faces. You can drift backward.</p><ul class="move-rows guide-airs">' +
