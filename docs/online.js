@@ -1,26 +1,29 @@
 (() => {
   'use strict';
 
-  const prefix = 'dogfight3-cg-versus-v1-';
+  const prefix = 'dogfight3-cg-versus-v2-';
+  const channel = 'dogfight3-v2';
   const quickId = prefix + 'quickplay';
   const roomAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab'];
   const axes = ['x', 'y', 'grabX', 'smashX', 'smashY', 'airDodgeX', 'airDodgeY'];
-  const lead = 12;
+  const predictionLimit = 8;
   const fighter = (kind) => typeof kind === 'string' && Object.hasOwn(window.DogFight.fighters, kind);
   const validCode = (value) => typeof value === 'string' && /^[A-HJ-NP-Z2-9]{6}$/.test(value);
   const randomInt = () => crypto.getRandomValues(new Uint32Array(1))[0];
   const roomCode = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (n) => roomAlphabet[n % 32]).join('');
 
   function pack(input) {
-    const values = axes.map((key) => Math.round(Math.max(-1, Math.min(1, input[key] || 0)) * 127));
+    const values = axes.map((key) => Math.round(Math.max(-1, Math.min(1, input[key] || 0)) * 127) || 0);
     for (const state of [input, input.tapped || {}])
       values.push(buttons.reduce((bits, key, i) => bits | (state[key] ? 1 << i : 0), 0));
     return values;
   }
+  function validInput(values) {
+    return Array.isArray(values) && values.length === 9 && Array.from(values).every((v, i) =>
+      Number.isInteger(v) && (i < 7 ? Math.abs(v) <= 127 : v >= 0 && v <= 63));
+  }
   function unpack(values) {
-    if (!Array.isArray(values) || values.length !== 9 || !values.every((v, i) =>
-      Number.isInteger(v) && (i < 7 ? Math.abs(v) <= 127 : v >= 0 && v <= 63))) return null;
     const input = { tapped: {} };
     axes.forEach((key, i) => { input[key] = values[i] / 127; });
     buttons.forEach((key, i) => {
@@ -30,46 +33,127 @@
     return input;
   }
   function seededRandom(seed) {
-    return () => {
-      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      return seed / 4294967296;
+    const next = () => {
+      next.state = (Math.imul(next.state, 1664525) + 1013904223) >>> 0;
+      return next.state / 4294967296;
     };
+    next.state = seed >>> 0;
+    return next;
   }
 
-  // Both simulations consume exactly the same numbered inputs, including one-frame taps.
-  class MatchFrames {
-    constructor(side, round, send) {
+  function heldInput(values) {
+    if (!values[8]) return values;
+    const held = values.slice();
+    held[8] = 0;
+    return held;
+  }
+
+  function restoreBattle(world, confirmed) {
+    const { emit, random, ...state } = confirmed;
+    // Clone the graph together: grips are shared and hit ledgers use fighters as Map keys.
+    Object.assign(world, structuredClone(state));
+    world.random.state = random.state;
+  }
+
+  const silent = () => {};
+  const dodgeCues = new Set(['dodge', 'shieldRoll', 'spotDodge', 'ledgeRoll']);
+
+  // The second Battle is a rolling checkpoint. Only it advances on two known inputs.
+  class RollbackMatch {
+    constructor(side, round, send, config, seed) {
       this.side = side;
       this.round = round;
       this.send = send;
-      this.local = [];
+      this.confirmedWorld = new window.DogFight.Battle(config, silent, seededRandom(seed));
+      this.pending = [];
       this.remote = [];
-      this.frame = this.sent = this.received = 0;
+      this.frame = this.confirmed = this.received = 0;
+      this.prediction = pack({});
+      this.lastHeld = 0;
+      this.cues = {};
       this.lastStep = performance.now();
     }
     receive(number, values) {
-      if (number !== this.received || this.remote.length >= lead * 2 + 2) return false;
-      const input = unpack(values);
-      if (!input) return false;
-      this.remote.push(input);
+      if (number !== this.received || this.remote.length >= predictionLimit * 2 + 2 || !validInput(values)) return false;
+      this.remote.push(values);
       this.received++;
       return true;
     }
+    step(world, mine, other, emit) {
+      const previous = world.emit;
+      world.emit = emit;
+      try {
+        const first = this.side === 0 ? mine : other;
+        const second = this.side === 0 ? other : mine;
+        world.step(1 / 60, unpack(first), unpack(second));
+      } finally {
+        world.emit = previous;
+      }
+    }
+    events(record, present, confirmed) {
+      return (name, detail) => {
+        if (detail.f?.index === this.side) {
+          let cue;
+          if (name === 'jump') cue = record.cues.jump;
+          else if (dodgeCues.has(name)) cue = record.cues.shield;
+          else if (name === 'special' || (name === 'recover' && detail.moveId && detail.moveId !== 'brisketCannon'))
+            cue = record.cues.special;
+          if (cue) {
+            if (cue.played) return;
+            cue.played = true;
+            return present(name, detail);
+          }
+        }
+        if (confirmed) present(name, detail);
+      };
+    }
+    confirm(world) {
+      let correction = false;
+      while (this.pending.length && this.remote.length && this.confirmedWorld.end === null) {
+        const record = this.pending.shift();
+        const actual = this.remote.shift();
+        if (actual.some((v, i) => v !== record.other[i])) correction = true;
+        this.step(this.confirmedWorld, record.mine, actual, this.events(record, world.emit, true));
+        this.prediction = heldInput(actual);
+        this.confirmed++;
+      }
+      if (this.confirmedWorld.end !== null) {
+        restoreBattle(world, this.confirmedWorld);
+        this.pending.length = this.remote.length = 0;
+      } else if (correction) {
+        restoreBattle(world, this.confirmedWorld);
+        for (const record of this.pending) {
+          record.other = this.prediction;
+          this.step(world, record.mine, record.other, silent);
+        }
+      }
+    }
+    advance(mine, world) {
+      const pressed = (mine[7] & ~this.lastHeld) | mine[8];
+      this.lastHeld = mine[7];
+      // Buffered actions can shift frames after a correction. Attach feedback to the physical press.
+      if (pressed) {
+        this.cues = { ...this.cues };
+        for (const key of ['jump', 'shield', 'special']) {
+          if (pressed & (1 << buttons.indexOf(key))) this.cues[key] = { played: false };
+        }
+      }
+      const record = { mine, other: this.remote[0] || this.prediction, cues: this.cues };
+      this.pending.push(record);
+      this.send(['input', this.round, this.frame++, mine]);
+      this.step(world, mine, record.other, this.events(record, world.emit, false));
+      if (this.remote.length) this.confirm(world);
+    }
     tick(readInput, world) {
-      if (this.local.length < lead) {
-        const values = pack(readInput());
-        this.local.push(unpack(values));
-        this.send(['input', this.round, this.sent++, values]);
-      }
-      const ready = Math.min(this.local.length, this.remote.length);
-      // Drain a short backlog after a delayed packet without making all later inputs feel late.
-      const steps = ready >= 4 ? 2 : Math.min(1, ready);
-      for (let i = 0; i < steps && world.end === null; i++) {
-        const mine = this.local.shift(), other = this.remote.shift();
-        world.step(1 / 60, this.side ? other : mine, this.side ? mine : other);
-        this.frame++;
-        this.lastStep = performance.now();
-      }
+      if (this.confirmedWorld.end !== null) return;
+      if (this.remote.length && this.pending.length) this.confirm(world);
+      if (this.confirmedWorld.end !== null || this.pending.length >= predictionLimit) return;
+      const mine = pack(readInput());
+      // Close a clock gap after a stalled tab without consuming a second physical press.
+      const catchUp = this.remote.length > 2;
+      this.advance(mine, world);
+      if (catchUp && this.confirmedWorld.end === null) this.advance(heldInput(mine), world);
+      this.lastStep = performance.now();
     }
   }
 
@@ -146,7 +230,7 @@
         if (host) {
           this.status(quick ? 'search' : 'room', quick ? 'Looking for another player…' : 'Waiting for your opponent to join.');
         } else {
-          const conn = peer.connect(address, { label: 'dogfight3-v1', serialization: 'json', reliable: true });
+          const conn = peer.connect(address, { label: channel, serialization: 'json', reliable: true });
           if (!conn) return this.close('Could not open a connection. Try again.');
           this.useConnection(peer, conn, false);
           this.later(15000, () => {
@@ -156,7 +240,7 @@
         }
       });
       peer.on('connection', (conn) => {
-        if (this.peer !== peer || !host || conn.label !== 'dogfight3-v1' || this.pending.size >= 8) return conn.close();
+        if (this.peer !== peer || !host || conn.label !== channel || this.pending.size >= 8) return conn.close();
         this.useConnection(peer, conn, true);
       });
       peer.on('error', (error) => {
@@ -260,8 +344,9 @@
       this.myVote = this.theirVote = this.finished = false;
       this.myResult = this.theirResult = null;
       this.phase = 'playing';
-      this.match = new MatchFrames(this.side, round, (message) => this.send(message));
-      this.events.start({ mode: 'local', p1, p2, stage, fetch: true }, seededRandom(seed));
+      const config = { mode: 'local', p1, p2, stage, fetch: true };
+      this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed);
+      this.events.start(config, seededRandom(seed));
     }
     receive(msg) {
       this.lastTraffic = Date.now();

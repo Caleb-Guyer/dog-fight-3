@@ -980,6 +980,7 @@
   }
   function updateHUD() {
     if (world.mode === 'adventure') return updateDispatchHUD();
+    const scores = online.match?.confirmedWorld.dogs || world.dogs;
     const combo = world.lastCombo;
     const grip = world.grapple;
     const prompt = $('grapple-prompt');
@@ -1009,7 +1010,7 @@
     }
     const shownMove = player.smashCharge ? smashes[player.smashCharge.moveId].label : player.lastMove;
     const key =
-      world.dogs.map((f) => f.kind + ':' + Math.floor(f.damage) + ':' + f.stocks).join('|') +
+      scores.map((f) => f.kind + ':' + Math.floor(f.damage) + ':' + f.stocks).join('|') +
       world.mode +
       '/' +
       combo.hits +
@@ -1031,7 +1032,7 @@
       readout.textContent =
         combo.hits + (combo.hits === 1 ? ' hit' : ' hits') + ' · ' + Math.floor(combo.damage) + '% damage';
     }
-    $('hud').innerHTML = world.dogs
+    $('hud').innerHTML = scores
       .map((f, i) => {
         const lives =
           world.mode === 'training'
@@ -2439,6 +2440,26 @@
     }
     oldPad = now;
   }
+  function runOnline(dt, pads) {
+    const match = online.match;
+    accumulator += dt;
+    while (accumulator >= 1 / 60 && match.confirmedWorld.end === null) {
+      match.tick(() => {
+        const input = $('dialog').open ? idleInput : playerInput(0, pads, online.side);
+        taps.clear();
+        touchTaps.clear();
+        return input;
+      }, world);
+      accumulator -= 1 / 60;
+    }
+    const waiting = performance.now() - match.lastStep;
+    const ended = match.confirmedWorld.end !== null;
+    $('countdown').classList.toggle('net-lag', !ended && waiting > 850);
+    if (!ended && waiting > 22000) return online.opponentLeft('The other player stopped responding.');
+    $('countdown').textContent = !ended && waiting > 850 ? 'Waiting for opponent…' : world.time < 0.37 ? 'GO!' : '';
+    updateHUD();
+    if (ended) online.finish(match.confirmedWorld.end);
+  }
   function frame(timestamp) {
     const now = timestamp / 1000,
       dt = Math.min(0.09, Math.max(0, now - before));
@@ -2468,20 +2489,12 @@
           if (online.match) online.match.lastStep = performance.now();
           announce('Fight!');
         }
+      } else if (online.match && !online.finished) {
+        runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
         accumulator += dt;
         while (accumulator >= 1 / 60 && world.end === null) {
-          if (online.match) {
-            online.match.tick(() => {
-              const input = $('dialog').open ? idleInput : playerInput(0, pads, online.side);
-              taps.clear();
-              touchTaps.clear();
-              return input;
-            }, world);
-            accumulator -= 1 / 60;
-            continue;
-          }
           const input = playerInput(0, pads);
           const player = world.dogs[0];
           if (drillWaiting) {
@@ -2511,20 +2524,16 @@
           touchTaps.clear();
           accumulator -= 1 / 60;
         }
-        if (online.match) {
-          const waiting = performance.now() - online.match.lastStep;
-          $('countdown').classList.toggle('net-lag', world.end === null && waiting > 850);
-          if (world.end !== null) online.finish(world.end);
-          else if (waiting > 22000) online.opponentLeft('The other player stopped responding.');
-          else if (waiting > 850) $('countdown').textContent = 'Waiting for opponent…';
-        }
-        if (!world) { requestAnimationFrame(frame); return; }
         updateHUD();
       } else {
         resultDelay -= dt;
         if (resultDelay <= 0 && (online.match ? dialogType !== 'online-result' : !$('dialog').open)) showResult();
       }
-      view.draw($('game'), world, dt, now);
+      if (world) {
+        const confirmed = online.match?.confirmedWorld;
+        const waitingOnKO = confirmed && world.end !== null && confirmed.end === null;
+        view.draw($('game'), waitingOnKO ? confirmed : world, dt, now);
+      }
     }
     requestAnimationFrame(frame);
   }

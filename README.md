@@ -18,6 +18,8 @@ Pick your dog and select **Quickplay** to fight the next available player. To pl
 
 Each device uses the P1 keyboard, controller, or touch controls. The HUD marks your fighter with **YOU**. Both dogs start with three stocks. At the results screen, both players can select **Rematch** to fight on the other arena. If the guest leaves, the host can use the same room code for the next opponent.
 
+Your dog responds on the next simulation frame. Both browsers predict the opponent’s held controls for up to eight frames and replay the fight when a late input changes what happened. The damage counter, stock count, and match result use confirmed inputs. A longer interruption briefly pauses the fight until the connection catches up.
+
 Online play uses PeerServer Cloud to find the other browser, then exchanges inputs over a direct WebRTC data channel. Both players need internet access and a network that permits the connection. The bundled PeerJS 1.5.5 client includes its MIT license in `docs/vendor/`. [PeerServer Cloud](https://peerjs.com/server/cloud)
 
 ## The Last Dispatch
