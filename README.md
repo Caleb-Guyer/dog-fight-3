@@ -1,14 +1,26 @@
 # Dog Fight 3
 
-A cartoon platform fighter for one or two players. Choose Pip, Brisket, Noodle, or Clover and compete for the Golden Tennis Ball on Picnic Table or Laundry Line.
+A cartoon platform fighter for one or two players. Play **The Last Dispatch** story adventure, or choose Pip, Brisket, Noodle, or Clover and compete for the Golden Tennis Ball on Picnic Table or Laundry Line.
 
 ## Play
 
 **[Play Dog Fight 3](https://caleb-guyer.github.io/dog-fight-3/)**
 
-Choose your dog and select **Start fight**. To play offline, download or clone the repository, extract it if necessary, and open `docs/index.html` in a modern browser. The game, artwork, typeface, and sound effects work locally. A keyboard is enough for both solo and local versus. Touch controls appear on touchscreen devices.
+From the main menu, choose **Adventure**, **Solo fight**, **Local versus**, or **Training**. For a match, choose your dog and select **Start fight**. To play offline, download or clone the repository, extract it if necessary, and open `docs/index.html` in a modern browser. The game, artwork, typeface, and sound effects work locally. A keyboard is enough for both solo and local versus. Touch controls appear on touchscreen devices.
 
 Each dog starts with three stocks. Dealing damage makes the next hit launch a rival farther. Knock a dog beyond the arena boundary to take a stock. When a hard hit sends you tumbling, you can bend the launch and choose how to land. A midair jump and **Up + Special** can bring you back to the ledge.
+
+## The Last Dispatch
+
+Choose **Adventure → Begin chapter** to play Chapter 1, **The Silent Yard**. The six o’clock train rolls past without ringing the depot bell. Follow Noodle’s turquoise envelope through three connected stops.
+
+- **Parcel Alley.** Start as Pip. Break the Ticket Clippers to raise the crossing arms, jump the mail chute and reach Noodle’s parcel cage.
+- **Sorting Bridge.** Choose Pip or Noodle. Cross the broken spans, climb the high platform and strike the amber lever to open the signal gate.
+- **Bell Depot.** Face the Copper Hound. Its lamp and the markings on the floor telegraph its stamp and rush. Jump or shield, then hit the open lamp while the machine recovers.
+
+Adventure uses the same jumps, attacks, specials and shields as Versus. You have 64 stamina and unlimited retries. Each semaphore restores stamina and saves a checkpoint. **Route map → Continue** resumes in this browser. Revisiting an earlier stop preserves the furthest checkpoint. Each stop has one optional postmark. The chapter ends with a delivery to Clover and can be replayed from the route map.
+
+The chapter script, dialogue, encounter order, terrain, gates, semaphores and postmarks live in `docs/dispatch-script.js`. The runtime in `docs/dispatch-run.js` plays those encounters using the regular fighting engine.
 
 ## Publish on GitHub Pages
 
@@ -22,6 +34,7 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 ## Modes and controls
 
 - **Solo** pits your dog against a computer opponent.
+- **Options** saves sound effects, volume and camera shake in this browser. Menus support pointer, touch, arrow keys and Enter, or a gamepad D-pad and its confirm button.
 - **Local versus** lets two people play on one device. Select either nameplate in the arena preview, then choose that side's dog from the roster.
 - **Training** starts you within striking distance of a stationary dummy. It shows the last move you used and counts hits that connect before the dummy can act again. Reset positions, change the dummy's starting damage, or practice getting back from the ledge.
 - **Fetch Ball** adds a tennis ball that both dogs can bat around. The third swat powers up the shot.

@@ -2000,8 +2000,9 @@
         halfH = 337.5 / this.zoom;
       this.cx += (clamp((a.x + b.x) / 2, halfW, 1200 - halfW) - this.cx) * blend;
       this.cy += (clamp((a.y + b.y) / 2 - 67, halfH, 675 - halfH) - this.cy) * blend;
-      const sx = reduced.matches ? 0 : snap(Math.sin(time * 97) * this.shake, 2),
-        sy = reduced.matches ? 0 : snap(Math.cos(time * 81) * this.shake * 0.55, 2);
+      const steady = reduced.matches || this.shakeEnabled === false;
+      const sx = steady ? 0 : snap(Math.sin(time * 97) * this.shake, 2),
+        sy = steady ? 0 : snap(Math.cos(time * 81) * this.shake * 0.55, 2);
       this.shake = Math.max(0, this.shake - 62 * dt);
       ctx.save();
       ctx.fillStyle = ink;
@@ -2508,5 +2509,13 @@
     thumbnail.getContext('2d').drawImage(canvas, 0, 0);
     moveThumbnails.set(cacheKey, thumbnail);
   }
-  window.DogFightView = { FightView, drawPreview, drawMoveThumbnail };
+  window.DogFightView = {
+    FightView,
+    drawPreview,
+    drawMoveThumbnail,
+    drawFighter,
+    drawItem,
+    drawEffect,
+    gripLead,
+  };
 })();

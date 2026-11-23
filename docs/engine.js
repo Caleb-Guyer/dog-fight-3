@@ -2021,6 +2021,8 @@
   class Battle {
     constructor(config, event = () => {}, random = Math.random) {
       this.stage = config.stage;
+      this.layout = config.layout || null;
+      this.stageWidth = this.layout?.length || 1200;
       this.mode = config.mode;
       this.fetch = config.fetch;
       this.time = 0;
@@ -2028,7 +2030,7 @@
       this.emit = event;
       this.random = random;
       this.dogs = [newFighter(config.p1, 0), newFighter(config.p2, 1)];
-      this.terrain = platforms(this.stage, 0);
+      this.terrain = this.layout?.terrain || platforms(this.stage, 0);
       this.ledgeClaims = [];
       this.grapple = null;
       this.projectiles = [];
@@ -2058,11 +2060,12 @@
     }
     spawn(f, fromKO) {
       if (this.grapple) this.breakGrapple(false);
-      const ground = this.stage === 'laundry' && f.index === 1 ? 1 : 0;
+      const point = this.layout?.spawns[f.index];
+      const ground = point ? point.ground : this.stage === 'laundry' && f.index === 1 ? 1 : 0;
       const stocks = f.stocks;
       Object.assign(f, newFighter(f.kind, f.index));
       f.stocks = stocks;
-      f.x = arenas[this.stage].spawn[f.index];
+      f.x = point?.x ?? arenas[this.stage].spawn[f.index];
       f.y = this.terrain[ground].y;
       f.ground = ground;
       if (f.index === 1) {
@@ -2428,11 +2431,11 @@
       }
       this.time += dt;
       const old = this.terrain;
-      this.terrain = platforms(this.stage, this.time);
+      this.terrain = this.layout?.terrain || platforms(this.stage, this.time);
       const second =
         this.mode === 'solo'
           ? this.cpu(dt)
-          : this.mode === 'local'
+          : this.mode === 'local' || this.mode === 'adventure'
             ? input2
             : this.launchPractice
               ? this.practiceInput(dt)
@@ -2485,7 +2488,9 @@
         !wallDrill
       )
         this.updateBall(dt);
-      const out = this.dogs.filter((f) => f.x < -115 || f.x > 1315 || f.y > 765 || f.y < -172);
+      const out = this.dogs.filter(
+        (f) => !f.absent && (f.x < -115 || f.x > this.stageWidth + 115 || f.y > 765 || f.y < -172),
+      );
       if (out.length) this.knockouts(out);
     }
     separateGroundedFighters() {
@@ -2682,7 +2687,7 @@
         dy = nextY - y,
         chest = y - f.stats.height * 0.52;
       let first = null;
-      for (const wall of solidWalls[this.stage]) {
+      for (const wall of this.layout?.walls || solidWalls[this.stage]) {
         if ((wall.left ? -1 : 1) !== dir || (x - wall.x) * dir < -1e-8) continue;
         const contactX = wall.x + dir * f.stats.width;
         let enter = Math.max(0, (contactX - x) / dx);
@@ -4257,7 +4262,7 @@
             this.swat(owner, 0, face);
             return false;
           }
-          return d.rangeLeft > 0 && d.x > -130 && d.x < 1330;
+          return d.rangeLeft > 0 && d.x > -130 && d.x < this.stageWidth + 130;
         }
         if (d.type === 'snare' || d.type === 'skip') {
           if (d.platform >= 0) {
@@ -4317,7 +4322,7 @@
               return false;
             }
           }
-          return d.age < 2.65 && d.x > -135 && d.x < 1335 && d.y < 780;
+          return d.age < 2.65 && d.x > -135 && d.x < this.stageWidth + 135 && d.y < 780;
         }
         if (d.age > 0.46) {
           d.back = true;
@@ -4341,7 +4346,7 @@
           impact(Math.sign(d.vx));
           d.hit[pass] = true;
         }
-        return d.age < 2.6 && d.x > -130 && d.x < 1330;
+        return d.age < 2.6 && d.x > -130 && d.x < this.stageWidth + 130;
       });
     }
     swat(f, aim, face = f.face) {

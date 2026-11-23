@@ -6,19 +6,26 @@
     <meta name="theme-color" content="#252337" />
     <meta
       name="description"
-      content="Pick your dog and brawl for the Golden Tennis Ball in this original browser platform fighter. Play solo, local versus, or training."
+      content="Play The Last Dispatch, a side-scrolling dog adventure, or battle for the Golden Tennis Ball in solo, local versus, and training."
     />
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=wall-techs-1" />
-    <script defer src="./fighters-art.js?v=wall-techs-1"></script>
+    <link rel="stylesheet" href="./style.css?v=dispatch-1" />
+    <link rel="stylesheet" href="./dispatch.css?v=dispatch-1" />
+    <script defer src="./fighters-art.js?v=dispatch-1"></script>
     <script defer src="./arena-art.js"></script>
-    <script defer src="./engine.js?v=wall-techs-1"></script>
-    <script defer src="./render.js?v=wall-techs-1"></script>
-    <script defer src="./app.js?v=wall-techs-1"></script>
+    <script defer src="./engine.js?v=dispatch-1"></script>
+    <script defer src="./render.js?v=dispatch-1"></script>
+    <script defer src="./dispatch-script.js?v=dispatch-1"></script>
+    <script defer src="./dispatch-actors.js?v=dispatch-1"></script>
+    <script defer src="./yard-art.js?v=dispatch-1"></script>
+    <script defer src="./dispatch-covers.js?v=dispatch-1"></script>
+    <script defer src="./dispatch-run.js?v=dispatch-1"></script>
+    <script defer src="./dispatch-view.js?v=dispatch-1"></script>
+    <script defer src="./app.js?v=dispatch-1"></script>
   </head>
-  <body>
+  <body class="menu-screen">
     <header class="topbar">
       <div class="shell bar-content">
         <img class="wordmark" src="./assets/wordmark.png" alt="Dog Fight 3" />
@@ -48,9 +55,104 @@
       </div>
     </header>
     <main class="shell">
-      <section id="lobby" class="cabinet" aria-label="Fighter select">
+      <section id="home" class="dispatch-board" aria-labelledby="home-heading">
+        <div class="board-heading">
+          <h1 id="home-heading">Main menu</h1>
+          <span class="rail-rule" aria-hidden="true"></span>
+        </div>
+        <div class="home-grid">
+          <button
+            type="button"
+            id="home-adventure"
+            class="feature-ticket"
+            aria-label="Adventure · The Last Dispatch"
+          >
+            <canvas id="title-cover" width="640" height="360" aria-hidden="true"></canvas>
+            <span class="ticket-corner">Adventure</span>
+            <span class="feature-caption"
+              ><span><small>Chapter 01 · The Silent Yard</small><strong>The Last Dispatch</strong></span
+              ><b>Story map</b></span
+            >
+          </button>
+          <nav class="mode-rack" aria-label="Game modes">
+            <button type="button" data-enter-mode="solo">
+              <i data-icon="paw"></i><span><b>Solo fight</b><small>Take on the CPU</small></span>
+            </button>
+            <button type="button" data-enter-mode="local">
+              <i data-icon="versus"></i
+              ><span><b>Local versus</b><small>Two players on one screen</small></span>
+            </button>
+            <button type="button" data-enter-mode="training">
+              <i data-icon="ledge"></i><span><b>Training</b><small>Free practice and drills</small></span>
+            </button>
+          </nav>
+        </div>
+        <div class="board-foot">
+          <div class="ticket-tools">
+            <button type="button" id="home-guide">Move list</button
+            ><button type="button" id="home-options">Options</button>
+          </div>
+          <span class="menu-hint">↑ ↓ Choose &nbsp; Enter Select</span>
+        </div>
+      </section>
+      <section id="dispatch-route" class="dispatch-board" aria-labelledby="route-title" hidden>
+        <div class="board-heading">
+          <h1 id="route-title">The Last Dispatch</h1>
+          <button class="board-back" id="route-home" type="button">Main menu</button>
+        </div>
+        <div class="route-grid">
+          <div class="route-print">
+            <canvas
+              id="route-cover"
+              width="640"
+              height="360"
+              role="img"
+              aria-label="Rail map of Parcel Alley, Sorting Bridge and Bell Depot"
+            ></canvas>
+            <div><span>Chapter 01</span><strong>The Silent Yard</strong></div>
+          </div>
+          <div class="route-manifest">
+            <h2>Route sheet</h2>
+            <ol id="route-stops"></ol>
+            <div id="route-crew" class="route-crew" role="group" aria-label="Choose a runner"></div>
+          </div>
+        </div>
+        <div class="board-foot">
+          <div class="route-save"><strong id="route-progress"></strong><span id="route-marks"></span></div>
+          <button class="dispatch-primary" id="dispatch-start" type="button">Begin chapter</button>
+        </div>
+      </section>
+      <section id="dispatch-story" class="dispatch-board story-board" aria-labelledby="story-title" hidden>
+        <div class="board-heading">
+          <span>Chapter 01 · The Silent Yard</span
+          ><button class="board-back" id="story-map" type="button">Route map</button>
+        </div>
+        <div class="story-grid">
+          <canvas
+            id="story-cover"
+            width="640"
+            height="360"
+            role="img"
+            aria-label="Story illustration"
+          ></canvas>
+          <div class="story-copy" aria-live="polite">
+            <span id="story-speaker"></span>
+            <h1 id="story-title"></h1>
+            <p id="story-text"></p>
+            <small id="story-count"></small>
+          </div>
+        </div>
+        <div class="board-foot">
+          <button type="button" class="board-back" id="story-skip">Skip scene</button
+          ><button class="dispatch-primary" type="button" id="story-next">Next</button>
+        </div>
+      </section>
+      <section id="lobby" class="cabinet" aria-label="Fighter select" hidden>
         <div class="selection-bar">
-          <h1>Fighter select</h1>
+          <div class="select-title">
+            <button id="lobby-home" class="utility" type="button">Main menu</button>
+            <h1>Fighter select</h1>
+          </div>
           <div class="mode-tabs" role="group" aria-label="Game mode">
             <button type="button" data-mode="solo" aria-pressed="true">Solo</button>
             <button type="button" data-mode="local" aria-pressed="false">Local versus</button>
@@ -129,6 +231,20 @@
             aria-label="Dog Fight 3 arena. Keyboard controls are available from the Controls button."
           ></canvas>
           <div id="hud" class="hud"></div>
+          <div id="dispatch-hud" class="dispatch-hud" hidden>
+            <div class="runner-meter">
+              <img id="runner-portrait" alt="" />
+              <div>
+                <b id="runner-name"></b
+                ><progress id="runner-health" max="64" value="64" aria-label="Runner stamina"></progress>
+              </div>
+            </div>
+            <div id="machine-meter" class="machine-meter" hidden>
+              <b id="machine-name"></b
+              ><progress id="machine-health" max="84" value="84" aria-label="Machine stamina"></progress>
+            </div>
+            <span id="dispatch-notice" hidden></span>
+          </div>
           <span id="grapple-prompt" role="status" hidden></span>
           <div class="training-readouts">
             <output id="launch-status" aria-label="Launch practice" aria-live="polite" hidden></output>
@@ -142,6 +258,9 @@
             <output id="training-combo" aria-label="Last combo" hidden></output>
           </div>
           <div id="countdown" class="countdown" aria-hidden="true"></div>
+        </div>
+        <div id="dispatch-orders" class="dispatch-orders" hidden>
+          <strong id="dispatch-objective" role="status"></strong><span id="dispatch-marks"></span>
         </div>
         <div class="touch-pad" aria-label="Touch controls">
           <div class="dpad">

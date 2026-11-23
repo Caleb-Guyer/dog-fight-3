@@ -157,6 +157,18 @@
       '..####......',
       '..##........',
     ],
+    versus: [
+      '##........##',
+      '###......###',
+      '.###....###.',
+      '..###..###..',
+      '...######...',
+      '....####....',
+      '...######...',
+      '..##.##.##..',
+      '.##......##.',
+      '##........##',
+    ],
     chevron: ['............', '.##......##.', '..##....##..', '...##..##...', '....####....', '.....##.....'],
     spark: [
       '......##....',
@@ -196,13 +208,23 @@
   document.querySelectorAll('i[data-icon]').forEach((el) => (el.innerHTML = svg(el.dataset.icon)));
   const portrait = (kind) => window.DogArt.portrait(kind);
   const modes = { solo: 'Solo', local: 'Local versus', training: 'Training' };
-  const settings = { stage: 'picnic', mode: 'solo', p1: 'pip', p2: 'brisket', fetch: true, sound: true };
+  const settings = {
+    stage: 'picnic',
+    mode: 'solo',
+    p1: 'pip',
+    p2: 'brisket',
+    fetch: true,
+    sound: true,
+    volume: 75,
+    shake: true,
+  };
   try {
     const s = JSON.parse(localStorage.getItem('dog-fight-3.config') || '{}');
     if (Object.hasOwn(arenas, s.stage)) settings.stage = s.stage;
     if (Object.hasOwn(modes, s.mode)) settings.mode = s.mode;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
-    for (const key of ['fetch', 'sound']) if (typeof s[key] === 'boolean') settings[key] = s[key];
+    for (const key of ['fetch', 'sound', 'shake']) if (typeof s[key] === 'boolean') settings[key] = s[key];
+    if (Number.isFinite(s.volume)) settings.volume = Math.max(0, Math.min(100, s.volume));
   } catch {
     /* Settings are optional in private browsing. */
   }
@@ -238,7 +260,7 @@
     } catch {}
   }
   function tone(start, end, length, delay = 0, type = 'triangle', volume = 0.085) {
-    if (!settings.sound || !audioContext || audioContext.state !== 'running') return;
+    if (!settings.sound || !settings.volume || !audioContext || audioContext.state !== 'running') return;
     const now = audioContext.currentTime + delay,
       oscillator = audioContext.createOscillator(),
       gain = audioContext.createGain();
@@ -246,7 +268,7 @@
     oscillator.frequency.setValueAtTime(start, now);
     oscillator.frequency.exponentialRampToValueAtTime(Math.max(22, end), now + length);
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(volume, now + 0.006);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, (volume * settings.volume) / 75), now + 0.006);
     gain.gain.exponentialRampToValueAtTime(0.0001, now + length);
     oscillator.connect(gain);
     gain.connect(audioContext.destination);
@@ -364,7 +386,7 @@
     $('sound').title = label;
   }
   let editing = 0,
-    page = 'lobby',
+    page = 'home',
     world = null,
     view = null,
     countdown = 0,
@@ -524,7 +546,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
-    if (dialogType === 'result') return;
+    if (dialogType === 'result' || dialogType === 'dispatch-fall') return;
     if ((dialogType === 'controls' || dialogType === 'moves') && backToPause) {
       backToPause = false;
       showPause();
@@ -888,6 +910,7 @@
     $('fullscreen').title = s;
   });
   function updateHUD() {
+    if (world.mode === 'adventure') return updateDispatchHUD();
     const combo = world.lastCombo;
     const grip = world.grapple;
     const prompt = $('grapple-prompt');
@@ -975,6 +998,10 @@
     audioReady();
     dismiss();
     page = 'match';
+    for (const id of ['home', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
+      $(id).hidden = true;
+    $('hud').hidden = false;
+    document.body.classList.remove('menu-screen', 'adventure-active');
     drillSide = null;
     drillWaiting = false;
     practiceSide = 'left';
@@ -990,6 +1017,7 @@
     $('lobby').hidden = true;
     $('match').hidden = false;
     view = new FightView();
+    view.shakeEnabled = settings.shake;
     world = new Battle(settings, (name, e) => {
       view.event(name, e);
       sound(name, e);
@@ -1042,7 +1070,9 @@
     dismiss();
     world = null;
     view = null;
-    document.body.classList.remove('playing', 'training-active');
+    document.body.classList.remove('playing', 'training-active', 'adventure-active', 'menu-screen');
+    for (const id of ['home', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
+      $(id).hidden = true;
     $('lobby').hidden = false;
     $('match').hidden = true;
     $('countdown').textContent = '';
@@ -1052,6 +1082,20 @@
   }
   function showPause() {
     if (page !== 'match' || !world || world.end !== null) return;
+    if (world.mode === 'adventure') {
+      if (world.finished) return;
+      showDialog(
+        'pause',
+        'Adventure paused',
+        '<p>' +
+          world.layout.name +
+          ' · ' +
+          world.objective +
+          '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button><button class="utility" data-do="dispatch-retry">Retry checkpoint</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="moves">Move list</button></div><div class="dialog-actions"><button class="utility" data-do="route">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
+      );
+      document.querySelector('[data-do=resume]').focus();
+      return;
+    }
     showDialog(
       'pause',
       'Paused',
@@ -1061,7 +1105,7 @@
         icon('keyboard') +
         'Controls</button><button class="utility" data-do="moves">Move list</button></div><div class="dialog-actions"><button class="utility" data-do="rematch">' +
         icon('reset') +
-        'Restart match</button><button class="utility" data-do="lobby">Fighter select</button></div>',
+        'Restart match</button><button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
     );
     document.querySelector('[data-do=resume]').focus();
   }
@@ -1086,7 +1130,7 @@
         duration +
         '</p></div></div><div class="dialog-actions"><button class="primary" data-do="rematch">' +
         icon('reset') +
-        'Rematch</button><button class="utility" data-do="lobby">Fighter select</button></div>',
+        'Rematch</button><button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
       false,
     );
     announce(f.stats.name + ' wins the Golden Tennis Ball');
@@ -1119,6 +1163,19 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if (action === 'home') showHome();
+    if (action === 'route') showRoute();
+    if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpointLit, world.dogs[0].kind);
+    if (action === 'option-sound' || action === 'option-shake') {
+      const key = action === 'option-sound' ? 'sound' : 'shake';
+      settings[key] = !settings[key];
+      save();
+      updateAudio();
+      audioReady();
+      sound('menu');
+      showOptions();
+      document.querySelector('[data-do="' + action + '"]').focus();
+    }
     if (action === 'resume' || action === 'close') exitDialog();
     if (action === 'lobby') toLobby();
     if (action === 'rematch') startMatch();
@@ -1471,6 +1528,397 @@
     practiceSide = practiceSide === 'left' ? 'right' : 'left';
     drill('air', false, 'edge');
   };
+  const campaign = window.DispatchScript;
+  let storage;
+  try {
+    storage = window.localStorage;
+  } catch {}
+  let progress = campaign.readSave(storage),
+    stored = !!storage,
+    runner = progress.hero;
+  let storyKey = '',
+    storyPage = 0,
+    afterStory = null,
+    adventureKey = '',
+    padRelease = false,
+    noticeUntil = 0;
+  function saveProgress(event) {
+    // Keep the furthest checkpoint and collected postmarks if two tabs are playing.
+    const disk = campaign.readSave(storage);
+    if (disk.started) {
+      const score = (p) => (p.complete ? 10 : 0) + p.room * 2 + Number(p.midway);
+      if (score(disk) > score(progress)) progress = { ...disk, stamps: progress.stamps | disk.stamps };
+      else progress.stamps |= disk.stamps;
+    }
+    progress = campaign.record(progress, event);
+    try {
+      storage.setItem(campaign.saveKey, JSON.stringify(progress));
+      stored = true;
+    } catch {
+      stored = false;
+    }
+  }
+  const countMarks = (bits) => [1, 2, 4].filter((bit) => bits & bit).length;
+  function menuScreen(id) {
+    dismiss();
+    world = null;
+    view = null;
+    page = id;
+    drillSide = null;
+    drillWaiting = false;
+    document.body.classList.remove('playing', 'training-active', 'adventure-active');
+    document.body.classList.add('menu-screen');
+    for (const screen of ['home', 'dispatch-route', 'dispatch-story', 'lobby', 'match'])
+      $(screen).hidden = screen !== id;
+    window.scrollTo(0, 0);
+  }
+  function showHome(focus = true) {
+    menuScreen('home');
+    afterStory = null;
+    window.DispatchCovers.draw($('title-cover'), 'title');
+    if (focus) $('home-adventure').focus({ preventScroll: true });
+  }
+  function showRoute() {
+    menuScreen('dispatch-route');
+    afterStory = null;
+    runner = progress.hero;
+    window.DispatchCovers.draw($('route-cover'), 'route');
+    const stops = $('route-stops');
+    stops.replaceChildren();
+    for (const [i, r] of campaign.rooms.entries()) {
+      const li = document.createElement('li'),
+        button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.stop = i;
+      const sealed = i > progress.room,
+        marked = !!(progress.stamps & (1 << i));
+      button.disabled = sealed;
+      const status = sealed
+        ? 'Sealed'
+        : marked
+          ? 'Postmark found'
+          : i === progress.room && !progress.complete
+            ? 'Current stop'
+            : 'Open stop';
+      button.innerHTML =
+        '<em>0' + (i + 1) + '</em><span><b>' + r.name + '</b><small>' + status + '</small></span>';
+      li.append(button);
+      stops.append(li);
+    }
+    $('route-crew').innerHTML = (progress.room > 0 ? ['pip', 'noodle'] : ['pip'])
+      .map(
+        (kind) =>
+          '<button type="button" data-runner="' +
+          kind +
+          '" aria-pressed="' +
+          (runner === kind) +
+          '" aria-label="Run as ' +
+          fighters[kind].name +
+          '"><img alt="" src="' +
+          portrait(kind) +
+          '">' +
+          fighters[kind].name +
+          '</button>',
+      )
+      .join('');
+    $('route-progress').textContent = progress.complete
+      ? 'Chapter clear'
+      : progress.started
+        ? (stored ? 'Saved at ' : 'This session · ') +
+          campaign.rooms[progress.room].name +
+          (progress.midway ? ' semaphore' : '')
+        : 'First stop · Parcel Alley';
+    $('route-marks').textContent =
+      'Postmarks ' +
+      countMarks(progress.stamps) +
+      ' / 3' +
+      (!stored ? ' · Progress lasts for this session' : '');
+    $('dispatch-start').textContent =
+      progress.pending === 'ending'
+        ? 'Read ending'
+        : progress.complete
+          ? 'Replay chapter'
+          : progress.started
+            ? 'Continue'
+            : 'Begin chapter';
+    $('dispatch-start').focus({ preventScroll: true });
+  }
+  function story(key, then) {
+    menuScreen('dispatch-story');
+    storyKey = key;
+    storyPage = 0;
+    afterStory = then;
+    const scene = campaign.scenes[key];
+    window.DispatchCovers.draw($('story-cover'), scene.art);
+    $('story-cover').setAttribute('aria-label', scene.title + ' illustration');
+    $('story-title').textContent = scene.title;
+    showStoryPage();
+    $('story-next').focus({ preventScroll: true });
+  }
+  function showStoryPage() {
+    const scene = campaign.scenes[storyKey],
+      [speaker, line] = scene.pages[storyPage];
+    $('story-speaker').textContent = speaker;
+    $('story-text').textContent = line;
+    $('story-count').textContent = storyPage + 1 + ' / ' + scene.pages.length;
+    $('story-next').textContent =
+      storyPage + 1 < scene.pages.length
+        ? 'Next'
+        : storyKey === 'ending'
+          ? 'Chapter results'
+          : storyKey === 'rescue'
+            ? 'Choose runner'
+            : 'Set out';
+  }
+  function finishStory() {
+    const next = afterStory;
+    afterStory = null;
+    if (next) next();
+  }
+  function chooseBridgeRunner() {
+    showRoute();
+    showDialog(
+      'dispatch-crew',
+      'Noodle joined the crew',
+      '<p>Choose who will cross Sorting Bridge. Both dogs have their full fighting moves.</p><div class="dialog-actions"><button class="primary" data-crew="noodle">Run as Noodle</button><button class="utility" data-crew="pip">Run as Pip</button></div>',
+    );
+    document.querySelector('[data-crew=noodle]').focus();
+  }
+  function chapterClear() {
+    saveProgress({ room: 2, pending: '', complete: true });
+    showRoute();
+    showDialog(
+      'dispatch-clear',
+      'Chapter clear',
+      '<div class="winner"><img alt="" src="' +
+        portrait('clover') +
+        '"><div><span class="mode-label">The Last Dispatch</span><h3>The Silent Yard</h3><p>' +
+        countMarks(progress.stamps) +
+        ' of 3 postmarks collected.</p></div></div><p>The bell is back in service. Clover has the next dispatch.</p><div class="dialog-actions"><button class="primary" data-do="close">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
+    );
+    document.querySelector('[data-do=close]').focus();
+  }
+  function playScene(key) {
+    const scene = campaign.scenes[key],
+      room = campaign.rooms.findIndex((r) => r.id === scene.stop);
+    if (!progress.complete) saveProgress({ room, pending: key, complete: !!scene.completesChapter });
+    if (scene.completesChapter) {
+      for (const [pitch, gain] of [
+        [392, 0.13],
+        [784, 0.06],
+        [1038, 0.032],
+      ]) {
+        tone(pitch, pitch * 0.996, 0.95, 0, 'sine', gain);
+        tone(pitch, pitch * 0.992, 0.62, 0.58, 'sine', gain * 0.45);
+      }
+    }
+    story(key, () => {
+      if (scene.completesChapter) return chapterClear();
+      if (scene.chooseRunner) return chooseBridgeRunner();
+      beginRun(room, false, room === 0 ? 'pip' : runner);
+    });
+  }
+  function enterStop(index, midway = false) {
+    audioReady();
+    sound('menu');
+    const intro = campaign.rooms[index].intro;
+    if (!midway && !campaign.scenes[intro].chooseRunner) playScene(intro);
+    else beginRun(index, midway, index === 0 ? 'pip' : runner);
+  }
+  function beginRun(index, midway, hero) {
+    dismiss();
+    page = 'match';
+    drillSide = null;
+    drillWaiting = false;
+    padRelease = true;
+    countdown = 0;
+    adventureKey = '';
+    for (const id of [
+      'home',
+      'dispatch-route',
+      'dispatch-story',
+      'lobby',
+      'training-tools',
+      'recovery-tip',
+      'hud',
+      'grapple-prompt',
+    ])
+      $(id).hidden = true;
+    $('match').hidden = $('dispatch-hud').hidden = $('dispatch-orders').hidden = false;
+    $('countdown').textContent = '';
+    document.body.classList.remove('menu-screen', 'training-active');
+    document.body.classList.add('playing', 'adventure-active');
+    hero = index === 0 ? 'pip' : hero;
+    runner = hero;
+    saveProgress({ room: index, midway, pending: '', hero: index > 0 ? hero : undefined });
+    view = new window.DispatchView();
+    view.shakeEnabled = settings.shake;
+    noticeUntil = 0;
+    $('dispatch-notice').hidden = true;
+    world = new window.DispatchRun({ room: index, midway, hero, stamps: progress.stamps }, (name, e) => {
+      view.event(name, e);
+      if (name === 'dispatchCheckpoint') {
+        saveProgress({ room: index, midway: true });
+        tone(485, 735, 0.12);
+        tone(735, 980, 0.13, 0.12);
+        dispatchNotice(stored ? 'Checkpoint saved' : 'Checkpoint reached');
+      } else if (name === 'dispatchStamp') {
+        saveProgress({ room: index, stamp: index });
+        tone(760, 1150, 0.09);
+        dispatchNotice('Postmark collected');
+      } else if (name === 'dispatchSignal') {
+        tone(330, 660, 0.19);
+        dispatchNotice('Signal clear');
+      } else if (name === 'machineWindup') {
+        tone(e.move === 'charge' ? 240 : 160, e.move === 'charge' ? 390 : 210, 0.18, 0, 'triangle', 0.07);
+      } else if (name === 'machineDown') {
+        tone(215, 48, 0.18);
+        tone(620, 435, 0.12, 0.1);
+      } else if (name === 'machineSwing') tone(135, 55, 0.11);
+      else sound(name, e);
+    });
+    $('match-mode').textContent = 'Adventure · The Last Dispatch';
+    $('match-stage').textContent = world.layout.name;
+    $('runner-portrait').src = portrait(hero);
+    $('runner-name').textContent = fighters[hero].name;
+    updateDispatchHUD();
+    view.draw($('game'), world, 0, 0);
+    $('game').focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+    announce('Adventure · ' + world.layout.name);
+  }
+  function dispatchNotice(message) {
+    $('dispatch-notice').textContent = message;
+    $('dispatch-notice').hidden = false;
+    noticeUntil = world.time + 1.7;
+    announce(message);
+  }
+  function updateDispatchHUD() {
+    if (noticeUntil && world.time >= noticeUntil) {
+      noticeUntil = 0;
+      $('dispatch-notice').hidden = true;
+    }
+    const enemy = world.enemy;
+    const key = [world.hp, world.stamps, world.objective, enemy?.kind, enemy?.hp].join('|');
+    if (key === adventureKey) return;
+    adventureKey = key;
+    $('runner-health').value = world.hp;
+    $('runner-health').setAttribute('aria-valuetext', Math.ceil(world.hp) + ' of 64');
+    $('machine-meter').hidden = !enemy;
+    if (enemy) {
+      $('machine-name').textContent = world.dogs[1].stats.name;
+      $('machine-health').max = enemy.maxHP;
+      $('machine-health').value = enemy.hp;
+    }
+    $('dispatch-marks').textContent = 'Postmarks ' + countMarks(world.stamps) + ' / 3';
+    if ($('dispatch-objective').textContent !== world.objective)
+      $('dispatch-objective').textContent = world.objective;
+  }
+  function runAdventure(dt, pads) {
+    accumulator += dt;
+    if (!down(pads[0], 0)) padRelease = false;
+    while (accumulator >= 1 / 60 && !world.finished) {
+      const input = playerInput(0, pads);
+      if (padRelease) input.jump = false;
+      world.step(1 / 60, input);
+      taps.clear();
+      touchTaps.clear();
+      accumulator -= 1 / 60;
+    }
+    updateDispatchHUD();
+    view.draw($('game'), world, dt, world.time);
+    if (world.finished === 'exit') {
+      playScene(world.layout.outro);
+    } else if (world.finished === 'fallen') {
+      showDialog(
+        'dispatch-fall',
+        'Runner down',
+        '<p>Pick up the trail at ' +
+          world.layout.name +
+          (world.checkpointLit ? '’s semaphore.' : '’s entrance.') +
+          '</p><div class="dialog-actions"><button class="primary" data-do="dispatch-retry">Retry checkpoint</button><button class="utility" data-do="route">Route map</button></div>',
+        false,
+      );
+      document.querySelector('[data-do=dispatch-retry]').focus();
+    }
+  }
+  function showOptions() {
+    showDialog(
+      'options',
+      'Options',
+      '<div class="option-list"><button type="button" data-do="option-sound" aria-pressed="' +
+        settings.sound +
+        '">Sound effects <b>' +
+        (settings.sound ? 'On' : 'Off') +
+        '</b></button><label for="option-volume">Volume <input type="range" id="option-volume" min="0" max="100" step="5" value="' +
+        settings.volume +
+        '"><output id="option-volume-value">' +
+        settings.volume +
+        '%</output></label><button type="button" data-do="option-shake" aria-pressed="' +
+        settings.shake +
+        '">Camera shake <b>' +
+        (settings.shake ? 'On' : 'Off') +
+        '</b></button></div><div class="dialog-actions"><button class="primary" data-do="close">Done</button></div>',
+    );
+  }
+  $('dialog-body').addEventListener('input', (e) => {
+    if (e.target.id === 'option-volume') {
+      settings.volume = Number(e.target.value);
+      $('option-volume-value').textContent = settings.volume + '%';
+      save();
+      audioReady();
+    }
+  });
+  $('dialog-body').addEventListener('click', (e) => {
+    const pick = e.target.closest('[data-crew]');
+    if (pick) beginRun(1, false, pick.dataset.crew);
+  });
+  $('home-adventure').onclick = () => {
+    audioReady();
+    sound('menu');
+    showRoute();
+  };
+  document.querySelector('.mode-rack').onclick = (e) => {
+    const b = e.target.closest('[data-enter-mode]');
+    if (!b) return;
+    settings.mode = b.dataset.enterMode;
+    editing = 0;
+    save();
+    audioReady();
+    sound('menu');
+    toLobby();
+  };
+  $('home-guide').onclick = () => showMoves(settings.p1);
+  $('home-options').onclick = showOptions;
+  $('lobby-home').onclick = $('route-home').onclick = () => showHome();
+  $('story-map').onclick = showRoute;
+  $('story-next').onclick = () => {
+    sound('menu');
+    if (storyPage + 1 < campaign.scenes[storyKey].pages.length) {
+      storyPage++;
+      showStoryPage();
+    } else finishStory();
+  };
+  $('story-skip').onclick = finishStory;
+  $('route-stops').onclick = (e) => {
+    const b = e.target.closest('[data-stop]');
+    if (b && !b.disabled) enterStop(Number(b.dataset.stop));
+  };
+  $('route-crew').onclick = (e) => {
+    const b = e.target.closest('[data-runner]');
+    if (!b) return;
+    runner = b.dataset.runner;
+    if (progress.room > 0) saveProgress({ room: progress.room, hero: runner });
+    showRoute();
+    document.querySelector('[data-runner="' + runner + '"]').focus();
+  };
+  $('dispatch-start').onclick = () => {
+    audioReady();
+    sound('menu');
+    if (progress.pending) return playScene(progress.pending);
+    if (progress.complete) return playScene('opening');
+    enterStop(progress.room, progress.midway);
+  };
   const keys = [
     {
       left: 'KeyA',
@@ -1562,6 +2010,49 @@
     }
   }
   const down = (pad, i) => !!pad?.buttons?.[i]?.pressed;
+  function menuButtons() {
+    const root = $('dialog').open ? $('dialog') : $(page);
+    return root
+      ? [...root.querySelectorAll('button,input[type=range]')].filter(
+          (el) => el.offsetWidth && el.offsetHeight && !el.disabled,
+        )
+      : [];
+  }
+  function moveMenuFocus(direction) {
+    const items = menuButtons(),
+      i = items.indexOf(document.activeElement);
+    if (items.length)
+      items[
+        i < 0 ? (direction > 0 ? 0 : items.length - 1) : (i + direction + items.length) % items.length
+      ].focus();
+  }
+  function menuBack() {
+    if ($('dialog').open) {
+      exitDialog();
+      return;
+    }
+    if (page === 'dispatch-story') showRoute();
+    else if (page === 'dispatch-route' || page === 'lobby') showHome();
+  }
+  window.addEventListener('keydown', (e) => {
+    if (
+      (page === 'match' && !$('dialog').open) ||
+      e.altKey ||
+      e.ctrlKey ||
+      e.metaKey ||
+      e.target instanceof HTMLInputElement
+    )
+      return;
+    if (e.code === 'Escape' && !$('dialog').open) {
+      e.preventDefault();
+      menuBack();
+      return;
+    }
+    if (['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(e.code)) {
+      e.preventDefault();
+      moveMenuFocus(e.code === 'ArrowDown' || e.code === 'ArrowRight' ? 1 : -1);
+    }
+  });
   function playerInput(i, pads) {
     const map = keys[i];
     const tapped = (action) => taps.has(map[action]) || (!i && touchTaps.has(action));
@@ -1616,6 +2107,13 @@
     const now = {
       pause: any(9),
       confirm: any(0),
+      back: any(1),
+      horizontal:
+        any(15) || pads.some((p) => (p.axes[0] || 0) > 0.65)
+          ? 1
+          : any(14) || pads.some((p) => (p.axes[0] || 0) < -0.65)
+            ? -1
+            : 0,
       next: any(13) || any(15) || pads.some((p) => (p.axes[0] || 0) > 0.65 || (p.axes[1] || 0) > 0.65),
       prev: any(12) || any(14) || pads.some((p) => (p.axes[0] || 0) < -0.65 || (p.axes[1] || 0) < -0.65),
     };
@@ -1623,17 +2121,19 @@
       if (dialogType === 'pause') dismiss();
       else if (page === 'match' && !dialogType) showPause();
       else if (page === 'lobby' && !dialogType) startMatch();
-    } else if (page === 'lobby' || $('dialog').open) {
-      const root = $('dialog').open ? $('dialog') : document,
-        items = Array.from(root.querySelectorAll('button')).filter(
-          (el) => el.offsetWidth && el.offsetHeight && !el.disabled,
-        );
+    } else if (page !== 'match' || $('dialog').open) {
+      const items = menuButtons();
       const n = items.indexOf(document.activeElement);
-      if (items.length && ((now.next && !oldPad.next) || (now.prev && !oldPad.prev)))
-        items[(n + (now.next ? 1 : -1) + items.length) % items.length].focus({ preventScroll: false });
+      if (n >= 0 && items[n].type === 'range' && now.horizontal && now.horizontal !== oldPad.horizontal) {
+        if (now.horizontal > 0) items[n].stepUp();
+        else items[n].stepDown();
+        items[n].dispatchEvent(new Event('input', { bubbles: true }));
+      } else if (now.back && !oldPad.back) menuBack();
+      else if (items.length && ((now.next && !oldPad.next) || (now.prev && !oldPad.prev)))
+        moveMenuFocus(now.next ? 1 : -1);
       if (now.confirm && !oldPad.confirm) {
         if (n >= 0) items[n].click();
-        else if (page === 'lobby' && !$('dialog').open) startMatch();
+        else if (items.length) items[0].click();
       }
     }
     oldPad = now;
@@ -1649,6 +2149,8 @@
         drawPreview($('preview'), settings, now);
         lastPreview = now;
       }
+    } else if (!paused && world?.mode === 'adventure') {
+      runAdventure(dt, pads);
     } else if (!paused && world) {
       if (countdown > 0) {
         countdown = Math.max(0, countdown - dt);
@@ -1706,5 +2208,6 @@
   }
   updateAudio();
   syncLobby();
+  showHome();
   requestAnimationFrame(frame);
 })();
