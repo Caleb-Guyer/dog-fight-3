@@ -275,6 +275,8 @@
     } else if (name === 'parry') {
       tone(1280, 1640, 0.055, 0, 'square', 0.053);
       tone(760, 1260, 0.14, 0.035, 'triangle', 0.085);
+    } else if (name === 'ledgeTrump') {
+      tone(490, 245, 0.075, 0, 'triangle', 0.06);
     } else if (name === 'ledgeRoll') {
       tone(215, 86, 0.085, 0, 'triangle', 0.045);
     } else if (name === 'shieldRoll' || name === 'spotDodge') {
@@ -784,7 +786,7 @@
           'ledgeRoll',
           'defense',
         ) +
-        '</ul><h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><ul class="move-rows guide-defense">' +
+        '</ul><h3 class="guide-section">Ledge trumping</h3><p>Catch an occupied ledge to bump the other dog outward. A fresh catch protects you for 15 frames. Regrabs leave you open until you land or take a hit. Play either side in <strong>Training → Contested ledge</strong>.</p><h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><ul class="move-rows guide-defense">' +
         rows +
         '</ul>';
     } else if (section === 'throws') {
@@ -947,6 +949,7 @@
     $('shield-status').hidden = $('shield-patterns').hidden = true;
     $('air-status').hidden = $('air-patterns').hidden = true;
     $('roll-status').hidden = $('roll-patterns').hidden = true;
+    $('trump-status').hidden = $('trump-patterns').hidden = true;
     $('recovery-tip').hidden = true;
     document.body.classList.add('playing');
     document.body.classList.toggle('training-active', settings.mode === 'training');
@@ -961,6 +964,7 @@
       if (name === 'airStart' || name === 'airCue' || name === 'airResult') airFeedback(name, e);
       if (world?.rollPractice && e.f?.index === 0 && (name === 'ledgeRoll' || name === 'rollResult'))
         rollFeedback(name, e);
+      if (world?.trumpPractice) trumpFeedback(name, e);
       if (name === 'ledgeRollEnd' && drillSide && e.f.index === 0) {
         $('recovery-tip').textContent =
           e.f.kit.ledgeRoll.label + ' finished. You’re facing the ledge. Tap Attack to jab.';
@@ -1219,13 +1223,70 @@
     };
     $('recovery-tip').textContent = tips[e.outcome];
   }
+  function trumpFeedback(name, e) {
+    const drill = world.trumpPractice;
+    const player = world.dogs[0];
+    const status = $('trump-status');
+    let result, label, tip;
+    if (name === 'ledgeTrump') {
+      if (e.target === player) {
+        result = 'lost';
+        label = 'Bumped off';
+        tip = 'You can still jump or use Up + Special. Catching the lip again leaves you open to a hit.';
+      } else if (!e.f.ledge.protectedCatch) {
+        result = 'regrab';
+        label = 'Vulnerable regrab';
+        tip = 'You took the ledge back. Roll, jump or attack before the rival reaches you.';
+      } else {
+        result = 'won';
+        label = 'Ledge trump';
+        tip =
+          'You bumped the other dog off. To try a regrab, tap Down to drop, then jump back toward the lip.';
+      }
+    } else if (name === 'ledge' && !e.trump && e.f === player && !e.protectedCatch) {
+      result = 'regrab';
+      label = 'Vulnerable regrab';
+      tip = 'You caught the ledge again. Land or take a hit to restore protection for your next catch.';
+    } else if (name === 'ledge' && !e.trump && e.f === player && e.protectedCatch) {
+      result = 'safe';
+      label = 'Protected catch';
+      tip = 'You caught a free ledge with fresh protection. Choose either role to try the contest again.';
+    } else if (
+      name === 'ledge' &&
+      !e.trump &&
+      e.protectedCatch &&
+      e.f.index === 1 &&
+      drill.role === 'defend' &&
+      drill.phase === 'caught'
+    ) {
+      result = 'clear';
+      label = 'Cleared the ledge';
+      tip = 'You left the lip before the rival arrived. Choose Defend the ledge to try a different exit.';
+    } else if (name === 'hit' && e.f.index === 1 && drill.phase === 'intercepted') {
+      result = 'intercepted';
+      label = 'Recovery intercepted';
+      tip = 'Your attack reached the rival before they caught the ledge.';
+    } else if (
+      name === 'ko' &&
+      e.f === player &&
+      (drill.phase === 'approach' || status.dataset.result === 'lost')
+    ) {
+      result = 'miss';
+      label = 'Missed the ledge';
+      tip = 'Choose Take the ledge or Defend the ledge to retry.';
+    } else return;
+    status.dataset.result = result;
+    status.textContent = label;
+    $('recovery-tip').textContent = tip;
+  }
   function drill(ledge, fromHang = false, pattern = 'strike') {
     if (!world) return;
     const launch = ledge === 'launch';
     const shield = ledge === 'shield';
     const air = ledge === 'air';
     const roll = ledge === 'roll';
-    drillSide = launch || shield || air || roll ? null : ledge || null;
+    const trump = ledge === 'trump';
+    drillSide = launch || shield || air || roll || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
@@ -1233,6 +1294,7 @@
     else if (shield) world.resetShieldPractice(pattern);
     else if (air) world.resetAirPractice(pattern, practiceSide);
     else if (roll) world.resetLedgeRollPractice(pattern, practiceSide);
+    else if (trump) world.resetLedgeTrumpPractice(pattern, practiceSide);
     else world.resetTraining(ledge, fromHang);
     const player = world.dogs[0];
     const result = $('launch-status');
@@ -1240,8 +1302,20 @@
     $('shield-status').hidden = $('shield-patterns').hidden = !shield;
     $('air-status').hidden = $('air-patterns').hidden = !air;
     $('roll-status').hidden = $('roll-patterns').hidden = !roll;
+    $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
-    if (roll) {
+    if (trump) {
+      const defend = pattern === 'defend';
+      $('trump-take').setAttribute('aria-pressed', String(!defend));
+      $('trump-defend').setAttribute('aria-pressed', String(defend));
+      $('trump-status').dataset.result = 'ready';
+      $('trump-status').textContent = (practiceSide === 'left' ? 'Left' : 'Right') + ' ledge';
+      message = defend
+        ? 'The rival is coming. Wait to feel the bump, or tap Shield to roll before they catch the lip.'
+        : 'The rival has the ledge. Drift ' +
+          (practiceSide === 'left' ? 'right' : 'left') +
+          ' or use your recovery to take it.';
+    } else if (roll) {
       const read = pattern === 'read';
       $('roll-status').dataset.result = 'ready';
       $('roll-status').textContent = practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
@@ -1295,6 +1369,13 @@
   $('ledge-training').onclick = () => drill('left');
   $('ledge-right').onclick = () => drill('right');
   $('ledge-attack-training').onclick = () => drill(practiceSide, true);
+  $('trump-training').onclick = () => drill('trump', false, world?.trumpPractice?.role || 'take');
+  $('trump-take').onclick = () => drill('trump', false, 'take');
+  $('trump-defend').onclick = () => drill('trump', false, 'defend');
+  $('trump-side').onclick = () => {
+    practiceSide = practiceSide === 'left' ? 'right' : 'left';
+    drill('trump', false, world.trumpPractice.role);
+  };
   $('ledge-roll-training').onclick = () => drill('roll', false, world?.rollPractice?.pattern || 'guard');
   $('roll-guard').onclick = () => drill('roll', false, 'guard');
   $('roll-read').onclick = () => drill('roll', false, 'read');

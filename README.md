@@ -180,6 +180,14 @@ While hanging, tap **Shield** to roll past a guard and turn back toward the ledg
 
 In **Training → Ledge roll practice**, **Close guard** swings at the lip. Roll past and tap Attack as your dog turns. **Read the roll** waits at the landing spot with a grab. Try jumping from the same position to make the grab miss. **Switch ledge** mirrors either setup.
 
+## Ledge trumping
+
+Catch the same lip as a hanging dog to take their place. A falling catch, a directional air dodge and Noodle’s Ledge Lasso can all do it. The displaced dog pops outward without taking damage and can jump, attack, or use a recovery special after the brief recoil. Rolling, jumping or dropping before the other dog arrives leaves the lip free.
+
+Your first catch protects you for 15 frames. Let go and catch any ledge again during the same recovery and opponents can hit or grab you immediately. Landing on a platform or taking a hit restores protection for your next catch. You can still trump someone with a vulnerable regrab.
+
+Open **Training → Contested ledge**. **Take the ledge** starts you outside a rival’s grip. Drift inward or use your recovery. **Defend the ledge** starts you hanging while the rival approaches. Wait for the bump, tap Shield to roll clear, or drop early and try a back air. Select Noodle as the dummy to practice against Ledge Lasso. **Switch ledge** mirrors both roles.
+
 ## Specials and recovery
 
 Press Special alone for Neutral. Hold left or right, up, or down as you press Special for the other three moves. These inputs work on the ground and in the air. On touchscreens, ↖ and ↗ aim an Up Special toward the stage. Slide your thumb onto a side arrow to steer. In the **Move list**, choose **Specials & recovery** to see the timing and artwork for each move.

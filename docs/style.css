@@ -665,6 +665,9 @@ body.playing .tools .utility,
 #shield-status[data-result='parry'],
 #roll-status[data-result='passed'],
 #roll-status[data-result='counter'],
+#trump-status[data-result='won'],
+#trump-status[data-result='clear'],
+#trump-status[data-result='intercepted'],
 #air-status[data-result='evade'],
 #air-status[data-result='ledge'],
 #air-status[data-result='land'] {
@@ -791,12 +794,14 @@ kbd {
 }
 #shield-patterns,
 #roll-patterns,
+#trump-patterns,
 #air-patterns {
   display: inline-flex;
   gap: 2px;
 }
 #shield-patterns [aria-pressed='true'],
 #roll-patterns [aria-pressed='true'],
+#trump-patterns [aria-pressed='true'],
 #air-patterns [aria-pressed='true'] {
   background: var(--gold);
   border-color: var(--ink);

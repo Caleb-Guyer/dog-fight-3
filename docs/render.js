@@ -238,6 +238,7 @@
         clamp(action.time / action.duration, 0, 1),
       ];
     }
+    if (f.ledgeTrump) return ['ledgeTrump', clamp(f.ledgeTrump.time / f.ledgeTrump.duration, 0, 1)];
     if (f.tumble) return ['tumble', 0];
     if (f.stun > 0) {
       if (!f.reaction) return ['hurt', 0.3];
@@ -1208,6 +1209,48 @@
     }
     ctx.restore();
   }
+  function slippingPaw(ctx, f, face, phase, lip) {
+    if (phase < 0.23 || phase >= 0.72) return;
+    const paw = window.DogArt.pawPoint(f.kind, 'ledgeTrump', phase, 'rear');
+    if (!paw) return;
+    const x = f.x + face * paw[0],
+      y = f.y + paw[1];
+    // Leave the shared corner to the new holder until the two paws visibly separate.
+    if (lip && Math.hypot(x - lip.x, y - lip.y) < 15) return;
+    ctx.save();
+    ctx.translate(snap(x, 2), snap(y, 2));
+    ctx.scale(face, 1);
+    ctx.globalAlpha *= clamp((0.72 - phase) * 4.5, 0, 1);
+    const end = reduced.matches ? 9 : 13;
+    const drop = f.vy < 0 ? 3 : -3;
+    pixelLine(ctx, 4, 0, end, drop, '#746c78', 3, 2);
+    pixelLine(ctx, 4, 0, end - 2, drop, '#c7bac4', 2, 2);
+    ctx.restore();
+  }
+  function ledgeCatchMark(ctx, e, p) {
+    ctx.save();
+    ctx.translate(snap(e.x, 2), snap(e.y, 2));
+    ctx.scale(e.face, 1);
+    ctx.globalAlpha *= Math.min(1, (1 - p) * 2);
+    if (e.type === 'ledgeClaim') {
+      // A single team-colored hook wraps around the corner where the hands change places.
+      const rise = reduced.matches ? 0 : snap(Math.min(1, p * 2) * 2, 2);
+      for (const [color, width] of [
+        [ink, 5],
+        [e.color, 3],
+      ]) {
+        pixelLine(ctx, -7, 5, -7, 1, color, width, 2);
+        pixelLine(ctx, -7, 1, -1, -6 - rise, color, width, 2);
+        pixelLine(ctx, -1, -6 - rise, 10, -6 - rise, color, width, 2);
+      }
+      if (e.protectedCatch) pixelLine(ctx, -1, -6 - rise, 3, -6 - rise, cream, 2, 2);
+    } else {
+      // A vulnerable regrab makes a quiet scrape against the vertical face.
+      pixelLine(ctx, -3, 6, -3, 2, '#847c87', 3, 2);
+      pixelLine(ctx, -3, 2, 1, 0, '#b8a9a0', 2, 2);
+    }
+    ctx.restore();
+  }
   function shieldSlip(ctx, f) {
     const a = f.floorAction;
     if (a?.type !== 'shieldRoll' && a?.type !== 'spotDodge') return;
@@ -1388,6 +1431,9 @@
     if (state === 'tumble') {
       face = f.reaction?.face || f.face;
       spriteTime = reduced.matches ? 0.21 : f.tumble.time;
+    } else if (state === 'ledgeTrump') {
+      face = -f.ledgeTrump.dir;
+      spriteTime = reduced.matches ? 0 : f.ledgeTrump.time;
     } else if (f.floorAction) {
       if (state === 'techRoll' || state === 'shieldRoll' || state === 'ledgeRoll')
         face = f.floorAction.dir || f.face;
@@ -1422,6 +1468,7 @@
       dodgeY: f.airDodge?.y || 0,
     });
     ctx.restore();
+    if (state === 'ledgeTrump') slippingPaw(ctx, f, face, phase, world.dogs[1 - f.index]?.ledge);
     swing(ctx, f, world.terrain[f.ground]);
     if (f.shield) {
       const r = 34 + f.shieldHP * 15;
@@ -1666,6 +1713,7 @@
     const p = 1 - clamp(e.life / e.max, 0, 1);
     if (e.type === 'airGather' || e.type === 'airWake') return airDodgeStart(ctx, e, p);
     if (e.type === 'lipDust' || e.type === 'ledgePlant') return ledgeRollDust(ctx, e, p);
+    if (e.type === 'ledgeClaim' || e.type === 'ledgeRegrab') return ledgeCatchMark(ctx, e, p);
     if (e.type === 'techLand' || e.type === 'knockDust' || e.type === 'riseScuff' || e.type === 'spotStep') {
       landingEffect(ctx, e, p);
       return;
@@ -1860,7 +1908,27 @@
         this.add('burst', clamp(e.x, 30, 1170), clamp(e.y, 38, 620), team[f.index], 0.7, 108);
         if (!reduced.matches) this.shake = 10;
       }
-      if (name === 'ledge') this.add('star', f.ledge.x, f.ledge.y, cream, 0.19, 16);
+      if (name === 'ledgeTrump' || (name === 'ledge' && !e.trump)) {
+        const claimed = name === 'ledgeTrump',
+          edge = e.edge || f.ledge;
+        // A simultaneous first arrival can mark this lip before the winning catch is resolved.
+        this.effects = this.effects.filter(
+          (effect) => !effect.lip || effect.lip.index !== edge.index || effect.lip.left !== edge.left,
+        );
+        const protectedCatch = e.protectedCatch ?? f.ledge?.protectedCatch ?? true;
+        const type = claimed ? 'ledgeClaim' : protectedCatch ? 'star' : 'ledgeRegrab';
+        const point = e.point || edge;
+        this.add(
+          type,
+          point.x,
+          point.y,
+          claimed ? team[f.index] : cream,
+          type === 'ledgeRegrab' ? 0.12 : 0.19,
+          16,
+          e.dir || (edge.left ? 1 : -1),
+          { lip: edge, protectedCatch },
+        );
+      }
     }
     draw(canvas, world, dt, time) {
       const ctx = canvas.getContext('2d'),
@@ -1920,7 +1988,9 @@
         drawFighter(ctx, holder, world, poseTime);
         gripLead(ctx, holder, grip);
       } else {
-        for (const f of world.dogs) if (f.stocks > 0) drawFighter(ctx, f, world, poseTime);
+        // Keep the hands that actually hold the lip visible for either player slot.
+        const order = a.ledge && b.ledgeTrump ? [b, a] : world.dogs;
+        for (const f of order) if (f.stocks > 0) drawFighter(ctx, f, world, poseTime);
       }
       for (const d of world.projectiles) {
         drawItem(ctx, d);

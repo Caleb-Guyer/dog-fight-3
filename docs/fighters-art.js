@@ -3063,7 +3063,7 @@
       recoil: [-2, -7, -15, -20, -13, -2, 7, 6, 2, 0],
     },
   };
-  const sharedPointPoses = ['floorAttack', 'parry', 'ledgeRoll'];
+  const sharedPointPoses = ['floorAttack', 'parry', 'ledgeRoll', 'ledgeTrump'];
   const ledgeRollStyles = {
     pip: {
       total: 23, safe: [2, 12], plant: 6, arrive: 16, distance: 96, front: 5, rear: 1,
@@ -3332,6 +3332,7 @@
   function frameNumber(pose, time, phase, name = 'pip', backRoll = false) {
     const tick = (period) => Math.floor((Math.abs(time) % 1000000) * period);
     if (pose === 'ledgeRoll') return ledgeRollFrame(name, phase);
+    if (pose === 'ledgeTrump') return Math.min(5, Math.round(phase * 5 + 1e-7));
     if (airDodgePoses.includes(pose)) {
       const directed = pose === 'directionalAirDodge';
       const spec = window.DogFight?.kits?.[name]?.airDodge || aerialStyles[name];
@@ -4316,8 +4317,83 @@
     return s;
   }
 
+  function ledgeTrumpStance(name, frame) {
+    if (frame === 0) return stance(name, 'ledge', 0);
+    const s = stance(name, 'fall', 0);
+    if (frame === 5) return s;
+    const i = frame - 1;
+    s.bodyX = [-6, -5, -3, -1][i];
+    s.bodyY = [6, 3, 1, 0][i];
+    s.lean = [-3, -3, -2, -1][i];
+    s.torsoTurn = [-5, -9, -6, -3][i];
+    s.headX = [-2, -1, -1, -1][i];
+    s.headY = [2, 1, 0, 0][i];
+    s.headTurn = [-9, -8, -4, 0][i];
+    s.openHands = frame === 4 ? 'front' : 'both';
+    s.twoHandsFront = frame <= 2;
+    s.behindHead = frame <= 2;
+    s.fistTurn = [-9, -24, -18, -8][i];
+    s.rearTurn = [7, 19, 15, 5][i];
+    s.leftX = [-4, -5, -4, -3][i];
+    s.leftY = [6, 4, 0, -3][i];
+    s.rightX = [-6, -3, 0, 2][i];
+    s.rightY = [4, 0, -4, -5][i];
+    s.leftFootTurn = [16, 13, 8, 3][i];
+    s.rightFootTurn = [13, 17, 10, 4][i];
+    s.ear = [1, 3, 1, -2][i];
+    s.tail = [3, 5, 2, 0][i];
+    s.scarf = [2, 4, 3, 0][i];
+    s.eye = frame === 2 ? startledEyes : null;
+    // Inward-facing wrist positions, relative to the feet. The fingers open at the lip
+    // before the hands part and the body settles into its normal airborne silhouette.
+    let nearX = [8, 13, 13, 13][i];
+    let nearY = [-23, -24, -21, -18][i];
+    let farX = [11, 5, 1, 3][i];
+    let farY = [-23, -22, -19, -19][i];
+    if (name === 'pip') {
+      nearX += [0, 3, 1, 0][i];
+      s.rightY -= [0, 3, 2, 0][i];
+      s.rightFootTurn += [0, 12, 5, 0][i];
+      s.scarf += [0, 3, 2, 0][i];
+    } else if (name === 'brisket') {
+      s.bodyY += [1, 3, 1, 0][i];
+      nearX -= [0, 2, 1, 0][i];
+      farX -= [1, 11, 6, 1][i];
+      farY += [0, 6, 3, 0][i];
+      s.rearTurn -= [0, 32, 15, 0][i];
+      if (frame === 2) s.eye = shutEyes;
+      s.kneeOut = [0, 3, 2, 1][i];
+      s.rightX += [1, 3, 2, 0][i];
+      s.powerArm = frame === 1;
+    } else if (name === 'noodle') {
+      nearX += [0, 4, 3, 1][i];
+      nearY += [0, 4, 5, 2][i];
+      farY += [0, 6, 4, 2][i];
+      s.headY += frame === 2 ? 2 : 0;
+      s.ear += [0, 3, 2, 1][i];
+      s.charmTurn = [-9, -20, -12, -3][i];
+      s.leftX -= [1, 3, 2, 0][i];
+    } else {
+      nearY -= [0, 3, 2, 0][i];
+      farX -= [0, 7, 4, 0][i];
+      farY += [0, 3, 2, 0][i];
+      s.rightX += [0, 3, 3, 1][i];
+      s.rightY -= [0, 4, 3, 0][i];
+      s.leftFootTurn -= [0, 9, 5, 0][i];
+      s.tailLift = [0, -2, -1, 0][i];
+      s.charmTurn = [-7, -15, -9, -3][i];
+    }
+    const [x, y] = fighters[name].pawAt;
+    s.fistX = nearX - x - s.bodyX;
+    s.fistY = nearY - y - s.bodyY;
+    s.rearX = farX - (x - 2) - s.bodyX;
+    s.rearY = farY - (y - 3) - s.bodyY;
+    return s;
+  }
+
   function stance(name, pose, frame, octant = 0) {
     if (pose === 'ledgeRoll') return ledgeRollStance(name, frame);
+    if (pose === 'ledgeTrump') return ledgeTrumpStance(name, frame);
     const s = {
       bodyX: 0,
       bodyY: 0,
@@ -5156,6 +5232,7 @@
     'skid',
     'ledge',
     'ledgeRoll',
+    'ledgeTrump',
     'rise',
     'win',
     ...landingPoses,
@@ -5194,7 +5271,7 @@
 
   function draw(ctx, kind, x, y, options = {}) {
     const name = fighterName(kind);
-    const requested = options.pose;
+    const requested = options.pose ?? (options.state === 'ledgeTrump' ? 'ledgeTrump' : undefined);
     const kitMatches =
       !Object.prototype.hasOwnProperty.call(kitMoves, requested) || requested.startsWith(name);
     const pose = kitMatches && poses.includes(requested) ? requested : 'idle';

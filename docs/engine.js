@@ -89,6 +89,7 @@
   const pivotWindow = 7 / 60;
   const ledgeDriftGrace = 12 / 60;
   const hangingFeet = [0, -13, 46];
+  const sameLedge = (a, b) => a && b && a.index === b.index && a.left === b.left;
   function smoothStep(value) {
     const t = clamp(value, 0, 1);
     return t * t * (3 - 2 * t);
@@ -1768,6 +1769,8 @@
       ledge: null,
       ledgeLock: 0,
       ledgeTime: 0,
+      ledgeProtectionReady: true,
+      ledgeTrump: null,
       drop: 0,
       shield: false,
       shieldHP: 1,
@@ -1995,11 +1998,13 @@
       this.random = random;
       this.dogs = [newFighter(config.p1, 0), newFighter(config.p2, 1)];
       this.terrain = platforms(this.stage, 0);
+      this.ledgeClaims = [];
       this.grapple = null;
       this.projectiles = [];
       this.ball = null;
       this.nextBall = 4;
       this.trainingDamage = 0;
+      this.trumpPractice = null;
       this.rollPractice = null;
       this.launchPractice = null;
       this.shieldPractice = null;
@@ -2046,6 +2051,8 @@
       this.lastCombo = { hits: 0, damage: 0 };
     }
     resetTraining(ledge = false, fromHang = false) {
+      this.ledgeClaims.length = 0;
+      this.trumpPractice = null;
       this.rollPractice = null;
       this.launchPractice = null;
       this.shieldPractice = null;
@@ -2068,6 +2075,7 @@
         Object.assign(dummy, { x: edge.x + face * spacing, y: floor.y, ground: edge.index, face: -face });
         if (fromHang) this.hangLedge(f, edge);
         else Object.assign(f, { x: edge.x - face * 68, y: floor.y + 65, face, ground: -1, jumps: 1 });
+        return edge;
       } else {
         const [player, dummy] = this.dogs,
           surface = this.terrain[0];
@@ -2103,6 +2111,40 @@
         evaded: false,
         outcome: '',
       };
+    }
+    resetLedgeTrumpPractice(role = 'take', side = 'left') {
+      const edge = this.resetTraining(side);
+      const defender = role === 'defend';
+      const holder = this.dogs[defender ? 0 : 1];
+      const incoming = this.dogs[1 - holder.index];
+      const dir = edge.left ? 1 : -1;
+      this.hangLedge(holder, edge);
+      Object.assign(incoming, {
+        face: dir,
+        ground: -1,
+        jumps: 1,
+        x: edge.x - dir * (defender ? 95 : 50),
+        y: edge.y + (defender ? -125 : 27),
+        vx: dir * (defender ? 65 : 40),
+        vy: defender ? 0 : -80,
+      });
+      this.trumpPractice = { role, side, edge, phase: defender ? 'approach' : 'ready', cast: false };
+    }
+    trumpPracticeInput() {
+      const drill = this.trumpPractice;
+      if (drill.role !== 'defend' || drill.phase !== 'approach') return idleInput;
+      const dummy = this.dogs[1];
+      const dir = drill.edge.left ? 1 : -1;
+      if (
+        dummy.kind === 'noodle' &&
+        !drill.cast &&
+        sameLedge(this.nearestLedge(dummy, 188, -35, 165), drill.edge)
+      ) {
+        drill.cast = true;
+        return { ...idleInput, y: -1, special: true };
+      }
+      const dx = drill.edge.x - dir * 9 - dummy.x;
+      return { ...idleInput, x: clamp((dx * 6 - dummy.vx * 0.5) / dummy.stats.speed, -1, 1) };
     }
     finishRollPractice(outcome) {
       const drill = this.rollPractice;
@@ -2268,6 +2310,11 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      if (this.trumpPractice?.phase === 'ready') {
+        if (!(Math.abs(input1.x) > 0.2 || input1.jump || input1.shield || input1.special || input1.attack))
+          return;
+        this.trumpPractice.phase = 'approach';
+      }
       if (this.rollPractice?.phase === 'ready') {
         if (
           !(
@@ -2329,7 +2376,9 @@
                   ? this.airPracticeInput(dt)
                   : this.rollPractice
                     ? this.rollPracticeInput(dt)
-                    : idleInput;
+                    : this.trumpPractice
+                      ? this.trumpPracticeInput()
+                      : idleInput;
       const inputs = [this.launchPractice?.phase === 'ready' ? idleInput : input1, second];
       for (const f of this.dogs) {
         if (f.ground !== -1) f.x += this.terrain[f.ground].x1 - old[f.ground].x1;
@@ -2339,6 +2388,13 @@
         f.techLock = Math.max(0, f.techLock - dt);
       }
       if (this.grapple) this.advanceGrapple(dt);
+      for (const f of this.dogs) {
+        if (f.ground >= 0) {
+          f.ledgeProtectionReady = true;
+          f.ledgeTrump = null;
+        }
+      }
+      if (this.ledgeClaims.length) this.resolveLedgeClaims();
       this.separateGroundedFighters();
       this.resolveMelee();
       for (const f of this.dogs) if (f.attack?.landed) f.attack = null;
@@ -2348,7 +2404,8 @@
         !this.launchPractice &&
         !this.shieldPractice &&
         !this.airPractice &&
-        !this.rollPractice
+        !this.rollPractice &&
+        !this.trumpPractice
       )
         this.updateBall(dt);
       const out = this.dogs.filter((f) => f.x < -115 || f.x > 1315 || f.y > 765 || f.y < -172);
@@ -2721,6 +2778,10 @@
       ])
         f[key] = Math.max(0, f[key] - dt);
       if (f.respawning > 0) return;
+      if (f.ledgeTrump) {
+        f.ledgeTrump.time += dt;
+        if (f.ledgeTrump.time + 1e-8 >= f.ledgeTrump.duration) f.ledgeTrump = null;
+      }
       if (f.airDodge && f.airDodge.time + 1e-8 >= f.airDodge.duration) {
         f.airDodge = null;
         f.dodge = 0;
@@ -2805,7 +2866,8 @@
         const throwFollow = f.command?.type === 'grab' && current.grabCancel;
         if (chainTap || jumpFollow || ropeFollow || throwFollow) f.attack = null;
       }
-      const ready = !f.attack && !f.airDodge && f.stun <= 0 && f.dodge <= 0 && f.landingLag <= 1e-8;
+      const ready =
+        !f.attack && !f.airDodge && !f.ledgeTrump && f.stun <= 0 && f.dodge <= 0 && f.landingLag <= 1e-8;
       const shieldExit = jumpTap || f.command?.type === 'grab';
       if (shieldExit || f.shieldDrop < 1e-8) f.shieldDrop = 0;
       if (guardIntent && ready && grounded && !shieldExit && !f.shieldDrop && f.charge < 0) {
@@ -2946,7 +3008,7 @@
       if (f.tumble) {
         f.vx *= Math.pow(0.68, dt);
         if (!f.stun) f.vx += input.x * 175 * dt;
-      } else if (f.stun > 0) {
+      } else if (f.stun > 0 || f.ledgeTrump) {
         f.vx *= Math.pow(0.68, dt);
         f.vx += input.x * 100 * dt;
       } else if (f.ground >= 0 && f.attack?.brake) {
@@ -3050,7 +3112,7 @@
           const a = f.airDodge;
           if (a && a.y < 0.5 && a.time + 1e-8 >= f.kit.airDodge.ledgeFrame / 60) {
             const edge = this.nearestLedge(f, 31, -16, 78);
-            if (edge && a.x * (edge.left ? 1 : -1) >= 0) this.hangLedge(f, edge);
+            if (edge && a.x * (edge.left ? 1 : -1) >= 0) this.ledgeClaims.push({ f, edge });
           } else if (!a && !f.dodge && f.vy > -125) this.tryLedge(f, 33, 80);
         }
         const a = f.airDodge;
@@ -3090,15 +3152,39 @@
       }
       return best;
     }
+    resolveLedgeClaims() {
+      // Both dogs get to act before a catch takes the lip. Break a same-tick tie with the match RNG.
+      const [a, b] = this.ledgeClaims;
+      if (b && sameLedge(a.edge, b.edge) && this.random() < 0.5) this.ledgeClaims.reverse();
+      for (const { f, edge } of this.ledgeClaims) this.hangLedge(f, edge);
+      this.ledgeClaims.length = 0;
+    }
     hangLedge(f, edge) {
+      if (sameLedge(f.ledge, edge)) return;
+      const rival = this.dogs[1 - f.index];
+      const trump = !!sameLedge(rival.ledge, edge);
+      const protectedCatch = f.ledgeProtectionReady;
+      const inward = edge.left ? 1 : -1;
+      if (trump) {
+        rival.ledge = null;
+        rival.ledgeTrump = { time: 0, duration: 10 / 60, dir: -inward };
+        rival.ledgeLock = 20 / 60 - 1e-8;
+        rival.invuln = rival.jumpBuffer = rival.guardBuffer = 0;
+        rival.command = rival.guardAim = null;
+        rival.face = inward;
+        rival.vx = -inward * 185;
+        rival.vy = -230;
+      }
       this.clearTumble(f, 'Ledge catch');
       f.shieldDrop = f.parryFlash = 0;
       f.guardIntent = '';
       f.run = null;
       f.throwBounce = null;
-      f.face = edge.left ? 1 : -1;
+      f.face = inward;
       // Give a player drifting toward the stage a moment to choose a get-up attack.
-      f.ledge = { ...edge, carriedIn: f.prev.x * f.face > 0.45 };
+      f.ledge = { ...edge, carriedIn: f.prev.x * inward > 0.45, protectedCatch };
+      f.ledgeTrump = null;
+      f.ledgeProtectionReady = false;
       f.ledgeTime = 0;
       f.x = edge.x + f.face * hangingFeet[1];
       f.y = edge.y + hangingFeet[2];
@@ -3106,14 +3192,23 @@
       f.ground = -1;
       f.attack = f.command = null;
       cancelCharge(f);
-      f.invuln = 0.25;
+      f.invuln = protectedCatch ? 15 / 60 - 1e-8 : 0;
       f.jumpBuffer = f.guardBuffer = f.chainWindow = 0;
       restoreAir(f);
-      this.emit('ledge', { f });
+      const drill = this.trumpPractice;
+      if (
+        drill?.phase === 'approach' &&
+        sameLedge(edge, drill.edge) &&
+        f.index === (drill.role === 'take' ? 0 : 1)
+      )
+        drill.phase = 'caught';
+      this.emit('ledge', { f, protectedCatch, trump });
+      if (trump)
+        this.emit('ledgeTrump', { f, target: rival, edge, dir: inward, point: { x: edge.x, y: edge.y } });
     }
     tryLedge(f, horizontal, below) {
       const edge = this.nearestLedge(f, horizontal, 5, below);
-      if (edge) this.hangLedge(f, edge);
+      if (edge) this.ledgeClaims.push({ f, edge });
       return !!edge;
     }
     catchRival(owner, target, attack) {
@@ -3144,6 +3239,7 @@
       this.grapple = owner.grip = target.grip = grip;
       for (const f of [owner, target]) {
         cancelCharge(f);
+        f.ledgeTrump = null;
         f.tumble = f.floorAction = null;
         f.airDodge = f.guardAim = null;
         f.dodge = 0;
@@ -3495,7 +3591,7 @@
             const dx = a.anchor.x + (a.anchor.left ? -13 : 13) - f.x;
             const dy = a.anchor.y + 46 - f.y;
             const distance = Math.hypot(dx, dy);
-            if (distance <= 615 * dt) this.hangLedge(f, a.anchor);
+            if (distance <= 615 * dt) this.ledgeClaims.push({ f, edge: a.anchor });
             else {
               f.x += (dx / distance) * 615 * dt;
               f.y += (dy / distance) * 615 * dt;
@@ -3785,6 +3881,7 @@
       this.emit('break', { f });
     }
     dealDamage(target, damage, preserveCombo) {
+      if (damage > 0) target.ledgeProtectionReady = true;
       const applied = Math.min(damage, 999 - target.damage);
       if (this.mode === 'training' && target.index === 1) {
         if (target.stun <= 0 && !preserveCombo) this.lastCombo = { hits: 0, damage: 0 };
@@ -3860,6 +3957,7 @@
         return false;
       }
       if (target.grip) this.breakGrapple(false);
+      target.ledgeTrump = null;
       target.throwBounce = null;
       target.floorAction = target.tumble = null;
       target.airDodge = target.guardAim = null;
@@ -3923,6 +4021,12 @@
       }
       const hitFrames = target.tumble ? clamp(4 + Math.floor(launchSpeed / 180), 6, 9) : emphatic ? 4 : 2;
       this.hitStop = Math.max(this.hitStop, hitFrames / 60);
+      if (
+        this.trumpPractice?.role === 'defend' &&
+        this.trumpPractice.phase === 'approach' &&
+        target.index === 1
+      )
+        this.trumpPractice.phase = 'intercepted';
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic });
       this.finishShieldPractice(target.index === 0 ? 'hit' : 'interrupted');
       this.finishAirPractice(target.index === 0 ? 'hit' : 'interrupted');
@@ -4326,6 +4430,14 @@
         const face = edge.left ? 1 : -1;
         const guardDistance = (foe.x - edge.x) * face;
         const threat = foe.attack;
+        const incomingDodge =
+          foe.airDodge &&
+          foe.airDodge.x * face > 0.3 &&
+          guardDistance < 0 &&
+          guardDistance > -90 &&
+          Math.abs(foe.y - edge.y) < 85;
+        if (sameLedge(threat?.anchor, edge) || incomingDodge)
+          return { ...idleInput, shield: true, tapped: { shield: true } };
         if (
           foe.ground === edge.index &&
           foe.face === -face &&

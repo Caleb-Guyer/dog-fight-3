@@ -11,12 +11,12 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=ledge-rolls-1" />
-    <script defer src="./fighters-art.js?v=ledge-rolls-1"></script>
+    <link rel="stylesheet" href="./style.css?v=ledge-trumps-1" />
+    <script defer src="./fighters-art.js?v=ledge-trumps-1"></script>
     <script defer src="./arena-art.js"></script>
-    <script defer src="./engine.js?v=ledge-rolls-1"></script>
-    <script defer src="./render.js?v=ledge-rolls-1"></script>
-    <script defer src="./app.js?v=ledge-rolls-1"></script>
+    <script defer src="./engine.js?v=ledge-trumps-1"></script>
+    <script defer src="./render.js?v=ledge-trumps-1"></script>
+    <script defer src="./app.js?v=ledge-trumps-1"></script>
   </head>
   <body>
     <header class="topbar">
@@ -135,6 +135,7 @@
             <output id="shield-status" aria-label="Shield practice" aria-live="polite" hidden></output>
             <output id="air-status" aria-label="Air-dodge practice" aria-live="polite" hidden></output>
             <output id="roll-status" aria-label="Ledge roll practice" aria-live="polite" hidden></output>
+            <output id="trump-status" aria-label="Contested ledge" aria-live="polite" hidden></output>
             <output id="training-move" aria-label="Last move" hidden></output>
             <span id="training-charge" hidden></span>
             <output id="training-combo" aria-label="Last combo" hidden></output>
@@ -188,6 +189,14 @@
             <button id="roll-guard" type="button" class="utility" aria-pressed="true">Close guard</button>
             <button id="roll-read" type="button" class="utility" aria-pressed="false">Read the roll</button>
             <button id="roll-side" type="button" class="utility">Switch ledge</button>
+          </span>
+          <button id="trump-training" type="button" class="utility">Contested ledge</button>
+          <span id="trump-patterns" role="group" aria-label="Contested ledge practice" hidden>
+            <button id="trump-take" type="button" class="utility" aria-pressed="true">Take the ledge</button>
+            <button id="trump-defend" type="button" class="utility" aria-pressed="false">
+              Defend the ledge
+            </button>
+            <button id="trump-side" type="button" class="utility">Switch ledge</button>
           </span>
           <button id="launch-training" type="button" class="utility">Launch practice</button>
           <button id="shield-training" type="button" class="utility">Shield practice</button>
