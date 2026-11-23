@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const { fighters, kits, moves, specials, arenas, Battle, idleInput } = window.DogFight;
+  const { fighters, kits, moves, specials, smashes, smashPower, arenas, Battle, idleInput } = window.DogFight;
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
   const $ = (id) => document.getElementById(id);
   const glyphs = {
@@ -259,6 +259,14 @@
         tone(detail.name === 'jab2' ? 620 : 425, 175, 0.034, 0, 'square', 0.036);
         tone(detail.name === 'jab2' ? 155 : 122, 54, 0.069, 0, 'triangle', 0.095);
       }
+    } else if (name === 'smashReady') {
+      tone(590, 740, 0.065, 0, 'triangle', 0.08);
+      tone(880, 1100, 0.105, 0.048, 'triangle', 0.062);
+    } else if (name === 'smashRelease') {
+      const pitch = { pip: 400, brisket: 135, noodle: 325, clover: 540 }[detail.f.kind];
+      tone(pitch, pitch * 0.52, 0.075, 0, 'triangle', 0.05 + detail.f.attack.power * 0.04);
+    } else if (name === 'sweetSpot') {
+      tone(1090, 1420, 0.065, 0, 'triangle', 0.065);
     } else if (name === 'recover' && detail.moveId === 'brisketCannon') {
       tone(95, 46, 0.12, 0, 'sawtooth', 0.048);
       tone(145, 410, 0.15, 0.018, 'triangle', 0.085);
@@ -505,6 +513,7 @@
       ['Move / aim', 'W A S D', 'Arrow keys', 'Stick / D-pad'],
       ['Jump', 'Space', 'Right Shift', 'A'],
       ['Attack / charge', 'J', ',', 'X'],
+      ['Smash / charge', 'I', 'N', 'RT / right stick'],
       ['Special', 'K', '.', 'B'],
       ['Shield / air-dodge', 'L', '/', 'LB / RB'],
       ['Grab / throw', 'U', 'M', 'Y'],
@@ -518,7 +527,7 @@
       'controls',
       'Controls',
       table +
-        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack on the ground for your dog’s combo. Hold it to charge. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>Press Special alone for Neutral Special. Aim left or right, up, or down as you press it for the other three. Every dog has a different Up Special for getting home. Open Move list for the inputs, then try either ledge in Training.</p><p>Grabs beat shields. Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
+        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack on the ground for your dog’s combo. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. Holding regular Attack also charges. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
   $('controls').onclick = showControls;
@@ -535,6 +544,7 @@
     up: 'Up + Special',
     down: 'Down + Special',
   };
+  const smashInputs = { side: 'Side + Smash', up: 'Up + Smash', down: 'Down + Smash' };
   function showMoves(kind, section = 'air') {
     if (dialogType !== 'moves') backToPause = dialogType === 'pause';
     const kit = kits[kind],
@@ -551,15 +561,16 @@
           '</button>',
       )
       .join('');
-    const specialPage = section === 'specials';
+    const moveSet = { air: moves, smashes, specials }[section];
+    const inputs = { air: airInputs, smashes: smashInputs, specials: specialInputs }[section];
     const rows = Object.entries(kit[section])
       .map(([side, id]) => {
-        const move = specialPage ? specials[id] : moves[id];
+        const move = moveSet[id];
         return (
           '<li><canvas width="124" height="78" data-direction="' +
           side +
           '" aria-hidden="true"></canvas><div><small>' +
-          (specialPage ? specialInputs[side] : airInputs[side]) +
+          inputs[side] +
           '</small><strong>' +
           move.label +
           '</strong><span>' +
@@ -572,6 +583,7 @@
       '<div class="guide-tabs" role="group" aria-label="Move categories">' +
       [
         ['air', 'Attacks'],
+        ['smashes', 'Smash attacks'],
         ['specials', 'Specials &amp; recovery'],
       ]
         .map(
@@ -586,13 +598,22 @@
         )
         .join('') +
       '</div>';
-    const contents = specialPage
-      ? '<p class="recovery-note"><strong>Offstage</strong> ' +
+    let contents;
+    if (section === 'smashes') {
+      contents =
+        '<p class="recovery-note"><strong>Charge</strong> Aim and hold Smash (P1 I, P2 N, gamepad RT), then release. A tap swings immediately. Full power takes one second. You can hold for one more second before the move fires.</p><ul class="move-rows guide-smashes">' +
+        rows +
+        '</ul>';
+    } else if (section === 'specials') {
+      contents =
+        '<p class="recovery-note"><strong>Offstage</strong> ' +
         kit.recovery +
         '</p><ul class="move-rows guide-specials">' +
         rows +
-        '</ul>'
-      : '<h3 class="guide-section">Ground combo</h3><div class="guide-chain">' +
+        '</ul>';
+    } else {
+      contents =
+        '<h3 class="guide-section">Ground combo</h3><div class="guide-chain">' +
         kit.ground.map((id) => moves[id].label).join(' / ') +
         '</div><p>' +
         kit.combo +
@@ -600,6 +621,7 @@
         '<h3 class="guide-section">Aerial attacks</h3><p>Forward follows the way your dog faces. You can drift backward.</p><ul class="move-rows guide-airs">' +
         rows +
         '</ul>';
+    }
     showDialog(
       'moves',
       f.name + ' moves',
@@ -631,6 +653,19 @@
   });
   function updateHUD() {
     const combo = world.lastCombo;
+    const player = world.dogs[0],
+      chargeReadout = $('training-charge');
+    const power = player.smashCharge ? smashPower(player.charge) : player.lastSmashPower;
+    chargeReadout.hidden = world.mode !== 'training' || power === null;
+    if (!chargeReadout.hidden) {
+      const value = player.smashCharge
+        ? power >= 1
+          ? 'Full charge'
+          : 'Charging ' + Math.round(power * 100) + '%'
+        : 'Released at ' + Math.round(power * 100) + '%';
+      if (chargeReadout.textContent !== value) chargeReadout.textContent = value;
+    }
+    const shownMove = player.smashCharge ? smashes[player.smashCharge.moveId].label : player.lastMove;
     const key =
       world.dogs.map((f) => f.kind + ':' + Math.floor(f.damage) + ':' + f.stocks).join('|') +
       world.mode +
@@ -639,12 +674,12 @@
       '/' +
       combo.damage +
       '/' +
-      (world.mode === 'training' ? world.dogs[0].lastMove : '');
+      (world.mode === 'training' ? shownMove : '');
     if (key === hudKey) return;
     hudKey = key;
     const lastMove = $('training-move');
-    lastMove.hidden = world.mode !== 'training' || !world.dogs[0].lastMove;
-    if (!lastMove.hidden) lastMove.textContent = world.dogs[0].lastMove;
+    lastMove.hidden = world.mode !== 'training' || !shownMove;
+    if (!lastMove.hidden) lastMove.textContent = shownMove;
     const readout = $('training-combo');
     readout.hidden = world.mode !== 'training' || combo.hits === 0;
     if (!readout.hidden) {
@@ -846,6 +881,7 @@
       down: 'KeyS',
       jump: 'Space',
       attack: 'KeyJ',
+      smash: 'KeyI',
       special: 'KeyK',
       shield: 'KeyL',
       grab: 'KeyU',
@@ -857,6 +893,7 @@
       down: 'ArrowDown',
       jump: 'ShiftRight',
       attack: 'Comma',
+      smash: 'KeyN',
       special: 'Period',
       shield: 'Slash',
       grab: 'KeyM',
@@ -935,17 +972,24 @@
     const axis = (n) => (Math.abs(pad?.axes?.[n] || 0) > 0.23 ? pad.axes[n] : 0);
     const x = Number(key('right') || down(pad, 15)) - Number(key('left') || down(pad, 14));
     const y = Number(key('down') || down(pad, 13)) - Number(key('up') || down(pad, 12));
+    const rightX = axis(2),
+      rightY = axis(3);
+    const rightStick = Math.max(Math.abs(rightX), Math.abs(rightY)) > 0.62;
     return {
       x: x || axis(0),
       y: y || axis(1),
       jump: key('jump') || down(pad, 0),
       attack: key('attack') || down(pad, 2),
+      smash: key('smash') || down(pad, 7) || rightStick,
+      smashX: rightStick ? rightX : x || axis(0),
+      smashY: rightStick ? rightY : y || axis(1),
       special: key('special') || down(pad, 1),
       shield: key('shield') || down(pad, 4) || down(pad, 5),
       grab: key('grab') || down(pad, 3),
       tapped: {
         jump: tapped('jump'),
         attack: tapped('attack'),
+        smash: tapped('smash'),
         special: tapped('special'),
         shield: tapped('shield'),
         grab: tapped('grab'),

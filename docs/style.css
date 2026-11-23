@@ -639,7 +639,8 @@ body.playing .tools .utility,
   gap: 2px;
   pointer-events: none;
 }
-.training-readouts output {
+.training-readouts output,
+#training-charge {
   padding: 5px 7px 4px;
   border: 2px solid #171623;
   border-left: 4px solid var(--gold);
@@ -1325,6 +1326,10 @@ dialog[data-view='moves'] {
   }
   .touch-actions [data-touch='attack'] {
     background: #845543;
+  }
+  .touch-actions [data-touch='smash'] {
+    background: #664b39;
+    border-color: #d3ab63;
   }
   .touch-pad button.held {
     color: var(--ink);

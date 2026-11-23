@@ -6,6 +6,8 @@
   const ink = '#252337';
   const cream = '#fff1c7';
   const gold = '#f4c76a';
+  const lilac = '#c5a9d3';
+  const chargeColors = { pip: '#ee9775', brisket: gold, noodle: '#e5b47b', clover: lilac };
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const snap = (value, cell = 3) => Math.round(value / cell) * cell;
   const effectsAtlas = new Image();
@@ -60,7 +62,16 @@
     const second = world.mode === 'local' ? 'P2' : world.mode === 'training' ? 'DUMMY' : 'CPU';
     const labels = ['P1', second];
     const widths = labels.map((label) => snap(Math.max(26, ctx.measureText(label).width + 8), 2));
-    const tops = world.dogs.map((f) => snap(f.y - f.stats.height - 33 - (f.attack?.aim === -1 ? 12 : 0), 2));
+    const tops = world.dogs.map((f) => {
+      let top = -f.stats.height;
+      if (f.attack?.smashSide === 'up') {
+        // Keep the tag clear of both hits of an overhead move, including Noodle's rope.
+        for (const box of [f.attack.box, f.attack.second?.box]) {
+          if (box) top = Math.min(top, box[1] - box[3]);
+        }
+      } else if (f.attack?.aim === -1 || f.smashCharge?.side === 'up') top -= 12;
+      return snap(f.y + top - 33, 2);
+    });
     for (const f of world.dogs) {
       if (!f.stocks) continue;
       const i = f.index,
@@ -150,7 +161,10 @@
     if (a.moveId === 'cloverSail' && !a.folded && a.time >= a.start + a.active) return 0.57;
     if (a.anchor && a.time >= a.start) return 0.45 + Math.min(0.17, (a.time - a.start) * 0.7);
     const beat = attackWindow(a);
-    if (a.time < beat.start - 1e-8) return 0.39 * clamp(a.time / beat.start, 0, 1);
+    if (a.time < beat.start - 1e-8) {
+      const held = a.smashSide ? 0.08 + 0.26 * a.power : 0;
+      return held + (0.39 - held) * clamp(a.time / beat.start, 0, 1);
+    }
     const activeTime = Math.max(0, a.time - beat.start);
     if (activeTime <= beat.active) return 0.4 + 0.25 * (activeTime / beat.active);
     if (a.second && beat === a)
@@ -163,6 +177,7 @@
     if (a.folded) return 'fall';
     if (a.diving) return 'pipSlideDive';
     if (a.anchor && a.time + 1e-8 >= a.start) return 'noodleReelLedge';
+    if (a.secondPose && attackWindow(a) === a.second) return a.secondPose;
     if (a.moveId) return a.moveId;
     if (a.name === 'recover') return 'rise';
     if (a.name === 'shoulder') return 'heavy';
@@ -180,6 +195,10 @@
     if (f.dodge > 0) return ['dodge', 1 - f.dodge / 0.27];
     if (f.shield) return ['shield', 0];
     if (f.attack) return [attackPose(f), attackPhase(f.attack)];
+    if (f.smashCharge && f.charge >= 0) {
+      const power = clamp(f.charge / window.DogFight.smashChargeTime, 0, 1);
+      return [f.smashCharge.moveId, 0.08 + 0.26 * power];
+    }
     if (f.charge >= 0) {
       let windup = 'heavy';
       if (f.charge < 0.115) {
@@ -197,6 +216,206 @@
     if (f.landTime > 0) return ['land', 1 - f.landTime / 0.12];
     if (f.skidTime > 0) return ['skid', 1 - f.skidTime / 0.14];
     return [Math.abs(f.vx) > 50 ? 'run' : 'idle', 0];
+  }
+  function glint(ctx, x, y, size, color) {
+    const d = Math.max(3, snap(size));
+    pixelLine(ctx, x - d, y, x + d, y, color);
+    pixelLine(ctx, x, y - d, x, y + d, color);
+    ctx.fillStyle = cream;
+    ctx.fillRect(snap(x), snap(y), 3, 3);
+  }
+  function drawSmashCharge(ctx, f) {
+    const { side, face, moveId } = f.smashCharge;
+    const power = clamp(f.charge / window.DogFight.smashChargeTime, 0, 1);
+    const tint = chargeColors[f.kind];
+    const up = side === 'up',
+      down = side === 'down';
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y, 2));
+    ctx.scale(face || f.face, 1);
+    // The three teeth fill from the feet up. A fixed four-point star marks full power.
+    // Both cues depend only on held charge, so a full charge remains steady.
+    const baseX = -34,
+      baseY = -5;
+    for (let i = 0; i < 3; i++) {
+      const x = baseX - i * 5,
+        y = baseY - i * 3;
+      ctx.fillStyle = ink;
+      ctx.fillRect(x - 1, y - 1, 6, 5);
+      ctx.fillStyle = power >= (i + 1) / 3 - 1e-8 ? tint : '#726775';
+      ctx.fillRect(x, y, 4, 3);
+    }
+    const px = up ? 4 : down ? 35 : 37;
+    const py = up ? -f.stats.height - 4 : down ? -6 : -39;
+    if (power > 0.1) {
+      const step = Math.min(3, Math.ceil(3 * power));
+      if (f.kind === 'pip') {
+        pixelLine(ctx, px - 8, py - 2, px - 3 - (up ? 1 : 0), py - 4 - step, tint);
+        if (step >= 2) pixelLine(ctx, px - 3, py + 4, px + 3, py + 2, cream);
+      } else if (f.kind === 'brisket') {
+        for (const dir of [-1, 1]) {
+          pixelLine(ctx, dir * 25, -4, dir * (28 + step * 3), -8, tint);
+          if (step >= 2) pixelLine(ctx, dir * 28, -10, dir * 32, -13 - step, cream);
+        }
+      } else if (f.kind === 'noodle') {
+        const [hx, hy] = window.DogArt.itemPoint(f.kind, moveId, 0.08 + power * 0.26);
+        arc(ctx, hx + 4, hy + 3, 5 + step * 2, 5, 0.3, 4.9, tint);
+      } else {
+        const [hx, hy] = window.DogArt.itemPoint(f.kind, moveId, 0.08 + power * 0.26);
+        arc(ctx, hx, hy, 10 + step * 2, 5 + (up ? 2 : 0), 3.1, 5.45, tint);
+        if (step >= 2) pixelLine(ctx, hx + 8, hy - 4, hx + 10, hy - 7, cream);
+      }
+    }
+    if (power >= 1 - 1e-8) glint(ctx, px + (up ? 6 : 13), py - (up ? 5 : 6), 6, tint);
+    ctx.restore();
+  }
+  function ropeTrace(ctx, points, tip, sweet) {
+    // Underpaint the complete cord before adding its warm braided edge.
+    for (const [color, width] of [
+      [ink, 6],
+      ['#e4ab68', 3],
+    ]) {
+      for (let i = 1; i < points.length; i++) pixelLine(ctx, ...points[i - 1], ...points[i], color, width);
+      arc(ctx, tip[0], tip[1], 7, 5, 0, Math.PI * 2, color, width);
+    }
+    for (let i = 1; i < points.length; i++) {
+      const [ax, ay] = points[i - 1],
+        [bx, by] = points[i];
+      if (Math.hypot(bx - ax, by - ay) > 19)
+        pixelLine(
+          ctx,
+          ax + (bx - ax) * 0.54,
+          ay + (by - ay) * 0.54,
+          ax + (bx - ax) * 0.62,
+          ay + (by - ay) * 0.62,
+          '#f7d39a',
+        );
+    }
+    if (sweet) glint(ctx, tip[0] + 6, tip[1] - 3, 5, cream);
+  }
+  function smashSwing(ctx, f, a) {
+    const beat = attackWindow(a);
+    if (a.time + 1e-8 < beat.start || a.time >= beat.start + beat.active) return;
+    const p = clamp((a.time - beat.start) / beat.active, 0, 1);
+    const second = beat === a.second,
+      power = a.power;
+    const [x, y, rx, ry] = beat.box || a.box;
+    const far = x + rx - 5,
+      top = y - ry + 5;
+    const wide = power >= 0.65 ? 6 : 3;
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y, 2));
+    ctx.scale(f.face, 1);
+    switch (a.moveId) {
+      case 'pipBoltKick':
+        pixelLine(ctx, far - 32 + p * 11, y + 8, far, y - 2, cream, wide);
+        pixelLine(ctx, far - 30 + p * 13, y + 14, far - 11, y + 8, '#ed9c79');
+        if (!reduced.matches) pixelLine(ctx, -25, -19, -43 - 9 * power, -16, '#deb181');
+        break;
+      case 'pipScissors': {
+        const targetX = x + (second ? -rx * 0.58 : rx * 0.76);
+        const fromX = targetX + (second ? 20 : -21);
+        pixelLine(ctx, fromX, top + 26 - p * 6, targetX, top, cream, wide);
+        pixelLine(ctx, fromX + (second ? 7 : -6), top + 24, targetX + (second ? 7 : -7), top + 5, '#ed9c79');
+        if (second && !reduced.matches)
+          pixelLine(ctx, x + rx * 0.52, top + 15, x + rx * 0.77, top + 3, cream);
+        break;
+      }
+      case 'pipDustDevil': {
+        const dir = Math.sign(x) || (second ? -1 : 1);
+        ctx.scale(dir, 1);
+        const reach = Math.abs(x) + rx - 5;
+        arc(ctx, reach * 0.54, y, reach * 0.44, Math.max(7, ry * 0.52), 0.23 + p * 0.48, 2.83, cream, wide);
+        pixelLine(ctx, reach - 9 - p * 4, -5, reach + 2, -8 - p * 4, '#d79b70');
+        if (!reduced.matches) pixelLine(ctx, reach - 19, -3, reach - 12, -8 - p * 5, gold);
+        break;
+      }
+      case 'brisketHaymaker':
+        arc(ctx, x - 3, y, rx * 0.9, ry * 0.78, -0.96 + p * 0.35, 0.86 + p * 0.24, gold, 6);
+        pixelLine(ctx, far - 13, y - 8, far - 3, y - 5, cream);
+        if (power >= 0.5) pixelLine(ctx, far - 19, y + 9, far - 6, y + 7, cream);
+        break;
+      case 'brisketRoofRaiser':
+        for (const sign of [-1, 1]) {
+          const from = x + sign * rx * 0.67;
+          pixelLine(ctx, from, top + 32 - 4 * p, from - sign * 8, top + 15, gold, wide);
+          pixelLine(ctx, from - sign * 8, top + 15, from - sign * 11, top + 5, cream);
+        }
+        if (power >= 0.5) pixelLine(ctx, x + 2, top + 9, x + 2, top, cream);
+        break;
+      case 'brisketQuake': {
+        // First contact covers 40% of the radius; the seventh frame reaches both edges.
+        const wave = clamp((a.time - a.start) / (a.active - 1 / 60), 0, 1);
+        const distance = rx * (0.4 + 0.6 * wave);
+        for (const dir of [-1, 1]) {
+          const outer = x + dir * distance;
+          pixelLine(ctx, x + dir * 22, -3, outer - dir * 13, -3, '#ce936b', wide);
+          pixelLine(ctx, outer - dir * 13, -3, outer - dir * 6, -10, gold, wide);
+          pixelLine(ctx, outer - dir * 6, -10, outer, -5, cream);
+          if (!reduced.matches)
+            pixelLine(ctx, outer - dir * 5, -8, outer, -14 - 7 * Math.sin(p * Math.PI), '#cd9976');
+        }
+        break;
+      }
+      case 'noodleLeadSnap':
+      case 'noodleBellPull':
+      case 'noodleSwitchback': {
+        const hand = window.DogArt.itemPoint(f.kind, attackPose(f), attackPhase(a));
+        const [hx, hy] = hand;
+        let tip, path;
+        if (a.moveId === 'noodleLeadSnap') {
+          tip = [far - Math.max(0, p - 0.57) * 14, y];
+          path = [
+            hand,
+            [hx + (tip[0] - hx) * 0.28, hy + 9 - p * 4],
+            [hx + (tip[0] - hx) * 0.67, y - 6 + p * 7],
+            tip,
+          ];
+        } else if (a.moveId === 'noodleBellPull') {
+          tip = second ? [x + 2, top + Math.max(0, p - 0.59) * 12] : [far - 4, y - ry * 0.32];
+          path = second
+            ? [hand, [hx + 6, hy - 11], [tip[0] + 14 - p * 7, tip[1] + 17], tip]
+            : [hand, [hx + 10, hy + 10], [x + rx * 0.45, y + ry * 0.64], tip];
+        } else {
+          // The knot and the hand cross from front to rear on the second contact cel.
+          const turn = 1 - 2 * clamp((p - 0.35) / 0.4, 0, 1);
+          const tail = 1 - 2 * clamp((p - 0.54) / 0.34, 0, 1);
+          tip = [x + (rx - 8) * turn, y - 2 - p * 4];
+          path = [
+            hand,
+            [x - (rx - 8) * tail, y + 1],
+            [x - rx * 0.17 * turn, y + ry * 0.54],
+            [x + rx * 0.42 * turn, y - 2],
+            tip,
+          ];
+        }
+        ropeTrace(ctx, path, tip, a.moveId === 'noodleLeadSnap' && p < 0.68);
+        break;
+      }
+      case 'cloverLineDrive':
+        if (a.fired) {
+          pixelLine(ctx, 31 + p * 6, y - 3, 47 + p * 7, y - 5, lilac);
+          if (!reduced.matches) pixelLine(ctx, 28 + p * 6, y + 4, 41 + p * 6, y + 3, cream);
+        }
+        break;
+      case 'cloverHaloLift': {
+        const [hx, hy] = window.DogArt.itemPoint(f.kind, a.moveId, attackPhase(a));
+        arc(ctx, hx, hy + 3, rx * 0.68, ry * 0.42, -2.82 + p * 0.2, -0.4 + p * 0.16, lilac, wide);
+        glint(ctx, hx - 4, hy - 7, 4 + power * 2, cream);
+        break;
+      }
+      case 'cloverRimRattle': {
+        const angle = (second ? Math.PI : 0) + (p - 0.44) * 1.24;
+        const ex = x + Math.cos(angle) * rx * 0.78,
+          ey = y + Math.sin(angle) * ry * 0.47;
+        arc(ctx, x, y, rx * 0.78, ry * 0.47, angle - 1.55, angle - 0.23, lilac, wide);
+        oval(ctx, ex, ey, 12, 4, ink, 2);
+        oval(ctx, ex, ey - 1, 9, 2, lilac, 2);
+        pixelLine(ctx, ex - 3, ey - 2, ex + 3, ey - 2, cream, 2, 2);
+        break;
+      }
+    }
+    ctx.restore();
   }
   function kitSwing(ctx, f, a) {
     const beat = attackWindow(a);
@@ -343,6 +562,7 @@
   }
   function swing(ctx, f) {
     const a = f.attack;
+    if (a?.smashSide) return smashSwing(ctx, f, a);
     if (a?.specialSide) return specialSwing(ctx, f, a);
     if (a?.moveId) {
       kitSwing(ctx, f, a);
@@ -390,7 +610,8 @@
   function drawFighter(ctx, f, world, time) {
     shadow(ctx, f, world.terrain);
     if (f.respawning > 0) oval(ctx, f.x, f.y - 3, 42, 5, team[f.index]);
-    if (f.charge > 0.21) {
+    if (f.smashCharge && f.charge >= 0) drawSmashCharge(ctx, f);
+    else if (f.charge > 0.21) {
       const r = 37 + f.charge * 10;
       const spin = reduced.matches ? 0 : (Math.floor(time * 12) * Math.PI) / 8;
       for (let i = 0; i < 4; i++)
@@ -400,7 +621,12 @@
     ctx.save();
     if (f.invuln > 0.01 && !reduced.matches && Math.floor(time * 12) % 2) ctx.globalAlpha = 0.53;
     window.DogArt.draw(ctx, f.kind, snap(f.x, 2), snap(f.y, 2), {
-      face: state === 'skid' ? f.skidFace : f.stun > 0 && f.reaction ? f.reaction.face : f.face,
+      face:
+        state === 'skid'
+          ? f.skidFace
+          : f.stun > 0 && f.reaction
+            ? f.reaction.face
+            : f.smashCharge?.face || f.face,
       scale: 1,
       time: time + f.index * 0.42,
       pose: state,
@@ -505,6 +731,10 @@
   }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
+    if (e.type === 'sweet') {
+      glint(ctx, e.x, e.y, reduced.matches ? 4 : e.size * (1 - p * 0.75), e.color);
+      return;
+    }
     const row = atlasRow[e.type];
     if (row !== undefined && effectsAtlas.naturalWidth) {
       const frame = Math.min(4, Math.floor(p * 5));
@@ -568,6 +798,10 @@
       }
       if (name === 'break') this.add('ring', f.x, f.y - 38, team[f.index], 0.3, 73);
       if (name === 'counter') this.add('block', f.x + f.face * 26, f.y - 40, gold, 0.22, 65, f.face);
+      if (name === 'sweetSpot' && e.point) {
+        const tint = e.moveId === 'cloverHaloLift' ? lilac : gold;
+        this.add('sweet', e.point.x + (e.face || 1) * 8, e.point.y - 9, tint, 0.17, 8);
+      }
       if (name === 'catch') this.add('star', f.x + f.face * 24, f.y - 40, cream, 0.17, 24);
       if (name === 'skip') this.add('ring', e.x, e.y, gold, 0.14, 15);
       if (name === 'land') this.add('land', f.x, f.y, cream, 0.2, clamp(35 + e.speed * 0.045, 46, 72));
@@ -654,6 +888,22 @@
   }
   const moveThumbnails = new Map();
   function drawItem(ctx, d) {
+    if (d.type === 'drive') {
+      const direction = Math.sign(d.vx) || 1;
+      const power = clamp(d.power || 0, 0, 1);
+      const rim = reduced.matches ? 3 : 2 + (Math.floor(d.age * 12) % 3);
+      ctx.save();
+      ctx.translate(snap(d.x, 2), snap(d.y, 2));
+      ctx.scale(direction, 1);
+      pixelLine(ctx, -32 - power * 11, 0, -12, 0, lilac, 4, 2);
+      if (!reduced.matches) pixelLine(ctx, -24 - power * 7, 5, -12, 4, '#9089b0', 2, 2);
+      oval(ctx, 0, 0, 18, rim + 2, ink, 2);
+      oval(ctx, 0, -1, 16, rim, '#a28abb', 2);
+      pixelLine(ctx, -8, -2, 5, -2, '#e7c7d9', 2, 2);
+      pixelLine(ctx, 10, -2, 15, 0, gold, 2, 2);
+      ctx.restore();
+      return;
+    }
     if (d.type === 'snare') {
       const open = d.platform >= 0 && d.armedIn <= 0;
       for (const [color, width] of [
@@ -674,24 +924,31 @@
       pixelLine(ctx, d.x - Math.sign(d.vx) * 22, d.y - 2, d.x - Math.sign(d.vx) * 35, d.y - 5, '#ecbe7e', 2);
   }
   function drawMoveThumbnail(canvas, kind, side, category = 'air') {
-    const { kits, moves, specials, fighters } = window.DogFight;
+    const { kits, moves, specials, smashes, fighters } = window.DogFight;
     const id = kits[kind][category][side],
-      move = (category === 'air' ? moves : specials)[id];
+      move = (category === 'air' ? moves : category === 'smashes' ? smashes : specials)[id];
     const target = canvas.getContext('2d');
-    const cached = moveThumbnails.get(id);
+    const cacheKey = id + '/' + canvas.width + '/' + canvas.height;
+    const cached = moveThumbnails.get(cacheKey);
+    target.clearRect(0, 0, canvas.width, canvas.height);
     if (cached) {
       target.drawImage(cached, 0, 0);
       return;
     }
     // Fit the whole silhouette, including the rope or disc beyond the dog's body.
     const source = document.createElement('canvas');
-    source.width = 320;
-    source.height = 272;
+    const smash = category === 'smashes';
+    source.width = smash ? 400 : 320;
+    source.height = smash ? 312 : 272;
     const ctx = source.getContext('2d');
-    ctx.translate(150, 158);
-    const a = { ...move, moveId: id, time: move.start + move.active * 0.35, power: 0.75 };
+    ctx.translate(smash ? 190 : 150, smash ? 185 : 158);
+    const beat = (id === 'pipScissors' || id === 'noodleBellPull') && move.second ? move.second : move;
+    const a = { ...move, moveId: id, time: beat.start + beat.active * 0.35, power: 0.75 };
     if (category === 'air') a.airSide = side;
-    else a.specialSide = side;
+    else if (smash) {
+      a.smashSide = side;
+      a.fired = !!a.projectile;
+    } else a.specialSide = side;
     if (id === 'noodleLasso') a.anchor = { x: 86, y: -86 };
     const fighter = { kind, face: 1, x: 0, y: 0, stats: fighters[kind], attack: a };
     window.DogArt.draw(ctx, kind, 0, 0, {
@@ -706,8 +963,16 @@
       drawItem(ctx, {
         type: a.projectile,
         age: 0.14,
-        x: 73,
-        y: a.projectile === 'snare' ? -6 : a.projectile === 'skip' ? -23 : -43,
+        x: a.projectile === 'drive' ? 85 : 73,
+        y:
+          a.projectile === 'snare'
+            ? -6
+            : a.projectile === 'skip'
+              ? -23
+              : a.projectile === 'drive'
+                ? -39
+                : -43,
+        power: a.power,
         platform: 0,
         armedIn: 0,
         vx: 1,
@@ -747,7 +1012,7 @@
     thumbnail.width = canvas.width;
     thumbnail.height = canvas.height;
     thumbnail.getContext('2d').drawImage(canvas, 0, 0);
-    moveThumbnails.set(id, thumbnail);
+    moveThumbnails.set(cacheKey, thumbnail);
   }
   window.DogFightView = { FightView, drawPreview, drawMoveThumbnail };
 })();

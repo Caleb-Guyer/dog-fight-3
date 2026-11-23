@@ -11,12 +11,12 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css" />
-    <script defer src="./fighters-art.js"></script>
+    <link rel="stylesheet" href="./style.css?v=smashes-1" />
+    <script defer src="./fighters-art.js?v=smashes-1"></script>
     <script defer src="./arena-art.js"></script>
-    <script defer src="./engine.js"></script>
-    <script defer src="./render.js"></script>
-    <script defer src="./app.js"></script>
+    <script defer src="./engine.js?v=smashes-1"></script>
+    <script defer src="./render.js?v=smashes-1"></script>
+    <script defer src="./app.js?v=smashes-1"></script>
   </head>
   <body>
     <header class="topbar">
@@ -131,6 +131,7 @@
           <div id="hud" class="hud"></div>
           <div class="training-readouts">
             <output id="training-move" aria-label="Last move" hidden></output>
+            <span id="training-charge" hidden></span>
             <output id="training-combo" aria-label="Last combo" hidden></output>
           </div>
           <div id="countdown" class="countdown" aria-hidden="true"></div>
@@ -170,14 +171,15 @@
             ><button type="button" data-touch="attack">Attack</button
             ><button type="button" data-touch="special">Special</button
             ><button type="button" data-touch="shield">Shield</button
-            ><button type="button" data-touch="grab">Grab</button>
+            ><button type="button" data-touch="grab">Grab</button
+            ><button type="button" data-touch="smash">Smash</button>
           </div>
         </div>
         <p id="recovery-tip" hidden></p>
         <div class="play-hints">
           <span><kbd>A</kbd><kbd>D</kbd> Move</span><span><kbd>Space</kbd> Jump</span
-          ><span><kbd>J</kbd> Attack</span><span><kbd>K</kbd> Special</span><span><kbd>L</kbd> Shield</span
-          ><span><kbd>U</kbd> Grab</span><span><kbd>Esc</kbd> Pause</span>
+          ><span><kbd>J</kbd> Attack</span><span><kbd>I</kbd> Smash</span><span><kbd>K</kbd> Special</span
+          ><span><kbd>L</kbd> Shield</span><span><kbd>U</kbd> Grab</span><span><kbd>Esc</kbd> Pause</span>
         </div>
       </section>
     </main>

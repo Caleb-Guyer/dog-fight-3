@@ -76,6 +76,7 @@
     y: 0,
     jump: false,
     attack: false,
+    smash: false,
     special: false,
     shield: false,
     grab: false,
@@ -83,10 +84,14 @@
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
   const inputWindow = 7 / 60;
+  const attackHold = 0.21;
+  const smashChargeTime = 1;
+  const smashHoldLimit = 2;
   const aimFor = (y) => (y < -0.45 ? -1 : y > 0.45 ? 1 : 0);
   const kits = {
     pip: {
       ground: ['pipJab', 'pipCross', 'pipHeel'],
+      smashes: { side: 'pipBoltKick', up: 'pipScissors', down: 'pipDustDevil' },
       specials: { neutral: 'pipBark', side: 'pipPounce', up: 'pipHopper', down: 'pipSlide' },
       recovery:
         'Aim Up + Special for the first hop. Release Special, then press Up + Special again while tilting toward the ledge to redirect the second hop.',
@@ -105,6 +110,7 @@
     },
     brisket: {
       ground: ['brisketCheck', 'brisketLift'],
+      smashes: { side: 'brisketHaymaker', up: 'brisketRoofRaiser', down: 'brisketQuake' },
       specials: {
         neutral: 'brisketClinch',
         side: 'brisketCharge',
@@ -129,6 +135,7 @@
     },
     noodle: {
       ground: ['noodleTrip', 'noodleReel', 'noodleSnap'],
+      smashes: { side: 'noodleLeadSnap', up: 'noodleBellPull', down: 'noodleSwitchback' },
       specials: { neutral: 'noodleTug', side: 'noodleSling', up: 'noodleLasso', down: 'noodleTripLine' },
       recovery:
         'Cast Up + Special from outside a solid ledge. The rope hooks the edge and reels you to it. From farther out, jump closer before casting.',
@@ -147,6 +154,7 @@
     },
     clover: {
       ground: ['cloverTap', 'cloverSet'],
+      smashes: { side: 'cloverLineDrive', up: 'cloverHaloLift', down: 'cloverRimRattle' },
       specials: { neutral: 'cloverRound', side: 'cloverChase', up: 'cloverSail', down: 'cloverServe' },
       recovery:
         'Use Up + Special to rise onto the disc. Keep Special held and steer left or right to sail toward the stage. Release Special to drop onto it.',
@@ -702,7 +710,211 @@
       projectile: 'skip',
     },
   };
-  for (const move of [...Object.values(moves), ...Object.values(specials)]) {
+  const smashes = {
+    pipBoltKick: {
+      label: 'Bolt Kick',
+      hint: 'Pip springs forward with both feet. The short windup lets you punish a missed attack.',
+      frames: [6, 5, 14],
+      box: [46, -36, 40, 27],
+      dmg: 12,
+      base: 208,
+      growth: 4.7,
+      angle: 32,
+      burst: 405,
+      hard: true,
+    },
+    pipScissors: {
+      label: 'Scissor Kick',
+      hint: 'One heel lifts a nearby rival into a second kick straight overhead.',
+      frames: [4, 4, 22],
+      box: [14, -55, 48, 35],
+      dmg: 3,
+      base: 61,
+      growth: 0.8,
+      angle: 76,
+      stun: 0.28,
+      lift: 175,
+      pull: true,
+      setupHit: true,
+      secondPose: 'pipScissorsFinish',
+      second: {
+        start: 12 / 60,
+        active: 5 / 60,
+        box: [6, -85, 48, 45],
+        dmg: 10,
+        base: 210,
+        growth: 4.8,
+        angle: 84,
+        hard: true,
+        around: true,
+      },
+    },
+    pipDustDevil: {
+      label: 'Dust Devil',
+      hint: 'Kick low in front, then sweep behind. Turn your back to the ledge for the stronger second kick.',
+      frames: [5, 4, 21],
+      box: [45, -18, 36, 18],
+      dmg: 10,
+      base: 187,
+      growth: 4.35,
+      angle: 24,
+      hard: true,
+      secondPose: 'pipDustDevilRear',
+      second: {
+        start: 14 / 60,
+        active: 5 / 60,
+        box: [-49, -20, 37, 20],
+        dmg: 13,
+        base: 211,
+        growth: 4.9,
+        angle: 26,
+        rear: true,
+        hard: true,
+      },
+    },
+    brisketHaymaker: {
+      label: 'Haymaker',
+      hint: 'Plant your feet and throw a heavy straight punch. It has a slow windup and sends rivals far sideways.',
+      frames: [12, 5, 24],
+      box: [54, -41, 47, 34],
+      dmg: 17,
+      base: 242,
+      growth: 5.5,
+      angle: 33,
+      hard: true,
+    },
+    brisketRoofRaiser: {
+      label: 'Roof Raiser',
+      hint: 'Drive upward with Brisket’s head and shoulders. The wide hit catches rivals on either side and launches them almost straight up.',
+      frames: [8, 7, 22],
+      box: [0, -75, 55, 46],
+      dmg: 15,
+      base: 222,
+      growth: 5,
+      angle: 87,
+      around: true,
+      hard: true,
+    },
+    brisketQuake: {
+      label: 'Quake Stomp',
+      hint: 'Slam both paws down. The shockwave spreads along the floor on both sides. Stand close for the biggest hit.',
+      frames: [13, 7, 25],
+      box: [0, -12, 103, 16],
+      dmg: 14,
+      base: 210,
+      growth: 4.7,
+      angle: 49,
+      around: true,
+      hard: true,
+      shockwave: true,
+      sweetSpot: { box: [0, -30, 66, 31], bonus: 4, launch: 1.14 },
+    },
+    noodleLeadSnap: {
+      label: 'Lead Snap',
+      hint: 'Crack the lead straight ahead. The knot at the far end hits much harder than the middle of the rope.',
+      frames: [9, 5, 20],
+      box: [86, -39, 82, 21],
+      dmg: 11,
+      base: 176,
+      growth: 4.35,
+      angle: 29,
+      hard: true,
+      rope: 'front',
+      sweetSpot: { box: [153, -40, 29, 33], bonus: 5, launch: 1.23 },
+    },
+    noodleBellPull: {
+      label: 'Bell Pull',
+      hint: 'Catch a nearby rival in an upward loop, then snap the rope above Noodle’s head to launch them.',
+      frames: [7, 5, 25],
+      box: [14, -57, 55, 38],
+      dmg: 4,
+      base: 58,
+      growth: 0.8,
+      angle: 82,
+      pull: true,
+      lift: 215,
+      stun: 0.32,
+      setupHit: true,
+      rope: 'up',
+      secondPose: 'noodleBellPullFinish',
+      second: {
+        start: 17 / 60,
+        active: 6 / 60,
+        box: [9, -95, 54, 54],
+        dmg: 11,
+        base: 209,
+        growth: 4.85,
+        angle: 83,
+        around: true,
+        hard: true,
+      },
+    },
+    noodleSwitchback: {
+      label: 'Switchback',
+      hint: 'Sweep the rope low on both sides and sling the rival across Noodle. A rival on your left flies right.',
+      frames: [9, 7, 19],
+      box: [3, -19, 77, 22],
+      dmg: 13,
+      base: 218,
+      growth: 4.8,
+      angle: 27,
+      around: true,
+      reverse: true,
+      hard: true,
+      rope: 'low',
+    },
+    cloverLineDrive: {
+      label: 'Line Drive',
+      hint: 'Fire the disc straight ahead. A longer charge gives it more speed, range, and knockback.',
+      frames: [9, 3, 18],
+      box: [39, -39, 34, 20],
+      dmg: 12,
+      base: 186,
+      growth: 4.65,
+      angle: 30,
+      projectile: 'drive',
+      hard: true,
+    },
+    cloverHaloLift: {
+      label: 'Halo Lift',
+      hint: 'Lift the disc over Clover’s head. Catch a jumping rival with its top rim for a stronger launch.',
+      frames: [7, 7, 16],
+      box: [7, -79, 46, 46],
+      dmg: 12,
+      base: 189,
+      growth: 4.5,
+      angle: 80,
+      around: true,
+      hard: true,
+      sweetSpot: { box: [6, -111, 37, 23], bonus: 5, launch: 1.19 },
+    },
+    cloverRimRattle: {
+      label: 'Rim Rattle',
+      hint: 'Spin the disc around your paws. The first pass catches low on either side so the second can knock the rival out.',
+      frames: [6, 5, 20],
+      box: [0, -20, 59, 21],
+      dmg: 3,
+      base: 56,
+      growth: 0.7,
+      angle: 38,
+      stun: 0.26,
+      around: true,
+      setupHit: true,
+      secondPose: 'cloverRimRattleFinish',
+      second: {
+        start: 14 / 60,
+        active: 5 / 60,
+        box: [0, -23, 73, 27],
+        dmg: 10,
+        base: 195,
+        growth: 4.65,
+        angle: 31,
+        around: true,
+        hard: true,
+      },
+    },
+  };
+  for (const move of [...Object.values(moves), ...Object.values(specials), ...Object.values(smashes)]) {
     const [startup, active, recovery] = move.frames;
     move.start = startup / 60;
     move.active = active / 60;
@@ -758,6 +970,9 @@
       dodge: 0,
       charge: -1,
       chargeAim: 0,
+      chargeReleased: false,
+      smashCharge: null,
+      lastSmashPower: null,
       attack: null,
       lastMove: '',
       landingLag: 0,
@@ -779,32 +994,32 @@
   }
   const attacks = {
     quick: { start: 0.045, active: 0.095, end: 0.23, dmg: 6, base: 137, growth: 3.35, reach: 0 },
-    heavy: { start: 0.095, active: 0.14, end: 0.48, dmg: 13, base: 225, growth: 5.5, reach: 15 },
     grab: { start: 0.065, active: 0.095, end: 0.39, dmg: 8, base: 210, growth: 3.95, reach: -11 },
   };
-  function beginAttack(f, name, aim = 0, power = 0, moveId = null) {
+  function cancelCharge(f) {
     f.charge = -1;
+    f.chargeReleased = false;
+    f.smashCharge = null;
+  }
+  function beginAttack(f, name, aim = 0, power = 0, moveId = null) {
+    cancelCharge(f);
+    f.lastSmashPower = null;
     f.shield = false;
     f.landTime = 0;
     f.skidTime = 0;
     f.reboundTime = 0;
     f.chainNext = 0;
     f.chainWindow = 0;
-    const move = moveId ? moves[moveId] || specials[moveId] : attacks[name];
+    const move = moveId ? moves[moveId] || specials[moveId] || smashes[moveId] : attacks[name];
     f.attack = { name, moveId, aim, power, time: 0, hitBeat: -1, ballHit: false, fired: false, ...move };
     const common = {
       quick: aim < 0 ? 'Up Tilt' : aim > 0 ? 'Low Tilt' : 'Quick Strike',
-      heavy: 'Charged Strike',
       grab: 'Throw',
       recover: 'Up Special',
     };
     f.lastMove = move.label || common[name] || f.stats.move;
   }
   function groundStrike(f, aim, heldFor) {
-    if (heldFor >= 0.21) {
-      beginAttack(f, 'heavy', aim, clamp(heldFor / 0.85, 0, 1));
-      return;
-    }
     const step = f.chainWindow > 0 ? f.chainNext : 0;
     const chain = f.kit.ground;
     const moveId = aim === 0 ? chain[step] : null;
@@ -817,6 +1032,27 @@
       f.chainWindow = f.attack.end + 0.23;
     }
     if (f.attack.step) f.vx += f.face * f.attack.step;
+  }
+  function smashPower(heldFor) {
+    return clamp(heldFor / smashChargeTime, 0, 1);
+  }
+  const smashStrength = (power) => 1 + 0.4 * power;
+  function lockSmash(f, button, aim, face) {
+    const side = aim < 0 ? 'up' : aim > 0 ? 'down' : 'side';
+    f.smashCharge = { moveId: f.kit.smashes[side], side, face: face || f.face, button };
+    f.chargeAim = aim;
+    f.face = f.smashCharge.face;
+    f.vx = 0;
+    f.shield = false;
+    f.chainWindow = f.landTime = f.skidTime = 0;
+  }
+  function releaseSmash(f) {
+    const { moveId, side, face } = f.smashCharge;
+    const power = smashPower(f.charge);
+    f.face = face;
+    beginAttack(f, 'heavy', f.chargeAim, power, moveId);
+    f.attack.smashSide = side;
+    f.lastSmashPower = power;
   }
   function aerialStrike(f, command) {
     const side = command.airSide;
@@ -860,7 +1096,16 @@
       this.trainingDamage = 0;
       this.lastCombo = { hits: 0, damage: 0 };
       this.hitStop = 0;
-      this.bot = { timer: 0, pulse: {}, hold: 0, guard: 0, jumpHold: 0, hop: null, hopDelay: 0 };
+      this.bot = {
+        timer: 0,
+        pulse: {},
+        hold: 0,
+        guard: 0,
+        jumpHold: 0,
+        hop: null,
+        hopDelay: 0,
+        smashHold: 0,
+      };
       if (this.mode === 'training') this.resetTraining();
       else this.dogs.forEach((f) => this.spawn(f, false));
     }
@@ -959,28 +1204,33 @@
       if (f.respawning > 0) return;
       if (pressed('jump')) f.jumpBuffer = inputWindow;
       if (pressed('shield')) f.guardBuffer = inputWindow;
-      if (f.command?.type === 'attack' && !input.attack) f.command.released = true;
+      if (f.command && !input[f.command.type]) f.command.released = true;
+      if (f.charge >= 0 && !input[f.smashCharge?.button || 'attack']) f.chargeReleased = true;
       if (!input.special) {
-        if (f.command?.type === 'special') f.command.released = true;
         if (f.attack?.specialSide === 'up') f.attack.released = true;
       }
       const type = pressed('grab')
         ? 'grab'
         : pressed('special')
           ? 'special'
-          : pressed('attack')
-            ? 'attack'
-            : null;
+          : pressed('smash')
+            ? 'smash'
+            : pressed('attack')
+              ? 'attack'
+              : null;
       if (type) {
+        const x = type === 'smash' ? (input.smashX ?? input.x) : input.x;
+        const y = type === 'smash' ? (input.smashY ?? input.y) : input.y;
+        const side = airDirection(x, y, f.face);
         f.command = {
           type,
-          aim: aimFor(input.y),
-          face: Math.abs(input.x) > 0.2 ? Math.sign(input.x) : 0,
+          aim: type === 'smash' ? (side === 'up' ? -1 : side === 'down' ? 1 : 0) : aimFor(y),
+          face: Math.abs(x) > 0.2 ? Math.sign(x) : 0,
           facing: f.face,
-          airSide: airDirection(input.x, input.y, f.face),
+          airSide: side,
           life: inputWindow,
           heldFor: 0,
-          released: (type === 'attack' || type === 'special') && !input[type],
+          released: !input[type],
         };
       }
     }
@@ -1083,7 +1333,7 @@
         this.emit('skid', { f, face: f.skidFace });
       }
       if (free && f.stun <= 0 && f.dodge <= 0 && !f.shield) {
-        if (f.jumpBuffer > 0 && (f.jumps > 0 || f.coyote > 0)) {
+        if (!f.smashCharge && f.jumpBuffer > 0 && (f.jumps > 0 || f.coyote > 0)) {
           if (grounded && direction === 1 && this.terrain[f.ground].thin) {
             f.drop = 0.24;
             f.y += 9;
@@ -1101,28 +1351,54 @@
           f.ground = -1;
           f.coyote = 0;
           f.jumpBuffer = 0;
-          f.charge = -1;
+          cancelCharge(f);
           f.chainWindow = 0;
           f.landTime = 0;
           f.skidTime = 0;
           f.reboundTime = 0;
         }
         const command = f.command;
-        if (f.charge >= 0 && (!command || command.type === 'attack')) {
-          if (input.attack && !command) f.charge += dt;
-          if (direction) f.chargeAim = direction;
-          if (!input.attack || f.charge >= 0.85 || f.ground < 0 || command)
-            groundStrike(f, f.chargeAim, f.charge);
-        } else if (command) {
+        if (f.charge >= 0 && (f.smashCharge || !command || command.type === 'attack')) {
+          const before = f.charge;
+          if (!f.chargeReleased) f.charge += dt;
+          if (!f.smashCharge) {
+            if (Math.abs(input.x) > 0.28) f.face = Math.sign(input.x);
+            if (direction || Math.abs(input.x) > 0.28) {
+              const side = airDirection(input.x, input.y, f.face);
+              f.chargeAim = side === 'up' ? -1 : side === 'down' ? 1 : 0;
+            }
+            if (f.charge >= attackHold) {
+              lockSmash(f, 'attack', f.chargeAim, f.face);
+              this.emit('smashCharge', { f });
+            }
+          }
+          if (f.smashCharge && before < smashChargeTime && f.charge >= smashChargeTime)
+            this.emit('smashReady', { f });
+          if (f.chargeReleased || f.charge + 1e-8 >= smashHoldLimit || (!f.smashCharge && command)) {
+            if (f.smashCharge) {
+              releaseSmash(f);
+              this.emit('smashRelease', { f });
+            } else groundStrike(f, f.chargeAim, f.charge);
+          }
+        } else if (command && (command.type !== 'smash' || f.ground >= 0)) {
           f.command = null;
           if (command.face && (f.ground >= 0 || command.type !== 'attack')) f.face = command.face;
           if (command.type === 'grab') beginAttack(f, 'grab', command.aim);
           else if (command.type === 'special') this.special(f, command);
-          else if (f.ground < 0) aerialStrike(f, command);
+          else if (command.type === 'smash') {
+            f.charge = 0;
+            f.chargeReleased = false;
+            lockSmash(f, 'smash', command.aim, command.face || command.facing);
+            if (command.released) {
+              releaseSmash(f);
+              this.emit('smashRelease', { f });
+            } else this.emit('smashCharge', { f });
+          } else if (f.ground < 0) aerialStrike(f, command);
           else if (command.released) groundStrike(f, command.aim, command.heldFor);
           else {
             f.charge = command.heldFor;
             f.chargeAim = command.aim;
+            f.chargeReleased = false;
           }
         }
       }
@@ -1133,6 +1409,10 @@
       if (f.attack) {
         const a = f.attack;
         a.time += dt;
+        if (a.projectile && !a.fired && a.time + 1e-8 >= a.start) {
+          a.fired = true;
+          this.throwItem(f, a);
+        }
         if (a.specialSide && this.advanceSpecial(f, a, input, dt)) return;
         if (a.plunge && a.time < a.start - 1e-8) f.vy = -1540 * f.kit.gravity * dt;
         if ((a.plunge || a.burst) && !a.fired && a.time + 1e-8 >= a.start) {
@@ -1167,6 +1447,7 @@
         }
       }
       if (f.ground < 0) {
+        if (f.charge >= 0) cancelCharge(f);
         const gravity =
           f.dodge > 0 ? 430 : (input.y > 0.55 && f.vy > 0 && f.stun <= 0 ? 2580 : 1540) * f.kit.gravity;
         f.vy = Math.min(f.vy + gravity * dt, 970);
@@ -1241,7 +1522,7 @@
       f.face = edge.left ? 1 : -1;
       f.ground = -1;
       f.attack = f.command = null;
-      f.charge = -1;
+      cancelCharge(f);
       f.invuln = 0.25;
       f.jumpBuffer = f.guardBuffer = f.chainWindow = 0;
       restoreAir(f);
@@ -1366,10 +1647,6 @@
       this.emit(side === 'up' && id !== 'brisketCannon' ? 'recover' : 'special', { f, moveId: id });
     }
     advanceSpecial(f, a, input, dt) {
-      if (a.projectile && !a.fired && a.time + 1e-8 >= a.start) {
-        a.fired = true;
-        this.throwItem(f, a);
-      }
       switch (a.moveId) {
         case 'pipSlide':
           if (a.diving) {
@@ -1488,14 +1765,23 @@
       };
       if (type === 'snare')
         this.projectiles = this.projectiles.filter((item) => item.owner !== f.index || item.type !== 'snare');
+      if (type === 'drive') {
+        d.x = f.x + f.face * 37;
+        d.y = f.y - 39;
+        d.vx = f.face * (560 + 260 * a.power);
+        d.vy = 0;
+        d.power = a.power;
+        d.rangeLeft = 215 + 150 * a.power;
+      }
       this.projectiles.push(d);
       this.emit(type === 'snare' ? 'ropeCast' : 'disc', { f, moveId: a.moveId });
     }
     attackArea(f) {
       const a = f.attack;
       if (a.box) {
-        const [x, y, rx, ry] = a.landed && a.plunge ? [0, -17, 63, 22] : a.box;
-        return { x: f.x + f.face * x, y: f.y + y, rx, ry };
+        const [x, y, rx, ry] = a.landed && a.plunge ? [0, -17, 63, 22] : attackWindow(a).box || a.box;
+        const spread = a.shockwave ? 0.4 + 0.6 * clamp((a.time - a.start) / (a.active - 1 / 60), 0, 1) : 1;
+        return { x: f.x + f.face * x, y: f.y + y, rx: rx * spread, ry };
       }
       const reach = f.stats.reach + a.reach;
       if (a.aim === -1) return { x: f.x + f.face * 7, y: f.y - f.stats.height - 13, rx: 42, ry: 47 };
@@ -1526,9 +1812,13 @@
         const beatIndex = beat === attack ? 0 : 1;
         const area = this.attackArea(f);
         const rival = this.dogs[1 - f.index];
-        const rear = attack.airSide === 'back';
-        const bothSides = attack.around || attack.airSide === 'neutral' || (attack.plunge && attack.landed);
-        const hitFacing = (x) => (bothSides ? Math.sign(x - f.x) || f.face : rear ? -f.face : f.face);
+        const rear = beat.rear || attack.airSide === 'back';
+        const bothSides =
+          beat.around || attack.around || attack.airSide === 'neutral' || (attack.plunge && attack.landed);
+        const hitFacing = (x) => {
+          const face = bothSides ? Math.sign(x - f.x) || f.face : rear ? -f.face : f.face;
+          return attack.reverse ? -face : face;
+        };
         if (
           !attack.ballHit &&
           this.ball &&
@@ -1550,11 +1840,21 @@
         )
           continue;
         attack.hitBeat = beatIndex;
+        let sweet = null;
+        if (beat.sweetSpot) {
+          const [sx, sy, rx, ry] = beat.sweetSpot.box;
+          if (
+            Math.abs((rival.x - f.x) * f.face - sx) <= rx &&
+            Math.abs(rival.y - rival.stats.height * 0.52 - f.y - sy) <= ry
+          )
+            sweet = beat.sweetSpot;
+        }
         hits.push({
           f,
           rival,
           attack,
           beat,
+          sweet,
           face: hitFacing(rival.x),
           point: {
             x: clamp(area.x, rival.x - rival.stats.width, rival.x + rival.stats.width),
@@ -1571,15 +1871,19 @@
             : first;
         this.swat(winner.f, winner.aim, winner.face);
       }
-      for (const { f, rival, attack, beat, face, point } of hits) {
-        const strength =
-          attack.name === 'heavy' || attack.moveId === 'brisketCannon' ? 1 + attack.power * 0.35 : 1;
+      for (const { f, rival, attack, beat, face, point, sweet } of hits) {
+        const strength = attack.smashSide
+          ? smashStrength(attack.power)
+          : attack.moveId === 'brisketCannon'
+            ? 1 + attack.power * 0.35
+            : 1;
+        const launch = (beat.setupHit ? 1 : strength) * (sweet?.launch || 1);
         attack.connected = this.hit(
           rival,
           f,
-          beat.dmg * strength,
-          beat.base * strength,
-          beat.growth * strength,
+          (beat.dmg + (sweet?.bonus || 0)) * strength,
+          beat.base * launch,
+          beat.growth * launch,
           attack.aim,
           attack.name,
           face,
@@ -1587,6 +1891,7 @@
           attack.moveId ? beat : null,
           attack.moveId,
         );
+        if (sweet && attack.connected) this.emit('sweetSpot', { f, point, face, moveId: attack.moveId });
         if (attack.connected && attack.name === 'rope')
           rival.vx = -face * Math.max(185, Math.abs(rival.vx) * 0.8);
         if (attack.connected && attack.moveId === 'noodleSling') {
@@ -1617,7 +1922,7 @@
       f.reaction = null;
       f.shieldHP = 0.24;
       f.stun = 0.85;
-      f.charge = -1;
+      cancelCharge(f);
       this.emit('break', { f });
     }
     hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId) {
@@ -1687,11 +1992,12 @@
       target.ledge = null;
       target.ledgeLock = 0.28;
       target.attack = null;
-      target.charge = -1;
+      cancelCharge(target);
       target.shield = false;
       target.stun = clamp(0.115 + speed * 0.00036, 0.14, 0.58);
       if (move?.stun) target.stun = Math.max(target.stun, move.stun);
-      const emphatic = !!move?.hard || name === 'heavy' || name === 'shoulder' || speed > 630;
+      const emphatic =
+        !!move?.hard || (name === 'heavy' && !move?.setupHit) || name === 'shoulder' || speed > 630;
       target.reaction = { duration: target.stun, face: -face, hard: emphatic || speed > 460 };
       this.hitStop = Math.max(this.hitStop, emphatic ? 4 / 60 : 2 / 60);
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic });
@@ -1704,21 +2010,43 @@
         if (d.caught) return false;
         d.age += dt;
         const impact = (direction) => {
-          const spec = specials[d.moveId] || specials.cloverRound;
+          const spec = smashes[d.moveId] || specials[d.moveId] || specials.cloverRound;
+          const strength = d.type === 'drive' ? smashStrength(d.power) : 1;
           this.hit(
             target,
             owner,
-            spec.dmg,
-            spec.base,
-            spec.growth,
+            spec.dmg * strength,
+            spec.base * strength,
+            spec.growth * strength,
             0,
-            d.type === 'snare' ? 'snare' : 'disc',
+            d.type === 'drive' ? 'heavy' : d.type === 'snare' ? 'snare' : 'disc',
             direction || owner.face,
             { x: d.x, y: d.y },
             spec,
             d.moveId,
           );
         };
+        if (d.type === 'drive') {
+          const step = Math.min(d.rangeLeft, Math.abs(d.vx) * dt);
+          const face = Math.sign(d.vx);
+          d.x += face * step;
+          d.rangeLeft -= step;
+          if (
+            !target.invuln &&
+            !target.respawning &&
+            Math.abs(target.x - d.x) <= target.stats.width + 15 &&
+            d.y >= target.y - target.stats.height - 5 &&
+            d.y <= target.y + 5
+          ) {
+            impact(face);
+            return false;
+          }
+          if (this.ball && Math.abs(d.x - this.ball.x) < 29 && Math.abs(d.y - this.ball.y) < 19) {
+            this.swat(owner, 0, face);
+            return false;
+          }
+          return d.rangeLeft > 0 && d.x > -130 && d.x < 1330;
+        }
         if (d.type === 'snare' || d.type === 'skip') {
           if (d.platform >= 0) {
             const p = this.terrain[d.platform];
@@ -1948,6 +2276,12 @@
         }
         return result;
       }
+      if (f.smashCharge?.button === 'smash') {
+        result.x = result.y = 0;
+        result.jump = false;
+        result.smash = f.charge < brain.smashHold;
+        return result;
+      }
       if (
         under &&
         f.ground >= 0 &&
@@ -1962,6 +2296,32 @@
       if (brain.timer <= 0) {
         brain.timer = 0.12 + this.random() * 0.14;
         brain.pulse = {};
+        const above = f.y - foe.y;
+        const smashReach = f.kind === 'clover' ? 220 : f.kind === 'noodle' ? 153 : 86;
+        if (
+          f.ground >= 0 &&
+          !f.attack &&
+          !f.stun &&
+          f.charge < 0 &&
+          !foe.shield &&
+          far < smashReach &&
+          above > -20 &&
+          above < 120 &&
+          (above > 30 || foe.damage > 48) &&
+          this.random() < 0.31
+        ) {
+          const up = above > 30 && far < 75;
+          const down = !up && far < 78 && (foe.face === f.face || this.random() < 0.43);
+          result.x = Math.sign(dx);
+          result.y = up ? -1 : down ? 1 : 0;
+          result.jump = false;
+          result.smash = true;
+          result.tapped = { smash: true };
+          brain.smashHold = above > 30 ? 0.035 : foe.stun > 0.15 ? 0.35 : 0.09 + this.random() * 0.18;
+          brain.hold = brain.guard = 0;
+          brain.hop = null;
+          return result;
+        }
         if (foe.y < f.y - 52 && far < 240 && f.jumps > 0) brain.pulse.jump = true;
         if (f.ground >= 0 && this.terrain[f.ground].thin && foe.y > f.y + 70 && far < 240) {
           brain.pulse.jump = true;
@@ -2066,6 +2426,9 @@
     kits,
     moves,
     specials,
+    smashes,
+    smashChargeTime,
+    smashPower,
     arenas,
     platforms,
     Battle,

@@ -31,6 +31,7 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 | Move or aim | W A S D | Arrow keys | Left stick or D-pad |
 | Jump | Space | Right Shift | A |
 | Attack | J | Comma | X |
+| Smash | I | N | RT or right stick |
 | Special | K | Period | B |
 | Shield or air-dodge | L | Slash | LB or RB |
 | Grab | U | M | Y |
@@ -38,7 +39,7 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 
 Tap Jump for a short hop or hold it for a full jump. Jump a second time in midair, then use Up + Special to recover. Hold Down and jump to drop through a raised platform.
 
-Tap Attack on the ground to start your dog's combo. Tap again to follow up, or hold Attack to charge a heavy strike. Up and Down aim grounded strikes. Grabs beat shields.
+Tap Attack on the ground to start your dog's combo. Tap again to follow up, or aim Up or Down for a tilt. Holding Attack charges your dog's smash in the chosen direction. Grabs beat shields.
 
 In midair, press Attack alone or aim forward, back, up, or down as you press it. Forward follows the direction your dog faces. You can drift backward and attack behind you. A short hop gives quick aerials time to connect. A heavy aerial takes longer to recover when it lands.
 
@@ -54,6 +55,21 @@ Open **Move list** on the select screen, in Training, or from Pause for illustra
 | **Brisket** | Tap Attack for Body Check, then tap again on contact for Bell Ringer. Press Grab after the check for a sideways throw near a ledge. | Hip Check launches backward. Belly Drop stalls before plunging and can hit beside Brisket on landing. |
 | **Noodle** | Ankle Tap into Reel In pulls the rival close. Finish with Whiplash or press Special during the pull to cast Tug Rope. | Slip Lead snags from the front, Tail Flick reaches behind, and Underhook lifts a rival from below. |
 | **Clover** | Tap Attack twice for Disc Tap and Set Point. On the second hit, use Jump + Up + Attack for Sky Volley, or Jump + Attack for Orbit. | Orbit hits on two beats if the rival stays close. Skip Shot angles the disc downward for a spike. |
+
+## Smash attacks
+
+While grounded, aim sideways, up, or down and press **Smash**. Tap for an immediate swing, or hold to charge and release to strike. The direction locks when the windup begins. A neutral input gives a side smash in the direction you face. Full charge takes one second and adds 40% damage. At two seconds the move releases automatically. An opponent can interrupt the windup.
+
+Use **I** for Player 1, **N** for Player 2, or the **Smash** button on a touchscreen. On a standard controller, aim with the left stick and hold **RT**, or hold the right stick in a direction and let it return to center. In **Training**, the readouts show the move, charge level, and damage.
+
+| Dog | Side smash | Up smash | Down smash |
+| --- | --- | --- | --- |
+| **Pip** | **Bolt Kick** lunges forward with both feet. | **Scissor Kick** lifts the rival into a second rising kick. | **Dust Devil** kicks in front first, then delivers a stronger rear sweep. |
+| **Brisket** | **Haymaker** is a slow, powerful straight punch. | **Roof Raiser** catches either side with a broad headbutt. | **Quake Stomp** sends a shockwave across the floor. It hits hardest near his paws. |
+| **Noodle** | **Lead Snap** deals extra damage at the rope's knotted tip. | **Bell Pull** scoops a rival into an overhead rope snap. | **Switchback** sweeps low and flings the rival across Noodle to the opposite side. |
+| **Clover** | **Line Drive** fires a straight disc. Charging increases its speed and range. | **Halo Lift** launches a rival highest when the top rim catches them overhead. | **Rim Rattle** spins low on both sides. The first pass sets up the second. |
+
+Open **Move list → Smash attacks** for the illustrated moves.
 
 ## Specials and recovery
 
