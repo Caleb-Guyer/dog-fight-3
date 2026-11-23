@@ -160,13 +160,15 @@
     if (a.diving) return 0.44 + 0.16 * Math.min(a.diveTime * 4, 1);
     if (a.moveId === 'cloverSail' && !a.folded && a.time >= a.start + a.active) return 0.57;
     if (a.anchor && a.time >= a.start) return 0.45 + Math.min(0.17, (a.time - a.start) * 0.7);
-    const beat = attackWindow(a);
+    // A late shoulder hit is the follow-through of one rush, so its pose keeps advancing.
+    const beat = a.dashAttack && a.late ? a : attackWindow(a);
     if (a.time < beat.start - 1e-8) {
       const held = a.smashSide ? 0.08 + 0.26 * a.power : 0;
       return held + (0.39 - held) * clamp(a.time / beat.start, 0, 1);
     }
     const activeTime = Math.max(0, a.time - beat.start);
-    if (activeTime <= beat.active) return 0.4 + 0.25 * (activeTime / beat.active);
+    const gatheringRim = a.dashAttack && a.second && beat === a && a.time + 1e-8 >= a.start + a.active;
+    if (activeTime <= beat.active && !gatheringRim) return 0.4 + 0.25 * (activeTime / beat.active);
     if (a.second && beat === a)
       return 0.16 + 0.23 * clamp((activeTime - a.active) / (a.second.start - a.start - a.active), 0, 1);
     return 0.68 + 0.32 * clamp((activeTime - beat.active) / (a.end - beat.start - beat.active), 0, 1);
@@ -177,6 +179,7 @@
     if (a.folded) return 'fall';
     if (a.diving) return 'pipSlideDive';
     if (a.anchor && a.time + 1e-8 >= a.start) return 'noodleReelLedge';
+    if (a.dashAttack && a.secondPose && a.time + 1e-8 >= a.start + a.active) return a.secondPose;
     if (a.secondPose && attackWindow(a) === a.second) return a.secondPose;
     if (a.moveId) return a.moveId;
     if (a.name === 'recover') return 'rise';
@@ -501,6 +504,101 @@
       pixelLine(ctx, x + dir * (extent - 5), y - 2, x + dir * extent, y - (heavy ? 6 : 4), cream, 2);
     }
   }
+  function dashFootwork(ctx, f) {
+    const a = f.attack;
+    if (!a?.dashAttack || f.ground < 0) return;
+    const last = a.second || a;
+    if (a.time > last.start + last.active + 0.055) return;
+    const speed = reduced.matches ? 0 : clamp(Math.abs(f.vx) / f.stats.speed, 0, 1.5);
+    const tail = -snap(32 + speed * 12, 2);
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y, 2));
+    ctx.scale(f.face, 1);
+    if (f.kind === 'pip') {
+      // Two shallow tracks slide under the outstretched soles.
+      pixelLine(ctx, tail - 7, -1, 10, -1, '#bd916c', 3, 2);
+      pixelLine(ctx, tail - 1, -3, -16, -3, '#efd09c', 2, 2);
+      if (speed > 0.28) pixelLine(ctx, tail - 5, -5, tail - 10, -9, '#d5b080', 2, 2);
+    } else if (f.kind === 'brisket') {
+      pixelLine(ctx, tail - 3, -2, -13, -2, '#b98c69', 4, 2);
+      if (!reduced.matches) {
+        pixelLine(ctx, tail - 2, -3, tail - 10, -9, '#deb582', 4, 2);
+        pixelLine(ctx, tail - 9, -10, tail - 14, -11, '#efd09c', 2, 2);
+        if (speed > 0.34) pixelLine(ctx, tail - 17, -7, tail - 21, -10, '#c79873', 3, 2);
+      }
+    } else {
+      pixelLine(ctx, tail - 4, -2, -24, -2, '#d4ac82', 2, 2);
+    }
+    ctx.restore();
+  }
+  function dashSwing(ctx, f, a) {
+    const beat = attackWindow(a);
+    const active = a.time + 1e-8 >= beat.start && a.time < beat.start + beat.active - 1e-8;
+    if (!active && f.kind !== 'noodle') return;
+    const p = clamp((a.time - beat.start) / beat.active, 0, 1);
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y, 2));
+    ctx.scale(f.face, 1);
+    if (f.kind === 'noodle') {
+      const hand = window.DogArt.itemPoint(f.kind, a.moveId, attackPhase(a));
+      const withdraw = clamp(
+        (a.time - a.start - a.active) / Math.min(0.17, a.end - a.start - a.active),
+        0,
+        1,
+      );
+      const cast = clamp((a.time / a.start - 0.28) / 0.72, 0, 1) * (1 - withdraw) ** 2;
+      if (hand && cast > 0.06) {
+        const [x, y, rx, ry] = a.box;
+        // The knot's outer edge reaches the live low hitbox. The lead draws back into
+        // the same painted grip once the inward-tugging contact window closes.
+        const tip = [hand[0] + (x + rx - 6 - hand[0]) * cast, hand[1] + (y - hand[1]) * cast];
+        const bend = Math.min(-4, y + ry - 3);
+        const slack = reduced.matches ? 0.5 : 0.35 + 0.6 * Math.sin(Math.PI * p);
+        const middle = [hand[0] + (tip[0] - hand[0]) * 0.56, (hand[1] + tip[1]) / 2];
+        middle[1] += (bend - middle[1]) * slack * cast;
+        ropeTrace(ctx, [hand, middle, tip], tip, false);
+      }
+    } else if (f.kind === 'clover') {
+      const rim = window.DogArt.itemPoint(f.kind, attackPose(f), attackPhase(a));
+      if (rim) {
+        const [x, y] = rim;
+        if (beat === a.second) {
+          // Trace the low scoop into the raised rim; the disc itself stays in the paw.
+          const [lowX, lowY] = window.DogArt.itemPoint(f.kind, a.moveId, 0.62);
+          const midX = Math.max(lowX, x) + 3,
+            midY = (y + lowY) / 2;
+          pixelLine(ctx, lowX, lowY, midX, midY, '#a990b5', 2, 2);
+          pixelLine(ctx, midX, midY, x + 4, y + 5, lilac);
+          pixelLine(ctx, x + 4, y + 5, x, y + 1, cream, 2, 2);
+          if (!reduced.matches) pixelLine(ctx, x + 12, y + 19, x + 10, y + 10, '#d9c1d9', 2, 2);
+        } else {
+          pixelLine(ctx, x - 30, y + 1, x - 18, y + 6, '#ad94bc', 2, 2);
+          pixelLine(ctx, x - 18, y + 6, x - 3, y + 3, lilac);
+          pixelLine(ctx, x - 3, y + 3, x, y + 1, cream, 2, 2);
+        }
+      }
+    } else if (f.kind === 'brisket') {
+      const late = beat === a.late;
+      const [x, y, rx, ry] = beat.box;
+      const shoulderX = x + rx - (late ? 16 : 13),
+        shoulderY = y - (late ? 4 : 6);
+      if (late) {
+        pixelLine(ctx, shoulderX, shoulderY, shoulderX + 6, shoulderY + 4, '#dab77e', 2, 2);
+      } else {
+        arc(ctx, shoulderX - 6, shoulderY + 2, 13, ry * 0.56, -1.05, 0.72, gold, 4);
+        pixelLine(ctx, shoulderX - 1, shoulderY - 2, shoulderX + 5, shoulderY + 1, cream, 2, 2);
+        if (!reduced.matches) pixelLine(ctx, -30, y - 4, -49, y - 2, '#dfba84', 3);
+      }
+    } else {
+      const [x, y, rx, ry] = a.box;
+      const follow = attackPhase(a) >= 0.54;
+      const toe = x + rx - (follow ? 9 : 13),
+        sole = y + ry - (follow ? 8 : 10);
+      pixelLine(ctx, toe - 13, sole + 6, toe - 3, sole + 4, cream, 2, 2);
+      pixelLine(ctx, toe - 3, sole + 4, toe + 5, sole - 2, '#e49e76', 2, 2);
+    }
+    ctx.restore();
+  }
   function smashSwing(ctx, f, a) {
     const beat = attackWindow(a);
     if (a.time + 1e-8 < beat.start || a.time >= beat.start + beat.active) return;
@@ -774,6 +872,7 @@
     if (a?.pummel) return;
     if (a?.grabAttempt) return catchReach(ctx, f, a);
     if (a?.throwSide) return throwFollowThrough(ctx, f, a);
+    if (a?.dashAttack) return dashSwing(ctx, f, a);
     if (a?.smashSide) return smashSwing(ctx, f, a);
     if (a?.specialSide) return specialSwing(ctx, f, a);
     if (a?.moveId) {
@@ -822,6 +921,7 @@
   function drawFighter(ctx, f, world, time) {
     shadow(ctx, f, world.terrain);
     movingGrabFeet(ctx, f);
+    dashFootwork(ctx, f);
     if (f.respawning > 0) oval(ctx, f.x, f.y - 3, 42, 5, team[f.index]);
     if (f.smashCharge && f.charge >= 0) drawSmashCharge(ctx, f);
     else if (f.charge > 0.21) {
@@ -1271,8 +1371,16 @@
       movingCatch = grapple && (side === 'dashGrab' || side === 'pivotGrab'),
       catching = grapple && (side === 'grab' || movingCatch),
       pummeling = grapple && side === 'pummel';
-    const id = catching || pummeling ? kits[kind][side] : kits[kind][category][side];
-    const book = { air: moves, specials, smashes, throws: catching ? grabs : pummeling ? pummels : throws };
+    const dash = category === 'dash';
+    const kit = kits[kind];
+    const id = dash ? kit.dashAttack : catching || pummeling ? kit[side] : kit[category][side];
+    const book = {
+      air: moves,
+      dash: moves,
+      specials,
+      smashes,
+      throws: catching ? grabs : pummeling ? pummels : throws,
+    };
     const move = book[category][id];
     const target = canvas.getContext('2d');
     const cacheKey = id + '/' + canvas.width + '/' + canvas.height;
@@ -1289,8 +1397,9 @@
     source.height = grapple ? 330 : smash ? 312 : 272;
     const ctx = source.getContext('2d');
     ctx.translate(movingCatch ? 260 : smash || grapple ? 190 : 150, grapple ? 190 : smash ? 185 : 158);
-    const beat = (id === 'pipScissors' || id === 'noodleBellPull') && move.second ? move.second : move;
-    const a = { ...move, moveId: id, time: beat.start + beat.active * 0.35, power: 0.75 };
+    const beat =
+      (id === 'pipScissors' || id === 'noodleBellPull' || dash) && move.second ? move.second : move;
+    const a = { ...move, moveId: id, time: beat.start + beat.active * (dash ? 0.25 : 0.35), power: 0.75 };
     if (category === 'air') a.airSide = side;
     else if (smash) {
       a.smashSide = side;
@@ -1302,9 +1411,13 @@
         a.runFace = 1;
       } else if (pummeling) a.pummel = true;
       else a.throwSide = side;
-    } else a.specialSide = side;
+    } else if (!dash) a.specialSide = side;
     if (id === 'noodleLasso') a.anchor = { x: 86, y: -86 };
     const fighter = { kind, index: 0, face: 1, x: 0, y: 0, ground: 0, stats: fighters[kind], attack: a };
+    if (dash) {
+      fighter.vx = fighter.stats.speed;
+      dashFootwork(ctx, fighter);
+    }
     if (movingCatch) {
       // Keep the incoming run rightward for both diagrams. The pivot catches
       // behind that run, with its own paws, disc or rope genuinely facing left.

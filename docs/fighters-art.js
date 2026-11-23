@@ -778,6 +778,23 @@
     ..##bbbbb##
     ....#####
   `);
+  const rushingShoulder = tile(`
+    ............######.....
+    ..........##BiiIii##...
+    .......###bBBiIIIIii#..
+    .....##bBBBBiiIiiBBii#.
+    ...##bbbBBBBiiiiBBBBiI#
+    ..#bbbBBBBBBiiBBBBBBBi#
+    ..bbBBBBBBBBBBBBBBBBBb#
+    .bbBBBBBBBBBbbBBBBbbb#.
+    bbBBBBBBBBBbbBBBbbww#..
+    bbBBBBBBBBbbbiwwwWw#...
+    bbBBBBBBbbbiwwwWWw#....
+    .bbBBBBbbbiwwwWWw#.....
+    ..bbBBBbiiwwWWWw#......
+    ...bbbBbwwwww##........
+    ....#bbbww##...........
+  `);
   const bulldogBelly = tile(`
     .....bbbBBBIiiwwww......
     ...#bBBBBIiiwwwWWWw##...
@@ -2599,6 +2616,74 @@
       follow: { bodyX: -1, bodyY: 1, torsoTurn: 5, headTurn: -6, fistX: 5,
         fistY: -3, fistTurn: -28, rearX: 2, rearY: -2, leftX: -5, rightX: 3, kneeOut: 2 },
     },
+    pipGrassSkid: {
+      ground: true, primed: true, sole: 'both', openHands: 'rear', openRange: [2, 5],
+      wind: { bodyX: 2, bodyY: 1, torsoTurn: 9, headTurn: -5, fistX: 2, fistY: -4,
+        rearX: -9, rearY: 2, leftX: 1, leftY: -5, rightX: 4, ear: -2, scarf: 4 },
+      lift: { bodyX: 1, bodyY: 4, torsoTurn: -7, headX: 1, headTurn: -5, fistX: -4, fistY: -4,
+        rearX: -13, rearY: 4, leftX: 1, rightX: 6, rightY: -4, kneeOut: 3, scarf: 5 },
+      hit: { bodyX: -2, bodyY: 6, torsoTurn: -23, headX: 1, headY: 1, headTurn: 3,
+        fistX: -4, fistY: -5, fistTurn: -17, rearX: -20, rearY: 8, rearTurn: 95,
+        leftX: 21, leftY: -8, leftFootTurn: -8, rightX: 18, rightY: -2, rightFootTurn: 53,
+        kneeOut: 3, frontKneeY: -2, ear: -3, tail: -4, scarf: 7 },
+      beat: { bodyX: 1, bodyY: 1, torsoTurn: 5, headTurn: 4, leftX: 2, rightX: 3,
+        rightY: 1, rightFootTurn: 10, rearX: 2, ear: 1, scarf: -2 },
+      follow: { bodyY: 4, torsoTurn: -13, headX: 1, headTurn: 4, fistX: -3, fistY: -3,
+        rearX: -12, rearY: 5, rearTurn: 52, leftX: 4, rightX: 11, rightFootTurn: 24,
+        kneeOut: 3, ear: -1, scarf: 3 },
+    },
+    brisketYardBuster: {
+      ground: true, primed: true, shoulderDrive: true, lateContactPhase: 0.49,
+      wind: { bodyX: 1, torsoTurn: 11, headTurn: -3, fistX: 2, fistY: -5, rearX: -7,
+        leftX: -2, leftY: -4, rightX: 3, ear: -2 },
+      lift: { bodyX: 1, bodyY: 4, torsoTurn: 14, headX: -2, headTurn: -8, shoulderY: -3,
+        fistX: -3, fistY: -2, rearX: -8, rearY: -3, leftX: -4, rightX: 5, rightY: -2, kneeOut: 3 },
+      hit: { bodyX: 6, bodyY: 1, lean: 3, torsoTurn: 24, headX: -2, headY: 1,
+        headTurn: -4, shoulderY: -6, fistX: -7, fistY: 2, fistTurn: 63, rearX: -10, rearY: 1,
+        leftX: -6, rightX: 6, rightY: -2, kneeOut: 2, ear: -3, tail: -2 },
+      beat: { bodyX: -2, bodyY: 2, lean: -1, torsoTurn: -10, shoulderY: 2, headX: 1,
+        headTurn: 6, fistX: 2, rearX: 2, rightY: 2, leftY: -2, rightX: 1, ear: 2 },
+      follow: { bodyX: 2, bodyY: 2, torsoTurn: 9, headTurn: 4, shoulderY: -1,
+        fistX: -3, fistY: 1, fistTurn: 21, rearX: -4, leftX: -2, leftY: -2, rightX: 4, kneeOut: 2 },
+    },
+    noodleLeadSweep: {
+      ground: true, primed: true, item: 'rope', clasp: 'front', openHands: 'rear', openRange: [2, 4],
+      itemAngles: [-43, -75, -29, -6, -24, -17, -9, 0],
+      wind: { bodyX: 1, torsoTurn: 7, headTurn: -3, fistX: -1, fistY: -3, rearX: -8,
+        leftX: -2, leftY: -4, rightX: 3, ear: -2, scarf: 3 },
+      lift: { bodyX: 2, bodyY: 3, torsoTurn: -8, headX: 1, headTurn: -5, fistX: -4, fistY: -8,
+        fistTurn: -29, rearX: 1, rearY: -2, leftX: -4, rightX: 4, rightY: -2, kneeOut: 3, ear: -3 },
+      hit: { bodyX: 4, bodyY: 5, lean: 2, torsoTurn: 13, headX: 1, headY: -2, headTurn: 8,
+        fistX: 10, fistY: -3, fistTurn: 14, rearX: -10, rearY: -5, rearTurn: -48,
+        leftX: -4, rightX: 6, rightY: -1, kneeOut: 3, ear: -4, scarf: 5 },
+      beat: { bodyX: -3, torsoTurn: -17, headTurn: -8, fistX: -9, fistY: 1, fistTurn: -21,
+        rearX: 6, rearY: 3, frontElbowX: -2, rightY: 1, leftY: -1, ear: 2, scarf: -2 },
+      follow: { bodyX: -1, bodyY: 2, torsoTurn: -8, headTurn: -5, fistX: 1, fistY: -3,
+        rearX: -1, rearY: -2, leftX: -3, leftY: -2, rightX: 4, kneeOut: 2, scarf: 2 },
+    },
+    cloverRimRush: {
+      ground: true, primed: true, item: 'disc', itemAngles: [-42, -51, -28, -8, -23, -31, -25, -4],
+      wind: { bodyX: 2, torsoTurn: 8, headTurn: -4, fistX: -2, fistY: -1, rearX: -7,
+        leftX: -3, leftY: -4, rightX: 4, ear: -2, scarf: 4 },
+      lift: { bodyX: 2, bodyY: 3, torsoTurn: 11, headTurn: 3, fistX: -1, fistY: 2, fistTurn: 8,
+        rearX: -9, rearY: -3, leftX: -4, rightX: 5, rightY: -2, kneeOut: 3, scarf: 5 },
+      hit: { bodyX: 4, bodyY: 5, torsoTurn: 15, headX: 1, headY: 1, headTurn: 8, fistX: 8,
+        fistY: 2, fistTurn: 20, rearX: -6, rearY: -3, leftX: -4, rightX: 7, kneeOut: 4, scarf: 4 },
+      beat: { bodyX: -1, fistX: -1, fistY: -1, torsoTurn: -4, headTurn: -4, rightX: -1, rearX: 4 },
+      follow: { bodyX: 2, bodyY: 3, torsoTurn: 8, headTurn: -2, fistX: 3, fistY: -1,
+        rearX: -2, leftX: -3, leftY: -1, rightX: 4, kneeOut: 2, scarf: 2 },
+    },
+    cloverRimRushPop: {
+      ground: true, primed: true, item: 'disc', itemAngles: [-23, -23, -39, -48, -67, -51, -29, -5],
+      wind: { bodyX: 3, bodyY: 5, torsoTurn: 11, headX: 1, headY: 1, headTurn: 4, fistX: 7,
+        fistY: 1, fistTurn: 20, rearX: -2, rearY: -3, leftX: -4, rightX: 6, kneeOut: 4, scarf: 4 },
+      hit: { bodyX: 2, bodyY: -2, torsoTurn: -9, headX: -1, headTurn: -16, shoulderY: -2,
+        fistX: 7, fistY: -11, fistTurn: -42, rearX: 2, rearY: -6, leftX: -3, leftY: -3,
+        rightX: 5, frontElbowX: 2, ear: -2, scarf: -4 },
+      beat: { bodyY: -1, fistX: -3, fistY: -3, headTurn: -5, rightX: 1, rearX: -3, rearY: 2, scarf: 2 },
+      follow: { bodyX: 2, torsoTurn: -6, headTurn: -8, fistX: 3, fistY: -7, fistTurn: -35,
+        rearX: -3, rearY: -1, leftX: -3, leftY: -2, rightX: 4, kneeOut: 2, scarf: 2 },
+    },
   };
 
   const specials = { pip: 'pounce', brisket: 'shoulder', noodle: 'cast', clover: 'disc' };
@@ -2722,7 +2807,7 @@
       s.clasp = move.clasp;
     }
     if (move.bark) s.barkJaw = frame === 3 ? 2 : frame === 4 ? 1 : 0;
-    if (move.bark || move.sail || move.crossedGuard || pose === 'noodleTripLine') s.powerArm = false;
+    if (move.bark || move.sail || move.shoulderDrive || move.crossedGuard || pose === 'noodleTripLine') s.powerArm = false;
     if (move.crossedGuard && frame >= 1 && frame < 7) s.reverseArm = true;
     if (move.rearStrike && (frame === 3 || frame === 4)) s.reverseArm = true;
     if ((pose === 'noodleLasso' || pose === 'noodleReelLedge') && driving) {
@@ -2746,6 +2831,7 @@
       s.glanceBack = frame === 0;
     }
     s.extraHaunch = !!move.haunch && frame > 0 && frame < 7;
+    if (move.shoulderDrive) s.shoulderLead = [0, 2, 5, 9, 4, 2, 0, 0][frame];
     s.bellyFirst = !!move.belly && frame >= 2 && frame < 6;
     s.tailType = move.tailType || null;
     s.kitFrame = frame;
@@ -2758,7 +2844,7 @@
       if (phase < 0.12) return 0;
       if (phase < 0.24) return 1;
       if (phase < 0.4) return 2;
-      if (phase < 0.54) return 3;
+      if (phase < (kitMoves[pose]?.lateContactPhase || 0.54)) return 3;
       if (phase < 0.68) return 4;
       if (phase < 0.83) return 5;
       if (phase < 0.95) return 6;
@@ -2865,6 +2951,7 @@
       headTurn: 0,
       torsoTurn: 0,
       shoulderY: 0,
+      shoulderLead: 0,
       powerArm: false,
       showSole: false,
       scarf: 0,
@@ -3454,6 +3541,13 @@
       },
       s.glanceBack,
     );
+    if (s.shoulderLead) {
+      const [sx, sy] = withTorso(d, s, d.shoulder[0] + s.bodyX + s.lean, d.shoulder[1] + s.bodyY + s.shoulderY);
+      const x = sx + s.shoulderLead;
+      const y = sy - 2 - Math.round(s.shoulderLead / 3);
+      link(buffer, [[sx - 4, sy + 3], [x, y + 2]], [10, 11], d.armCoat);
+      stamp(buffer, rushingShoulder, x - 11, y - 6);
+    }
     if (s.twoHandsFront) {
       if (s.behindHead) drawPaw(buffer, name, d, s, false, ...wrist(d, s, false));
       else drawArm(buffer, name, d, s, false);

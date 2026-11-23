@@ -560,7 +560,7 @@
       'controls',
       'Controls',
       table +
-        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack on the ground for your dog’s combo. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. Holding regular Attack also charges. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
+        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack from a standstill for your dog’s combo. Press Attack while running left or right for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
   $('controls').onclick = showControls;
@@ -588,6 +588,21 @@
     up: 'After catch · Up',
     down: 'After catch · Down',
   };
+  function guideMoveRow(move, input, direction, category) {
+    return (
+      '<li><canvas width="124" height="78" data-direction="' +
+      direction +
+      '" data-category="' +
+      category +
+      '" aria-hidden="true"></canvas><div><small>' +
+      input +
+      '</small><strong>' +
+      move.label +
+      '</strong><span>' +
+      move.hint +
+      '</span></div></li>'
+    );
+  }
   function showMoves(kind, section = 'air') {
     if (dialogType !== 'moves') backToPause = dialogType === 'pause';
     const kit = kits[kind],
@@ -620,20 +635,7 @@
           }
         : kit[section];
     const rows = Object.entries(entries)
-      .map(([side, id]) => {
-        const move = moveSet[id];
-        return (
-          '<li><canvas width="124" height="78" data-direction="' +
-          side +
-          '" aria-hidden="true"></canvas><div><small>' +
-          inputs[side] +
-          '</small><strong>' +
-          move.label +
-          '</strong><span>' +
-          move.hint +
-          '</span></div></li>'
-        );
-      })
+      .map(([side, id]) => guideMoveRow(moveSet[id], inputs[side], side, section))
       .join('');
     const sections =
       '<div class="guide-tabs" role="group" aria-label="Move categories">' +
@@ -679,7 +681,9 @@
         kit.ground.map((id) => moves[id].label).join(' / ') +
         '</div><p>' +
         kit.combo +
-        '</p>' +
+        '</p><h3 class="guide-section">Dash attack</h3><ul class="move-rows guide-dash">' +
+        guideMoveRow(moves[kit.dashAttack], 'Run + Attack', 'dash', 'dash') +
+        '</ul>' +
         '<h3 class="guide-section">Aerial attacks</h3><p>Forward follows the way your dog faces. You can drift backward.</p><ul class="move-rows guide-airs">' +
         rows +
         '</ul>';
@@ -695,7 +699,7 @@
         '<div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
     for (const canvas of document.querySelectorAll('[data-direction]'))
-      drawMoveThumbnail(canvas, kind, canvas.dataset.direction, section);
+      drawMoveThumbnail(canvas, kind, canvas.dataset.direction, canvas.dataset.category);
   }
   $('lobby-moves').onclick = () => showMoves(settings[editing ? 'p2' : 'p1']);
   $('training-moves').onclick = () => showMoves(settings.p1);

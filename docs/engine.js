@@ -94,6 +94,7 @@
   const kits = {
     pip: {
       ground: ['pipJab', 'pipCross', 'pipHeel'],
+      dashAttack: 'pipGrassSkid',
       grab: 'pipCollarTag',
       dashGrab: 'pipTagDash',
       pivotGrab: 'pipHeelHook',
@@ -118,6 +119,7 @@
     },
     brisket: {
       ground: ['brisketCheck', 'brisketLift'],
+      dashAttack: 'brisketYardBuster',
       grab: 'brisketBearHug',
       dashGrab: 'brisketFreightHug',
       pivotGrab: 'brisketGateSwing',
@@ -153,6 +155,7 @@
     },
     noodle: {
       ground: ['noodleTrip', 'noodleReel', 'noodleSnap'],
+      dashAttack: 'noodleLeadSweep',
       grab: 'noodleLeadLoop',
       dashGrab: 'noodleRunningLoop',
       pivotGrab: 'noodleBackcast',
@@ -182,6 +185,7 @@
     },
     clover: {
       ground: ['cloverTap', 'cloverSet'],
+      dashAttack: 'cloverRimRush',
       grab: 'cloverDiscHook',
       dashGrab: 'cloverScoopSlide',
       pivotGrab: 'cloverRimTurn',
@@ -213,6 +217,86 @@
   // Frames are [startup, active, recovery] at 60 Hz. Boxes are [forward, down from feet, half-width, half-height].
   // The launch angle is measured above horizontal. Negative angles spike an airborne opponent.
   const moves = {
+    pipGrassSkid: {
+      label: 'Grass Skid',
+      hint: 'Slide in heel-first for a quick, low kick. Pip recovers fast enough to chase.',
+      dashAttack: true,
+      frames: [4, 6, 10],
+      box: [34, -15, 31, 15],
+      carry: 1.08,
+      brake: 1700,
+      dmg: 7,
+      base: 176,
+      growth: 3.35,
+      angle: 21,
+    },
+    brisketYardBuster: {
+      label: 'Yard Buster',
+      hint: 'Lead with the shoulder. The first four frames of contact hit hardest, and a miss leaves Brisket open.',
+      dashAttack: true,
+      frames: [9, 11, 21],
+      box: [44, -34, 39, 29],
+      carry: 1.48,
+      brake: 710,
+      dmg: 14,
+      base: 241,
+      growth: 4.75,
+      angle: 33,
+      hard: true,
+      late: {
+        start: 13 / 60,
+        active: 7 / 60,
+        box: [34, -30, 32, 26],
+        dmg: 8,
+        base: 146,
+        growth: 3.05,
+        angle: 27,
+      },
+    },
+    noodleLeadSweep: {
+      label: 'Lead Sweep',
+      hint: 'Plant your paws and sweep the lead along the ground. Catch a rival at the tip to pull them into paw range.',
+      dashAttack: true,
+      frames: [7, 5, 14],
+      box: [73, -18, 55, 15],
+      carry: 0.92,
+      brake: 1420,
+      dmg: 6,
+      base: 119,
+      growth: 1.7,
+      angle: 34,
+      pull: true,
+      stun: 0.36,
+    },
+    cloverRimRush: {
+      label: 'Rim Rush',
+      hint: 'Skim the disc low, then scoop upward for a second hit. Jump as the rim pops the rival up to follow with an aerial.',
+      dashAttack: true,
+      frames: [5, 4, 20],
+      box: [39, -18, 35, 16],
+      carry: 1.1,
+      brake: 1110,
+      dmg: 3,
+      base: 64,
+      growth: 0.65,
+      angle: 35,
+      pull: true,
+      lift: 150,
+      stun: 0.27,
+      setupHit: true,
+      secondPose: 'cloverRimRushPop',
+      second: {
+        start: 13 / 60,
+        active: 5 / 60,
+        box: [37, -54, 39, 41],
+        dmg: 6,
+        base: 232,
+        growth: 3.3,
+        angle: 78,
+        stun: 0.3,
+        jumpCancel: true,
+      },
+    },
     pipJab: {
       label: 'Quick Paw',
       frames: [3, 4, 6],
@@ -1482,7 +1566,8 @@
     }
   }
   function attackWindow(attack) {
-    return attack.second && attack.time + 1e-8 >= attack.second.start ? attack.second : attack;
+    const next = attack.second || attack.late;
+    return next && attack.time + 1e-8 >= next.start ? next : attack;
   }
   function restoreAir(f) {
     f.jumps = 2;
@@ -1696,7 +1781,7 @@
           released: !input[type],
         };
         if (
-          type === 'grab' &&
+          (type === 'grab' || type === 'attack') &&
           f.run &&
           f.ground >= 0 &&
           !input.shield &&
@@ -1704,10 +1789,21 @@
           !f.dodge &&
           !f.landingLag
         ) {
-          const side = Math.abs(x) >= runStick ? Math.sign(x) : 0;
-          if (side === -f.run.face || (!side && f.run.turned)) f.command.grabStyle = 'pivot';
-          else if (f.vx * f.run.face >= f.stats.speed * 0.4) f.command.grabStyle = 'dash';
-          if (f.command.grabStyle) f.command.runFace = f.run.face;
+          const steering = Math.abs(grabX) >= runStick ? Math.sign(grabX) : 0;
+          const coasting = f.vx * f.run.face >= f.stats.speed * 0.4;
+          if (type === 'grab') {
+            if (steering === -f.run.face || (!steering && f.run.turned)) f.command.grabStyle = 'pivot';
+            else if (coasting) f.command.grabStyle = 'dash';
+            if (f.command.grabStyle) f.command.runFace = f.run.face;
+          } else if (
+            coasting &&
+            !f.run.turned &&
+            steering !== -f.run.face &&
+            side !== 'up' &&
+            side !== 'down'
+          ) {
+            f.command.runFace = f.run.face;
+          }
         }
       }
     }
@@ -1773,7 +1869,8 @@
         f.attack = null;
       if (grounded && current?.connected && current.time + 1e-8 >= current.start + (current.link || 0) / 60) {
         const chainTap = attackTap && f.command.aim === 0 && f.chainWindow > 0;
-        const jumpFollow = jumpTap && current.jumpCancel;
+        const jumpFollow =
+          jumpTap && (current.jumpCancel || (current.hitBeat === 1 && current.second?.jumpCancel));
         const ropeFollow =
           f.command?.type === 'special' && f.command.airSide === 'neutral' && current.specialCancel;
         const throwFollow = f.command?.type === 'grab' && current.grabCancel;
@@ -1877,7 +1974,11 @@
               this.emit('smashRelease', { f });
             } else this.emit('smashCharge', { f });
           } else if (f.ground < 0) aerialStrike(f, command);
-          else if (command.released) groundStrike(f, command.aim, command.heldFor);
+          else if (command.runFace) {
+            f.face = command.runFace;
+            beginAttack(f, 'dash', 0, 0, f.kit.dashAttack);
+            f.vx = f.face * Math.max(0, f.vx * f.face) * f.attack.carry;
+          } else if (command.released) groundStrike(f, command.aim, command.heldFor);
           else {
             f.charge = command.heldFor;
             f.chargeAim = command.aim;
@@ -1909,7 +2010,7 @@
       if (f.stun > 0) {
         f.vx *= Math.pow(0.68, dt);
         f.vx += input.x * 100 * dt;
-      } else if (f.ground >= 0 && f.attack?.grabAttempt && f.attack.brake) {
+      } else if (f.ground >= 0 && f.attack?.brake) {
         f.vx = toward(f.vx, 0, f.attack.brake * dt);
       } else if (f.dodge <= 0 && !sliding) {
         const onFloor = f.ground >= 0;
@@ -2535,7 +2636,8 @@
           continue;
         const beat = attackWindow(attack);
         if (attack.time + 1e-8 < beat.start || attack.time >= beat.start + beat.active - 1e-8) continue;
-        const beatIndex = beat === attack ? 0 : 1;
+        // A late hit changes the strength of one swing. Only a second strike can hit twice.
+        const beatIndex = beat === attack.second ? 1 : 0;
         const area = this.attackArea(f);
         const rival = this.dogs[1 - f.index];
         if (attack.grabAttempt) {
@@ -2574,6 +2676,7 @@
           });
         }
         if (attack.hitBeat === beatIndex || rival.invuln > 0 || rival.respawning > 0) continue;
+        if (attack.dashAttack && (rival.x - f.x) * f.face < 0) continue;
         if (
           Math.abs(rival.x - area.x) > area.rx + rival.stats.width ||
           Math.abs(rival.y - rival.stats.height * 0.52 - area.y) > area.ry + rival.stats.height * 0.4
@@ -3082,18 +3185,27 @@
         else result.x = 0;
       }
       if (far > 10 && far < 95 && f.face !== Math.sign(dx)) result.x = Math.sign(dx);
-      if (f.run && f.ground >= 0 && !result.jump && !foe.invuln && !foe.regrabLock) {
+      if (f.run && f.ground >= 0 && !result.jump && !foe.invuln) {
         const face = Math.sign(dx);
         const pivot = face === -f.run.face;
         const grab = grabs[pivot ? f.kit.pivotGrab : f.kit.dashGrab];
-        const [x, y, rx, ry] = grab.box;
-        const speed = Math.max(0, f.vx * f.run.face) * grab.carry;
-        const time = Math.min(grab.start, speed / grab.brake);
-        const contactX = f.x + f.run.face * (speed - (grab.brake * time) / 2) * time;
-        const distance = (foe.x + foe.vx * grab.start - contactX) * face;
+        const wantsGrab = pivot || foe.shield || foe.landingLag > grab.start;
+        const move = wantsGrab ? grab : moves[f.kit.dashAttack];
+        const [x, y, rx, ry] = move.box;
+        const speed = Math.max(0, f.vx * f.run.face) * move.carry;
+        const time = Math.min(move.start, speed / move.brake);
+        const contactX = f.x + f.run.face * (speed - (move.brake * time) / 2) * time;
+        const distance = (foe.x + foe.vx * move.start - contactX) * face;
         const platform = this.terrain[f.ground];
+        const room = face > 0 ? platform.x2 - f.x : f.x - platform.x1;
+        const ready = wantsGrab
+          ? !foe.regrabLock
+          : brain.timer <= 0 &&
+            result.x === face &&
+            !opponentOffstage &&
+            room > (speed * speed) / (2 * move.brake) + 8;
         if (
-          (pivot || foe.shield || foe.landingLag > grab.start) &&
+          ready &&
           contactX >= platform.x1 + 8 &&
           contactX <= platform.x2 - 8 &&
           distance > 0 &&
@@ -3103,8 +3215,9 @@
           brain.hold = brain.guard = 0;
           brain.hop = null;
           result.x = face;
-          result.grab = true;
-          result.tapped = { grab: true };
+          const button = wantsGrab ? 'grab' : 'attack';
+          result[button] = true;
+          result.tapped = { [button]: true };
           return result;
         }
       }

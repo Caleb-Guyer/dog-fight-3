@@ -39,7 +39,7 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 
 Tap Jump for a short hop or hold it for a full jump. Jump a second time in midair, then use Up + Special to recover. Hold Down and jump to drop through a raised platform.
 
-Tap Attack on the ground to start your dog's combo. Tap again to follow up, or aim Up or Down for a tilt. Holding Attack charges your dog's smash in the chosen direction. Grabs beat shields.
+Tap Attack from a standstill to start your dog's combo. Tap again to follow up, or aim Up or Down for a tilt. Hold Attack from a standstill to charge a smash. Once you're running left or right, press Attack for a dash attack. Grabs beat shields.
 
 In midair, press Attack alone or aim forward, back, up, or down as you press it. Forward follows the direction your dog faces. You can drift backward and attack behind you. A short hop gives quick aerials time to connect. A heavy aerial takes longer to recover when it lands.
 
@@ -47,7 +47,7 @@ In local versus, a single controller plays P2 alongside the P1 keyboard. With tw
 
 ## The four fighters
 
-Open **Move list** on the select screen, in Training, or from Pause for illustrated aerials and each dog's combo inputs.
+Open **Move list → Attacks** on the select screen, in Training, or from Pause for each dog's ground combo, dash attack, and aerials.
 
 | Dog | A combo to try | What to practice in the air |
 | --- | --- | --- |
@@ -55,6 +55,17 @@ Open **Move list** on the select screen, in Training, or from Pause for illustra
 | **Brisket** | Tap Attack for Body Check, then tap again on contact for Bell Ringer. Press Grab after the check, then tap back to suplex the rival over the ledge behind you. | Hip Check launches backward. Belly Drop stalls before plunging and can hit beside Brisket on landing. |
 | **Noodle** | Ankle Tap into Reel In pulls the rival close. Finish with Whiplash or press Special during the pull to cast Tug Rope. | Slip Lead snags from the front, Tail Flick reaches behind, and Underhook lifts a rival from below. |
 | **Clover** | Tap Attack twice for Disc Tap and Set Point. On the second hit, use Jump + Up + Attack for Sky Volley, or Jump + Attack for Orbit. | Orbit hits on two beats if the rival stays close. Skip Shot angles the disc downward for a spike. |
+
+## Dash attacks
+
+Hold left or right to get running, then press **Attack** once. Use **J** for P1, **Comma** for P2, **X** on a standard gamepad, or **Attack** on touch. In Training, back away from the dummy to give yourself a run-up.
+
+| Dog | Dash attack | What to try |
+| --- | --- | --- |
+| **Pip** | **Grass Skid** | Slide in heel-first for a quick 7% kick. Its low launch and short recovery give you time to chase. |
+| **Brisket** | **Yard Buster** | Time the shoulder to meet the rival early for 14%. A late brush deals 8%, and a miss leaves you open while Brisket brakes. |
+| **Noodle** | **Lead Sweep** | Catch the rival from a lead's length away. The low sweep deals 6% and tugs them back toward your paws. |
+| **Clover** | **Rim Rush** | Scoop low for 3%, then flick the disc upward for another 6%. Jump as the second hit connects to chase with an aerial. |
 
 ## Grabs, pummels and throws
 
