@@ -69,6 +69,7 @@
       let top = -f.stats.height;
       if (f.floorAction?.type === 'downed') top *= 0.58;
       else if (f.floorAction?.type === 'floorAttack') top *= 0.75;
+      if (f.airDodge?.y > 0) top -= 16 * f.airDodge.y;
       if (f.attack?.smashSide === 'up' || f.attack?.tiltSide === 'up') {
         // Keep the tag above overhead attacks, including Noodle's raised loops.
         for (const box of [f.attack.box, f.attack.second?.box]) {
@@ -231,6 +232,7 @@
       if (!f.reaction) return ['hurt', 0.3];
       return [f.reaction.hard ? 'launch' : 'hurt', clamp(1 - f.stun / f.reaction.duration, 0, 1)];
     }
+    if (f.airDodge) return [f.airDodge.type, clamp(f.airDodge.time / f.airDodge.duration, 0, 1)];
     if (f.dodge > 0) return ['dodge', 1 - f.dodge / 0.27];
     if (f.shield) return ['shield', 0];
     if (f.attack) return [attackPose(f), attackPhase(f.attack)];
@@ -1171,6 +1173,72 @@
     }
     ctx.restore();
   }
+  // Keep diagonal strokes on the pixel grid, including unsnapped gamepad angles.
+  function airStroke(ctx, dx, dy, from, to, lane, color, width) {
+    pixelLine(
+      ctx,
+      from * dx - lane * dy,
+      from * dy + lane * dx,
+      to * dx - lane * dy,
+      to * dy + lane * dx,
+      color,
+      width,
+      2,
+    );
+  }
+  function airDodgeSlip(ctx, f) {
+    const a = f.airDodge;
+    if (!a || a.time + 1e-8 < a.safeFrom || a.time + 1e-8 >= a.safeUntil) return;
+    const progress = reduced.matches ? 0.5 : (a.time - a.safeFrom) / (a.safeUntil - a.safeFrom);
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y - f.stats.height * 0.51, 2));
+    if (a.type === 'neutralAirDodge') {
+      // Facing inward on both sides, the brackets hold their place around the tucked body.
+      const span = f.stats.width * 1.4 + 11 - snap(4 * Math.sin(progress * Math.PI), 2);
+      for (const sign of [-1, 1]) {
+        const x = sign * span;
+        for (const [color, width] of [
+          ['#615d70', 4],
+          ['#ddcedb', 2],
+        ]) {
+          pixelLine(ctx, x + sign * 5, -10, x, -5, color, width, 2);
+          pixelLine(ctx, x, -5, x, 3, color, width, 2);
+          pixelLine(ctx, x, 3, x + sign * 4, 7, color, width, 2);
+        }
+        if (!reduced.matches) pixelLine(ctx, x + sign * 9, -2, x + sign * 11, -2, '#bdb4cb', 2, 2);
+      }
+    } else {
+      // A shallow dodge stretches the paws and tail across the wake, especially on Noodle.
+      const shallow = Math.max(0, Math.abs(a.x) - Math.abs(a.y));
+      const radius =
+        Math.hypot(a.x * (f.stats.width + 6), a.y * f.stats.height * 0.43) +
+        shallow * (f.kind === 'noodle' ? 24 : 14);
+      const rear = -radius - 2;
+      const length = reduced.matches ? 17 : 19 + Math.round(9 * Math.sin(progress * Math.PI));
+      for (const [lane, stretch] of [
+        [-7, length],
+        [7, Math.round(length * 0.64)],
+      ]) {
+        airStroke(ctx, a.x, a.y, rear - stretch, rear + 2, lane, '#56636c', 4);
+        airStroke(ctx, a.x, a.y, rear - stretch, rear - 2, lane, lane < 0 ? mint : '#a4c4c4', 2);
+      }
+      if (!reduced.matches) airStroke(ctx, a.x, a.y, rear - length - 8, rear - length - 5, -7, '#bccdca', 2);
+    }
+    ctx.restore();
+  }
+  function airDodgeStart(ctx, e, p) {
+    // Short marks at takeoff stay muted during the vulnerable startup frames.
+    ctx.save();
+    ctx.translate(snap(e.x, 2), snap(e.y, 2));
+    ctx.globalAlpha *= (1 - p) * 0.74;
+    if (e.type === 'airGather') {
+      const span = e.size - (reduced.matches ? 0 : snap(p * 6, 2));
+      for (const sign of [-1, 1]) pixelLine(ctx, sign * span, 0, sign * (span + 6), 0, '#c7b8cb', 2, 2);
+    } else {
+      for (const sign of [-1, 1]) airStroke(ctx, e.dx, e.dy, -14, -5, sign * 9, '#a5b8bc', 2);
+    }
+    ctx.restore();
+  }
   function fallingShield(ctx, f) {
     const left = clamp(f.shieldDrop / shieldDropDuration, 0, 1);
     const radius = (34 + f.shieldHP * 15) * (reduced.matches ? 0.76 : 0.57 + 0.36 * left);
@@ -1241,6 +1309,7 @@
     shadow(ctx, f, world.terrain);
     floorRollTrack(ctx, f);
     shieldSlip(ctx, f);
+    airDodgeSlip(ctx, f);
     movingGrabFeet(ctx, f);
     dashFootwork(ctx, f);
     if (f.respawning > 0) oval(ctx, f.x, f.y - 3, 42, 5, team[f.index]);
@@ -1260,6 +1329,8 @@
     } else if (f.floorAction) {
       if (state === 'techRoll' || state === 'shieldRoll') face = f.floorAction.dir || f.face;
       spriteTime = reduced.matches ? 0 : f.floorAction.time;
+    } else if (f.airDodge) {
+      spriteTime = reduced.matches ? 0 : f.airDodge.time;
     } else if (state === 'parry') face = f.parryFace || f.face;
     else if (state === 'skid') face = f.skidFace;
     else if (f.stun > 0 && f.reaction) face = f.reaction.face;
@@ -1268,6 +1339,7 @@
     if (
       f.invuln > 0.01 &&
       !f.floorAction &&
+      !f.airDodge &&
       !(f.parryFlash > 0) &&
       !reduced.matches &&
       Math.floor(time * 12) % 2
@@ -1280,6 +1352,8 @@
       pose: state,
       phase,
       backRoll: state === 'shieldRoll' && f.floorAction.backRoll,
+      dodgeX: f.airDodge ? f.airDodge.x * f.face : 0,
+      dodgeY: f.airDodge?.y || 0,
     });
     ctx.restore();
     swing(ctx, f, world.terrain[f.ground]);
@@ -1524,6 +1598,7 @@
   }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
+    if (e.type === 'airGather' || e.type === 'airWake') return airDodgeStart(ctx, e, p);
     if (e.type === 'techLand' || e.type === 'knockDust' || e.type === 'riseScuff' || e.type === 'spotStep') {
       landingEffect(ctx, e, p);
       return;
@@ -1633,6 +1708,19 @@
         this.add('parry', e.point.x, e.point.y, gold, parryDuration, 12, e.face, {
           projectile: e.projectile,
         });
+      if (name === 'dodge' && (e.type === 'neutralAirDodge' || e.type === 'directionalAirDodge')) {
+        const neutral = e.type === 'neutralAirDodge';
+        this.add(
+          neutral ? 'airGather' : 'airWake',
+          f.x,
+          f.y - f.stats.height * 0.51,
+          lilac,
+          7 / 60,
+          f.stats.width + 12,
+          f.face,
+          { behind: true, dx: e.dirX, dy: e.dirY },
+        );
+      }
       if (name === 'jump' || name === 'recover')
         this.add('ring', f.x, f.y, name === 'jump' ? cream : team[f.index], 0.23, 21);
       if (name === 'hit' || name === 'block') {
@@ -1927,6 +2015,21 @@
       time = 0.21;
       pixelLine(ctx, -52, -5, -35, -15, '#c6a984', 3, 2);
       pixelLine(ctx, -45, -1, -36, -7, cream, 2, 2);
+    } else if (side === 'neutralAirDodge' || side === 'directionalAirDodge') {
+      const directed = side === 'directionalAirDodge';
+      const [total, first, last] = window.DogFight.kits[kind].airDodge[directed ? 'directional' : 'neutral'];
+      const tick = Math.round(first + (last - first) * (directed ? 0.7 : 0.5));
+      phase = tick / total;
+      f.airDodge = {
+        type: side,
+        time: tick / 60,
+        duration: total / 60,
+        safeFrom: first / 60,
+        safeUntil: (last + 1) / 60,
+        x: directed ? Math.SQRT1_2 : 0,
+        y: directed ? -Math.SQRT1_2 : 0,
+      };
+      airDodgeSlip(ctx, f);
     } else {
       pixelLine(ctx, -49, 1, 50, 1, '#736477', 2, 2);
       if (side === 'techRoll') {
@@ -1956,7 +2059,15 @@
         phase = 0.28;
       }
     }
-    window.DogArt.draw(ctx, kind, 0, 0, { face: 1, scale: 1, time, pose: side, phase });
+    window.DogArt.draw(ctx, kind, 0, 0, {
+      face: 1,
+      scale: 1,
+      time,
+      pose: side,
+      phase,
+      dodgeX: f.airDodge?.x || 0,
+      dodgeY: f.airDodge?.y || 0,
+    });
     if (f.attack) floorSweep(ctx, f, f.attack);
     if (side === 'parry') {
       const [x, y] =

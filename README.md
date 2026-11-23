@@ -57,6 +57,21 @@ Pip finishes a forward roll fastest at 24 frames. Brisket covers the least groun
 
 In **Training → Shield practice**, choose **Strike** or **Grab**, then raise Shield. The selected dummy winds up its own side smash or standing grab. Choose the same pattern again to retry the timing. **Move list → Defense** shows each dog's roll, spot-dodge, and parry.
 
+## Air dodges
+
+Tap **Shield** in midair with the stick centered or the direction keys released for a **neutral air dodge**. Your dog tucks in place, lets the hit pass, then starts falling. Aim as you tap Shield for a **directional air dodge**. You can burst left, right, up, down, or diagonally. On a controller the left stick sets the angle. On touch, hold an arrow and tap Shield with your other thumb. Lift your direction thumb or slide it to the center dot for neutral.
+
+A directional dodge commits you to its original angle. From outside the stage, aim diagonally up and inward to slip a guard and grab the ledge. Both dodges have vulnerable startup and recovery. The directional dodge travels farther and takes longer to recover. You get one air dodge until you land or catch a ledge. A midair jump and Up + Special remain available afterward if you saved them.
+
+| Dog | What to expect | Landing lag for neutral / directional |
+| --- | --- | --- |
+| **Pip** | The quickest neutral dodge. A short burst leaves time to act again in the air. | 6 / 11 frames |
+| **Brisket** | The longest invincibility and shortest burst. Give the tuck a little more time to start. | 8 / 17 frames |
+| **Noodle** | The longest burst. Start farther outside the stage when aiming for a ledge. | 7 / 14 frames |
+| **Clover** | A longer burst than Pip’s and the quickest landing recovery. | 5 / 9 frames |
+
+Choose **Training → Air-dodge practice → In place**. Jump and tap Shield as the dummy tries to catch your landing with an up tilt. Choose **At the ledge** to recover past its forward tilt. **Switch ledge** mirrors the approach. **Move list → Defense** illustrates both options for each fighter.
+
 ## Launch defense
 
 **Directional influence (DI).** During the brief freeze of a strong hit or throw, hold across the launch path to bend it by up to 18 degrees. Against a near-vertical throw, left or right changes where you come down. Against a sideways hit, holding up can buy height for a recovery. Your final direction during the freeze sets the angle. After hitstun ends, you can jump, use an aerial, or air dodge out of tumble.

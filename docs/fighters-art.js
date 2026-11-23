@@ -3039,6 +3039,30 @@
   const captivePoses = [...captiveLoops, ...captiveFlinches];
   const landingPoses = ['tumble', 'tech', 'techRoll', 'downed', 'floorRise', 'floorAttack'];
   const shieldPoses = ['shieldRoll', 'spotDodge', 'parry'];
+  const airDodgePoses = ['neutralAirDodge', 'directionalAirDodge'];
+  const diagonal = Math.SQRT1_2;
+  const airDirections = [
+    [1, 0], [diagonal, diagonal], [0, 1], [-diagonal, diagonal],
+    [-1, 0], [-diagonal, -diagonal], [0, -1], [diagonal, -diagonal],
+  ];
+  const aerialStyles = {
+    pip: {
+      neutral: [24, 2, 11], directional: [34, 3, 13], travel: [3, 16],
+      recoil: [-3, -8, -19, -26, -14, 3, 11, 7, 2, 0],
+    },
+    brisket: {
+      neutral: [32, 4, 18], directional: [45, 5, 20], travel: [5, 23],
+      recoil: [0, -4, -9, -14, -12, -5, 4, 5, 2, 0],
+    },
+    noodle: {
+      neutral: [28, 3, 14], directional: [40, 4, 15], travel: [4, 21],
+      recoil: [3, 6, 14, 22, 13, -3, -10, -7, -2, 0],
+    },
+    clover: {
+      neutral: [26, 3, 13], directional: [36, 3, 14], travel: [3, 18],
+      recoil: [-2, -7, -15, -20, -13, -2, 7, 6, 2, 0],
+    },
+  };
   const sharedPointPoses = ['floorAttack', 'parry'];
   const shieldStyles = {
     pip: {
@@ -3272,6 +3296,18 @@
 
   function frameNumber(pose, time, phase, name = 'pip', backRoll = false) {
     const tick = (period) => Math.floor((Math.abs(time) % 1000000) * period);
+    if (airDodgePoses.includes(pose)) {
+      const directed = pose === 'directionalAirDodge';
+      const spec = window.DogFight?.kits?.[name]?.airDodge || aerialStyles[name];
+      const [total, first, last] = spec[directed ? 'directional' : 'neutral'];
+      const elapsed = Math.min(total, Math.floor(phase * total + 1e-7));
+      if (elapsed < first) return Math.floor(2 * elapsed / first);
+      if (elapsed <= last) return 2 + Math.floor(4 * (elapsed - first) / (last - first + 1));
+      if (directed && elapsed <= spec.travel[1]) return 6;
+      const release = (directed ? spec.travel[1] : last) + 1;
+      const firstCel = directed ? 7 : 6;
+      return firstCel + Math.min(10 - firstCel, Math.floor((elapsed - release) * (11 - firstCel) / (total - release)));
+    }
     if (shieldPoses.includes(pose)) return shieldFrame(name, pose, phase, backRoll);
     if (pose === 'tumble') return tick(14) % 8;
     if (pose === 'downed') {
@@ -3880,7 +3916,165 @@
     }
   }
 
-  function stance(name, pose, frame) {
+  function neutralAirStance(s, name, frame) {
+    const tuck = [1, 3, 5, 7, 7, 5, 3, 2, 1, 0][frame];
+    const swing = [0, 1, 3, 4, 2, -2, -4, -2, -1, 0][frame];
+    const opening = frame >= 6;
+    s.roll = aerialStyles[name].recoil[frame];
+    s.rollHeight = 1 - tuck * 0.016;
+    s.bodyY = Math.floor(tuck / 3);
+    s.headX = -Math.ceil(tuck / 3);
+    s.headY = Math.ceil(tuck / 2);
+    s.headTurn = 1 + 2 * tuck;
+    s.torsoTurn = -2 * tuck;
+    s.fistX = 5 - tuck;
+    s.fistY = -6 - tuck;
+    s.fistTurn = -12 - 9 * tuck;
+    s.rearX = -5 + tuck;
+    s.rearY = -6 - tuck;
+    s.rearTurn = -8 - 5 * tuck;
+    s.leftX = -3 + tuck;
+    s.leftY = -2 * tuck;
+    s.rightX = 4 - tuck;
+    s.rightY = -2 - 2 * tuck;
+    s.leftFootTurn = -3 - 6 * tuck;
+    s.rightFootTurn = 4 + 8 * tuck;
+    s.frontKneeY = -Math.floor(tuck / 2);
+    s.packTail = !opening && tuck >= 5;
+    s.foldEars = !opening && tuck >= 5;
+    s.openHands = opening ? 'both' : null;
+    s.scarf = -2 * swing;
+    s.ear = swing;
+    s.tail = -2 * swing;
+    if (name === 'pip') {
+      // One knee flashes across the chest, then the forepaws open on opposite sides.
+      s.rightX += swing;
+      s.kickFront = !opening && tuck >= 5;
+      s.showSole = s.kickFront;
+      s.rearX -= 2 * swing;
+      s.scarf -= Math.sign(swing);
+    } else if (name === 'brisket') {
+      s.extraHaunch = tuck >= 4;
+      s.twoHandsFront = tuck >= 4;
+      s.rollWidth = 1 + 0.012 * tuck;
+      s.headTurn -= tuck;
+      s.fistX += 3;
+      s.rearX -= tuck;
+      s.fistY -= 2;
+      s.rearY -= 1;
+      s.kneeOut = 1 + Math.floor(tuck / 2);
+      s.charmTurn = -8 * swing;
+    } else if (name === 'noodle') {
+      s.torsoTurn += 3 * tuck;
+      s.rollWidth = 1 - 0.025 * tuck;
+      s.headX += tuck;
+      s.headY += Math.floor(tuck / 2);
+      s.leftX -= 1 + tuck;
+      s.rightX += 3;
+      s.ear = Math.round(1.25 * swing);
+      s.charmTurn = 12 * swing;
+    } else {
+      s.hideCharm = true;
+      s.heldItem = 'disc';
+      s.heldAngle = [-30, -72, -123, -157, -168, -144, -95, -63, -42, -31][frame];
+      s.openHands = opening ? 'rear' : null;
+      s.fistX += 2;
+      s.fistY += 2;
+      s.rearX -= swing;
+    }
+    if (opening) {
+      const reach = [3, 4, 2, 0][frame - 6];
+      s.fistX += reach;
+      s.rearX -= 2 * reach;
+      s.leftX -= reach;
+      s.rightX += reach;
+      s.headTurn -= 2 * reach;
+    }
+  }
+
+  function directedAirStance(s, name, frame, octant) {
+    const [aimX, aimY] = airDirections[octant];
+    const drive = [-0.12, -0.38, 0.68, 0.94, 1, 0.9, 0.72, 0.46, 0.23, 0.08][frame];
+    const x = aimX * drive;
+    const y = aimY * drive;
+    const burst = frame >= 2 && frame <= 5;
+    const r = Math.round;
+    s.bodyX = r(2 * x);
+    s.bodyY = r(y) - 1;
+    s.lean = r(3 * x);
+    s.headX = r(3 * x);
+    s.headY = r(3 * y) - 1;
+    s.torsoTurn = r(12 * x + 4 * y);
+    s.headTurn = r(24 * y - 8 * x);
+    s.roll = r(23 * x + 14 * y);
+    s.fistX = 3 + r((aimX >= 0 ? 8 : -2) * x);
+    s.fistY = -5 + r((aimY < 0 ? 15 : 4) * y);
+    s.fistTurn = r(-23 + 35 * y - 18 * x);
+    s.rearX = -4 + r((aimX < 0 ? 12 : -4) * x);
+    s.rearY = -4 - r(7 * y);
+    s.rearTurn = r(16 * x - 35 * y);
+    s.leftX = -3 - r(5 * x);
+    s.rightX = 3 - r(10 * x);
+    s.leftY = -3 + r(5 * y - 5 * Math.abs(x));
+    s.rightY = -4 + r((aimY < 0 ? -3 : 10) * y - 7 * Math.abs(x));
+    s.leftFootTurn = r(-33 * x + 15 * y);
+    s.rightFootTurn = r(-40 * x + 28 * y);
+    s.frontKneeY = -r(4 * Math.abs(x));
+    s.rollHeight = 1 - 0.13 * Math.abs(x) + 0.04 * Math.abs(y);
+    s.rollWidth = 1 + 0.06 * Math.abs(x) - 0.08 * Math.abs(y);
+    s.foldEars = burst && aimY > -0.5;
+    s.scarf = r(6 * x + 4 * y);
+    s.ear = r(3 * x - 3 * y);
+    s.tail = r(3 * x + 4 * y);
+    s.tailLift = r(3 * y);
+    if (name === 'pip') {
+      s.roll += r(8 * x);
+      s.fistY -= r(3 * drive);
+      s.leftFootTurn -= r(15 * x);
+      s.scarf += r(2 * x - y);
+      s.openHands = burst && aimY < 0 ? 'front' : null;
+    } else if (name === 'brisket') {
+      // The forward shoulder and rear haunch lead different kinds of slip.
+      s.roll -= r(7 * x);
+      s.extraHaunch = frame >= 2 && frame <= 6;
+      s.haunchX = r(3 * Math.min(0, x));
+      s.shoulderLead = burst ? r(4 * Math.max(0, x)) : 0;
+      s.fistX -= r(6 * x);
+      s.fistY -= r(3 * drive);
+      s.rearX += r(3 * drive);
+      s.kneeOut = 3;
+      s.charmTurn = r(-24 * x - 18 * y);
+    } else if (name === 'noodle') {
+      s.rollWidth += 0.13 * Math.abs(x);
+      s.rollHeight -= 0.07 * Math.abs(x);
+      s.headX += r(3 * x);
+      s.rearX -= r(3 * x);
+      s.leftX -= r(4 * x);
+      s.ear = r(1.35 * s.ear);
+      s.charmTurn = r(-42 * x + 38 * y);
+    } else {
+      s.hideCharm = true;
+      s.heldItem = 'disc';
+      s.heldAngle = r(-62 + 48 * x + 49 * y);
+      s.fistX += 1;
+      s.fistY += 2;
+      s.tail -= r(5 * x);
+    }
+    if (frame >= 6) {
+      // The slip may still be travelling on cel six; loosen the tuck immediately.
+      const spread = [2, 5, 3, 1][frame - 6];
+      s.openHands = name === 'clover' ? 'rear' : 'both';
+      s.rearX -= spread;
+      s.fistX += spread;
+      s.rightX += spread;
+      s.leftX -= spread;
+      s.rightY += 2;
+      s.tail -= spread;
+      s.ear -= spread;
+    }
+  }
+
+  function stance(name, pose, frame, octant = 0) {
     const s = {
       bodyX: 0,
       bodyY: 0,
@@ -3963,6 +4157,12 @@
       return s;
     }
     switch (pose) {
+      case 'neutralAirDodge':
+      case 'directionalAirDodge':
+        if (frame === 10) return stance(name, 'fall', 2);
+        if (pose === 'neutralAirDodge') neutralAirStance(s, name, frame);
+        else directedAirStance(s, name, frame, octant);
+        break;
       case 'shieldRoll':
         shieldRollStance(s, name, frame);
         break;
@@ -4627,10 +4827,11 @@
     return s;
   }
 
-  function getFrame(name, pose, number) {
-    const key = name + '/' + pose + '/' + number;
+  function getFrame(name, pose, number, octant = 0) {
+    const directionKey = pose === 'directionalAirDodge' && number !== 10 ? '/' + octant : '';
+    const key = name + '/' + pose + '/' + number + directionKey;
     if (frames.has(key)) return frames.get(key);
-    const s = number >= 8 && kitMoves[pose]?.lip ? placeGrippingPaws(name, pose, number - 8) : stance(name, pose, number);
+    const s = number >= 8 && kitMoves[pose]?.lip ? placeGrippingPaws(name, pose, number - 8) : stance(name, pose, number, octant);
     const pixels = compose(name, s);
     let left = W,
       top = H,
@@ -4700,6 +4901,7 @@
     'win',
     ...landingPoses,
     ...shieldPoses,
+    ...airDodgePoses,
     ...captivePoses,
     ...Object.keys(kitMoves),
   ];
@@ -4740,7 +4942,14 @@
     const time = Number.isFinite(options.time) ? options.time : 0;
     const phase = Number.isFinite(options.phase) ? Math.max(0, Math.min(1, options.phase)) : 0.5;
     const scale = (Number.isFinite(options.scale) ? options.scale : 1) * 2;
-    const frame = getFrame(name, pose, frameNumber(pose, time, phase, name, options.backRoll));
+    let octant = 0;
+    if (pose === 'directionalAirDodge') {
+      const dx = Number.isFinite(options.dodgeX) ? options.dodgeX : 0;
+      const dy = Number.isFinite(options.dodgeY) ? options.dodgeY : 0;
+      // The caller supplies facing-local X. The canvas reflection below supplies the world facing.
+      if (dx || dy) octant = (8 + Math.round(Math.atan2(dy, dx) * 4 / Math.PI)) % 8;
+    }
+    const frame = getFrame(name, pose, frameNumber(pose, time, phase, name, options.backRoll), octant);
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.translate(Math.round(x), Math.round(y));

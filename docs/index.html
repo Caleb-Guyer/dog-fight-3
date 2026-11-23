@@ -11,12 +11,12 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=shield-defense-1" />
-    <script defer src="./fighters-art.js?v=shield-defense-1"></script>
+    <link rel="stylesheet" href="./style.css?v=air-dodges-1" />
+    <script defer src="./fighters-art.js?v=air-dodges-1"></script>
     <script defer src="./arena-art.js"></script>
-    <script defer src="./engine.js?v=shield-defense-1"></script>
-    <script defer src="./render.js?v=shield-defense-1"></script>
-    <script defer src="./app.js?v=shield-defense-1"></script>
+    <script defer src="./engine.js?v=air-dodges-1"></script>
+    <script defer src="./render.js?v=air-dodges-1"></script>
+    <script defer src="./app.js?v=air-dodges-1"></script>
   </head>
   <body>
     <header class="topbar">
@@ -133,12 +133,35 @@
           <div class="training-readouts">
             <output id="launch-status" aria-label="Launch practice" aria-live="polite" hidden></output>
             <output id="shield-status" aria-label="Shield practice" aria-live="polite" hidden></output>
+            <output id="air-status" aria-label="Air-dodge practice" aria-live="polite" hidden></output>
             <output id="training-move" aria-label="Last move" hidden></output>
             <span id="training-charge" hidden></span>
             <output id="training-combo" aria-label="Last combo" hidden></output>
           </div>
           <div id="countdown" class="countdown" aria-hidden="true"></div>
         </div>
+        <div class="touch-pad" aria-label="Touch controls">
+          <div class="dpad">
+            <button type="button" data-touch="up-left" aria-label="Aim up and left">↖</button
+            ><button type="button" data-touch="up" aria-label="Aim up">▲</button
+            ><button type="button" data-touch="up-right" aria-label="Aim up and right">↗</button
+            ><button type="button" data-touch="left" aria-label="Move left">◀</button
+            ><button type="button" data-touch="neutral" aria-label="Center aim">•</button
+            ><button type="button" data-touch="right" aria-label="Move right">▶</button
+            ><button type="button" data-touch="down-left" aria-label="Aim down and left">↙</button
+            ><button type="button" data-touch="down" aria-label="Aim down">▼</button
+            ><button type="button" data-touch="down-right" aria-label="Aim down and right">↘</button>
+          </div>
+          <div class="touch-actions">
+            <button type="button" data-touch="jump">Jump</button
+            ><button type="button" data-touch="attack">Attack</button
+            ><button type="button" data-touch="special">Special</button
+            ><button type="button" data-touch="shield">Shield</button
+            ><button type="button" data-touch="grab">Grab</button
+            ><button type="button" data-touch="smash">Smash</button>
+          </div>
+        </div>
+        <p id="recovery-tip" hidden></p>
         <div id="training-tools" class="training-tools" hidden>
           <label for="dummy-damage"
             >Dummy damage <output id="damage-output" for="dummy-damage">0%</output></label
@@ -165,27 +188,14 @@
             <button id="shield-strike" type="button" class="utility" aria-pressed="true">Strike</button>
             <button id="shield-grab" type="button" class="utility" aria-pressed="false">Grab</button>
           </span>
+          <button id="air-dodge-training" type="button" class="utility">Air-dodge practice</button>
+          <span id="air-patterns" role="group" aria-label="Air-dodge drill" hidden>
+            <button id="air-neutral" type="button" class="utility" aria-pressed="true">In place</button>
+            <button id="air-edge" type="button" class="utility" aria-pressed="false">At the ledge</button>
+            <button id="air-side" type="button" class="utility" hidden>Switch ledge</button>
+          </span>
           <button id="training-moves" type="button" class="utility">Move list</button>
         </div>
-        <div class="touch-pad" aria-label="Touch controls">
-          <div class="dpad">
-            <button type="button" data-touch="up-left" aria-label="Aim up and left">↖</button
-            ><button type="button" data-touch="up" aria-label="Aim up">▲</button
-            ><button type="button" data-touch="up-right" aria-label="Aim up and right">↗</button
-            ><button type="button" data-touch="left" aria-label="Move left">◀</button
-            ><button type="button" data-touch="down" aria-label="Aim down">▼</button
-            ><button type="button" data-touch="right" aria-label="Move right">▶</button>
-          </div>
-          <div class="touch-actions">
-            <button type="button" data-touch="jump">Jump</button
-            ><button type="button" data-touch="attack">Attack</button
-            ><button type="button" data-touch="special">Special</button
-            ><button type="button" data-touch="shield">Shield</button
-            ><button type="button" data-touch="grab">Grab</button
-            ><button type="button" data-touch="smash">Smash</button>
-          </div>
-        </div>
-        <p id="recovery-tip" hidden></p>
         <div class="play-hints">
           <span><kbd>A</kbd><kbd>D</kbd> Move</span><span><kbd>Space</kbd> Jump</span
           ><span><kbd>J</kbd> Attack</span><span><kbd>I</kbd> Smash</span><span><kbd>K</kbd> Special</span

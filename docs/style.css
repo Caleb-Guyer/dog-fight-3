@@ -662,7 +662,10 @@ body.playing .tools .utility,
   color: var(--gold);
 }
 #launch-status[data-result='tech'],
-#shield-status[data-result='parry'] {
+#shield-status[data-result='parry'],
+#air-status[data-result='evade'],
+#air-status[data-result='ledge'],
+#air-status[data-result='land'] {
   border-left-color: var(--aqua);
   color: var(--aqua);
 }
@@ -784,11 +787,13 @@ kbd {
   min-height: 30px;
   font-size: 13px;
 }
-#shield-patterns {
+#shield-patterns,
+#air-patterns {
   display: inline-flex;
   gap: 2px;
 }
-#shield-patterns [aria-pressed='true'] {
+#shield-patterns [aria-pressed='true'],
+#air-patterns [aria-pressed='true'] {
   background: var(--gold);
   border-color: var(--ink);
   color: var(--ink);
@@ -1324,7 +1329,7 @@ dialog[data-view='moves'] {
   .dpad {
     display: grid;
     grid-template-columns: repeat(3, minmax(30px, 45px));
-    grid-template-rows: repeat(2, 35px);
+    grid-template-rows: repeat(3, 35px);
     gap: 3px;
   }
   .dpad [data-touch='up'] {
@@ -1332,6 +1337,14 @@ dialog[data-view='moves'] {
   }
   .dpad [data-touch='left'] {
     grid-column: 1;
+  }
+  .dpad [data-touch='right'] {
+    grid-column: 3;
+  }
+  .dpad [data-touch='neutral'] {
+    background: #332f40;
+    border-color: #635a6b;
+    color: #ddd4c6;
   }
   .touch-actions {
     display: grid;

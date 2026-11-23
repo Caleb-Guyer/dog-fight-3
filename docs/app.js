@@ -277,6 +277,10 @@
       tone(760, 1260, 0.14, 0.035, 'triangle', 0.085);
     } else if (name === 'shieldRoll' || name === 'spotDodge') {
       tone(name === 'shieldRoll' ? 195 : 315, 76, name === 'shieldRoll' ? 0.1 : 0.055, 0, 'triangle', 0.05);
+    } else if (name === 'dodge') {
+      if (detail.type === 'directionalAirDodge')
+        tone(470, 155 - detail.dirY * 55, 0.12, 0, 'triangle', 0.065);
+      else tone(260, 370, 0.07, 0, 'sine', 0.07);
     } else if (name === 'tech') {
       tone(560, 890, 0.055, 0, 'triangle', 0.075);
       tone(910, 1250, 0.07, 0.043, 'square', 0.026);
@@ -572,6 +576,7 @@
       'Controls',
       table +
         '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
+        '<p>In midair, tap Shield with the stick centered to dodge in place. Aim and tap Shield to dodge in that direction, including diagonally. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Try Training → Air-dodge practice.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
         '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
@@ -705,6 +710,32 @@
     let contents;
     if (section === 'defense') {
       const { roll, spot } = kit.defense;
+      const { neutral, directional } = kit.airDodge;
+      const airRows = [
+        [
+          'neutralAirDodge',
+          'Tap Shield in midair',
+          'Neutral air dodge',
+          'Center your aim and tap Shield to tuck in place. ' +
+            f.name +
+            ' evades on frames ' +
+            neutral[1] +
+            '–' +
+            neutral[2] +
+            ' and can act again sooner than after a directional dodge.',
+        ],
+        [
+          'directionalAirDodge',
+          'Aim + tap Shield in midair',
+          'Directional air dodge',
+          kit.airDodge.tip +
+            ' Landing during the dodge gives you ' +
+            directional[3] +
+            ' frames of landing lag.',
+        ],
+      ]
+        .map(([key, input, label, hint]) => guideMoveRow({ label, hint }, input, key, 'defense'))
+        .join('');
       const groundRows = [
         [
           'shieldRoll',
@@ -742,6 +773,8 @@
       contents =
         '<p class="recovery-note">Shield is L for P1, Slash for P2, either bumper on a gamepad, or Shield on touch.</p><h3 class="guide-section">On the ground</h3><p>Choose <strong>Training → Shield practice</strong> to face a strike or a grab.</p><ul class="move-rows guide-shield">' +
         groundRows +
+        '</ul><h3 class="guide-section">In the air</h3><p>One dodge per airtime. Landing or catching a ledge refreshes it. Try <strong>Training → Air-dodge practice</strong>.</p><ul class="move-rows guide-air-dodge">' +
+        airRows +
         '</ul><h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><ul class="move-rows guide-defense">' +
         rows +
         '</ul>';
@@ -903,6 +936,7 @@
     practiceSide = 'left';
     $('launch-status').hidden = true;
     $('shield-status').hidden = $('shield-patterns').hidden = true;
+    $('air-status').hidden = $('air-patterns').hidden = true;
     $('recovery-tip').hidden = true;
     document.body.classList.add('playing');
     document.body.classList.toggle('training-active', settings.mode === 'training');
@@ -914,6 +948,7 @@
       sound(name, e);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
+      if (name === 'airStart' || name === 'airCue' || name === 'airResult') airFeedback(name, e);
       if (name === 'ko') announce(e.f.stats.name + ' knocked out');
       if (name === 'ledge' && drillSide && e.f.index === 0)
         $('recovery-tip').textContent =
@@ -1099,23 +1134,75 @@
     result.textContent = label;
     tip.textContent = message;
   }
+  function airFeedback(name, e) {
+    const result = $('air-status');
+    if (name === 'airStart') {
+      result.dataset.result = 'approach';
+      result.textContent = e.pattern === 'edge' ? 'Guard at the ledge' : 'Watch your landing';
+      return;
+    }
+    if (name === 'airCue') {
+      result.dataset.result = 'swing';
+      result.textContent = moves[e.moveId].label;
+      return;
+    }
+    result.dataset.result = e.outcome;
+    const labels = {
+      evade: e.evaded === 'neutralAirDodge' ? 'Dodged in place' : 'Dodged the strike',
+      ledge: 'Caught the ledge',
+      land: 'Back onstage',
+      hit: 'Hit',
+      interrupted: 'Interrupted',
+      miss: 'Missed',
+    };
+    result.textContent = labels[e.outcome];
+    if (e.outcome === 'hit')
+      $('recovery-tip').textContent =
+        e.pattern === 'neutral'
+          ? 'Tap Shield before the up tilt reaches you. Choose In place to try again.'
+          : 'Start your dodge as the guard winds up. Choose At the ledge to retry.';
+    else if (e.outcome === 'ledge' || e.outcome === 'land')
+      $('recovery-tip').textContent =
+        (e.evaded ? 'You slipped the guard’s strike. ' : '') +
+        'Choose At the ledge to retry, or switch sides.';
+    else $('recovery-tip').textContent = 'Choose In place or At the ledge to try another approach.';
+  }
   function drill(ledge, fromHang = false, pattern = 'strike') {
     if (!world) return;
     const launch = ledge === 'launch';
     const shield = ledge === 'shield';
-    drillSide = launch || shield ? null : ledge || null;
+    const air = ledge === 'air';
+    drillSide = launch || shield || air ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
     if (launch) world.resetLaunchPractice();
     else if (shield) world.resetShieldPractice(pattern);
+    else if (air) world.resetAirPractice(pattern, practiceSide);
     else world.resetTraining(ledge, fromHang);
     const player = world.dogs[0];
     const result = $('launch-status');
     result.hidden = !launch;
     $('shield-status').hidden = $('shield-patterns').hidden = !shield;
+    $('air-status').hidden = $('air-patterns').hidden = !air;
     let message = 'Positions reset.';
-    if (shield) {
+    if (air) {
+      const edge = pattern === 'edge';
+      $('air-status').dataset.result = 'ready';
+      $('air-status').textContent = edge
+        ? practiceSide === 'left'
+          ? 'Left ledge'
+          : 'Right ledge'
+        : 'Jump to begin';
+      $('air-neutral').setAttribute('aria-pressed', String(!edge));
+      $('air-edge').setAttribute('aria-pressed', String(edge));
+      $('air-side').hidden = !edge;
+      message = edge
+        ? 'Aim up and ' +
+          (practiceSide === 'left' ? 'right' : 'left') +
+          ', then tap Shield to slip past the guard and catch the lip.'
+        : 'Jump. As you fall toward the dummy, release the directions and tap Shield before its up tilt connects.';
+    } else if (shield) {
       $('shield-status').dataset.result = 'ready';
       $('shield-status').textContent = 'Hold Shield to begin';
       $('shield-strike').setAttribute('aria-pressed', String(pattern === 'strike'));
@@ -1148,6 +1235,13 @@
   $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'strike');
   $('shield-strike').onclick = () => drill('shield', false, 'strike');
   $('shield-grab').onclick = () => drill('shield', false, 'grab');
+  $('air-dodge-training').onclick = () => drill('air', false, world?.airPractice?.pattern || 'neutral');
+  $('air-neutral').onclick = () => drill('air', false, 'neutral');
+  $('air-edge').onclick = () => drill('air', false, 'edge');
+  $('air-side').onclick = () => {
+    practiceSide = practiceSide === 'left' ? 'right' : 'left';
+    drill('air', false, 'edge');
+  };
   const keys = [
     {
       left: 'KeyA',
@@ -1255,7 +1349,10 @@
         rightTap = tapped('right');
       grabX = leftTap === rightTap ? (world.dogs[i].prev.grabX ?? 0) : rightTap ? 1 : -1;
     }
-    const y = Number(key('down') || down(pad, 13)) - Number(key('up') || down(pad, 12));
+    const up = key('up') || down(pad, 12),
+      downAim = key('down') || down(pad, 13);
+    const y = Number(downAim) - Number(up);
+    const digitalAim = left || right || up || downAim || (!i && touches.has('neutral'));
     const rightX = axis(2),
       rightY = axis(3);
     const rightStick = Math.max(Math.abs(rightX), Math.abs(rightY)) > 0.62;
@@ -1263,6 +1360,9 @@
       x: x || axis(0),
       grabX,
       y: y || axis(1),
+      // Apply the air dodge's radial dead zone to the whole stick, including shallow angles.
+      airDodgeX: digitalAim ? (left || right ? grabX : 0) : pad?.axes?.[0] || 0,
+      airDodgeY: digitalAim ? y : pad?.axes?.[1] || 0,
       jump: key('jump') || down(pad, 0),
       attack: key('attack') || down(pad, 2),
       smash: key('smash') || down(pad, 7) || rightStick,
