@@ -174,6 +174,15 @@
       '##........##',
     ],
     chevron: ['............', '.##......##.', '..##....##..', '...##..##...', '....####....', '.....##.....'],
+    signal: [
+      '...######...',
+      '.##......##.',
+      '##..####..##',
+      '...##..##...',
+      '..##....##..',
+      '.....##.....',
+      '.....##.....',
+    ],
     spark: [
       '......##....',
       '.....###....',
@@ -403,8 +412,10 @@
     accumulator = 0,
     lastPreview = -1,
     hudKey = '';
-  const labelFor = (i) =>
-    i === 0 ? 'P1' : settings.mode === 'local' ? 'P2' : settings.mode === 'training' ? 'DUMMY' : 'CPU';
+  const labelFor = (i) => {
+    if (online.match) return 'P' + (i + 1) + (i === online.side ? ' · YOU' : '');
+    return i === 0 ? 'P1' : settings.mode === 'local' ? 'P2' : settings.mode === 'training' ? 'DUMMY' : 'CPU';
+  };
   const slotLabel = (i) =>
     i === 0
       ? 'Player 1'
@@ -537,7 +548,7 @@
     $('dialog-close').hidden = !close;
     if (!$('dialog').open) $('dialog').showModal();
     if (page === 'match') {
-      paused = true;
+      paused = !online.match;
       clearInput();
     }
   }
@@ -552,7 +563,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
-    if (dialogType === 'result' || dialogType === 'dispatch-fall') return;
+    if (dialogType === 'result' || dialogType === 'dispatch-fall' || dialogType === 'online-result') return;
     if ((dialogType === 'controls' || dialogType === 'moves') && backToPause) {
       backToPause = false;
       showPause();
@@ -594,6 +605,7 @@
   };
   function showControls() {
     backToPause = page === 'match';
+    const networkGame = !!online.match || page === 'online-lobby';
     const rows = [
       ['Move / aim', 'W A S D', 'Arrow keys', 'Stick / D-pad'],
       ['Jump', 'Space', 'Right Shift', 'A'],
@@ -602,12 +614,13 @@
       ['Special', 'K', '.', 'B'],
       ['Shield / air dodge / tech', 'L', '/', 'LB / RB'],
       ['Grab / throw', 'U', 'M', 'Y'],
-      ['Pause', 'Esc', 'Esc', 'Start'],
+      [networkGame ? 'Match menu' : 'Pause', 'Esc', 'Esc', 'Start'],
     ];
     if (nativeScreen) rows.push(['Fullscreen', 'F', 'F', '—']);
     const table =
-      '<table class="control-table"><thead><tr><th>Action</th><th>P1</th><th>P2</th><th>Gamepad</th></tr></thead><tbody>' +
-      rows.map((r) => '<tr>' + r.map((c) => '<td>' + c + '</td>').join('') + '</tr>').join('') +
+      '<table class="control-table"><thead><tr><th>Action</th>' +
+      (networkGame ? '<th>Keyboard</th>' : '<th>P1</th><th>P2</th>') + '<th>Gamepad</th></tr></thead><tbody>' +
+      rows.map((r) => '<tr>' + (networkGame ? [r[0], r[1], r[3]] : r).map((c) => '<td>' + c + '</td>').join('') + '</tr>').join('') +
       '</tbody></table>';
     showDialog(
       'controls',
@@ -951,7 +964,7 @@
   // Use the first play gesture. Leaving fullscreen is respected for the rest of this visit.
   document.addEventListener('click', (e) => {
     if (triedFullscreen || !nativeScreen || inFullscreen() || navigator.userActivation?.isActive === false) return;
-    const start = e.target.closest?.('#start, #dispatch-start, [data-stop], [data-reel]');
+    const start = e.target.closest?.('#start, #dispatch-start, [data-stop], [data-reel], #online-quick, #online-create, #online-join');
     if (start && !start.disabled && (e.isTrusted || navigator.userActivation?.isActive)) toggleFullscreen(false);
   }, true);
   document.addEventListener('keydown', (e) => {
@@ -1046,11 +1059,11 @@
       })
       .join('');
   }
-  function startMatch() {
+  function startMatch(config = settings, random = Math.random) {
     audioReady();
     dismiss();
     page = 'match';
-    for (const id of ['home', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
+    for (const id of ['home', 'online-lobby', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
       $(id).hidden = true;
     $('hud').hidden = false;
     document.body.classList.remove('menu-screen', 'adventure-active');
@@ -1065,12 +1078,12 @@
     $('trump-status').hidden = $('trump-patterns').hidden = true;
     $('recovery-tip').hidden = true;
     document.body.classList.add('playing');
-    document.body.classList.toggle('training-active', settings.mode === 'training');
+    document.body.classList.toggle('training-active', config.mode === 'training');
     $('lobby').hidden = true;
     $('match').hidden = false;
     view = new FightView();
     view.shakeEnabled = settings.shake;
-    world = new Battle(settings, (name, e) => {
+    world = new Battle(config, (name, e) => {
       view.event(name, e);
       sound(name, e);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
@@ -1098,32 +1111,36 @@
         $('recovery-tip').textContent = 'Missed the ledge. Pick a side to try again.';
       }
       if (name === 'win') resultDelay = 0.7;
-    });
-    $('training-tools').hidden = settings.mode !== 'training';
+    }, random);
+    $('training-tools').hidden = config.mode !== 'training';
     $('dummy-damage').value = '0';
     $('damage-output').textContent = '0%';
-    $('match-mode').textContent = modes[settings.mode];
-    $('match-stage').textContent = arenas[settings.stage].name;
-    countdown = settings.mode === 'training' ? 0 : 2.4;
+    const matchName = online.match ? 'Online · You are P' + (online.side + 1) : modes[config.mode];
+    $('match-mode').textContent = matchName;
+    $('match-stage').textContent = arenas[config.stage].name;
+    $('pause-label').textContent = online.match ? 'Match menu' : 'Pause';
+    countdown = config.mode === 'training' ? 0 : 2.4;
     lastCount = 0;
     resultDelay = 0;
     hudKey = '';
     accumulator = 0;
     $('countdown').textContent = countdown ? '3' : '';
+    $('countdown').classList.remove('net-lag');
     clearInput();
     updateHUD();
     view.draw($('game'), world, 0, 0);
     $('game').focus({ preventScroll: true });
     window.scrollTo(0, 0);
-    announce(modes[settings.mode] + ' on ' + arenas[settings.stage].name);
+    announce(matchName + ' on ' + arenas[config.stage].name);
   }
   function toLobby() {
+    leaveOnline();
     page = 'lobby';
     dismiss();
     world = null;
     view = null;
     document.body.classList.remove('playing', 'training-active', 'adventure-active', 'menu-screen');
-    for (const id of ['home', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
+    for (const id of ['home', 'online-lobby', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
       $(id).hidden = true;
     $('lobby').hidden = false;
     $('match').hidden = true;
@@ -1134,6 +1151,12 @@
   }
   function showPause() {
     if (page !== 'match' || !world || world.end !== null) return;
+    if (online.match) {
+      showDialog('online-menu', 'Match menu',
+        '<p>The online fight is still running.</p><div class="dialog-actions"><button class="primary" data-do="resume">Return to fight</button><button class="utility" data-do="online-leave">Leave match</button></div>');
+      document.querySelector('[data-do=resume]').focus();
+      return;
+    }
     if (world.mode === 'adventure') {
       if (world.finished) return;
       showDialog(
@@ -1165,6 +1188,17 @@
     const f = world.dogs[world.end],
       elapsed = Math.floor(world.time);
     const duration = Math.floor(elapsed / 60) + 'm ' + String(elapsed % 60).padStart(2, '0') + 's';
+    if (online.match) {
+      const title = world.end === online.side ? 'You win!' : 'Opponent wins';
+      showDialog('online-result', title,
+        '<div class="winner"><img alt="" src="' + portrait(f.kind) + '"><div><h3>' + f.stats.name +
+        ' wins!</h3><p>' + stockLabel(f.stocks) + ' · ' + duration + '</p></div></div><p id="net-rematch-status" role="status"></p>' +
+        '<div class="dialog-actions"><button class="primary" data-do="online-rematch">Rematch</button><button class="utility" data-do="online-leave">Online lobby</button></div>', false);
+      updateVotes();
+      document.querySelector('[data-do=online-rematch]').focus();
+      announce(title);
+      return;
+    }
     showDialog(
       'result',
       'Match result',
@@ -1188,7 +1222,7 @@
     announce(f.stats.name + ' wins the Golden Tennis Ball');
     document.querySelector('[data-do=rematch]').focus();
   }
-  $('start').onclick = startMatch;
+  $('start').onclick = () => startMatch();
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
     const reel = e.target.closest('[data-reel]');
@@ -1225,6 +1259,8 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if (action === 'online-rematch') online.rematch();
+    if (action === 'online-leave') showOnline();
     if (action === 'fullscreen') toggleFullscreen();
     if (action === 'home') showHome();
     if (action === 'route') showRoute();
@@ -1625,7 +1661,8 @@
     }
   }
   const countMarks = (bits) => campaign.rooms.filter((_, i) => bits & (1 << i)).length;
-  function menuScreen(id) {
+  function menuScreen(id, keepRoom = false) {
+    if (!keepRoom) leaveOnline();
     film?.score.silence();
     film = null;
     dismiss();
@@ -1637,7 +1674,7 @@
     document.body.classList.remove('playing', 'training-active', 'adventure-active');
     document.body.classList.add('menu-screen');
     document.body.classList.toggle('cinema-active', id === 'dispatch-story');
-    for (const screen of ['home', 'dispatch-route', 'dispatch-story', 'lobby', 'match'])
+    for (const screen of ['home', 'online-lobby', 'dispatch-route', 'dispatch-story', 'lobby', 'match'])
       $(screen).hidden = screen !== id;
     window.scrollTo(0, 0);
   }
@@ -1813,6 +1850,8 @@
   }
   function beginRun(index, checkpoint, atCheckpoint = null) {
     dismiss();
+    $('pause-label').textContent = 'Pause';
+    $('countdown').classList.remove('net-lag');
     page = 'match';
     drillSide = null;
     drillWaiting = false;
@@ -2044,6 +2083,124 @@
     if (progress.complete) return playScene('opening');
     enterStop(progress.room, progress.checkpoint);
   };
+  let onlineDog = settings.p1, peerLibrary = null, onlineRequest = 0;
+  const online = new window.DogOnline.OnlineSession({
+    status: onlineStatus, start: startMatch, votes: updateVotes,
+    closed: (message) => showOnline(message, online.action === 'join' ? online.code : ''),
+  });
+  function leaveOnline() {
+    onlineRequest++;
+    online.close();
+  }
+  function showOnline(message = '', invite = '') {
+    menuScreen('online-lobby');
+    afterStory = null;
+    $('online-code').value = invite;
+    const roster = $('online-roster');
+    if (!roster.childElementCount) {
+      for (const [kind, dog] of Object.entries(fighters)) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'net-dog';
+        button.dataset.dog = kind;
+        button.innerHTML = '<img alt="" src="' + portrait(kind) + '"><strong>' + dog.name + '</strong><small>' + dog.style + '</small>';
+        roster.append(button);
+      }
+    }
+    onlineStatus('idle', message, '');
+    $(invite ? 'online-join' : 'online-quick').focus({ preventScroll: true });
+  }
+  function onlineStatus(phase, message, code) {
+    const busy = phase !== 'idle', room = phase === 'room';
+    if (room && page === 'match') menuScreen('online-lobby', true);
+    $('online-actions').hidden = busy;
+    $('online-wait').hidden = !busy;
+    $('online-status').textContent = message;
+    $('online-connect-title').textContent = room ? 'Friend room' : phase === 'search' ? 'Quickplay' : 'Matchmaking';
+    $('online-cancel').textContent = room ? 'Close room' : phase === 'search' ? 'Cancel search' : 'Cancel';
+    $('online-invite').hidden = !room;
+    $('online-invite-url').hidden = true;
+    $('online-room-code').textContent = room ? code : '';
+    $('online-copy').textContent = 'Copy invite link';
+    for (const button of $('online-roster').children) {
+      button.disabled = busy;
+      button.setAttribute('aria-pressed', String(button.dataset.dog === onlineDog));
+    }
+    if (busy && !$('online-wait').contains(document.activeElement)) $('online-cancel').focus({ preventScroll: true });
+  }
+  function loadPeer() {
+    if (window.Peer) return Promise.resolve();
+    if (!peerLibrary) peerLibrary = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = './vendor/peerjs-1.5.5.min.js';
+      script.onload = resolve;
+      script.onerror = () => { peerLibrary = null; script.remove(); reject(); };
+      document.head.append(script);
+    });
+    return peerLibrary;
+  }
+  async function seekOpponent(action) {
+    const code = $('online-code').value.trim().toUpperCase();
+    if (action === 'join' && !window.DogOnline.validCode(code)) {
+      $('online-status').textContent = 'Enter a six-character room code. Use letters or the digits 2–9.';
+      $('online-code').focus();
+      return;
+    }
+    audioReady();
+    sound('menu');
+    const request = ++onlineRequest;
+    onlineStatus('connecting', 'Connecting…', '');
+    try { await loadPeer(); }
+    catch {
+      if (request === onlineRequest) showOnline('Could not load online play. Please try again.', code);
+      return;
+    }
+    if (request === onlineRequest) online.start(action, onlineDog, code);
+  }
+  function updateVotes() {
+    const button = document.querySelector('[data-do=online-rematch]');
+    if (!button) return;
+    button.disabled = online.myVote;
+    $('net-rematch-status').textContent = online.myVote ? 'Waiting for your opponent…' :
+      online.theirVote ? 'Your opponent wants a rematch.' : '';
+  }
+  $('home-online').onclick = () => { audioReady(); sound('menu'); showOnline(); };
+  $('online-home').onclick = () => showHome();
+  $('online-cancel').onclick = () => showOnline(online.phase === 'room' ? 'Room closed.' : 'Matchmaking canceled.');
+  $('online-quick').onclick = () => seekOpponent('quick');
+  $('online-create').onclick = () => seekOpponent('create');
+  $('online-join-form').onsubmit = (e) => { e.preventDefault(); seekOpponent('join'); };
+  $('online-code').oninput = (e) => { e.target.value = e.target.value.toUpperCase(); };
+  $('online-roster').onclick = (e) => {
+    const dog = e.target.closest('[data-dog]');
+    if (!dog || dog.disabled) return;
+    onlineDog = dog.dataset.dog;
+    sound('menu');
+    onlineStatus('idle', '', '');
+  };
+  $('online-copy').onclick = async () => {
+    const code = online.code;
+    const url = location.protocol === 'file:' ? new URL('https://caleb-guyer.github.io/dog-fight-3/') : new URL(location.href);
+    url.hash = 'room/' + code;
+    try {
+      await navigator.clipboard.writeText(url.href);
+      if (online.phase === 'room' && online.code === code) $('online-copy').textContent = 'Link copied';
+    } catch {
+      if (online.phase !== 'room' || online.code !== code) return;
+      const field = $('online-invite-url');
+      field.value = url.href;
+      field.hidden = false;
+      field.select();
+    }
+  };
+  let returnToOnline = false;
+  window.addEventListener('pagehide', () => {
+    returnToOnline = !!online.match || page === 'online-lobby';
+    leaveOnline();
+  });
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted && returnToOnline) showOnline();
+  });
   const keys = [
     {
       left: 'KeyA',
@@ -2122,7 +2279,7 @@
   function onBlur() {
     clearInput();
     if (page === 'dispatch-story') setFilmPaused(true);
-    if (page === 'match' && !paused && world?.end === null) showPause();
+    if (page === 'match' && !online.match && !paused && world?.end === null) showPause();
   }
   window.addEventListener('blur', onBlur);
   const redrawPausedStage = () => {
@@ -2150,7 +2307,7 @@
   function menuButtons() {
     const root = $('dialog').open ? $('dialog') : $(page);
     return root
-      ? [...root.querySelectorAll('button,input[type=range]')].filter(
+      ? [...root.querySelectorAll('button,input:not([readonly])')].filter(
           (el) => el.offsetWidth && el.offsetHeight && !el.disabled,
         )
       : [];
@@ -2169,7 +2326,8 @@
       return;
     }
     if (page === 'dispatch-story') $('story-map').click();
-    else if (page === 'dispatch-route' || page === 'lobby') showHome();
+    else if (page === 'online-lobby' && !$('online-wait').hidden) showOnline();
+    else if (page === 'dispatch-route' || page === 'lobby' || page === 'online-lobby') showHome();
   }
   window.addEventListener('keydown', (e) => {
     if (
@@ -2195,11 +2353,11 @@
       moveMenuFocus(e.code === 'ArrowDown' || e.code === 'ArrowRight' ? 1 : -1);
     }
   });
-  function playerInput(i, pads) {
+  function playerInput(i, pads, fighterIndex = i) {
     const map = keys[i];
     const tapped = (action) => taps.has(map[action]) || (!i && touchTaps.has(action));
     const key = (action) => held.has(map[action]) || (!i && touches.has(action)) || tapped(action);
-    const pad = world.mode === 'local' && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
+    const pad = world.mode === 'local' && !online.match && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
     const axis = (n) => (Math.abs(pad?.axes?.[n] || 0) > 0.23 ? pad.axes[n] : 0);
     const left = key('left') || down(pad, 14),
       right = key('right') || down(pad, 15);
@@ -2209,7 +2367,7 @@
       // Rolling one direction key onto the other is a turn even during their brief overlap.
       const leftTap = tapped('left'),
         rightTap = tapped('right');
-      grabX = leftTap === rightTap ? (world.dogs[i].prev.grabX ?? 0) : rightTap ? 1 : -1;
+      grabX = leftTap === rightTap ? (world.dogs[fighterIndex].prev.grabX ?? 0) : rightTap ? 1 : -1;
     }
     const up = key('up') || down(pad, 12),
       downAim = key('down') || down(pad, 13);
@@ -2260,7 +2418,7 @@
       prev: any(12) || any(14) || pads.some((p) => (p.axes[0] || 0) < -0.65 || (p.axes[1] || 0) < -0.65),
     };
     if (now.pause && !oldPad.pause) {
-      if (dialogType === 'pause') dismiss();
+      if (dialogType === 'pause' || dialogType === 'online-menu') dismiss();
       else if (page === 'match' && !dialogType) showPause();
       else if (page === 'dispatch-story' && !dialogType) toggleFilm();
       else if (page === 'lobby' && !dialogType) startMatch();
@@ -2307,12 +2465,23 @@
         $('countdown').textContent = number || 'GO!';
         if (!number) {
           clearInput();
+          if (online.match) online.match.lastStep = performance.now();
           announce('Fight!');
         }
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
         accumulator += dt;
         while (accumulator >= 1 / 60 && world.end === null) {
+          if (online.match) {
+            online.match.tick(() => {
+              const input = $('dialog').open ? idleInput : playerInput(0, pads, online.side);
+              taps.clear();
+              touchTaps.clear();
+              return input;
+            }, world);
+            accumulator -= 1 / 60;
+            continue;
+          }
           const input = playerInput(0, pads);
           const player = world.dogs[0];
           if (drillWaiting) {
@@ -2342,10 +2511,18 @@
           touchTaps.clear();
           accumulator -= 1 / 60;
         }
+        if (online.match) {
+          const waiting = performance.now() - online.match.lastStep;
+          $('countdown').classList.toggle('net-lag', world.end === null && waiting > 850);
+          if (world.end !== null) online.finish(world.end);
+          else if (waiting > 22000) online.opponentLeft('The other player stopped responding.');
+          else if (waiting > 850) $('countdown').textContent = 'Waiting for opponent…';
+        }
+        if (!world) { requestAnimationFrame(frame); return; }
         updateHUD();
       } else {
         resultDelay -= dt;
-        if (resultDelay <= 0 && !$('dialog').open) showResult();
+        if (resultDelay <= 0 && (online.match ? dialogType !== 'online-result' : !$('dialog').open)) showResult();
       }
       view.draw($('game'), world, dt, now);
     }
@@ -2357,12 +2534,18 @@
     showRoute();
     showReels();
   }
-  window.addEventListener('hashchange', () => {
-    if (location.hash === '#cutscenes') openFilmLibraryLink();
-    else if (location.hash === '#adventure') showRoute();
-  });
-  if (location.hash === '#cutscenes') openFilmLibraryLink();
-  else if (location.hash === '#adventure') showRoute();
-  else showHome();
+  function openLink() {
+    const hash = location.hash;
+    if (hash === '#cutscenes') openFilmLibraryLink();
+    else if (hash === '#adventure') showRoute();
+    else if (hash === '#online') showOnline();
+    else if (hash.startsWith('#room/')) {
+      const code = hash.slice(6).toUpperCase();
+      if (window.DogOnline.validCode(code)) showOnline('', code);
+      else showOnline('This invite has an invalid room code.');
+    } else showHome();
+  }
+  window.addEventListener('hashchange', openLink);
+  openLink();
   requestAnimationFrame(frame);
 })();

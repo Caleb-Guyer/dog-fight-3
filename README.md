@@ -6,11 +6,19 @@ A cartoon platform fighter for one or two players. Play **The Last Dispatch** st
 
 **[Play Dog Fight 3](https://caleb-guyer.github.io/dog-fight-3/)**
 
-From the main menu, choose **Adventure**, **Solo fight**, **Local versus**, or **Training**. For a match, choose your dog and select **Start fight**. To play offline, download or clone the repository, extract it if necessary, and open `docs/index.html` in a modern browser. The game, artwork, typeface, and sound effects work locally. A keyboard is enough for both solo and local versus. Touch controls appear on touchscreen devices.
+From the main menu, choose **Adventure**, **Solo fight**, **Local versus**, **Online versus**, or **Training**. For a solo or local match, choose your dog and select **Start fight**. To play offline, download or clone the repository, extract it if necessary, and open `docs/index.html` in a modern browser. The game, artwork, typeface, and sound effects work locally. A keyboard is enough for both solo and local versus. Touch controls appear on touchscreen devices.
 
 Each dog starts with three stocks. Dealing damage makes the next hit launch a rival farther. Knock a dog beyond the arena boundary to take a stock. When a hard hit sends you tumbling, you can bend the launch and choose how to land. A midair jump and **Up + Special** can bring you back to the ledge.
 
 The game fills the browser window. On browsers with fullscreen support, starting your first fight or chapter also hides the browser controls. Select **Fullscreen** or press **F** to switch at any time. On a phone, rotate to landscape for a wider view with the touch controls over the arena.
+
+## Online versus
+
+Pick your dog and select **Quickplay** to fight the next available player. To play a friend, choose **Create room** and share the six-character code or invite link. Your friend picks a dog and selects **Join room**. The fight starts when both players connect. [Open Online versus](https://caleb-guyer.github.io/dog-fight-3/#online)
+
+Each device uses the P1 keyboard, controller, or touch controls. The HUD marks your fighter with **YOU**. Both dogs start with three stocks. At the results screen, both players can select **Rematch** to fight on the other arena. If the guest leaves, the host can use the same room code for the next opponent.
+
+Online play uses PeerServer Cloud to find the other browser, then exchanges inputs over a direct WebRTC data channel. Both players need internet access and a network that permits the connection. The bundled PeerJS 1.5.5 client includes its MIT license in `docs/vendor/`. [PeerServer Cloud](https://peerjs.com/server/cloud)
 
 ## The Last Dispatch
 

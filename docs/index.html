@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#252337" />
     <meta
       name="description"
-      content="Play The Last Dispatch, a five-mission cartoon brawler, or battle for the Golden Tennis Ball in solo, local versus, and training."
+      content="A cartoon dog platform fighter. Play the five-mission adventure, battle on the same screen, or take a three-stock fight online with friend rooms and Quickplay."
     />
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="./style.css?v=screen-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=missions-1" />
+    <link rel="stylesheet" href="./online.css?v=online-1" />
     <script defer src="./fighters-art.js?v=dispatch-1"></script>
     <script defer src="./arena-art.js?v=screen-1"></script>
     <script defer src="./engine.js?v=stocks-1"></script>
@@ -30,7 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=chapter-lead-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./app.js?v=chapter-lead-1"></script>
+    <script defer src="./online.js?v=online-1"></script>
+    <script defer src="./app.js?v=online-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -90,6 +92,9 @@
               <i data-icon="versus"></i
               ><span><b>Local versus</b><small>Two players on one screen</small></span>
             </button>
+            <button type="button" id="home-online">
+              <i data-icon="signal"></i><span><b>Online versus</b><small>Quickplay and friend rooms</small></span>
+            </button>
             <button type="button" data-enter-mode="training">
               <i data-icon="ledge"></i><span><b>Training</b><small>Free practice and drills</small></span>
             </button>
@@ -102,6 +107,43 @@
           </div>
           <span class="menu-hint">↑ ↓ Choose &nbsp; Enter Select</span>
         </div>
+      </section>
+      <section id="online-lobby" class="dispatch-board" aria-labelledby="online-title" hidden>
+        <div class="board-heading">
+          <h1 id="online-title">Online versus</h1>
+          <button id="online-home" class="board-back" type="button">Main menu</button>
+        </div>
+        <div class="online-deck">
+          <section class="online-select" aria-labelledby="online-select-title">
+            <h2 id="online-select-title">Your fighter</h2>
+            <div id="online-roster" role="group" aria-label="Choose your fighter"></div>
+          </section>
+          <section class="online-connect" aria-labelledby="online-connect-title">
+            <h2 id="online-connect-title">Matchmaking</h2>
+            <p id="online-status" role="status"></p>
+            <div id="online-actions">
+              <button id="online-quick" class="net-action net-primary" type="button"><i data-icon="signal"></i>Quickplay</button>
+              <button id="online-create" class="net-action" type="button"><i data-icon="versus"></i>Create room</button>
+              <form id="online-join-form">
+                <label for="online-code">Room code</label>
+                <div class="net-code-row">
+                  <input id="online-code" type="text" maxlength="6" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="6 characters" required />
+                  <button id="online-join" class="net-action" type="submit">Join room</button>
+                </div>
+              </form>
+            </div>
+            <div id="online-wait" hidden>
+              <div id="online-invite" hidden>
+                <span>Room code</span>
+                <strong id="online-room-code"></strong>
+                <button type="button" id="online-copy" class="net-action">Copy invite link</button>
+                <input id="online-invite-url" aria-label="Invite link" readonly hidden />
+              </div>
+              <button type="button" id="online-cancel" class="net-action">Cancel</button>
+            </div>
+          </section>
+        </div>
+        <div class="board-foot"><span class="menu-hint">1 vs 1 · 3 stocks</span><span class="menu-hint">P1 controls on each device</span></div>
       </section>
       <section id="dispatch-route" class="dispatch-board" aria-labelledby="route-title" hidden>
         <div class="board-heading">
@@ -231,7 +273,7 @@
             <span class="mode-label" id="match-mode">Solo</span>
             <h1 id="match-stage">Picnic Table</h1>
           </div>
-          <button id="pause" class="utility" type="button"><i data-icon="pause"></i>Pause</button>
+          <button id="pause" class="utility" type="button"><i data-icon="pause"></i><span id="pause-label">Pause</span></button>
         </div>
         <div class="play-window" id="play-window">
           <canvas
