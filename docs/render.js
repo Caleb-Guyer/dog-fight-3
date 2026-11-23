@@ -7,6 +7,7 @@
   const cream = '#fff1c7';
   const gold = '#f4c76a';
   const lilac = '#c5a9d3';
+  const mint = '#9fe4d7';
   const chargeColors = { pip: '#ee9775', brisket: gold, noodle: '#e5b47b', clover: lilac };
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const snap = (value, cell = 3) => Math.round(value / cell) * cell;
@@ -64,6 +65,8 @@
     const widths = labels.map((label) => snap(Math.max(26, ctx.measureText(label).width + 8), 2));
     const tops = world.dogs.map((f) => {
       let top = -f.stats.height;
+      if (f.floorAction?.type === 'downed') top *= 0.58;
+      else if (f.floorAction?.type === 'floorAttack') top *= 0.75;
       if (f.attack?.smashSide === 'up' || f.attack?.tiltSide === 'up') {
         // Keep the tag above overhead attacks, including Noodle's raised loops.
         for (const box of [f.attack.box, f.attack.second?.box]) {
@@ -211,6 +214,17 @@
         return [grip.holdPose || canonical + 'Hold', phase];
       }
     }
+    if (f.floorAction) {
+      const action = f.floorAction;
+      if (action.type === 'downed') return ['downed', clamp(action.time / 0.2, 0, 1)];
+      if (action.type === 'floorAttack' && f.attack?.floorAttack)
+        return ['floorAttack', attackPhase(f.attack)];
+      return [
+        action.type === 'getupRoll' ? 'techRoll' : action.type,
+        clamp(action.time / action.duration, 0, 1),
+      ];
+    }
+    if (f.tumble) return ['tumble', 0];
     if (f.stun > 0) {
       if (!f.reaction) return ['hurt', 0.3];
       return [f.reaction.hard ? 'launch' : 'hurt', clamp(1 - f.stun / f.reaction.duration, 0, 1)];
@@ -1074,10 +1088,65 @@
     }
     ctx.restore();
   }
+  function floorSweep(ctx, f, a) {
+    if (a.time + 1e-8 < a.start || a.time >= a.start + a.active - 1e-8) return;
+    const [x, y, rx, ry] = a.box;
+    const phase = attackPhase(a);
+    const early = phase < 0.54;
+    let forward, rear;
+    if (f.kind === 'brisket') {
+      forward = window.DogArt.pawPoint(f.kind, 'floorAttack', phase, 'front');
+      rear = window.DogArt.pawPoint(f.kind, 'floorAttack', phase, 'rear');
+    } else if (f.kind === 'noodle') {
+      forward = window.DogArt.itemPoint(f.kind, 'floorAttack', phase);
+      rear = early ? [-54, -20] : [-58, -20];
+    } else if (f.kind === 'clover') {
+      const disc = window.DogArt.itemPoint(f.kind, 'floorAttack', phase);
+      forward = early ? disc : [50, -18];
+      rear = early ? [-56, -20] : disc;
+    } else {
+      forward = early ? [52, -18] : [46, -14];
+      rear = early ? [-50, -20] : [-52, -22];
+    }
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y, 2));
+    ctx.scale(f.face, 1);
+    // One sweep spans both sides on every active frame. Its leading edge switches
+    // with the striking limb as the dog turns over.
+    for (const [sign, point] of [
+      [1, forward],
+      [-1, rear],
+    ]) {
+      const leading = (sign === 1) === early;
+      const near = x + sign * (rx - 25),
+        outer = x + sign * (rx - 3);
+      const low = y + ry * 0.65;
+      pixelLine(ctx, near, low, outer - sign * 6, low - 2, leading ? chargeColors[f.kind] : '#c3a98a', 3, 2);
+      const color = leading ? cream : '#bda084';
+      pixelLine(ctx, outer - sign * 6, low - 2, outer, low - 7, color, 2, 2);
+      if (point) pixelLine(ctx, outer, low - 7, point[0], point[1] + 1, color, 2, 2);
+    }
+    ctx.restore();
+  }
+  function floorRollTrack(ctx, f) {
+    const action = f.floorAction;
+    if (!action || !action.dir || (action.type !== 'techRoll' && action.type !== 'getupRoll')) return;
+    const p = action.time / action.duration;
+    if (p < 0.08 || p > 0.88) return;
+    const skid = reduced.matches ? 0 : snap(Math.sin(p * Math.PI) * 7, 2);
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y, 2));
+    ctx.scale(action.dir, 1);
+    const end = -f.stats.width - skid;
+    pixelLine(ctx, end - 13, -2, end + 4, -2, action.type === 'techRoll' ? '#8cc4bb' : '#c99f79', 3, 2);
+    if (!reduced.matches) pixelLine(ctx, end - 17, -6, end - 23, -9, '#ddc29a', 2, 2);
+    ctx.restore();
+  }
   function swing(ctx, f, floor) {
     const a = f.attack;
     // A pummel lands only through its shared grip and has no free melee hitbox.
     if (a?.pummel) return;
+    if (a?.floorAttack) return floorSweep(ctx, f, a);
     if (a?.grabAttempt) return catchReach(ctx, f, a);
     if (a?.throwSide) return throwFollowThrough(ctx, f, a);
     if (a?.ledgeAttack) return ledgeSwing(ctx, f, a);
@@ -1130,6 +1199,7 @@
   }
   function drawFighter(ctx, f, world, time) {
     shadow(ctx, f, world.terrain);
+    floorRollTrack(ctx, f);
     movingGrabFeet(ctx, f);
     dashFootwork(ctx, f);
     if (f.respawning > 0) oval(ctx, f.x, f.y - 3, 42, 5, team[f.index]);
@@ -1141,17 +1211,24 @@
         arc(ctx, f.x, f.y - 34, r, r, spin + (i * Math.PI) / 2, spin + (i * Math.PI) / 2 + 0.4, gold);
     }
     const [state, phase] = pose(f, world.end, f.grip ? world.dogs[f.grip.owner] : null);
+    let face = f.face,
+      spriteTime = time + f.index * 0.42;
+    if (state === 'tumble') {
+      face = f.reaction?.face || f.face;
+      spriteTime = reduced.matches ? 0.21 : f.tumble.time;
+    } else if (f.floorAction) {
+      if (state === 'techRoll') face = f.floorAction.dir || f.face;
+      spriteTime = reduced.matches ? 0 : f.floorAction.time;
+    } else if (state === 'skid') face = f.skidFace;
+    else if (f.stun > 0 && f.reaction) face = f.reaction.face;
+    else if (f.smashCharge) face = f.smashCharge.face;
     ctx.save();
-    if (f.invuln > 0.01 && !reduced.matches && Math.floor(time * 12) % 2) ctx.globalAlpha = 0.53;
+    if (f.invuln > 0.01 && !f.floorAction && !reduced.matches && Math.floor(time * 12) % 2)
+      ctx.globalAlpha = 0.53;
     window.DogArt.draw(ctx, f.kind, snap(f.x, 2), snap(f.y, 2), {
-      face:
-        state === 'skid'
-          ? f.skidFace
-          : f.stun > 0 && f.reaction
-            ? f.reaction.face
-            : f.smashCharge?.face || f.face,
+      face,
       scale: 1,
-      time: time + f.index * 0.42,
+      time: spriteTime,
       pose: state,
       phase,
     });
@@ -1252,8 +1329,114 @@
       ctx.fillRect(snap(x - 3), snap(y - size), 6, size * 2);
     }
   }
+  function landingEffect(ctx, e, p) {
+    ctx.save();
+    ctx.translate(snap(e.x, 2), snap(e.y, 2));
+    ctx.globalAlpha *= Math.min(1, (1 - p) * 2);
+    const spread = e.size + (reduced.matches ? 0 : snap(12 * p, 2));
+    if (e.type === 'techLand') {
+      for (const sign of [-1, 1]) {
+        const end = sign * (spread + (sign === e.dir ? 5 : 0));
+        pixelLine(ctx, sign * 7, -1, end - sign * 6, -2, mint, 3, 2);
+        pixelLine(ctx, end - sign * 6, -2, end, -8, cream, 2, 2);
+      }
+      const accent = (e.dir || 1) * (spread + 4);
+      if (p < 0.65) glint(ctx, accent, -10, reduced.matches ? 3 : 5, mint);
+    } else if (e.type === 'knockDust') {
+      for (const sign of [-1, 1]) {
+        const edge = sign * spread;
+        pixelLine(ctx, sign * 11, -2, edge - sign * 5, -2, '#be9779', 4, 2);
+        pixelLine(ctx, edge - sign * 5, -2, edge, -7, '#e2bc8d', 3, 2);
+        if (!reduced.matches) pixelLine(ctx, edge + sign * 4, -8, edge + sign * 7, -11, '#cfaa83', 2, 2);
+      }
+    } else {
+      ctx.scale(e.face, 1);
+      pixelLine(ctx, -13, -2, -spread, -2, '#d6b58b', 2, 2);
+      if (!reduced.matches) pixelLine(ctx, -spread - 2, -4, -spread - 5, -7, '#c39875', 2, 2);
+    }
+    ctx.restore();
+  }
+  function launchDirections(ctx, trace) {
+    const length = 146;
+    const base = trace.raw,
+      steered = trace.velocity;
+    ctx.save();
+    ctx.translate(snap(trace.x, 2), snap(trace.y, 2));
+    const stroke = (x1, y1, x2, y2, color, width) => {
+      const pad = Math.floor(width / 2);
+      pixelLine(ctx, x1 - pad, y1 - pad, x2 - pad, y2 - pad, color, width, 2);
+    };
+    const along = (unit, start, end, color, width) =>
+      stroke(unit.x * start, unit.y * start, unit.x * end, unit.y * end, color, width);
+    const dashes = (color, width) => {
+      for (let at = 10; at < length - 8; at += 24)
+        along(base, at, Math.min(at + 9, length - 7), color, width);
+    };
+    // Equal-length rays show only the change in initial direction. Paint both outlines
+    // first so a straight launch still shows the amber dashes around its aqua center.
+    dashes(ink, 8);
+    along(steered, 7, length, ink, 6);
+    dashes(gold, 6);
+    along(steered, 7, length, mint, 3);
+    const bx = base.x * length,
+      by = base.y * length;
+    arc(ctx, bx, by, 6, 6, 0, Math.PI * 2, ink, 5);
+    arc(ctx, bx, by, 6, 6, 0, Math.PI * 2, gold, 3);
+    const sx = steered.x * length,
+      sy = steered.y * length;
+    for (const [color, width] of [
+      [ink, 6],
+      [mint, 3],
+    ]) {
+      for (const sign of [-1, 1]) {
+        stroke(
+          sx - steered.x * 10 - sign * steered.y * 6,
+          sy - steered.y * 10 + sign * steered.x * 6,
+          sx,
+          sy,
+          color,
+          width,
+        );
+      }
+    }
+    ctx.fillStyle = ink;
+    ctx.fillRect(-4, -4, 8, 8);
+    ctx.fillStyle = cream;
+    ctx.fillRect(-2, -2, 4, 4);
+    ctx.restore();
+  }
+  function launchKey(ctx, trace, displayedWidth) {
+    const degrees = Math.round((trace.turn * 180) / Math.PI);
+    const second = degrees ? 'Yours · ' + degrees + '° turn' : 'Yours · no turn';
+    ctx.save();
+    ctx.font = '19px "Brawl Pixel", monospace';
+    const width = Math.ceil(Math.max(ctx.measureText('Unsteered').width, ctx.measureText(second).width)) + 48;
+    const scale = Math.min(clamp(820 / (displayedWidth || 820), 1, 2.15), 460 / width);
+    ctx.translate(28, 18);
+    ctx.scale(scale, scale);
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = ink;
+    ctx.fillRect(0, 0, width, 47);
+    ctx.fillStyle = '#383247';
+    ctx.fillRect(2, 2, width - 4, 43);
+    pixelLine(ctx, 7, 13, 13, 13, gold, 3, 2);
+    pixelLine(ctx, 18, 13, 24, 13, gold, 3, 2);
+    arc(ctx, 29, 13, 3, 3, 0, Math.PI * 2, gold, 2);
+    pixelLine(ctx, 7, 33, 30, 33, mint, 3, 2);
+    pixelLine(ctx, 25, 29, 30, 33, mint, 2, 2);
+    pixelLine(ctx, 25, 37, 30, 33, mint, 2, 2);
+    ctx.fillStyle = cream;
+    ctx.fillText('Unsteered', 39, 13);
+    ctx.fillText(second, 39, 33);
+    ctx.restore();
+  }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
+    if (e.type === 'techLand' || e.type === 'knockDust' || e.type === 'riseScuff') {
+      landingEffect(ctx, e, p);
+      return;
+    }
     if (e.type === 'pummel') {
       pummelContact(ctx, e.x, e.y, e.kind, e.face, e.count, p);
       return;
@@ -1308,6 +1491,8 @@
   class FightView {
     constructor() {
       this.effects = [];
+      this.pendingLaunch = null;
+      this.launchTrace = null;
       this.lastTrail = [-1, -1];
       this.leftFighter = 0;
       this.shake = 0;
@@ -1321,6 +1506,24 @@
     }
     event(name, e) {
       const f = e.f;
+      if (name === 'launchDI' && f.index === 0) {
+        const base = Math.hypot(e.raw.x, e.raw.y),
+          speed = Math.hypot(e.velocity.x, e.velocity.y);
+        if (base && speed)
+          this.pendingLaunch = {
+            fighter: f,
+            x: e.point.x,
+            y: e.point.y,
+            raw: { x: e.raw.x / base, y: e.raw.y / base },
+            velocity: { x: e.velocity.x / speed, y: e.velocity.y / speed },
+            turn: Math.abs(e.angle),
+          };
+      }
+      if (name === 'tech') this.add('techLand', e.point.x, e.point.y, mint, 0.19, 18, 1, { dir: e.dir });
+      if (name === 'knockdown')
+        this.add('knockDust', e.point.x, e.point.y, cream, 0.24, 17 + f.stats.width * 0.45);
+      if (name === 'getup' && (e.type === 'floorRise' || e.type === 'getupRoll'))
+        this.add('riseScuff', e.point.x, e.point.y, cream, 0.14, 23, e.dir || f.face);
       if (name === 'jump' || name === 'recover')
         this.add('ring', f.x, f.y, name === 'jump' ? cream : team[f.index], 0.23, 21);
       if (name === 'hit' || name === 'block') {
@@ -1385,6 +1588,11 @@
     draw(canvas, world, dt, time) {
       const ctx = canvas.getContext('2d'),
         [a, b] = world.dogs;
+      const practice = world.mode === 'training' && world.end === null && world.launchPractice;
+      if (this.launchTrace && this.launchTrace.practice !== practice) this.launchTrace = null;
+      if (practice && practice.phase !== 'ready' && !this.launchTrace && this.pendingLaunch?.fighter === a)
+        this.launchTrace = { ...this.pendingLaunch, practice };
+      this.pendingLaunch = null;
       ctx.imageSmoothingEnabled = false;
       const spread = Math.abs(a.x - b.x);
       const vertical = Math.abs(a.y - b.y);
@@ -1407,6 +1615,7 @@
       ctx.scale(this.zoom, this.zoom);
       ctx.translate(-Math.round(this.cx), -Math.round(this.cy));
       window.ArenaArt.draw(ctx, world.stage, world.time);
+      if (this.launchTrace) launchDirections(ctx, this.launchTrace);
       if (spread > 14) this.leftFighter = a.x < b.x ? 0 : 1;
       fighterTags(ctx, world, this.leftFighter);
       for (const f of world.dogs) {
@@ -1463,6 +1672,7 @@
         window.DogArt.draw(ctx, f.kind, px, py + 25, { face: f.face, scale: 0.53, time, pose: 'fall' });
         ctx.restore();
       }
+      if (this.launchTrace) launchKey(ctx, this.launchTrace, canvas.clientWidth);
     }
   }
   const moveThumbnails = new Map();
@@ -1596,7 +1806,49 @@
     pixelLine(ctx, 29, 8, 45, 8, '#815b50', 2, 2);
     ctx.restore();
   }
+  function defenseThumbnail(source, kind, side) {
+    source.width = 320;
+    source.height = 228;
+    const ctx = source.getContext('2d');
+    ctx.translate(160, 148);
+    const f = { kind, x: 0, y: 0, face: 1, stats: window.DogFight.fighters[kind] };
+    let phase = 0,
+      time = 0;
+    if (side === 'tumble') {
+      time = 0.21;
+      pixelLine(ctx, -52, -5, -35, -15, '#c6a984', 3, 2);
+      pixelLine(ctx, -45, -1, -36, -7, cream, 2, 2);
+    } else {
+      pixelLine(ctx, -49, 1, 50, 1, '#736477', 2, 2);
+      if (side === 'techRoll') {
+        phase = 0.42;
+        f.floorAction = { type: 'techRoll', time: phase, duration: 1, dir: 1 };
+        landingEffect(ctx, { type: 'techLand', x: -25, y: 0, size: 11, dir: 1 }, 0.3);
+        floorRollTrack(ctx, f);
+      } else {
+        const move = window.DogFight.moves.getupSweep;
+        f.attack = { ...move, time: move.start + move.active * 0.32, moveId: 'getupSweep' };
+        phase = attackPhase(f.attack);
+      }
+    }
+    window.DogArt.draw(ctx, kind, 0, 0, { face: 1, scale: 1, time, pose: side, phase });
+    if (f.attack) floorSweep(ctx, f, f.attack);
+  }
   function drawMoveThumbnail(canvas, kind, side, category = 'air') {
+    const target = canvas.getContext('2d');
+    const cacheKey = [kind, category, side, canvas.width, canvas.height].join('/');
+    const cached = moveThumbnails.get(cacheKey);
+    target.clearRect(0, 0, canvas.width, canvas.height);
+    if (cached) {
+      target.drawImage(cached, 0, 0);
+      return;
+    }
+    const source = document.createElement('canvas');
+    if (category === 'defense') {
+      defenseThumbnail(source, kind, side);
+      fitThumbnail(canvas, source, cacheKey);
+      return;
+    }
     const { kits, moves, specials, smashes, grabs, throws, pummels, fighters } = window.DogFight;
     const grapple = category === 'throws',
       movingCatch = grapple && (side === 'dashGrab' || side === 'pivotGrab'),
@@ -1617,16 +1869,7 @@
       throws: catching ? grabs : pummeling ? pummels : throws,
     };
     const move = book[category][id];
-    const target = canvas.getContext('2d');
-    const cacheKey = id + '/' + canvas.width + '/' + canvas.height;
-    const cached = moveThumbnails.get(cacheKey);
-    target.clearRect(0, 0, canvas.width, canvas.height);
-    if (cached) {
-      target.drawImage(cached, 0, 0);
-      return;
-    }
     // Fit the whole silhouette, including the rope or disc beyond the dog's body.
-    const source = document.createElement('canvas');
     const smash = category === 'smashes';
     source.width = movingCatch ? 520 : grapple ? 420 : smash ? 400 : 320;
     source.height = grapple ? 330 : smash ? 312 : 272;
@@ -1727,7 +1970,11 @@
         armedIn: 0,
         vx: 1,
       });
-    const { data } = ctx.getImageData(0, 0, source.width, source.height);
+    fitThumbnail(canvas, source, cacheKey);
+  }
+  function fitThumbnail(canvas, source, cacheKey) {
+    const target = canvas.getContext('2d');
+    const { data } = source.getContext('2d').getImageData(0, 0, source.width, source.height);
     let left = source.width,
       right = -1,
       top = source.height,

@@ -8,7 +8,7 @@ A cartoon platform fighter for one or two players. Choose Pip, Brisket, Noodle, 
 
 Choose your dog and select **Start fight**. To play offline, download or clone the repository, extract it if necessary, and open `docs/index.html` in a modern browser. The game, artwork, typeface, and sound effects work locally. A keyboard is enough for both solo and local versus. Touch controls appear on touchscreen devices.
 
-Each dog starts with three stocks. Dealing damage makes the next hit launch a rival farther. Knock a dog beyond the arena boundary to take a stock. A midair jump and **Up + Special** can bring you back to the ledge.
+Each dog starts with three stocks. Dealing damage makes the next hit launch a rival farther. Knock a dog beyond the arena boundary to take a stock. When a hard hit sends you tumbling, you can bend the launch and choose how to land. A midair jump and **Up + Special** can bring you back to the ledge.
 
 ## Publish on GitHub Pages
 
@@ -33,7 +33,7 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 | Attack | J | Comma | X |
 | Smash | I | N | RT or right stick |
 | Special | K | Period | B |
-| Shield or air-dodge | L | Slash | LB or RB |
+| Shield, air dodge, or landing tech | L | Slash | LB or RB |
 | Grab | U | M | Y |
 | Pause | Esc | Esc | Start |
 
@@ -44,6 +44,16 @@ Tap Attack with no direction to start your dog's jab combo. On the ground, aim l
 In midair, press Attack alone or aim forward, back, up, or down as you press it. Forward follows the direction your dog faces. You can drift backward and attack behind you. A short hop gives quick aerials time to connect. A heavy aerial takes longer to recover when it lands.
 
 In local versus, a single controller plays P2 alongside the P1 keyboard. With two controllers, the first plays P1 and the second plays P2.
+
+## Launch defense
+
+**Directional influence (DI).** During the brief freeze of a strong hit or throw, hold across the launch path to bend it by up to 18 degrees. Against a near-vertical throw, left or right changes where you come down. Against a sideways hit, holding up can buy height for a recovery. Your final direction during the freeze sets the angle. After hitstun ends, you can jump, use an aerial, or air dodge out of tumble.
+
+**Landing tech.** Tap Shield in the last 11 frames before your tumbling dog hits a platform. Tap it alone for a quick recovery in place. Add left or right to roll through a waiting opponent. A roll covers more ground and leaves a longer opening at the end. A mistimed press starts a 28-frame lockout, so timing beats repeated taps.
+
+**Missed tech.** After the bounce, tap Attack for a two-sided, 7% **Get-up Sweep**, tap a side for a get-up roll, or tap Up or Jump to stand. If you wait, your dog stands automatically. A prone dog can duck a high swing, but a low hit can catch it.
+
+Choose **Training → Launch practice**. Your selected opponent grabs you at 90% and uses its own up throw. Compare the dashed gold line showing the original direction with your solid aqua launch line, then try a tech where you land. Choose Launch practice again to repeat the same throw. The **Defense** tab in the Move list illustrates the controls for every dog.
 
 ## The four fighters
 

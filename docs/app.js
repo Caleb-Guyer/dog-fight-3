@@ -272,6 +272,12 @@
         tone(detail.name === 'jab2' ? 620 : 425, 175, 0.034, 0, 'square', 0.036);
         tone(detail.name === 'jab2' ? 155 : 122, 54, 0.069, 0, 'triangle', 0.095);
       }
+    } else if (name === 'tech') {
+      tone(560, 890, 0.055, 0, 'triangle', 0.075);
+      tone(910, 1250, 0.07, 0.043, 'square', 0.026);
+    } else if (name === 'knockdown') {
+      tone(125, 41, 0.1, 0, 'triangle', 0.095);
+      tone(110, 50, 0.045, 0.082, 'square', 0.025);
     } else if (name === 'grabCatch') {
       const pitch = { pip: 470, brisket: 130, noodle: 315, clover: 635 }[detail.f.kind];
       tone(pitch * 1.25, pitch, 0.052, 0, 'square', 0.035);
@@ -548,7 +554,7 @@
       ['Attack / charge', 'J', ',', 'X'],
       ['Smash / charge', 'I', 'N', 'RT / right stick'],
       ['Special', 'K', '.', 'B'],
-      ['Shield / air-dodge', 'L', '/', 'LB / RB'],
+      ['Shield / air dodge / tech', 'L', '/', 'LB / RB'],
       ['Grab / throw', 'U', 'M', 'Y'],
       ['Pause', 'Esc', 'Esc', 'Start'],
     ];
@@ -560,6 +566,7 @@
       'controls',
       'Controls',
       table +
+        '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
         '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
@@ -592,6 +599,23 @@
     back: 'After catch · Back',
     up: 'After catch · Up',
     down: 'After catch · Down',
+  };
+  const defenseGuide = {
+    tumble: {
+      label: 'Directional influence',
+      input: 'Aim during the hit freeze',
+      hint: 'Hold across the launch path to bend it toward your stick. Try left or right against an up throw. Your angle locks in as the freeze ends.',
+    },
+    techRoll: {
+      label: 'Tech landing',
+      input: 'Tap Shield just before landing',
+      hint: 'Leave movement neutral to land in place, or hold left or right to roll through. The roll covers more ground and takes longer to finish.',
+    },
+    floorAttack: {
+      label: 'Get-up Sweep',
+      input: 'After a knockdown · tap Attack',
+      hint: 'Sweep both sides for 7% as you get up. You can also tap a side to roll away, or tap Up or Jump to stand.',
+    },
   };
   function guideMoveRow(move, input, direction, category) {
     return (
@@ -639,9 +663,14 @@
             ...kit.throws,
           }
         : kit[section];
-    const rows = Object.entries(entries)
-      .map(([side, id]) => guideMoveRow(moveSet[id], inputs[side], side, section))
-      .join('');
+    const rows =
+      section === 'defense'
+        ? Object.entries(defenseGuide)
+            .map(([key, move]) => guideMoveRow(move, move.input, key, section))
+            .join('')
+        : Object.entries(entries)
+            .map(([side, id]) => guideMoveRow(moveSet[id], inputs[side], side, section))
+            .join('');
     const ledgeMove =
       '<h3 class="guide-section">Ledge attack</h3><ul class="move-rows guide-ledge">' +
       guideMoveRow(moves[kit.ledgeAttack], 'While hanging · tap Attack', 'ledge', 'ledge') +
@@ -653,6 +682,7 @@
         ['smashes', 'Smash attacks'],
         ['specials', 'Specials &amp; recovery'],
         ['throws', 'Grabs &amp; throws'],
+        ['defense', 'Defense'],
       ]
         .map(
           ([key, label]) =>
@@ -667,7 +697,12 @@
         .join('') +
       '</div>';
     let contents;
-    if (section === 'throws') {
+    if (section === 'defense') {
+      contents =
+        '<p class="recovery-note">Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again. Shield is L for P1, Slash for P2, or either bumper on a gamepad.</p><ul class="move-rows guide-defense">' +
+        rows +
+        '</ul>';
+    } else if (section === 'throws') {
       contents =
         '<p class="recovery-note"><strong>Grab</strong> Use U (P1), M (P2), Y on a gamepad, or Grab on touch. Grab during a run to catch ahead. Reverse and press Grab together to catch behind. After a catch, tap Attack to pummel or tap a direction to throw. Forward follows your new facing. Grab again also throws forward. Tap action buttons when caught to escape.</p><ul class="move-rows guide-throws">' +
         rows +
@@ -736,7 +771,7 @@
     const combo = world.lastCombo;
     const grip = world.grapple;
     const prompt = $('grapple-prompt');
-    prompt.hidden = !grip || grip.phase === 'throw';
+    prompt.hidden = !grip || grip.phase === 'throw' || !!world.launchPractice;
     if (!prompt.hidden) {
       const holder = world.dogs[grip.owner].stats.name;
       const captive = world.dogs[grip.target].stats.name;
@@ -820,6 +855,7 @@
     drillSide = null;
     drillWaiting = false;
     practiceSide = 'left';
+    $('launch-status').hidden = true;
     $('recovery-tip').hidden = true;
     document.body.classList.add('playing');
     document.body.classList.toggle('training-active', settings.mode === 'training');
@@ -829,6 +865,7 @@
     world = new Battle(settings, (name, e) => {
       view.event(name, e);
       sound(name, e);
+      if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
       if (name === 'ko') announce(e.f.stats.name + ' knocked out');
       if (name === 'ledge' && drillSide && e.f.index === 0)
         $('recovery-tip').textContent =
@@ -954,16 +991,55 @@
   let drillSide = null,
     drillWaiting = false,
     practiceSide = 'left';
+  function launchFeedback(name, e) {
+    const result = $('launch-status'),
+      tip = $('recovery-tip');
+    let label, message;
+    if (name === 'launchDI') {
+      label = 'Tap Shield before landing';
+      message =
+        'The dashed gold line shows the original launch. The solid aqua line shows yours. Hold a side at landing to tech roll.';
+    } else if (name === 'tech') {
+      label = e.dir ? 'Tech roll ' + (e.dir < 0 ? 'left' : 'right') : 'Tech in place';
+      message = 'Clean landing. Choose Launch practice to try the same throw again.';
+    } else if (name === 'knockdown') {
+      label = 'Missed tech';
+      message = 'Tap Attack to sweep, tap a side to roll, or tap Up or Jump to stand.';
+    } else if (name === 'getup') {
+      label =
+        e.type === 'floorAttack'
+          ? 'Get-up Sweep'
+          : e.dir
+            ? 'Get-up roll ' + (e.dir < 0 ? 'left' : 'right')
+            : 'Stand up';
+      message = 'Choose Launch practice to retry. Tap Shield shortly before your paws touch down.';
+    } else if (name === 'tumbleEscape' || name === 'ko') {
+      label = name === 'ko' ? 'Ring-out' : e.option;
+      message = 'Choose Launch practice to take the throw again.';
+    } else return;
+    result.dataset.result = name;
+    result.textContent = label;
+    tip.textContent = message;
+  }
   function drill(ledge, fromHang = false) {
     if (!world) return;
-    drillSide = ledge || null;
-    drillWaiting = !!ledge;
-    if (ledge) practiceSide = ledge;
+    const launch = ledge === 'launch';
+    drillSide = launch ? null : ledge || null;
+    drillWaiting = !!drillSide;
+    if (drillSide) practiceSide = drillSide;
     view = new FightView();
-    world.resetTraining(ledge, fromHang);
+    if (launch) world.resetLaunchPractice();
+    else world.resetTraining(ledge, fromHang);
     const player = world.dogs[0];
+    const result = $('launch-status');
+    result.hidden = !launch;
     let message = 'Positions reset.';
-    if (fromHang)
+    if (launch) {
+      result.dataset.result = 'ready';
+      result.textContent = 'Up throw incoming';
+      message =
+        'Start at 90%. Hold left or right as the throw hits to bend your launch. Tap Shield just before landing.';
+    } else if (fromHang)
       message =
         'Hanging from the ' + ledge + ' ledge. Tap Attack for ' + moves[player.kit.ledgeAttack].label + '.';
     else if (ledge) message = 'Jump or use Special to start. ' + player.kit.recovery;
@@ -978,6 +1054,7 @@
   $('ledge-training').onclick = () => drill('left');
   $('ledge-right').onclick = () => drill('right');
   $('ledge-attack-training').onclick = () => drill(practiceSide, true);
+  $('launch-training').onclick = () => drill('launch');
   const keys = [
     {
       left: 'KeyA',

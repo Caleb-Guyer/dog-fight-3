@@ -89,6 +89,19 @@
   const pivotWindow = 7 / 60;
   const ledgeDriftGrace = 12 / 60;
   const hangingFeet = [0, -13, 46];
+  const tumbleSpeed = 430;
+  const maxDI = (18 * Math.PI) / 180;
+  const techWindow = 11 / 60;
+  const techLockout = 28 / 60;
+  // Total frames and initial invulnerability frames for each landing option.
+  const floorFrames = {
+    tech: [19, 13],
+    techRoll: [29, 17],
+    downed: [75, 0],
+    floorRise: [23, 10],
+    getupRoll: [34, 13],
+    floorAttack: [36, 6],
+  };
   const attackHold = 0.21;
   const smashChargeTime = 1;
   const smashHoldLimit = 2;
@@ -227,6 +240,17 @@
   // Frames are [startup, active, recovery] at 60 Hz. Boxes are [forward, down from feet, half-width, half-height].
   // The launch angle is measured above horizontal. Negative angles spike an airborne opponent.
   const moves = {
+    getupSweep: {
+      label: 'Get-up Sweep',
+      frames: [11, 6, 19],
+      box: [0, -21, 59, 19],
+      floorAttack: true,
+      around: true,
+      dmg: 7,
+      base: 165,
+      growth: 2.7,
+      angle: 29,
+    },
     // Climb points are [frame, distance inward from the lip, feet below the surface].
     pipRailKick: {
       label: 'Rail Kick',
@@ -1655,6 +1679,10 @@
       usedPogo: false,
       stun: 0,
       reaction: null,
+      tumble: null,
+      floorAction: null,
+      techBuffer: 0,
+      techLock: 0,
       invuln: 0,
       respawning: 0,
       ledge: null,
@@ -1828,6 +1856,17 @@
     f.cutJump = false;
     f.reboundTime = 0;
   }
+  function bodyHeight(f) {
+    const action = f.floorAction;
+    if (!action) return f.stats.height;
+    if (action.type === 'downed') return f.stats.height * 0.42;
+    const rise = clamp((action.time / action.duration - 0.55) / 0.45, 0, 1);
+    return f.stats.height * (0.55 + 0.45 * rise);
+  }
+  function cpuLaunchAim(f) {
+    const towardCenter = f.x < 600 ? 1 : -1;
+    return { x: towardCenter, y: Math.abs(f.vx) > Math.abs(f.vy) ? -1 : 0 };
+  }
   class Battle {
     constructor(config, event = () => {}, random = Math.random) {
       this.stage = config.stage;
@@ -1844,6 +1883,7 @@
       this.ball = null;
       this.nextBall = 4;
       this.trainingDamage = 0;
+      this.launchPractice = null;
       this.lastCombo = { hits: 0, damage: 0 };
       this.hitStop = 0;
       this.bot = {
@@ -1884,6 +1924,7 @@
       this.lastCombo = { hits: 0, damage: 0 };
     }
     resetTraining(ledge = false, fromHang = false) {
+      this.launchPractice = null;
       this.dogs.forEach((f) => this.spawn(f, false));
       this.projectiles = [];
       this.ball = null;
@@ -1911,30 +1952,96 @@
         dummy.y = player.y = surface.y;
       }
     }
+    resetLaunchPractice() {
+      this.resetTraining();
+      this.dogs[0].damage = 90;
+      this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
+    }
+    practiceInput(dt) {
+      const drill = this.launchPractice;
+      if (drill.phase === 'ready') {
+        drill.time += dt;
+        if (drill.time >= 0.32 && !drill.grabStarted) {
+          drill.grabStarted = true;
+          return { ...idleInput, grab: true };
+        }
+        if (this.grapple && drill.time >= 0.95) return { ...idleInput, y: -1 };
+      } else if (drill.phase === 'flight') {
+        const [player, dummy] = this.dogs;
+        if (player.tumble && player.vy > 0 && dummy.ground >= 0) {
+          const p = this.terrain[dummy.ground];
+          const spacing = (dummy.stats.width + player.stats.width + 7) * (dummy.x < player.x ? -1 : 1);
+          const mark = clamp(player.x + player.vx * 0.1 + spacing, p.x1 + 20, p.x2 - 20);
+          if (Math.abs(mark - dummy.x) > 7) return { ...idleInput, x: Math.sign(mark - dummy.x) };
+        }
+      }
+      return idleInput;
+    }
+    releaseLaunch(f, input) {
+      const raw = { x: f.vx, y: f.vy };
+      const speed = Math.hypot(raw.x, raw.y);
+      // The perpendicular component rotates the launch once. Parallel input preserves the line.
+      const stick = Math.hypot(input.x, input.y);
+      const cross = (raw.x * input.y - raw.y * input.x) / (speed * Math.max(1, stick));
+      const angle = stick > 0.2 ? maxDI * clamp(cross, -1, 1) : 0;
+      f.vx = raw.x * Math.cos(angle) - raw.y * Math.sin(angle);
+      f.vy = raw.x * Math.sin(angle) + raw.y * Math.cos(angle);
+      f.tumble.pending = false;
+      this.emit('launchDI', {
+        f,
+        angle,
+        raw,
+        velocity: { x: f.vx, y: f.vy },
+        point: { x: f.x, y: f.y - f.stats.height * 0.52 },
+      });
+    }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
       if (this.hitStop > 0) {
         this.captureInput(this.dogs[0], input1);
         if (this.mode === 'local') this.captureInput(this.dogs[1], input2);
         this.hitStop = this.hitStop <= dt + 1e-8 ? 0 : this.hitStop - dt;
+        if (!this.hitStop) {
+          for (const f of this.dogs) {
+            if (!f.tumble?.pending) continue;
+            const input =
+              f.index === 0
+                ? input1
+                : this.mode === 'local'
+                  ? input2
+                  : this.mode === 'solo'
+                    ? cpuLaunchAim(f)
+                    : idleInput;
+            this.releaseLaunch(f, input);
+          }
+        }
         return;
       }
       this.time += dt;
       const old = this.terrain;
       this.terrain = platforms(this.stage, this.time);
-      const second = this.mode === 'solo' ? this.cpu(dt) : this.mode === 'local' ? input2 : idleInput;
-      const inputs = [input1, second];
+      const second =
+        this.mode === 'solo'
+          ? this.cpu(dt)
+          : this.mode === 'local'
+            ? input2
+            : this.launchPractice
+              ? this.practiceInput(dt)
+              : idleInput;
+      const inputs = [this.launchPractice?.phase === 'ready' ? idleInput : input1, second];
       for (const f of this.dogs) {
         if (f.ground !== -1) f.x += this.terrain[f.ground].x1 - old[f.ground].x1;
         this.captureInput(f, inputs[f.index]);
         if (!f.grip) this.move(f, inputs[f.index], dt);
+        f.techBuffer = Math.max(0, f.techBuffer - dt);
+        f.techLock = Math.max(0, f.techLock - dt);
       }
       if (this.grapple) this.advanceGrapple(dt);
       this.separateGroundedFighters();
       this.resolveMelee();
       for (const f of this.dogs) if (f.attack?.landed) f.attack = null;
       this.updateDiscs(dt);
-      if (this.fetch) this.updateBall(dt);
+      if (this.fetch && !this.launchPractice) this.updateBall(dt);
       const out = this.dogs.filter((f) => f.x < -115 || f.x > 1315 || f.y > 765 || f.y < -172);
       if (out.length) this.knockouts(out);
     }
@@ -1942,6 +2049,7 @@
       const [a, b] = this.dogs;
       if (a.ground < 0 || a.ground !== b.ground || a.respawning || b.respawning) return;
       if ([a, b].some((f) => f.attack?.moveId === 'pipSlide' && f.attack.time < f.attack.start)) return;
+      if ([a, b].some((f) => f.floorAction?.dir)) return;
       const spacing = a.stats.width + b.stats.width;
       const overlap = spacing - Math.abs(a.x - b.x);
       if (overlap <= 0) return;
@@ -1957,6 +2065,18 @@
       const grabX = input.grabX ?? input.x;
       f.prev = { ...input };
       if (f.respawning > 0) return;
+      const floor = f.floorAction;
+      if (floor?.type === 'downed') {
+        if (floor.time + inputWindow >= 12 / 60) {
+          if (pressed('attack')) floor.choice = { type: 'floorAttack', dir: 0 };
+          else if (pressed('jump') || (input.y < -0.5 && was.y >= -0.5))
+            floor.choice = { type: 'floorRise', dir: 0 };
+          else if (Math.abs(grabX) > 0.5 && (was.grabX ?? was.x) * Math.sign(grabX) <= 0.5)
+            floor.choice = { type: 'getupRoll', dir: Math.sign(grabX) };
+        }
+        return;
+      }
+      if (floor && floor.duration - floor.time > inputWindow) return;
       if (f.grip || f.attack?.grabAttempt) {
         const grip = f.grip;
         const face = grip?.face ?? f.face;
@@ -1999,7 +2119,17 @@
         }
       }
       if (pressed('jump')) f.jumpBuffer = inputWindow;
-      if (pressed('shield')) f.guardBuffer = inputWindow;
+      if (pressed('shield')) {
+        f.guardBuffer = inputWindow;
+        if (f.tumble) {
+          if (f.techLock <= 1e-8) {
+            f.techBuffer = techWindow;
+            f.techLock = techLockout;
+            f.tumble.techDir = Math.abs(input.x) > 0.45 ? Math.sign(input.x) : 0;
+          }
+          if (f.stun > 0 || this.floorAhead(f, techWindow + 1 / 60) >= 0) f.guardBuffer = 0;
+        }
+      }
       if (f.command?.grabStyle === 'dash' && grabX * f.command.runFace <= -runStick)
         f.command.grabStyle = 'pivot';
       if (f.command && !input[f.command.type]) f.command.released = true;
@@ -2059,6 +2189,80 @@
         }
       }
     }
+    floorAhead(f, horizon) {
+      if (f.vy < 0) return -1;
+      const gravity = 1540 * f.kit.gravity;
+      let soonest = horizon + 1e-8,
+        result = -1;
+      for (const [i, p] of this.terrain.entries()) {
+        const height = p.y - f.y;
+        if (height < -2 || (p.thin && f.drop > 0)) continue;
+        const t = (Math.sqrt(f.vy * f.vy + 2 * gravity * Math.max(0, height)) - f.vy) / gravity;
+        if (t >= soonest) continue;
+        const x = f.x + f.vx * t;
+        const atContact = p.thin && this.stage === 'laundry' ? platforms(this.stage, this.time + t)[i] : p;
+        if (x < atContact.x1 - 6 || x > atContact.x2 + 6) continue;
+        soonest = t;
+        result = i;
+      }
+      return result;
+    }
+    clearTumble(f, option) {
+      if (f.tumble && f.index === 0 && this.launchPractice?.phase === 'flight') {
+        this.launchPractice.phase = 'escaped';
+        this.emit('tumbleEscape', { f, option });
+      }
+      f.tumble = null;
+      f.techBuffer = 0;
+    }
+    startTumble(f, pending) {
+      f.tumble = {
+        time: 0,
+        pending,
+        willTech: this.mode === 'solo' && f.index === 1 && this.random() < 0.72,
+      };
+    }
+    beginFloorAction(f, type, dir = 0) {
+      const [total, safe] = floorFrames[type];
+      f.tumble = f.reaction = f.attack = f.command = f.run = null;
+      f.shield = f.cutJump = false;
+      f.vx = f.vy = f.stun = f.techBuffer = f.guardBuffer = f.jumpBuffer = f.landingLag = 0;
+      f.invuln = safe / 60;
+      f.floorAction = { type, time: 0, duration: total / 60, dir };
+      if (type === 'floorAttack') beginAttack(f, 'floorAttack', 0, 0, 'getupSweep');
+      const event =
+        type === 'downed' ? 'knockdown' : type === 'tech' || type === 'techRoll' ? 'tech' : 'getup';
+      if (f.index === 0 && this.launchPractice?.phase === 'flight') this.launchPractice.phase = 'landed';
+      this.emit(event, { f, type, dir, point: { x: f.x, y: f.y } });
+    }
+    advanceFloor(f, dt) {
+      const a = f.floorAction;
+      const before = a.time;
+      a.time += dt;
+      if (a.time + 1e-8 >= floorFrames[a.type][1] / 60) f.invuln = 0;
+      if (a.type === 'downed') {
+        if (a.time + 1e-8 >= 12 / 60 && a.choice) this.beginFloorAction(f, a.choice.type, a.choice.dir);
+        else if (a.time + 1e-8 >= a.duration) this.beginFloorAction(f, 'floorRise');
+        return;
+      }
+      if (a.dir) {
+        const progress = (t) => {
+          const p = clamp((t - 2 / 60) / (a.duration - 8 / 60), 0, 1);
+          return p * p * (3 - 2 * p);
+        };
+        const stage = this.terrain[f.ground];
+        const distance = (65 + f.stats.speed * 0.15) * (a.type === 'techRoll' ? 1 : 0.88);
+        f.x = clamp(
+          f.x + a.dir * distance * (progress(a.time) - progress(before)),
+          stage.x1 + 2,
+          stage.x2 - 2,
+        );
+      }
+      if (f.attack?.floorAttack) f.attack.time = a.time;
+      if (a.time + 1e-8 >= a.duration) {
+        f.floorAction = f.attack = null;
+      }
+    }
     move(f, input, dt) {
       for (const key of [
         'stun',
@@ -2088,6 +2292,11 @@
       }
       const jumpTap = f.jumpBuffer > 0;
       const attackTap = f.command?.type === 'attack';
+      if (f.floorAction) return this.advanceFloor(f, dt);
+      if (f.tumble) {
+        if (f.tumble.pending) this.releaseLaunch(f, input);
+        f.tumble.time += dt;
+      }
       if (f.ledge) {
         f.ledgeTime += dt;
         const inward = f.ledge.left ? 1 : -1;
@@ -2154,6 +2363,7 @@
       f.shieldHP = clamp(f.shieldHP + (f.shield ? -0.13 : 0.24) * dt, 0, 1);
       if (f.shield && f.shieldHP <= 0) this.breakShield(f);
       if (free && !grounded && f.guardBuffer > 0 && !f.usedDodge) {
+        this.clearTumble(f, 'Air dodge');
         f.throwBounce = null;
         f.guardBuffer = 0;
         f.usedDodge = true;
@@ -2181,6 +2391,7 @@
       }
       if (free && f.stun <= 0 && f.dodge <= 0 && !f.shield) {
         if (!f.smashCharge && f.jumpBuffer > 0 && (f.jumps > 0 || f.coyote > 0)) {
+          this.clearTumble(f, 'Jump');
           f.throwBounce = null;
           if (grounded && direction === 1 && this.terrain[f.ground].thin) {
             f.drop = 0.24;
@@ -2261,6 +2472,7 @@
         f.cutJump = false;
       }
       if (f.attack) {
+        if (f.tumble) this.clearTumble(f, 'Aerial action');
         const a = f.attack;
         a.time += dt;
         if (a.projectile && !a.fired && a.time + 1e-8 >= a.start) {
@@ -2277,7 +2489,10 @@
         if (a.time >= a.end) f.attack = null;
       }
       const sliding = f.attack?.motionLocked;
-      if (f.stun > 0) {
+      if (f.tumble) {
+        f.vx *= Math.pow(0.68, dt);
+        if (!f.stun) f.vx += input.x * 175 * dt;
+      } else if (f.stun > 0) {
         f.vx *= Math.pow(0.68, dt);
         f.vx += input.x * 100 * dt;
       } else if (f.ground >= 0 && f.attack?.brake) {
@@ -2323,6 +2538,7 @@
               f.y = this.terrain[landing].y - 1;
               f.vy = -Math.min(650, lift + landingSpeed * scale);
               f.vx *= carry;
+              if (Math.hypot(f.vx, f.vy) >= tumbleSpeed) this.startTumble(f, false);
               this.emit('throwBounce', {
                 f,
                 owner: this.dogs[owner],
@@ -2335,6 +2551,14 @@
             f.ground = landing;
             f.y = this.terrain[landing].y;
             f.vy = 0;
+            if (f.tumble) {
+              restoreAir(f);
+              if (f.techBuffer > 1e-8) {
+                const dir = Math.abs(input.x) > 0.45 ? Math.sign(input.x) : f.tumble.techDir || 0;
+                this.beginFloorAction(f, dir ? 'techRoll' : 'tech', dir);
+              } else this.beginFloorAction(f, 'downed');
+              return;
+            }
             if (f.attack?.airSide) {
               const a = f.attack,
                 last = a.second || a;
@@ -2394,6 +2618,7 @@
       return best;
     }
     hangLedge(f, edge) {
+      this.clearTumble(f, 'Ledge catch');
       f.run = null;
       f.throwBounce = null;
       f.face = edge.left ? 1 : -1;
@@ -2444,6 +2669,8 @@
       this.grapple = owner.grip = target.grip = grip;
       for (const f of [owner, target]) {
         cancelCharge(f);
+        f.tumble = f.floorAction = null;
+        f.techBuffer = 0;
         f.run = null;
         f.attack = f.command = f.reaction = f.throwBounce = null;
         f.chainWindow = f.jumpBuffer = f.guardBuffer = f.reboundTime = f.landingLag = f.stun = 0;
@@ -2913,6 +3140,7 @@
         const beatIndex = beat === attack.second ? 1 : 0;
         const area = this.attackArea(f);
         const rival = this.dogs[1 - f.index];
+        const height = bodyHeight(rival);
         if (attack.grabAttempt) {
           if (
             !this.grapple &&
@@ -2920,9 +3148,10 @@
             !rival.respawning &&
             !rival.dodge &&
             !rival.regrabLock &&
+            rival.floorAction?.type !== 'downed' &&
             (attack.grabStyle === 'standing' || (rival.x - f.x) * f.face >= 0) &&
             Math.abs(rival.x - area.x) <= area.rx + rival.stats.width &&
-            Math.abs(rival.y - rival.stats.height * 0.52 - area.y) <= area.ry + rival.stats.height * 0.4
+            Math.abs(rival.y - height * 0.52 - area.y) <= area.ry + height * 0.4
           )
             catches.push({ f, rival, attack });
           continue;
@@ -2953,7 +3182,7 @@
         if (attack.edge && (rival.x - attack.edge.x) * f.face < 0) continue;
         if (
           Math.abs(rival.x - area.x) > area.rx + rival.stats.width ||
-          Math.abs(rival.y - rival.stats.height * 0.52 - area.y) > area.ry + rival.stats.height * 0.4
+          Math.abs(rival.y - height * 0.52 - area.y) > area.ry + height * 0.4
         )
           continue;
         attack.hitBeat = beatIndex;
@@ -2962,7 +3191,7 @@
           const [sx, sy, rx, ry] = beat.sweetSpot.box;
           if (
             Math.abs((rival.x - f.x) * f.face - sx) <= rx &&
-            Math.abs(rival.y - rival.stats.height * 0.52 - f.y - sy) <= ry
+            Math.abs(rival.y - height * 0.52 - f.y - sy) <= ry
           )
             sweet = beat.sweetSpot;
         }
@@ -2975,7 +3204,7 @@
           face: hitFacing(rival.x),
           point: {
             x: clamp(area.x, rival.x - rival.stats.width, rival.x + rival.stats.width),
-            y: clamp(area.y, rival.y - rival.stats.height, rival.y - 4),
+            y: clamp(area.y, rival.y - height, rival.y - 4),
           },
         });
       }
@@ -3097,6 +3326,8 @@
       }
       if (target.grip) this.breakGrapple(false);
       target.throwBounce = null;
+      target.floorAction = target.tumble = null;
+      target.techBuffer = target.dodge = 0;
       this.dealDamage(target, damage, move?.preserveCombo);
       const speed = (base + target.damage * growth) / target.stats.weight;
       if (move) {
@@ -3146,7 +3377,14 @@
       const emphatic =
         !!move?.hard || (name === 'heavy' && !move?.setupHit) || name === 'shoulder' || speed > 630;
       target.reaction = { duration: target.stun, face: -face, hard: emphatic || speed > 460 };
-      this.hitStop = Math.max(this.hitStop, emphatic ? 4 / 60 : 2 / 60);
+      const launchSpeed = Math.hypot(target.vx, target.vy);
+      const finish = !move?.setupHit && !move?.second && !move?.pull && !move?.bounce && name !== 'snare';
+      if (finish && launchSpeed >= tumbleSpeed) this.startTumble(target, true);
+      if (target.index === 0 && this.launchPractice?.phase === 'ready' && name === 'throw') {
+        this.launchPractice.phase = 'flight';
+      }
+      const hitFrames = target.tumble ? clamp(4 + Math.floor(launchSpeed / 180), 6, 9) : emphatic ? 4 : 2;
+      this.hitStop = Math.max(this.hitStop, hitFrames / 60);
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic });
       return true;
     }
@@ -3155,6 +3393,7 @@
         const owner = this.dogs[d.owner],
           target = this.dogs[1 - d.owner];
         if (d.caught) return false;
+        const height = bodyHeight(target);
         d.age += dt;
         const impact = (direction) => {
           const spec = smashes[d.moveId] || specials[d.moveId] || specials.cloverRound;
@@ -3182,7 +3421,7 @@
             !target.invuln &&
             !target.respawning &&
             Math.abs(target.x - d.x) <= target.stats.width + 15 &&
-            d.y >= target.y - target.stats.height - 5 &&
+            d.y >= target.y - height - 5 &&
             d.y <= target.y + 5
           ) {
             impact(face);
@@ -3245,7 +3484,7 @@
               !target.invuln &&
               !target.respawning &&
               Math.abs(target.x - d.x) < target.stats.width + 13 &&
-              d.y >= target.y - target.stats.height - 7 &&
+              d.y >= target.y - height - 7 &&
               d.y <= target.y + 5
             ) {
               impact(Math.sign(d.vx));
@@ -3269,7 +3508,8 @@
         if (
           !d.hit[pass] &&
           Math.abs(target.x - d.x) < target.stats.width + 16 &&
-          Math.abs(target.y - 39 - d.y) < 42 &&
+          Math.abs(target.y - (target.floorAction ? height * 0.52 : 39) - d.y) <
+            (target.floorAction ? height * 0.5 + 8 : 42) &&
           target.invuln <= 0
         ) {
           impact(Math.sign(d.vx));
@@ -3318,10 +3558,12 @@
       }
       if (b.owner >= 0 && Math.abs(b.vx) > 150) {
         const target = this.dogs[1 - b.owner];
+        const height = bodyHeight(target);
         if (
           target.invuln <= 0 &&
           Math.abs(b.x - target.x) < target.stats.width + 11 &&
-          Math.abs(b.y - target.y + 37) < 43
+          Math.abs(b.y - target.y + (target.floorAction ? height * 0.52 : 37)) <
+            (target.floorAction ? height * 0.5 + 10 : 43)
         ) {
           this.hit(
             target,
@@ -3351,6 +3593,7 @@
     knockouts(out) {
       if (this.grapple) this.breakGrapple(false);
       for (const f of out) {
+        if (f.index === 0 && this.launchPractice) this.launchPractice.phase = 'out';
         this.emit('ko', { f, x: f.x, y: f.y });
         if (this.mode !== 'training') f.stocks--;
         this.projectiles = this.projectiles.filter((d) => d.owner !== f.index);
@@ -3417,6 +3660,41 @@
       const targetX = opponentOffstage ? clamp(foe.x, closest.x1 + 37, closest.x2 - 37) : foe.x;
       const spacing = f.kind === 'noodle' ? 88 : f.kind === 'clover' ? 57 : 40;
       result.x = Math.abs(targetX - f.x) > (opponentOffstage ? 10 : spacing) ? Math.sign(targetX - f.x) : 0;
+      if (f.floorAction) {
+        result.x = 0;
+        result.jump = false;
+        if (f.floorAction.type === 'downed' && f.floorAction.time >= 15 / 60) {
+          if (far < 70 && !foe.shield) {
+            result.attack = true;
+            result.tapped = { attack: true };
+          } else if (far < 140) {
+            const away = -Math.sign(dx);
+            result.x = f.x + 90 * away > closest.x1 && f.x + 90 * away < closest.x2 ? away : -away;
+          } else result.jump = true;
+        }
+        return result;
+      }
+      if (f.tumble && !unsafe) {
+        result.jump = false;
+        result.x = 0;
+        const landing = this.floorAhead(f, 7 / 60);
+        if (landing >= 0 && f.tumble.willTech && f.techLock <= 1e-8) {
+          const p = this.terrain[landing];
+          const away = -Math.sign(dx);
+          result.x = far < 140 && f.x + 95 * away > p.x1 && f.x + 95 * away < p.x2 ? away : 0;
+          result.shield = true;
+          result.tapped = { shield: true };
+          f.tumble.rollDir = result.x;
+        } else if (f.techBuffer > 0) result.x = f.tumble.rollDir || 0;
+        return result;
+      }
+      if (foe.floorAction?.type === 'downed' && f.ground >= 0 && far < f.stats.reach + 15 && !f.attack) {
+        result.x = Math.sign(dx);
+        result.y = 1;
+        result.attack = true;
+        result.tapped = { attack: true };
+        return result;
+      }
       if (f.ledge) {
         const edge = f.ledge;
         const face = edge.left ? 1 : -1;

@@ -831,6 +831,87 @@
     ........#######.......
   `);
 
+  // Side-lying torsos keep the rump, chest markings, and tail readable at floor height.
+  const restingBodies = {
+    pip: {
+      at: [-23, -12], collar: [8, 7], tailAt: [-31, -11],
+      coat: tile(`
+        .......#############......
+        ....###cLLLLLLLwWWWW##....
+        ..##clLHHHLLLLlwWWWWWW#...
+        .#clLLLLLLLlllwwWWWWWWW#..
+        #clLLLLLlllllcwwWWWWWWw#..
+        #clLLlllccccccwWWWWWWw#...
+        #cclllllcccCccwwWWWww#....
+        .#ccccccCCcccCwWWwww#.....
+        ..##cccccccCccwwww##......
+        ....##############........
+      `),
+      tail: tile(`..###........ .#WWw##...... #WwwLll##.... .###clLLl###. ....##clLllC# ......######.`),
+    },
+    brisket: {
+      at: [-23, -13], collar: [7, 7], tailAt: [-29, -12],
+      coat: tile(`
+        .......################.....
+        ....###bBBBiiIIiiiBBBww##...
+        ..##bBBBiiiIIIIiiBBwwwWWw#..
+        .#bBBBIIIIIiiiBBiwwWWWWWWw#.
+        #bBBBiiiiiiBBBBiwwWWWWWWWWw#
+        #bBBBBBBBBBBBBBiwwWWWWWWWWw#
+        #bbBBBBBBBBBBbiwwWWWWWWWWw#.
+        #bbbBBBBbbbBbiwwWWWWWWwww#..
+        .#bbbbbbbbbbiwwWWWWWWww##...
+        ..##bbbbbbiwwwwWWwwww##.....
+        ....#################.......
+      `),
+      tail: tile(`..#####.. .#iBBIi#. #bBI#BI#. #bbBBb#.. .#bbbBB#. ..#####..`),
+    },
+    noodle: {
+      at: [-25, -11], collar: [6, 6], tailAt: [-36, -10],
+      coat: tile(`
+        .......##################........
+        ....###cOOOOOllOOOOOllLLl##......
+        ..##cOOOllllOOOOOllllLLLll#......
+        .#cOOOlllOOOOOlllllllLLLLLl#.....
+        #ccOOOOOOccccccccccllLLLLLl#.....
+        #cccOOccccCCCCcccclllLLLLl#......
+        .#ccccccccCCCCCcccllLLLll#.......
+        ..##CcccccccCCcccccclll##........
+        ....###################..........
+      `),
+      tail: tile(`###............. #cO##........... .##OO###........ ...##ccO####.... .....###ccOO###. ........###cccC# ...........####.`),
+    },
+    clover: {
+      at: [-24, -13], collar: [8, 7], tailAt: [-38, -12],
+      coat: tile(`
+        .......##############......
+        ....###kkkkppppkkWWwW##....
+        ..##kkkppppppkkkWWwWWWw#...
+        .#kkkppppppkkkkWWWWWWWWw#..
+        #kkppppkkkkkkkWwWWWWWWWW#..
+        #kkkkkkkkkkkkkkwWWWWWWWw#..
+        .#kkkkkkkk##kkkwwWWWWWw#...
+        ..##kkkk##kkkwwWWWWwww#....
+        ...#kk##kkkkkwwWWwww##.....
+        ....################.......
+      `),
+      tail: tile(`....####............ ..##WWww###......... .#WWWwwwppp###...... #WWWwwpppkpppp###... .#wwpkkpppkkkkppp##. ..##kkkppkkkkkkkkkk# ....###kkkkkkkkk###. .......#########....`),
+    },
+  };
+  const tuckedTails = {
+    pip: tile(`....###.. ..##wWW#. .#lLLw##. #clL###.. #clLL##.. .#clLll#. ..######.`),
+    brisket: tile(`...####.. .##iBBi#. #bBI#Bi# #bbBBb#. .#bbbb#. ..#####.`),
+    noodle: tile(`....#####. ..##cOOOC# .#cO##CC#. #cO#..##.. #cOO##.... .#ccOO##.. ..###ccC#. .....####.`),
+    clover: tile(`.....####.. ...##WWww#. ..#WWWwwp#. .#WWwpkk#.. #kppkkkk#.. #kkkppkkk#. .#kkkkkkk#. ..########.`),
+  };
+  const foldedEars = Object.fromEntries(Object.entries(fighters).map(([name, dog]) => [
+    name, dog.ears.map(([x, y, pixels]) => {
+      const height = Math.max(3, Math.round(pixels.length * 0.58));
+      const rows = Array.from({ length: height }, (_, i) => pixels[Math.round(i * (pixels.length - 1) / (height - 1))]);
+      return [x, y + Math.min(Math.max(0, -y), pixels.length - height), rows];
+    }),
+  ]));
+
   // Three hand-set keys per move: load the weight, strike, then carry momentum past contact.
   // Grounded paw positions use zero as the sole of the shoe. Angles are in degrees.
   const strikes = {
@@ -2950,6 +3031,26 @@
   const captiveLoops = ['grappled', 'grappledHigh'];
   const captiveFlinches = ['grappledFlinch', 'grappledHighFlinch'];
   const captivePoses = [...captiveLoops, ...captiveFlinches];
+  const landingPoses = ['tumble', 'tech', 'techRoll', 'downed', 'floorRise', 'floorAttack'];
+
+  const landingStyles = {
+    pip: {
+      air: [-18, 25, 79, 132, 181, 230, 276, 313], roll: [14, 52, 108, 162, 227, 298, 339, 360],
+      slap: [-14, -23, -13, -5, 4, 2, 0, 0], cheek: [6, 13, 7], hips: -1, spring: 4,
+    },
+    brisket: {
+      air: [-28, 11, 54, 114, 178, 231, 267, 299], roll: [16, 43, 88, 142, 209, 284, 329, 360],
+      slap: [-21, -31, -20, -12, -4, 2, 0, 0], cheek: [5, 12, 6], hips: -1, spring: 2,
+    },
+    noodle: {
+      air: [-25, 8, 61, 123, 180, 226, 263, 298], roll: [11, 40, 96, 155, 221, 287, 336, 360],
+      slap: [-9, -19, -14, -7, 2, 3, 0, 0], cheek: [8, 12, 4], hips: -2, spring: 3,
+    },
+    clover: {
+      air: [-11, 33, 83, 141, 200, 247, 287, 322], roll: [18, 59, 116, 171, 234, 305, 344, 360],
+      slap: [-14, -25, -15, -4, 8, 3, 0, 0], cheek: [7, 14, 7], hips: -1, spring: 4,
+    },
+  };
   const torsoAngles = {
     attack: [-4, 1, 7, 5, 1, 0],
     jab2: [7, 2, -8, -4, 1, 0],
@@ -3111,6 +3212,18 @@
 
   function frameNumber(pose, time, phase) {
     const tick = (period) => Math.floor((Math.abs(time) % 1000000) * period);
+    if (pose === 'tumble') return tick(14) % 8;
+    if (pose === 'downed') {
+      if (phase < 0.13) return 0;
+      if (phase < 0.33) return 1;
+      if (phase < 0.53) return 2;
+      if (phase < 0.75) return 3;
+      if (phase < 1) return 4;
+      return 5 + (tick(2) % 2);
+    }
+    if (pose === 'tech' || pose === 'techRoll' || pose === 'floorRise')
+      return Math.min(7, Math.floor(phase * 8));
+    if (pose === 'floorAttack') return actionCel(pose, phase);
     if (captiveLoops.includes(pose) || kitMoves[pose]?.hold) return Math.floor(phase * 8) % 8;
     const lip = kitMoves[pose]?.lip;
     if (lip && phase <= 0.65) {
@@ -3211,6 +3324,287 @@
     if (frame === 3) s.eye = shutEyes;
   }
 
+  function spinningStance(s, name, pose, frame) {
+    const style = landingStyles[name];
+    const rolling = pose === 'techRoll';
+    const fold = (rolling ? [1, 3, 5, 6, 4, 2, 0, 0] : [0, 2, 4, 5, 4, 2, 1, 0])[frame];
+    const flare = [2, 1, -1, -3, -2, 0, 3, 2][frame];
+    if (rolling && frame === 7) {
+      s.guardFloor = true;
+      return;
+    }
+    s.roll = (rolling ? style.roll : style.air)[frame];
+    s.floorRoll = rolling;
+    s.bodyY = 1 + Math.round(fold / 2);
+    s.torsoTurn = rolling ? 11 + fold : -14 - fold;
+    s.headX = -1 - Math.floor(fold / 2);
+    s.headY = 1 + fold;
+    s.headTurn = rolling ? 5 + 3 * fold : -17 + 4 * fold;
+    s.shoulderY = -1;
+    s.fistX = (rolling ? 6 : 3) - 2 * fold;
+    s.fistY = (rolling ? 4 : -3) - 2 * fold;
+    s.fistTurn = -20 - 9 * fold;
+    s.rearX = -8 + fold;
+    s.rearY = -1 - 2 * fold;
+    s.rearTurn = -13 - 7 * fold;
+    s.leftX = (rolling ? -2 : 1) + fold;
+    s.leftY = -1 - 2 * fold;
+    s.leftFootTurn = -13 + 7 * fold;
+    s.rightX = 6 - fold;
+    s.rightY = -3 - 2 * fold;
+    s.rightFootTurn = 22 + 8 * fold;
+    s.frontKneeY = -2 - Math.floor(fold / 2);
+    s.kneeOut = 1;
+    s.ear = name === 'noodle' ? flare * 2 : flare;
+    s.scarf = -3 * flare;
+    s.tail = 2 * flare;
+    s.charmTurn = -13 * flare;
+    s.eye = rolling ? (frame < 2 ? shutEyes : null) : fold > 3 ? hitEyes : startledEyes;
+    s.packTail = fold >= 2 || (rolling && frame < 6);
+    s.foldEars = rolling ? frame >= 2 && frame <= 5 : fold >= 4;
+    if (name === 'brisket') {
+      s.rightX -= 3;
+      s.leftX += 1;
+      s.headY += 2;
+      s.fistY -= 2;
+      s.rearX += 2;
+      s.kneeOut += 2;
+      s.extraHaunch = fold >= 3;
+    } else if (name === 'noodle') {
+      s.torsoTurn -= 5;
+      s.headX += 2;
+      s.rearX -= 3;
+      s.leftX -= 2;
+      s.tailLift = -2 + flare;
+    } else if (name === 'clover') {
+      s.fistX -= 2;
+      s.fistY -= 2;
+      s.leftY -= 2;
+      s.palmCharm = true;
+    } else {
+      s.rightX += Math.max(0, 4 - fold);
+      s.rightY -= 2;
+    }
+    if (rolling && frame >= 5) {
+      // The lead foot unfolds from the roll, then the rear foot takes the weight.
+      s.rightX = frame === 5 ? 10 : 5;
+      s.rightY = frame === 5 ? -6 : -1;
+      s.leftX = frame === 5 ? 3 : -3;
+      s.leftY = frame === 5 ? -6 : 0;
+      s.fistX = frame === 5 ? 8 : 1;
+      s.fistY = frame === 5 ? 1 : -2;
+      s.rearX = -5;
+      s.headTurn = frame === 5 ? 12 : 2;
+      s.showSole = frame === 5;
+      s.kickFront = frame === 5;
+    }
+  }
+
+  function restingStance(s, name) {
+    const style = landingStyles[name];
+    s.lowBody = true;
+    s.bodyX = style.hips;
+    [s.headX, s.headY, s.headTurn] = style.cheek;
+    s.shoulderY = 8;
+    s.leftX = -5;
+    s.leftY = -1;
+    s.leftFootTurn = 23;
+    s.rightX = -9;
+    s.rightFootTurn = -11;
+    s.fistX = 5;
+    s.fistY = 9;
+    s.fistTurn = 17;
+    s.rearX = -2;
+    s.rearY = 8;
+    s.frontElbowX = -3;
+    s.kneeOut = 3;
+    s.ear = 2;
+    s.scarf = -2;
+    s.openHands = 'front';
+    s.guardFloor = true;
+    if (name === 'brisket') {
+      s.fistX += 2;
+      s.rearX -= 2;
+      s.kneeOut += 2;
+    } else if (name === 'noodle') {
+      s.leftX -= 2;
+      s.headTurn -= 2;
+      s.ear += 2;
+      s.charmTurn = -16;
+    } else if (name === 'clover') {
+      s.hideCharm = true;
+      s.heldItem = 'disc';
+      s.heldAngle = -8;
+      s.fistX -= 2;
+    }
+  }
+
+  function downedStance(s, name, frame) {
+    restingStance(s, name);
+    const jolt = [3, -2, 1, 2, 0, 0, -1][frame];
+    s.bodyY += jolt;
+    s.headY += [2, -2, 0, 1, 0, 0, 0][frame];
+    s.headTurn += [8, -8, -2, 4, 1, 0, -1][frame];
+    s.fistX += [4, 2, 3, 1, 0, 0, -1][frame];
+    s.rearX -= [4, 3, 2, 1, 0, 0, 0][frame];
+    s.leftY -= [0, 4, 2, 0, 0, 0, 0][frame];
+    s.rightY -= [0, 2, 1, 0, 0, 0, 0][frame];
+    s.ear += jolt;
+    s.scarf -= jolt;
+    s.tail = [3, -2, 1, 2, 0, 0, 1][frame];
+    s.eye = frame < 2 || frame === 3 ? shutEyes : null;
+    s.roll = [0, -7, -3, 1, 0, 0, 0][frame];
+    s.floorRoll = true;
+    s.floorLift = frame === 1 ? landingStyles[name].spring : frame === 2 ? 1 : 0;
+  }
+
+  function risingStance(s, name, frame, breakfall) {
+    const style = landingStyles[name];
+    if (frame < 4) {
+      restingStance(s, name);
+      const lift = (breakfall ? [0, 1, 5, 9] : [0, 2, 6, 9])[frame];
+      s.bodyY -= Math.floor(lift / 4);
+      s.headY -= lift;
+      s.headTurn -= lift;
+      s.shoulderY -= Math.floor(lift / 2);
+      s.torsoTurn = -Math.floor(lift / 2);
+      s.fistY += Math.floor(lift / 2);
+      s.fistX += (breakfall ? [9, 11, 7, 3] : [0, 1, 3, 2])[frame];
+      s.rightX += Math.round(lift / 2);
+      s.rearX -= breakfall ? 4 : 0;
+      s.leftX += Math.floor(lift / 3);
+      s.ear -= Math.floor(lift / 3);
+      if (breakfall) {
+        s.openHands = 'both';
+        s.eye = frame < 2 ? shutEyes : null;
+        s.scarf = 5 - 2 * frame;
+        s.roll = -style.slap[frame];
+        s.floorRoll = true;
+        s.packTail = true;
+        s.foldEars = frame < 2;
+      }
+      return;
+    }
+    const crouch = [4, 2, 1, 0][frame - 4];
+    s.guardFloor = true;
+    s.bodyY = crouch;
+    s.headY = Math.round(crouch / 2);
+    s.headTurn = 2 * crouch;
+    s.torsoTurn = (breakfall ? 2 : 1) * crouch;
+    s.kneeOut = crouch;
+    s.leftX = -Math.ceil(crouch / 2);
+    s.rightX = crouch;
+    s.fistX = breakfall ? 2 * crouch : crouch;
+    s.fistY = breakfall ? -crouch : crouch;
+    s.rearX = -crouch;
+    s.rearY = -Math.ceil(crouch / 2);
+    s.ear = crouch;
+    s.scarf = -crouch;
+    if (breakfall) {
+      s.roll = style.slap[frame];
+      s.floorRoll = frame < 7;
+    }
+  }
+
+  function floorSweepStance(s, name, frame) {
+    if (frame > 4) {
+      risingStance(s, name, [3, 5, 7][frame - 5], false);
+      return;
+    }
+    restingStance(s, name);
+    if (name === 'noodle') {
+      s.hideCharm = true;
+      s.heldItem = 'rope';
+      s.heldAngle = [-33, -49, -36, -4, -8][frame];
+      s.clasp = 'front';
+    }
+    if (frame < 3) {
+      s.bodyX -= frame;
+      s.headY -= 2 * frame;
+      s.headTurn -= 5 * frame;
+      s.torsoTurn = -4 * frame;
+      s.fistX -= 2 * frame;
+      s.fistY -= frame;
+      s.rearY -= 2 * frame;
+      s.rightX += 2 * frame;
+      s.rightY -= 2 * frame;
+      s.leftX += frame;
+      s.leftFootTurn += 9 * frame;
+      s.scarf += 2 * frame;
+      return;
+    }
+    const rear = frame === 4;
+    s.bodyX = rear ? -1 : 0;
+    s.headX -= rear ? 1 : 3;
+    s.headY -= 5;
+    s.headTurn = rear ? -5 : 7;
+    s.torsoTurn = rear ? -9 : 7;
+    s.ear = rear ? -3 : 3;
+    s.scarf = rear ? -5 : 4;
+    s.tail = rear ? -2 : 3;
+    if (name === 'pip') {
+      s.packTail = true;
+      s.soleSide = 'both';
+      s.showSole = s.kickFront = s.kickRear = true;
+      s.rightX = rear ? 15 : 18;
+      s.rightY = rear ? -4 : -7;
+      s.rightFootTurn = rear ? 58 : 69;
+      s.leftX = rear ? -13 : -12;
+      s.leftY = rear ? -7 : -5;
+      s.leftFootTurn = rear ? -106 : -86;
+      s.frontKneeY = -3;
+      s.fistX = -4;
+      s.fistY = 11;
+      s.rearX = -9;
+      s.rearY = 5;
+    } else if (name === 'brisket') {
+      s.lowBody = false;
+      s.bodyY = 4;
+      s.headY = 0;
+      s.shoulderY = 1;
+      s.twoHandsFront = s.powerArm = true;
+      s.openHands = 'both';
+      s.fistX = rear ? 12 : 15;
+      s.fistY = rear ? -2 : -4;
+      s.fistTurn = rear ? 48 : 57;
+      s.rearX = rear ? -33 : -30;
+      s.rearY = rear ? -1 : 2;
+      s.rearTurn = rear ? -118 : -104;
+      s.leftX = -3;
+      s.rightX = 4;
+      s.kneeOut = 4;
+    } else if (name === 'noodle') {
+      s.floorTailReach = rear ? 29 : 27;
+      s.fistX = rear ? 4 : 7;
+      s.fistY = 1;
+      s.fistTurn = -8;
+      s.rearX = -8;
+      s.rearY = 6;
+      s.rightX = -2;
+      s.leftX = -4;
+      s.ear += 2;
+    } else {
+      s.packTail = true;
+      s.soleSide = rear ? 'front' : 'rear';
+      s.showSole = true;
+      s.kickFront = rear;
+      s.kickRear = !rear;
+      s.heldAngle = rear ? -174 : -4;
+      s.fistX = rear ? -26 : 6;
+      s.fistY = 5;
+      s.fistTurn = rear ? -135 : 20;
+      s.rearX = rear ? 1 : -10;
+      s.rearY = 8;
+      s.leftX = rear ? -1 : -13;
+      s.leftY = rear ? 0 : -6;
+      s.leftFootTurn = rear ? 10 : -109;
+      s.rightX = rear ? 17 : 2;
+      s.rightY = rear ? -6 : -1;
+      s.rightFootTurn = rear ? 66 : 13;
+      s.kneeOut = 3;
+    }
+  }
+
   function stance(name, pose, frame) {
     const s = {
       bodyX: 0,
@@ -3273,6 +3667,11 @@
       twoHandsFront: false,
       impactPaw: null,
       floorRoll: false,
+      floorLift: 0,
+      lowBody: false,
+      floorTailReach: 0,
+      packTail: false,
+      foldEars: false,
       behindHead: false,
     };
     if (Object.prototype.hasOwnProperty.call(kitMoves, pose)) {
@@ -3284,6 +3683,20 @@
       return s;
     }
     switch (pose) {
+      case 'tumble':
+      case 'techRoll':
+        spinningStance(s, name, pose, frame);
+        break;
+      case 'tech':
+      case 'floorRise':
+        risingStance(s, name, frame, pose === 'tech');
+        break;
+      case 'downed':
+        downedStance(s, name, frame);
+        break;
+      case 'floorAttack':
+        floorSweepStance(s, name, frame);
+        break;
       case 'grappledFlinch':
       case 'grappledHighFlinch':
         flinchStance(s, name, pose === 'grappledHighFlinch', frame);
@@ -3738,7 +4151,7 @@
   }
 
   function tumble(pixels, s) {
-    if (s.roll % 360 === 0 && !s.wholeY) return pixels;
+    if (s.roll % 360 === 0 && !s.wholeY && !s.floorRoll) return pixels;
     const output = new Uint8Array(W * H);
     const cx = originX;
     const cy = originY - 18;
@@ -3754,10 +4167,10 @@
       }
     }
     if (s.floorRoll) {
-      // A cartwheel transfers its weight from a foot to a planted forepaw.
+      // Keep the contacting shoulder, foot, or forepaw on the surface during a roll.
       let last = output.length - 1;
       while (last > 0 && !output[last]) last--;
-      const rows = originY - 1 - Math.floor(last / W);
+      const rows = originY - 1 - s.floorLift - Math.floor(last / W);
       if (rows > 0) {
         output.copyWithin(rows * W, 0);
         output.fill(0, 0, rows * W);
@@ -3773,15 +4186,22 @@
   function compose(name, s) {
     const d = fighters[name];
     const buffer = new Uint8Array(W * H);
-    const bodyX = d.bodyAt[0] + s.bodyX;
-    const bodyY = d.bodyAt[1] + s.bodyY;
+    const resting = s.lowBody ? restingBodies[name] : null;
+    const bodyAt = resting ? resting.at : d.bodyAt;
+    const bodyX = bodyAt[0] + s.bodyX;
+    const bodyY = bodyAt[1] + s.bodyY;
     const hipX = d.hip[0] + s.bodyX;
     const hipY = d.hip[1] + s.bodyY;
     const [neckX, neckY] = withTorso(d, s, d.headAt[0] + s.bodyX + s.lean + 10, d.headAt[1] + s.bodyY + 14);
     const headX = neckX - 10 + s.headX;
     const headY = neckY - 14 + s.headY;
     const tailAcrossFeet = s.tailType === 'broom' && s.kitFrame >= 2 && s.kitFrame <= 5;
-    if (!tailAcrossFeet) drawTail(buffer, d, s);
+    if (s.packTail) {
+      const [tx, ty] = withTorso(d, s, hipX - (resting ? 14 : 9), hipY - (resting ? 6 : 10));
+      stamp(buffer, tuckedTails[name], tx, ty);
+    } else if (resting) {
+      if (!s.floorTailReach) stamp(buffer, resting.tail, resting.tailAt[0] + s.bodyX, resting.tailAt[1] + s.bodyY, s.tail);
+    } else if (!tailAcrossFeet) drawTail(buffer, d, s);
     if (s.extraHaunch) {
       const [x, y] = withTorso(d, s, -16 + s.bodyX + s.haunchX, -15 + s.bodyY);
       link(
@@ -3799,7 +4219,7 @@
     if (!s.kickRear) drawLeg(buffer, name, d, s, false);
     if (!s.reverseArm && (!s.twoHandsFront || s.behindHead)) drawArm(buffer, name, d, s, false);
     if (!s.kickFront) drawLeg(buffer, name, d, s, true);
-    turned(buffer, hipX, hipY, 31, s.torsoTurn, (part) => stamp(part, d.body, bodyX, bodyY, s.lean));
+    turned(buffer, hipX, hipY, 31, s.torsoTurn, (part) => stamp(part, resting ? resting.coat : d.body, bodyX, bodyY, s.lean));
     if (s.bellyFirst) {
       const [x, y] = withTorso(d, s, -12 + s.bodyX, -12 + s.bodyY);
       stamp(buffer, bulldogBelly, x - 1, y, -1);
@@ -3816,8 +4236,17 @@
     if (s.kickRear) drawLeg(buffer, name, d, s, false);
     if (s.kickFront) drawLeg(buffer, name, d, s, true);
     if (tailAcrossFeet) drawTail(buffer, d, s);
+    if (s.floorTailReach) {
+      const tip = -s.floorTailReach;
+      link(buffer, [[-10, -8], [-14, -5], [-19, -5], [tip + 4, -8], [tip, -10]], [5, 4, 3, 2, 1], 'c');
+      ink(buffer, -16, -7, 'O');
+      ink(buffer, -17, -7, 'O');
+      ink(buffer, tip, -10, 'l');
+    }
     turned(buffer, hipX, hipY, 32, s.torsoTurn, (part) => {
-      stamp(part, d.collar, d.collarAt[0] + s.bodyX + s.lean, d.collarAt[1] + s.bodyY, s.scarf);
+      const neckX = d.collarAt[0] + s.bodyX + s.lean + (resting ? resting.collar[0] : 0);
+      const neckY = d.collarAt[1] + s.bodyY + (resting ? resting.collar[1] : 0);
+      stamp(part, d.collar, neckX, neckY, s.scarf);
     });
     if (s.behindHead) drawArm(buffer, name, d, s, true);
     turned(
@@ -3837,9 +4266,10 @@
             s.headLean + (front ? s.ear : 0),
           );
         };
-        ear(d.ears[0], false);
+        const pieces = s.foldEars ? foldedEars[name] : d.ears;
+        ear(pieces[0], false);
         stamp(head, d.head, headX, headY, s.headLean);
-        ear(d.ears[1], true);
+        ear(pieces[1], true);
         for (const [x, y, art] of d.eyes) {
           stamp(head, s.eye || art, headX + x + Math.round(s.headLean / 2), headY + y);
         }
@@ -3946,7 +4376,7 @@
       y: top - originY,
       item: itemAnchor(fighters[name], s, pixels),
     };
-    if (tracksKitPaws(pose) || captivePoses.includes(pose)) {
+    if (tracksKitPaws(pose) || captivePoses.includes(pose) || pose === 'floorAttack') {
       result.paws = [true, false].map((near) => {
         const [x, y] = wrist(fighters[name], s, near);
         const [px, py] = rotateAt(x, y, 0, -18, s.roll);
@@ -3981,6 +4411,7 @@
     'ledge',
     'rise',
     'win',
+    ...landingPoses,
     ...captivePoses,
     ...Object.keys(kitMoves),
   ];
@@ -3994,8 +4425,7 @@
     const name = fighterName(kind);
     if (
       typeof pose !== 'string' ||
-      !pose.startsWith(name) ||
-      !Object.prototype.hasOwnProperty.call(kitMoves, pose)
+      (pose !== 'floorAttack' && (!pose.startsWith(name) || !Object.prototype.hasOwnProperty.call(kitMoves, pose)))
     ) {
       return null;
     }
@@ -4007,7 +4437,7 @@
   // Effects can follow the painted wrists through grabs, releases and paw strikes.
   function pawPoint(kind, pose, phase = 0.5, side = 'front') {
     const name = fighterName(kind);
-    if (typeof pose !== 'string' || (!captivePoses.includes(pose) && !(tracksKitPaws(pose) && pose.startsWith(name)))) return null;
+    if (typeof pose !== 'string' || (pose !== 'floorAttack' && !captivePoses.includes(pose) && !(tracksKitPaws(pose) && pose.startsWith(name)))) return null;
     const fraction = Number.isFinite(phase) ? Math.max(0, Math.min(1, phase)) : 0.5;
     const frame = getFrame(name, pose, frameNumber(pose, 0, fraction));
     return frame.paws[side === 'rear' ? 1 : 0].slice();

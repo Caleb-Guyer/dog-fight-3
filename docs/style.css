@@ -661,6 +661,10 @@ body.playing .tools .utility,
 #training-move {
   color: var(--gold);
 }
+#launch-status[data-result='tech'] {
+  border-left-color: var(--aqua);
+  color: var(--aqua);
+}
 .hud-card {
   --side: var(--tomato);
   display: grid;

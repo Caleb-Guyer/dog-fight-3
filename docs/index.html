@@ -11,12 +11,12 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=throws-1" />
-    <script defer src="./fighters-art.js?v=ledge-attacks-1"></script>
+    <link rel="stylesheet" href="./style.css?v=launch-defense-1" />
+    <script defer src="./fighters-art.js?v=launch-defense-1"></script>
     <script defer src="./arena-art.js"></script>
-    <script defer src="./engine.js?v=ledge-attacks-1"></script>
-    <script defer src="./render.js?v=ledge-attacks-1"></script>
-    <script defer src="./app.js?v=ledge-attacks-1"></script>
+    <script defer src="./engine.js?v=launch-defense-1"></script>
+    <script defer src="./render.js?v=launch-defense-1"></script>
+    <script defer src="./app.js?v=launch-defense-1"></script>
   </head>
   <body>
     <header class="topbar">
@@ -131,6 +131,7 @@
           <div id="hud" class="hud"></div>
           <span id="grapple-prompt" role="status" hidden></span>
           <div class="training-readouts">
+            <output id="launch-status" aria-label="Launch practice" aria-live="polite" hidden></output>
             <output id="training-move" aria-label="Last move" hidden></output>
             <span id="training-charge" hidden></span>
             <output id="training-combo" aria-label="Last combo" hidden></output>
@@ -157,6 +158,7 @@
           </button>
           <button id="ledge-right" type="button" class="utility"><i data-icon="ledge"></i>Right ledge</button>
           <button id="ledge-attack-training" type="button" class="utility">Practice ledge attack</button>
+          <button id="launch-training" type="button" class="utility">Launch practice</button>
           <button id="training-moves" type="button" class="utility">Move list</button>
         </div>
         <div class="touch-pad" aria-label="Touch controls">
