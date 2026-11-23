@@ -188,6 +188,15 @@
   }
   function pose(f, winner) {
     if (winner === f.index) return ['win', 0];
+    if (f.grip) {
+      const grip = f.grip;
+      const phase = reduced.matches ? 0.25 : (grip.time / 0.64) % 1;
+      if (f.index === grip.target) return [grip.high ? 'grappledHigh' : 'grappled', phase];
+      if (f.index === grip.owner) {
+        if (grip.phase === 'throw' && f.attack) return [attackPose(f), attackPhase(f.attack)];
+        return [grip.grabId + 'Hold', phase];
+      }
+    }
     if (f.stun > 0) {
       if (!f.reaction) return ['hurt', 0.3];
       return [f.reaction.hard ? 'launch' : 'hurt', clamp(1 - f.stun / f.reaction.duration, 0, 1)];
@@ -292,6 +301,127 @@
         );
     }
     if (sweet) glint(ctx, tip[0] + 6, tip[1] - 3, 5, cream);
+  }
+  function catchReach(ctx, f, a) {
+    if (f.grip) return;
+    const phase = attackPhase(a);
+    const [x, y, rx] = a.box;
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y, 2));
+    ctx.scale(f.face, 1);
+    if (f.kind === 'noodle') {
+      const hand = window.DogArt.itemPoint(f.kind, a.moveId, phase);
+      // Pay the loop out before contact. A missed cast winds back into the same paw.
+      const extension =
+        a.time < a.start
+          ? clamp((a.time / a.start - 0.3) / 0.7, 0, 1)
+          : 1 - clamp((a.time - a.start - a.active) / (a.end - a.start - a.active), 0, 1);
+      if (hand && extension > 0.06) {
+        const ex = hand[0] + (x + rx - hand[0]) * extension;
+        const ey = hand[1] + (y - hand[1]) * extension;
+        const slack = 9 * (1 - extension);
+        const tip = [ex, ey];
+        ropeTrace(ctx, [hand, [(hand[0] + ex) / 2, (hand[1] + ey) / 2 + slack], tip], tip, false);
+      }
+    } else if (a.time + 1e-8 >= a.start && a.time < a.start + a.active) {
+      const hand = window.DogArt.pawPoint?.(f.kind, a.moveId, phase) || [x + rx - 7, y];
+      const [hx, hy] = hand;
+      if (f.kind === 'pip') {
+        pixelLine(ctx, hx + 1, hy - 6, hx + 8, hy - 9, cream, 2, 2);
+        pixelLine(ctx, hx + 2, hy + 1, hx + 9, hy, '#ee9775', 2, 2);
+      } else if (f.kind === 'brisket') {
+        arc(ctx, hx + 1, hy, 10, 12, -0.97, 0.72, gold);
+        pixelLine(ctx, hx + 3, hy + 9, hx - 2, hy + 12, cream);
+      } else {
+        const rim = window.DogArt.itemPoint(f.kind, a.moveId, phase) || hand;
+        arc(ctx, rim[0] - 3, rim[1] + 1, 14, 7, -0.95, 1.29, lilac);
+      }
+    }
+    ctx.restore();
+  }
+  function gripLead(ctx, owner, grip) {
+    if (owner.kind !== 'noodle' || !grip.anchor) return;
+    const [name, phase] = pose(owner, null);
+    const hand = window.DogArt.itemPoint(owner.kind, name, phase);
+    if (!hand) return;
+    // Both coordinates are in world space. The loop stays on the captive's chest
+    // as the physics moves the pair over a shoulder or across a platform.
+    const from = [snap(owner.x, 2) + grip.face * hand[0], snap(owner.y, 2) + hand[1]];
+    const tip = [grip.anchor.x, grip.anchor.y];
+    ropeTrace(ctx, [from, tip], tip, false);
+  }
+  function throwVector(move, side, face) {
+    const angle = (move.angle * Math.PI) / 180;
+    const sign = (side === 'back' || move.reverseLaunch ? -1 : 1) * face;
+    return [Math.cos(angle) * sign, -Math.sin(angle)];
+  }
+  function throwTrail(ctx, x, y, dx, dy, kind, progress) {
+    const tint = chargeColors[kind] || cream;
+    const travel = reduced.matches ? 0 : progress * 13;
+    const stretch = (1 - progress) * (kind === 'brisket' ? 17 : 12);
+    // Draw in launch-vector coordinates, while keeping every mark on screen-space pixels.
+    const stroke = (from, offset, to, offset2, color, width = 3) =>
+      pixelLine(
+        ctx,
+        x + dx * from - dy * offset,
+        y + dy * from + dx * offset,
+        x + dx * to - dy * offset2,
+        y + dy * to + dx * offset2,
+        color,
+        width,
+      );
+    if (kind === 'brisket') {
+      stroke(travel - 9, -14 - stretch * 0.24, travel - 3, -6, tint, 4);
+      stroke(travel - 3, 6, travel - 10, 15 + stretch * 0.24, tint, 4);
+      if (!reduced.matches) stroke(travel - 18, -2, travel - 8, -2, cream);
+    } else if (kind === 'clover') {
+      stroke(travel - 7 - stretch, -5, travel - 4, -4, lilac);
+      stroke(travel - 4, -4, travel + 2, -7, cream, 2);
+      stroke(travel - 9 - stretch * 0.6, 5, travel - 1, 4, lilac, 2);
+    } else if (kind === 'noodle') {
+      stroke(travel - 14 - stretch * 0.5, -4, travel - 8, 1, tint);
+      stroke(travel - 8, 1, travel - 3, -4, cream);
+      if (!reduced.matches) stroke(travel - 8, 6, travel - 1, 6, tint, 2);
+    } else {
+      stroke(travel - 10 - stretch, -5, travel - 1, -5, cream);
+      stroke(travel - 10 - stretch * 0.65, 4, travel - 4, 3, tint, 2);
+    }
+  }
+  function throwFollowThrough(ctx, f, a) {
+    if (!a.thrown || a.time >= a.start + a.active + 0.055) return;
+    const progress = clamp((a.time - a.start) / (a.active + 0.055), 0, 1);
+    const phase = attackPhase(a);
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y, 2));
+    ctx.scale(f.face, 1);
+    if (f.kind === 'noodle') {
+      const hand = window.DogArt.itemPoint(f.kind, a.moveId, phase);
+      if (hand) {
+        // The released line is loose and visibly short of the departed chest.
+        const slack = 0.54 * (1 - progress) ** 2;
+        const tip = [
+          hand[0] + (a.release[0] - hand[0]) * slack,
+          hand[1] + (a.release[1] - hand[1]) * slack + 5,
+        ];
+        if (Math.hypot(tip[0] - hand[0], tip[1] - hand[1]) > 7)
+          ropeTrace(ctx, [hand, [(hand[0] + tip[0]) / 2, (hand[1] + tip[1]) / 2 + 6], tip], tip, false);
+      }
+    } else if (f.kind === 'clover') {
+      const rim = window.DogArt.itemPoint(f.kind, a.moveId, phase);
+      if (rim) arc(ctx, rim[0] - 1, rim[1] + 2, 13, 7, -0.98 + progress * 0.3, 0.7 + progress * 0.3, lilac);
+    } else if (f.kind === 'pip' && a.throwSide === 'down' && f.ground >= 0) {
+      pixelLine(ctx, 27 + progress * 7, -2, 44 + progress * 8, -3, '#dfa879');
+    }
+    ctx.restore();
+  }
+  function floorThrow(ctx, x, y, face, heavy, p) {
+    const spread = (heavy ? 19 : 12) + (reduced.matches ? 0 : p * (heavy ? 17 : 19));
+    for (const side of [-1, 1]) {
+      const dir = face * side;
+      const extent = heavy || side > 0 ? spread : spread * 0.52;
+      pixelLine(ctx, x + dir * 4, y - 1, x + dir * (extent - 5), y - 2, heavy ? '#dba678' : lilac);
+      pixelLine(ctx, x + dir * (extent - 5), y - 2, x + dir * extent, y - (heavy ? 6 : 4), cream, 2);
+    }
   }
   function smashSwing(ctx, f, a) {
     const beat = attackWindow(a);
@@ -562,6 +692,8 @@
   }
   function swing(ctx, f) {
     const a = f.attack;
+    if (a?.grabAttempt) return catchReach(ctx, f, a);
+    if (a?.throwSide) return throwFollowThrough(ctx, f, a);
     if (a?.smashSide) return smashSwing(ctx, f, a);
     if (a?.specialSide) return specialSwing(ctx, f, a);
     if (a?.moveId) {
@@ -731,6 +863,23 @@
   }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
+    if (e.type === 'toss') {
+      throwTrail(ctx, e.x, e.y, e.dx, e.dy, e.kind, p);
+      return;
+    }
+    if (e.type === 'throwFloor') {
+      floorThrow(ctx, e.x, e.y, e.face, e.heavy, p);
+      return;
+    }
+    if (e.type === 'grip' || e.type === 'escape') {
+      const gap = reduced.matches ? 10 : e.type === 'grip' ? 15 - 6 * p : 8 + 12 * p;
+      for (const dir of [-1, 1]) {
+        const at = e.x + dir * gap;
+        pixelLine(ctx, at + dir * 4, e.y - 6, at, e.y - 2, e.color);
+        pixelLine(ctx, at, e.y + 2, at + dir * 4, e.y + 6, e.color);
+      }
+      return;
+    }
     if (e.type === 'sweet') {
       glint(ctx, e.x, e.y, reduced.matches ? 4 : e.size * (1 - p * 0.75), e.color);
       return;
@@ -771,9 +920,9 @@
       this.cx = 600;
       this.cy = 337.5;
     }
-    add(type, x, y, color, life, size, face = 1) {
+    add(type, x, y, color, life, size, face = 1, details) {
       const behind = type === 'smoke' || type === 'land' || type === 'skid';
-      this.effects.push({ type, x, y, color, life, max: life, size, face, behind });
+      this.effects.push({ type, x, y, color, life, max: life, size, face, behind, ...details });
     }
     event(name, e) {
       const f = e.f;
@@ -801,6 +950,26 @@
       if (name === 'sweetSpot' && e.point) {
         const tint = e.moveId === 'cloverHaloLift' ? lilac : gold;
         this.add('sweet', e.point.x + (e.face || 1) * 8, e.point.y - 9, tint, 0.17, 8);
+      }
+      if (name === 'grabCatch') this.add('grip', e.point.x, e.point.y, chargeColors[f.kind], 0.14, 15);
+      if (name === 'grabEscape') this.add('escape', e.point.x, e.point.y, '#b9dddd', 0.17, 17);
+      if (name === 'grabClash') this.add('block', e.point.x, e.point.y, cream, 0.15, 42);
+      if (name === 'throwRelease') {
+        const speed = Math.hypot(e.target.vx, e.target.vy);
+        const [dx, dy] =
+          speed > 0
+            ? [e.target.vx / speed, e.target.vy / speed]
+            : throwVector(window.DogFight.throws[e.moveId], e.direction, f.face);
+        this.add('toss', e.point.x - dx * 6, e.point.y - dy * 6, chargeColors[f.kind], 0.16, 18, e.face, {
+          kind: f.kind,
+          dx,
+          dy,
+        });
+      }
+      if (name === 'throwBounce') {
+        const heavy = e.owner.kind === 'brisket';
+        this.add('land', e.point.x, e.point.y, cream, heavy ? 0.21 : 0.14, heavy ? 72 : 48, e.face);
+        this.add('throwFloor', e.point.x, e.point.y, chargeColors[e.owner.kind], 0.16, 23, e.face, { heavy });
       }
       if (name === 'catch') this.add('star', f.x + f.face * 24, f.y - 40, cream, 0.17, 24);
       if (name === 'skip') this.add('ring', e.x, e.y, gold, 0.14, 15);
@@ -856,7 +1025,17 @@
       }
       for (const e of this.effects) if (e.behind) drawEffect(ctx, e);
       const poseTime = world.end === null ? world.time : time;
-      for (const f of world.dogs) if (f.stocks > 0) drawFighter(ctx, f, world, poseTime);
+      if (world.grapple) {
+        const grip = world.grapple,
+          holder = world.dogs[grip.owner],
+          captive = world.dogs[grip.target];
+        // The holding paws and Noodle's line stay visible for either player slot.
+        drawFighter(ctx, captive, world, poseTime);
+        drawFighter(ctx, holder, world, poseTime);
+        gripLead(ctx, holder, grip);
+      } else {
+        for (const f of world.dogs) if (f.stocks > 0) drawFighter(ctx, f, world, poseTime);
+      }
       for (const d of world.projectiles) {
         drawItem(ctx, d);
       }
@@ -923,10 +1102,65 @@
     if (d.type === 'skip')
       pixelLine(ctx, d.x - Math.sign(d.vx) * 22, d.y - 2, d.x - Math.sign(d.vx) * 35, d.y - 5, '#ecbe7e', 2);
   }
+  function throwGuidePartner(ctx, f, side, catching) {
+    const a = f.attack;
+    const kind = f.kind === 'brisket' ? 'pip' : 'brisket';
+    const chestToFeet = window.DogFight.fighters[kind].height * 0.52;
+    let x,
+      y,
+      face = -1,
+      victimPose = 'grappled',
+      phase = 0.25,
+      release = null;
+    if (catching) {
+      const hand =
+        window.DogArt.itemPoint(f.kind, a.moveId, attackPhase(a)) ||
+        window.DogArt.pawPoint?.(f.kind, a.moveId, attackPhase(a)) ||
+        a.grip;
+      x = f.kind === 'noodle' ? a.box[0] + a.box[2] : clamp(hand[0] + 3, a.grip[0], a.box[0] + a.box[2]);
+      y = f.kind === 'noodle' ? a.box[1] : clamp(hand[1], a.box[1] - a.box[3], a.box[1] + a.box[3]);
+    } else if (f.kind === 'noodle' && (side === 'back' || side === 'up')) {
+      // Show the taut rope one simulation frame before release. This is the same
+      // second half of the handoff path that the captive follows during the match.
+      a.time = a.start - 1 / 60;
+      const t = clamp((2 * a.time) / a.start - 1, 0, 1),
+        eased = t * t * (3 - 2 * t);
+      x = a.via[0] + (a.release[0] - a.via[0]) * eased;
+      y = a.via[1] + (a.release[1] - a.via[1]) * eased;
+      face = x < 0 ? 1 : -1;
+      victimPose = y < -70 ? 'grappledHigh' : 'grappled';
+      f.grip = {
+        owner: 0,
+        target: 1,
+        face: 1,
+        phase: 'throw',
+        time: a.time,
+        anchor: { x, y },
+        high: y < -70,
+      };
+    } else {
+      a.thrown = true;
+      const [dx, dy] = throwVector(a, side, 1);
+      const distance = a.bounce
+        ? clamp((-a.release[1] - chestToFeet) / dy, 0, 58)
+        : clamp(a.base * 0.065, 12, 26);
+      x = a.release[0] + dx * distance;
+      y = a.release[1] + dy * distance;
+      face = dx < 0 ? -1 : 1;
+      victimPose = a.hard ? 'launch' : 'hurt';
+      phase = 0.27;
+      release = { dx, dy, floor: a.bounce ? { x, y: y + chestToFeet } : null };
+    }
+    window.DogArt.draw(ctx, kind, x, y + chestToFeet, { face, scale: 1, time: 0, pose: victimPose, phase });
+    return release;
+  }
   function drawMoveThumbnail(canvas, kind, side, category = 'air') {
-    const { kits, moves, specials, smashes, fighters } = window.DogFight;
-    const id = kits[kind][category][side],
-      move = (category === 'air' ? moves : category === 'smashes' ? smashes : specials)[id];
+    const { kits, moves, specials, smashes, grabs, throws, fighters } = window.DogFight;
+    const grapple = category === 'throws',
+      catching = grapple && side === 'grab';
+    const id = catching ? kits[kind].grab : kits[kind][category][side];
+    const book = { air: moves, specials, smashes, throws: catching ? grabs : throws };
+    const move = book[category][id];
     const target = canvas.getContext('2d');
     const cacheKey = id + '/' + canvas.width + '/' + canvas.height;
     const cached = moveThumbnails.get(cacheKey);
@@ -938,19 +1172,23 @@
     // Fit the whole silhouette, including the rope or disc beyond the dog's body.
     const source = document.createElement('canvas');
     const smash = category === 'smashes';
-    source.width = smash ? 400 : 320;
-    source.height = smash ? 312 : 272;
+    source.width = grapple ? 420 : smash ? 400 : 320;
+    source.height = grapple ? 330 : smash ? 312 : 272;
     const ctx = source.getContext('2d');
-    ctx.translate(smash ? 190 : 150, smash ? 185 : 158);
+    ctx.translate(smash || grapple ? 190 : 150, grapple ? 190 : smash ? 185 : 158);
     const beat = (id === 'pipScissors' || id === 'noodleBellPull') && move.second ? move.second : move;
     const a = { ...move, moveId: id, time: beat.start + beat.active * 0.35, power: 0.75 };
     if (category === 'air') a.airSide = side;
     else if (smash) {
       a.smashSide = side;
       a.fired = !!a.projectile;
+    } else if (grapple) {
+      if (catching) a.grabAttempt = true;
+      else a.throwSide = side;
     } else a.specialSide = side;
     if (id === 'noodleLasso') a.anchor = { x: 86, y: -86 };
-    const fighter = { kind, face: 1, x: 0, y: 0, stats: fighters[kind], attack: a };
+    const fighter = { kind, index: 0, face: 1, x: 0, y: 0, ground: 0, stats: fighters[kind], attack: a };
+    const release = grapple ? throwGuidePartner(ctx, fighter, side, catching) : null;
     window.DogArt.draw(ctx, kind, 0, 0, {
       face: 1,
       scale: 1,
@@ -959,6 +1197,27 @@
       phase: attackPhase(a),
     });
     swing(ctx, fighter);
+    if (fighter.grip) gripLead(ctx, fighter, fighter.grip);
+    if (release) {
+      throwTrail(
+        ctx,
+        a.release[0] - 6 * release.dx,
+        a.release[1] - 6 * release.dy,
+        release.dx,
+        release.dy,
+        kind,
+        0.25,
+      );
+      if (release.floor)
+        floorThrow(
+          ctx,
+          release.floor.x,
+          release.floor.y,
+          Math.sign(release.dx) || 1,
+          kind === 'brisket',
+          0.3,
+        );
+    }
     if (a.projectile)
       drawItem(ctx, {
         type: a.projectile,

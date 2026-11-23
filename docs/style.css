@@ -640,6 +640,7 @@ body.playing .tools .utility,
   pointer-events: none;
 }
 .training-readouts output,
+#grapple-prompt,
 #training-charge {
   padding: 5px 7px 4px;
   border: 2px solid #171623;
@@ -648,6 +649,14 @@ body.playing .tools .utility,
   color: var(--cream);
   font: 400 clamp(11px, 1.2vw, 16px) / 1 var(--pixel);
   pointer-events: none;
+}
+#grapple-prompt {
+  position: absolute;
+  top: 3%;
+  left: 2.8%;
+  max-width: 59%;
+  border-left-color: var(--aqua);
+  line-height: 1.18;
 }
 #training-move {
   color: var(--gold);
@@ -817,7 +826,8 @@ dialog[data-view='moves'] {
 }
 .guide-tabs {
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  gap: 2px 12px;
   border-bottom: 2px solid #b5a787;
   margin-top: 12px;
 }

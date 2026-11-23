@@ -1,6 +1,7 @@
 (() => {
   'use strict';
-  const { fighters, kits, moves, specials, smashes, smashPower, arenas, Battle, idleInput } = window.DogFight;
+  const { fighters, kits, moves, specials, smashes, grabs, throws, smashPower, arenas, Battle, idleInput } =
+    window.DogFight;
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
   const $ = (id) => document.getElementById(id);
   const glyphs = {
@@ -259,6 +260,15 @@
         tone(detail.name === 'jab2' ? 620 : 425, 175, 0.034, 0, 'square', 0.036);
         tone(detail.name === 'jab2' ? 155 : 122, 54, 0.069, 0, 'triangle', 0.095);
       }
+    } else if (name === 'grabCatch') {
+      const pitch = { pip: 470, brisket: 130, noodle: 315, clover: 635 }[detail.f.kind];
+      tone(pitch * 1.25, pitch, 0.052, 0, 'square', 0.035);
+      tone(pitch, pitch * 0.8, 0.065, 0.01, 'triangle', 0.06);
+    } else if (name === 'throwBounce') {
+      const heavy = detail.moveId === 'brisketSitSlam';
+      tone(heavy ? 109 : 430, heavy ? 45 : 650, 0.1, 0, 'triangle', heavy ? 0.14 : 0.065);
+    } else if (name === 'grabEscape' || name === 'grabClash') {
+      tone(475, 795, 0.055, 0, 'triangle', 0.065);
     } else if (name === 'smashReady') {
       tone(590, 740, 0.065, 0, 'triangle', 0.08);
       tone(880, 1100, 0.105, 0.048, 'triangle', 0.062);
@@ -527,7 +537,7 @@
       'controls',
       'Controls',
       table +
-        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack on the ground for your dog’s combo. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. Holding regular Attack also charges. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
+        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack on the ground for your dog’s combo. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. Holding regular Attack also charges. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Once you catch a rival, tap a direction to throw. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
   $('controls').onclick = showControls;
@@ -545,6 +555,13 @@
     down: 'Down + Special',
   };
   const smashInputs = { side: 'Side + Smash', up: 'Up + Smash', down: 'Down + Smash' };
+  const throwInputs = {
+    grab: 'Press Grab',
+    forward: 'After catch · Forward',
+    back: 'After catch · Back',
+    up: 'After catch · Up',
+    down: 'After catch · Down',
+  };
   function showMoves(kind, section = 'air') {
     if (dialogType !== 'moves') backToPause = dialogType === 'pause';
     const kit = kits[kind],
@@ -561,11 +578,14 @@
           '</button>',
       )
       .join('');
-    const moveSet = { air: moves, smashes, specials }[section];
-    const inputs = { air: airInputs, smashes: smashInputs, specials: specialInputs }[section];
-    const rows = Object.entries(kit[section])
+    const moveSet = { air: moves, smashes, specials, throws }[section];
+    const inputs = { air: airInputs, smashes: smashInputs, specials: specialInputs, throws: throwInputs }[
+      section
+    ];
+    const entries = section === 'throws' ? { grab: kit.grab, ...kit.throws } : kit[section];
+    const rows = Object.entries(entries)
       .map(([side, id]) => {
-        const move = moveSet[id];
+        const move = side === 'grab' ? grabs[id] : moveSet[id];
         return (
           '<li><canvas width="124" height="78" data-direction="' +
           side +
@@ -585,6 +605,7 @@
         ['air', 'Attacks'],
         ['smashes', 'Smash attacks'],
         ['specials', 'Specials &amp; recovery'],
+        ['throws', 'Throws'],
       ]
         .map(
           ([key, label]) =>
@@ -599,7 +620,12 @@
         .join('') +
       '</div>';
     let contents;
-    if (section === 'smashes') {
+    if (section === 'throws') {
+      contents =
+        '<p class="recovery-note"><strong>Grab</strong> Press U (P1), M (P2), Y on a gamepad, or Grab on touch. Once you catch a rival, tap a direction. Forward is the way you faced at the catch. Tap Grab again for forward. A trapped player can tap action buttons to escape sooner.</p><ul class="move-rows guide-throws">' +
+        rows +
+        '</ul>';
+    } else if (section === 'smashes') {
       contents =
         '<p class="recovery-note"><strong>Charge</strong> Aim and hold Smash (P1 I, P2 N, gamepad RT), then release. A tap swings immediately. Full power takes one second. You can hold for one more second before the move fires.</p><ul class="move-rows guide-smashes">' +
         rows +
@@ -653,6 +679,20 @@
   });
   function updateHUD() {
     const combo = world.lastCombo;
+    const grip = world.grapple;
+    const prompt = $('grapple-prompt');
+    prompt.hidden = !grip || grip.phase === 'throw';
+    if (!prompt.hidden) {
+      const holder = world.dogs[grip.owner].stats.name;
+      const captive = world.dogs[grip.target].stats.name;
+      const text =
+        world.mode === 'local'
+          ? holder + ' · Aim to throw / ' + captive + ' · Tap buttons to escape'
+          : grip.owner === 0
+            ? 'Aim to throw · Grab again for forward'
+            : 'Grabbed · Tap action buttons to escape';
+      if (prompt.textContent !== text) prompt.textContent = text;
+    }
     const player = world.dogs[0],
       chargeReadout = $('training-charge');
     const power = player.smashCharge ? smashPower(player.charge) : player.lastSmashPower;
