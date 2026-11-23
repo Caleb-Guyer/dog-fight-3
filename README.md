@@ -68,11 +68,11 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 | Grab | U | M | Y |
 | Pause | Esc | Esc | Start |
 
-Tap Jump for a short hop or hold it for a full jump. Jump a second time in midair, then use Up + Special to recover. Hold Down and jump to drop through a raised platform.
+Your dog crouches for three frames before a grounded jump. Release Jump during the crouch for a short hop. Hold Jump through it for a full jump. Press Attack with Jump or during the crouch to launch a short-hop aerial in the direction you aimed. To attack on the way down, jump first and press Attack later. Jump a second time in midair, then use Up + Special to recover. Down + Jump drops through a raised platform.
 
 Tap Attack with no direction to start your dog's jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Left or right turns your dog toward the swing. Press before you reach running speed for a forward tilt. At running speed the same input gives you a dash attack. Holding Attack from a standstill charges a smash. Grabs beat shields.
 
-In midair, press Attack alone or aim forward, back, up, or down as you press it. Forward follows the direction your dog faces. You can drift backward and attack behind you. A short hop gives quick aerials time to connect. A heavy aerial takes longer to recover when it lands.
+In midair, press Attack alone or aim forward, back, up, or down as you press it. Forward follows the direction your dog faces. Tap Down once after the top of your jump to fast-fall, then release Down to aim your attack. Brisket falls fastest, followed by Pip, Clover, and Noodle. Each aerial has its own landing window in the Move list. Outside that window, a landing during the move takes two frames to recover. Landing during Pip’s Scramble takes three frames in its committed window. Brisket’s Belly Drop takes eighteen.
 
 In local versus, a single controller plays P2 alongside the P1 keyboard. With two controllers, the first plays P1 and the second plays P2.
 

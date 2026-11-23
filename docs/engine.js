@@ -100,6 +100,7 @@
   const techLockout = 28 / 60;
   const shieldDropTime = 10 / 60;
   const parryWindow = 5 / 60;
+  const jumpSquatTime = 3 / 60;
   // Total frames and initial invulnerability frames for each landing option.
   const floorFrames = {
     tech: [19, 13],
@@ -160,6 +161,8 @@
         'Tap Attack three times for Heel Kick. For an aerial finish, press Jump, Forward and Attack together as Cross connects.',
       airAccel: 1060,
       gravity: 1.0,
+      fallSpeed: 630,
+      fastFallSpeed: 855,
     },
     brisket: {
       defense: { rollDistance: 96, roll: [32, 4, 17], spot: [25, 3, 15] },
@@ -216,6 +219,8 @@
         'Tap Attack for Body Check. As the shoulder connects, tap Attack for Bell Ringer or press Grab for Bear Hug. Once you catch the rival, tap a direction to throw.',
       airAccel: 540,
       gravity: 1.17,
+      fallSpeed: 740,
+      fastFallSpeed: 960,
     },
     noodle: {
       defense: { rollDistance: 150, roll: [30, 3, 15], spot: [22, 2, 12] },
@@ -266,6 +271,8 @@
         'Tap Attack for Ankle Tap, then again for Reel In. After the pull connects, tap Attack for Whiplash or press Special for Tug Rope.',
       airAccel: 715,
       gravity: 0.93,
+      fallSpeed: 545,
+      fastFallSpeed: 730,
     },
     clover: {
       defense: { rollDistance: 116, roll: [26, 3, 13], spot: [20, 2, 11] },
@@ -316,10 +323,13 @@
         'Tap Attack twice. When Set Point connects, press Jump, Up and Attack together for Sky Volley. Jump with Attack alone for both beats of Orbit.',
       airAccel: 950,
       gravity: 0.96,
+      fallSpeed: 585,
+      fastFallSpeed: 790,
     },
   };
   // Frames are [startup, active, recovery] at 60 Hz. Boxes are [forward, down from feet, half-width, half-height].
   // The launch angle is measured above horizontal. Negative angles spike an airborne opponent.
+  // An aerial pays its full landing lag from the first landingWindow frame up to (excluding) the second.
   const moves = {
     getupSweep: {
       label: 'Get-up Sweep',
@@ -669,7 +679,8 @@
       base: 128,
       growth: 3.0,
       angle: 48,
-      land: 4,
+      land: 3,
+      landingWindow: [3, 12],
     },
     pipDiveKick: {
       label: 'Flying Kick',
@@ -682,6 +693,7 @@
       angle: 27,
       burst: 205,
       land: 5,
+      landingWindow: [3, 14],
     },
     pipBackKick: {
       label: 'Back Heel',
@@ -692,7 +704,8 @@
       base: 158,
       growth: 4.1,
       angle: 19,
-      land: 5,
+      land: 4,
+      landingWindow: [2, 10],
     },
     pipFlip: {
       label: 'Flip Kick',
@@ -704,6 +717,7 @@
       growth: 3.55,
       angle: 80,
       land: 4,
+      landingWindow: [3, 11],
     },
     pipPogo: {
       label: 'Pogo Paw',
@@ -715,7 +729,8 @@
       growth: 4.15,
       angle: -67,
       pogo: true,
-      land: 6,
+      land: 7,
+      landingWindow: [3, 20],
     },
     brisketCheck: {
       label: 'Body Check',
@@ -750,7 +765,8 @@
       base: 192,
       growth: 4.4,
       angle: 40,
-      land: 8,
+      land: 9,
+      landingWindow: [4, 24],
     },
     brisketRam: {
       label: 'Air Ram',
@@ -763,7 +779,8 @@
       angle: 29,
       burst: 310,
       hard: true,
-      land: 10,
+      land: 12,
+      landingWindow: [4, 27],
     },
     brisketHip: {
       label: 'Hip Check',
@@ -775,7 +792,8 @@
       growth: 5.2,
       angle: 18,
       hard: true,
-      land: 9,
+      land: 10,
+      landingWindow: [4, 20],
     },
     brisketCrown: {
       label: 'Crown Bump',
@@ -786,7 +804,8 @@
       base: 194,
       growth: 4.5,
       angle: 84,
-      land: 7,
+      land: 8,
+      landingWindow: [4, 18],
     },
     brisketDrop: {
       label: 'Belly Drop',
@@ -799,7 +818,8 @@
       angle: -74,
       plunge: true,
       hard: true,
-      land: 14,
+      land: 18,
+      landingWindow: [1, 46],
     },
     noodleTrip: {
       label: 'Ankle Tap',
@@ -847,6 +867,7 @@
       growth: 3.45,
       angle: 38,
       land: 5,
+      landingWindow: [3, 17],
     },
     noodleCast: {
       label: 'Slip Lead',
@@ -860,6 +881,7 @@
       pull: true,
       stun: 0.27,
       land: 7,
+      landingWindow: [5, 20],
       rope: 'front',
     },
     noodleTail: {
@@ -871,7 +893,8 @@
       base: 169,
       growth: 3.85,
       angle: 17,
-      land: 6,
+      land: 5,
+      landingWindow: [2, 13],
     },
     noodleLoop: {
       label: 'Lasso Loop',
@@ -883,6 +906,7 @@
       growth: 3.65,
       angle: 78,
       land: 6,
+      landingWindow: [4, 18],
       rope: 'up',
     },
     noodleHook: {
@@ -896,7 +920,8 @@
       angle: 82,
       pull: true,
       lift: 285,
-      land: 7,
+      land: 8,
+      landingWindow: [4, 21],
       rope: 'down',
     },
     cloverTap: {
@@ -933,7 +958,8 @@
       growth: 0.9,
       angle: 33,
       stun: 0.23,
-      land: 6,
+      land: 7,
+      landingWindow: [3, 22],
       second: { start: 12 / 60, active: 5 / 60, dmg: 6, base: 161, growth: 3.4, angle: 57 },
     },
     cloverFore: {
@@ -946,6 +972,7 @@
       growth: 3.85,
       angle: 34,
       land: 5,
+      landingWindow: [3, 15],
     },
     cloverBack: {
       label: 'Backhand',
@@ -956,7 +983,8 @@
       base: 173,
       growth: 4.1,
       angle: 23,
-      land: 5,
+      land: 4,
+      landingWindow: [2, 12],
     },
     cloverVolley: {
       label: 'Sky Volley',
@@ -968,6 +996,7 @@
       growth: 3.85,
       angle: 80,
       land: 4,
+      landingWindow: [2, 12],
     },
     cloverSkip: {
       label: 'Skip Shot',
@@ -979,6 +1008,7 @@
       growth: 4.1,
       angle: -49,
       land: 7,
+      landingWindow: [3, 18],
     },
   };
   const specials = {
@@ -1831,9 +1861,12 @@
       followPounce: 0,
       hopWindow: 0,
       jumpBuffer: 0,
+      jumpSquat: null,
+      fastFall: false,
       cutJump: false,
       coyote: 0,
       landTime: 0,
+      landDuration: 0.12,
       skidTime: 0,
       skidFace: index ? -1 : 1,
       reboundTime: 0,
@@ -1985,9 +2018,10 @@
     beginAttack(f, 'aerial', side === 'up' ? -1 : side === 'down' ? 1 : 0, 0, f.kit.air[side]);
     f.attack.airSide = side;
     if (f.attack.plunge) {
+      f.fastFall = false;
       f.cutJump = false;
       f.vx *= 0.35;
-      f.vy = 0;
+      f.vy = Math.min(0, f.vy);
     }
   }
   function attackWindow(attack) {
@@ -1995,6 +2029,8 @@
     return next && attack.time + 1e-8 >= next.start ? next : attack;
   }
   function restoreAir(f) {
+    f.jumpSquat = null;
+    f.fastFall = false;
     f.jumps = 2;
     f.usedUp = false;
     f.usedAir = false;
@@ -2006,6 +2042,16 @@
     f.hopWindow = 0;
     f.cutJump = false;
     f.reboundTime = 0;
+  }
+  function controlsFall(f) {
+    return !f.stun && !f.tumble && !f.grip && !f.ledge && !f.ledgeTrump && !f.wallAction &&
+      !f.airDodge && !f.throwBounce && !f.attack?.plunge && !f.attack?.motionLocked;
+  }
+  function bufferSquatInput(f, input) {
+    const squat = f.jumpSquat;
+    if (squat.time + 1e-8 >= jumpSquatTime) return;
+    if (f.command?.type === 'attack') squat.aerial ??= f.command;
+    if (!input.jump || squat.aerial) squat.short = true;
   }
   function bodyHeight(f) {
     const action = f.floorAction;
@@ -2514,6 +2560,8 @@
       f.shieldAxis = shieldDirection(grabX, input.y, previousAxis);
       f.prev = { ...input };
       if (f.respawning > 0) return;
+      if (f.ground < 0 && f.vy >= 0 && input.y >= 0.65 && !(was.y >= 0.65) && controlsFall(f))
+        f.fastFall = true;
       const floor = f.floorAction;
       if (
         f.ground >= 0 &&
@@ -2660,6 +2708,7 @@
           }
         }
       }
+      if (f.jumpSquat) bufferSquatInput(f, input);
     }
     floorAhead(f, horizon) {
       if (f.vy < 0) return -1;
@@ -2710,8 +2759,7 @@
         vx *= Math.pow(0.68, dt);
         const free = f.stun <= elapsed + dt;
         if (free) vx += f.prev.x * 175 * dt;
-        const fastFall = free && f.prev.y > 0.55 && vy > 0;
-        vy = Math.min(vy + (fastFall ? 2580 : 1540) * f.kit.gravity * dt, 970);
+        vy = Math.min(vy + 1540 * f.kit.gravity * dt, 970);
         const nextX = x + vx * dt,
           nextY = y + vy * dt;
         const contact = this.wallContact(f, x, y, nextX, nextY);
@@ -2816,6 +2864,7 @@
       this.emit('ledgeRoll', { f, dir: action.dir, edge, point: { x: edge.x, y: edge.y } });
     }
     beginAirDodge(f) {
+      f.fastFall = false;
       const aim = f.guardAim || idleInput;
       const length = Math.hypot(aim.x, aim.y);
       const directed = length >= 0.35;
@@ -2909,6 +2958,28 @@
         }
       }
     }
+    advanceJumpSquat(f, input, dt) {
+      if (!f.jumpSquat) {
+        f.jumpSquat = { time: 0, short: false, aerial: null };
+        bufferSquatInput(f, input);
+        f.run = null;
+        cancelCharge(f);
+        if (this.cpuControlled(f)) this.bot.jumpHold = this.bot.hop && f.kind !== 'brisket' ? 2 / 60 : 0.34;
+      }
+      const squat = f.jumpSquat;
+      if (squat.time + 1e-8 < jumpSquatTime) {
+        squat.time += dt;
+        const floor = this.terrain[f.ground];
+        f.x = clamp(f.x + f.vx * dt, floor.x1 - 7, floor.x2 + 7);
+        f.y = floor.y;
+        f.jumpBuffer = 0;
+        return false;
+      }
+      f.vy = -f.stats.jump * (squat.short ? 0.60 : 1);
+      if (squat.aerial) f.command = squat.aerial;
+      f.jumpSquat = null;
+      return true;
+    }
     move(f, input, dt) {
       for (const key of [
         'stun',
@@ -2946,7 +3017,8 @@
         if (!f.command.released) f.command.heldFor += dt;
         if (f.command.life < -0.00001) f.command = null;
       }
-      const jumpTap = f.jumpBuffer > 0;
+      const jumpTap = f.jumpBuffer > 0 || !!f.jumpSquat;
+      const jumpingFromLedge = jumpTap && !!f.ledge;
       const attackTap = f.command?.type === 'attack';
       const guardIntent = f.guardIntent;
       f.guardIntent = '';
@@ -3051,7 +3123,7 @@
       const free = ready && !f.shieldDrop;
       const direction = aimFor(input.y);
       f.shield = free && grounded && input.shield && f.charge < 0 && f.command?.type !== 'grab' && !jumpTap;
-      if (grounded && input.shield) f.guardBuffer = 0;
+      if (grounded && input.shield && !f.jumpSquat) f.guardBuffer = 0;
       f.shieldHP = clamp(f.shieldHP + (f.shield ? -0.13 : 0.24) * dt, 0, 1);
       if (f.shield && f.shieldHP <= 0) this.breakShield(f);
       if (free && !grounded && f.guardBuffer > 0 && !f.usedDodge) {
@@ -3075,24 +3147,29 @@
       if (free && f.stun <= 0 && f.dodge <= 0 && !f.shield) {
         if (
           !f.smashCharge &&
-          f.jumpBuffer > 0 &&
+          jumpTap &&
           (f.jumps > 0 || f.coyote > 0) &&
           !(f.tumble && f.techBuffer > 1e-8 && this.wallAhead(f, f.techBuffer))
         ) {
           this.clearTumble(f, 'Jump');
           f.throwBounce = null;
-          if (grounded && direction === 1 && this.terrain[f.ground].thin) {
+          if (grounded && !f.jumpSquat && !attackTap && !jumpingFromLedge && direction === 1 && this.terrain[f.ground].thin) {
             f.drop = 0.24;
             f.y += 9;
             f.vy = 110;
             f.jumps = 1;
           } else {
-            if (f.coyote > 0) f.jumps = 2;
-            f.vy = -f.stats.jump * (f.jumps === 2 ? 1 : 0.91);
+            const groundJump = grounded && !jumpingFromLedge;
+            if (groundJump) {
+              if (!this.advanceJumpSquat(f, input, dt)) return;
+            } else {
+              if (f.coyote > 0) f.jumps = 2;
+              f.vy = -f.stats.jump * (f.jumps === 2 ? 1 : 0.91);
+              if (this.cpuControlled(f)) this.bot.jumpHold = this.bot.hop && f.kind !== 'brisket' ? 0.07 : 0.34;
+            }
             f.jumps--;
-            f.cutJump = true;
-            if (this.cpuControlled(f))
-              this.bot.jumpHold = this.bot.hop && f.kind !== 'brisket' ? 0.07 : 0.34;
+            f.cutJump = !groundJump;
+            f.fastFall = false;
             this.emit('jump', { f });
           }
           f.ground = -1;
@@ -3168,7 +3245,7 @@
           this.throwItem(f, a);
         }
         if (a.specialSide && this.advanceSpecial(f, a, input, dt)) return;
-        if (a.plunge && a.time < a.start - 1e-8) f.vy = -1540 * f.kit.gravity * dt;
+        if (a.plunge && a.time < a.start - 1e-8) f.vy = Math.min(f.vy, -1540 * f.kit.gravity * dt);
         if ((a.plunge || a.burst) && !a.fired && a.time + 1e-8 >= a.start) {
           a.fired = true;
           if (a.plunge) f.vy = 685;
@@ -3191,7 +3268,7 @@
           f.shield ||
           f.shieldDrop > 0 ||
           f.charge >= 0 ||
-          (onFloor && (f.attack?.tiltSide || f.attack?.ledgeAttack));
+          (onFloor && (f.landingLag > 1e-8 || f.attack?.tiltSide || f.attack?.ledgeAttack));
         const mobility = planted ? 0 : f.attack ? (onFloor ? 0.12 : 0.65) : 1;
         const steppingJab = f.attack?.step && f.attack.time < f.attack.start;
         const drag = onFloor ? (steppingJab ? 560 : 2630) : Math.abs(input.x) > 0.1 ? f.kit.airAccel : 155;
@@ -3218,8 +3295,10 @@
       if (f.ground < 0) {
         if (f.charge >= 0) cancelCharge(f);
         if (!dodgeGlide) {
-          const fastFall = !f.airDodge && input.y > 0.55 && f.vy > 0 && f.stun <= 0;
-          f.vy = Math.min(f.vy + (fastFall ? 2580 : 1540) * f.kit.gravity * dt, 970);
+          const controlled = controlsFall(f);
+          if (!controlled || f.vy < 0) f.fastFall = false;
+          const terminal = controlled ? Math.max(f.vy, f.kit.fallSpeed) : 970;
+          f.vy = f.fastFall ? Math.max(f.vy, f.kit.fastFallSpeed) : Math.min(f.vy + 1540 * f.kit.gravity * dt, terminal);
         }
         f.y += f.vy * dt;
         const contact = this.wallContact(f, oldX, oldY, f.x, f.y);
@@ -3269,9 +3348,9 @@
               return;
             }
             if (f.attack?.airSide) {
-              const a = f.attack,
-                last = a.second || a;
-              const committed = a.time + 1e-8 >= a.start && a.time < last.start + last.active + 0.05;
+              const a = f.attack;
+              const frame = a.time * 60 + 1e-6;
+              const committed = frame >= a.landingWindow[0] && frame < a.landingWindow[1];
               f.landingLag = (committed ? a.land : 2) / 60;
               a.landed = true;
             }
@@ -3283,10 +3362,11 @@
               f.attack.landed = true;
             }
             restoreAir(f);
-            if (landingSpeed > 225) {
-              f.landTime = 0.12;
-              this.emit('land', { f, speed: landingSpeed });
+            if (f.attack?.airSide || landingSpeed > 225) {
+              f.landDuration = Math.max(0.12, f.landingLag);
+              f.landTime = f.landDuration;
             }
+            if (landingSpeed > 225) this.emit('land', { f, speed: landingSpeed });
             if (f.stun > 0) f.stun *= 0.62;
           }
         }
@@ -3431,6 +3511,8 @@
         f.shieldDrop = f.parryFlash = 0;
         f.run = null;
         f.attack = f.command = f.reaction = f.throwBounce = null;
+        f.jumpSquat = null;
+        f.fastFall = false;
         f.chainWindow = f.jumpBuffer = f.guardBuffer = f.reboundTime = f.landingLag = f.stun = 0;
         f.hopWindow = f.followPounce = f.landTime = f.skidTime = 0;
         f.shield = f.cutJump = false;
@@ -3729,6 +3811,7 @@
           f.vx = (command.face || f.face) * 205;
           break;
       }
+      if (a.motionLocked || side === 'up') f.fastFall = false;
       this.emit(side === 'up' && id !== 'brisketCannon' ? 'recover' : 'special', { f, moveId: id });
     }
     advanceSpecial(f, a, input, dt) {
@@ -4034,6 +4117,7 @@
         if (!attack.connected || f.attack !== attack) continue;
         if (attack.pogo && !attack.landed && !f.usedPogo) {
           f.usedPogo = true;
+          f.fastFall = false;
           f.cutJump = false;
           f.vy = -465;
           f.reboundPose = attack.moveId;
@@ -4098,6 +4182,7 @@
       target.lastMove = 'Parry';
       if (!projectile) {
         owner.attack = owner.floorAction = owner.run = owner.command = owner.reaction = null;
+        owner.fastFall = false;
         owner.jumpBuffer = owner.guardBuffer = owner.chainWindow = owner.hopWindow = owner.reboundTime = 0;
         owner.vx *= 0.25;
         owner.stun = Math.max(owner.stun, 14 / 60);
@@ -4192,6 +4277,8 @@
       target.y -= 1;
       target.ground = -1;
       target.coyote = 0;
+      target.jumpSquat = null;
+      target.fastFall = false;
       target.cutJump = false;
       target.chainWindow = 0;
       target.hopWindow = target.followPounce = 0;

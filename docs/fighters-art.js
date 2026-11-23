@@ -3402,6 +3402,7 @@
       return tick(2.8) % 2;
     }
     if (pose === 'ledge') return tick(3) % 4;
+    if (pose === 'jumpSquat') return Math.min(2, Math.round(phase * 2));
     if (pose === 'rise') return phase < 0.2 ? 0 : 1 + (tick(10) % 3);
     if (pose === 'jump' || pose === 'fall') return phase < 0.3 ? 0 : phase < 0.72 ? 1 : 2;
     if (pose === 'hurt' || pose === 'launch') return Math.min(3, Math.floor(phase * 4));
@@ -4722,6 +4723,23 @@
         s.rearY = -s.fistY;
         break;
       }
+      case 'jumpSquat': {
+        const depth = [2, 3, 4][frame] + (name === 'brisket' ? 1 : 0);
+        s.bodyY = depth;
+        s.headY = Math.round(depth / 2);
+        s.headTurn = depth + frame;
+        s.torsoTurn = depth;
+        s.kneeOut = depth;
+        s.fistX = 1 + frame;
+        s.rearX = -depth;
+        s.fistY = -1 - frame;
+        s.leftX = -1 - frame;
+        s.rightX = 1 + frame;
+        s.tailLift = frame;
+        s.scarf = -frame;
+        s.guardFloor = true;
+        break;
+      }
       case 'jump':
         s.lean = [2, 1, -1][frame];
         s.headX = 1;
@@ -5409,6 +5427,7 @@
   const poses = [
     'idle',
     'run',
+    'jumpSquat',
     'jump',
     'fall',
     'attack',

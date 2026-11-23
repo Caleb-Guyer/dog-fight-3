@@ -248,6 +248,7 @@
     }
     if (f.airDodge) return [f.airDodge.type, clamp(f.airDodge.time / f.airDodge.duration, 0, 1)];
     if (f.dodge > 0) return ['dodge', 1 - f.dodge / 0.27];
+    if (f.jumpSquat) return ['jumpSquat', clamp((f.jumpSquat.time * 60 - 1) / 2, 0, 1)];
     if (f.shield) return ['shield', 0];
     if (f.attack) return [attackPose(f), attackPhase(f.attack)];
     if (f.smashCharge && f.charge >= 0) {
@@ -265,7 +266,7 @@
       if (f.vy < 0) return ['jump', clamp(1 + f.vy / f.stats.jump, 0, 1)];
       return ['fall', clamp(f.vy / f.stats.jump, 0, 1)];
     }
-    if (f.landTime > 0) return ['land', 1 - f.landTime / 0.12];
+    if (f.landTime > 0) return ['land', clamp(1 - f.landTime / (f.landDuration || 0.12), 0, 1)];
     if (f.skidTime > 0) return ['skid', 1 - f.skidTime / 0.14];
     return [Math.abs(f.vx) > 50 ? 'run' : 'idle', 0];
   }
@@ -1417,6 +1418,13 @@
     ledgeRollTrail(ctx, f);
     shieldSlip(ctx, f);
     airDodgeSlip(ctx, f);
+    if (f.fastFall && !reduced.matches) {
+      const y = f.y - f.stats.height + 8;
+      for (const side of [-1, 1]) {
+        const x = f.x + side * (f.stats.width + 3);
+        pixelLine(ctx, x + side * 2, y - 9, x, y + (side === f.face ? 9 : 4), teamColor(f), 2, 2);
+      }
+    }
     movingGrabFeet(ctx, f);
     dashFootwork(ctx, f);
     if (f.respawning > 0) oval(ctx, f.x, f.y - 3, 42, 5, teamColor(f));
