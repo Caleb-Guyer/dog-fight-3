@@ -960,6 +960,11 @@
     e.preventDefault();
     if (!e.repeat) toggleFullscreen();
   });
+  const stockLabel = (n) => n + (n === 1 ? ' stock' : ' stocks');
+  function stockPaws(count) {
+    return Array.from({ length: 3 }, (_, i) =>
+      '<i class="' + (i >= count ? 'lost' : '') + '" data-icon="paw">' + svg('paw') + '</i>').join('');
+  }
   function updateHUD() {
     if (world.mode === 'adventure') return updateDispatchHUD();
     const combo = world.lastCombo;
@@ -1018,11 +1023,7 @@
         const lives =
           world.mode === 'training'
             ? '∞'
-            : Array.from(
-                { length: 3 },
-                (_, j) =>
-                  '<i class="' + (j >= f.stocks ? 'lost' : '') + '" data-icon="paw">' + svg('paw') + '</i>',
-              ).join('');
+            : stockPaws(f.stocks);
         return (
           '<div class="hud-card ' +
           (i ? 'two' : '') +
@@ -1227,7 +1228,8 @@
     if (action === 'fullscreen') toggleFullscreen();
     if (action === 'home') showHome();
     if (action === 'route') showRoute();
-    if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.dogs[0].kind);
+    if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.dogs[0].kind, world.atCheckpoint);
+    if (action === 'dispatch-rematch') beginRun(world.roomIndex, 0, world.dogs[0].kind);
     if (action === 'option-sound' || action === 'option-shake') {
       const key = action === 'option-sound' ? 'sound' : 'shake';
       settings[key] = !settings[key];
@@ -1610,7 +1612,10 @@
     if (disk.started) {
       const score = (p) => (p.complete ? 1000 : 0) + p.room * 10 + p.checkpoint;
       if (score(disk) > score(progress)) progress = { ...disk, stamps: progress.stamps | disk.stamps };
-      else progress.stamps |= disk.stamps;
+      else {
+        progress.stamps |= disk.stamps;
+        if (score(disk) === score(progress) && disk.atCheckpoint) progress.atCheckpoint = disk.atCheckpoint;
+      }
     }
     progress = campaign.record(progress, event);
     try {
@@ -1666,7 +1671,7 @@
             ? 'Current stop'
             : 'Open stop';
       button.innerHTML =
-        '<em>0' + (i + 1) + '</em><span><b>' + r.name + '</b><small>' + r.type + ' · ' + status + '</small></span>';
+        '<em>0' + (i + 1) + '</em><span><b>' + r.name + '</b><small>' + r.type + (r.rules ? ' · 3 stocks' : '') + ' · ' + status + '</small></span>';
       li.append(button);
       stops.append(li);
     }
@@ -1830,9 +1835,9 @@
     sound('menu');
     const intro = campaign.rooms[index].intro;
     if (!checkpoint && intro) playScene(intro);
-    else beginRun(index, checkpoint, index === 0 ? 'pip' : runner);
+    else beginRun(index, checkpoint, index === 0 ? 'pip' : runner, checkpoint ? progress.atCheckpoint : null);
   }
-  function beginRun(index, checkpoint, hero) {
+  function beginRun(index, checkpoint, hero, atCheckpoint = null) {
     dismiss();
     page = 'match';
     drillSide = null;
@@ -1863,10 +1868,10 @@
     view.shakeEnabled = settings.shake;
     noticeUntil = 0;
     $('dispatch-notice').hidden = true;
-    world = new window.DispatchRun({ room: index, checkpoint, hero, stamps: progress.stamps }, (name, e) => {
+    world = new window.DispatchRun({ room: index, checkpoint, hero, atCheckpoint, stamps: progress.stamps }, (name, e) => {
       view.event(name, e);
       if (name === 'dispatchCheckpoint') {
-        saveProgress({ room: index, checkpoint: e.checkpoint });
+        saveProgress({ room: index, checkpoint: e.checkpoint, atCheckpoint: e.atCheckpoint });
         tone(485, 735, 0.12);
         tone(735, 980, 0.13, 0.12);
         dispatchNotice(stored ? 'Checkpoint saved' : 'Checkpoint reached');
@@ -1880,7 +1885,13 @@
       } else if (name === 'dispatchWave') {
         tone(420, 570, 0.12);
         if (campaign.rooms[index].id === 'exchange') dispatchNotice('Wave ' + e.wave);
-      } else if (name === 'machineWindup') {
+      } else if (name === 'ko') {
+        sound(name, e);
+        dispatchNotice(e.f.stats.name + (e.remaining ? ' · ' + stockLabel(e.remaining) + ' left' : ' out'));
+      } else if (name === 'stockTie') dispatchNotice('Tiebreak · One stock each');
+      else if (name === 'hoist') dispatchNotice('Gantry catch · Armor damaged');
+      else if (name === 'dispatchVictory') dispatchNotice('Mission clear');
+      else if (name === 'machineWindup') {
         tone(e.move === 'charge' ? 240 : 160, e.move === 'charge' ? 390 : 210, 0.18, 0, 'triangle', 0.07);
       } else if (name === 'machineDown') {
         tone(215, 48, 0.18);
@@ -1909,21 +1920,51 @@
       noticeUntil = 0;
       $('dispatch-notice').hidden = true;
     }
-    const foes = world.foes, lead = foes[0], hp = foes.reduce((n, e) => n + e.hp, 0);
-    const key = [world.hp, world.stamps, world.objective, world.wave, hp].join('|');
+    const hero = world.dogs[0], foes = world.foes, lead = foes[0];
+    const boss = world.layout.rules === 'boss', horde = world.layout.rules === 'horde';
+    const grip = world.grapple;
+    const order = !grip || grip.phase === 'throw' ? world.objective : grip.owner === 0
+      ? 'Tap Attack to pummel · Aim to throw' : 'Grabbed · Tap action buttons to escape';
+    const key = [world.roomIndex, world.wave, hero.stocks, Math.floor(hero.damage), world.stamps, order,
+      ...foes.flatMap((e) => [e.f.stocks, Math.floor(e.f.damage), e.hp])].join('|');
     if (key === adventureKey) return;
     adventureKey = key;
-    $('runner-health').value = world.hp;
-    $('runner-health').setAttribute('aria-valuetext', Math.ceil(world.hp) + ' of ' + world.maxHP);
+    $('runner-score').hidden = !!world.bridge;
+    if (!world.bridge) {
+      showPercent($('runner-percent'), hero.damage);
+      showStocks($('runner-lives'), hero.stocks, hero.stats.name);
+    }
     $('machine-meter').hidden = !lead;
     if (lead) {
-      $('machine-name').textContent = foes.length > 1 ? 'Sorting crew · ' + (world.wave + 1) + '/' + world.layout.waves.length : lead.f.stats.name;
-      $('machine-health').max = foes.reduce((n, e) => n + e.maxHP, 0);
-      $('machine-health').value = hp;
+      $('machine-name').textContent = horde ? 'Sorting crew' : lead.f.stats.name;
+      $('rival-score').hidden = boss;
+      $('machine-health').hidden = !boss;
+      if (boss) {
+        $('machine-health').max = lead.maxHP;
+        $('machine-health').value = lead.hp;
+      } else {
+        $('rival-percent').hidden = horde;
+        if (!horde) showPercent($('rival-percent'), lead.f.damage);
+        const team = horde ? 'Sorting crew' : world.layout.rules === 'relay' ? 'Cage guards' : lead.f.stats.name;
+        showStocks($('rival-lives'), world.rivalStocks, team);
+        if (horde) $('rival-score').setAttribute('aria-label', foes.filter((e) => e.f.stocks)
+          .map((e) => e.f.stats.name + ' ' + Math.floor(e.f.damage) + '%').join(', '));
+        else $('rival-score').removeAttribute('aria-label');
+      }
     }
     $('dispatch-marks').textContent = 'Postmarks ' + countMarks(world.stamps) + ' / ' + campaign.rooms.length;
-    if ($('dispatch-objective').textContent !== world.objective)
-      $('dispatch-objective').textContent = world.objective;
+    if ($('dispatch-objective').textContent !== order) $('dispatch-objective').textContent = order;
+  }
+  function showPercent(element, damage) {
+    element.className = 'percentage' + (damage >= 110 ? ' danger' : damage >= 65 ? ' high' : '');
+    element.textContent = Math.floor(damage) + '%';
+  }
+  function showStocks(element, count, name) {
+    const label = name + ' · ' + stockLabel(count);
+    if (element.getAttribute('aria-label') === label) return;
+    element.innerHTML = stockPaws(count);
+    element.setAttribute('aria-label', label);
+    element.title = label;
   }
   function runAdventure(dt, pads) {
     accumulator += dt;
@@ -1954,9 +1995,13 @@
     } else if (world.finished === 'fallen') {
       showDialog(
         'dispatch-fall',
-        'Runner down',
+        world.bridge ? 'Runner down' : 'Out of stocks',
         '<p>Restart at ' + (world.layout.checkpoints[world.checkpoint - 1]?.name || world.layout.name) +
-          ' with full stamina.</p><div class="dialog-actions"><button class="primary" data-do="dispatch-retry">Retry</button><button class="utility" data-do="route">Route map</button></div>',
+          (world.bridge ? '.' : ' with ' + stockLabel(world.atCheckpoint?.stocks ?? campaign.fightStocks) + ' at ' +
+          Math.floor(world.atCheckpoint?.damage || 0) + '%.') +
+          '</p><div class="dialog-actions"><button class="primary" data-do="dispatch-retry">Retry</button>' +
+          (!world.bridge && world.checkpoint ? '<button class="utility" data-do="dispatch-rematch">Restart mission</button>' : '') +
+          '<button class="utility" data-do="route">Route map</button></div>',
         false,
       );
       document.querySelector('[data-do=dispatch-retry]').focus();

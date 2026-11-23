@@ -24,7 +24,7 @@
     ctx.fillRect(4, -4, 4, 4);
     ctx.restore();
   }
-  function drawOpponent(ctx, e, world, time, showMeter) {
+  function drawOpponent(ctx, e, world, time) {
     const { f, kind, phase } = e;
     if (f.absent) return;
     ctx.save();
@@ -32,7 +32,7 @@
       if (phase === 'defeat') ctx.globalAlpha = Math.max(0, 1 - e.time / e.duration);
       drawFighter(ctx, f, world, time);
     } else {
-      if (phase === 'windup') {
+      if (phase === 'windup' && !f.stun && f.ground >= 0) {
         const width = e.move === 'charge' ? (kind === 'conductor' ? 285 : 178) : f.stats.reach;
         ctx.save();
         ctx.translate(Math.round(f.x), Math.round(f.y));
@@ -43,25 +43,57 @@
         for (let i = 8; i < width + 8; i += 18) ctx.fillRect(i, -3, 8, 4);
         ctx.restore();
       }
-      const pose = phase === 'defeat' ? phase : e.hurt > 0 || f.grip ? 'hurt'
+      const pose = phase === 'defeat' ? phase : f.tumble || f.stun || e.hurt > 0 || f.grip ? 'hurt'
         : phase === 'approach' ? (Math.abs(f.vx) > 12 ? 'walk' : 'idle')
         : phase === 'strike' && e.move === 'charge' ? 'charge' : phase;
       const fraction = pose === 'hurt' && e.hurt ? 1 - e.hurt / 0.13
         : phase === 'approach' ? 0 : Math.min(1, e.time / e.duration);
+      if (f.respawning > 0) {
+        ctx.fillStyle = '#a6d5ce';
+        ctx.fillRect(Math.round(f.x - 36), Math.round(f.y), 72, 4);
+      }
+      if (f.invuln > 0 && !reduced.matches && Math.floor(time * 12) % 2) ctx.globalAlpha = 0.55;
+      if (f.tumble && !reduced.matches) {
+        const cx = Math.round(f.x), cy = Math.round(f.y - f.stats.height / 2);
+        ctx.translate(cx, cy);
+        ctx.rotate((Math.sign(f.vx) || f.face) * Math.min(5.5, f.tumble.time * 9));
+        ctx.translate(-cx, -cy);
+      }
       window.DispatchActors.draw(ctx, kind, Math.round(f.x), Math.round(f.y), {
         face: f.face, pose, phase: fraction, time,
       });
-      if (showMeter && e.hp > 0) {
-        const x = Math.round(f.x) - 20, y = Math.round(f.y - f.stats.height) - 16;
-        ctx.fillStyle = '#242237';
-        ctx.fillRect(x, y, 40, 7);
-        ctx.fillStyle = '#e8b373';
-        ctx.fillRect(x + 2, y + 2, Math.ceil(36 * e.hp / e.maxHP), 3);
-      }
+    }
+    ctx.restore();
+  }
+  function drawHordeDamage(ctx, foes) {
+    ctx.save();
+    ctx.font = '16px "Brawl Pixel", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const tags = [];
+    for (const { f } of foes) {
+      if (!f.stocks || f.absent) continue;
+      const x = Math.round(f.x), text = Math.floor(f.damage) + '%';
+      const half = Math.ceil(ctx.measureText(text).width / 2) + 5;
+      let y = Math.round(f.y - f.stats.height - 14);
+      while (tags.some((tag) => Math.abs(tag.x - x) < tag.half + half && Math.abs(tag.y - y) < 19)) y -= 19;
+      tags.push({ x, y, half });
+      ctx.fillStyle = '#252337';
+      ctx.fillRect(x - half, y - 9, half * 2, 18);
+      ctx.fillStyle = f.damage >= 110 ? '#ff9c79' : f.damage >= 65 ? '#f4ca78' : '#fff1c7';
+      ctx.fillText(text, x, y);
     }
     ctx.restore();
   }
   class DispatchView extends FightView {
+    drawEdgePortrait(ctx, f, x, y, time) {
+      const kind = f.encounter?.kind;
+      if (!kind || kind === 'brisket') return super.drawEdgePortrait(ctx, f, x, y, time);
+      ctx.translate(x, y + 14);
+      const scale = kind === 'conductor' ? 0.33 : 0.46;
+      ctx.scale(scale, scale);
+      window.DispatchActors.draw(ctx, kind, 0, 0, { face: f.face, time, pose: 'hurt' });
+    }
     event(name, e) {
       super.event(name, e);
       if (name === 'machineSwing' && e.kind === 'conductor' && e.move === 'stamp')
@@ -92,6 +124,7 @@
         room: l.id,
         length: l.length,
         combat: !world.bridge,
+        stockArena: !!l.rules,
         gateX: world.bridge?.nextSignal?.gate,
         gateClosed: !!world.bridge?.nextSignal,
         checkpoints: world.bridge ? l.checkpoints.map((cp, i) => ({ x: cp.x, lit: i < world.checkpoint })) : [],
@@ -105,9 +138,10 @@
       }
       for (const fx of this.effects) if (fx.behind) drawEffect(ctx, fx);
       const hero = world.dogs[0];
-      for (const enemy of world.foes) drawOpponent(ctx, enemy, world, t, world.foes.length > 1);
+      for (const enemy of world.foes) drawOpponent(ctx, enemy, world, t);
       drawFighter(ctx, hero, world, t);
       if (world.grapple) gripLead(ctx, world.dogs[world.grapple.owner], world.grapple);
+      if (l.rules === 'horde') drawHordeDamage(ctx, world.foes);
       for (const shot of world.projectiles) drawItem(ctx, shot);
       for (const fx of this.effects) {
         if (!fx.behind) drawEffect(ctx, fx);
@@ -115,6 +149,7 @@
       }
       this.effects = this.effects.filter((fx) => fx.life > 0);
       ctx.restore();
+      if (!world.bridge) this.drawOffscreen(ctx, world, x, top, width, height, 1, t);
     }
   }
   window.DispatchView = DispatchView;

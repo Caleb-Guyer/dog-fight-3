@@ -12,15 +12,15 @@
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="./style.css?v=screen-1" />
-    <link rel="stylesheet" href="./dispatch.css?v=widefilm-1" />
+    <link rel="stylesheet" href="./dispatch.css?v=stocks-1" />
     <link rel="stylesheet" href="./screen.css?v=missions-1" />
     <script defer src="./fighters-art.js?v=dispatch-1"></script>
     <script defer src="./arena-art.js?v=screen-1"></script>
-    <script defer src="./engine.js?v=missions-1"></script>
-    <script defer src="./render.js?v=screen-1"></script>
-    <script defer src="./dispatch-script.js?v=missions-1"></script>
+    <script defer src="./engine.js?v=stocks-1"></script>
+    <script defer src="./render.js?v=stocks-1"></script>
+    <script defer src="./dispatch-script.js?v=stocks-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
-    <script defer src="./yard-art.js?v=missions-1"></script>
+    <script defer src="./yard-art.js?v=stocks-1"></script>
     <script defer src="./dispatch-covers.js?v=missions-1"></script>
     <script defer src="./film-opening.js?v=widefilm-1"></script>
     <script defer src="./film-rescue.js?v=widefilm-1"></script>
@@ -28,9 +28,9 @@
     <script defer src="./film-ending.js?v=widefilm-1"></script>
     <script defer src="./dispatch-film.js?v=widefilm-1"></script>
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
-    <script defer src="./dispatch-run.js?v=missions-1"></script>
-    <script defer src="./dispatch-view.js?v=missions-1"></script>
-    <script defer src="./app.js?v=missions-1"></script>
+    <script defer src="./dispatch-run.js?v=stocks-1"></script>
+    <script defer src="./dispatch-view.js?v=stocks-1"></script>
+    <script defer src="./app.js?v=stocks-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -243,13 +243,20 @@
             <div class="runner-meter">
               <img id="runner-portrait" alt="" />
               <div>
-                <b id="runner-name"></b
-                ><progress id="runner-health" max="64" value="64" aria-label="Runner stamina"></progress>
+                <b id="runner-name"></b>
+                <span class="stock-line" id="runner-score">
+                  <strong class="percentage" id="runner-percent"></strong>
+                  <span class="lives" id="runner-lives" role="img"></span>
+                </span>
               </div>
             </div>
             <div id="machine-meter" class="machine-meter" hidden>
-              <b id="machine-name"></b
-              ><progress id="machine-health" max="84" value="84" aria-label="Opponent stamina"></progress>
+              <b id="machine-name"></b>
+              <span class="stock-line" id="rival-score">
+                <strong class="percentage" id="rival-percent"></strong>
+                <span class="lives" id="rival-lives" role="img"></span>
+              </span>
+              <progress id="machine-health" aria-label="Copper Hound armor" hidden></progress>
             </div>
             <span id="dispatch-notice" hidden></span>
           </div>

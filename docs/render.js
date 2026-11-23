@@ -3,6 +3,7 @@
 
   const { clamp, platforms, attackWindow } = window.DogFight;
   const team = ['#ef926e', '#98d0d1'];
+  const teamColor = (fighter) => team[fighter.index === 0 ? 0 : 1];
   const ink = '#252337';
   const cream = '#fff1c7';
   const gold = '#f4c76a';
@@ -1351,8 +1352,8 @@
     ctx.translate(snap(f.x, 2), snap(f.y - 36, 2));
     ctx.scale(f.face, 1);
     ctx.globalAlpha *= left * 0.55;
-    arc(ctx, 0, 0, radius, radius, 0.22, 0.83, team[f.index], 2);
-    if (!reduced.matches) arc(ctx, 0, 0, radius, radius, 2.3, 2.66, team[f.index], 2);
+    arc(ctx, 0, 0, radius, radius, 0.22, 0.83, teamColor(f), 2);
+    if (!reduced.matches) arc(ctx, 0, 0, radius, radius, 2.3, 2.66, teamColor(f), 2);
     ctx.restore();
   }
   function swing(ctx, f, floor) {
@@ -1418,7 +1419,7 @@
     airDodgeSlip(ctx, f);
     movingGrabFeet(ctx, f);
     dashFootwork(ctx, f);
-    if (f.respawning > 0) oval(ctx, f.x, f.y - 3, 42, 5, team[f.index]);
+    if (f.respawning > 0) oval(ctx, f.x, f.y - 3, 42, 5, teamColor(f));
     if (f.smashCharge && f.charge >= 0) drawSmashCharge(ctx, f);
     else if (f.charge > 0.21) {
       const r = 37 + f.charge * 10;
@@ -1478,8 +1479,8 @@
     swing(ctx, f, world.terrain[f.ground]);
     if (f.shield) {
       const r = 34 + f.shieldHP * 15;
-      oval(ctx, f.x, f.y - 36, r, r, team[f.index] + '36');
-      arc(ctx, f.x, f.y - 36, r, r, 0, Math.PI * 2, team[f.index], 4);
+      oval(ctx, f.x, f.y - 36, r, r, teamColor(f) + '36');
+      arc(ctx, f.x, f.y - 36, r, r, 0, Math.PI * 2, teamColor(f), 4);
       arc(ctx, f.x, f.y - 36, r - 5, r - 5, 3.75, 4.42, cream);
     } else if (
       f.shieldDrop > 0 &&
@@ -1910,11 +1911,11 @@
         );
       }
       if (name === 'jump' || name === 'recover')
-        this.add('ring', f.x, f.y, name === 'jump' ? cream : team[f.index], 0.23, 21);
+        this.add('ring', f.x, f.y, name === 'jump' ? cream : teamColor(f), 0.23, 21);
       if (name === 'hit' || name === 'block') {
         const face = e.face || 1;
         const point = e.point || { x: f.x - face * f.stats.width * 0.7, y: f.y - f.stats.height * 0.54 };
-        if (name === 'block') this.add('block', point.x - face * 7, point.y, team[f.index], 0.16, 54, face);
+        if (name === 'block') this.add('block', point.x - face * 7, point.y, teamColor(f), 0.16, 54, face);
         else {
           this.add(
             e.emphatic ? 'impact' : 'light',
@@ -1928,7 +1929,7 @@
           if (!reduced.matches && e.emphatic) this.shake = Math.min(7, 2 + e.speed * 0.006);
         }
       }
-      if (name === 'break') this.add('ring', f.x, f.y - 38, team[f.index], 0.3, 73);
+      if (name === 'break') this.add('ring', f.x, f.y - 38, teamColor(f), 0.3, 73);
       if (name === 'counter') this.add('block', f.x + f.face * 26, f.y - 40, gold, 0.22, 65, f.face);
       if (name === 'sweetSpot' && e.point) {
         const tint = e.moveId === 'cloverHaloLift' ? lilac : gold;
@@ -1965,7 +1966,7 @@
       if (name === 'skid') this.add('skid', f.x - e.face * 9, f.y, cream, 0.18, 56, e.face);
       if (name === 'swat') this.add('star', e.ball.x, e.ball.y, gold, 0.2, 25);
       if (name === 'ko') {
-        this.add('burst', clamp(e.x, 30, 1170), clamp(e.y, 38, 620), team[f.index], 0.7, 108);
+        this.add('burst', clamp(e.x, 30, (e.stageWidth ?? 1200) - 30), clamp(e.y, 38, 620), teamColor(f), 0.7, 108);
         if (!reduced.matches) this.shake = 10;
       }
       if (name === 'ledgeTrump' || (name === 'ledge' && !e.trump)) {
@@ -1982,7 +1983,7 @@
           type,
           point.x,
           point.y,
-          claimed ? team[f.index] : cream,
+          claimed ? teamColor(f) : cream,
           type === 'ledgeRegrab' ? 0.12 : 0.19,
           16,
           e.dir || (edge.left ? 1 : -1),
@@ -2071,22 +2072,28 @@
       }
       this.effects = this.effects.filter((e) => e.life > 0);
       ctx.restore();
+      this.drawOffscreen(ctx, world, left, top, width, height, this.zoom, time);
+      if (this.launchTrace) launchKey(ctx, this.launchTrace, canvas.clientWidth);
+    }
+    drawEdgePortrait(ctx, f, x, y, time) {
+      window.DogArt.draw(ctx, f.kind, x, y + 25, { face: f.face, scale: 0.53, time, pose: 'fall' });
+    }
+    drawOffscreen(ctx, world, left, top, width, height, zoom, time) {
       for (const f of world.dogs) {
-        const x = (f.x - left) * this.zoom, y = (f.y - 35 - top) * this.zoom;
-        if (f.stocks <= 0 || (x >= 10 && x <= width - 10 && y >= 0 && y <= height + 4)) continue;
+        const x = (f.x - left) * zoom, y = (f.y - 35 - top) * zoom;
+        if (f.absent || f.stocks <= 0 || (x >= 10 && x <= width - 10 && y >= 0 && y <= height + 4)) continue;
         const px = clamp(x, 27, width - 27), py = clamp(y, 26, height - 29);
         ctx.fillStyle = ink;
         ctx.fillRect(px - 23, py - 23, 46, 46);
-        ctx.fillStyle = team[f.index];
+        ctx.fillStyle = teamColor(f);
         ctx.fillRect(px - 20, py - 20, 40, 40);
         ctx.save();
         ctx.beginPath();
         ctx.rect(px - 19, py - 19, 38, 38);
         ctx.clip();
-        window.DogArt.draw(ctx, f.kind, px, py + 25, { face: f.face, scale: 0.53, time, pose: 'fall' });
+        this.drawEdgePortrait(ctx, f, px, py, time);
         ctx.restore();
       }
-      if (this.launchTrace) launchKey(ctx, this.launchTrace, canvas.clientWidth);
     }
   }
   const moveThumbnails = new Map();

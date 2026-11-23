@@ -2059,7 +2059,7 @@
       else this.dogs.forEach((f) => this.spawn(f, false));
     }
     spawn(f, fromKO) {
-      if (this.grapple) this.breakGrapple(false);
+      if (this.grapple && (this.dogs.length === 2 || f.grip)) this.breakGrapple(false);
       const point = this.layout?.spawns[f.index];
       const ground = point ? point.ground : this.stage === 'laundry' && f.index === 1 ? 1 : 0;
       const stocks = f.stocks;
@@ -4427,13 +4427,16 @@
         this.nextBall = 3.5;
       }
     }
+    loseStock(f) {
+      if (f.grip) this.breakGrapple(false);
+      if (this.mode !== 'training') f.stocks--;
+      this.projectiles = this.projectiles.filter((d) => d.owner !== f.index);
+      this.emit('ko', { f, x: f.x, y: f.y, stageWidth: this.stageWidth, remaining: f.stocks });
+    }
     knockouts(out) {
-      if (this.grapple) this.breakGrapple(false);
       for (const f of out) {
         if (f.index === 0 && this.launchPractice) this.launchPractice.phase = 'out';
-        this.emit('ko', { f, x: f.x, y: f.y });
-        if (this.mode !== 'training') f.stocks--;
-        this.projectiles = this.projectiles.filter((d) => d.owner !== f.index);
+        this.loseStock(f);
       }
       const eliminated = this.dogs.filter((f) => f.stocks <= 0);
       if (eliminated.length === 1) {

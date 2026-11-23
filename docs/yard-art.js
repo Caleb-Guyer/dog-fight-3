@@ -2256,16 +2256,71 @@
     p.r(w - 3, 9, 2, 32, groove);
     p.r(3, 42, w - 6, 1, groove);
   }
-  function platformArt(room, platform, index) {
+  const cornerMetals = {
+    alley: ['#ffe6b2', '#d4a575', '#9f795e', '#645b59'],
+    weighhouse: ['#fff0ba', '#d4b574', '#9b895e', '#5c6a5d'],
+    exchange: ['#e8f2d7', '#b3c5bb', '#8b9c99', '#516476'],
+    depot: ['#ffe3a5', '#e4aa73', '#b77e5e', '#76565b'],
+  };
+  function deckCorners(p, w, room) {
+    const [worn, light, face, shadow] = cornerMetals[room];
+    for (const dir of [1, -1]) {
+      p.g.save();
+      p.g.translate(dir === 1 ? 0 : w, 0);
+      p.g.scale(dir, 1);
+      // A riveted angle wraps down the exposed end. The worn nose touches
+      // the catch point and the dark notch directly below leaves room for the paw.
+      p.poly(
+        [
+          [0, 0],
+          [15, 0],
+          [15, 3],
+          [12, 5],
+          [7, 5],
+          [5, 7],
+          [5, 10],
+          [3, 12],
+          [0, 12],
+        ],
+        ink,
+      );
+      p.poly(
+        [
+          [0, 1],
+          [13, 1],
+          [13, 3],
+          [11, 4],
+          [6, 4],
+          [3, 7],
+          [3, 10],
+          [1, 11],
+          [0, 10],
+        ],
+        face,
+      );
+      p.r(0, 0, 9, 1, worn);
+      p.r(0, 1, 2, 3, light);
+      p.r(2, 1, 10, 1, light);
+      p.r(2, 2, 6, 1, worn);
+      p.r(1, 5, 2, 1, shadow);
+      p.r(0, 6, 1, 4, light);
+      p.r(9, 2, 2, 2, shadow);
+      p.dot(9, 2, worn);
+      p.dot(2, 9, light);
+      p.g.restore();
+    }
+  }
+  function platformArt(room, platform, index, corners) {
     const w = Math.max(2, Math.ceil((platform.x2 - platform.x1) / cell)),
       thin = platform.thin;
-    const key = ['platform', room, w, thin ? 1 : 0, index % 4].join('/');
+    const key = ['platform', room, w, thin ? 1 : 0, index % 4, corners ? 1 : 0].join('/');
     return piece(key, w, thin ? 14 : 45, (p) => {
       if (room === 'weighhouse' || room === 'exchange') worksDeck(p, w, room, thin);
       else if (thin) thinDeck(p, w, room);
       else if (room === 'alley') alleyDock(p, w, 77 + index * 19);
       else if (room === 'bridge') bridgeDeck(p, w);
       else depotDock(p, w, 177 + index * 17);
+      if (corners) deckCorners(p, w, room);
     });
   }
   function footing(room, w) {
@@ -2737,12 +2792,13 @@
     let x = -(((shift % span) + span) % span);
     for (; x < width; x += span) ctx.drawImage(bitmap, x, y, span, bitmap.height * cell);
   }
-  function drawSurfaces(ctx, terrain, room, cameraX, width) {
+  function drawSurfaces(ctx, terrain, room, cameraX, width, stockArena) {
+    const mainDeck = stockArena && cornerMetals[room] ? terrain.find((platform) => !platform.thin) : null;
     terrain.forEach((platform, index) => {
       const left = Math.round(platform.x1 - cameraX),
         right = Math.round(platform.x2 - cameraX);
       if (left >= width || right <= 0 || left >= right) return;
-      const art = platformArt(room, platform, index);
+      const art = platformArt(room, platform, index, platform === mainDeck);
       if (!platform.thin) {
         const supports = footing(room, art.width);
         ctx.drawImage(supports, left, Math.round(platform.y) + 135, right - left, supports.height * cell);
@@ -2771,7 +2827,7 @@
     ctx.imageSmoothingEnabled = false;
     if (view.room === 'weighhouse' || view.room === 'exchange') {
       workingYard(ctx, view.room, cameraX, top, width, height, time);
-      drawSurfaces(ctx, terrain, view.room, cameraX, width);
+      drawSurfaces(ctx, terrain, view.room, cameraX, width, view.stockArena);
       ctx.restore();
       return;
     }
@@ -2909,7 +2965,7 @@
       // The route uses the door's position after its last crossing opens.
       if (gateX !== exitX) crossing(gateX, !!gateClosed);
     }
-    drawSurfaces(ctx, terrain, room, cameraX, width);
+    drawSurfaces(ctx, terrain, room, cameraX, width, view.stockArena);
     ctx.restore();
   }
   window.YardArt = Object.freeze({ draw });

@@ -2,30 +2,33 @@
   'use strict';
   const solid = (x1, x2, y) => ({ x1, x2, y, thin: false });
   const shelf = (x1, x2, y) => ({ x1, x2, y, thin: true });
-  const foe = (kind, x, hp) => ({ kind, x, hp });
+  const fightStocks = 3;
+  const foe = (kind, x, stocks = 1) => ({ kind, x, stocks });
   const rooms = [
     {
       id: 'alley', name: 'Parcel Alley', type: 'Brawl', intro: 'opening', outro: 'rescue',
-      length: 1080, start: 425, terrain: [solid(0, 1080, 505), shelf(170, 365, 410), shelf(716, 910, 410)],
-      objective: 'Beat both cage guards to free Noodle.',
-      waves: [[foe('clipper', 659, 22)], [foe('porter', 344, 32)]],
+      rules: 'relay',
+      length: 1080, start: 425, terrain: [solid(135, 945, 505), shelf(170, 365, 410), shelf(716, 910, 410)],
+      objective: 'Launch the cage guards off the dock to free Noodle.',
+      waves: [[foe('clipper', 659)], [foe('porter', 344, 2)]],
       checkpoints: [{ wave: 1, name: 'parcel cage' }],
     },
     {
       id: 'weighhouse', name: 'The Weigh House', type: 'Rival duel',
       length: 1120, start: 438, terrain: [solid(145, 975, 508), shelf(235, 419, 407), shelf(698, 883, 407)],
-      objective: 'Beat Brisket by stamina or knock him off the scale.',
-      waves: [[foe('brisket', 682, 52)]],
+      rules: 'duel',
+      objective: 'Take Brisket’s three stocks. Recover if he knocks you off the scale.',
+      waves: [[foe('brisket', 682, fightStocks)]],
       dispatch: 'Brisket yields the weigh ticket. Across the tracks, the idle sorting belts roar back to life.',
     },
     {
       id: 'exchange', name: 'Freight Exchange', type: 'Horde',
-      length: 1160, start: 580, terrain: [solid(0, 1160, 510), shelf(181, 388, 408), shelf(770, 977, 408)],
-      objective: 'Clear the sorting floor.',
+      rules: 'horde',
+      length: 1160, start: 580, terrain: [solid(145, 1015, 510), shelf(181, 388, 408), shelf(770, 977, 408)],
       waves: [
-        [foe('clipper', 774, 18), foe('puncher', 320, 14)],
-        [foe('porter', 852, 25), foe('puncher', 245, 16)],
-        [foe('puncher', 222, 15), foe('clipper', 944, 18), foe('porter', 805, 23)],
+        [foe('clipper', 774, 2), foe('puncher', 320)],
+        [foe('porter', 852, 2), foe('puncher', 245)],
+        [foe('puncher', 222), foe('clipper', 944), foe('porter', 805)],
       ],
       checkpoints: [{ wave: 2, name: 'last wave' }],
       dispatch: 'The last trolley coasts to a stop. Noodle spots a cable ferry beyond the freight doors.',
@@ -51,9 +54,10 @@
     },
     {
       id: 'depot', name: 'Bell Depot', type: 'Boss', intro: 'boss', outro: 'ending',
-      length: 1160, start: 426, terrain: [solid(0, 1160, 520), shelf(182, 377, 415), shelf(788, 983, 415)],
+      rules: 'boss',
+      length: 1160, start: 426, terrain: [solid(120, 1040, 520), shelf(182, 377, 415), shelf(788, 983, 415)],
       objective: 'Dodge the Copper Hound’s rush. Hit the lamp when its stamp sticks.',
-      waves: [[foe('conductor', 739, 86)]],
+      waves: [[{ ...foe('conductor', 739), hp: 170 }]],
     },
   ];
   for (const room of rooms) {
@@ -128,6 +132,11 @@
   };
   const saveKey = 'dog-fight-3.last-dispatch.v1';
   const lastRoom = rooms.length - 1;
+  function checkpointFighter(value) {
+    if (!Number.isInteger(value?.stocks) || value.stocks < 1 || value.stocks > fightStocks ||
+        !Number.isFinite(value.damage) || value.damage < 0 || value.damage > 999) return null;
+    return { stocks: value.stocks, damage: value.damage };
+  }
   function readSave(storage) {
     let raw;
     try { raw = JSON.parse(storage.getItem(saveKey)); } catch {}
@@ -147,6 +156,7 @@
     const pending = scene && scene.stop === rooms[room].id && !checkpoint ? raw.pending : '';
     return {
       version: 2, started: raw.started === true, room, checkpoint, pending,
+      atCheckpoint: checkpoint && rooms[room].rules ? checkpointFighter(raw.atCheckpoint) : null,
       hero: room > 0 && raw.hero === 'noodle' ? 'noodle' : 'pip',
       stamps: Number.isInteger(raw.stamps) ? raw.stamps & ((1 << rooms.length) - 1) : 0,
       complete: room === lastRoom && raw.complete === true,
@@ -159,14 +169,19 @@
     if (event.room > progress.room) {
       fresh.room = event.room;
       fresh.checkpoint = 0;
+      fresh.atCheckpoint = null;
       fresh.pending = '';
     }
-    fresh.checkpoint = Math.max(fresh.checkpoint, event.checkpoint || 0);
+    if (event.checkpoint && event.checkpoint >= fresh.checkpoint) {
+      if (event.checkpoint > fresh.checkpoint || event.atCheckpoint !== undefined)
+        fresh.atCheckpoint = checkpointFighter(event.atCheckpoint);
+      fresh.checkpoint = event.checkpoint;
+    }
     if (event.pending !== undefined && (!fresh.checkpoint || !event.pending) && (!fresh.complete || !event.pending))
       fresh.pending = event.pending;
     if (event.hero && fresh.room > 0) fresh.hero = event.hero;
     if (event.complete) fresh.complete = true;
     return fresh;
   }
-  window.DispatchScript = { rooms, scenes, saveKey, lastRoom, readSave, record };
+  window.DispatchScript = { rooms, scenes, saveKey, lastRoom, fightStocks, readSave, record };
 })();

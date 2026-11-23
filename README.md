@@ -18,13 +18,13 @@ Choose **Adventure → Begin chapter** to play **The Silent Yard**. The six o’
 
 | Mission | How to clear it |
 | --- | --- |
-| Parcel Alley · Brawl | Beat the Ticket Clipper and Baggage Porter guarding Noodle’s cage. |
-| The Weigh House · Rival duel | Fight Brisket on the suspended scale. Empty his stamina or knock him off the stage. |
-| Freight Exchange · Horde | Survive three waves of sorting machines. The last crew attacks three at a time. |
+| Parcel Alley · Brawl | Ring out the Ticket Clipper once and the Baggage Porter twice to free Noodle. The guards share three stocks. |
+| The Weigh House · Rival duel | Fight Brisket in a three-stock duel on the suspended scale. Only ring-outs take a stock. |
+| Freight Exchange · Horde | Carry three stocks through three waves. Each crew fields three stocks, for nine enemy ring-outs in all. The last three machines fight together. |
 | Sorting Bridge · Crossing | Strike the west signal, ride the cable ferry and take the freight lift to the east signal. Cable Dock and Crane House save your progress. The optional postmark hangs above the crane approach. |
-| Bell Depot · Boss | Watch the Copper Hound’s lamp and the markings on the floor. Evade the rush and strike while the stamp is stuck. A parry opens the same damage window. |
+| Bell Depot · Boss | Break the Copper Hound’s armor before it takes your three stocks. Its lamp opens after a rush, a stuck stamp or a parry. It charges more often at half armor. |
 
-After Parcel Alley, choose Pip or Noodle. Both have their full fighting moves. Winning a fight earns its postmark. Sorting Bridge has a collectible postmark. Clearing each mission opens the next stop. You start with 64 stamina and have unlimited retries. **Route map → Continue** resumes the latest checkpoint in this browser. Replay any open mission from the route sheet. Saves from the original three-stop chapter carry forward, including postmarks and unlocked cutscenes.
+After Parcel Alley, choose Pip or Noodle. Both have their full fighting moves. Winning a fight earns its postmark. Sorting Bridge has a collectible postmark. Clearing each mission opens the next stop. Each combat mission starts you at **three stocks and 0% damage**. Higher damage makes you easier to launch. Crossing a blast boundary costs a stock, and respawning resets your damage. The Copper Hound has an armor meter. **Route map → Continue** restores your saved stop and checkpoint, including the stocks and damage you took into a saved wave. Older checkpoints start you with three fresh stocks. Replay any open mission from the route sheet. Saves from the original three-stop chapter carry forward, including postmarks and unlocked cutscenes.
 
 Four animated pixel-art cutscenes play during the chapter, with timed captions and an original score. Each shot fills your screen with scenery that extends around the dogs on ultrawide monitors and in portrait. **Pause** (P or gamepad Start) holds the current frame. **Next** jumps to the next caption and **Skip scene** moves the adventure along. With reduced motion enabled, each scene opens on a still frame and **Play** starts the animation. Rewatch unlocked scenes from **Adventure → Cutscenes**. [Open the cutscene library](https://caleb-guyer.github.io/dog-fight-3/#cutscenes)
 

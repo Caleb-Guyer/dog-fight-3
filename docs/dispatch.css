@@ -497,6 +497,15 @@
   font: 400 clamp(11px, 1.4vw, 18px) / 1 var(--pixel);
   text-transform: uppercase;
 }
+.runner-meter { --side: var(--tomato); }
+.machine-meter { --side: var(--aqua); }
+.stock-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.stock-line .lives { align-self: end; padding-bottom: 2px; }
+.stock-line .lives i { width: clamp(8px, 1.1vw, 13px); height: clamp(8px, 1.1vw, 13px); }
 .dispatch-hud progress {
   display: block;
   width: clamp(54px, 12vw, 148px);
