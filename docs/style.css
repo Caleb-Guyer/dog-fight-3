@@ -662,6 +662,8 @@ body.playing .tools .utility,
   color: var(--gold);
 }
 #launch-status[data-result='tech'],
+#wall-status[data-result='wallTech'],
+#wall-status[data-result='wallTechJump'],
 #shield-status[data-result='parry'],
 #roll-status[data-result='passed'],
 #roll-status[data-result='counter'],
@@ -793,6 +795,7 @@ kbd {
   font-size: 13px;
 }
 #shield-patterns,
+#wall-patterns,
 #roll-patterns,
 #trump-patterns,
 #air-patterns {

@@ -33,7 +33,7 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 | Attack | J | Comma | X |
 | Smash | I | N | RT or right stick |
 | Special | K | Period | B |
-| Shield, dodge, parry, or landing tech | L | Slash | LB or RB |
+| Shield, dodge, parry, or tech | L | Slash | LB or RB |
 | Grab | U | M | Y |
 | Pause | Esc | Esc | Start |
 
@@ -81,6 +81,10 @@ Choose **Training → Air-dodge practice → In place**. Jump and tap Shield as 
 **Missed tech.** After the bounce, tap Attack for a two-sided, 7% **Get-up Sweep**, tap a side for a get-up roll, or tap Up or Jump to stand. If you wait, your dog stands automatically. A prone dog can duck a high swing, but a low hit can catch it.
 
 Choose **Training → Launch practice**. Your selected opponent grabs you at 90% and uses its own up throw. Compare the dashed gold line showing the original direction with your solid aqua launch line, then try a tech where you land. Choose Launch practice again to repeat the same throw. The **Defense** tab in the Move list illustrates the controls for every dog.
+
+**Wall tech.** When you tumble into a solid stage wall, tap Shield in the last 11 frames before impact to brace against it. Hold Jump at contact to spring up and away. Both recoveries preserve the air jump and Up Special you have left. A missed tech bounces you back into open air, still tumbling. Wall and landing techs share the same 28-frame lockout.
+
+Choose **Training → Wall tech practice** to play Noodle at 90% in the gap on Laundry Line. Pip’s Back Heel hits you toward the brickwork. Try letting it hit the wall first, then use **Retry kick** to practice the Shield timing. **Switch wall** mirrors the exchange. **Reset positions** returns to your selected dogs and stage.
 
 ## The four fighters
 

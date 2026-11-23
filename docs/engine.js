@@ -1737,6 +1737,36 @@
       platform(805, 935, 310, true),
     ];
   }
+  // Only the plank ends, roof fascias and brickwork have vertical collision faces.
+  function stageWalls(stage) {
+    const bands =
+      stage === 'laundry'
+        ? [
+            [0, 0, 15],
+            [3, 15, 18],
+            [9, 18, 225],
+          ]
+        : [
+            [0, 0, 14],
+            [5, 14, 22],
+            [12, 22, 27],
+            [18, 27, 30],
+          ];
+    return platforms(stage, 0).flatMap((p, index) =>
+      p.thin
+        ? []
+        : bands.flatMap(([inset, top, bottom]) =>
+            [true, false].map((left) => ({
+              x: left ? p.x1 + inset : p.x2 - inset,
+              top: p.y + top,
+              bottom: p.y + bottom,
+              index,
+              left,
+            })),
+          ),
+    );
+  }
+  const solidWalls = { picnic: stageWalls('picnic'), laundry: stageWalls('laundry') };
   function newFighter(kind, index) {
     return {
       kind,
@@ -1761,6 +1791,7 @@
       stun: 0,
       reaction: null,
       tumble: null,
+      wallAction: null,
       floorAction: null,
       techBuffer: 0,
       techLock: 0,
@@ -2004,6 +2035,7 @@
       this.ball = null;
       this.nextBall = 4;
       this.trainingDamage = 0;
+      this.wallPractice = null;
       this.trumpPractice = null;
       this.rollPractice = null;
       this.launchPractice = null;
@@ -2051,6 +2083,12 @@
       this.lastCombo = { hits: 0, damage: 0 };
     }
     resetTraining(ledge = false, fromHang = false) {
+      if (this.wallPractice) {
+        this.stage = this.wallPractice.original.stage;
+        this.dogs = this.wallPractice.original.dogs;
+        this.terrain = platforms(this.stage, this.time);
+        this.wallPractice = null;
+      }
       this.ledgeClaims.length = 0;
       this.trumpPractice = null;
       this.rollPractice = null;
@@ -2089,6 +2127,26 @@
       this.resetTraining();
       this.dogs[0].damage = 90;
       this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
+    }
+    resetWallPractice(side = 'left') {
+      this.resetTraining();
+      const original = { stage: this.stage, dogs: this.dogs };
+      this.stage = 'laundry';
+      this.terrain = platforms(this.stage, this.time);
+      const inward = side === 'right' ? 1 : -1;
+      const roof = this.terrain[inward === 1 ? 1 : 0];
+      const lip = inward === 1 ? roof.x1 : roof.x2;
+      this.dogs = [newFighter('noodle', 0), newFighter('pip', 1)];
+      const [noodle, pip] = this.dogs;
+      Object.assign(noodle, { x: lip - inward * 58, y: roof.y + 121, face: inward, damage: 90, jumps: 1 });
+      Object.assign(pip, {
+        x: lip - inward * 106,
+        y: roof.y + 121,
+        face: -inward,
+        jumps: 1,
+        damage: this.trainingDamage,
+      });
+      this.wallPractice = { phase: 'ready', time: 0, side, inward, swung: false, outcome: '', original };
     }
     resetShieldPractice(pattern = 'strike') {
       this.resetTraining();
@@ -2310,6 +2368,14 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      const wallDrill = this.wallPractice;
+      if (wallDrill?.phase === 'ready') {
+        wallDrill.time += dt;
+        this.dogs[0].prev = { ...input1 };
+        if (wallDrill.time + 1e-8 < 0.75) return;
+        wallDrill.phase = 'swing';
+        this.emit('wallCue', { f: this.dogs[0] });
+      }
       if (this.trumpPractice?.phase === 'ready') {
         if (!(Math.abs(input1.x) > 0.2 || input1.jump || input1.shield || input1.special || input1.attack))
           return;
@@ -2379,7 +2445,15 @@
                     : this.trumpPractice
                       ? this.trumpPracticeInput()
                       : idleInput;
-      const inputs = [this.launchPractice?.phase === 'ready' ? idleInput : input1, second];
+      const settingUpWallHit = wallDrill?.phase === 'swing';
+      const inputs = [
+        this.launchPractice?.phase === 'ready' || settingUpWallHit ? idleInput : input1,
+        second,
+      ];
+      if (settingUpWallHit && !wallDrill.swung) {
+        inputs[1] = { ...idleInput, x: wallDrill.inward, attack: true };
+        wallDrill.swung = true;
+      }
       for (const f of this.dogs) {
         if (f.ground !== -1) f.x += this.terrain[f.ground].x1 - old[f.ground].x1;
         this.captureInput(f, inputs[f.index]);
@@ -2387,11 +2461,13 @@
         f.techBuffer = Math.max(0, f.techBuffer - dt);
         f.techLock = Math.max(0, f.techLock - dt);
       }
+      if (settingUpWallHit) this.dogs[0].prev = { ...input1 };
       if (this.grapple) this.advanceGrapple(dt);
       for (const f of this.dogs) {
         if (f.ground >= 0) {
           f.ledgeProtectionReady = true;
           f.ledgeTrump = null;
+          f.wallAction = null;
         }
       }
       if (this.ledgeClaims.length) this.resolveLedgeClaims();
@@ -2405,7 +2481,8 @@
         !this.shieldPractice &&
         !this.airPractice &&
         !this.rollPractice &&
-        !this.trumpPractice
+        !this.trumpPractice &&
+        !wallDrill
       )
         this.updateBall(dt);
       const out = this.dogs.filter((f) => f.x < -115 || f.x > 1315 || f.y > 765 || f.y < -172);
@@ -2513,7 +2590,12 @@
             f.techLock = techLockout;
             f.tumble.techDir = Math.abs(input.x) > 0.45 ? Math.sign(input.x) : 0;
           }
-          if (f.stun > 0 || this.floorAhead(f, techWindow + 1 / 60) >= 0) f.guardBuffer = 0;
+          if (
+            f.stun > 0 ||
+            this.floorAhead(f, techWindow + 1 / 60) >= 0 ||
+            this.wallAhead(f, techWindow + 1 / 60)
+          )
+            f.guardBuffer = 0;
         }
       }
       if (f.command?.grabStyle === 'dash' && grabX * f.command.runFace <= -runStick)
@@ -2593,12 +2675,81 @@
       }
       return result;
     }
+    wallContact(f, x, y, nextX, nextY) {
+      const dx = nextX - x;
+      if (Math.abs(dx) < 1e-8) return null;
+      const dir = -Math.sign(dx),
+        dy = nextY - y,
+        chest = y - f.stats.height * 0.52;
+      let first = null;
+      for (const wall of solidWalls[this.stage]) {
+        if ((wall.left ? -1 : 1) !== dir || (x - wall.x) * dir < -1e-8) continue;
+        const contactX = wall.x + dir * f.stats.width;
+        let enter = Math.max(0, (contactX - x) / dx);
+        let leave = Math.min(1, (wall.x - x) / dx);
+        if (Math.abs(dy) > 1e-8) {
+          const top = (wall.top - chest) / dy,
+            bottom = (wall.bottom - chest) / dy;
+          enter = Math.max(enter, Math.min(top, bottom));
+          leave = Math.min(leave, Math.max(top, bottom));
+        } else if (chest < wall.top || chest > wall.bottom) continue;
+        if (enter > leave + 1e-8 || (first && enter >= first.t)) continue;
+        first = { wall, dir, x: contactX, feet: y + dy * enter, t: enter };
+      }
+      return first;
+    }
+    wallAhead(f, horizon) {
+      let { x, y, vx, vy } = f;
+      // Sample the tumbling arc a frame at a time so a shallow plank is as hittable as a brick wall.
+      for (let elapsed = 0; elapsed + 1e-8 < horizon; elapsed += 1 / 60) {
+        const dt = Math.min(1 / 60, horizon - elapsed);
+        vx *= Math.pow(0.68, dt);
+        const free = f.stun <= elapsed + dt;
+        if (free) vx += f.prev.x * 175 * dt;
+        const fastFall = free && f.prev.y > 0.55 && vy > 0;
+        vy = Math.min(vy + (fastFall ? 2580 : 1540) * f.kit.gravity * dt, 970);
+        const nextX = x + vx * dt,
+          nextY = y + vy * dt;
+        const contact = this.wallContact(f, x, y, nextX, nextY);
+        if (contact) return contact;
+        x = nextX;
+        y = nextY;
+      }
+      return null;
+    }
+    hitWall(f, contact, jump) {
+      const { wall, dir, feet } = contact;
+      f.x = contact.x;
+      f.y = feet;
+      const type = f.techBuffer > 1e-8 ? (jump ? 'wallTechJump' : 'wallTech') : 'wallBounce';
+      if (type === 'wallBounce') {
+        f.vx = -f.vx * 0.72;
+        f.vy *= 0.82;
+      } else {
+        this.clearTumble(f, jump ? 'Wall-tech jump' : 'Wall tech');
+        f.reaction = f.command = f.guardAim = f.throwBounce = null;
+        f.stun = f.jumpBuffer = f.guardBuffer = f.coyote = 0;
+        f.cutJump = false;
+        f.face = jump ? dir : -dir;
+        f.vx = jump ? dir * 290 : 0;
+        f.vy = jump ? -f.stats.jump * 0.92 : 0;
+        f.invuln = Math.max(f.invuln, (jump ? 9 : 12) / 60);
+        f.ledgeLock = (jump ? 8 : 10) / 60 - 1e-8;
+      }
+      f.wallAction = { type, time: 0, duration: (type === 'wallBounce' ? 6 : jump ? 8 : 10) / 60, dir, wall };
+      if (this.wallPractice?.phase === 'flight' && f.index === 0) {
+        this.wallPractice.phase = 'done';
+        this.wallPractice.outcome = type;
+      }
+      this.emit(type, { f, wall, dir, point: { x: wall.x, y: feet - f.stats.height * 0.52 } });
+    }
     clearTumble(f, option) {
       if (f.tumble && f.index === 0 && this.launchPractice?.phase === 'flight') {
         this.launchPractice.phase = 'escaped';
         this.emit('tumbleEscape', { f, option });
       }
       f.tumble = null;
+      f.wallAction = null;
       f.techBuffer = 0;
     }
     startTumble(f, pending) {
@@ -2795,6 +2946,12 @@
       const attackTap = f.command?.type === 'attack';
       const guardIntent = f.guardIntent;
       f.guardIntent = '';
+      if (f.wallAction) {
+        const action = f.wallAction;
+        action.time += dt;
+        if (action.time + 1e-8 >= action.duration) f.wallAction = null;
+        else if (action.type === 'wallTech') return;
+      }
       if (f.floorAction) return this.advanceFloor(f, dt);
       if (f.tumble) {
         if (f.tumble.pending) this.releaseLaunch(f, input);
@@ -2867,7 +3024,13 @@
         if (chainTap || jumpFollow || ropeFollow || throwFollow) f.attack = null;
       }
       const ready =
-        !f.attack && !f.airDodge && !f.ledgeTrump && f.stun <= 0 && f.dodge <= 0 && f.landingLag <= 1e-8;
+        !f.attack &&
+        !f.airDodge &&
+        !f.ledgeTrump &&
+        f.wallAction?.type !== 'wallTechJump' &&
+        f.stun <= 0 &&
+        f.dodge <= 0 &&
+        f.landingLag <= 1e-8;
       const shieldExit = jumpTap || f.command?.type === 'grab';
       if (shieldExit || f.shieldDrop < 1e-8) f.shieldDrop = 0;
       if (guardIntent && ready && grounded && !shieldExit && !f.shieldDrop && f.charge < 0) {
@@ -2906,7 +3069,12 @@
         this.emit('skid', { f, face: f.skidFace });
       }
       if (free && f.stun <= 0 && f.dodge <= 0 && !f.shield) {
-        if (!f.smashCharge && f.jumpBuffer > 0 && (f.jumps > 0 || f.coyote > 0)) {
+        if (
+          !f.smashCharge &&
+          f.jumpBuffer > 0 &&
+          (f.jumps > 0 || f.coyote > 0) &&
+          !(f.tumble && f.techBuffer > 1e-8 && this.wallAhead(f, f.techBuffer))
+        ) {
           this.clearTumble(f, 'Jump');
           f.throwBounce = null;
           if (grounded && direction === 1 && this.terrain[f.ground].thin) {
@@ -3008,7 +3176,7 @@
       if (f.tumble) {
         f.vx *= Math.pow(0.68, dt);
         if (!f.stun) f.vx += input.x * 175 * dt;
-      } else if (f.stun > 0 || f.ledgeTrump) {
+      } else if (f.stun > 0 || f.ledgeTrump || f.wallAction?.type === 'wallTechJump') {
         f.vx *= Math.pow(0.68, dt);
         f.vx += input.x * 100 * dt;
       } else if (f.ground >= 0 && f.attack?.brake) {
@@ -3029,7 +3197,8 @@
         trackGroundRun(f, input.grabX ?? input.x, dt);
       else f.run = null;
       const dodgeGlide = f.airDodge && this.advanceAirDodge(f, dt);
-      const oldY = f.y;
+      const oldX = f.x,
+        oldY = f.y;
       f.x += f.vx * dt;
       if (f.ground >= 0) {
         const p = this.terrain[f.ground];
@@ -3049,6 +3218,15 @@
           f.vy = Math.min(f.vy + (fastFall ? 2580 : 1540) * f.kit.gravity * dt, 970);
         }
         f.y += f.vy * dt;
+        const contact = this.wallContact(f, oldX, oldY, f.x, f.y);
+        if (contact) {
+          if (f.tumble) {
+            this.hitWall(f, contact, input.jump);
+            return;
+          }
+          f.x = contact.x;
+          f.vx = 0;
+        }
         if (f.vy >= 0) {
           const landing = this.landingSurface(f, oldY);
           if (landing >= 0) {
@@ -3239,6 +3417,7 @@
       this.grapple = owner.grip = target.grip = grip;
       for (const f of [owner, target]) {
         cancelCharge(f);
+        f.wallAction = null;
         f.ledgeTrump = null;
         f.tumble = f.floorAction = null;
         f.airDodge = f.guardAim = null;
@@ -3958,6 +4137,7 @@
       }
       if (target.grip) this.breakGrapple(false);
       target.ledgeTrump = null;
+      target.wallAction = null;
       target.throwBounce = null;
       target.floorAction = target.tumble = null;
       target.airDodge = target.guardAim = null;
@@ -4016,6 +4196,8 @@
       const launchSpeed = Math.hypot(target.vx, target.vy);
       const finish = !move?.setupHit && !move?.second && !move?.pull && !move?.bounce && name !== 'snare';
       if (finish && launchSpeed >= tumbleSpeed) this.startTumble(target, true);
+      if (this.wallPractice?.phase === 'swing' && target.index === 0 && moveId === 'pipBackKick')
+        this.wallPractice.phase = 'flight';
       if (target.index === 0 && this.launchPractice?.phase === 'ready' && name === 'throw') {
         this.launchPractice.phase = 'flight';
       }
@@ -4401,6 +4583,16 @@
             const away = -Math.sign(dx);
             result.x = f.x + 90 * away > closest.x1 && f.x + 90 * away < closest.x2 ? away : -away;
           } else result.jump = true;
+        }
+        return result;
+      }
+      const wall = f.tumble && this.wallAhead(f, 7 / 60);
+      if (wall) {
+        result.x = 0;
+        result.jump = f.tumble.willTech && f.y > wall.wall.top + f.stats.height;
+        if (f.tumble.willTech && f.techLock <= 1e-8) {
+          result.shield = true;
+          result.tapped = { shield: true };
         }
         return result;
       }

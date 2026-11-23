@@ -10,6 +10,7 @@
   const mint = '#9fe4d7';
   const parryDuration = 12 / 60;
   const shieldDropDuration = 10 / 60;
+  const wallOptions = new Set(['wallTech', 'wallTechJump', 'wallBounce']);
   const chargeColors = { pip: '#ee9775', brisket: gold, noodle: '#e5b47b', clover: lilac };
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const snap = (value, cell = 3) => Math.round(value / cell) * cell;
@@ -239,6 +240,7 @@
       ];
     }
     if (f.ledgeTrump) return ['ledgeTrump', clamp(f.ledgeTrump.time / f.ledgeTrump.duration, 0, 1)];
+    if (f.wallAction) return [f.wallAction.type, clamp(f.wallAction.time / f.wallAction.duration, 0, 1)];
     if (f.tumble) return ['tumble', 0];
     if (f.stun > 0) {
       if (!f.reaction) return ['hurt', 0.3];
@@ -1434,6 +1436,10 @@
     } else if (state === 'ledgeTrump') {
       face = -f.ledgeTrump.dir;
       spriteTime = reduced.matches ? 0 : f.ledgeTrump.time;
+    } else if (f.wallAction?.type === state) {
+      // The paws face the surface even when the fighter's velocity already points away.
+      face = -f.wallAction.dir;
+      spriteTime = f.wallAction.time;
     } else if (f.floorAction) {
       if (state === 'techRoll' || state === 'shieldRoll' || state === 'ledgeRoll')
         face = f.floorAction.dir || f.face;
@@ -1452,6 +1458,7 @@
       !firstHangFrame &&
       !f.floorAction &&
       !f.airDodge &&
+      !f.wallAction &&
       !(f.parryFlash > 0) &&
       !reduced.matches &&
       Math.floor(time * 12) % 2
@@ -1602,6 +1609,43 @@
     }
     ctx.restore();
   }
+  function wallContactMark(ctx, e, p) {
+    // The collision point stays on the brick or plank once the dog has left it.
+    const lift = Math.min(e.size, e.y - e.wall.top);
+    const drop = Math.min(e.size - 2, e.wall.bottom - e.y);
+    const drift = reduced.matches ? 0 : snap(6 * p, 2);
+    ctx.save();
+    ctx.translate(Math.round(e.x), Math.round(e.y));
+    ctx.scale(e.face, 1);
+    ctx.globalAlpha *= Math.min(1, (1 - p) * 2);
+    if (e.type === 'wallBounce') {
+      // A stubby impact notch and a loose flake follow the missed shoulder check.
+      pixelLine(ctx, -2, -Math.min(4, lift), -2, Math.min(4, drop), '#70525b', 4, 2);
+      pixelLine(ctx, -2, 0, 3, -2, '#eaa57a', 3, 2);
+      pixelLine(ctx, 5 + drift, 2 + drift, 11 + drift, 5 + drift, '#90676a', 4, 2);
+      pixelLine(ctx, 5 + drift, 2 + drift, 9 + drift, 4 + drift, e.color, 2, 2);
+      if (!reduced.matches) pixelLine(ctx, 6 + drift, -6, 9 + 2 * drift, -8, '#cfa184', 2, 2);
+    } else {
+      // Two interrupted scuffs leave the gripping paw visible between them.
+      for (const [color, width] of [
+        ['#455460', 4],
+        [e.color, 2],
+      ]) {
+        pixelLine(ctx, -2, -Math.min(4, lift), -2, -lift, color, width, 2);
+        pixelLine(ctx, -2, -lift, 2, -lift, color, width, 2);
+        pixelLine(ctx, -2, Math.min(4, drop), -2, drop, color, width, 2);
+      }
+      if (e.type === 'wallTechJump') {
+        // A short diagonal points up and away, independent of the dog's original facing.
+        const end = reduced.matches ? 16 : 20;
+        pixelLine(ctx, 4 + drift, -4 - drift, end + drift, -15 - drift, '#536473', 4, 2);
+        pixelLine(ctx, 4 + drift, -4 - drift, end + drift, -15 - drift, cream, 2, 2);
+      } else {
+        pixelLine(ctx, -2, drop, 3, drop, cream, 2, 2);
+      }
+    }
+    ctx.restore();
+  }
   function parryContact(ctx, x, y, face, projectile, p) {
     ctx.save();
     ctx.translate(snap(x, 2), snap(y, 2));
@@ -1711,6 +1755,7 @@
   }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
+    if (wallOptions.has(e.type)) return wallContactMark(ctx, e, p);
     if (e.type === 'airGather' || e.type === 'airWake') return airDodgeStart(ctx, e, p);
     if (e.type === 'lipDust' || e.type === 'ledgePlant') return ledgeRollDust(ctx, e, p);
     if (e.type === 'ledgeClaim' || e.type === 'ledgeRegrab') return ledgeCatchMark(ctx, e, p);
@@ -1802,6 +1847,11 @@
           };
       }
       if (name === 'tech') this.add('techLand', e.point.x, e.point.y, mint, 0.19, 18, 1, { dir: e.dir });
+      if (wallOptions.has(name)) {
+        this.add(name, e.point.x, e.point.y, name === 'wallBounce' ? '#e0a379' : mint, 0.17, 13, e.dir, {
+          wall: e.wall,
+        });
+      }
       if (name === 'ledgeRoll' || name === 'ledgeRollPlant') {
         const plant = name === 'ledgeRollPlant';
         this.add(
@@ -2153,6 +2203,34 @@
     pixelLine(ctx, 29, 8, 45, 8, '#815b50', 2, 2);
     ctx.restore();
   }
+  function guideWall(ctx, wall) {
+    // Cut away three courses of Laundry's warm brickwork under the overhanging roof trim.
+    const h = wall.bottom - wall.top;
+    ctx.save();
+    ctx.translate(wall.x, wall.top);
+    ctx.fillStyle = ink;
+    ctx.fillRect(-6, -8, 34, 7);
+    ctx.fillRect(-3, -2, 31, 4);
+    ctx.fillStyle = '#474057';
+    ctx.fillRect(0, 0, 26, h - 3);
+    ctx.fillRect(0, h - 3, 17, 3);
+    ctx.fillStyle = '#b47b6c';
+    ctx.fillRect(3, 3, 23, h - 7);
+    ctx.fillRect(3, h - 4, 14, 4);
+    ctx.fillStyle = '#885f68';
+    ctx.fillRect(2, 0, 25, 6);
+    for (let i = 0; i < 3; i++) {
+      const y = 12 + i * 16;
+      ctx.fillRect(3, y, 23, 2);
+      ctx.fillRect(i % 2 ? 10 : 18, y + 2, 2, Math.min(14, h - y - 5));
+    }
+    ctx.fillStyle = '#e6b187';
+    ctx.fillRect(-4, -6, 31, 3);
+    ctx.fillStyle = '#c98b73';
+    ctx.fillRect(6, 16, 7, 2);
+    ctx.fillRect(15, 32, 8, 2);
+    ctx.restore();
+  }
   function defenseThumbnail(source, kind, side) {
     source.width = 320;
     source.height = 228;
@@ -2160,7 +2238,8 @@
     ctx.translate(160, 148);
     const f = { kind, x: 0, y: 0, face: 1, stats: window.DogFight.fighters[kind] };
     let phase = 0,
-      time = 0;
+      time = 0,
+      wallMark = null;
     if (side === 'tumble') {
       time = 0.21;
       pixelLine(ctx, -52, -5, -35, -15, '#c6a984', 3, 2);
@@ -2178,6 +2257,17 @@
       phase = action.time / action.duration;
       guideLedge(ctx, edge, Math.max(65, Math.round(body.x + f.stats.width + 9)));
       ledgeRollTrail(ctx, f);
+    } else if (wallOptions.has(side)) {
+      const y = -Math.round(f.stats.height * 0.52);
+      const wall = { x: f.stats.width, top: y - 25, bottom: y + 31 };
+      guideWall(ctx, wall);
+      const jump = side === 'wallTechJump';
+      const bounce = side === 'wallBounce';
+      phase = jump ? 0.32 : bounce ? 0.5 : 0.4;
+      // Keep the original contact on the masonry as the two airborne snapshots separate.
+      f.x = jump ? -12 : bounce ? -18 : 0;
+      f.y = jump ? -Math.round(f.stats.jump * 0.034) : bounce ? 3 : 0;
+      wallMark = { type: side, x: wall.x, y, wall, face: -1, size: 13, color: bounce ? '#e0a379' : mint };
     } else if (side === 'neutralAirDodge' || side === 'directionalAirDodge') {
       const directed = side === 'directionalAirDodge';
       const [total, first, last] = window.DogFight.kits[kind].airDodge[directed ? 'directional' : 'neutral'];
@@ -2232,6 +2322,7 @@
       dodgeY: f.airDodge?.y || 0,
     });
     if (f.attack) floorSweep(ctx, f, f.attack);
+    if (wallMark) wallContactMark(ctx, wallMark, 0.25);
     if (side === 'parry') {
       const [x, y] =
         kind === 'clover'

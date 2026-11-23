@@ -724,6 +724,19 @@
     noodle: tile(`..##.##. .#lL#lL# #LLlLLl# #LcLLcL# .#LccL#. ..#ll#.. ...##...`),
     clover: tile(`..##.##. .#wW#WW# #WWwWWw# #WpWWpW# .#WppW#. ..#ww#.. ...##...`),
   };
+  // Slim side profiles keep the fingertips flat against a vertical surface.
+  const wallPaws = {
+    pip: tile(`..## .#W# #wW# #WW# .cW# .wW# ..##`),
+    brisket: tile(`...## ..#W# .#iW# #wWW# #WbW# .#wW# ..#w# ...##`),
+    noodle: tile(`..## .#L# #lL# #LL# .cL# .lL# ..##`),
+    clover: tile(`..## .#W# #wW# #WW# .pW# .wW# ..##`),
+  };
+  const wallShoulders = {
+    pip: tile(`..###. .#lLL# #lLLL# #LLWW# #llww# .#cll# ..###.`),
+    brisket: tile(`..####. .#iIii# #iIIIi# #iiIBB# #iBBbb# .#Bbbb# ..####.`),
+    noodle: tile(`..###. .#cLO# #cOOO# #OOOL# #cOOl# .#Ccc# ..###.`),
+    clover: tile(`..###. .#kpP# #kppp# #ppWW# #kpww# .#kkp# ..###.`),
+  };
   // Raised pads face the incoming blow, with a dark gap between the outer claws.
   const parryPaws = {
     pip: tile(`..##.##.. .#WW#WW#. .#Ww#WW## #WWWWwWWW# #WcWWcWWw# .#WcccWW#. .#Wcccw#.. ..#www#... ...###....`),
@@ -3063,7 +3076,14 @@
       recoil: [-2, -7, -15, -20, -13, -2, 7, 6, 2, 0],
     },
   };
-  const sharedPointPoses = ['floorAttack', 'parry', 'ledgeRoll', 'ledgeTrump'];
+  const wallPoses = ['wallTech', 'wallTechJump', 'wallBounce'];
+  const sharedPointPoses = ['floorAttack', 'parry', 'ledgeRoll', 'ledgeTrump', ...wallPoses];
+  const wallStyles = {
+    pip: { width: 23, height: 70, farY: -7, turn: [-26, -71, -117, -165] },
+    brisket: { width: 31, height: 69, farY: 7, turn: [-19, -51, -90, -132] },
+    noodle: { width: 29, height: 62, farY: -6, turn: [-30, -76, -125, -179] },
+    clover: { width: 25, height: 77, farY: -8, turn: [-24, -66, -112, -161] },
+  };
   const ledgeRollStyles = {
     pip: {
       total: 23, safe: [2, 12], plant: 6, arrive: 16, distance: 96, front: 5, rear: 1,
@@ -3333,6 +3353,13 @@
     const tick = (period) => Math.floor((Math.abs(time) % 1000000) * period);
     if (pose === 'ledgeRoll') return ledgeRollFrame(name, phase);
     if (pose === 'ledgeTrump') return Math.min(5, Math.round(phase * 5 + 1e-7));
+    if (wallPoses.includes(pose)) {
+      const total = pose === 'wallTech' ? 10 : pose === 'wallTechJump' ? 8 : 6;
+      const tick = Math.min(total - 1, Math.floor(phase * total + 1e-7));
+      if (pose === 'wallTech') return [0, 1, 1, 2, 2, 2, 3, 3, 4, 4][tick];
+      if (pose === 'wallTechJump') return [0, 1, 2, 2, 3, 4, 4, 5][tick];
+      return tick;
+    }
     if (airDodgePoses.includes(pose)) {
       const directed = pose === 'directionalAirDodge';
       const spec = window.DogFight?.kits?.[name]?.airDodge || aerialStyles[name];
@@ -4391,7 +4418,162 @@
     return s;
   }
 
+  function wallStance(name, pose, frame) {
+    const style = wallStyles[name];
+    const stats = window.DogFight?.fighters?.[name] || style;
+    const d = fighters[name];
+    // The ink ends immediately outside the solid. Odd world-unit widths round to the nearest sprite pixel.
+    const wall = Math.ceil(stats.width / 2) - 1;
+    const palmY = -Math.round(stats.height * 0.52 / 2);
+    if (pose === 'wallBounce' && frame >= 2) {
+      const i = frame - 2;
+      const s = stance(name, 'tumble', [0, 7, 6, 5][i]);
+      s.roll = style.turn[i];
+      s.headTurn -= [3, 2, 1, 0][i];
+      s.packTail = i > 0;
+      s.foldEars = i < 3;
+      s.eye = i < 2 ? hitEyes : startledEyes;
+      return s;
+    }
+    if (pose === 'wallTechJump' && frame >= 2) {
+      if (frame === 5) {
+        // Physics already faces outward after the push. Finish in that ordinary rising pose.
+        const jump = stance(name, 'jump', 1);
+        jump.faceEdge = true;
+        return jump;
+      }
+      const s = stance(name, 'jump', 1);
+      const i = frame - 2;
+      s.bodyX = [-4, -4, -2][i];
+      s.bodyY = [-2, -1, -1][i];
+      s.lean = [-4, -3, -1][i];
+      s.torsoTurn = [-17, -14, -6][i];
+      s.headX = [-3, -2, -1][i];
+      s.headTurn = [-5, -7, -3][i];
+      s.glanceBack = frame === 4;
+      s.fistX = [wall - d.pawAt[0] - s.bodyX - 1, 4, -3][i];
+      s.fistY = [-3, -4, -6][i];
+      s.rearX = [-7, -9, -6][i];
+      s.rearY = [-5, -9, -8][i];
+      s.openHands = i === 0 ? 'both' : 'rear';
+      s.leftX = [-8, -10, -5][i];
+      s.leftY = [-11, -12, -7][i];
+      s.rightX = [wall - d.feet[1] + 5, 8, 3][i];
+      s.rightY = [-4, -5, -7][i];
+      s.rightFootTurn = [-77, -49, -22][i];
+      s.leftFootTurn = [-17, -26, -12][i];
+      s.showSole = i < 2;
+      s.kickFront = i < 2;
+      s.frontKneeY = i === 0 ? 2 : -2;
+      s.ear = [3, 1, -2][i];
+      s.tail = [5, 2, -1][i];
+      s.scarf = [6, 3, -1][i];
+      if (name === 'pip') s.leftFootTurn -= 16;
+      else if (name === 'brisket') {
+        s.kneeOut = 3;
+        s.rearX += 3;
+        s.rightX -= 2;
+      } else if (name === 'noodle') {
+        s.leftX -= 4;
+        s.headX += 2;
+        s.ear *= 2;
+        s.charmTurn = [26, 12, -8][i];
+      } else {
+        s.leftY -= 3;
+        s.rightFootTurn -= 8;
+        s.tailLift = -2;
+      }
+      return s;
+    }
+    const s = stance(name, 'fall', 0);
+    const missed = pose === 'wallBounce';
+    const leaping = pose === 'wallTechJump';
+    const tuck = missed ? [4, 6][frame] : leaping ? [4, 2][frame] : [3, 5, 6, 4, 2][frame];
+    s.bodyX = -3 - Math.floor(tuck / 3);
+    s.bodyY = 1 + Math.floor(tuck / 3);
+    s.lean = -2;
+    s.torsoTurn = -7 - tuck;
+    s.headX = -4 - Math.ceil(tuck / 3);
+    s.headY = 1 + Math.floor(tuck / 3);
+    s.headTurn = missed ? 5 + tuck : -8 - tuck;
+    s.frontElbowX = -4 - Math.floor(tuck / 2);
+    s.frontElbowY = 2;
+    s.leftX = -5 - tuck;
+    s.leftY = leaping ? -9 - tuck : -5 - Math.floor(tuck / 2);
+    s.rightX = wall - d.feet[1] - 4;
+    s.rightY = leaping ? -9 + frame * 3 : -4 - Math.floor(tuck / 3);
+    s.rightFootTurn = leaping ? -77 : -62;
+    s.leftFootTurn = -14 - 3 * tuck;
+    s.showSole = !missed;
+    s.kickFront = !missed;
+    s.kneeOut = 1 + Math.floor(tuck / 3);
+    s.scarf = -tuck;
+    s.ear = -Math.ceil(tuck / 2);
+    s.tail = -tuck;
+    s.charmTurn = -4 * tuck;
+    let nearX = wall;
+    let nearY = palmY;
+    let farX = wall;
+    let farY = palmY + style.farY;
+    if (missed) {
+      // The shoulder takes the impact. The wrists curl in before the body rolls away.
+      s.wallShoulder = frame === 0 ? [wall, palmY] : null;
+      s.bodyX = frame === 0 ? 1 : -2;
+      s.bodyY = frame === 0 ? -1 : 1;
+      s.lean = frame === 0 ? 1 : -1;
+      s.torsoTurn = frame === 0 ? 9 : -4;
+      s.headX = frame === 0 ? -9 : -5;
+      if (name === 'noodle' && frame === 0) s.headX -= 4;
+      s.headY = frame === 0 ? 1 : 2;
+      s.headTurn = frame === 0 ? 9 : -3;
+      s.eye = hitEyes;
+      s.foldEars = true;
+      s.rightX = -1 - 3 * frame;
+      s.rightY = -4 - 3 * frame;
+      s.leftY -= 2;
+      nearX = wall - 10 - frame;
+      farX = wall - 14 - frame;
+      nearY = palmY + 5;
+      farY = palmY - 2;
+      s.fistTurn = -25 - frame * 14;
+      s.rearTurn = -37;
+    } else {
+      s.wallHands = 'both';
+      s.twoHandsFront = true;
+      s.behindHead = true;
+      if (name === 'brisket') {
+        s.powerArm = true;
+        s.bodyY += 2;
+        s.kneeOut += 1;
+        s.headTurn += 7;
+      } else if (name === 'noodle') {
+        s.leftX -= 4;
+        s.ear -= 2;
+        s.headY += 2;
+        s.charmTurn -= 14;
+      } else if (name === 'clover') {
+        // Her off-paw keeps the disc against her chest while palm and sole catch the wall.
+        s.wallHands = 'front';
+        s.hideCharm = true;
+        s.heldItem = 'backDisc';
+        s.heldAngle = -145 + tuck;
+        farX = -4;
+        farY = palmY + 5;
+        s.leftY -= 3;
+      } else {
+        s.leftY -= 2;
+        s.scarf -= 2;
+      }
+    }
+    s.fistX = nearX - d.pawAt[0] - s.bodyX;
+    s.fistY = nearY - d.pawAt[1] - s.bodyY;
+    s.rearX = farX - (d.pawAt[0] - 2) - s.bodyX;
+    s.rearY = farY - (d.pawAt[1] - 3) - s.bodyY;
+    return s;
+  }
+
   function stance(name, pose, frame, octant = 0) {
+    if (wallPoses.includes(pose)) return wallStance(name, pose, frame);
     if (pose === 'ledgeRoll') return ledgeRollStance(name, frame);
     if (pose === 'ledgeTrump') return ledgeTrumpStance(name, frame);
     const s = {
@@ -4831,13 +5013,15 @@
     const elbowY = s.guardFloor ? Math.min(rawElbowY, -armClearance) : rawElbowY;
     const foreX = Math.round(elbowX + (x - elbowX) * 0.62);
     const foreY = Math.round(elbowY + (y + 1 - elbowY) * 0.62);
+    const onWall = s.wallHands === 'both' || s.wallHands === (near ? 'front' : 'rear');
+    const palmInset = onWall ? Math.ceil(d.fistWidth / 2) : 1;
     link(
       buffer,
       [
         [sx, sy],
         [elbowX, elbowY],
         [foreX, foreY],
-        [x - 1, y + 1],
+        [x - palmInset, y + 1],
       ],
       s.powerArm ? [d.fistWidth + 3, d.fistWidth + 1, d.fistWidth + 2, d.fistWidth] : d.fistWidth,
       near ? d.armCoat : rearColors[d.armCoat] || d.armCoat,
@@ -4851,6 +5035,11 @@
   }
 
   function drawPaw(buffer, name, d, s, near, x, y) {
+    if (s.wallHands === 'both' || s.wallHands === (near ? 'front' : 'rear')) {
+      const pad = wallPaws[name];
+      stamp(buffer, pad, x - pad[0].length + 1, y - Math.floor(pad.length / 2), 0, !near);
+      return;
+    }
     const handOpened = s.openHands === 'both' || s.openHands === (near ? 'front' : 'rear');
     const onLip = s.lipHands === 'both' || s.lipHands === (near ? 'front' : 'rear');
     let paw = s.grip || onLip ? ledgePaws[name] : handOpened ? spreadPaws[name] : d.fist;
@@ -5104,6 +5293,13 @@
       drawPaw(buffer, name, d, s, true, x, y);
     } else drawArm(buffer, name, d, s, true);
     if (s.reverseArm) drawArm(buffer, name, d, s, false);
+    if (s.wallShoulder) {
+      const [x, y] = s.wallShoulder;
+      const [sx, sy] = withTorso(d, s, d.shoulder[0] + s.bodyX, d.shoulder[1] + s.bodyY);
+      link(buffer, [[sx, sy], [x - 5, y + 1]], [d.fistWidth + 2, 5], d.armCoat);
+      const shoulder = wallShoulders[name];
+      stamp(buffer, shoulder, x - shoulder[0].length + 1, y - Math.floor(shoulder.length / 2));
+    }
     // A rotated outline can project its last pixel beyond an otherwise planted stance.
     if (s.guardFloor || s.clipFloor) buffer.fill(0, originY * W);
     if (s.rideDisc) {
@@ -5233,6 +5429,7 @@
     'ledge',
     'ledgeRoll',
     'ledgeTrump',
+    ...wallPoses,
     'rise',
     'win',
     ...landingPoses,

@@ -285,6 +285,11 @@
       if (detail.type === 'directionalAirDodge')
         tone(470, 155 - detail.dirY * 55, 0.12, 0, 'triangle', 0.065);
       else tone(260, 370, 0.07, 0, 'sine', 0.07);
+    } else if (name === 'wallTech' || name === 'wallTechJump') {
+      tone(630, 920, 0.052, 0, 'triangle', 0.075);
+      if (name === 'wallTechJump') tone(870, 1440, 0.082, 0.04, 'square', 0.024);
+    } else if (name === 'wallBounce') {
+      tone(165, 56, 0.075, 0, 'triangle', 0.09);
     } else if (name === 'tech') {
       tone(560, 890, 0.055, 0, 'triangle', 0.075);
       tone(910, 1250, 0.07, 0.043, 'square', 0.026);
@@ -788,6 +793,34 @@
         ) +
         '</ul><h3 class="guide-section">Ledge trumping</h3><p>Catch an occupied ledge to bump the other dog outward. A fresh catch protects you for 15 frames. Regrabs leave you open until you land or take a hit. Play either side in <strong>Training → Contested ledge</strong>.</p><h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><ul class="move-rows guide-defense">' +
         rows +
+        '</ul><h3 class="guide-section">At a wall</h3><p>Try <strong>Training → Wall tech practice</strong> to take Pip’s Back Heel into either wall of Laundry Line.</p><ul class="move-rows guide-wall">' +
+        guideMoveRow(
+          {
+            label: 'Wall tech',
+            hint: 'Tap in the last 11 frames of a tumble into a solid wall. Your dog plants its paws and briefly stops. Your saved air jump is still available.',
+          },
+          'Tap Shield before impact',
+          'wallTech',
+          'defense',
+        ) +
+        guideMoveRow(
+          {
+            label: 'Wall-tech jump',
+            hint: 'Keep Jump held as the tech lands to spring up and away. You can use your saved recovery afterward.',
+          },
+          'Tap Shield + hold Jump',
+          'wallTechJump',
+          'defense',
+        ) +
+        guideMoveRow(
+          {
+            label: 'Missed wall tech',
+            hint: 'Your dog bounces back into open air, still tumbling. An early Shield press locks out another attempt for 28 frames.',
+          },
+          'Miss the Shield timing',
+          'wallBounce',
+          'defense',
+        ) +
         '</ul>';
     } else if (section === 'throws') {
       contents =
@@ -839,7 +872,7 @@
       drawMoveThumbnail(canvas, kind, canvas.dataset.direction, canvas.dataset.category);
   }
   $('lobby-moves').onclick = () => showMoves(settings[editing ? 'p2' : 'p1']);
-  $('training-moves').onclick = () => showMoves(settings.p1);
+  $('training-moves').onclick = () => showMoves(world.dogs[0].kind);
   $('fullscreen').hidden = !document.fullscreenEnabled;
   $('fullscreen').onclick = async () => {
     try {
@@ -946,6 +979,7 @@
     drillWaiting = false;
     practiceSide = 'left';
     $('launch-status').hidden = true;
+    $('wall-status').hidden = $('wall-patterns').hidden = true;
     $('shield-status').hidden = $('shield-patterns').hidden = true;
     $('air-status').hidden = $('air-patterns').hidden = true;
     $('roll-status').hidden = $('roll-patterns').hidden = true;
@@ -960,6 +994,7 @@
       view.event(name, e);
       sound(name, e);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
+      if (world?.wallPractice && e.f?.index === 0) wallFeedback(name);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (name === 'airStart' || name === 'airCue' || name === 'airResult') airFeedback(name, e);
       if (world?.rollPractice && e.f?.index === 0 && (name === 'ledgeRoll' || name === 'rollResult'))
@@ -1088,7 +1123,7 @@
     if (action === 'lobby') toLobby();
     if (action === 'rematch') startMatch();
     if (action === 'controls') showControls();
-    if (action === 'moves') showMoves(settings.p1);
+    if (action === 'moves') showMoves(world?.dogs[0].kind || settings.p1);
   });
   $('dummy-damage').addEventListener('input', (e) => {
     if (!world) return;
@@ -1128,6 +1163,35 @@
       ],
     };
     [result.textContent, tip.textContent] = feedback[e.outcome];
+  }
+  function wallFeedback(name) {
+    const status = $('wall-status');
+    if (world.wallPractice.phase === 'done' && status.dataset.result !== 'flight') return;
+    const feedback = {
+      wallCue: [
+        'swing',
+        'Watch Pip’s heel',
+        'Tap Shield as the kick connects. Hold Jump at the wall to spring away.',
+      ],
+      hit: ['flight', 'Back Heel · tap Shield', 'Tap Shield now. Keep Jump held for a wall-tech jump.'],
+      wallTech: [
+        'wallTech',
+        'Wall tech',
+        'You stopped at the brickwork. Jump or use Up + Special to reach the roof.',
+      ],
+      wallTechJump: [
+        'wallTechJump',
+        'Wall-tech jump',
+        'You kicked away and kept your air jump. Steer toward the lip to recover.',
+      ],
+      wallBounce: [
+        'wallBounce',
+        'Missed tech',
+        'The wall bounced you back. Retry and tap Shield when Back Heel connects.',
+      ],
+    };
+    if (!feedback[name] || (name === 'hit' && world.wallPractice.phase !== 'flight')) return;
+    [status.dataset.result, status.textContent, $('recovery-tip').textContent] = feedback[name];
   }
   function launchFeedback(name, e) {
     const result = $('launch-status'),
@@ -1282,29 +1346,39 @@
   function drill(ledge, fromHang = false, pattern = 'strike') {
     if (!world) return;
     const launch = ledge === 'launch';
+    const wall = ledge === 'wall';
     const shield = ledge === 'shield';
     const air = ledge === 'air';
     const roll = ledge === 'roll';
     const trump = ledge === 'trump';
-    drillSide = launch || shield || air || roll || trump ? null : ledge || null;
+    drillSide = launch || wall || shield || air || roll || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
     if (launch) world.resetLaunchPractice();
+    else if (wall) world.resetWallPractice(pattern);
     else if (shield) world.resetShieldPractice(pattern);
     else if (air) world.resetAirPractice(pattern, practiceSide);
     else if (roll) world.resetLedgeRollPractice(pattern, practiceSide);
     else if (trump) world.resetLedgeTrumpPractice(pattern, practiceSide);
     else world.resetTraining(ledge, fromHang);
     const player = world.dogs[0];
+    $('match-stage').textContent = arenas[world.stage].name;
+    hudKey = '';
     const result = $('launch-status');
     result.hidden = !launch;
+    $('wall-status').hidden = $('wall-patterns').hidden = !wall;
     $('shield-status').hidden = $('shield-patterns').hidden = !shield;
     $('air-status').hidden = $('air-patterns').hidden = !air;
     $('roll-status').hidden = $('roll-patterns').hidden = !roll;
     $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
-    if (trump) {
+    if (wall) {
+      $('wall-status').dataset.result = 'ready';
+      $('wall-status').textContent = pattern === 'right' ? 'Right wall' : 'Left wall';
+      message =
+        'You’re Noodle at 90%. Tap Shield when Pip’s Back Heel hits. Hold Jump at the wall to kick away.';
+    } else if (trump) {
       const defend = pattern === 'defend';
       $('trump-take').setAttribute('aria-pressed', String(!defend));
       $('trump-defend').setAttribute('aria-pressed', String(defend));
@@ -1384,6 +1458,9 @@
     drill('roll', false, world.rollPractice.pattern);
   };
   $('launch-training').onclick = () => drill('launch');
+  $('wall-training').onclick = $('wall-retry').onclick = () =>
+    drill('wall', false, world.wallPractice?.side || 'left');
+  $('wall-side').onclick = () => drill('wall', false, world.wallPractice.side === 'left' ? 'right' : 'left');
   $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'strike');
   $('shield-strike').onclick = () => drill('shield', false, 'strike');
   $('shield-grab').onclick = () => drill('shield', false, 'grab');

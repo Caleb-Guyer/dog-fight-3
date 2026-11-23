@@ -11,12 +11,12 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=ledge-trumps-1" />
-    <script defer src="./fighters-art.js?v=ledge-trumps-1"></script>
+    <link rel="stylesheet" href="./style.css?v=wall-techs-1" />
+    <script defer src="./fighters-art.js?v=wall-techs-1"></script>
     <script defer src="./arena-art.js"></script>
-    <script defer src="./engine.js?v=ledge-trumps-1"></script>
-    <script defer src="./render.js?v=ledge-trumps-1"></script>
-    <script defer src="./app.js?v=ledge-trumps-1"></script>
+    <script defer src="./engine.js?v=wall-techs-1"></script>
+    <script defer src="./render.js?v=wall-techs-1"></script>
+    <script defer src="./app.js?v=wall-techs-1"></script>
   </head>
   <body>
     <header class="topbar">
@@ -132,6 +132,7 @@
           <span id="grapple-prompt" role="status" hidden></span>
           <div class="training-readouts">
             <output id="launch-status" aria-label="Launch practice" aria-live="polite" hidden></output>
+            <output id="wall-status" aria-label="Wall tech practice" aria-live="polite" hidden></output>
             <output id="shield-status" aria-label="Shield practice" aria-live="polite" hidden></output>
             <output id="air-status" aria-label="Air-dodge practice" aria-live="polite" hidden></output>
             <output id="roll-status" aria-label="Ledge roll practice" aria-live="polite" hidden></output>
@@ -199,6 +200,11 @@
             <button id="trump-side" type="button" class="utility">Switch ledge</button>
           </span>
           <button id="launch-training" type="button" class="utility">Launch practice</button>
+          <button id="wall-training" type="button" class="utility">Wall tech practice</button>
+          <span id="wall-patterns" role="group" aria-label="Wall tech drill" hidden>
+            <button id="wall-retry" type="button" class="utility">Retry kick</button>
+            <button id="wall-side" type="button" class="utility">Switch wall</button>
+          </span>
           <button id="shield-training" type="button" class="utility">Shield practice</button>
           <span id="shield-patterns" role="group" aria-label="Dummy action" hidden>
             <button id="shield-strike" type="button" class="utility" aria-pressed="true">Strike</button>
