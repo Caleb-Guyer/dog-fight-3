@@ -12,7 +12,7 @@
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="./style.css?v=dispatch-1" />
-    <link rel="stylesheet" href="./dispatch.css?v=dispatch-1" />
+    <link rel="stylesheet" href="./dispatch.css?v=cinema-1" />
     <script defer src="./fighters-art.js?v=dispatch-1"></script>
     <script defer src="./arena-art.js"></script>
     <script defer src="./engine.js?v=dispatch-1"></script>
@@ -20,10 +20,15 @@
     <script defer src="./dispatch-script.js?v=dispatch-1"></script>
     <script defer src="./dispatch-actors.js?v=dispatch-1"></script>
     <script defer src="./yard-art.js?v=dispatch-1"></script>
-    <script defer src="./dispatch-covers.js?v=dispatch-1"></script>
+    <script defer src="./dispatch-covers.js?v=cinema-1"></script>
+    <script defer src="./film-opening.js?v=cinema-1"></script>
+    <script defer src="./film-rescue.js?v=cinema-1"></script>
+    <script defer src="./film-boss.js?v=cinema-1"></script>
+    <script defer src="./film-ending.js?v=cinema-1"></script>
+    <script defer src="./dispatch-film.js?v=cinema-1"></script>
     <script defer src="./dispatch-run.js?v=dispatch-1"></script>
     <script defer src="./dispatch-view.js?v=dispatch-1"></script>
-    <script defer src="./app.js?v=dispatch-1"></script>
+    <script defer src="./app.js?v=cinema-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -119,32 +124,30 @@
         </div>
         <div class="board-foot">
           <div class="route-save"><strong id="route-progress"></strong><span id="route-marks"></span></div>
-          <button class="dispatch-primary" id="dispatch-start" type="button">Begin chapter</button>
+          <div class="route-actions">
+            <button class="board-back" id="route-films" type="button">Cutscenes</button>
+            <button class="dispatch-primary" id="dispatch-start" type="button">Begin chapter</button>
+          </div>
         </div>
       </section>
       <section id="dispatch-story" class="dispatch-board story-board" aria-labelledby="story-title" hidden>
-        <div class="board-heading">
-          <span>Chapter 01 · The Silent Yard</span
-          ><button class="board-back" id="story-map" type="button">Route map</button>
+        <div class="film-heading">
+          <h1 id="story-title"></h1>
+          <button class="board-back" id="story-map" type="button">Route map</button>
         </div>
-        <div class="story-grid">
-          <canvas
-            id="story-cover"
-            width="640"
-            height="360"
-            role="img"
-            aria-label="Story illustration"
-          ></canvas>
-          <div class="story-copy" aria-live="polite">
-            <span id="story-speaker"></span>
-            <h1 id="story-title"></h1>
-            <p id="story-text"></p>
-            <small id="story-count"></small>
+        <canvas id="story-cover" width="320" height="180" role="img" aria-describedby="story-text"></canvas>
+        <div class="film-timeline" aria-hidden="true"><i id="film-progress"></i></div>
+        <div class="film-caption" aria-live="polite" aria-atomic="true">
+          <span id="story-speaker"></span>
+          <p id="story-text"></p>
+        </div>
+        <div class="film-controls">
+          <button class="film-transport" id="film-pause" type="button">Pause</button>
+          <span id="film-time" aria-hidden="true"></span>
+          <div class="film-end-controls">
+            <button type="button" class="board-back" id="story-skip">Skip scene</button>
+            <button class="dispatch-primary" type="button" id="story-next">Next</button>
           </div>
-        </div>
-        <div class="board-foot">
-          <button type="button" class="board-back" id="story-skip">Skip scene</button
-          ><button class="dispatch-primary" type="button" id="story-next">Next</button>
         </div>
       </section>
       <section id="lobby" class="cabinet" aria-label="Fighter select" hidden>

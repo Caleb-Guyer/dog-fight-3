@@ -55,8 +55,7 @@
   border-block: 2px solid #676575;
 }
 .home-grid,
-.route-grid,
-.story-grid {
+.route-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.95fr) minmax(235px, 1fr);
 }
@@ -72,8 +71,7 @@
   min-width: 0;
 }
 .feature-ticket canvas,
-.route-print canvas,
-.story-grid > canvas {
+.route-print canvas {
   display: block;
   width: 100%;
   height: auto;
@@ -102,8 +100,7 @@
   border-top: 5px solid #d38b5e;
 }
 .feature-caption small,
-.route-print > div > span,
-.story-copy > span {
+.route-print > div > span {
   display: block;
   color: #67422e;
   font: 400 clamp(13px, 1.2vw, 16px) / 1.2 var(--pixel);
@@ -291,8 +288,7 @@
 .route-save strong {
   font: 400 clamp(15px, 1.5vw, 19px) / 1.2 var(--pixel);
 }
-.route-save span,
-.story-copy small {
+.route-save span {
   color: #d3cfca;
   font-size: 14px;
 }
@@ -301,29 +297,156 @@
   color: #292839;
   box-shadow: 3px 3px 0 #151925;
 }
-.story-grid {
-  grid-template-columns: minmax(0, 1.55fr) minmax(250px, 1fr);
+.route-actions, .film-end-controls {
+  display: flex;
   align-items: center;
-  background: #252b39;
+  gap: 10px;
 }
-.story-copy {
-  padding: 22px;
-  min-width: 0;
+.cinema-active {
+  background: #171a26;
 }
-.story-copy > span {
-  color: #eebf79;
+.cinema-active .shell {
+  width: min(1050px, calc(100% - 32px), max(53vw, calc((100svh - 285px) * 16 / 9)));
 }
-.story-copy h1 {
-  margin: 10px 0 15px;
-  font-size: clamp(25px, 3vw, 40px);
+.cinema-active .bar-content {
+  min-height: 45px;
+  padding-block: 5px;
 }
-.story-copy p {
-  font: 400 clamp(16px, 1.6vw, 19px) / 1.5 var(--body);
-  color: #f5eacb;
+.cinema-active .wordmark {
+  width: 142px;
 }
-.story-copy small {
+.story-board {
+  --projection-light: #e8b47a;
+  background: #202430;
+  margin: 8px auto 16px;
+  border-color: #0d111c;
+}
+.film-heading, .film-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 9px 16px;
+}
+.film-heading {
+  justify-content: space-between;
+  border-bottom: 2px solid #0e131e;
+}
+.film-heading h1 {
+  color: #f5e3bb;
+  font: 400 clamp(19px, 2.4vw, 28px)/1.1 var(--pixel);
+}
+#story-cover {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16/9;
+  background: #202332;
   display: block;
-  margin-top: 17px;
+}
+.film-timeline {
+  height: 3px;
+  background: #454653;
+}
+.film-timeline i {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+  background: var(--projection-light);
+}
+.film-caption {
+  padding: 12px 18px 9px;
+  min-height: 5.3em;
+  background: #222632;
+}
+.film-caption span {
+  color: var(--projection-light);
+  font: 400 15px/1.2 var(--pixel);
+  text-transform: uppercase;
+}
+.film-caption p {
+  max-width: 90ch;
+  margin-top: 3px;
+  font: 400 clamp(16px, 1.35vw, 18px)/1.35 var(--body);
+  color: #fff1d2;
+}
+.film-controls {
+  border-top: 1px solid #3f424f;
+}
+.film-controls button, .film-heading button {
+  box-shadow: none;
+  min-height: 35px;
+}
+.film-transport {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #f8e8ca;
+  min-width: 78px;
+  padding-inline: 5px;
+  font: 400 16px/1 var(--pixel);
+  text-transform: uppercase;
+}
+.film-transport::before {
+  content: '';
+  width: 9px;
+  height: 11px;
+  box-sizing: border-box;
+  border-inline: 3px solid var(--projection-light);
+}
+.film-transport[data-paused='true']::before {
+  width: 10px;
+  border: 0;
+  background: var(--projection-light);
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+#film-time {
+  color: #ccc6b8;
+  font: 14px/1 var(--body);
+  font-variant-numeric: tabular-nums;
+}
+.film-end-controls {
+  margin-left: auto;
+}
+.film-end-controls .dispatch-primary {
+  padding-block: 8px 6px;
+}
+.film-library {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+.film-library button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px;
+  text-align: left;
+  color: var(--ink);
+  background: #e2d4b1;
+  border: 2px solid #807568;
+}
+.film-library button:not(:disabled):hover {
+  background: #f9e5ad;
+}
+.film-library button:disabled {
+  opacity: 1;
+  color: #55505a;
+  background: #d9d0ba;
+}
+.film-library canvas, .film-leader {
+  width: 96px;
+  aspect-ratio: 16/9;
+  flex: 0 0 96px;
+  background: repeating-linear-gradient(135deg, #383a48 0 4px, #404250 4px 8px);
+}
+.film-library b, .film-library small {
+  display: block;
+}
+.film-library b {
+  font: 400 18px/1.15 var(--pixel);
+}
+.film-library small {
+  font-size: 14px;
+  margin-top: 3px;
 }
 .select-title {
   display: flex;
@@ -474,12 +597,6 @@
     font-size: 13px;
     padding: 7px;
   }
-  .story-grid {
-    grid-template-columns: 1.1fr 1fr;
-  }
-  .story-copy {
-    padding: 14px;
-  }
 }
 @media (max-width: 600px) {
   .menu-screen .shell {
@@ -502,8 +619,7 @@
     gap: 8px;
   }
   .home-grid,
-  .route-grid,
-  .story-grid {
+  .route-grid {
     display: block;
   }
   .feature-ticket,
@@ -542,8 +658,7 @@
   .route-manifest {
     padding: 12px;
   }
-  .route-print canvas,
-  .story-grid > canvas {
+  .route-print canvas {
     max-height: 200px;
     object-fit: cover;
   }
@@ -556,12 +671,16 @@
   .route-print > div {
     padding: 8px 12px;
   }
-  .story-copy h1 {
-    margin: 7px 0;
-  }
-  .story-copy small {
-    margin-top: 8px;
-  }
+  .cinema-active .shell { width: calc(100% - 12px); }
+  .route-actions { flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+  .film-heading, .film-controls { padding: 8px; gap: 6px; }
+  .film-controls { flex-wrap: wrap; }
+  .film-caption { padding: 10px; min-height: 7.7em; }
+  .film-end-controls { gap: 5px; }
+  .film-controls button { min-height: 40px; }
+  .film-controls .board-back, .film-controls .dispatch-primary, .film-heading .board-back { padding: 7px; font-size: 13px; }
+  .film-transport { min-width: 60px; font-size: 14px; gap: 5px; }
+  #film-time { font-size: 12px; }
   .dispatch-orders {
     padding: 6px;
   }
@@ -590,6 +709,17 @@
   }
 }
 @media (max-height: 540px) and (orientation: landscape) {
+  .cinema-active .topbar { position: absolute; right: 3px; top: 3px; z-index: 1; border: 0; background: none; }
+  .cinema-active .topbar .shell { width: auto; min-height: 0; padding: 0; }
+  .cinema-active .topbar .tools { flex-direction: column; }
+  .cinema-active .topbar .wordmark, .cinema-active #controls { display: none; }
+  .cinema-active .shell { width: min(100% - 86px, max(405px, calc((100svh - 150px) * 16 / 9))); }
+  .cinema-active .story-board { margin: 2px auto; }
+  .film-heading, .film-controls { padding: 3px 8px; }
+  .film-heading h1 { font-size: 18px; }
+  .film-heading button, .film-controls button { min-height: 26px; padding-block: 4px; }
+  .film-caption { min-height: 0; padding: 4px 8px; }
+  .film-caption p { font-size: 15px; line-height: 1.15; }
   .adventure-active .play-window {
     width: min(100%, calc((100svh - 34px) * 16 / 9));
   }

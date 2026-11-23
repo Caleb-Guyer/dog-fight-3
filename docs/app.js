@@ -521,9 +521,11 @@
     save();
     audioReady();
     updateAudio();
+    film?.score.mix();
     sound('menu');
   };
   function showDialog(kind, title, html, close = true) {
+    if (page === 'dispatch-story' && film) setFilmPaused(true);
     dialogType = kind;
     $('dialog').dataset.view = kind;
     $('dialog-title').textContent = title;
@@ -1139,6 +1141,16 @@
   $('start').onclick = startMatch;
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
+    const reel = e.target.closest('[data-reel]');
+    if (reel && !reel.disabled) {
+      audioReady();
+      const key = reel.dataset.reel;
+      story(key, () => {
+        showRoute();
+        showReels(key);
+      }, true);
+      return;
+    }
     const guide = e.target.closest('[data-guide-kind]');
     if (guide) {
       const kind = guide.dataset.guideKind;
@@ -1536,9 +1548,9 @@
   let progress = campaign.readSave(storage),
     stored = !!storage,
     runner = progress.hero;
-  let storyKey = '',
-    storyPage = 0,
+  let film = null,
     afterStory = null,
+    inLibrary = false,
     adventureKey = '',
     padRelease = false,
     noticeUntil = 0;
@@ -1560,6 +1572,8 @@
   }
   const countMarks = (bits) => [1, 2, 4].filter((bit) => bits & bit).length;
   function menuScreen(id) {
+    film?.score.silence();
+    film = null;
     dismiss();
     world = null;
     view = null;
@@ -1568,6 +1582,7 @@
     drillWaiting = false;
     document.body.classList.remove('playing', 'training-active', 'adventure-active');
     document.body.classList.add('menu-screen');
+    document.body.classList.toggle('cinema-active', id === 'dispatch-story');
     for (const screen of ['home', 'dispatch-route', 'dispatch-story', 'lobby', 'match'])
       $(screen).hidden = screen !== id;
     window.scrollTo(0, 0);
@@ -1635,7 +1650,7 @@
       (!stored ? ' · Progress lasts for this session' : '');
     $('dispatch-start').textContent =
       progress.pending === 'ending'
-        ? 'Read ending'
+        ? 'Watch ending'
         : progress.complete
           ? 'Replay chapter'
           : progress.started
@@ -1643,36 +1658,76 @@
             : 'Begin chapter';
     $('dispatch-start').focus({ preventScroll: true });
   }
-  function story(key, then) {
-    menuScreen('dispatch-story');
-    storyKey = key;
-    storyPage = 0;
-    afterStory = then;
-    const scene = campaign.scenes[key];
-    window.DispatchCovers.draw($('story-cover'), scene.art);
-    $('story-cover').setAttribute('aria-label', scene.title + ' illustration');
-    $('story-title').textContent = scene.title;
-    showStoryPage();
-    $('story-next').focus({ preventScroll: true });
+  function showReels(selected = 'opening') {
+    const locks = {
+      opening: '',
+      rescue: progress.room >= 1 ? '' : 'Finish Parcel Alley',
+      boss: progress.room >= 2 ? '' : 'Cross Sorting Bridge',
+      ending: progress.complete || progress.pending === 'ending' ? '' : 'Defeat the Copper Hound',
+    };
+    const rows = Object.entries(campaign.scenes).map(([key, scene]) => {
+      const locked = locks[key];
+      const print = locked ? '<i class="film-leader" aria-hidden="true"></i>' :
+        '<canvas width="160" height="90" aria-hidden="true"></canvas>';
+      return '<button type="button" data-reel="' + key + '"' + (locked ? ' disabled' : '') + '>' +
+        print + '<span><b>' + scene.title + '</b><small>' + (locked || 'Play cutscene') + '</small></span></button>';
+    });
+    showDialog('cutscenes', 'Cutscenes', '<div class="film-library">' + rows.join('') + '</div>');
+    for (const button of document.querySelectorAll('[data-reel]:enabled')) {
+      window.DispatchFilm.poster(button.querySelector('canvas'), button.dataset.reel);
+    }
+    document.querySelector('[data-reel="' + selected + '"]').focus();
   }
-  function showStoryPage() {
-    const scene = campaign.scenes[storyKey],
-      [speaker, line] = scene.pages[storyPage];
+  function story(key, then, fromLibrary = false) {
+    menuScreen('dispatch-story');
+    afterStory = then;
+    inLibrary = fromLibrary;
+    const scene = campaign.scenes[key];
+    $('story-cover').setAttribute('aria-label', scene.title + ' animated cutscene');
+    $('story-title').textContent = scene.title;
+    $('story-map').textContent = fromLibrary ? 'Cutscenes' : 'Route map';
+    $('story-skip').hidden = fromLibrary;
+    film = new window.DispatchFilm(
+      $('story-cover'), key, scene.pages.length,
+      () => ({ context: audioContext, volume: settings.sound ? settings.volume / 100 : 0 }),
+      (part) => showStoryPage(key, part),
+      (time, duration) => {
+        $('film-progress').style.transform = 'scaleX(' + time / duration + ')';
+        const label = '0:' + String(Math.floor(time)).padStart(2, '0') + ' / 0:' + duration;
+        if ($('film-time').textContent !== label) $('film-time').textContent = label;
+      }, finishStory,
+    );
+    updateFilmButton();
+    $(film.paused && fromLibrary ? 'film-pause' : 'story-next').focus({ preventScroll: true });
+  }
+  function showStoryPage(key, part) {
+    const scene = campaign.scenes[key],
+      [speaker, line] = scene.pages[part];
     $('story-speaker').textContent = speaker;
     $('story-text').textContent = line;
-    $('story-count').textContent = storyPage + 1 + ' / ' + scene.pages.length;
+    const finalAction = scene.completesChapter ? 'Chapter results' : scene.chooseRunner ? 'Choose runner' : 'Set out';
     $('story-next').textContent =
-      storyPage + 1 < scene.pages.length
-        ? 'Next'
-        : storyKey === 'ending'
-          ? 'Chapter results'
-          : storyKey === 'rescue'
-            ? 'Choose runner'
-            : 'Set out';
+      part + 1 < scene.pages.length ? 'Next' : inLibrary ? 'Done' : finalAction;
+  }
+  function updateFilmButton() {
+    $('film-pause').textContent = film.paused ? 'Play' : 'Pause';
+    $('film-pause').dataset.paused = String(film.paused);
+  }
+  function setFilmPaused(value) {
+    if (!film) return;
+    film.setPaused(value);
+    updateFilmButton();
+  }
+  function toggleFilm() {
+    if (!film) return;
+    audioReady();
+    setFilmPaused(!film.paused);
   }
   function finishStory() {
     const next = afterStory;
     afterStory = null;
+    film?.score.silence();
+    film = null;
     if (next) next();
   }
   function chooseBridgeRunner() {
@@ -1702,16 +1757,6 @@
     const scene = campaign.scenes[key],
       room = campaign.rooms.findIndex((r) => r.id === scene.stop);
     if (!progress.complete) saveProgress({ room, pending: key, complete: !!scene.completesChapter });
-    if (scene.completesChapter) {
-      for (const [pitch, gain] of [
-        [392, 0.13],
-        [784, 0.06],
-        [1038, 0.032],
-      ]) {
-        tone(pitch, pitch * 0.996, 0.95, 0, 'sine', gain);
-        tone(pitch, pitch * 0.992, 0.62, 0.58, 'sine', gain * 0.45);
-      }
-    }
     story(key, () => {
       if (scene.completesChapter) return chapterClear();
       if (scene.chooseRunner) return chooseBridgeRunner();
@@ -1746,7 +1791,7 @@
       $(id).hidden = true;
     $('match').hidden = $('dispatch-hud').hidden = $('dispatch-orders').hidden = false;
     $('countdown').textContent = '';
-    document.body.classList.remove('menu-screen', 'training-active');
+    document.body.classList.remove('menu-screen', 'training-active', 'cinema-active');
     document.body.classList.add('playing', 'adventure-active');
     hero = index === 0 ? 'pip' : hero;
     runner = hero;
@@ -1891,14 +1936,10 @@
   $('home-guide').onclick = () => showMoves(settings.p1);
   $('home-options').onclick = showOptions;
   $('lobby-home').onclick = $('route-home').onclick = () => showHome();
-  $('story-map').onclick = showRoute;
-  $('story-next').onclick = () => {
-    sound('menu');
-    if (storyPage + 1 < campaign.scenes[storyKey].pages.length) {
-      storyPage++;
-      showStoryPage();
-    } else finishStory();
-  };
+  $('route-films').onclick = () => showReels();
+  $('story-map').onclick = () => (inLibrary ? finishStory() : showRoute());
+  $('story-next').onclick = () => film?.next();
+  $('film-pause').onclick = toggleFilm;
   $('story-skip').onclick = finishStory;
   $('route-stops').onclick = (e) => {
     const b = e.target.closest('[data-stop]');
@@ -1996,6 +2037,7 @@
   });
   function onBlur() {
     clearInput();
+    if (page === 'dispatch-story') setFilmPaused(true);
     if (page === 'match' && !paused && world?.end === null) showPause();
   }
   window.addEventListener('blur', onBlur);
@@ -2031,7 +2073,7 @@
       exitDialog();
       return;
     }
-    if (page === 'dispatch-story') showRoute();
+    if (page === 'dispatch-story') $('story-map').click();
     else if (page === 'dispatch-route' || page === 'lobby') showHome();
   }
   window.addEventListener('keydown', (e) => {
@@ -2043,6 +2085,11 @@
       e.target instanceof HTMLInputElement
     )
       return;
+    if (e.code === 'KeyP' && page === 'dispatch-story' && !$('dialog').open) {
+      e.preventDefault();
+      if (!e.repeat) toggleFilm();
+      return;
+    }
     if (e.code === 'Escape' && !$('dialog').open) {
       e.preventDefault();
       menuBack();
@@ -2120,6 +2167,7 @@
     if (now.pause && !oldPad.pause) {
       if (dialogType === 'pause') dismiss();
       else if (page === 'match' && !dialogType) showPause();
+      else if (page === 'dispatch-story' && !dialogType) toggleFilm();
       else if (page === 'lobby' && !dialogType) startMatch();
     } else if (page !== 'match' || $('dialog').open) {
       const items = menuButtons();
@@ -2144,7 +2192,9 @@
     before = now;
     const pads = getPads();
     padMenu(pads);
-    if (page === 'lobby') {
+    if (page === 'dispatch-story' && film && !document.hidden && !$('dialog').open) {
+      film.tick(dt);
+    } else if (page === 'lobby') {
       if (now - lastPreview > 1 / 24 && !document.hidden && !$('dialog').open) {
         drawPreview($('preview'), settings, now);
         lastPreview = now;
@@ -2208,6 +2258,14 @@
   }
   updateAudio();
   syncLobby();
-  showHome();
+  function openFilmLibraryLink() {
+    showRoute();
+    showReels();
+  }
+  window.addEventListener('hashchange', () => {
+    if (location.hash === '#cutscenes') openFilmLibraryLink();
+  });
+  if (location.hash === '#cutscenes') openFilmLibraryLink();
+  else showHome();
   requestAnimationFrame(frame);
 })();

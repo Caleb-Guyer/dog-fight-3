@@ -130,8 +130,8 @@
     return symbols.get(key);
   }
 
-  function dog(p, name, x, feet, size, facing = 1, pose = 'idle', phase = 0.5) {
-    if (window.DogArt) window.DogArt.draw(p.g, name, x, feet, { scale: size, face: facing, pose, phase, time: 0.13 });
+  function dog(p, name, x, feet, size, facing = 1, pose = 'idle', phase = 0.5, time = 0.13) {
+    if (window.DogArt) window.DogArt.draw(p.g, name, x, feet, { scale: size, face: facing, pose, phase, time });
   }
 
   function paw(p, x, y, color, size = 1) {
@@ -1378,4 +1378,14 @@
     g.restore();
   }
   window.DispatchCovers = Object.freeze({ draw });
+  // The films and the printed route map share the same native pixel grid and props.
+  function ease(start, end, time) {
+    const t = Math.max(0, Math.min(1, (time - start) / (end - start)));
+    return t * t * (3 - 2 * t);
+  }
+  window.DispatchFilmArt = Object.freeze({
+    c, PixelPen, plate: symbol, train, bell, envelope, pipPortrait, city, stationClock,
+    cloudStrip, steam, crate, lamp, paw, arch, axle, rivet, ease, lerp: (a, b, t) => a + (b - a) * t, dog,
+  });
+  window.DispatchFilms = Object.create(null);
 })();
