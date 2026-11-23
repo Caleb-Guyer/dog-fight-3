@@ -1177,181 +1177,289 @@
     p.poly([246, 178, 288, 166, 320, 167, 320, 180], c.navy);
   }
 
-  function route(p) {
-    // Folded civic rail map. Isometric landmarks and three punched stops stand in for labels.
+  const routeStops = [
+    { x: 38, y: 116, label: ['PARCEL', 'ALLEY'] },
+    { x: 97, y: 105, label: ['THE WEIGH', 'HOUSE'] },
+    { x: 157, y: 95, label: ['FREIGHT', 'EXCHANGE'] },
+    { x: 218, y: 82, label: ['SORTING', 'BRIDGE'] },
+    { x: 280, y: 70, label: ['BELL', 'DEPOT'] },
+  ];
+
+  // Seven-row wood type. The lettering is printed with the map, so it stays on
+  // the same pixel grid in a thumbnail and before the interface font has loaded.
+  const routeLetters = {
+    '1': [4, 12, 4, 4, 4, 4, 14],
+    '2': [14, 17, 1, 2, 4, 8, 31],
+    '3': [30, 1, 1, 14, 1, 1, 30],
+    '4': [2, 6, 10, 18, 31, 2, 2],
+    '5': [31, 16, 16, 30, 1, 1, 30],
+    A: [14, 17, 17, 31, 17, 17, 17],
+    B: [30, 17, 17, 30, 17, 17, 30],
+    C: [15, 16, 16, 16, 16, 16, 15],
+    D: [30, 17, 17, 17, 17, 17, 30],
+    E: [31, 16, 16, 30, 16, 16, 31],
+    F: [31, 16, 16, 30, 16, 16, 16],
+    G: [15, 16, 16, 23, 17, 17, 15],
+    H: [17, 17, 17, 31, 17, 17, 17],
+    I: [14, 4, 4, 4, 4, 4, 14],
+    L: [16, 16, 16, 16, 16, 16, 31],
+    N: [17, 25, 25, 21, 19, 19, 17],
+    O: [14, 17, 17, 17, 17, 17, 14],
+    P: [30, 17, 17, 30, 16, 16, 16],
+    R: [30, 17, 17, 30, 20, 18, 17],
+    S: [15, 16, 16, 14, 1, 1, 30],
+    T: [31, 4, 4, 4, 4, 4, 4],
+    U: [17, 17, 17, 17, 17, 17, 14],
+    W: [17, 17, 17, 21, 21, 27, 17],
+    X: [17, 17, 10, 4, 10, 17, 17],
+    Y: [17, 17, 10, 4, 4, 4, 4],
+  };
+
+  function routeTextWidth(text) {
+    return [...text].reduce((width, letter) => width + (letter === ' ' ? 3 : 6), -1);
+  }
+
+  function routeText(p, text, center, y, color) {
+    let x = center - Math.floor(routeTextWidth(text) / 2);
+    for (const letter of text) {
+      if (letter === ' ') {
+        x += 3;
+        continue;
+      }
+      for (const [row, bits] of routeLetters[letter].entries()) {
+        for (let col = 0; col < 5; col++) if (bits & (16 >> col)) p.rect(x + col, y + row, 1, 1, color);
+      }
+      x += 6;
+    }
+  }
+
+  function routePaper(p) {
+    const paper = '#eed5a4', sand = '#d8ba8a', road = '#ceb287', bright = '#f6dfae';
     p.rect(0, 0, 320, 180, c.brick);
     p.rect(3, 3, 314, 174, c.ochre);
-    p.rect(6, 5, 308, 170, '#e6c593');
-    p.rect(8, 7, 304, 166, '#eed5a4');
-    p.poly([8, 143, 42, 129, 94, 140, 135, 157, 183, 158, 209, 173, 8, 173], '#d6b786');
-    p.poly([8, 7, 78, 7, 65, 29, 31, 43, 8, 36], '#dbc390');
-    // Parchment creases and a quieter network of surface streets.
-    for (const x of [85, 164, 235]) {
-      p.rect(x, 8, 1, 165, '#d7ba8c');
-      p.rect(x + 1, 8, 1, 165, '#f6dfad');
-    }
-    p.rect(8, 91, 304, 1, '#d9bd90');
+    p.rect(5, 5, 310, 170, '#c5a677');
+    p.rect(7, 6, 306, 168, paper);
+    p.poly([7, 6, 73, 6, 62, 21, 42, 25, 26, 36, 7, 33], '#e0c897');
+    p.poly([7, 144, 39, 137, 66, 146, 92, 146, 119, 157, 149, 159, 175, 173, 7, 173], '#dfc18e');
+    p.poly([261, 117, 278, 115, 300, 126, 313, 120, 313, 139, 297, 143, 279, 133], '#e1c394');
     const streets = [
-      [9, 93, 46, 74, 73, 73, 111, 48, 136, 68],
-      [13, 102, 62, 82, 85, 85, 112, 65, 133, 78],
-      [22, 168, 75, 145, 105, 151, 135, 129],
-      [8, 54, 35, 46, 54, 50, 72, 36, 120, 24],
-      [183, 40, 210, 57, 241, 54, 272, 72, 312, 67],
-      [179, 23, 211, 43, 241, 38, 270, 56, 306, 51],
-      [205, 128, 241, 146, 276, 124, 310, 139],
-      [221, 115, 242, 129, 274, 110, 311, 123],
-      [214, 164, 258, 154, 287, 160, 312, 149],
-      [34, 8, 59, 35, 84, 44],
-      [201, 8, 211, 28, 238, 30, 263, 12],
+      [9, 49, 30, 38, 45, 40, 68, 29, 100, 32, 127, 18, 153, 19],
+      [8, 57, 31, 46, 47, 48, 71, 37, 100, 40, 129, 26, 149, 27],
+      [13, 90, 48, 74, 71, 76, 98, 63, 125, 66, 149, 50],
+      [8, 154, 32, 152, 67, 164, 98, 153, 124, 159, 158, 147, 181, 150],
+      [81, 173, 99, 163, 123, 168, 157, 156, 180, 159, 206, 147],
+      [146, 8, 156, 28, 180, 40, 206, 37, 226, 47, 249, 41],
+      [172, 9, 180, 23, 202, 29, 221, 24, 238, 34, 259, 28],
+      [235, 152, 254, 144, 277, 149, 300, 137, 311, 138],
+      [242, 160, 255, 153, 278, 158, 301, 147, 312, 148],
+      [255, 107, 269, 112, 292, 100, 311, 104],
+      [30, 7, 40, 20, 64, 29, 71, 40],
+      [124, 8, 130, 24, 140, 32, 143, 40],
+      [81, 141, 89, 149, 99, 163, 102, 173],
+      [284, 7, 293, 13, 304, 16, 312, 15],
     ];
-    for (const a of streets) {
-      p.path(a, '#ccb084', 3);
-      p.path(a, '#fae3b3');
+    for (const street of streets) {
+      p.path(street, road, 2);
+      p.path(street, bright);
     }
-    const blocks = [
-      [31, 59],
-      [47, 66],
-      [65, 49],
-      [91, 37],
-      [103, 31],
-      [35, 148],
-      [85, 135],
-      [107, 143],
-      [214, 52],
-      [235, 59],
-      [255, 65],
-      [282, 128],
-      [248, 144],
-      [217, 148],
-      [70, 56],
-      [275, 48],
-      [287, 54],
+    for (const [x, y, w] of [
+      [18, 67, 8], [44, 55, 7], [56, 51, 10], [87, 45, 7], [108, 28, 8],
+      [134, 39, 8], [155, 36, 7], [168, 43, 7], [229, 25, 8], [245, 21, 9],
+      [61, 166, 7], [107, 147, 8], [129, 148, 6], [167, 145, 10], [178, 138, 6],
+      [204, 125, 8], [262, 141, 9], [297, 106, 6], [298, 128, 8], [255, 157, 6],
+    ]) p.poly([x - w / 2, y, x + 2, y - 4, x + w, y - 1, x + w / 2, y + 3], '#d9bd93');
+
+    // The creek turns east of the freight yards and passes under the printed truss.
+    const creek = [
+      168, 6, 183, 6, 180, 20, 187, 31, 201, 38, 210, 47, 208, 60, 217, 69,
+      232, 76, 238, 88, 234, 102, 223, 118, 224, 129, 237, 140, 257, 148,
+      264, 164, 261, 174, 242, 174, 247, 164, 241, 156, 223, 148, 210, 136,
+      206, 121, 211, 110, 221, 98, 224, 89, 218, 82, 204, 76, 192, 65, 193, 53,
+      187, 47, 173, 39, 164, 27, 163, 18,
     ];
-    for (const [x, y] of blocks) p.poly([x, y, x + 7, y - 4, x + 14, y + 1, x + 8, y + 5], '#d2b78d');
-    // The curved canal and piers explain where the middle stop's rail bridge belongs.
-    const bank = [
-      111, 5, 132, 5, 143, 24, 135, 44, 152, 59, 176, 73, 178, 91, 164, 108, 162, 120, 184, 137, 205, 145, 220, 174,
-      196, 174, 184, 156, 162, 147, 142, 130, 138, 112, 153, 91, 151, 80, 133, 70, 117, 54, 110, 43, 118, 23,
+    p.poly(creek, '#82a39a');
+    p.path([175, 7, 171, 22, 179, 34, 195, 42, 201, 50, 200, 62, 211, 73, 227, 80, 232, 90,
+      227, 101, 216, 116, 216, 130, 232, 144, 249, 152, 256, 164, 251, 173], '#a6c4af', 4);
+    for (const [x, y] of [[172, 19], [185, 39], [199, 54], [226, 90], [218, 111], [220, 133], [244, 153], [251, 166]]) {
+      p.path([x - 2, y + 1, x + 1, y, x + 5, y], '#cfdbba');
+    }
+
+    for (const x of [76, 163, 246]) {
+      p.rect(x, 7, 1, 166, '#d8bb8d');
+      p.rect(x + 1, 7, 1, 166, '#f2dbaa');
+    }
+    p.rect(8, 145, 304, 1, '#ddc296');
+    for (const [x, y] of [[15, 21], [22, 17], [20, 25], [54, 23], [130, 18], [137, 20],
+      [235, 16], [242, 14], [178, 132], [184, 133], [21, 160], [28, 162], [269, 127]]) {
+      p.poly([x - 2, y + 1, x, y - 3, x + 2, y + 1], '#98a68c');
+      p.rect(x, y + 1, 1, 2, '#a79376');
+    }
+    for (const [x, y] of [[21, 120], [64, 57], [115, 44], [190, 110], [266, 117], [256, 168]]) {
+      p.path([x, y, x + 1, y - 3, x + 3, y, x + 5, y - 2], '#a9aa89');
+    }
+    for (const [x, y] of [[10, 11], [153, 10], [89, 169], [284, 12], [301, 159]]) p.rect(x, y, 5, 1, sand);
+    // An engraver's compass stays away from the stops and their names.
+    p.poly([288, 136, 291, 148, 301, 152, 291, 154, 288, 166, 285, 154, 275, 152, 285, 148], c.brick);
+    p.poly([288, 139, 288, 151, 285, 151], bright);
+    p.poly([288, 152, 292, 152, 288, 163], bright);
+    p.oval(288, 152, 2, 2, c.plum);
+  }
+
+  function mapAlley(p) {
+    p.poly([13, 102, 34, 94, 60, 98, 65, 102, 39, 110, 22, 108], '#bca17c');
+    // A narrow loading court between a pair of steep, brick party walls.
+    for (const [x, y, w, h] of [[15, 80, 11, 21], [27, 72, 13, 28], [43, 80, 10, 18]]) {
+      p.poly([x, y, x + w, y - 5, x + w + 6, y - 1, x + w + 6, y + h - 3, x + 6, y + h + 4, x, y + h], c.brick, c.plum);
+      p.poly([x + 1, y + 1, x + w, y - 4, x + w + 5, y - 1, x + 6, y + 4], c.ochre);
+      p.poly([x + 7, y + 5, x + w + 5, y, x + w + 5, y + h - 3, x + 7, y + h + 3], c.rust);
+      p.path([x + 1, y + 1, x + 7, y + 5, x + w + 4, y + 1], c.copper);
+      p.rect(x + 2, y + 8, 2, 4, c.wheat);
+      p.rect(x + 9, y + 7, 3, 4, c.gold);
+      p.rect(x + 8, y + h - 6, 4, 7, c.plum);
+    }
+    p.poly([29, 70, 29, 65, 33, 64, 35, 65, 35, 70, 31, 72], c.brick, c.plum);
+    p.path([18, 85, 27, 90, 35, 90, 49, 85], c.night);
+    p.poly([24, 88, 28, 90, 26, 94], c.red);
+    p.poly([38, 89, 42, 88, 41, 93], c.teal);
+    crate(p, 40, 96, 12, 8);
+    p.rect(43, 98, 4, 2, c.wheat);
+  }
+
+  function mapWeighHouse(p) {
+    p.poly([72, 90, 99, 80, 123, 85, 125, 90, 102, 100, 80, 96], '#bca17c');
+    p.poly([74, 82, 99, 72, 119, 77, 119, 87, 98, 97, 74, 92], c.rust, c.night);
+    p.poly([75, 82, 99, 73, 118, 77, 97, 87], c.sand);
+    p.poly([77, 85, 96, 89, 96, 94, 77, 91], c.brick);
+    p.path([100, 88, 116, 81], c.ochre);
+    p.poly([82, 79, 82, 69, 99, 64, 108, 68, 107, 79, 91, 84], c.green, c.night);
+    p.poly([81, 69, 96, 62, 109, 66, 108, 69, 92, 75], c.teal, c.night);
+    p.poly([85, 74, 90, 76, 90, 80, 85, 79], c.gold);
+    p.rect(97, 72, 3, 6, c.ice);
+    // The unbalanced brass pans and graduated upright identify the weighing platform.
+    p.path([91, 71, 97, 68, 102, 69], c.night, 3);
+    p.path([97, 66, 97, 42], c.night, 3);
+    p.path([98, 64, 98, 43], c.ochre);
+    p.oval(98, 42, 3, 3, c.brick);p.rect(98, 40, 2, 2, c.gold);
+    p.path([78, 51, 97, 44, 116, 39], c.night, 3);
+    p.path([79, 50, 97, 43, 115, 39], c.ochre);
+    p.path([80, 51, 75, 61, 86, 60, 80, 51], c.brick);
+    p.path([114, 40, 109, 51, 120, 50, 114, 40], c.brick);
+    p.poly([73, 60, 87, 59, 86, 62, 83, 65, 79, 66, 75, 64], c.copper, c.night);
+    p.path([74, 60, 86, 59], c.gold);
+    p.poly([108, 51, 122, 49, 120, 53, 117, 56, 112, 56, 109, 54], c.copper, c.night);
+    p.path([109, 51, 121, 49], c.gold);
+  }
+
+  function mapExchange(p) {
+    p.poly([131, 82, 151, 71, 180, 73, 184, 80, 159, 89, 136, 87], '#bba17d');
+    p.poly([132, 78, 156, 68, 179, 73, 180, 79, 158, 87, 133, 83], c.plum, c.night);
+    p.path([134, 78, 157, 70, 177, 74], c.copper, 2);
+    p.path([138, 83, 158, 86, 178, 78], c.ochre);
+    // Loaded gantry, hoisted parcel and ranks of mail crates at the freight exchange.
+    p.poly([138, 77, 141, 50, 146, 48, 149, 76], c.teal, c.night);
+    p.path([142, 72, 145, 56, 145, 72], c.aqua);
+    p.poly([132, 53, 132, 46, 139, 43, 149, 46, 149, 52, 143, 57], c.rust, c.night);
+    p.poly([133, 47, 139, 45, 143, 47, 139, 50], c.gold);
+    p.poly([143, 46, 163, 28, 177, 24, 179, 29, 150, 51], c.green, c.night);
+    p.path([145, 45, 164, 29, 176, 25], c.aqua);
+    p.path([150, 43, 153, 45, 154, 38, 158, 40, 159, 34, 164, 36, 165, 30, 169, 32], c.night);
+    p.path([175, 29, 175, 48, 172, 50], c.night);
+    p.path([172, 49, 168, 54, 176, 52, 172, 49], c.brick);
+    crate(p, 165, 53, 15, 11); p.rect(167, 56, 5, 2, c.cream);
+    crate(p, 135, 73, 11, 8); crate(p, 146, 70, 14, 11);
+    crate(p, 151, 63, 13, 9); crate(p, 159, 71, 13, 10);
+    p.rect(149, 73, 4, 2, c.cream);p.rect(153, 66, 4, 2, c.cream);
+  }
+
+  function mapBridge(p) {
+    p.poly([193, 72, 202, 69, 204, 76, 201, 80, 195, 79], c.brick);
+    p.poly([226, 59, 235, 58, 234, 66, 229, 70, 225, 68], c.brick);
+    p.poly([188, 68, 227, 48, 244, 53, 204, 76], c.green, c.night);
+    p.path([188, 66, 228, 47, 243, 51], c.aqua, 2);
+    p.path([192, 68, 229, 50], c.ochre);
+    p.path([197, 71, 235, 51], c.copper);
+    p.path([189, 66, 189, 54, 196, 60, 201, 48, 207, 54, 214, 41, 220, 47, 228, 36, 228, 48], c.green, 2);
+    p.path([189, 53, 228, 34], c.teal, 2);
+    p.path([203, 75, 203, 62, 209, 67, 215, 55, 221, 61, 228, 48, 234, 54, 242, 42, 242, 54], c.night, 2);
+    p.path([202, 61, 242, 40], c.teal, 2);
+    p.path([203, 61, 203, 72, 242, 52], c.aqua);
+    for (const [x, y] of [[189,52],[202,60],[215,54],[228,47],[242,40]]) p.rect(x, y, 2, 1, c.ice);
+  }
+
+  function mapDepot(p) {
+    p.poly([257, 55, 281, 46, 302, 49, 303, 53, 280, 64, 258, 60], '#b9a080');
+    p.poly([259, 41, 275, 32, 299, 36, 298, 51, 278, 60, 259, 55], c.rust, c.night);
+    p.poly([278, 45, 297, 37, 297, 50, 279, 58], c.brick);
+    p.poly([255, 40, 266, 27, 282, 24, 302, 35, 281, 45], c.green, c.night);
+    p.path([258, 39, 268, 29, 280, 27, 297, 35], c.teal, 2);
+    p.poly([268, 35, 268, 24, 275, 19, 282, 23, 282, 32, 276, 36], c.brick, c.night);
+    p.poly([266, 24, 272, 17, 275, 12, 278, 18, 285, 23, 277, 26], c.green, c.night);
+    p.path([268, 23, 274, 16, 276, 15], c.aqua);
+    p.rect(270, 25, 9, 8, c.night);
+    p.image(bell(), 270, 25, 9, 7);
+    p.rect(262, 44, 4, 6, c.gold);p.rect(269, 45, 3, 6, c.wheat);
+    p.poly([280, 56, 280, 50, 282, 46, 286, 44, 289, 46, 289, 52], c.night);
+    p.rect(292, 41, 3, 7, c.wheat);
+    p.path([261, 56, 277, 60, 298, 51], c.copper, 2);
+    p.rect(298, 44, 2, 10, c.night);p.rect(297, 42, 4, 4, c.red);
+  }
+
+  function route(p, currentStop) {
+    routePaper(p);
+    const line = [
+      13, 124, 29, 118, 38, 116, 58, 116, 68, 108, 83, 105, 97, 105,
+      114, 105, 126, 98, 138, 95, 157, 95, 177, 95, 189, 88, 203, 82,
+      218, 82, 238, 82, 252, 72, 266, 70, 280, 70, 296, 70, 307, 65,
     ];
-    p.poly(bank, '#789891');
-    p.poly(
-      [
-        117, 6, 129, 6, 137, 24, 128, 43, 148, 63, 171, 77, 171, 90, 157, 108, 157, 123, 181, 143, 199, 150, 213, 174,
-        204, 174, 191, 154, 166, 143, 143, 125, 144, 112, 159, 90, 156, 78, 136, 67, 120, 51, 115, 43, 124, 24,
-      ],
-      '#a6c0a3',
-    );
-    for (const [x, y] of [
-      [130, 29],
-      [136, 59],
-      [159, 83],
-      [150, 114],
-      [177, 143],
-      [193, 154],
-    ]) {
-      p.rect(x, y, 8, 1, '#d6d6aa');
-      p.rect(x - 3, y + 3, 4, 1, '#d6d6aa');
+    // Short mail-yard sidings sit behind the heavier passenger track.
+    p.path([12, 117, 26, 111, 44, 110, 52, 106, 64, 106, 74, 103], '#a78970', 2);
+    p.path([116, 102, 130, 91, 145, 88, 166, 88, 177, 84], '#ae8d73', 2);
+    p.path([234, 75, 248, 67, 258, 65, 271, 65], '#a78970', 2);
+    for (let i = 2; i < line.length; i += 2) {
+      const x0 = line[i - 2], y0 = line[i - 1], x1 = line[i], y1 = line[i + 1];
+      for (let x = Math.ceil((x0 + 1) / 7) * 7; x < x1; x += 7) {
+        const y = Math.round(y0 + (y1 - y0) * (x - x0) / (x1 - x0));
+        p.path([x - 1, y - 3, x + 2, y + 3], c.brick, 2);
+      }
     }
-    // A loop siding and a narrow relief rail outside the passenger route.
-    p.path([18, 144, 46, 135, 67, 137, 98, 117, 117, 117, 128, 106], c.plum, 2);
-    p.path([213, 91, 254, 103, 287, 99, 309, 109], c.plum, 2);
-    const rails = [23, 144, 56, 129, 76, 115, 105, 103, 132, 102, 155, 87, 180, 85, 205, 66, 235, 64, 261, 48, 298, 41];
-    p.path(rails, c.brick, 6);
-    p.path(rails, c.ochre, 4);
-    p.path(rails, c.night, 2);
-    for (const [x, y] of [
-      [32, 139],
-      [41, 135],
-      [82, 112],
-      [93, 108],
-      [113, 101],
-      [123, 101],
-      [189, 79],
-      [197, 73],
-      [217, 66],
-      [227, 65],
-      [275, 45],
-      [284, 43],
-    ])
-      p.path([x - 1, y - 2, x + 3, y + 5], c.rust, 2);
-    p.path(rails, c.night);
-    // Parcel Alley, Sorting Bridge, Bell Depot.
-    p.poly([28, 112, 62, 95, 93, 107, 58, 125], '#bc9f78');
-    for (const [x, y, w, h] of [
-      [33, 82, 15, 25],
-      [47, 74, 18, 30],
-      [64, 82, 13, 19],
-    ]) {
-      p.poly([x, y, x + w, y - 5, x + w + 7, y - 1, x + w + 7, y + h - 2, x + 7, y + h + 5, x, y + h], c.brick, c.plum);
-      p.poly([x + 1, y + 1, x + w - 1, y - 4, x + w + 5, y - 1, x + 7, y + 5], c.ochre);
-      p.path([x + 8, y + 7, x + 8, y + h + 3], c.copper);
-      p.rect(x + 3, y + 10, 3, 5, c.gold);
-      p.rect(x + 10, y + 11, 3, 4, c.wheat);
+    p.path(line.map(n => n - 2), c.night, 5);
+    p.path(line.map(n => n - 1), c.ochre, 3);
+    p.path(line, c.rust);
+    for (const [x, y] of [[59, 115], [121, 100], [182, 92], [245, 76], [302, 68]]) {
+      p.path([x - 2, y - 3, x + 2, y - 1, x, y + 3], c.night, 2);
+      p.path([x - 1, y - 2, x + 1, y - 1, x, y + 1], c.wheat);
     }
-    p.poly([124, 95, 161, 72, 182, 76, 145, 101], c.green, c.night);
-    p.path([125, 93, 160, 70, 181, 74], c.aqua, 2);
-    p.path([134, 96, 171, 72], c.slate, 2);
-    p.path([125, 91, 125, 78, 130, 85, 137, 70, 143, 77, 150, 62, 156, 69, 162, 59, 162, 71], c.green, 2);
-    p.path([125, 78, 162, 57], c.aqua, 2);
-    p.path([136, 95, 136, 85, 143, 85, 150, 76, 156, 78, 164, 66, 172, 70, 175, 64, 175, 72], c.green, 2);
-    p.path([136, 84, 174, 61], c.green, 2);
-    p.poly([233, 52, 260, 42, 280, 46, 252, 60], '#bc9f78');
-    p.poly([237, 49, 236, 35, 244, 28, 246, 25, 260, 22, 274, 30, 273, 43, 254, 53], c.brick, c.plum);
-    p.poly([234, 34, 245, 22, 261, 18, 276, 28, 257, 35], c.green, c.night);
-    p.poly([246, 25, 246, 18, 250, 12, 252, 8, 254, 12, 258, 16, 259, 22], c.green, c.night);
-    p.rect(248, 18, 8, 7, c.wheat);
-    p.image(bell(), 248, 18, 8, 7);
-    p.rect(244, 38, 3, 7, c.gold);
-    p.rect(260, 35, 3, 6, c.wheat);
-    for (const [x, y] of [
-      [59, 128],
-      [161, 87],
-      [264, 47],
-    ]) {
-      p.oval(x, y, 6, 6, c.night);
-      p.oval(x, y, 4, 4, c.gold);
-      p.oval(x, y, 2, 2, c.rust);
+
+    mapAlley(p);
+    mapWeighHouse(p);
+    mapExchange(p);
+    mapBridge(p);
+    mapDepot(p);
+
+    for (const [i, stop] of routeStops.entries()) {
+      const { x, y, label } = stop, active = i === currentStop;
+      const half = Math.ceil(Math.max(...label.map(routeTextWidth)) / 2) + 4;
+      const top = y + 12, left = x - half, right = x + half;
+      // A typeset name slip hangs from each numbered ticket punch. Only the
+      // present stop gets the dispatcher's turquoise stamp and a dark name slip.
+      p.path([x, y + 7, x, top + 2], c.brick, 2);
+      p.poly([left + 2, top + 1, right - 2, top + 1, right + 1, top + 4, right + 1, top + 18,
+        right - 1, top + 21, left + 1, top + 21, left - 1, top + 18, left - 1, top + 4], '#bd9f79');
+      p.poly([left + 2, top, right - 2, top, right, top + 2, right, top + 17, right - 2, top + 19,
+        left + 2, top + 19, left, top + 17, left, top + 2], active ? '#36575a' : '#f6e0ad', active ? c.night : '#b79872');
+      if (active) p.path([left + 2, top + 1, right - 3, top + 1], c.aqua);
+      routeText(p, label[0], x, top + 3, active ? c.cream : c.night);
+      routeText(p, label[1], x, top + 11, active ? c.cream : c.night);
+      if (active) {
+        p.oval(x, y + 1, 11, 10, c.green);
+        p.oval(x, y, 10, 10, c.aqua);
+        p.path([x - 8, y - 4, x - 5, y - 7, x - 2, y - 8], c.ice);
+      }
+      p.oval(x, y + 1, 8, 8, c.brick);
+      p.oval(x, y, 8, 8, c.night);
+      p.oval(x, y, 6, 6, active ? c.mint : c.wheat);
+      routeText(p, String(i + 1), x, y - 3, c.night);
     }
-    // Small river reeds and a compass rose in the map's clear lower corner.
-    for (const [x, y] of [
-      [95, 87],
-      [108, 62],
-      [185, 101],
-      [206, 166],
-      [178, 116],
-      [92, 22],
-    ]) {
-      p.path([x, y, x + 1, y - 4, x + 3, y, x + 5, y - 3], c.teal);
-    }
-    p.poly([289, 132, 292, 144, 300, 148, 292, 150, 289, 163, 286, 151, 278, 148, 286, 144], c.brick);
-    p.poly([289, 136, 289, 148, 286, 148], c.wheat);
-    p.poly([289, 148, 293, 148, 289, 158], c.wheat);
-    p.oval(289, 148, 2, 2, c.plum);
-    for (const [x, y] of [
-      [14, 17],
-      [20, 14],
-      [18, 22],
-      [90, 65],
-      [190, 38],
-      [195, 34],
-      [202, 36],
-      [228, 112],
-      [19, 117],
-      [285, 77],
-      [297, 81],
-    ]) {
-      p.poly([x - 3, y + 2, x, y - 4, x + 3, y + 2], '#91a08a');
-      p.rect(x, y + 2, 1, 2, '#a59373');
-    }
-    for (const [x, y] of [
-      [39, 143],
-      [72, 156],
-      [106, 72],
-      [226, 21],
-      [263, 135],
-      [286, 101],
-    ])
-      p.rect(x, y, 5, 1, '#d2b78d');
   }
 
   const painters = { title, opening, rescue, boss, ending, route };
@@ -1359,13 +1467,15 @@
     // Each card is a still. A resize only reblits its once-painted native canvas.
     const name = Object.hasOwn(painters, scene) ? scene : 'title';
     if (!canvas || canvas.width < 1 || canvas.height < 1) return;
-    let frame = scenes.get(name);
+    const currentStop = name === 'route' && Number.isInteger(time) && time >= 0 && time < routeStops.length ? time : 0;
+    const key = name === 'route' ? name + currentStop : name;
+    let frame = scenes.get(key);
     if (!frame) {
       frame = surface(WIDTH, HEIGHT);
       const p = new PixelPen(frame);
       p.rect(0, 0, WIDTH, HEIGHT, c.ink);
-      painters[name](p);
-      if (window.DogArt || name === 'route') scenes.set(name, frame);
+      painters[name](p, currentStop);
+      if (window.DogArt || name === 'route') scenes.set(key, frame);
     }
     const g = canvas.getContext('2d');
     const scale = Math.max(canvas.width / WIDTH, canvas.height / HEIGHT);

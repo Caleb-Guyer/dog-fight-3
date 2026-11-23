@@ -1142,7 +1142,7 @@
           world.layout.name +
           ' · ' +
           world.objective +
-          '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button><button class="utility" data-do="dispatch-retry">Retry checkpoint</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div><div class="dialog-actions"><button class="utility" data-do="route">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
+          '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button><button class="utility" data-do="dispatch-retry">Retry</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div><div class="dialog-actions"><button class="utility" data-do="route">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
       );
       document.querySelector('[data-do=resume]').focus();
       return;
@@ -1227,7 +1227,7 @@
     if (action === 'fullscreen') toggleFullscreen();
     if (action === 'home') showHome();
     if (action === 'route') showRoute();
-    if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpointLit, world.dogs[0].kind);
+    if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.dogs[0].kind);
     if (action === 'option-sound' || action === 'option-shake') {
       const key = action === 'option-sound' ? 'sound' : 'shake';
       settings[key] = !settings[key];
@@ -1608,7 +1608,7 @@
     // Keep the furthest checkpoint and collected postmarks if two tabs are playing.
     const disk = campaign.readSave(storage);
     if (disk.started) {
-      const score = (p) => (p.complete ? 10 : 0) + p.room * 2 + Number(p.midway);
+      const score = (p) => (p.complete ? 1000 : 0) + p.room * 10 + p.checkpoint;
       if (score(disk) > score(progress)) progress = { ...disk, stamps: progress.stamps | disk.stamps };
       else progress.stamps |= disk.stamps;
     }
@@ -1620,7 +1620,7 @@
       stored = false;
     }
   }
-  const countMarks = (bits) => [1, 2, 4].filter((bit) => bits & bit).length;
+  const countMarks = (bits) => campaign.rooms.filter((_, i) => bits & (1 << i)).length;
   function menuScreen(id) {
     film?.score.silence();
     film = null;
@@ -1647,7 +1647,7 @@
     menuScreen('dispatch-route');
     afterStory = null;
     runner = progress.hero;
-    window.DispatchCovers.draw($('route-cover'), 'route');
+    window.DispatchCovers.draw($('route-cover'), 'route', progress.room);
     const stops = $('route-stops');
     stops.replaceChildren();
     for (const [i, r] of campaign.rooms.entries()) {
@@ -1666,7 +1666,7 @@
             ? 'Current stop'
             : 'Open stop';
       button.innerHTML =
-        '<em>0' + (i + 1) + '</em><span><b>' + r.name + '</b><small>' + status + '</small></span>';
+        '<em>0' + (i + 1) + '</em><span><b>' + r.name + '</b><small>' + r.type + ' · ' + status + '</small></span>';
       li.append(button);
       stops.append(li);
     }
@@ -1691,12 +1691,12 @@
       : progress.started
         ? (stored ? 'Saved at ' : 'This session · ') +
           campaign.rooms[progress.room].name +
-          (progress.midway ? ' semaphore' : '')
+          (progress.checkpoint ? ' · ' + campaign.rooms[progress.room].checkpoints[progress.checkpoint - 1].name : '')
         : 'First stop · Parcel Alley';
     $('route-marks').textContent =
       'Postmarks ' +
       countMarks(progress.stamps) +
-      ' / 3' +
+      ' / ' + campaign.rooms.length +
       (!stored ? ' · Progress lasts for this session' : '');
     $('dispatch-start').textContent =
       progress.pending === 'ending'
@@ -1712,7 +1712,7 @@
     const locks = {
       opening: '',
       rescue: progress.room >= 1 ? '' : 'Finish Parcel Alley',
-      boss: progress.room >= 2 ? '' : 'Cross Sorting Bridge',
+      boss: progress.room >= campaign.lastRoom ? '' : 'Cross Sorting Bridge',
       ending: progress.complete || progress.pending === 'ending' ? '' : 'Defeat the Copper Hound',
     };
     const rows = Object.entries(campaign.scenes).map(([key, scene]) => {
@@ -1792,17 +1792,17 @@
     film = null;
     if (next) next();
   }
-  function chooseBridgeRunner() {
+  function chooseRunner() {
     showRoute();
     showDialog(
       'dispatch-crew',
       'Noodle joined the crew',
-      '<p>Choose who will cross Sorting Bridge. Both dogs have their full fighting moves.</p><div class="dialog-actions"><button class="primary" data-crew="noodle">Run as Noodle</button><button class="utility" data-crew="pip">Run as Pip</button></div>',
+      '<p>Brisket guards the weigh scale. Choose who will fight him for a freight ticket.</p><div class="dialog-actions"><button class="primary" data-crew="noodle">Run as Noodle</button><button class="utility" data-crew="pip">Run as Pip</button></div>',
     );
     document.querySelector('[data-crew=noodle]').focus();
   }
   function chapterClear() {
-    saveProgress({ room: 2, pending: '', complete: true });
+    saveProgress({ room: campaign.lastRoom, pending: '', complete: true });
     showRoute();
     showDialog(
       'dispatch-clear',
@@ -1811,7 +1811,7 @@
         portrait('clover') +
         '"><div><span class="mode-label">The Last Dispatch</span><h3>The Silent Yard</h3><p>' +
         countMarks(progress.stamps) +
-        ' of 3 postmarks collected.</p></div></div><p>The bell is back in service. Clover has the next dispatch.</p><div class="dialog-actions"><button class="primary" data-do="close">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
+        ' of ' + campaign.rooms.length + ' postmarks collected.</p></div></div><p>The bell is back in service. Clover has the next dispatch.</p><div class="dialog-actions"><button class="primary" data-do="close">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
     );
     document.querySelector('[data-do=close]').focus();
   }
@@ -1821,24 +1821,25 @@
     if (!progress.complete) saveProgress({ room, pending: key, complete: !!scene.completesChapter });
     story(key, () => {
       if (scene.completesChapter) return chapterClear();
-      if (scene.chooseRunner) return chooseBridgeRunner();
-      beginRun(room, false, room === 0 ? 'pip' : runner);
+      if (scene.chooseRunner) return chooseRunner();
+      beginRun(room, 0, room === 0 ? 'pip' : runner);
     });
   }
-  function enterStop(index, midway = false) {
+  function enterStop(index, checkpoint = 0) {
     audioReady();
     sound('menu');
     const intro = campaign.rooms[index].intro;
-    if (!midway && !campaign.scenes[intro].chooseRunner) playScene(intro);
-    else beginRun(index, midway, index === 0 ? 'pip' : runner);
+    if (!checkpoint && intro) playScene(intro);
+    else beginRun(index, checkpoint, index === 0 ? 'pip' : runner);
   }
-  function beginRun(index, midway, hero) {
+  function beginRun(index, checkpoint, hero) {
     dismiss();
     page = 'match';
     drillSide = null;
     drillWaiting = false;
     padRelease = true;
     countdown = 0;
+    accumulator = 0;
     adventureKey = '';
     for (const id of [
       'home',
@@ -1857,15 +1858,15 @@
     document.body.classList.add('playing', 'adventure-active');
     hero = index === 0 ? 'pip' : hero;
     runner = hero;
-    saveProgress({ room: index, midway, pending: '', hero: index > 0 ? hero : undefined });
+    saveProgress({ room: index, checkpoint, pending: '', hero: index > 0 ? hero : undefined });
     view = new window.DispatchView();
     view.shakeEnabled = settings.shake;
     noticeUntil = 0;
     $('dispatch-notice').hidden = true;
-    world = new window.DispatchRun({ room: index, midway, hero, stamps: progress.stamps }, (name, e) => {
+    world = new window.DispatchRun({ room: index, checkpoint, hero, stamps: progress.stamps }, (name, e) => {
       view.event(name, e);
       if (name === 'dispatchCheckpoint') {
-        saveProgress({ room: index, midway: true });
+        saveProgress({ room: index, checkpoint: e.checkpoint });
         tone(485, 735, 0.12);
         tone(735, 980, 0.13, 0.12);
         dispatchNotice(stored ? 'Checkpoint saved' : 'Checkpoint reached');
@@ -1875,7 +1876,10 @@
         dispatchNotice('Postmark collected');
       } else if (name === 'dispatchSignal') {
         tone(330, 660, 0.19);
-        dispatchNotice('Signal clear');
+        dispatchNotice(e.name + ' raised');
+      } else if (name === 'dispatchWave') {
+        tone(420, 570, 0.12);
+        if (campaign.rooms[index].id === 'exchange') dispatchNotice('Wave ' + e.wave);
       } else if (name === 'machineWindup') {
         tone(e.move === 'charge' ? 240 : 160, e.move === 'charge' ? 390 : 210, 0.18, 0, 'triangle', 0.07);
       } else if (name === 'machineDown') {
@@ -1884,7 +1888,7 @@
       } else if (name === 'machineSwing') tone(135, 55, 0.11);
       else sound(name, e);
     });
-    $('match-mode').textContent = 'Adventure · The Last Dispatch';
+    $('match-mode').textContent = 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
     $('match-stage').textContent = world.layout.name;
     $('runner-portrait').src = portrait(hero);
     $('runner-name').textContent = fighters[hero].name;
@@ -1905,19 +1909,19 @@
       noticeUntil = 0;
       $('dispatch-notice').hidden = true;
     }
-    const enemy = world.enemy;
-    const key = [world.hp, world.stamps, world.objective, enemy?.kind, enemy?.hp].join('|');
+    const foes = world.foes, lead = foes[0], hp = foes.reduce((n, e) => n + e.hp, 0);
+    const key = [world.hp, world.stamps, world.objective, world.wave, hp].join('|');
     if (key === adventureKey) return;
     adventureKey = key;
     $('runner-health').value = world.hp;
-    $('runner-health').setAttribute('aria-valuetext', Math.ceil(world.hp) + ' of 64');
-    $('machine-meter').hidden = !enemy;
-    if (enemy) {
-      $('machine-name').textContent = world.dogs[1].stats.name;
-      $('machine-health').max = enemy.maxHP;
-      $('machine-health').value = enemy.hp;
+    $('runner-health').setAttribute('aria-valuetext', Math.ceil(world.hp) + ' of ' + world.maxHP);
+    $('machine-meter').hidden = !lead;
+    if (lead) {
+      $('machine-name').textContent = foes.length > 1 ? 'Sorting crew · ' + (world.wave + 1) + '/' + world.layout.waves.length : lead.f.stats.name;
+      $('machine-health').max = foes.reduce((n, e) => n + e.maxHP, 0);
+      $('machine-health').value = hp;
     }
-    $('dispatch-marks').textContent = 'Postmarks ' + countMarks(world.stamps) + ' / 3';
+    $('dispatch-marks').textContent = 'Postmarks ' + countMarks(world.stamps) + ' / ' + campaign.rooms.length;
     if ($('dispatch-objective').textContent !== world.objective)
       $('dispatch-objective').textContent = world.objective;
   }
@@ -1935,15 +1939,24 @@
     updateDispatchHUD();
     view.draw($('game'), world, dt, world.time);
     if (world.finished === 'exit') {
-      playScene(world.layout.outro);
+      const { layout, roomIndex } = world;
+      if (layout.outro) playScene(layout.outro);
+      else {
+        const next = roomIndex + 1, hero = world.dogs[0].kind;
+        saveProgress({ room: next, pending: '', hero });
+        showRoute();
+        showDialog('dispatch-next', layout.name + ' clear',
+          '<p>' + layout.dispatch + '</p><div class="dialog-actions"><button class="primary" data-next-stop="' +
+          next + '" data-hero="' + hero + '">Continue to ' + campaign.rooms[next].name + '</button>' +
+          '<button class="utility" data-do="route">Route map</button></div>');
+        document.querySelector('[data-next-stop]').focus();
+      }
     } else if (world.finished === 'fallen') {
       showDialog(
         'dispatch-fall',
         'Runner down',
-        '<p>Pick up the trail at ' +
-          world.layout.name +
-          (world.checkpointLit ? '’s semaphore.' : '’s entrance.') +
-          '</p><div class="dialog-actions"><button class="primary" data-do="dispatch-retry">Retry checkpoint</button><button class="utility" data-do="route">Route map</button></div>',
+        '<p>Restart at ' + (world.layout.checkpoints[world.checkpoint - 1]?.name || world.layout.name) +
+          ' with full stamina.</p><div class="dialog-actions"><button class="primary" data-do="dispatch-retry">Retry</button><button class="utility" data-do="route">Route map</button></div>',
         false,
       );
       document.querySelector('[data-do=dispatch-retry]').focus();
@@ -1978,7 +1991,9 @@
   });
   $('dialog-body').addEventListener('click', (e) => {
     const pick = e.target.closest('[data-crew]');
-    if (pick) beginRun(1, false, pick.dataset.crew);
+    if (pick) beginRun(1, 0, pick.dataset.crew);
+    const next = e.target.closest('[data-next-stop]');
+    if (next) beginRun(Number(next.dataset.nextStop), 0, next.dataset.hero);
   });
   $('home-adventure').onclick = () => {
     audioReady();
@@ -2020,7 +2035,7 @@
     sound('menu');
     if (progress.pending) return playScene(progress.pending);
     if (progress.complete) return playScene('opening');
-    enterStop(progress.room, progress.midway);
+    enterStop(progress.room, progress.checkpoint);
   };
   const keys = [
     {
@@ -2337,8 +2352,10 @@
   }
   window.addEventListener('hashchange', () => {
     if (location.hash === '#cutscenes') openFilmLibraryLink();
+    else if (location.hash === '#adventure') showRoute();
   });
   if (location.hash === '#cutscenes') openFilmLibraryLink();
+  else if (location.hash === '#adventure') showRoute();
   else showHome();
   requestAnimationFrame(frame);
 })();

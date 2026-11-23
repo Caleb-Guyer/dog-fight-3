@@ -6,30 +6,31 @@
     <meta name="theme-color" content="#252337" />
     <meta
       name="description"
-      content="Play The Last Dispatch, a side-scrolling dog adventure, or battle for the Golden Tennis Ball in solo, local versus, and training."
+      content="Play The Last Dispatch, a five-mission cartoon brawler, or battle for the Golden Tennis Ball in solo, local versus, and training."
     />
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="./style.css?v=screen-1" />
     <link rel="stylesheet" href="./dispatch.css?v=widefilm-1" />
-    <link rel="stylesheet" href="./screen.css?v=widefilm-1" />
+    <link rel="stylesheet" href="./screen.css?v=missions-1" />
     <script defer src="./fighters-art.js?v=dispatch-1"></script>
     <script defer src="./arena-art.js?v=screen-1"></script>
-    <script defer src="./engine.js?v=dispatch-1"></script>
+    <script defer src="./engine.js?v=missions-1"></script>
     <script defer src="./render.js?v=screen-1"></script>
-    <script defer src="./dispatch-script.js?v=dispatch-1"></script>
-    <script defer src="./dispatch-actors.js?v=dispatch-1"></script>
-    <script defer src="./yard-art.js?v=screen-1"></script>
-    <script defer src="./dispatch-covers.js?v=cinema-1"></script>
+    <script defer src="./dispatch-script.js?v=missions-1"></script>
+    <script defer src="./dispatch-actors.js?v=missions-1"></script>
+    <script defer src="./yard-art.js?v=missions-1"></script>
+    <script defer src="./dispatch-covers.js?v=missions-1"></script>
     <script defer src="./film-opening.js?v=widefilm-1"></script>
     <script defer src="./film-rescue.js?v=widefilm-1"></script>
     <script defer src="./film-boss.js?v=widefilm-1"></script>
     <script defer src="./film-ending.js?v=widefilm-1"></script>
     <script defer src="./dispatch-film.js?v=widefilm-1"></script>
-    <script defer src="./dispatch-run.js?v=screen-1"></script>
-    <script defer src="./dispatch-view.js?v=screen-1"></script>
-    <script defer src="./app.js?v=widefilm-1"></script>
+    <script defer src="./dispatch-bridge.js?v=missions-1"></script>
+    <script defer src="./dispatch-run.js?v=missions-1"></script>
+    <script defer src="./dispatch-view.js?v=missions-1"></script>
+    <script defer src="./app.js?v=missions-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -114,7 +115,7 @@
               width="640"
               height="360"
               role="img"
-              aria-label="Rail map of Parcel Alley, Sorting Bridge and Bell Depot"
+              aria-label="Rail map from Parcel Alley through the Weigh House, Freight Exchange and Sorting Bridge to Bell Depot"
             ></canvas>
             <div><span>Chapter 01</span><strong>The Silent Yard</strong></div>
           </div>
@@ -248,7 +249,7 @@
             </div>
             <div id="machine-meter" class="machine-meter" hidden>
               <b id="machine-name"></b
-              ><progress id="machine-health" max="84" value="84" aria-label="Machine stamina"></progress>
+              ><progress id="machine-health" max="84" value="84" aria-label="Opponent stamina"></progress>
             </div>
             <span id="dispatch-notice" hidden></span>
           </div>

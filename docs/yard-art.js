@@ -25,9 +25,9 @@
 
   // Filling whole cells, including diagonals and silhouettes, keeps every layer on the same grid.
   class Brush {
-    constructor(w, h) {
-      this.canvas = surface(w, h);
-      this.g = this.canvas.getContext('2d');
+    constructor(w, h, context) {
+      this.canvas = context ? context.canvas : surface(w, h);
+      this.g = context || this.canvas.getContext('2d');
     }
     r(x, y, w, h, color) {
       if (w <= 0 || h <= 0) return;
@@ -188,22 +188,24 @@
     bridge: ['#374768', '#425574', '#516580', '#63778d', '#788999', '#9098a2', '#a6a3a6', '#b9abad'],
     depot: ['#29324c', '#303a54', '#38465d', '#42536a', '#4d6075', '#5c7081', '#687d89', '#758795'],
   };
-  function paintSky(room) {
-    const span = skyWidth + skyWing * 2;
-    const p = new Brush(span, skyHeight),
-      band = skies[room];
-    p.g.translate(skyWing, 0);
-    p.r(-skyWing, 0, span, skyHeight, band[7]);
-    const stops = [0, 19, 36, 53, 71, 88, 105, 123, skyHeight];
+  function skyBands(p, x, span, band, stops) {
     const channels = band.map((hex) => [1, 3, 5].map((a) => parseInt(hex.slice(a, a + 2), 16)));
     for (let i = 0; i < band.length - 1; i++) {
       for (let step = 0; step < 4; step++) {
         const y = Math.round(stops[i] + ((stops[i + 1] - stops[i]) * step) / 4);
         const end = Math.round(stops[i] + ((stops[i + 1] - stops[i]) * (step + 1)) / 4);
         const tone = channels[i].map((a, j) => Math.round(a + ((channels[i + 1][j] - a) * step) / 4));
-        p.r(-skyWing, y, span, end - y, 'rgb(' + tone.join(',') + ')');
+        p.r(x, y, span, end - y, 'rgb(' + tone.join(',') + ')');
       }
     }
+  }
+  function paintSky(room) {
+    const span = skyWidth + skyWing * 2;
+    const p = new Brush(span, skyHeight),
+      band = skies[room];
+    p.g.translate(skyWing, 0);
+    p.r(-skyWing, 0, span, skyHeight, band[7]);
+    skyBands(p, -skyWing, span, band, [0, 19, 36, 53, 71, 88, 105, 123]);
     const rng = seeded(room === 'alley' ? 5 : 18);
     if (room === 'alley') {
       p.oval(292, 64, 22, 22, '#eabb92');
@@ -1136,6 +1138,922 @@
     }
     return p.canvas;
   }
+
+  const worksTop = -130,
+    worksBase = 350;
+  const yardSky = '#759095',
+    yardBallast = '#737c70',
+    shedRoof = '#424556',
+    shedFloor = '#535363';
+
+  function freightBox(p, x, base, size, kind, dim = false) {
+    const h = Math.round(size * (kind === 1 ? 0.66 : 0.77)),
+      y = base - h;
+    const edge = dim ? '#716d70' : '#72676b';
+    const paper = dim ? '#97897b' : kind === 1 ? '#84998e' : '#b29479';
+    const lip = dim ? '#aca18d' : kind === 1 ? '#a4b0a0' : '#c6ac87';
+    p.poly(
+      [
+        [x, y + 2],
+        [x + size - 4, y - 1],
+        [x + size + 1, y + 1],
+        [x + size + 1, base - 2],
+        [x + 4, base + 1],
+        [x, base - 1],
+      ],
+      edge,
+    );
+    p.poly(
+      [
+        [x + 1, y + 3],
+        [x + size - 4, y],
+        [x + size, y + 2],
+        [x + 4, y + 5],
+      ],
+      lip,
+    );
+    p.poly(
+      [
+        [x + 4, y + 5],
+        [x + size, y + 2],
+        [x + size, base - 3],
+        [x + 4, base],
+      ],
+      paper,
+    );
+    p.line(x + 2, y + 4, x + 2, base - 2, paper);
+    if (kind === 2) {
+      p.line(x + 6, y + 5, x + size - 2, base - 4, edge);
+      p.line(x + 6, base - 2, x + size - 3, y + 4, edge);
+    } else {
+      p.line(x + size * 0.48, y + 2, x + size * 0.68, y + 4, edge);
+      p.r(x + size * 0.65, y + 4, 2, h - 5, edge);
+      p.r(x + 5, y + 6, Math.max(2, size / 4), 2, dim ? '#b1a490' : '#d1bd9d');
+      p.dot(x + 6, y + 7, edge);
+    }
+  }
+
+  function weighGround(p) {
+    const w = panoramaWidth,
+      low = worksBase,
+      high = worksTop;
+    p.r(0, high, w, low - high, '#dfc9a1');
+    skyBands(
+      p,
+      0,
+      w,
+      [yardSky, '#7a9698', '#849f9c', '#91a9a1', '#a1b0a5', '#b4b8a4', '#c5bda0', '#d5c4a1', '#dfc9a1'],
+      [high, -76, -41, -13, 13, 32, 48, 64, 80],
+    );
+    for (const [x, y, cw, ch] of [
+      [27, 29, 59, 7],
+      [173, -49, 89, 7],
+      [270, 12, 66, 6],
+      [424, 35, 81, 8],
+      [638, -13, 76, 7],
+      [812, 20, 106, 9],
+      [934, 48, 55, 6],
+    ])
+      cloud(p, x, y, cw, ch, '#c4c3ae', '#a5b7ab');
+    const hilly = [];
+    for (let x = 0; x <= w; x += 10)
+      hilly.push([x, 92 + Math.round(4 * Math.sin((x * Math.PI) / 125) + 2 * Math.sin((x * Math.PI) / 50))]);
+    p.poly([...hilly, [w, 147], [0, 147]], '#a9ac94');
+    for (const [x, y] of [
+      [38, 91],
+      [265, 83],
+      [553, 87],
+      [814, 85],
+    ]) {
+      p.r(x, y - 15, 5, 30, '#999e8c');
+      p.r(x - 1, y - 16, 7, 3, '#99988a');
+      p.r(x + 1, y - 11, 2, 15, '#b4b39c');
+      p.line(x + 2, y - 18, x + 9, y - 22, '#bdbba3', 2);
+      p.line(x + 10, y - 23, x + 21, y - 22, '#bdbba3', 2);
+    }
+    const sizes = [46, 69, 40, 61, 51, 76, 48, 64];
+    for (let i = -1; i < 9; i++) {
+      const id = (i + 8) % 8,
+        x = i * 125 + 6,
+        s = sizes[id],
+        y = 103 - [5, 12, 8, 1, 14, 9, 4, 10][id];
+      p.r(x, y, s, 47, '#929a89');
+      p.poly(
+        [
+          [x - 2, y + 2],
+          [x + 7, y - 4],
+          [x + s - 11, y - 6],
+          [x + s + 3, y],
+          [x + s + 3, y + 3],
+        ],
+        '#879286',
+      );
+      for (let k = 7; k < s - 6; k += 12) {
+        p.r(x + k, y + 7, 5, 5, '#a9ad96');
+        p.r(x + k, y + 7, 2, 5, '#829286');
+      }
+      if (id % 3 === 1) cityTower(p, x + s + 17, y - 5, '#8c978b', '#808f86', '#a8ab96', 1);
+      p.r(x + s + 6, 110, s * 0.65, 31, '#a1a38f');
+    }
+    for (let i = 0; i < 6; i++) {
+      const x = [-8, 105, 322, 522, 699, 857][i],
+        end = [105, 322, 522, 699, 857, 992][i];
+      p.r(x, 73, 3, 79, '#858b7d');
+      p.r(x + 1, 75, 1, 72, '#aba48b');
+      p.r(x - 5, 72, 13, 2, '#7b827a');
+      p.line(x, 75, (x + end) / 2, 85, '#92988b');
+      p.line((x + end) / 2, 85, end, 75, '#92988b');
+    }
+    // Ballast, rails and warehouse carts sit behind the weighbridge's open sides.
+    p.r(0, 140, w, low - 140, '#929585');
+    p.poly(
+      [
+        [0, 149],
+        [190, 145],
+        [337, 150],
+        [523, 141],
+        [727, 146],
+        [888, 145],
+        [w, 149],
+        [w, low],
+        [0, low],
+      ],
+      '#878e7f',
+    );
+    p.poly(
+      [
+        [0, 194],
+        [138, 187],
+        [330, 182],
+        [511, 187],
+        [708, 177],
+        [858, 185],
+        [w, 194],
+        [w, low],
+        [0, low],
+      ],
+      yardBallast,
+    );
+    for (const y of [153, 168, 233]) {
+      for (let x = -6; x < w; x += 12) {
+        const j = Math.round(3 * Math.sin((x * Math.PI) / 250));
+        p.line(x, y + j - 1, x + 5, y + j + 3, '#727d73');
+      }
+      for (let x = 0; x < w; x += 25) {
+        const a = Math.round(3 * Math.sin((x * Math.PI) / 250)),
+          b = Math.round(3 * Math.sin(((x + 25) * Math.PI) / 250));
+        p.line(x, y + a, x + 25, y + b, '#788177');
+        p.line(x, y + a + 3, x + 25, y + b + 3, '#9b9b85');
+      }
+    }
+    for (const [x, y] of [
+      [20, 134],
+      [315, 131],
+      [488, 139],
+      [737, 132],
+      [901, 137],
+    ]) {
+      p.r(x - 1, y, 41, 4, '#767d73');
+      p.r(x, y, 39, 1, '#aaa18b');
+      p.oval(x + 6, y + 5, 3, 3, '#6f776e');
+      p.oval(x + 33, y + 5, 3, 3, '#6f776e');
+      freightBox(p, x + 2, y - 1, 15, 2, true);
+      freightBox(p, x + 18, y - 1, 18, 0, true);
+    }
+    const rng = seeded(530);
+    for (let i = 0; i < 420; i++) {
+      const x = Math.floor(rng() * w),
+        y = 145 + Math.floor(rng() * (low - 145));
+      p.r(x, y, 1 + Math.floor(rng() * 6), 1, i % 3 ? '#7c8777' : '#9a9b83');
+      if (i % 17 === 0) p.line(x, y, x - 2, y - 3, '#65776c');
+    }
+  }
+
+  function mailSlots(p, x, y, cols) {
+    const w = cols * 11 + 5;
+    p.r(x, y, w, 31, '#414958');
+    p.r(x + 1, y + 1, w - 2, 29, '#59616b');
+    for (let row = 0; row < 3; row++)
+      for (let col = 0; col < cols; col++) {
+        const u = x + 3 + col * 11,
+          v = y + 3 + row * 8;
+        p.r(u, v, 9, 7, '#48505f');
+        p.r(u, v, 9, 1, '#737981');
+        if ((col * 11 + row * 7 + x) % 5 < 2) {
+          p.r(u + 2, v + 4, 6, 2, '#998e85');
+          p.dot(u + 3, v + 3, '#afa091');
+        }
+      }
+  }
+  function exchangeGround(p) {
+    const w = panoramaWidth,
+      high = worksTop,
+      low = worksBase;
+    p.r(0, high, w, low - high, shedRoof);
+    p.r(0, -52, w, 244, '#555667');
+    p.r(0, 78, w, 102, '#60616e');
+    for (let i = -1; i <= 8; i++) {
+      const x = i * 125,
+        h = 30 + (Math.abs(i + 8) % 3) * 4;
+      p.poly(
+        [
+          [x + 3, -38],
+          [x + 87, -75],
+          [x + 116, -69],
+          [x + 116, -40],
+          [x + 105, -23],
+          [x + 3, -23],
+        ],
+        '#383f50',
+      );
+      p.poly(
+        [
+          [x + 12, -39],
+          [x + 87, -69],
+          [x + 109, -65],
+          [x + 109, -44],
+          [x + 101, -29],
+          [x + 13, -29],
+        ],
+        '#5c687a',
+      );
+      p.poly(
+        [
+          [x + 18, -40],
+          [x + 74, -64],
+          [x + 83, -65],
+          [x + 41, -35],
+          [x + 18, -32],
+        ],
+        '#6d7885',
+      );
+      p.line(x + 54, -54, x + 54, -28, '#424a5a', 2);
+      p.r(x, -19, 125, 5, '#3f4657');
+      p.r(x, -18, 125, 1, '#656774');
+      p.line(x + 4, -14, x + 48, 7, '#414859', 3);
+      p.line(x + 49, 7, x + 121, -15, '#414859', 3);
+      const y = 15 + (Math.abs(i + 8) % 3) * 3;
+      p.r(x + 9, y, 84, h, '#484f61');
+      p.r(x + 12, y + 3, 78, h - 7, '#657783');
+      p.poly(
+        [
+          [x + 14, y + h - 8],
+          [x + 45, y + 3],
+          [x + 63, y + 3],
+          [x + 32, y + h - 7],
+        ],
+        '#788892',
+      );
+      p.r(x + 12, y + h * 0.57, 80, 2, '#4a5465');
+      for (const k of [32, 50, 69]) p.r(x + k, y + 2, 2, h - 4, '#4a5465');
+      p.r(x + 8, y + h, 86, 2, '#787c83');
+      p.r(x + 113, -76, 5, 238, '#4b5060');
+      p.r(x + 116, -75, 1, 227, '#6d6c77');
+      mailSlots(p, x + 15, 101, 6);
+      p.r(x + 14, 136, 72, 3, '#555966');
+    }
+    for (const [x, y] of [
+      [74, 52],
+      [277, 43],
+      [458, 50],
+      [674, 45],
+      [909, 50],
+    ]) {
+      p.line(x, 0, x, y - 6, '#505460');
+      p.r(x - 2, y - 7, 5, 4, '#6f6a70');
+      p.poly(
+        [
+          [x - 8, y],
+          [x - 3, y - 4],
+          [x + 4, y - 4],
+          [x + 9, y],
+          [x + 9, y + 2],
+          [x - 8, y + 2],
+        ],
+        '#67646c',
+      );
+      p.r(x - 6, y + 2, 13, 2, '#b0a08b');
+      p.r(x - 3, y + 3, 7, 1, '#c2ac91');
+    }
+    for (const x of [49, 401, 774]) {
+      p.r(x, 65, 40, 18, '#505561');
+      p.r(x + 1, 66, 38, 15, '#717480');
+      p.r(x + 3, 68, 13, 10, '#aaa18c');
+      p.line(x + 4, 69, x + 9, 73, '#777882');
+      p.line(x + 9, 73, x + 14, 69, '#777882');
+      p.line(x + 19, 73, x + 26, 73, '#a49c8d', 2);
+      p.line(x + 25, 73, x + 31, 69, '#a49c8d', 2);
+      p.line(x + 25, 73, x + 32, 76, '#a49c8d', 2);
+      p.r(x + 31, 68, 5, 2, '#8b9c91');
+      p.r(x + 32, 76, 5, 2, '#a38b80');
+    }
+    for (const x of [337, 536, 876]) {
+      p.r(x, 84, 39, 60, '#4e5260');
+      p.r(x + 2, 87, 35, 54, '#686b75');
+      for (let j = 0; j < 11; j++) p.r(x + 3, 89 + 4 * j, 33, 1, '#767780');
+      p.r(x + 10, 117, 14, 3, '#565966');
+      p.dot(x + 22, 118, '#90908b');
+      p.r(x - 2, 83, 44, 3, '#747783');
+      p.r(x - 3, 142, 45, 3, '#555b68');
+    }
+    p.poly(
+      [
+        [0, 156],
+        [177, 154],
+        [417, 158],
+        [626, 153],
+        [860, 157],
+        [w, 156],
+        [w, low],
+        [0, low],
+      ],
+      '#626371',
+    );
+    p.poly(
+      [
+        [0, 195],
+        [165, 187],
+        [366, 190],
+        [575, 183],
+        [776, 189],
+        [w, 195],
+        [w, low],
+        [0, low],
+      ],
+      shedFloor,
+    );
+    const rng = seeded(912);
+    for (let i = 0; i < 290; i++) {
+      const x = Math.floor(rng() * w),
+        y = 162 + Math.floor(rng() * (low - 162));
+      p.r(x, y, 2 + Math.floor(rng() * 8), 1, i % 4 ? '#5c5d6b' : '#6c6b76');
+    }
+    for (const y of [204, 263]) {
+      for (let x = 0; x < w; x += 125) {
+        const j = x % 250 === 0 ? 3 : -3;
+        p.line(x, y + j, x + 125, y - j, '#646471');
+        p.line(x + 17, y + j + 2, x + 9, y + j + 9, '#4f525f');
+      }
+    }
+    for (const [x, y] of [
+      [-11, 151],
+      [385, 158],
+      [572, 150],
+      [709, 154],
+      [934, 151],
+    ]) {
+      freightBox(p, x, y, 23, 2, true);
+      freightBox(p, x + 26, y, 17, 0, true);
+      freightBox(p, x + 3, y - 16, 15, 1, true);
+    }
+  }
+
+  function weighFrame() {
+    return piece('weighbridge-office', 248, 133, (p) => {
+      const iron = '#697b78',
+        shadow = '#63716e',
+        brass = '#ab956f',
+        edge = '#7d8271';
+      // Rain shelter, the clerk's desk, and the separate overhead balance shaft.
+      p.poly(
+        [
+          [0, 21],
+          [22, 7],
+          [96, 5],
+          [112, 12],
+          [114, 19],
+          [4, 25],
+        ],
+        shadow,
+      );
+      p.poly(
+        [
+          [4, 19],
+          [24, 9],
+          [94, 7],
+          [107, 13],
+          [55, 17],
+        ],
+        '#9eaa92',
+      );
+      p.line(5, 22, 112, 16, '#bac0a0', 2);
+      for (const x of [8, 65]) {
+        p.r(x, 22, 4, 97, iron);
+        p.r(x + 1, 23, 1, 90, '#a4ae93');
+      }
+      p.r(12, 26, 51, 57, '#9b9d85');
+      p.r(17, 31, 40, 31, '#768a80');
+      p.r(19, 33, 36, 26, '#b3b7a1');
+      p.poly(
+        [
+          [20, 53],
+          [40, 34],
+          [48, 34],
+          [25, 57],
+          [20, 57],
+        ],
+        '#c6c5a5',
+      );
+      p.r(35, 32, 2, 29, '#7c8c7e');
+      p.r(20, 47, 36, 2, '#7b8a7d');
+      p.r(13, 63, 49, 3, '#768578');
+      p.r(14, 63, 46, 1, '#b3b198');
+      p.r(18, 67, 13, 8, '#868978');
+      p.r(19, 67, 11, 6, '#c9b892');
+      p.r(21, 69, 6, 1, '#9f9c83');
+      p.r(21, 71, 4, 1, '#aca387');
+      for (let y = 70; y < 83; y += 5) p.r(15, y, 45, 1, '#8c9784');
+      p.r(9, 82, 62, 5, '#798778');
+      p.r(10, 82, 58, 1, '#b3b299');
+      p.r(21, 77, 11, 5, '#8e8270');
+      p.r(32, 74, 11, 8, '#a29074');
+      p.line(42, 18, 66, 37, iron, 3);
+      p.poly(
+        [
+          [78, 122],
+          [85, 90],
+          [94, 62],
+          [102, 63],
+          [96, 96],
+          [91, 122],
+        ],
+        shadow,
+      );
+      p.poly(
+        [
+          [110, 65],
+          [119, 66],
+          [130, 120],
+          [121, 120],
+        ],
+        shadow,
+      );
+      p.line(96, 69, 89, 106, '#96a28a', 2);
+      p.line(113, 72, 124, 115, '#9c9e82', 2);
+      p.r(73, 121, 64, 4, edge);
+      p.r(75, 121, 60, 1, '#aaa78b');
+      p.r(47, 17, 55, 3, iron);
+      p.r(48, 17, 52, 1, '#b5aa86');
+      p.oval(49, 20, 4, 4, '#697d73');
+      p.oval(49, 20, 2, 2, brass);
+      p.dot(49, 20, shadow);
+      p.r(101, 7, 104, 5, iron);
+      p.r(103, 7, 100, 1, '#b4b092');
+      p.r(184, 8, 5, 13, shadow);
+      for (const x of [151, 179, 202]) {
+        p.r(x - 3, 4, 7, 3, shadow);
+        p.r(x - 1, 6, 3, 15, iron);
+        p.oval(x, 21, 4, 4, '#667573');
+        p.oval(x, 21, 3, 3, brass);
+        p.dot(x, 21, shadow);
+      }
+      p.r(139, 11, 69, 3, shadow);
+      p.r(140, 11, 66, 1, brass);
+      p.line(100, 15, 150, 2, iron, 2);
+      p.line(149, 3, 179, 10, '#929c84', 2);
+      p.r(201, 15, 4, 97, '#7b8879');
+      p.r(202, 24, 1, 78, '#abb095');
+      p.r(195, 110, 17, 4, '#798577');
+      // Weathered brass bezel and a crescent of hand-painted calibration ticks.
+      const x = 104,
+        y = 44,
+        r = 24;
+      p.oval(x, y + 2, r + 4, r + 4, '#6a746f');
+      p.oval(x, y, r + 3, r + 3, '#9b8465');
+      p.oval(x - 1, y - 1, r + 1, r + 1, '#c3a36e');
+      p.oval(x, y, r - 1, r - 1, '#7e806f');
+      p.oval(x, y, r - 3, r - 3, '#d5c39a');
+      p.oval(x, y + 1, r - 5, r - 5, '#dfcfa4');
+      p.line(x - 24, y - 9, x - 19, y - 18, '#ddbf87', 2);
+      p.line(x - 18, y - 19, x - 9, y - 24, '#ddbf87', 2);
+      for (let i = 0; i < 17; i++) {
+        const a = ((151 + i * 15) * Math.PI) / 180,
+          length = i % 4 === 0 ? 5 : i % 2 === 0 ? 3 : 2;
+        p.line(
+          x + Math.cos(a) * (r - 5),
+          y + Math.sin(a) * (r - 5),
+          x + Math.cos(a) * (r - 5 - length),
+          y + Math.sin(a) * (r - 5 - length),
+          i % 4 === 0 ? '#777d6b' : '#929780',
+        );
+      }
+      p.r(x - 6, y + 10, 13, 3, '#aea88a');
+      p.r(x - 4, y + 11, 9, 1, '#7e8b79');
+      p.r(x - 2, y + 6, 5, 2, '#a6a184');
+      p.dot(x - 3, y + 5, '#a6a184');
+      p.dot(x + 3, y + 5, '#a6a184');
+      for (const [dx, dy] of [
+        [-21, -12],
+        [19, -14],
+        [18, 15],
+        [-19, 15],
+      ])
+        p.dot(x + dx, y + dy, '#e0cca3');
+      p.r(50, 109, 37, 3, '#7b8274');
+      p.r(51, 109, 34, 1, '#a6aa90');
+      for (const [x, y, w] of [
+        [18, 112, 16],
+        [34, 112, 12],
+        [24, 101, 11],
+      ])
+        freightBox(p, x, y, w, 2, true);
+      wingedPost(p, 39, 93, '#abad91', '#859280');
+      pigeon(p, 25, 9, 1, true);
+    });
+  }
+  function movingBalance(p, t) {
+    const load = (1 - Math.cos(t * 1.24)) * 0.5,
+      ang = -2.48 + load * 1.72,
+      x = 104,
+      y = 44;
+    p.line(
+      x - Math.cos(ang) * 4,
+      y - Math.sin(ang) * 4,
+      x + Math.cos(ang) * 17,
+      y + Math.sin(ang) * 17,
+      '#956d58',
+      2,
+    );
+    p.line(x, y, x + Math.cos(ang) * 15, y + Math.sin(ang) * 15, '#a67b62');
+    p.oval(x, y, 3, 3, '#85836e');
+    p.dot(x - 1, y - 1, '#d2b389');
+    const down = Math.round(load * 5);
+    for (const [cx, base, w] of [
+      [151, 71, 13],
+      [179, 59, 11],
+      [202, 69, 8],
+    ]) {
+      const cy = base - (cx === 179 ? -down : down);
+      p.line(cx - 1, 23, cx - 1, cy - 9, '#7c887b');
+      p.line(cx + 1, 24, cx + 1, cy - 11, '#9da28a');
+      p.oval(cx, cy - 8, 3, 4, '#8b866e');
+      p.oval(cx, cy - 9, 1, 2, '#b5b092');
+      p.poly(
+        [
+          [cx - w / 2, cy - 4],
+          [cx - 2, cy - 6],
+          [cx + 3, cy - 6],
+          [cx + w / 2, cy - 3],
+          [cx + w / 2 + 1, cy + 8],
+          [cx - w / 2 - 1, cy + 8],
+        ],
+        '#827f6b',
+      );
+      p.r(cx - w / 2 + 1, cy - 3, w - 1, 8, '#ac976e');
+      p.r(cx - w / 2 + 2, cy - 3, 2, 7, '#c6b080');
+      p.r(cx + w / 2 - 2, cy - 2, 2, 8, '#91836a');
+      p.r(cx - w / 2 - 2, cy + 7, w + 4, 3, '#919078');
+      p.r(cx - w / 2 - 1, cy + 7, w + 2, 1, '#c3ab79');
+    }
+    const tray = 93 + Math.round(load * 2);
+    p.line(49, 23, 49, 55, '#889483');
+    p.line(49, 55, 36, tray - 1, '#879380');
+    p.line(49, 55, 63, tray - 1, '#879380');
+    freightBox(p, 42, tray - 2, 15, 0, true);
+    p.poly(
+      [
+        [33, tray - 1],
+        [63, tray - 1],
+        [66, tray + 1],
+        [60, tray + 4],
+        [39, tray + 4],
+        [33, tray + 1],
+      ],
+      '#8a8b74',
+    );
+    p.r(34, tray - 1, 30, 1, '#bcad87');
+  }
+
+  const rearBelt = [0, 108, 324, 51],
+    frontBelt = [27, 56, 347, 108];
+  function belt(p, ends, front) {
+    const [x, y, u, v] = ends;
+    const side = front ? '#69747d' : '#687381',
+      metal = front ? '#8a908d' : '#828a8e';
+    const lip = front ? '#92978f' : '#899198',
+      edge = front ? '#59616d' : '#616b79';
+    for (let i = 0; i < 4; i++) {
+      const f = 0.09 + i * 0.265,
+        px = Math.round(x + (u - x) * f),
+        py = Math.round(y + (v - y) * f + 7);
+      p.r(px - 2, py, 4, 145 - py, edge);
+      p.r(px + 1, py + 4, 1, 135 - py, metal);
+      p.line(px, py + 21, px + 16, py + 4, front ? '#656c77' : '#727a84', 2);
+      p.r(px - 4, 142, 9, 3, '#646975');
+    }
+    p.poly(
+      [
+        [x - 3, y],
+        [u - 1, v - 2],
+        [u + 5, v + 1],
+        [u + 5, v + 7],
+        [x + 4, y + 10],
+        [x - 4, y + 6],
+      ],
+      edge,
+    );
+    p.poly(
+      [
+        [x - 2, y],
+        [u, v - 1],
+        [u + 4, v + 1],
+        [x + 3, y + 4],
+      ],
+      metal,
+    );
+    p.poly(
+      [
+        [x + 3, y + 4],
+        [u + 3, v + 2],
+        [u + 3, v + 6],
+        [x + 3, y + 8],
+      ],
+      side,
+    );
+    for (let n = 6; n < u - x - 4; n += 8) {
+      const yy = y + ((v - y) * n) / (u - x);
+      p.line(x + n, yy, x + n + 3, yy + 2, '#74808a');
+      if (n % 16 === 6) p.r(x + n + 2, yy + 5, 2, 1, lip);
+    }
+    for (const [px, py] of [
+      [x, y + 4],
+      [u, v + 3],
+    ]) {
+      p.oval(px, py, 4, 4, edge);
+      p.oval(px, py, 3, 3, metal);
+      p.oval(px, py, 1, 1, side);
+    }
+  }
+  function chute(p, x, y, flip, route) {
+    const vertices = (pts) => pts.map(([dx, dy]) => [x + dx * flip, y + dy]);
+    p.poly(
+      vertices([
+        [-26, 0],
+        [20, 0],
+        [25, 5],
+        [23, 17],
+        [17, 22],
+        [0, 23],
+        [-5, 40],
+        [-16, 44],
+        [-24, 38],
+        [-15, 18],
+        [-26, 14],
+      ]),
+      '#555965',
+    );
+    p.poly(
+      vertices([
+        [-23, 2],
+        [18, 2],
+        [21, 5],
+        [20, 14],
+        [14, 18],
+        [-3, 19],
+        [-9, 33],
+        [-18, 35],
+        [-12, 16],
+        [-23, 12],
+      ]),
+      '#8d8283',
+    );
+    p.poly(
+      vertices([
+        [-21, 3],
+        [17, 3],
+        [14, 7],
+        [-20, 8],
+      ]),
+      '#aaa08d',
+    );
+    p.poly(
+      vertices([
+        [8, 8],
+        [18, 7],
+        [16, 13],
+        [11, 16],
+        [-5, 17],
+        [-4, 12],
+      ]),
+      route,
+    );
+    p.poly(
+      vertices([
+        [-16, 32],
+        [-6, 29],
+        [-5, 35],
+        [-16, 42],
+        [-23, 38],
+      ]),
+      '#737481',
+    );
+    p.poly(
+      vertices([
+        [-17, 36],
+        [-7, 32],
+        [-8, 37],
+        [-17, 41],
+        [-21, 39],
+      ]),
+      '#555a66',
+    );
+    for (const [dx, dy] of [
+      [-20, 10],
+      [15, 10],
+      [-11, 20],
+    ])
+      p.dot(x + dx * flip, y + dy, '#b1a18b');
+    p.line(x - 18 * flip, y, x - 18 * flip, y - 15, '#626371', 2);
+    p.line(x + 13 * flip, y, x + 13 * flip, y - 15, '#626371', 2);
+  }
+  function exchangeFeeds() {
+    return piece('exchange-feeds', 368, 66, (p) => {
+      for (const [x, elbow, length, warm] of [
+        [38, -30, 62, true],
+        [307, 27, 56, false],
+      ]) {
+        const dark = warm ? '#68616b' : '#586772',
+          side = warm ? '#887b7d' : '#75858a';
+        p.poly(
+          [
+            [x + elbow - 11, 0],
+            [x + elbow + 13, 0],
+            [x + elbow + 13, 16],
+            [x + 13, 34],
+            [x + 13, length],
+            [x - 11, length],
+            [x - 11, 39],
+            [x + elbow - 11, 23],
+          ],
+          dark,
+        );
+        p.poly(
+          [
+            [x + elbow - 8, 0],
+            [x + elbow + 5, 0],
+            [x + elbow + 5, 18],
+            [x + 4, 36],
+            [x + 4, length],
+            [x - 8, length],
+            [x - 8, 37],
+            [x + elbow - 8, 21],
+          ],
+          side,
+        );
+        for (const yy of [length - 13, length - 4]) {
+          p.r(x - 12, yy, 27, 3, dark);
+          p.r(x - 9, yy, 19, 1, warm ? '#a18f87' : '#93a099');
+          p.dot(x + 9, yy + 1, '#a59c91');
+        }
+        p.r(x + elbow - 12, 5, 27, 3, dark);
+      }
+      p.line(161, 4, 163, 59, '#696d77', 2);
+      p.line(165, 4, 166, 59, '#84868a');
+      p.r(157, 6, 14, 4, '#606473');
+      p.r(159, 7, 10, 1, '#90918b');
+    });
+  }
+  function exchangeLine(front) {
+    return piece('exchange-line/' + front, 368, 151, (p) => {
+      if (!front) {
+        // The sorter drops each parcel onto one of two oppositely running belts.
+        chute(p, 307, 8, -1, '#8e9c8c');
+        chute(p, 38, 14, 1, '#ab8d77');
+        p.poly(
+          [
+            [148, 37],
+            [174, 33],
+            [179, 38],
+            [164, 58],
+            [157, 60],
+            [145, 55],
+          ],
+          '#656875',
+        );
+        p.poly(
+          [
+            [150, 40],
+            [171, 36],
+            [175, 38],
+            [162, 54],
+            [156, 56],
+            [148, 53],
+          ],
+          '#838589',
+        );
+        p.line(149, 39, 171, 35, '#a29988', 2);
+        p.line(164, 34, 164, 10, '#696a75', 2);
+        p.line(152, 49, 160, 46, '#a8a28e', 2);
+        p.line(159, 46, 164, 40, '#a8a28e', 2);
+        p.oval(164, 34, 4, 4, '#646772');
+        p.oval(164, 34, 2, 2, '#96958a');
+      }
+      belt(p, front ? frontBelt : rearBelt, front);
+      if (front) {
+        p.r(304, 116, 25, 12, '#616570');
+        p.r(306, 118, 21, 8, '#747b80');
+        for (let x = 310; x <= 323; x += 4) p.r(x, 119, 1, 6, '#5d6772');
+      }
+    });
+  }
+  function parcelsOnBelt(p, time, front) {
+    const [x, y, u, v] = front ? frontBelt : rearBelt;
+    const shipments = front
+      ? [
+          [0.04, 13, 1],
+          [0.35, 19, 0],
+          [0.76, 14, 2],
+        ]
+      : [
+          [0.07, 13, 2],
+          [0.45, 16, 0],
+          [0.79, 12, 1],
+        ];
+    for (const [at, size, kind] of shipments) {
+      const distance = (((at + time * (front ? 0.044 : 0.037)) % 1) + 1) % 1;
+      const s = front ? distance : 1 - distance;
+      freightBox(p, Math.round(x + 1 + (u - x - size) * s), Math.round(y + (v - y) * s), size, kind, false);
+    }
+  }
+
+  function worksFringe(room, high) {
+    const weigh = room === 'weighhouse',
+      w = weigh ? 428 : 250;
+    return piece(room + (high ? '-overhead' : '-underside'), w, 106, (p) => {
+      p.r(0, 0, w, 106, high ? (weigh ? yardSky : shedRoof) : weigh ? yardBallast : shedFloor);
+      const rng = seeded(high ? 611 : 298);
+      if (high && weigh) {
+        cloud(p, 42, 64, 42, 5, '#8e9f9f', '#819799');
+        p.r(274, 31, 16, 1, '#849b9c');
+      } else if (high) {
+        for (let x = -12; x < w; x += 125) {
+          p.r(x, 0, 4, 106, '#3b4051');
+          p.r(x, 29, 125, 4, '#3d4152');
+          p.line(x + 4, 30, x + 54, 3, '#3a4050', 3);
+          p.line(x + 6, 29, x + 53, 4, '#535765');
+          p.dot(x + 1, 37, '#706975');
+        }
+      } else {
+        for (let i = 0; i < 75; i++) {
+          const x = Math.floor(rng() * w),
+            y = Math.floor(rng() * 106);
+          p.r(
+            x,
+            y,
+            2 + Math.floor(rng() * 5),
+            1,
+            weigh ? (i % 4 ? '#7b8577' : '#939580') : i % 4 ? '#5c5d6b' : '#696974',
+          );
+        }
+      }
+    });
+  }
+  function workingYard(ctx, room, cameraX, top, width, height, time) {
+    const weigh = room === 'weighhouse',
+      pace = weigh ? 0.67 : 0.77;
+    const plate = piece(room + '-panorama', panoramaWidth, worksBase - worksTop, (p) => {
+      p.g.translate(0, -worksTop);
+      if (weigh) weighGround(p);
+      else exchangeGround(p);
+    });
+    const bottom = top + height;
+    ctx.fillStyle = weigh ? yardBallast : shedFloor;
+    ctx.fillRect(0, top, width, height);
+    for (const high of [true, false]) {
+      const edge = (high ? worksTop : worksBase) * cell,
+        start = high ? top : Math.max(edge, top),
+        end = high ? Math.min(edge, bottom) : bottom;
+      if (start >= end) continue;
+      const tile = worksFringe(room, high),
+        h = tile.height * cell;
+      for (let y = edge + Math.floor((start - edge) / h) * h; y < end; y += h)
+        pan(ctx, tile, cameraX, pace, width, y);
+    }
+    if (top < worksBase * cell && bottom > worksTop * cell)
+      pan(ctx, plate, cameraX, pace, width, worksTop * cell);
+    // The panorama may continue across an ultrawide screen; the working scale
+    // and the pair of sorters each occupy one physical bay in the story.
+    const x = (weigh ? 73 : 18) * cell - Math.round(cameraX / cell) * cell,
+      y = (weigh ? 19 : 14) * cell;
+    const span = (weigh ? 248 : 368) * cell;
+    if (x > width || x + span < 0 || y - (weigh ? 0 : 48 * cell) > bottom || y + 151 * cell < top) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(cell, cell);
+    const p = new Brush(0, 0, ctx),
+      clock = motion?.matches ? 1.9 : time;
+    if (weigh) {
+      ctx.drawImage(weighFrame(), 0, 0);
+      movingBalance(p, clock);
+    } else {
+      ctx.drawImage(exchangeFeeds(), 0, -48);
+      ctx.drawImage(exchangeLine(false), 0, 0);
+      parcelsOnBelt(p, clock, false);
+      ctx.drawImage(exchangeLine(true), 0, 0);
+      parcelsOnBelt(p, clock, true);
+    }
+    ctx.restore();
+  }
   function thinDeck(p, w, room) {
     const wood = room === 'alley',
       steel = room === 'bridge';
@@ -1262,12 +2180,89 @@
     p.r(w - 3, 9, 2, 33, '#6a5357');
     p.r(3, 41, w - 6, 2, '#715856');
   }
+  function worksDeck(p, w, room, thin) {
+    const weigh = room === 'weighhouse',
+      rim = weigh ? '#eac483' : '#c4cfbb',
+      face = weigh ? '#81856b' : '#7d8c91';
+    const body = weigh ? '#52665e' : '#4f566a',
+      groove = weigh ? '#3f504c' : '#404457',
+      gleam = weigh ? '#a8a17c' : '#9aa3a0';
+    p.r(0, 0, w, thin ? 7 : 45, ink);
+    p.r(1, 1, w - 2, 2, rim);
+    p.r(2, 3, w - 4, 3, face);
+    for (let x = 7; x < w - 5; x += weigh ? 17 : 13) {
+      p.r(x, 2, 2, 3, groove);
+      p.dot(x - 2, 2, cream);
+    }
+    if (thin) {
+      p.r(4, 7, w - 8, 2, groove);
+      for (const x of [5, w - 10]) {
+        p.r(x, 7, 5, 4, body);
+        p.line(x + 1, 10, x + 3, 12, ink, 2);
+        p.dot(x + 2, 8, rim);
+      }
+      return;
+    }
+    p.r(2, 7, w - 4, 36, body);
+    p.r(2, 7, w - 4, 2, groove);
+    p.r(3, 9, w - 6, 1, gleam);
+    p.r(3, 38, w - 6, 2, groove);
+    if (weigh) {
+      // Inspection hatches reveal the springs below the real weighing deck.
+      for (let x = 11, i = 0; x < w - 26; x += 40, i++) {
+        p.r(x, 15, 29, 18, groove);
+        p.r(x + 1, 16, 27, 15, '#485951');
+        p.r(x + 3, 17, 23, 2, '#7d8066');
+        if (i % 3 === 1) {
+          p.r(x + 7, 20, 16, 7, '#7b8368');
+          p.r(x + 8, 21, 14, 1, '#b0a17b');
+          p.line(x + 9, 26, x + 20, 22, '#9e986f');
+          p.dot(x + 5, 26, gleam);
+        } else {
+          for (let n = 0; n < 4; n++) {
+            p.line(x + 4 + n * 5, 27, x + 8 + n * 5, 21, '#9b9370', 2);
+            p.line(x + 8 + n * 5, 21, x + 10 + n * 5, 24, '#727b64');
+          }
+        }
+        p.r(x + 3, 29, 23, 2, '#7f856d');
+        p.dot(x + 1, 14, rim);
+        p.dot(x + 28, 32, gleam);
+      }
+    } else {
+      for (let x = 8, i = 0; x < w - 30; x += 45, i++) {
+        p.r(x, 15, 32, 18, groove);
+        p.r(x + 2, 17, 28, 13, '#626a78');
+        p.r(x + 4, 19, 23, 9, '#464d5d');
+        if (i % 3 === 0) {
+          for (let k = 0; k < 3; k++) p.r(x + 6, 20 + k * 3, 18 - k * 2, 1, '#83918e');
+        } else if (i % 3 === 2) {
+          p.r(x + 7, 20, 15, 6, '#929b98');
+          p.r(x + 9, 22, 11, 3, '#555d6a');
+          p.dot(x + 23, 21, '#b99a7f');
+        } else {
+          for (let k = 0; k < 3; k++) {
+            const cx = x + 8 + k * 7;
+            p.oval(cx, 23, 3, 3, '#83918e');
+            p.oval(cx, 23, 2, 2, '#64747a');
+            p.dot(cx, 23, '#a8a693');
+          }
+        }
+        p.r(x + 2, 30, 28, 1, '#8a9390');
+        p.r(x + 33, 19, 4, 1, '#ba9478');
+        p.r(x + 33, 21, 4, 1, '#a27e72');
+      }
+    }
+    p.r(1, 10, 1, 30, gleam);
+    p.r(w - 3, 9, 2, 32, groove);
+    p.r(3, 42, w - 6, 1, groove);
+  }
   function platformArt(room, platform, index) {
     const w = Math.max(2, Math.ceil((platform.x2 - platform.x1) / cell)),
       thin = platform.thin;
     const key = ['platform', room, w, thin ? 1 : 0, index % 4].join('/');
     return piece(key, w, thin ? 14 : 45, (p) => {
-      if (thin) thinDeck(p, w, room);
+      if (room === 'weighhouse' || room === 'exchange') worksDeck(p, w, room, thin);
+      else if (thin) thinDeck(p, w, room);
       else if (room === 'alley') alleyDock(p, w, 77 + index * 19);
       else if (room === 'bridge') bridgeDeck(p, w);
       else depotDock(p, w, 177 + index * 17);
@@ -1276,7 +2271,16 @@
   function footing(room, w) {
     return piece('footing/' + room + '/' + w, w, 25, (p) => {
       // The supports are recessed past the bottom of the 135-unit exposed end wall.
-      if (room === 'bridge') {
+      if (room === 'weighhouse' || room === 'exchange') {
+        const shade = room === 'weighhouse' ? '#59675f' : '#4d5160',
+          light = room === 'weighhouse' ? '#7e8470' : '#697078';
+        for (let x = 14; x < w - 16; x += 54) {
+          p.r(x, 0, 8, 24, shade);
+          p.r(x + 1, 0, 2, 22, light);
+          p.line(x + 6, 10, x + 15, 0, shade, 3);
+          p.r(x - 2, 21, 13, 3, shade);
+        }
+      } else if (room === 'bridge') {
         for (let x = 14; x < w - 13; x += 67) {
           p.r(x, 0, 5, 25, '#536273');
           p.r(x + 1, 0, 1, 25, '#687984');
@@ -1733,6 +2737,19 @@
     let x = -(((shift % span) + span) % span);
     for (; x < width; x += span) ctx.drawImage(bitmap, x, y, span, bitmap.height * cell);
   }
+  function drawSurfaces(ctx, terrain, room, cameraX, width) {
+    terrain.forEach((platform, index) => {
+      const left = Math.round(platform.x1 - cameraX),
+        right = Math.round(platform.x2 - cameraX);
+      if (left >= width || right <= 0 || left >= right) return;
+      const art = platformArt(room, platform, index);
+      if (!platform.thin) {
+        const supports = footing(room, art.width);
+        ctx.drawImage(supports, left, Math.round(platform.y) + 135, right - left, supports.height * cell);
+      }
+      ctx.drawImage(art, left, Math.round(platform.y), right - left, art.height * cell);
+    });
+  }
   function draw(ctx, view) {
     const {
       terrain = [],
@@ -1748,6 +2765,16 @@
     } = view;
     const width = view.width || 1200,
       height = view.height || 675;
+    ctx.save();
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.imageSmoothingEnabled = false;
+    if (view.room === 'weighhouse' || view.room === 'exchange') {
+      workingYard(ctx, view.room, cameraX, top, width, height, time);
+      drawSurfaces(ctx, terrain, view.room, cameraX, width);
+      ctx.restore();
+      return;
+    }
     const room = view.room === 'depot' ? 'depot' : view.room === 'bridge' ? 'bridge' : 'alley';
     if (!roomArt.has(room))
       roomArt.set(room, {
@@ -1760,10 +2787,6 @@
     const pace = room === 'alley' ? 0.64 : room === 'bridge' ? 0.68 : 0.79;
     const bottom = top + height,
       sceneBottom = skyHeight * cell;
-    ctx.save();
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.imageSmoothingEnabled = false;
     ctx.fillStyle = top < 0 ? upperTone[room] : lowerTone[room];
     ctx.fillRect(0, top, width, height);
     for (const high of [true, false]) {
@@ -1852,24 +2875,30 @@
           bitmap.height * cell,
         );
     };
-    for (const x of cargoSpots[room]) {
+    for (const x of view.combat ? [] : cargoSpots[room]) {
       const y = restingHeight(terrain, x);
       if (y !== undefined && x >= cameraX - 90 && x <= cameraX + width + 90) place(yardCargo(room), x, y, 17);
     }
-    if (Number.isFinite(exitX)) {
+    if (!view.combat && Number.isFinite(exitX)) {
       const y = restingHeight(terrain, exitX);
       if (y !== undefined) place(dispatchDoor(room, !!exitOpen), exitX, y, 27);
     }
-    if (Number.isFinite(checkpointX)) {
-      const y = restingHeight(terrain, checkpointX);
-      if (y !== undefined) {
+    if (!view.combat) {
+      const checkpoints = Array.isArray(view.checkpoints) ? view.checkpoints : [];
+      const semaphore = (x, lit) => {
+        if (!Number.isFinite(x) || x + 16 * cell < cameraX || x - 13 * cell > cameraX + width) return;
+        const y = restingHeight(terrain, x);
+        if (y === undefined) return;
         const low = terrain.some(
-          (p) => p.thin && checkpointX >= p.x1 - 12 && checkpointX <= p.x2 + 12 && y > p.y && y - p.y < 145,
+          (p) => p.thin && x >= p.x1 - 12 && x <= p.x2 + 12 && y > p.y && y - p.y < 145,
         );
-        place(checkpointArt(!!checkpointLit, low), checkpointX, y, 13);
-      }
+        place(checkpointArt(!!lit, low), x, y, 13);
+      };
+      for (const point of checkpoints) semaphore(point.x, point.lit);
+      if (Number.isFinite(checkpointX) && !checkpoints.some((point) => point.x === checkpointX))
+        semaphore(checkpointX, checkpointLit);
     }
-    if (Number.isFinite(gateX)) {
+    if (!view.combat && Number.isFinite(gateX)) {
       const crossing = (x, closed) => {
         const y = restingHeight(terrain, x);
         if (y !== undefined) place(gateArt(closed), x, y, 32);
@@ -1880,17 +2909,7 @@
       // The route uses the door's position after its last crossing opens.
       if (gateX !== exitX) crossing(gateX, !!gateClosed);
     }
-    terrain.forEach((platform, index) => {
-      const left = Math.round(platform.x1 - cameraX),
-        right = Math.round(platform.x2 - cameraX);
-      if (left >= width || right <= 0 || left >= right) return;
-      const art = platformArt(room, platform, index);
-      if (!platform.thin) {
-        const supports = footing(room, art.width);
-        ctx.drawImage(supports, left, Math.round(platform.y) + 135, right - left, supports.height * cell);
-      }
-      ctx.drawImage(art, left, Math.round(platform.y), right - left, art.height * cell);
-    });
+    drawSurfaces(ctx, terrain, room, cameraX, width);
     ctx.restore();
   }
   window.YardArt = Object.freeze({ draw });

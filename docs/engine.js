@@ -2421,7 +2421,7 @@
                 ? input1
                 : this.mode === 'local'
                   ? input2
-                  : this.mode === 'solo'
+                  : this.cpuControlled(f)
                     ? cpuLaunchAim(f)
                     : idleInput;
             this.releaseLaunch(f, input);
@@ -2451,7 +2451,7 @@
       const settingUpWallHit = wallDrill?.phase === 'swing';
       const inputs = [
         this.launchPractice?.phase === 'ready' || settingUpWallHit ? idleInput : input1,
-        second,
+        ...(Array.isArray(second) ? second : [second]),
       ];
       if (settingUpWallHit && !wallDrill.swung) {
         inputs[1] = { ...idleInput, x: wallDrill.inward, attack: true };
@@ -2493,8 +2493,7 @@
       );
       if (out.length) this.knockouts(out);
     }
-    separateGroundedFighters() {
-      const [a, b] = this.dogs;
+    separateGroundedFighters(a = this.dogs[0], b = this.dogs[1]) {
       if (a.ground < 0 || a.ground !== b.ground || a.respawning || b.respawning) return;
       if ([a, b].some((f) => f.attack?.moveId === 'pipSlide' && f.attack.time < f.attack.start)) return;
       if ([a, b].some((f) => f.floorAction?.dir)) return;
@@ -2761,7 +2760,7 @@
       f.tumble = {
         time: 0,
         pending,
-        willTech: this.mode === 'solo' && f.index === 1 && this.random() < 0.72,
+        willTech: this.cpuControlled(f) && this.random() < 0.72,
       };
     }
     beginFloorAction(f, type, dir = 0) {
@@ -3092,7 +3091,7 @@
             f.vy = -f.stats.jump * (f.jumps === 2 ? 1 : 0.91);
             f.jumps--;
             f.cutJump = true;
-            if (this.mode === 'solo' && f.index === 1)
+            if (this.cpuControlled(f))
               this.bot.jumpHold = this.bot.hop && f.kind !== 'brisket' ? 0.07 : 0.34;
             this.emit('jump', { f });
           }
@@ -3344,8 +3343,8 @@
     }
     hangLedge(f, edge) {
       if (sameLedge(f.ledge, edge)) return;
-      const rival = this.dogs[1 - f.index];
-      const trump = !!sameLedge(rival.ledge, edge);
+      const rival = this.dogs.find((other) => other !== f && sameLedge(other.ledge, edge));
+      const trump = !!rival;
       const protectedCatch = f.ledgeProtectionReady;
       const inward = edge.left ? 1 : -1;
       if (trump) {
@@ -3763,7 +3762,7 @@
           break;
         case 'noodleSling':
           if (a.reeling) {
-            const rival = this.dogs[1 - f.index];
+            const rival = a.reelTarget;
             const dx = rival.x - f.face * (f.stats.width + rival.stats.width - 4) - f.x;
             f.vx = clamp(dx / dt, -700, 700);
             if (Math.abs(dx) < 5 || a.time >= a.reelEnd) a.reeling = a.motionLocked = false;
@@ -3878,6 +3877,12 @@
         ry: a.name === 'rope' ? 18 : 29,
       };
     }
+    cpuControlled(f) {
+      return this.mode === 'solo' && f.index === 1;
+    }
+    opponents(f) {
+      return [this.dogs[1 - f.index]];
+    }
     resolveMelee() {
       // Collect both active hitboxes before either hit can interrupt the other fighter.
       const hits = [],
@@ -3901,89 +3906,91 @@
         // A late hit changes the strength of one swing. Only a second strike can hit twice.
         const beatIndex = beat === attack.second ? 1 : 0;
         const area = this.attackArea(f);
-        const rival = this.dogs[1 - f.index];
-        const height = bodyHeight(rival);
-        const overlaps =
-          Math.abs(rival.x - area.x) <= area.rx + rival.stats.width &&
-          Math.abs(rival.y - height * 0.52 - area.y) <= area.ry + height * 0.4;
-        if (this.shieldPractice) this.recordPracticeDodge(rival, overlaps);
-        if (
-          this.rollPractice?.phase === 'active' &&
-          rival.index === 0 &&
-          rival.floorAction?.type === 'ledgeRoll' &&
-          rival.invuln > 0 &&
-          overlaps
-        )
-          this.rollPractice.evaded = true;
-        if (
-          this.airPractice?.phase === 'swing' &&
-          rival.index === 0 &&
-          rival.airDodge &&
-          rival.invuln > 0 &&
-          overlaps
-        )
-          this.airPractice.evaded = rival.airDodge.type;
-        if (attack.grabAttempt) {
+        for (const rival of this.opponents(f)) {
+          const height = bodyHeight(rival);
+          const overlaps =
+            Math.abs(rival.x - area.x) <= area.rx + rival.stats.width &&
+            Math.abs(rival.y - height * 0.52 - area.y) <= area.ry + height * 0.4;
+          if (this.shieldPractice) this.recordPracticeDodge(rival, overlaps);
           if (
-            !this.grapple &&
-            !rival.invuln &&
-            !rival.respawning &&
-            (!rival.dodge || rival.airDodge) &&
-            !rival.regrabLock &&
-            rival.floorAction?.type !== 'downed' &&
-            (attack.grabStyle === 'standing' || (rival.x - f.x) * f.face >= 0) &&
+            this.rollPractice?.phase === 'active' &&
+            rival.index === 0 &&
+            rival.floorAction?.type === 'ledgeRoll' &&
+            rival.invuln > 0 &&
             overlaps
           )
-            catches.push({ f, rival, attack });
-          continue;
-        }
-        const rear = beat.rear || attack.airSide === 'back';
-        const bothSides =
-          beat.around || attack.around || attack.airSide === 'neutral' || (attack.plunge && attack.landed);
-        const hitFacing = (x) => {
-          const face = bothSides ? Math.sign(x - f.x) || f.face : rear ? -f.face : f.face;
-          return attack.reverse ? -face : face;
-        };
-        if (
-          !attack.ballHit &&
-          this.ball &&
-          Math.abs(this.ball.x - area.x) < area.rx + 14 &&
-          Math.abs(this.ball.y - area.y) < area.ry + 14
-        ) {
-          attack.ballHit = true;
-          swats.push({
+            this.rollPractice.evaded = true;
+          if (
+            this.airPractice?.phase === 'swing' &&
+            rival.index === 0 &&
+            rival.airDodge &&
+            rival.invuln > 0 &&
+            overlaps
+          )
+            this.airPractice.evaded = rival.airDodge.type;
+          if (attack.grabAttempt) {
+            if (
+              !this.grapple &&
+              !rival.invuln &&
+              !rival.respawning &&
+              (!rival.dodge || rival.airDodge) &&
+              !rival.regrabLock &&
+              rival.floorAction?.type !== 'downed' &&
+              (attack.grabStyle === 'standing' || (rival.x - f.x) * f.face >= 0) &&
+              overlaps
+            )
+              catches.push({ f, rival, attack });
+            continue;
+          }
+          const rear = beat.rear || attack.airSide === 'back';
+          const bothSides =
+            beat.around || attack.around || attack.airSide === 'neutral' || (attack.plunge && attack.landed);
+          const hitFacing = (x) => {
+            const face = bothSides ? Math.sign(x - f.x) || f.face : rear ? -f.face : f.face;
+            return attack.reverse ? -face : face;
+          };
+          if (
+            !attack.ballHit &&
+            this.ball &&
+            Math.abs(this.ball.x - area.x) < area.rx + 14 &&
+            Math.abs(this.ball.y - area.y) < area.ry + 14
+          ) {
+            attack.ballHit = true;
+            swats.push({
+              f,
+              aim: attack.aim,
+              face: hitFacing(this.ball.x),
+              distance: Math.hypot(this.ball.x - area.x, this.ball.y - area.y),
+            });
+          }
+          if (attack.hitTargets?.get(rival) === beatIndex || rival.invuln > 0 || rival.respawning > 0) continue;
+          if (attack.dashAttack && (rival.x - f.x) * f.face < 0) continue;
+          if (attack.edge && (rival.x - attack.edge.x) * f.face < 0) continue;
+          if (!overlaps) continue;
+          (attack.hitTargets ??= new Map()).set(rival, beatIndex);
+          attack.hitBeat = beatIndex;
+          let sweet = null;
+          if (beat.sweetSpot) {
+            const [sx, sy, rx, ry] = beat.sweetSpot.box;
+            if (
+              Math.abs((rival.x - f.x) * f.face - sx) <= rx &&
+              Math.abs(rival.y - height * 0.52 - f.y - sy) <= ry
+            )
+              sweet = beat.sweetSpot;
+          }
+          hits.push({
             f,
-            aim: attack.aim,
-            face: hitFacing(this.ball.x),
-            distance: Math.hypot(this.ball.x - area.x, this.ball.y - area.y),
+            rival,
+            attack,
+            beat,
+            sweet,
+            face: hitFacing(rival.x),
+            point: {
+              x: clamp(area.x, rival.x - rival.stats.width, rival.x + rival.stats.width),
+              y: clamp(area.y, rival.y - height, rival.y - 4),
+            },
           });
         }
-        if (attack.hitBeat === beatIndex || rival.invuln > 0 || rival.respawning > 0) continue;
-        if (attack.dashAttack && (rival.x - f.x) * f.face < 0) continue;
-        if (attack.edge && (rival.x - attack.edge.x) * f.face < 0) continue;
-        if (!overlaps) continue;
-        attack.hitBeat = beatIndex;
-        let sweet = null;
-        if (beat.sweetSpot) {
-          const [sx, sy, rx, ry] = beat.sweetSpot.box;
-          if (
-            Math.abs((rival.x - f.x) * f.face - sx) <= rx &&
-            Math.abs(rival.y - height * 0.52 - f.y - sy) <= ry
-          )
-            sweet = beat.sweetSpot;
-        }
-        hits.push({
-          f,
-          rival,
-          attack,
-          beat,
-          sweet,
-          face: hitFacing(rival.x),
-          point: {
-            x: clamp(area.x, rival.x - rival.stats.width, rival.x + rival.stats.width),
-            y: clamp(area.y, rival.y - height, rival.y - 4),
-          },
-        });
       }
       if (swats.length) {
         const [first, second] = swats;
@@ -4039,7 +4046,15 @@
         f.reboundTime = 0.14;
         f.attack = null;
       }
-      const ready = catches.filter(({ f, attack }) => f.attack === attack);
+      if (!catches.length) return;
+      // One pair of paws can seize one opponent. Choose the nearest reachable body.
+      const nearest = new Map();
+      for (const entry of catches) {
+        const { f, rival, attack } = entry, prev = nearest.get(f);
+        if (f.attack === attack && (!prev || Math.abs(rival.x - f.x) < Math.abs(prev.rival.x - f.x)))
+          nearest.set(f, entry);
+      }
+      const ready = [...nearest.values()];
       if (ready.length === 2) {
         for (const { f } of ready) {
           f.attack = f.command = null;
@@ -4222,12 +4237,11 @@
     }
     updateDiscs(dt) {
       this.projectiles = this.projectiles.filter((d) => {
-        const owner = this.dogs[d.owner],
-          target = this.dogs[1 - d.owner];
+        const owner = this.dogs[d.owner];
         if (d.caught) return false;
-        const height = bodyHeight(target);
+        const rivals = this.opponents(owner);
         d.age += dt;
-        const impact = (direction) => {
+        const impact = (target, direction) => {
           const spec = smashes[d.moveId] || specials[d.moveId] || specials.cloverRound;
           const strength = d.type === 'drive' ? smashStrength(d.power) : 1;
           this.hit(
@@ -4249,14 +4263,14 @@
           const face = Math.sign(d.vx);
           d.x += face * step;
           d.rangeLeft -= step;
-          const overlaps =
-            Math.abs(target.x - d.x) <= target.stats.width + 15 &&
-            d.y >= target.y - height - 5 &&
-            d.y <= target.y + 5;
-          if (this.shieldPractice && overlaps) this.recordPracticeDodge(target, true);
-          if (!target.invuln && !target.respawning && overlaps) {
-            impact(face);
-            return false;
+          for (const target of rivals) {
+            if (Math.abs(target.x - d.x) > target.stats.width + 15 ||
+                d.y < target.y - bodyHeight(target) - 5 || d.y > target.y + 5) continue;
+            if (this.shieldPractice) this.recordPracticeDodge(target, true);
+            if (!target.invuln && !target.respawning) {
+              impact(target, face);
+              return false;
+            }
           }
           if (this.ball && Math.abs(d.x - this.ball.x) < 29 && Math.abs(d.y - this.ball.y) < 19) {
             this.swat(owner, 0, face);
@@ -4270,13 +4284,10 @@
             d.x = p.x1 + d.offset;
             d.y = p.y - 3;
             d.armedIn -= dt;
-            if (
-              d.armedIn <= 0 &&
-              target.ground === d.platform &&
-              !target.invuln &&
-              Math.abs(target.x - d.x) < target.stats.width + 22
-            ) {
-              impact(Math.sign(target.x - owner.x));
+            const target = d.armedIn <= 0 && rivals.find((f) =>
+              f.ground === d.platform && !f.invuln && Math.abs(f.x - d.x) < f.stats.width + 22);
+            if (target) {
+              impact(target, Math.sign(target.x - owner.x));
               return false;
             }
           } else {
@@ -4310,15 +4321,11 @@
                 }
               }
             }
-            if (
-              d.type === 'skip' &&
-              !target.invuln &&
-              !target.respawning &&
-              Math.abs(target.x - d.x) < target.stats.width + 13 &&
-              d.y >= target.y - height - 7 &&
-              d.y <= target.y + 5
-            ) {
-              impact(Math.sign(d.vx));
+            const target = d.type === 'skip' && rivals.find((f) =>
+              !f.invuln && !f.respawning && Math.abs(f.x - d.x) < f.stats.width + 13 &&
+              d.y >= f.y - bodyHeight(f) - 7 && d.y <= f.y + 5);
+            if (target) {
+              impact(target, Math.sign(d.vx));
               return false;
             }
           }
@@ -4336,15 +4343,14 @@
         d.x += d.vx * dt;
         d.y += d.vy * dt;
         const pass = d.back ? 1 : 0;
-        if (
-          !d.hit[pass] &&
-          Math.abs(target.x - d.x) < target.stats.width + 16 &&
-          Math.abs(target.y - (target.floorAction ? height * 0.52 : 39) - d.y) <
-            (target.floorAction ? height * 0.5 + 8 : 42) &&
-          target.invuln <= 0
-        ) {
-          impact(Math.sign(d.vx));
-          d.hit[pass] = true;
+        for (const target of rivals) {
+          const height = bodyHeight(target), slot = pass + 2 * target.index;
+          if (!d.hit[slot] && Math.abs(target.x - d.x) < target.stats.width + 16 &&
+              Math.abs(target.y - (target.floorAction ? height * 0.52 : 39) - d.y) <
+                (target.floorAction ? height * 0.5 + 8 : 42) && target.invuln <= 0) {
+            impact(target, Math.sign(d.vx));
+            d.hit[slot] = true;
+          }
         }
         return d.age < 2.6 && d.x > -130 && d.x < this.stageWidth + 130;
       });

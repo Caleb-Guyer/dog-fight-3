@@ -14,17 +14,21 @@ The game fills the browser window. On browsers with fullscreen support, starting
 
 ## The Last Dispatch
 
-Choose **Adventure → Begin chapter** to play Chapter 1, **The Silent Yard**. The six o’clock train rolls past without ringing the depot bell. Follow Noodle’s turquoise envelope through three connected stops.
+Choose **Adventure → Begin chapter** to play **The Silent Yard**. The six o’clock train rolls past without ringing the depot bell. Pip follows a turquoise envelope to a locked parcel cage. [Open the adventure](https://caleb-guyer.github.io/dog-fight-3/#adventure)
 
-- **Parcel Alley.** Start as Pip. Break the Ticket Clippers to raise the crossing arms, jump the mail chute and reach Noodle’s parcel cage.
-- **Sorting Bridge.** Choose Pip or Noodle. Cross the broken spans, climb the high platform and strike the amber lever to open the signal gate.
-- **Bell Depot.** Face the Copper Hound. Its lamp and the markings on the floor telegraph its stamp and rush. Jump or shield, then hit the open lamp while the machine recovers.
+| Mission | How to clear it |
+| --- | --- |
+| Parcel Alley · Brawl | Beat the Ticket Clipper and Baggage Porter guarding Noodle’s cage. |
+| The Weigh House · Rival duel | Fight Brisket on the suspended scale. Empty his stamina or knock him off the stage. |
+| Freight Exchange · Horde | Survive three waves of sorting machines. The last crew attacks three at a time. |
+| Sorting Bridge · Crossing | Strike the west signal, ride the cable ferry and take the freight lift to the east signal. Cable Dock and Crane House save your progress. The optional postmark hangs above the crane approach. |
+| Bell Depot · Boss | Watch the Copper Hound’s lamp and the markings on the floor. Evade the rush and strike while the stamp is stuck. A parry opens the same damage window. |
 
-Adventure uses the same jumps, attacks, specials and shields as Versus. You have 64 stamina and unlimited retries. Each semaphore restores stamina and saves a checkpoint. **Route map → Continue** resumes in this browser. Revisiting an earlier stop preserves the furthest checkpoint. Each stop has one optional postmark. The chapter ends with a delivery to Clover and can be replayed from the route map.
+After Parcel Alley, choose Pip or Noodle. Both have their full fighting moves. Winning a fight earns its postmark. Sorting Bridge has a collectible postmark. Clearing each mission opens the next stop. You start with 64 stamina and have unlimited retries. **Route map → Continue** resumes the latest checkpoint in this browser. Replay any open mission from the route sheet. Saves from the original three-stop chapter carry forward, including postmarks and unlocked cutscenes.
 
 Four animated pixel-art cutscenes play during the chapter, with timed captions and an original score. Each shot fills your screen with scenery that extends around the dogs on ultrawide monitors and in portrait. **Pause** (P or gamepad Start) holds the current frame. **Next** jumps to the next caption and **Skip scene** moves the adventure along. With reduced motion enabled, each scene opens on a still frame and **Play** starts the animation. Rewatch unlocked scenes from **Adventure → Cutscenes**. [Open the cutscene library](https://caleb-guyer.github.io/dog-fight-3/#cutscenes)
 
-The chapter script, dialogue, encounter order, terrain, gates, semaphores and postmarks live in `docs/dispatch-script.js`. The runtime in `docs/dispatch-run.js` plays those encounters using the regular fighting engine.
+The chapter script, dialogue, encounter order, terrain, checkpoints and postmarks live in `docs/dispatch-script.js`. The runtime in `docs/dispatch-run.js` plays those encounters using the regular fighting engine. The ferry, lift and drawspans use the moving surfaces in `docs/dispatch-bridge.js`.
 
 ## Publish on GitHub Pages
 

@@ -2,90 +2,67 @@
   'use strict';
   const solid = (x1, x2, y) => ({ x1, x2, y, thin: false });
   const shelf = (x1, x2, y) => ({ x1, x2, y, thin: true });
+  const foe = (kind, x, hp) => ({ kind, x, hp });
   const rooms = [
     {
-      id: 'alley',
-      name: 'Parcel Alley',
-      intro: 'opening',
-      outro: 'rescue',
-      length: 2480,
-      checkpoint: 1410,
-      exit: 2350,
-      terrain: [
-        solid(0, 1030, 500),
-        solid(1170, 2480, 500),
-        shelf(565, 800, 387),
-        shelf(925, 1065, 405),
-        shelf(1190, 1350, 405),
-        shelf(1650, 1860, 390),
-      ],
-      stamp: { x: 693, y: 342 },
-      encounters: [
-        { at: 370, x: 700, gate: 929, kind: 'clipper' },
-        { at: 1690, x: 1990, gate: 2230, kind: 'clipper' },
-      ],
-      objective: 'Find Noodle at the parcel cage.',
-      combat: 'Break the Clipper to release the crossing arm.',
-      exitHint: 'Reach the parcel cage.',
+      id: 'alley', name: 'Parcel Alley', type: 'Brawl', intro: 'opening', outro: 'rescue',
+      length: 1080, start: 425, terrain: [solid(0, 1080, 505), shelf(170, 365, 410), shelf(716, 910, 410)],
+      objective: 'Beat both cage guards to free Noodle.',
+      waves: [[foe('clipper', 659, 22)], [foe('porter', 344, 32)]],
+      checkpoints: [{ wave: 1, name: 'parcel cage' }],
     },
     {
-      id: 'bridge',
-      name: 'Sorting Bridge',
-      intro: 'rescue',
-      outro: 'boss',
-      length: 2770,
-      checkpoint: 1260,
-      exit: 2640,
-      terrain: [
-        solid(0, 630, 510),
-        solid(790, 1510, 508),
-        solid(1645, 2190, 482),
-        solid(2335, 2770, 510),
-        shelf(484, 650, 411),
-        shelf(738, 920, 366),
-        shelf(1100, 1250, 400),
-        shelf(1450, 1650, 389),
-        shelf(1672, 1915, 364),
-        shelf(2100, 2300, 396),
-      ],
-      stamp: { x: 831, y: 317 },
-      signal: { x: 1798, y: 332, gate: 2115 },
-      encounters: [{ at: 190, x: 452, gate: 585, kind: 'clipper' }],
-      objective: 'Cross the gaps to the bridge signal.',
-      combat: 'Clear the Clipper from the bridge.',
-      exitHint: 'Follow the green signal to Bell Depot.',
+      id: 'weighhouse', name: 'The Weigh House', type: 'Rival duel',
+      length: 1120, start: 438, terrain: [solid(145, 975, 508), shelf(235, 419, 407), shelf(698, 883, 407)],
+      objective: 'Beat Brisket by stamina or knock him off the scale.',
+      waves: [[foe('brisket', 682, 52)]],
+      dispatch: 'Brisket yields the weigh ticket. Across the tracks, the idle sorting belts roar back to life.',
     },
     {
-      id: 'depot',
-      name: 'Bell Depot',
-      intro: 'boss',
-      outro: 'ending',
-      length: 1520,
-      checkpoint: 318,
-      exit: 1430,
-      terrain: [solid(0, 1520, 520), shelf(230, 420, 411), shelf(680, 886, 396), shelf(1195, 1360, 408)],
-      stamp: { x: 326, y: 360 },
-      encounters: [{ at: 448, x: 1000, gate: 1340, kind: 'conductor' }],
-      objective: 'Find the bell clapper.',
-      combat: 'Jump the rush. Strike when the stamp sticks.',
-      exitHint: 'Take the clapper to the dispatch door.',
+      id: 'exchange', name: 'Freight Exchange', type: 'Horde',
+      length: 1160, start: 580, terrain: [solid(0, 1160, 510), shelf(181, 388, 408), shelf(770, 977, 408)],
+      objective: 'Clear the sorting floor.',
+      waves: [
+        [foe('clipper', 774, 18), foe('puncher', 320, 14)],
+        [foe('porter', 852, 25), foe('puncher', 245, 16)],
+        [foe('puncher', 222, 15), foe('clipper', 944, 18), foe('porter', 805, 23)],
+      ],
+      checkpoints: [{ wave: 2, name: 'last wave' }],
+      dispatch: 'The last trolley coasts to a stop. Noodle spots a cable ferry beyond the freight doors.',
+    },
+    {
+      id: 'bridge', name: 'Sorting Bridge', type: 'Crossing', outro: 'boss',
+      length: 4880, start: 115, exit: 4775,
+      terrain: [
+        solid(0, 539, 510), solid(657, 1120, 510), solid(1440, 1960, 510),
+        solid(2820, 3255, 510), solid(3360, 4100, 512), solid(4450, 4880, 502),
+        shelf(465, 616, 422), shelf(706, 915, 399), shelf(1468, 1655, 419),
+        shelf(3120, 3290, 413), shelf(3205, 3325, 317), shelf(3620, 3910, 335),
+      ],
+      signals: [
+        { x: 801, y: 362, gate: 1038, name: 'West drawspan', order: 'Hit the west signal above the broken track.' },
+        { x: 3816, y: 298, gate: 4040, name: 'East drawspan', order: 'Ride the freight lift up and hit the gantry signal.' },
+      ],
+      spans: [shelf(1111, 1449, 510), shelf(4091, 4459, 502)],
+      ferry: { from: 1938, to: 2690, width: 185, y: 510, duration: 5.6 },
+      lift: { x1: 3465, x2: 3640, bottom: 509, top: 335, duration: 2.4 },
+      checkpoints: [{ x: 1580, name: 'Cable Dock', signals: 1 }, { x: 3005, name: 'Crane House', signals: 1 }],
+      stamp: { x: 3260, y: 278 },
+    },
+    {
+      id: 'depot', name: 'Bell Depot', type: 'Boss', intro: 'boss', outro: 'ending',
+      length: 1160, start: 426, terrain: [solid(0, 1160, 520), shelf(182, 377, 415), shelf(788, 983, 415)],
+      objective: 'Dodge the Copper Hound’s rush. Hit the lamp when its stamp sticks.',
+      waves: [[foe('conductor', 739, 86)]],
     },
   ];
   for (const room of rooms) {
-    room.spawns = [
-      { x: 110, ground: 0 },
-      { x: 330, ground: 0 },
-    ];
+    room.checkpoints ??= [];
+    room.spawns = [room.start, ...Array(3).fill(room.start)].map((x) => ({ x, ground: 0 }));
     room.walls = room.terrain.flatMap((p, index) =>
-      p.thin
-        ? []
-        : [true, false].map((left) => ({
-            x: left ? p.x1 : p.x2,
-            top: p.y,
-            bottom: p.y + 135,
-            index,
-            left,
-          })),
+      p.thin ? [] : [true, false].map((left) => ({
+        x: left ? p.x1 : p.x2, top: p.y, bottom: p.y + 135, index, left,
+      })),
     );
   }
   const scenes = {
@@ -106,7 +83,7 @@
     },
     rescue: {
       art: 'rescue',
-      stop: 'bridge',
+      stop: 'weighhouse',
       chooseRunner: true,
       title: 'Return to sender',
       pages: [
@@ -150,47 +127,46 @@
     },
   };
   const saveKey = 'dog-fight-3.last-dispatch.v1';
+  const lastRoom = rooms.length - 1;
   function readSave(storage) {
     let raw;
-    try {
-      raw = JSON.parse(storage.getItem(saveKey));
-    } catch {}
-    if (!raw || raw.version !== 1) raw = {};
-    const room = Number.isInteger(raw.room) ? Math.max(0, Math.min(rooms.length - 1, raw.room)) : 0;
-    const started = raw.started === true;
-    const pending =
-      started &&
-      (raw.pending === rooms[room].intro ||
-        (raw.pending === rooms[room].outro && scenes[raw.pending]?.completesChapter))
-        ? raw.pending
-        : '';
+    try { raw = JSON.parse(storage.getItem(saveKey)); } catch {}
+    if (raw?.version === 1 && raw.started === true) {
+      // Earlier chapters had three stops. A pending rescue still belongs at the cage.
+      const oldRoom = [0, 1, 2].includes(raw.room) ? raw.room : 0;
+      const room = oldRoom === 1 && raw.pending === 'rescue' ? 1 : [0, 3, lastRoom][oldRoom];
+      const bits = Number.isInteger(raw.stamps) ? raw.stamps : 0;
+      raw = { ...raw, version: 2, room, checkpoint: raw.midway && (room === 0 || room === 3) ? 1 : 0,
+        stamps: (bits & 1) | ((bits & 2) << 2) | ((bits & 4) << 2) };
+    }
+    if (raw?.version !== 2 || raw.started !== true) raw = {};
+    const room = Number.isInteger(raw.room) ? Math.max(0, Math.min(lastRoom, raw.room)) : 0;
+    const checkpoint = Number.isInteger(raw.checkpoint)
+      ? Math.max(0, Math.min(rooms[room].checkpoints.length, raw.checkpoint)) : 0;
+    const scene = Object.hasOwn(scenes, raw.pending) && scenes[raw.pending];
+    const pending = scene && scene.stop === rooms[room].id && !checkpoint ? raw.pending : '';
     return {
-      version: 1,
-      started,
-      room: started ? room : 0,
-      midway: started && raw.midway === true,
-      pending,
-      hero: started && room > 0 && raw.hero === 'noodle' ? 'noodle' : 'pip',
-      stamps: started && Number.isInteger(raw.stamps) ? raw.stamps & 7 : 0,
-      complete: started && room === 2 && raw.complete === true,
+      version: 2, started: raw.started === true, room, checkpoint, pending,
+      hero: room > 0 && raw.hero === 'noodle' ? 'noodle' : 'pip',
+      stamps: Number.isInteger(raw.stamps) ? raw.stamps & ((1 << rooms.length) - 1) : 0,
+      complete: room === lastRoom && raw.complete === true,
     };
   }
-  // Replaying an earlier stop can add a postmark without moving the saved train backward.
   function record(progress, event) {
     const fresh = { ...progress, started: true };
-    if (event.room > fresh.room || (event.room === fresh.room && event.midway)) {
-      fresh.room = event.room;
-      fresh.midway = !!event.midway;
-    }
     if (event.stamp !== undefined) fresh.stamps |= 1 << event.stamp;
-    if (event.complete) fresh.complete = true;
-    const nextStory =
-      event.room > progress.room ||
-      (event.room === progress.room && (!progress.midway || !event.pending || event.pending === 'ending'));
-    if (event.pending !== undefined && nextStory && (!progress.complete || event.pending === ''))
+    if (event.room < progress.room) return fresh;
+    if (event.room > progress.room) {
+      fresh.room = event.room;
+      fresh.checkpoint = 0;
+      fresh.pending = '';
+    }
+    fresh.checkpoint = Math.max(fresh.checkpoint, event.checkpoint || 0);
+    if (event.pending !== undefined && (!fresh.checkpoint || !event.pending) && (!fresh.complete || !event.pending))
       fresh.pending = event.pending;
-    if (event.hero && fresh.room > 0 && event.room >= progress.room) fresh.hero = event.hero;
+    if (event.hero && fresh.room > 0) fresh.hero = event.hero;
+    if (event.complete) fresh.complete = true;
     return fresh;
   }
-  window.DispatchScript = { rooms, scenes, saveKey, readSave, record };
+  window.DispatchScript = { rooms, scenes, saveKey, lastRoom, readSave, record };
 })();

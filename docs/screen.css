@@ -358,7 +358,7 @@ body:is(.playing, .cinema-active) .full-button span {
     grid-template-rows: minmax(0, 1.13fr) minmax(160px, 1fr);
   }
   #dispatch-route .route-grid {
-    grid-template-rows: minmax(80px, 1fr) minmax(155px, 0.85fr);
+    grid-template-rows: minmax(72px, 1fr) minmax(0, max-content);
   }
   .feature-ticket,
   .route-print {
