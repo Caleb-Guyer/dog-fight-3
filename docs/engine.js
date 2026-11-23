@@ -95,6 +95,22 @@
   }
   const tumbleSpeed = 430;
   const maxDI = (18 * Math.PI) / 180;
+  const octant = Math.PI / 4;
+  const diagonal = Math.SQRT1_2;
+  const shiftDirections = [
+    [1, 0], [diagonal, diagonal], [0, 1], [-diagonal, diagonal],
+    [-1, 0], [-diagonal, -diagonal], [0, -1], [diagonal, -diagonal],
+  ];
+  function shiftSector(input, previous = -1) {
+    // grabX carries the full horizontal input even when a keyboard player holds Walk.
+    const x = input.grabX || input.x || 0, y = input.y || 0, magnitude = Math.hypot(x, y);
+    if (magnitude < 0.35) return -1;
+    if (magnitude < 0.72) return previous;
+    const angle = Math.atan2(y, x);
+    // Keep a held analog stick from retriggering at an octant boundary.
+    if (previous >= 0 && Math.cos(angle - previous * octant) > Math.cos(octant * 0.75)) return previous;
+    return (Math.round(angle / octant) + 8) % 8;
+  }
   const techWindow = 11 / 60;
   const techLockout = 28 / 60;
   const shieldDropTime = 10 / 60;
@@ -1827,6 +1843,7 @@
       usedPogo: false,
       stun: 0,
       reaction: null,
+      hitShift: null,
       tumble: null,
       wallAction: null,
       floorAction: null,
@@ -2133,6 +2150,7 @@
       this.launchPractice = null;
       this.shieldPractice = null;
       this.footworkPractice = null;
+      this.escapePractice = null;
       this.airPractice = null;
       this.lastCombo = { hits: 0, damage: 0 };
       this.hitStop = 0;
@@ -2179,6 +2197,7 @@
     resetTraining(ledge = false, fromHang = false) {
       if (this.grapple) this.breakGrapple(false);
       if (this.footworkPractice) this.dogs = this.footworkPractice.originalDogs;
+      if (this.escapePractice) this.dogs = this.escapePractice.originalDogs;
       if (this.shieldPractice?.originalDogs) this.dogs = this.shieldPractice.originalDogs;
       if (this.wallPractice) {
         this.stage = this.wallPractice.original.stage;
@@ -2192,6 +2211,7 @@
       this.launchPractice = null;
       this.shieldPractice = null;
       this.footworkPractice = null;
+      this.escapePractice = null;
       this.airPractice = null;
       this.dogs.forEach((f) => this.spawn(f, false));
       this.projectiles = [];
@@ -2225,6 +2245,42 @@
       this.resetTraining();
       this.dogs[0].damage = 90;
       this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
+    }
+    resetEscapePractice(spacing = 'tip', slow = true) {
+      this.resetTraining();
+      const originalDogs = this.dogs, player = originalDogs[0], clover = newFighter('clover', 1);
+      const floor = this.terrain[0];
+      clover.x = (floor.x1 + floor.x2) / 2 + 30;
+      const reach = spacing === 'close' ? clover.stats.width + 4 : smashes.cloverRimRattle.box[2] - 1;
+      player.x = clover.x - reach - player.stats.width;
+      clover.y = player.y = floor.y;
+      clover.ground = player.ground = 0;
+      clover.damage = this.trainingDamage;
+      this.dogs = [player, clover];
+      this.escapePractice = { originalDogs, spacing, slow, phase: 'ready', time: 0, outward: 0, outcome: '' };
+    }
+    escapePracticeInput(dt) {
+      const drill = this.escapePractice, clover = this.dogs[1];
+      if (drill.phase === 'windup') {
+        drill.time += dt;
+        if (drill.time + 1e-8 >= 24 / 60) {
+          drill.phase = 'swing';
+          return { ...idleInput, smash: true, smashY: 1 };
+        }
+      } else if (drill.phase === 'swing' || drill.phase === 'follow') {
+        const a = clover.attack;
+        if (a?.moveId === 'cloverRimRattle' && a.time + 1e-8 >= a.second.start + a.second.active)
+          this.finishEscapePractice(drill.phase === 'swing' ? 'missed' : drill.outward > 0 ? 'escaped' : 'clear');
+        else if (!a && !clover.smashCharge) this.finishEscapePractice('interrupted');
+      }
+      return idleInput;
+    }
+    finishEscapePractice(outcome) {
+      const drill = this.escapePractice;
+      if (!drill || drill.phase === 'done') return;
+      drill.phase = 'done';
+      drill.outcome = outcome;
+      this.emit('escapeResult', { f: this.dogs[0], outcome, spacing: drill.spacing, outward: drill.outward });
     }
     resetFootworkPractice() {
       this.resetTraining();
@@ -2566,6 +2622,23 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      if (this.escapePractice) {
+        let drill = this.escapePractice;
+        const start = input1.tapped?.attack || (input1.attack && !this.dogs[0].prev.attack);
+        if (drill.phase === 'ready' || drill.phase === 'done') {
+          if (start && !drill.consumeAttack) {
+            if (drill.phase === 'done') this.resetEscapePractice(drill.spacing, drill.slow);
+            drill = this.escapePractice;
+            drill.phase = 'windup';
+            drill.consumeAttack = true;
+            this.emit('escapeCue', { f: this.dogs[0], phase: 'windup' });
+          } else if (drill.phase === 'ready') return;
+        }
+        if (drill.consumeAttack) {
+          drill.consumeAttack = !!input1.attack;
+          input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
+        }
+      }
       const wallDrill = this.wallPractice;
       if (wallDrill?.phase === 'ready') {
         wallDrill.time += dt;
@@ -2608,43 +2681,24 @@
         this.captureInput(this.dogs[0], input1);
         if (this.mode === 'local') this.captureInput(this.dogs[1], input2);
         this.hitStop = this.hitStop <= dt + 1e-8 ? 0 : this.hitStop - dt;
-        if (!this.hitStop) {
-          for (const f of this.dogs) {
-            if (!f.tumble?.pending) continue;
-            const input =
-              f.index === 0
-                ? input1
-                : this.mode === 'local'
-                  ? input2
-                  : this.cpuControlled(f)
-                    ? cpuLaunchAim(f)
-                    : idleInput;
-            this.releaseLaunch(f, input);
+        for (const f of this.dogs) {
+          const human = f.index === 0 ? input1 : this.mode === 'local' ? input2 : null;
+          if (f.hitShift) {
+            // A CPU can read a second swing once. It must re-center and flick under the same rules.
+            const cpu = f.hitShift.cpuDirection && f.hitShift.remaining <= 4 ? { x: f.hitShift.cpuDirection } : idleInput;
+            this.shiftDuringHit(f, human || cpu);
           }
+          if (!this.hitStop && f.tumble?.pending)
+            this.releaseLaunch(f, human || (this.cpuControlled(f) ? cpuLaunchAim(f) : idleInput));
         }
         return;
       }
       this.time += dt;
       const old = this.terrain;
       this.terrain = this.layout?.terrain || platforms(this.stage, this.time);
-      const second =
-        this.mode === 'solo'
-          ? this.cpu(dt)
-          : this.mode === 'local' || this.mode === 'adventure'
-            ? input2
-            : this.footworkPractice
-              ? this.footworkInput(dt)
-              : this.launchPractice
-                ? this.practiceInput(dt)
-                : this.shieldPractice
-                  ? this.shieldPracticeInput(dt, input1)
-                  : this.airPractice
-                    ? this.airPracticeInput(dt)
-                    : this.rollPractice
-                      ? this.rollPracticeInput(dt)
-                      : this.trumpPractice
-                        ? this.trumpPracticeInput()
-                        : idleInput;
+      let second = input2;
+      if (this.mode === 'solo') second = this.cpu(dt);
+      else if (this.mode === 'training') second = this.trainingRivalInput(dt, input1);
       const settingUpWallHit = wallDrill?.phase === 'swing';
       const inputs = [
         this.launchPractice?.phase === 'ready' || settingUpWallHit ? idleInput : input1,
@@ -2655,6 +2709,7 @@
         wallDrill.swung = true;
       }
       for (const f of this.dogs) {
+        f.hitShift = null;
         if (f.ground !== -1) {
           f.x += this.terrain[f.ground].x1 - old[f.ground].x1;
           if (f.impactLag > 1e-8 || f.shieldStun > 1e-8) f.y = this.terrain[f.ground].y;
@@ -2681,6 +2736,7 @@
       this.updateDiscs(dt);
       if (
         this.fetch &&
+        !this.escapePractice &&
         !this.footworkPractice &&
         !this.launchPractice &&
         !this.shieldPractice &&
@@ -2694,6 +2750,16 @@
         (f) => !f.absent && (f.x < -115 || f.x > this.stageWidth + 115 || f.y > 765 || f.y < -172),
       );
       if (out.length) this.knockouts(out);
+    }
+    trainingRivalInput(dt, player) {
+      if (this.escapePractice) return this.escapePracticeInput(dt);
+      if (this.footworkPractice) return this.footworkInput(dt);
+      if (this.launchPractice) return this.practiceInput(dt);
+      if (this.shieldPractice) return this.shieldPracticeInput(dt, player);
+      if (this.airPractice) return this.airPracticeInput(dt);
+      if (this.rollPractice) return this.rollPracticeInput(dt);
+      if (this.trumpPractice) return this.trumpPracticeInput();
+      return idleInput;
     }
     separateGroundedFighters(a = this.dogs[0], b = this.dogs[1]) {
       if (a.ground < 0 || a.ground !== b.ground || a.respawning || b.respawning) return;
@@ -2891,6 +2957,38 @@
         result = i;
       }
       return result;
+    }
+    shiftDuringHit(f, input) {
+      const shift = f.hitShift;
+      const previous = shift.sector;
+      shift.sector = shiftSector(input, previous);
+      shift.cooldown = Math.max(0, shift.cooldown - 1);
+      shift.remaining--;
+      if (!shift.remaining) f.hitShift = null;
+      if (shift.sector < 0 || shift.sector === previous || shift.cooldown) return;
+      const [dx, dy] = shiftDirections[shift.sector];
+      const x = f.x, y = f.y;
+      let nextX = x + dx * 12, nextY = y + (shift.ground >= 0 ? 0 : dy * 12);
+      if (shift.ground >= 0) {
+        const floor = this.terrain[shift.ground];
+        nextX = clamp(nextX, Math.min(x, floor.x1), Math.max(x, floor.x2));
+      }
+      const wall = this.wallContact(f, x, y, nextX, nextY);
+      if (wall) nextX = clamp(wall.x, Math.min(x, nextX), Math.max(x, nextX));
+      if (nextY > y) {
+        const travelY = nextY - y;
+        for (const floor of this.terrain) {
+          if ((floor.thin && f.drop > 0) || floor.y < y || floor.y > nextY) continue;
+          const crossing = x + (nextX - x) * (floor.y - y) / travelY;
+          if (crossing >= floor.x1 - 5 && crossing <= floor.x2 + 5) nextY = floor.y;
+        }
+      }
+      if (x === nextX && y === nextY) return;
+      shift.cooldown = 4;
+      f.x = nextX;
+      f.y = nextY;
+      this.emit('hitShift', { f, point: { x, y: y - f.stats.height * 0.52 }, dx: nextX - x, dy: nextY - y });
+      if (this.escapePractice?.phase === 'follow' && f.index === 0) this.escapePractice.outward += x - nextX;
     }
     wallContact(f, x, y, nextX, nextY) {
       const dx = nextX - x;
@@ -4492,7 +4590,8 @@
         target.vx = face * speed * (upward ? 0.34 : downward ? 0.48 : 0.93);
         target.vy = downward ? speed * 0.8 : -speed * (upward ? 1.13 : 0.59) - 48;
       }
-      if (target.ground >= 0) target.jumps = 1;
+      const groundAtHit = target.ground;
+      if (groundAtHit >= 0) target.jumps = 1;
       target.y -= 1;
       target.ground = -1;
       target.coyote = 0;
@@ -4527,7 +4626,14 @@
       if (target.index === 0 && this.launchPractice?.phase === 'ready' && name === 'throw') {
         this.launchPractice.phase = 'flight';
       }
-      const hitFrames = target.tumble ? clamp(4 + Math.floor(launchSpeed / 180), 6, 9) : emphatic ? 4 : 2;
+      const opener = !!(move?.second || move?.setupHit);
+      const hitFrames = target.tumble ? clamp(4 + Math.floor(launchSpeed / 180), 6, 9)
+        : opener ? 6 : emphatic ? 4 : 2;
+      target.hitShift = grab || name === 'snare' ? null : {
+        ground: groundAtHit, remaining: hitFrames, cooldown: 0, sector: shiftSector(target.prev),
+        cpuDirection: opener && this.cpuControlled(target) && this.random() < 0.45
+          ? Math.sign(target.x - owner.x) || face : 0,
+      };
       this.hitStop = Math.max(this.hitStop, hitFrames / 60);
       if (
         this.trumpPractice?.role === 'defend' &&
@@ -4536,6 +4642,13 @@
       )
         this.trumpPractice.phase = 'intercepted';
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic });
+      if (this.escapePractice && owner.index === 1 && target.index === 0 && moveId === 'cloverRimRattle') {
+        if (opener && this.escapePractice.phase === 'swing') {
+          this.escapePractice.phase = 'follow';
+          this.emit('escapeCue', { f: target, phase: 'follow' });
+        } else if (!opener && this.escapePractice.phase !== 'done')
+          this.finishEscapePractice(this.escapePractice.phase === 'follow' ? 'caught' : 'missed');
+      }
       if (this.shieldPractice) {
         const counter = this.shieldPractice.phase === 'counter';
         this.finishShieldPractice(target.index === 0 ? 'hit' : counter ? 'counterHit' : 'interrupted');

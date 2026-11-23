@@ -637,6 +637,7 @@
         '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
         '<p>While holding Shield, press Jump, Grab, Up + Smash, or Up + Special. Tap during a blocked hit to start your response as soon as shieldstun ends. An immediate shield grab takes four extra frames to reach. A heavier blow pushes you farther away.</p>' +
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim and tap Shield to dodge in that direction, including diagonally. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Try Training → Air-dodge practice.</p>' +
+        '<p>Flick a direction during the hit spark to shift your dog. You can slide sideways on the ground or in eight directions in the air. Try escaping the second swing in Training → Combo escape.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
         '<p>Your dog crouches for three frames. Tap Jump for a short hop, or hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Tap Down once after the top of your jump to fast-fall, then aim freely. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
@@ -844,7 +845,9 @@
           'ledgeRoll',
           'defense',
         ) +
-        '</ul><h3 class="guide-section">Ledge trumping</h3><p>Catch an occupied ledge to bump the other dog outward. A fresh catch protects you for 15 frames. Regrabs leave you open until you land or take a hit. Play either side in <strong>Training → Contested ledge</strong>.</p><h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><ul class="move-rows guide-defense">' +
+        '</ul><h3 class="guide-section">Ledge trumping</h3><p>Catch an occupied ledge to bump the other dog outward. A fresh catch protects you for 15 frames. Regrabs leave you open until you land or take a hit. Play either side in <strong>Training → Contested ledge</strong>.</p>' +
+        '<h3 class="guide-section">Between hits</h3><p>Flick a fresh direction during impact freeze to move a short distance. Center the stick and flick again for a second shift if time allows. On a keyboard or touch screen, tap a direction at the spark. Try <strong>Training → Combo escape</strong> at two distances.</p>' +
+        '<h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><ul class="move-rows guide-defense">' +
         rows +
         '</ul><h3 class="guide-section">At a wall</h3><p>Try <strong>Training → Wall tech practice</strong> to take Pip’s Back Heel into either wall of Laundry Line.</p><ul class="move-rows guide-wall">' +
         guideMoveRow(
@@ -1083,6 +1086,7 @@
     drillWaiting = false;
     practiceSide = 'left';
     $('footwork-status').hidden = true;
+    $('escape-status').hidden = $('escape-patterns').hidden = true;
     $('launch-status').hidden = true;
     $('wall-status').hidden = $('wall-patterns').hidden = true;
     $('shield-status').hidden = $('shield-patterns').hidden = true;
@@ -1103,6 +1107,7 @@
       if (world?.wallPractice && e.f?.index === 0) wallFeedback(name);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
+      if (name === 'escapeCue' || name === 'escapeResult') escapeFeedback(e);
       if (name === 'airStart' || name === 'airCue' || name === 'airResult') airFeedback(name, e);
       if (world?.rollPractice && e.f?.index === 0 && (name === 'ledgeRoll' || name === 'rollResult'))
         rollFeedback(name, e);
@@ -1305,6 +1310,27 @@
   let drillSide = null,
     drillWaiting = false,
     practiceSide = 'left';
+  function escapeFeedback(e) {
+    const status = $('escape-status'), tip = $('recovery-tip');
+    status.dataset.result = e.outcome || e.phase;
+    status.textContent = {
+      windup: 'Watch the disc', follow: 'Flick left!', escaped: 'Second swing missed',
+      caught: 'Both swings hit', missed: 'First swing missed', clear: 'Follow-up missed', interrupted: 'Swing interrupted',
+    }[status.dataset.result];
+    if (e.phase === 'windup')
+      tip.textContent = 'Let the first swing hit. Tap left or flick the stick left when the spark appears.';
+    if (!e.outcome) return;
+    const result = {
+      escaped: 'You shifted past the rim and took only the first 3%.',
+      caught: e.outward > 0
+        ? 'Your flick moved you. The second swing still reached from this spacing.'
+        : 'The finisher caught you. Start with movement released, then flick left on the first spark.',
+      clear: 'The finisher missed. Try a left flick during the first hit to practice the escape.',
+      missed: 'The opening swing missed. Wait in place until Clover’s disc touches you.',
+      interrupted: 'Clover lost the swing. Give her room to finish the first pass.',
+    }[e.outcome];
+    tip.textContent = result + ' Tap Attack to retry.';
+  }
   function footworkFeedback(e) {
     const status = $('footwork-status');
     const state = e.outcome || e.phase;
@@ -1545,15 +1571,17 @@
     const wall = ledge === 'wall';
     const shield = ledge === 'shield';
     const footwork = ledge === 'footwork';
+    const escape = ledge === 'escape';
     const air = ledge === 'air';
     const roll = ledge === 'roll';
     const trump = ledge === 'trump';
-    drillSide = launch || wall || shield || footwork || air || roll || trump ? null : ledge || null;
+    drillSide = launch || wall || shield || footwork || escape || air || roll || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
     if (launch) world.resetLaunchPractice();
     else if (footwork) world.resetFootworkPractice();
+    else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true);
     else if (wall) world.resetWallPractice(pattern);
     else if (shield) world.resetShieldPractice(pattern);
     else if (air) world.resetAirPractice(pattern, practiceSide);
@@ -1566,13 +1594,21 @@
     const result = $('launch-status');
     result.hidden = !launch;
     $('footwork-status').hidden = !footwork;
+    $('escape-status').hidden = $('escape-patterns').hidden = !escape;
     $('wall-status').hidden = $('wall-patterns').hidden = !wall;
     $('shield-status').hidden = $('shield-patterns').hidden = !shield;
     $('air-status').hidden = $('air-patterns').hidden = !air;
     $('roll-status').hidden = $('roll-patterns').hidden = !roll;
     $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
-    if (footwork) {
+    if (escape) {
+      $('escape-tip').setAttribute('aria-pressed', String(pattern === 'tip'));
+      $('escape-close').setAttribute('aria-pressed', String(pattern === 'close'));
+      $('escape-slow').setAttribute('aria-pressed', String(world.escapePractice.slow));
+      $('escape-status').dataset.result = 'ready';
+      $('escape-status').textContent = 'Rim Rattle';
+      message = 'Tap Attack to start. Watch Clover’s disc, then flick left on the first hit spark.';
+    } else if (footwork) {
       $('footwork-status').dataset.result = 'ready';
       $('footwork-status').textContent = 'Bait Bear Hug';
       message = 'Dash right to the chalk, then reverse. When Brisket misses his grab, dash back in and tap Attack. Choose Footwork practice to retry.';
@@ -1646,6 +1682,15 @@
   }
   $('reset-training').onclick = () => drill(false);
   $('footwork-training').onclick = () => drill('footwork');
+  $('escape-training').onclick = () => drill('escape', false, world.escapePractice?.spacing || 'tip');
+  $('escape-tip').onclick = () => drill('escape', false, 'tip');
+  $('escape-close').onclick = () => drill('escape', false, 'close');
+  $('escape-slow').onclick = () => {
+    const drill = world.escapePractice;
+    drill.slow = !drill.slow;
+    $('escape-slow').setAttribute('aria-pressed', String(drill.slow));
+    $('game').focus({ preventScroll: true });
+  };
   $('ledge-training').onclick = () => drill('left');
   $('ledge-right').onclick = () => drill('right');
   $('ledge-attack-training').onclick = () => drill(practiceSide, true);
@@ -2549,7 +2594,7 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += dt;
+        accumulator += world.escapePractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];

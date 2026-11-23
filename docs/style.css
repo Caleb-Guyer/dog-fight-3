@@ -655,6 +655,7 @@ body.playing .tools .utility,
 #shield-status[data-result='parry'],
 #shield-status[data-result='punish'],
 #footwork-status[data-result='punish'],
+#escape-status[data-result='escaped'],
 #shield-status[data-result='spaced'],
 #shield-status[data-result='counterHit'],
 #roll-status[data-result='passed'],
@@ -786,6 +787,7 @@ kbd {
   min-height: 30px;
   font-size: 13px;
 }
+#escape-patterns,
 #shield-patterns,
 #wall-patterns,
 #roll-patterns,
@@ -794,6 +796,7 @@ kbd {
   display: inline-flex;
   gap: 2px;
 }
+#escape-patterns [aria-pressed='true'],
 #shield-patterns [aria-pressed='true'],
 #roll-patterns [aria-pressed='true'],
 #trump-patterns [aria-pressed='true'],

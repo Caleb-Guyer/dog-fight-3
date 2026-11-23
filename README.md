@@ -120,6 +120,10 @@ Choose **Training → Air-dodge practice → In place**. Jump and tap Shield as 
 
 Choose **Training → Launch practice**. Your selected opponent grabs you at 90% and uses its own up throw. Compare the dashed gold line showing the original direction with your solid aqua launch line, then try a tech where you land. Choose Launch practice again to repeat the same throw. The **Defense** tab in the Move list illustrates the controls for every dog.
 
+During impact freeze, flick a fresh direction to shift your dog’s position. A ground hit allows a sideways shift. An airborne dog can shift in eight directions. A held direction counts once when you first flick during the freeze. Center and flick again if the impact lasts long enough. Holding an angle as a strong hit releases still steers your launch.
+
+In **Training → Combo escape**, tap Attack to cue Clover’s Rim Rattle. **At the tip**, wait out both swings to take 13%, then tap Attack to retry and flick left as the first hit sparks. A clean escape leaves you at 3%. Choose **Up close** and repeat the same flick to see how spacing changes the result. **Half speed** starts on. Toggle it off to practice at match speed.
+
 **Wall tech.** When you tumble into a solid stage wall, tap Shield in the last 11 frames before impact to brace against it. Hold Jump at contact to spring up and away. Both recoveries preserve the air jump and Up Special you have left. A missed tech bounces you back into open air, still tumbling. Wall and landing techs share the same 28-frame lockout.
 
 Choose **Training → Wall tech practice** to play Noodle at 90% in the gap on Laundry Line. Pip’s Back Heel hits you toward the brickwork. Try letting it hit the wall first, then use **Retry kick** to practice the Shield timing. **Switch wall** mirrors the exchange. **Reset positions** returns to your selected dogs and stage.

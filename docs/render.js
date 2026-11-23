@@ -1773,6 +1773,15 @@
   }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
+    if (e.type === 'hitShift') {
+      const length = Math.hypot(e.dx, e.dy), x = e.dx / length, y = e.dy / length;
+      const reach = reduced.matches ? 7 : 12 - 6 * p;
+      for (const offset of [-5, 4]) {
+        const tailX = e.x - x * e.size - y * offset, tailY = e.y - y * e.size + x * offset;
+        pixelLine(ctx, tailX, tailY, tailX + x * reach, tailY + y * reach, offset < 0 ? mint : cream, 3, 2);
+      }
+      return;
+    }
     if (wallOptions.has(e.type)) return wallContactMark(ctx, e, p);
     if (e.type === 'airGather' || e.type === 'airWake') return airDodgeStart(ctx, e, p);
     if (e.type === 'lipDust' || e.type === 'ledgePlant') return ledgeRollDust(ctx, e, p);
@@ -1862,6 +1871,8 @@
     }
     event(name, e) {
       const f = e.f;
+      if (name === 'hitShift')
+        this.add('hitShift', e.point.x, e.point.y, mint, 8 / 60, f.stats.width + 4, 1, { dx: e.dx, dy: e.dy });
       if (name === 'launchDI' && f.index === 0) {
         const base = Math.hypot(e.raw.x, e.raw.y),
           speed = Math.hypot(e.velocity.x, e.velocity.y);
@@ -2051,6 +2062,25 @@
       window.ArenaArt.draw(ctx, world.stage, world.time, {
         left, top, right: left + 2 * halfW, bottom: top + 2 * halfH,
       });
+      if (world.escapePractice) {
+        const drill = world.escapePractice, floor = world.terrain[0].y;
+        // Three chalk ticks count in the swing. The arrow draws at the defender's feet on contact.
+        if (drill.phase === 'windup' || drill.phase === 'swing') {
+          for (let i = 0; i < 3; i++) {
+            const x = b.x - 12 + i * 9;
+            pixelLine(ctx, x, floor + 10, x + 3, floor + 4, ink, 5, 2);
+            pixelLine(ctx, x, floor + 10, x + 3, floor + 4, drill.time * 60 >= i * 8 ? gold : '#887d7c', 2, 2);
+          }
+        }
+        if (drill.phase === 'follow' && a.hitShift) {
+          const x = a.x - a.stats.width - 15, y = a.y - 12;
+          for (const [color, width] of [[ink, 6], [mint, 3]]) {
+            pixelLine(ctx, x, y, x + 15, y, color, width, 2);
+            pixelLine(ctx, x, y, x + 6, y - 6, color, width, 2);
+            pixelLine(ctx, x, y, x + 6, y + 6, color, width, 2);
+          }
+        }
+      }
       if (world.footworkPractice) {
         const x = snap(world.footworkPractice.mark, 2), y = world.terrain[0].y;
         const chalk = world.footworkPractice.phase === 'opening' ? mint : cream;
