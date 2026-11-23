@@ -1487,9 +1487,15 @@
     swing(ctx, f, world.terrain[f.ground]);
     if (f.shield) {
       const r = 34 + f.shieldHP * 15;
-      oval(ctx, f.x, f.y - 36, r, r, teamColor(f) + '36');
-      arc(ctx, f.x, f.y - 36, r, r, 0, Math.PI * 2, teamColor(f), 4);
-      arc(ctx, f.x, f.y - 36, r - 5, r - 5, 3.75, 4.42, cream);
+      const dent = f.shieldStun > 1e-8 ? Math.min(8, (f.impactLag + f.shieldStun) * 38) : 0;
+      const rx = r - dent, ry = r + dent * 0.4;
+      oval(ctx, f.x, f.y - 36, rx, ry, teamColor(f) + '36');
+      arc(ctx, f.x, f.y - 36, rx, ry, 0, Math.PI * 2, teamColor(f), 4);
+      arc(ctx, f.x, f.y - 36, rx - 5, ry - 5, 3.75, 4.42, cream);
+      if (dent > 1) {
+        const contact = f.vx > 0 ? Math.PI : 0;
+        arc(ctx, f.x, f.y - 36, rx, ry, contact - 0.6, contact + 0.6, cream, 3);
+      }
     } else if (
       f.shieldDrop > 0 &&
       !(f.parryFlash > 0) &&
@@ -1923,7 +1929,10 @@
       if (name === 'hit' || name === 'block') {
         const face = e.face || 1;
         const point = e.point || { x: f.x - face * f.stats.width * 0.7, y: f.y - f.stats.height * 0.54 };
-        if (name === 'block') this.add('block', point.x - face * 7, point.y, teamColor(f), 0.16, 54, face);
+        if (name === 'block') {
+          const frames = e.impactFrames || 2;
+          this.add('block', point.x - face * 7, point.y, teamColor(f), (7 + frames) / 60, 34 + frames * 5, face);
+        }
         else {
           this.add(
             e.emphatic ? 'impact' : 'light',

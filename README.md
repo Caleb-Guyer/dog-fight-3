@@ -83,10 +83,12 @@ Hold **Shield** on the ground to block. On a touchscreen, keep one thumb on Shie
 - **Shield + Left or Right** rolls in that direction, even through a rival. A forward roll turns you around to face the dog you passed. A backward roll keeps your facing, travels a little less, and takes two extra frames to recover.
 - **Shield + Down** spot-dodges in place. Time the duck to slip a grab and stay close enough to answer. Both dodges have a brief invincible stretch between their vulnerable start and recovery. Keep holding Shield after the dodge to block again.
 - **Release Shield just before a strike** to parry. The first five frames of the release can catch the hit. A melee parry interrupts the attacker and gives you an opening to counter. A projectile parry absorbs the impact at your position. Grabs can catch a blocking dog or a dog trying to parry.
+- A blocked jab gives a short pause and a small shove. A charged smash holds the shield longer and pushes the dogs farther apart. A blocked projectile can pin the defender while its owner keeps moving.
+- **Jump**, **Grab**, **Up + Smash**, and **Up + Special** work directly from a grounded shield. Keep Shield held and tap a response during impact or shieldstun. It starts on the first actionable frame. An immediate shield grab adds four frames to the dog's usual grab startup. Holding Up + Smash charges it as usual.
 
 Pip finishes a forward roll fastest at 24 frames. Brisket covers the least ground and starts more slowly, but has the longest invincibility. Noodle travels farthest. Clover recovers from her spot-dodge in 20 frames and can answer with Disc Tap. All timings use 60 game frames per second.
 
-In **Training → Shield practice**, choose **Strike** or **Grab**, then raise Shield. The selected dummy winds up its own side smash or standing grab. Choose the same pattern again to retry the timing. **Move list → Defense** shows each dog's roll, spot-dodge, and parry.
+In **Training → Shield practice**, choose **Pip’s spaced kick** or **Brisket’s Belly Drop** to play as Clover. Hold Shield and tap Grab when the aerial hits. Pip lands at the tip of Flying Kick and can dash out of Disc Hook’s reach. Brisket lands beside you and can be grabbed during Belly Drop’s 18 frames of landing recovery. Select a matchup again to retry. **Strike** and **Grab** use your selected fighters for parry and dodge practice. **Reset positions** returns to free training.
 
 ## Air dodges
 

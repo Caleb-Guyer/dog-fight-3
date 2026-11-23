@@ -378,9 +378,13 @@
     else if (name === 'ko') {
       tone(690, 71, 0.38, 0, 'sawtooth', 0.056);
       tone(150, 39, 0.47, 0.02, 'sine', 0.13);
-    } else if (name === 'block' || name === 'break') {
+    } else if (name === 'block') {
+      const weight = (detail.impactFrames || 2) - 2;
+      tone(880 - weight * 76, 510 - weight * 62, 0.04 + weight * 0.008, 0, 'square', 0.025);
+      tone(520 - weight * 65, 350 - weight * 48, 0.075 + weight * 0.012, 0.012, 'triangle', 0.06);
+    } else if (name === 'break') {
       tone(910, 525, 0.044, 0, 'square', 0.025);
-      tone(name === 'break' ? 385 : 760, name === 'break' ? 85 : 740, 0.08, 0.022, 'triangle', 0.055);
+      tone(385, 85, 0.08, 0.022, 'triangle', 0.055);
     } else if (name === 'swat') tone(580, 210, 0.12, 0, 'square', 0.034);
     else if (name === 'land' && detail.speed > 420) tone(90, 45, 0.063, 0, 'triangle', 0.037);
     else if (name === 'tick') tone(390, 420, 0.11);
@@ -627,6 +631,7 @@
       'Controls',
       table +
         '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
+        '<p>While holding Shield, press Jump, Grab, Up + Smash, or Up + Special. Tap during a blocked hit to start your response as soon as shieldstun ends. An immediate shield grab takes four extra frames to reach. A heavier blow pushes you farther away.</p>' +
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim and tap Shield to dodge in that direction, including diagonally. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Try Training → Air-dodge practice.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
         '<p>Your dog crouches for three frames. Tap Jump for a short hop, or hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Tap Down once after the top of your jump to fast-fall, then aim freely. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
@@ -824,7 +829,7 @@
         .map(([key, input, label, hint]) => guideMoveRow({ label, hint }, input, key, 'defense'))
         .join('');
       contents =
-        '<p class="recovery-note">Shield is L for P1, Slash for P2, either bumper on a gamepad, or Shield on touch.</p><h3 class="guide-section">On the ground</h3><p>Choose <strong>Training → Shield practice</strong> to face a strike or a grab.</p><ul class="move-rows guide-shield">' +
+        '<p class="recovery-note">Shield is L for P1, Slash for P2, either bumper on a gamepad, or Shield on touch.</p><h3 class="guide-section">On the ground</h3><p>Keep Shield held and press Jump, Grab, Up + Smash, or Up + Special. You can tap during impact. A grab immediately after a block needs four extra startup frames.</p><p>In <strong>Training → Shield practice</strong>, use Clover’s Disc Hook against Pip’s spaced kick and Brisket’s Belly Drop. Choose Strike or Grab to practice a parry or dodge with your own dog.</p><ul class="move-rows guide-shield">' +
         groundRows +
         '</ul><h3 class="guide-section">In the air</h3><p>One dodge per airtime. Landing or catching a ledge refreshes it. Try <strong>Training → Air-dodge practice</strong>.</p><ul class="move-rows guide-air-dodge">' +
         airRows +
@@ -1297,29 +1302,37 @@
   function shieldFeedback(name, e) {
     const result = $('shield-status');
     const tip = $('recovery-tip');
+    const aerial = e.pattern === 'kick' || e.pattern === 'drop';
+    const dummy = world.dogs[1];
     const attackName =
-      e.pattern === 'grab'
-        ? grabs[world.dogs[1].kit.grab].label
-        : smashes[world.dogs[1].kit.smashes.side].label;
+      aerial ? moves[dummy.kit.air[e.pattern === 'kick' ? 'forward' : 'down']].label
+        : e.pattern === 'grab' ? grabs[dummy.kit.grab].label : smashes[dummy.kit.smashes.side].label;
     if (name === 'shieldCue') {
       result.dataset.result = e.phase;
-      result.textContent = e.phase === 'windup' ? attackName + ' coming' : attackName;
+      result.textContent = e.phase === 'counter' ? 'Blocked · tap Grab' : e.phase === 'windup' ? attackName + ' coming' : attackName;
       return;
     }
     result.dataset.result = e.outcome;
     const feedback = {
       parry: ['Parry', 'Shield released on time. After a melee parry, tap Attack to counter.'],
       block: ['Blocked', 'You held Shield through contact. Try releasing it just before the hit.'],
-      hit: ['Hit', 'Try holding Shield through the windup, then release as the strike reaches you.'],
+      break: ['Shield broken', 'Choose the matchup again to start with a fresh shield.'],
+      hit: ['Hit', aerial ? 'Keep Shield held until the aerial lands. Tap Grab when the shield flashes.' : 'Try holding Shield through the windup, then release as the strike reaches you.'],
       grabbed: ['Grabbed', 'Hold Shield, then tap Down just before the grab reaches you.'],
-      interrupted: ['Interrupted', 'You caught the dummy first. Choose Strike or Grab to retry.'],
+      interrupted: ['Interrupted', 'You caught the dummy first. Choose the same matchup to retry.'],
+      spaced: ['Out of reach', 'Pip dashed clear. At its closest, Disc Hook fell short by ' + e.gap + ' game pixels. Try the same grab against Belly Drop.'],
+      punish: ['Grab punish', dummy.stats.name + ' had ' + e.landingFrames + (e.landingFrames === 1 ? ' frame' : ' frames') + ' of landing recovery left when Disc Hook caught him. Aim to throw.'],
+      lateCatch: ['Grab landed late', dummy.stats.name + ' had time to act before Disc Hook landed. Tap Grab as the shield flashes.'],
+      late: ['Grab missed', dummy.stats.name + ' escaped the grab. Try tapping Grab as the shield flashes.'],
+      waited: ['No punish', 'Choose the matchup again. Keep Shield held and tap Grab when the hit lands.'],
+      counterHit: ['Counter landed', 'Your counter connected. Choose the same matchup to try Disc Hook.'],
       miss: [
         e.lastDodge === 'shieldRoll'
           ? 'Rolled clear'
           : e.lastDodge === 'spotDodge'
             ? 'Spot-dodged'
             : 'Missed',
-        'Choose Strike or Grab to try another exchange.',
+        'Choose the same matchup to try another exchange.',
       ],
     };
     [result.textContent, tip.textContent] = feedback[e.outcome];
@@ -1577,12 +1590,14 @@
     } else if (shield) {
       $('shield-status').dataset.result = 'ready';
       $('shield-status').textContent = 'Hold Shield to begin';
-      $('shield-strike').setAttribute('aria-pressed', String(pattern === 'strike'));
-      $('shield-grab').setAttribute('aria-pressed', String(pattern === 'grab'));
-      message =
-        pattern === 'strike'
-          ? 'Raise Shield to start. Roll through the strike, or release Shield as it lands to parry.'
-          : 'Raise Shield to start. Tap Down just before the grab to spot-dodge, or tap a side to roll.';
+      for (const button of $('shield-patterns').querySelectorAll('button'))
+        button.setAttribute('aria-pressed', String(button.id === 'shield-' + pattern));
+      message = {
+        kick: 'You’re Clover. Hold Shield. Tap Grab when Pip’s Flying Kick hits the far side of your shield.',
+        drop: 'You’re Clover. Hold Shield. Tap Grab as Brisket’s Belly Drop hits to catch him before he recovers.',
+        strike: 'Raise Shield to start. Roll through the strike, or release Shield as it lands to parry.',
+        grab: 'Raise Shield to start. Tap Down just before the grab to spot-dodge, or tap a side to roll.',
+      }[pattern];
     } else if (launch) {
       result.dataset.result = 'ready';
       result.textContent = 'Up throw incoming';
@@ -1621,9 +1636,9 @@
   $('wall-training').onclick = $('wall-retry').onclick = () =>
     drill('wall', false, world.wallPractice?.side || 'left');
   $('wall-side').onclick = () => drill('wall', false, world.wallPractice.side === 'left' ? 'right' : 'left');
-  $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'strike');
-  $('shield-strike').onclick = () => drill('shield', false, 'strike');
-  $('shield-grab').onclick = () => drill('shield', false, 'grab');
+  $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'kick');
+  for (const button of $('shield-patterns').querySelectorAll('button'))
+    button.onclick = () => drill('shield', false, button.id.slice('shield-'.length));
   $('air-dodge-training').onclick = () => drill('air', false, world?.airPractice?.pattern || 'neutral');
   $('air-neutral').onclick = () => drill('air', false, 'neutral');
   $('air-edge').onclick = () => drill('air', false, 'edge');

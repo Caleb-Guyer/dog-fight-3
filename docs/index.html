@@ -11,14 +11,14 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=screen-1" />
+    <link rel="stylesheet" href="./style.css?v=shield-pressure-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=missions-1" />
     <link rel="stylesheet" href="./online.css?v=online-1" />
     <script defer src="./fighters-art.js?v=aerial-1"></script>
     <script defer src="./arena-art.js?v=screen-1"></script>
-    <script defer src="./engine.js?v=aerial-1"></script>
-    <script defer src="./render.js?v=aerial-1"></script>
+    <script defer src="./engine.js?v=shield-pressure-1"></script>
+    <script defer src="./render.js?v=shield-pressure-1"></script>
     <script defer src="./dispatch-script.js?v=chapter-lead-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -29,10 +29,10 @@
     <script defer src="./film-ending.js?v=widefilm-1"></script>
     <script defer src="./dispatch-film.js?v=widefilm-1"></script>
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
-    <script defer src="./dispatch-run.js?v=chapter-lead-1"></script>
+    <script defer src="./dispatch-run.js?v=shield-pressure-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./online.js?v=aerial-1"></script>
-    <script defer src="./app.js?v=aerial-1"></script>
+    <script defer src="./online.js?v=shield-pressure-1"></script>
+    <script defer src="./app.js?v=shield-pressure-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -385,8 +385,10 @@
             <button id="wall-side" type="button" class="utility">Switch wall</button>
           </span>
           <button id="shield-training" type="button" class="utility">Shield practice</button>
-          <span id="shield-patterns" role="group" aria-label="Dummy action" hidden>
-            <button id="shield-strike" type="button" class="utility" aria-pressed="true">Strike</button>
+          <span id="shield-patterns" role="group" aria-label="Shield practice matchup" hidden>
+            <button id="shield-kick" type="button" class="utility" aria-pressed="true">Pip’s spaced kick</button>
+            <button id="shield-drop" type="button" class="utility" aria-pressed="false">Brisket’s Belly Drop</button>
+            <button id="shield-strike" type="button" class="utility" aria-pressed="false">Strike</button>
             <button id="shield-grab" type="button" class="utility" aria-pressed="false">Grab</button>
           </span>
           <button id="air-dodge-training" type="button" class="utility">Air-dodge practice</button>

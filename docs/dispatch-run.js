@@ -190,7 +190,7 @@
       const { f, kind } = e, hero = this.dogs[0];
       if (!f.stocks || f.respawning || (kind === 'conductor' && e.hp <= 0)) return idleInput;
       if (kind === 'brisket') return this.cpu(dt);
-      if (f.grip) return idleInput;
+      if (f.grip || f.impactLag > 1e-8) return idleInput;
       if (f.ledge) return { ...idleInput, x: f.ledge.left ? 1 : -1, jump: true };
       e.jumpHold = Math.max(0, e.jumpHold - dt);
       if (f.floorAction?.type === 'downed') return { ...idleInput, jump: true };
