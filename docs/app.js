@@ -1728,6 +1728,18 @@
     }
     document.querySelector('[data-reel="' + selected + '"]').focus();
   }
+  function filmArea() {
+    const screen = $('dispatch-story').getBoundingClientRect();
+    const heading = document.querySelector('.film-heading').getBoundingClientRect();
+    const tools = document.querySelector('.topbar').getBoundingClientRect();
+    const footer = document.querySelector('.film-footer').getBoundingClientRect();
+    return {
+      width: screen.width,
+      height: screen.height,
+      above: Math.max(heading.bottom, tools.bottom) - screen.top + 3,
+      below: screen.bottom - footer.top + 3,
+    };
+  }
   function story(key, then, fromLibrary = false) {
     menuScreen('dispatch-story');
     afterStory = then;
@@ -1745,7 +1757,7 @@
         $('film-progress').style.transform = 'scaleX(' + time / duration + ')';
         const label = '0:' + String(Math.floor(time)).padStart(2, '0') + ' / 0:' + duration;
         if ($('film-time').textContent !== label) $('film-time').textContent = label;
-      }, finishStory,
+      }, finishStory, filmArea,
     );
     updateFilmButton();
     $(film.paused && fromLibrary ? 'film-pause' : 'story-next').focus({ preventScroll: true });
@@ -2096,6 +2108,12 @@
   };
   if (window.ResizeObserver) new ResizeObserver(redrawPausedStage).observe($('game'));
   else window.addEventListener('resize', redrawPausedStage);
+  const reframeFilm = () => film?.paint(true);
+  if (window.ResizeObserver) {
+    const observer = new ResizeObserver(reframeFilm);
+    for (const selector of ['#story-cover', '.film-heading', '.film-footer', '.topbar'])
+      observer.observe(document.querySelector(selector));
+  } else window.addEventListener('resize', reframeFilm);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) onBlur();
   });

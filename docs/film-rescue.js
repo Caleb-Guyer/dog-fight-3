@@ -1,4 +1,4 @@
-/* Parcel Alley and the approach to Sorting Bridge, on the native 320 × 180 film canvas. */
+/* Parcel Alley and the approach to Sorting Bridge. */
 (() => {
   'use strict';
 
@@ -157,6 +157,209 @@
     p.rect(x + 6, y + 4, 3, 1, c.cream);
   }
 
+  const original = { left: 0, top: 0, right: 320, bottom: 180 };
+  const plates = new Map();
+  // Each parallax layer keeps one bitmap. The extra 64 pixels cover the full tracking shot.
+  function scenery(p, key, v, paint, offset = 0) {
+    const left = Math.floor(v.left / 32) * 32,
+      top = Math.floor(v.top / 32) * 32;
+    const right = Math.ceil((v.right + 64) / 32) * 32,
+      bottom = Math.ceil(v.bottom / 32) * 32;
+    let tile = plates.get(key);
+    if (!tile || tile.left !== left || tile.right !== right || tile.top !== top || tile.bottom !== bottom) {
+      const canvas = document.createElement('canvas');
+      canvas.width = right - left;
+      canvas.height = bottom - top;
+      const brush = new A.PixelPen(canvas);
+      brush.g.translate(-left, -top);
+      paint(brush, { left, right, top, bottom });
+      tile = { canvas, left, right, top, bottom };
+      plates.set(key, tile);
+    }
+    p.image(tile.canvas, left - offset, top);
+  }
+
+  function sortingLoft(p, v) {
+    const { left, right, top, bottom } = v;
+    p.rect(left, top, right - left, bottom - top, c.slate);
+    p.rect(left, top, right - left, Math.max(0, -top + 12), c.navy);
+    // Slate roof, clerestory windows and the crane rail above the parcel cage.
+    for (let x = Math.floor((left - 76) / 102) * 102 + 14; x < right; x += 102) {
+      p.rect(x, top, 6, Math.max(0, -top + 14), c.night);
+      p.rect(x + 1, top, 1, Math.max(0, -top + 14), c.steel);
+      p.rect(x + 7, -134, 85, 48, c.night);
+      p.rect(x + 9, -132, 81, 44, '#657b87');
+      p.poly([x + 9, -132, x + 48, -132, x + 28, -88, x + 9, -88], '#95a5a1');
+      for (let pane = 1; pane < 4; pane++) p.rect(x + 9 + 20 * pane, -133, 2, 47, c.navy);
+      p.line(x + 8, -111, x + 89, -111, c.navy, 2);
+      for (let y = -148; y > top - 67; y -= 67) {
+        p.path([x + 5, y + 2, x + 49, y - 33, x + 100, y + 2], c.night, 4);
+        p.line(x + 6, y, x + 49, y - 35, '#677688');
+        p.line(x + 6, y + 3, x + 101, y + 3, c.ink, 3);
+      }
+    }
+    p.rect(left, -83, right - left, 6, c.ink);
+    p.rect(left, -81, right - left, 1, c.copper);
+    p.path([-42, -74, 28, -64, 74, -71, 132, -63, 191, -72, 244, -61, 311, -72, 377, -67], c.ink, 2);
+    p.poly([50, -82, 99, -82, 96, -73, 82, -70, 70, -61, 57, -65], c.plum, c.ink);
+    A.axle(p, 68, -68, 11);
+    A.axle(p, 89, -77, 6);
+    p.path([59, -65, 59, -46, 65, -44, 69, -47, 69, -57], c.night, 2);
+    p.line(88, -70, 88, 24, c.night, 2);
+    for (let y = -67; y < 12; y += 5) p.rect(89, y, 1, 2, c.steel);
+    p.line(240, -78, 240, -51, c.night, 2);
+    p.poly([226, -44, 230, -48, 237, -51, 244, -51, 251, -47, 255, -43], c.night, c.ink);
+    p.oval(240, -43, 13, 2, c.copper);
+    p.oval(240, -42, 7, 2, c.wheat);
+    p.poly(
+      [
+        left,
+        -5,
+        -108,
+        -1,
+        0,
+        -3,
+        104,
+        2,
+        228,
+        -3,
+        right,
+        -7,
+        right,
+        15,
+        234,
+        13,
+        103,
+        17,
+        0,
+        30,
+        -119,
+        18,
+        left,
+        23,
+      ],
+      c.ink,
+    );
+    p.path([left, 17, -119, 12, 0, 25, 50, 12, 220, 8, right, 9], c.plum, 3);
+    // More of the two sorting bays appears when the camera opens up sideways.
+    for (let x = Math.floor((left - 85) / 110) * 110 + 4; x < right; x += 110) {
+      if (x > -91 && x < 316) continue;
+      p.rect(x, 24, 92, 92, c.navy);
+      p.rect(x + 3, 27, 85, 76, '#667884');
+      p.poly([x + 3, 27, x + 33, 27, x + 19, 101, x + 3, 102], '#7e8a8c');
+      for (const y of [49, 72, 94]) p.line(x + 3, y, x + 88, y - 4, c.slate, 2);
+      p.rect(x + 90, 13, 6, 115, c.night);
+      p.rect(x + 90, 15, 1, 110, c.steel);
+    }
+    // The left bay weighs sacks. The brass tube opposite feeds the little pigeonholes.
+    for (const x of [-158, -145]) p.line(x, 14, x - 5, 134, c.night, 3);
+    for (let y = 22; y < 132; y += 11) {
+      const x = -158 - Math.round((y - 14) / 24);
+      p.line(x, y, x + 14, y - 1, c.steel, 2);
+    }
+    p.rect(-100, 17, 2, 27, c.night);
+    p.oval(-99, 49, 11, 11, c.night); p.oval(-99, 49, 8, 8, '#c8b99b');
+    p.path([-106, 48, -104, 44, -100, 42], c.copper);
+    p.line(-99, 50, -96, 44, c.brick, 2);
+    p.path([-99, 59, -99, 68, -94, 70, -92, 67], c.night, 2);
+    p.path([379, 13, 379, 50, 370, 58, 352, 58, 346, 65, 346, 82], c.night, 6);
+    p.path([380, 15, 380, 50, 371, 59, 353, 59, 347, 65, 347, 81], '#ab8770', 3);
+    for (const y of [28, 42]) p.rect(378, y, 7, 2, c.slate);
+    p.poly([340, 79, 355, 78, 354, 87, 349, 90, 341, 86], c.slate, c.night);
+    p.rect(421, 45, 63, 54, c.night);
+    for (let row = 0; row < 3; row++) for (let col = 0; col < 4; col++) {
+      const x = 423 + col * 15, y = 48 + row * 16;
+      p.rect(x, y, 13, 13, (row + col) % 3 ? c.plum : c.slate);
+      p.rect(x + 3, y + 7, 6, 2, (row + col) % 3 ? '#ad947c' : c.steel);
+      p.line(x, y + 13, x + 14, y + 13, '#807779');
+    }
+    A.arch(p, -14, 23, 96, 107, c.steel, c.green);
+    p.poly([-10, 48, 20, 33, 48, 32, 62, 45, 67, 97, -8, 120], c.aqua);
+    p.poly([-8, 67, 26, 62, 41, 65, 65, 60, 65, 105, -8, 121], c.ice);
+    p.line(-9, 67, 66, 62, c.green, 3);
+    // The wall meets the same sloping floor at either side of the original view.
+    p.poly(
+      [
+        left,
+        139,
+        -113,
+        137,
+        0,
+        130,
+        123,
+        108,
+        228,
+        105,
+        320,
+        124,
+        439,
+        135,
+        right,
+        139,
+        right,
+        bottom + 1,
+        left,
+        bottom + 1,
+      ],
+      '#575168',
+    );
+    p.path([left, 144, -113, 141, 0, 133], c.navy, 2);
+    p.path([320, 128, 439, 139, right, 144], c.navy, 2);
+    for (const [x, dx] of [
+      [9, -2.54],
+      [128, -1.63],
+      [233, -0.49],
+    ]) {
+      p.line(x, 179, x + (bottom - 179) * dx, bottom, c.navy, 2);
+    }
+    for (let y = 199; y < bottom; y += 39) {
+      p.path([left, y + 13, -72, y + 5, 87, y, 254, y - 5, 417, y, right, y + 8], '#4a495d', 2);
+      for (let x = left + (Math.abs(y * 3) % 41); x < right; x += 79)
+        p.path([x, y + 11, x + 13, y + 9, x + 22, y + 9], '#686476');
+    }
+    p.poly([-95, 155, -74, 144, 0, 139, 82, 124, 18, 152, -7, 159], '#78828a');
+    for (const [x, y, w, h] of [
+      [-95, 101, 44, 33],
+      [-84, 83, 30, 20],
+      [-50, 111, 24, 22],
+      [-11, 110, 37, 27],
+      [-8, 93, 28, 19],
+      [337, 108, 48, 29],
+      [347, 87, 30, 22],
+      [401, 121, 29, 16],
+    ]) {
+      A.crate(p, x, y, w, h);
+      label(p, x + 3, y + 5, Math.min(15, w - 8));
+    }
+    // A parcel barrow in the foreground crosses the lower right corner of the shot.
+    p.poly([249, 195, 260, 180, 279, 162, 302, 156, 327, 151, 348, 164, 346, 193, 282, 214], c.night);
+    p.path([252, 195, 282, 207, 344, 188], c.slate, 2);
+    p.line(282, 207, 282, 215, c.ink, 3);
+    for (const x of [270, 329]) {
+      p.oval(x, x === 270 ? 209 : 197, 7, 8, c.ink);
+      p.oval(x, x === 270 ? 209 : 197, 2, 3, c.steel);
+    }
+    // The returning mail trolley passes a spare reel of braided tow line.
+    p.path(
+      [44, 254, 62, 266, 87, 268, 103, 264, 101, 258, 93, 257, 90, 261, 105, 270, 134, 273, 153, 268],
+      c.night,
+      3,
+    );
+    p.path(
+      [44, 253, 62, 265, 87, 267, 102, 263, 100, 258, 93, 258, 92, 261, 106, 269, 134, 272, 153, 267],
+      '#9e897e',
+    );
+    p.oval(31, 259, 23, 4, '#494859');
+    p.oval(30, 239, 19, 6, c.night);
+    p.rect(13, 239, 34, 16, c.rust);
+    for (let y = 241; y < 255; y += 3) p.path([14, y, 22, y + 2, 37, y + 2, 46, y], c.copper);
+    p.oval(30, 255, 19, 5, '#695352');
+    p.oval(30, 238, 20, 6, '#a18470');
+    p.oval(30, 238, 13, 3, '#76625e');
+    p.oval(30, 238, 4, 2, c.night);
+    cageRoom(p);
+  }
+
   function cageRoom(p) {
     p.rect(0, 0, 320, 180, c.slate);
     p.poly([0, 6, 110, 8, 118, 107, 0, 145], c.navy);
@@ -311,8 +514,8 @@
     });
   }
 
-  function parcelRescue(p, t) {
-    p.image(A.plate('dispatch-film-parcel-room', 320, 180, cageRoom), 0, 0);
+  function parcelRescue(p, t, view) {
+    scenery(p, 'sorting-loft', view, sortingLoft);
     dust(p, t, 84, 28, 37, 76, c.ice, 7);
     const sheen = Math.round(Math.sin(t * 1.25) * 2);
     p.path([151, 60 + sheen, 158, 59 + sheen, 167, 59 + sheen, 171, 58 + sheen], '#eac28c');
@@ -464,7 +667,15 @@
     A.crate(p, 361, 94, 29, 20); label(p, 366, 98, 12);
   }
 
-  function water(p, t, pan) {
+  function water(p, t, pan, view) {
+    if (view.left < -28) {
+      const x = -108 - Math.round(pan * 0.32), y = 115 + Math.round(Math.sin(t * 1.7));
+      p.poly([x, y, x + 43, y, x + 48, y - 3, x + 45, y + 4, x + 35, y + 7, x + 7, y + 7], c.navy);
+      p.path([x + 2, y + 1, x + 39, y + 1, x + 45, y - 1], '#b59482');
+      p.poly([x + 11, y - 1, x + 13, y - 8, x + 26, y - 9, x + 32, y - 2], '#668486', c.slate);
+      p.path([x + 35, y, x + 35, y - 12, x + 41, y - 15], c.plum, 2);
+      p.rect(x + 7, y + 9, 26, 1, '#aabaaa');
+    }
     for (let band = 0; band < 10; band++) {
       const y = 103 + band * 3, width = 5 + band * 2;
       const x = 243 - pan * 0.26 + Math.sin(t * 1.5 + band * 2.2) * (3 + band);
@@ -475,6 +686,158 @@
       const x = 8 + i * 29 - pan * 0.3 + Math.sin(t + i * 2) * 4;
       p.rect(x, 109 + i % 5 * 4, 4 + i % 4, 1, i % 2 ? c.ice : '#aec6ad');
     }
+    for (let y = 211; y < view.bottom; y += 19) {
+      const drift = Math.sin(t * 0.8 + y * 0.2) * 4 - pan * 0.2;
+      for (let x = Math.floor((view.left - 20) / 81) * 81 + y % 37; x < view.right; x += 81) {
+        const ripple = 10 + (Math.abs(x * 3 + y) % 13);
+        p.rect(x + drift, y, ripple, 1, '#82a4a1');
+        p.rect(x + drift + ripple + 3, y - 1, 3, 1, '#9bb4a5');
+      }
+    }
+  }
+
+  function canalSky(p, v) {
+    const { left, right, top, bottom } = v,
+      width = right - left;
+    p.rect(left, top, width, bottom - top, '#d18d88');
+    p.rect(left, 127, width, Math.max(0, bottom - 127), '#648a90');
+    for (const [y, height, color] of [
+      [23, 23, '#e0a08a'],
+      [46, 20, c.peach],
+      [66, 29, '#efbf8b'],
+      [94, 4, c.plum],
+      [98, 5, '#a9bdac'],
+      [103, 16, '#91b1a3'],
+      [119, 8, '#7fa69c'],
+      [127, 28, '#6c9993'],
+    ])
+      p.rect(left, y, width, height, color);
+    for (let y = -29; y > top - 42; y -= 49) {
+      const n = Math.round((-y - 29) / 49),
+        tint = ['#be8289', '#aa7d8b', '#92798b', '#79738a'];
+      p.rect(
+        left,
+        Math.max(top, y - 48),
+        width,
+        Math.max(0, y - Math.max(top, y - 48)),
+        tint[Math.min(n, 3)],
+      );
+      for (let x = Math.floor((left - 75) / 149) * 149 + ((n * 37) % 139); x < right; x += 149) {
+        if ((Math.abs(Math.round(x / 149)) + n) % 4 !== 1)
+          A.cloudStrip(
+            p,
+            x,
+            y - 10 - (Math.abs(Math.round(x / 149)) % 3) * 5,
+            41 + (Math.abs(x) % 32),
+            '#a27f8e',
+            '#bf9397',
+          );
+        p.rect(x + 43, y + 2, 21, 1, tint[Math.min(n, 3)]);
+        p.rect(x + 61, y + 1, 14, 1, tint[Math.min(n, 3)]);
+      }
+    }
+    for (let x = Math.floor((left - 70) / 56) * 56; x < right; x += 56) {
+      const bay = Math.abs(Math.floor(x / 56)),
+        roof = 66 + ((bay * 13) % 17);
+      p.poly([x, 83, x + 17, roof, x + 34, roof + 1, x + 57, 78, x + 57, 95, x, 95], '#ae858b');
+      p.rect(x + 1, 84, 49, 10, '#927783');
+      p.poly([x + 4, 83, x + 12, 74, x + 21, 74, x + 21, 83, x + 31, 73, x + 40, 73, x + 40, 84], '#927783');
+      p.rect(x + 45, 70 - (bay % 6), 4, 20, '#8a7583');
+      p.rect(x + 45, 69 - (bay % 6), 5, 2, '#b18b88');
+      p.rect(x + 10, 87, 8, 2, '#c99684');
+      p.rect(x + 26, 86, 7, 2, '#c99684');
+      p.rect(x + 15, 113 + (bay % 7), 17, 1, '#b7c5ac');
+    }
+    A.cloudStrip(p, -106, 37, 79, '#be8792', '#e8ad98');
+    A.cloudStrip(p, 422, 26, 88, '#c08791', '#e7a693');
+    morning(p);
+  }
+
+  function canalBridge(p) {
+    trestle(p);
+    const last = 515;
+    p.poly([419, deckY(419) - 1, last, deckY(last) - 1, last, deckY(last) + 5, 419, deckY(419) + 5], c.navy);
+    p.line(419, deckY(419), last, deckY(last), '#c79784');
+    for (const [a, b] of [
+      [419, 468],
+      [468, last],
+    ]) {
+      const mid = (a + b) / 2;
+      p.path([a, deckY(a) - 2, mid, deckY(mid) - 21, b, deckY(b) - 2], c.plum, 3);
+      p.line(mid, deckY(mid) - 20, mid, deckY(mid) - 4, c.violet, 2);
+      p.poly([b - 4, deckY(b) + 4, b + 3, deckY(b) + 4, b + 5, 120, b - 7, 120], '#686978', c.plum);
+    }
+    p.poly([509, 45, 535, 33, 557, 34, 568, 43, 568, 88, 508, 88], c.violet, c.plum);
+    p.rect(515, 50, 22, 34, c.plum);
+    p.rect(540, 45, 18, 10, '#c49483');
+    p.path([504, 46, 533, 31, 558, 31, 573, 43], c.navy, 2);
+  }
+
+  function canalWharf(p, v) {
+    const left = Math.min(-200, v.left),
+      right = Math.max(550, v.right),
+      bottom = Math.max(215, v.bottom);
+    const deck = [
+      left,
+      149,
+      -130,
+      146,
+      0,
+      136,
+      85,
+      129,
+      157,
+      128,
+      222,
+      133,
+      255,
+      132,
+      404,
+      111,
+      513,
+      101,
+      right,
+      98,
+    ];
+    const shifted = (y) => deck.map((n, i) => (i % 2 ? n + y : n));
+    const face = (depth, color) => {
+      const lower = [];
+      for (let i = deck.length - 2; i >= 0; i -= 2) lower.push(deck[i], deck[i + 1] + depth);
+      p.poly([...deck, ...lower], color);
+    };
+    face(85, '#484a60');
+    face(15, '#ad8a7b');
+    p.path(deck, c.navy, 2);
+    p.path(shifted(4), '#c8a485', 3);
+    p.path(shifted(17), c.ink, 2);
+    p.path(shifted(19), c.copper);
+    p.path(shifted(84), c.night, 4);
+    p.path(shifted(89), '#7e9999', 2);
+    // Under the quay the girders recede behind a row of mooring piles.
+    for (let x = Math.floor((left - 30) / 68) * 68 + 17; x < right; x += 68) {
+      const y = x < 0 ? 168 + Math.min(13, -x * 0.07) : x > 250 ? Math.max(135, 163 - (x - 250) * 0.12) : 166;
+      const waterline = Math.min(bottom, y + 103 + (Math.abs(x) % 17));
+      p.poly([x, y + 5, x + 7, y + 4, x + 10, waterline, x - 1, waterline], '#3e4359');
+      p.line(x + 3, y + 6, x + 2, waterline, '#606275', 2);
+      for (let row = y + 27; row < waterline - 25; row += 46) {
+        p.line(x + 8, row + 28, x + 61, row - 8, '#40445b', 3);
+        p.line(x + 8, row + 27, x + 62, row - 9, '#565a70');
+        p.rect(x + 1, row, 4, 3, c.night);
+        p.rect(x + 2, row, 2, 1, c.steel);
+      }
+      p.rect(x - 5, waterline + 1, 19, 1, '#a0b4a5');
+      for (let i = 0; i < 7; i++)
+        p.rect(x - 1 + Math.round(Math.sin(i * 2) * 3), waterline + 4 + i * 3, 9 - i, 1, '#577a84');
+    }
+    for (const [x, y, w, h] of [
+      [-91, 121, 31, 22],
+      [-69, 128, 34, 20],
+      [451, 90, 35, 19],
+    ]) {
+      A.crate(p, x, y, w, h);
+      label(p, x + 4, y + 5, 14);
+    }
+    quay(p);
   }
 
   function sorter(p, t, pan) {
@@ -505,13 +868,13 @@
     }
   }
 
-  function bridgeEscape(p, t) {
+  function bridgeEscape(p, t, view) {
     const pan = Math.round(57 * ease(4.45, 7.93, t));
-    p.image(A.plate('dispatch-film-canal-dawn', 404, 180, morning), -Math.round(pan * 0.17), 0);
-    water(p, t, pan);
-    p.image(A.plate('dispatch-film-bridge-truss', 420, 132, trestle), -Math.round(pan * 0.53), 0);
+    scenery(p, 'canal-sky', view, canalSky, Math.round(pan * 0.17));
+    water(p, t, pan, view);
+    scenery(p, 'bridge-iron', view, canalBridge, Math.round(pan * 0.53));
     sorter(p, t, pan);
-    p.image(A.plate('dispatch-film-quay', 404, 180, quay), -pan, 0);
+    scenery(p, 'quay', view, canalWharf, pan);
     let nx = 149 + 165 * ease(4.28, 7.95, t);
     const tread = ease(4.24, 4.73, t), point = ease(1.39, 1.94, t) - ease(3.68, 4.22, t);
     const attention = ease(2.52, 2.64, t) - ease(2.84, 3.16, t);
@@ -538,33 +901,46 @@
     A.dog(p, 'pip', px - pan, py, 0.79, 1, pose, phase, t);
     // The near roof and mooring chain move fastest in the pan.
     const fg = Math.round(pan * 1.22);
+    p.poly([view.left - 2, -44, -86 - fg, -54, 65 - fg, -31, 87 - fg, 0, 3 - fg, 28, -63 - fg, 37, view.left - 2, 39], c.night);
+    p.path([-87 - fg, -50, 61 - fg, -28, 84 - fg, -1], c.slate, 2);
+    p.path([view.left - 2, 33, -63 - fg, 31, 3 - fg, 23], c.slate);
     p.poly([-fg, 0, 87 - fg, 0, 76 - fg, 8, 27 - fg, 14, 3 - fg, 28, -fg, 28], c.night);
     p.path([-fg, 20, 25 - fg, 11, 76 - fg, 4], c.slate);
     p.path([4 - fg, 163, 21 - fg, 172, 39 - fg, 176, 60 - fg, 172, 72 - fg, 165], c.night, 2);
     for (const bx of [3, 72, 366]) {
       const sx = bx - fg;
+      p.poly([sx - 4, 179, sx + 3, 179, sx + 4, 184, sx + 7, 186, sx + 6, 188, sx - 8, 188, sx - 8, 185, sx - 5, 183], c.night, c.ink);
       p.poly([sx - 4, 180, sx - 4, 164, sx - 6, 162, sx - 4, 158, sx + 3, 158, sx + 5, 161, sx + 2, 164, sx + 3, 180], c.night, c.ink);
       p.rect(sx - 3, 159, 6, 2, c.steel);
     }
   }
 
   let interiorFrame, interiorPen;
-  window.DispatchFilms.rescue = function rescue(p, part, time) {
+  window.DispatchFilms.rescue = function rescue(p, part, time, view = original) {
     const t = limit(Number.isFinite(time) ? time : 0, 0, 8);
-    if (part === 1) bridgeEscape(p, t);
+    if (part === 1) bridgeEscape(p, t, view);
     else {
-      if (!interiorFrame) {
-        interiorFrame = document.createElement('canvas');
-        interiorFrame.width = 320; interiorFrame.height = 180;
-        interiorPen = new A.PixelPen(interiorFrame);
-      }
-      parcelRescue(interiorPen, t);
+      if (!interiorFrame) interiorFrame = document.createElement('canvas');
+      const left = Math.floor(view.left) - 2,
+        top = Math.floor(view.top) - 2;
+      const right = Math.ceil(view.right) + 2,
+        bottom = Math.ceil(view.bottom) + 2;
+      const width = right - left,
+        height = bottom - top;
+      if (interiorFrame.width !== width) interiorFrame.width = width;
+      if (interiorFrame.height !== height) interiorFrame.height = height;
+      if (!interiorPen) interiorPen = new A.PixelPen(interiorFrame);
+      interiorPen.g.setTransform(1, 0, 0, 1, -left, -top);
+      interiorPen.g.imageSmoothingEnabled = false;
+      parcelRescue(interiorPen, t, { left, top, right, bottom });
       // Pull in on the resisting latch, then widen just in time for the dog to unfold.
       const zoom = 1 + 0.23 * (ease(0.18, 1.53, t) - ease(2.36, 3.61, t)) + 0.22 * ease(6.08, 7.88, t);
-      const w = Math.round(320 / zoom), h = Math.round(180 / zoom);
-      const sx = Math.round((320 - w) * (t > 5.8 ? 0.17 : 0.37));
-      const sy = Math.round((180 - h) * (t > 5.8 ? 0.81 : 0.66));
-      p.g.drawImage(interiorFrame, sx, sy, w, h, 0, 0, 320, 180);
+      const sx = Math.round((320 - 320 / zoom) * (t > 5.8 ? 0.17 : 0.37));
+      const sy = Math.round((180 - 180 / zoom) * (t > 5.8 ? 0.81 : 0.66));
+      p.g.save();
+      p.g.scale(zoom, zoom);
+      p.g.drawImage(interiorFrame, left - sx, top - sy);
+      p.g.restore();
     }
   };
 })();

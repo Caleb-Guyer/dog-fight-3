@@ -330,9 +330,6 @@
   font: 400 clamp(19px, 2.4vw, 28px)/1.1 var(--pixel);
 }
 #story-cover {
-  width: 100%;
-  height: auto;
-  aspect-ratio: 16/9;
   background: #202332;
   display: block;
 }

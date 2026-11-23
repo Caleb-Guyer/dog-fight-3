@@ -10,6 +10,757 @@
     dusk = '#8a7188',
     blueGlass = '#72868b';
   const tile = (name, w, h, paint) => A.plate('film-opening/' + name, w, h, paint);
+  const nativeView = { left: 0, top: 0, right: 320, bottom: 180 };
+  const expandedSets = new Map();
+
+  function isExpanded(v) {
+    return v.left < 0 || v.top < 0 || v.right > 320 || v.bottom > 180;
+  }
+
+  function set(p, v, original, continuation) {
+    if (!isExpanded(v)) {
+      p.image(original(), 0, 0);
+      return;
+    }
+    // Cache painted scenery in world pixels. Only scenery for the two most recent
+    // orientations of a set is retained, regardless of window resize events.
+    const left = Math.min(0, Math.floor(v.left / 32) * 32);
+    const top = Math.min(0, Math.floor(v.top / 32) * 32);
+    const right = Math.max(320, Math.ceil(v.right / 32) * 32);
+    const bottom = Math.max(180, 180 + Math.ceil((v.bottom - 180) / 32) * 32);
+    const key = original.name + (bottom - top > right - left ? '/tall' : '/wide');
+    let cached = expandedSets.get(key);
+    if (!cached || left < cached.left || top < cached.top || right > cached.right || bottom > cached.bottom) {
+      const canvas = document.createElement('canvas');
+      canvas.width = right - left;
+      canvas.height = bottom - top;
+      const pen = new A.PixelPen(canvas);
+      pen.g.translate(-left, -top);
+      continuation(pen, { left, top, right, bottom });
+      pen.image(original(), 0, 0);
+      cached = { canvas, left, top, right, bottom };
+      expandedSets.set(key, cached);
+    }
+    p.image(cached.canvas, cached.left, cached.top);
+  }
+
+  function outsideFrame(p, v, paint) {
+    if (!isExpanded(v)) return;
+    const g = p.g;
+    g.save();
+    g.beginPath();
+    g.rect(v.left - 1, v.top - 1, v.right - v.left + 2, v.bottom - v.top + 2);
+    g.rect(0, 0, 320, 180);
+    g.clip('evenodd');
+    paint();
+    g.restore();
+  }
+
+  function band(p, b, y0, y1, color) {
+    p.rect(b.left, y0, b.right - b.left, Math.max(0, y1 - y0), color);
+  }
+
+  function roofTruss(p, x, y, w, h, iron, edge) {
+    p.path([x, y, x + w, y - 5], iron, 5);
+    p.path([x, y + h, x + w, y + h - 5], iron, 5);
+    p.path(
+      [x + 2, y + h, x + w * 0.25, y - 1, x + w * 0.5, y + h - 3, x + w * 0.75, y - 4, x + w - 2, y + h - 5],
+      iron,
+      4,
+    );
+    p.path([x + 2, y + h - 1, x + w * 0.25, y - 2, x + w * 0.5, y + h - 4], edge);
+    for (const f of [0, 0.25, 0.5, 0.75, 1]) p.rect(x + w * f + 2, y + h - 2 - 5 * f, 2, 1, edge);
+  }
+
+  function drain(p, x, y, w) {
+    p.poly([x, y, x + w, y - 4, x + w + 11, y + 2, x + 9, y + 7], c.night);
+    p.path([x, y, x + w, y - 4, x + w + 8, y], c.slate);
+    for (let i = 6; i < w - 1; i += 6) p.line(x + i, y + 1 - (i * 4) / w, x + i + 5, y + 4 - (i * 4) / w, c.plum, 2);
+  }
+
+  function sortingCabinet(p, x, y, w, h) {
+    p.rect(x - 2, y - 3, w + 4, h + 6, c.ink);
+    p.rect(x, y, w, h, c.brick);
+    p.rect(x + 2, y + 1, w - 4, 2, c.copper);
+    const cols = Math.max(2, Math.floor(w / 20)),
+      rows = Math.max(2, Math.floor(h / 18));
+    const dx = (w - 5) / cols,
+      dy = (h - 5) / rows;
+    for (let iy = 0; iy < rows; iy++)
+      for (let ix = 0; ix < cols; ix++) {
+        const a = px(x + 3 + ix * dx),
+          b = px(y + 4 + iy * dy);
+        p.rect(a, b, dx - 3, dy - 3, iy % 3 === 1 ? c.plum : c.night);
+        if ((ix * 3 + iy) % 4 !== 1) {
+          p.rect(a + 2, b + dy - 8, dx - 7, 3, (ix + iy) % 3 ? c.sand : c.steel);
+          p.path([a + 4, b + dy - 8, a + dx * 0.45, b + dy - 6, a + dx - 7, b + dy - 8], c.brick);
+        }
+      }
+    p.rect(x - 4, y + h, w + 8, 3, c.night);
+    p.rect(x - 3, y + h, w + 6, 1, c.copper);
+  }
+
+  function platformEnd(p, b) {
+    p.rect(b.left, b.top, b.right - b.left, b.bottom - b.top, dusk);
+    if (b.top < 0) {
+      band(p, b, b.top, -169, c.navy);
+      band(p, b, -169, -102, '#66667e');
+      band(p, b, -102, -45, '#796b83');
+      for (let j = Math.floor(b.left / 67); j * 67 < b.right; j++) {
+        const x = j * 67 + 22,
+          y = -195 + ((Math.abs(j) * 37) % 24);
+        p.rect(x, y, 2, 1, c.smoke);
+        p.rect(x + 27, y - 28, 1, 1, c.sand);
+      }
+      A.cloudStrip(p, 37, -200, 79, '#63677e', '#8b7b88');
+      A.cloudStrip(p, 201, -135, 92, '#8d7886', '#a08992');
+    }
+    band(p, b, 28, 51, rose);
+    band(p, b, 51, 76, c.peach);
+    band(p, b, 76, 116, c.sand);
+    for (const [x, y, w] of [
+      [-283, 20, 103],
+      [-136, 55, 69],
+      [341, 35, 73],
+      [453, 17, 96],
+      [566, 61, 65],
+    ])
+      A.cloudStrip(p, x, y, w, '#a87580', '#ce9688');
+    A.city(p, 110, '#8e7c83', '#987b7d', '#c39482');
+    for (let i = Math.floor(b.left / 39) - 1; i * 39 < b.right; i++) {
+      const x = i * 39 + 5;
+      if (x > -29 && x < 330) continue;
+      const n = Math.abs(i * 19 + 29),
+        w = 22 + (n % 13),
+        y = 75 + (n % 19);
+      p.rect(x, y, w, 110 - y, '#8e7c83');
+      p.poly([x - 3, y, x + 4, y - 5, x + w - 5, y - 5, x + w + 3, y], '#8e7c83');
+      p.rect(x + 4, y - 12, 3, 8, '#8e7c83');
+      for (let col = x + 4; col < x + w - 2; col += 7) p.rect(col, y + 4, 3, 3, '#c39482');
+    }
+    // Signal cabin on one approach, a high water tank and ladder on the other.
+    p.poly([-152, 107, -149, 72, -158, 70, -130, 56, -95, 67, -100, 72, -102, 107], c.plum);
+    p.poly([-153, 70, -130, 58, -99, 67, -101, 69, -132, 62], c.copper);
+    p.rect(-144, 74, 36, 15, c.steel);
+    for (const x of [-139, -130, -119]) p.rect(x, 74, 2, 15, c.plum);
+    p.rect(-150, 93, 49, 3, c.violet);
+    p.rect(-131, 95, 9, 13, c.night);
+    p.poly([369, 60, 378, 52, 410, 51, 423, 56, 422, 80, 414, 85, 376, 85, 369, 79], c.violet);
+    p.path([367, 59, 378, 51, 409, 49, 424, 55], c.smoke, 2);
+    p.path([370, 72, 382, 76, 411, 75, 422, 70], c.plum, 2);
+    p.path([377, 82, 373, 111, 411, 84, 418, 109], c.plum, 3);
+    p.path([415, 57, 418, 107], c.smoke);
+    p.path([419, 56, 422, 107], c.smoke);
+    for (let y = 62; y < 108; y += 6) p.rect(415 + (y - 57) * 0.06, y, 6, 1, c.smoke);
+    p.path(
+      [b.left, 70, -125, 72, -67, 59, 0, 65, 81, 77, 135, 76, 200, 82, 278, 76, 320, 70, 371, 61, 441, 72, b.right, 68],
+      c.violet,
+    );
+    band(p, b, 110, 140, c.plum);
+    band(p, b, 113, 117, c.rust);
+    band(p, b, 117, 119, c.navy);
+    for (let x = Math.floor(b.left / 13) * 13 - 2; x < b.right; x += 13)
+      p.path([x, 121, x + 5, 123, x + 11, 123], c.brick, 2);
+    band(p, b, 122, 124, c.ochre);
+    band(p, b, 126, 128, c.ink);
+    band(p, b, 130, 133, c.slate);
+    band(p, b, 133, b.bottom, c.plum);
+    p.poly([b.left, 147 - b.left * 0.08, 141, 136, 304, 136, 213, 146, 0, 165, b.left, 165 - b.left * 0.09], c.rust);
+    p.poly([b.left, 152 - b.left * 0.08, 173, 138, 266, 137, 179, 145, 0, 162, b.left, 162 - b.left * 0.09], c.copper);
+    p.path([b.left, 168 - b.left * 0.11, 0, 168, 224, 145, 319, 142, b.right, 142 - (b.right - 319) * 0.03], c.ink, 2);
+    // Tracks of light in the paving widen toward the camera.
+    for (const y of [221, 252, 291, 334, 393, 471, 572]) {
+      p.path([b.left, y - b.left * 0.11, 119, y - 13, b.right, y - 13 - (b.right - 119) * 0.055], c.night, 2);
+      for (let j = Math.floor(b.left / 95); j * 95 < b.right; j++) {
+        const x = j * 95 + ((y * 3) % 66),
+          yy = y - 6 - x * 0.06;
+        p.path([x, yy, x + 9, yy - 2, x + 25, yy - 2], c.brick);
+      }
+    }
+    p.path([29, 178, 5, 230, -27, 273, -55, 324], c.night);
+    p.path([211, 187, 170, 243, 132, 309, 43, 461], c.navy, 2);
+    drain(p, 142, 247, 42);
+    drain(p, -119, 178, 33);
+    drain(p, 328, 186, 45);
+    // The canopy's copper lip continues down its western end. Its pitched roof is visible above the clock.
+    p.poly(
+      [b.left, -63, b.right, -111, b.right, -3, 320, 5, 227, 9, 98, 16, 80, 20, 0, 25, b.left, 25 - b.left * 0.06],
+      c.ink,
+    );
+    p.poly([b.left, -62, b.right, -110, b.right, -64, b.left, -12], c.navy);
+    p.poly([b.left, -62, 249, -88, 321, -89, b.right, -108, b.right, -101, 322, -82, 248, -81, b.left, -54], c.slate);
+    for (let x = Math.floor(b.left / 51) * 51 - 51; x < b.right; x += 51)
+      p.path([x, -61 - x * 0.057, x + 22, -18 - x * 0.057], c.night, 2);
+    for (let x = Math.floor(b.left / 121) * 121; x < b.right; x += 121)
+      roofTruss(p, x, -45 - x * 0.056, 121, 24, c.night, c.slate);
+    p.path(
+      [b.left, 24 - b.left * 0.06, 0, 24, 85, 18, 226, 8, 319, 5, b.right, 5 - (b.right - 319) * 0.035],
+      c.copper,
+      2,
+    );
+    p.poly([-4, 24, 1, 23, 1, 48, -2, 42], c.ink);
+    p.path([-215, 43, -197, 34, -180, 31, -164, 30], c.night, 3);
+    // The original foreground silhouettes are the corners of two parked parcel barrows.
+    p.poly(
+      [-116, 185, -68, 176, 0, 169, 24, 162, 39, 164, 49, 171, 74, 177, 99, 180, 105, 183, 99, 208, 1, 224, -103, 222],
+      c.ink,
+    );
+    p.path([-98, 196, -12, 187, 65, 181], c.slate, 2);
+    p.poly([-95, 201, 0, 192, 95, 185, 93, 203, 0, 218, -93, 215], c.navy);
+    p.path([-92, 210, -4, 207, 70, 194], c.plum, 2);
+    p.oval(-61, 225, 9, 9, c.ink);
+    p.oval(-61, 225, 4, 4, c.slate);
+    p.oval(67, 211, 7, 7, c.ink);
+    p.oval(67, 211, 3, 3, c.slate);
+    p.poly(
+      [246, 204, 256, 180, 263, 166, 279, 157, 301, 156, 320, 150, 365, 143, 385, 147, 392, 177, 381, 186, 282, 210],
+      c.ink,
+    );
+    p.poly([259, 190, 318, 183, 340, 176, 363, 160, 382, 159, 384, 176, 281, 202], c.navy);
+    p.path([252, 198, 279, 171, 362, 149], c.plum, 2);
+    p.path([281, 205, 377, 183], c.slate, 2);
+    p.oval(294, 207, 8, 8, c.ink);
+    p.oval(294, 207, 4, 4, c.slate);
+    p.oval(372, 190, 6, 6, c.ink);
+    p.oval(372, 190, 2, 2, c.slate);
+  }
+
+  function clerestory(p, b, high, lit) {
+    // Steel glazing on the pitched roof. Leaded panes, chains and the deep cornice
+    // above the lens supply scale when the phone reveals the top of the hall.
+    band(p, b, b.top, 0, c.night);
+    p.poly(
+      [
+        b.left,
+        -156 - b.left * 0.08,
+        b.right,
+        -156 - b.right * 0.08,
+        b.right,
+        -45 - b.right * 0.045,
+        b.left,
+        -45 - b.left * 0.045,
+      ],
+      c.plum,
+    );
+    for (let i = Math.floor((b.left - 25) / 91) - 1; i * 91 < b.right + 25; i++) {
+      const x = i * 91 + 16,
+        y = high - x * 0.048,
+        w = 65;
+      p.poly([x, y + 15, x + 16, y - 11, x + w, y - 13, x + w - 6, y + 36, x + 2, y + 39], c.ink);
+      p.poly([x + 4, y + 16, x + 19, y - 7, x + w - 5, y - 9, x + w - 11, y + 31, x + 6, y + 34], lit);
+      p.poly([x + 8, y + 17, x + 23, y - 5, x + 36, y - 6, x + 12, y + 29], lit === c.steel ? blueGlass : c.copper);
+      p.path([x + 20, y + 35, x + 28, y - 8], c.plum, 3);
+      p.path([x + 4, y + 12, x + w - 4, y + 9], c.plum, 3);
+      p.path([x + 1, y + 38, x + w - 5, y + 35], c.slate, 2);
+    }
+    for (let i = Math.floor(b.left / 152) - 1; i * 152 < b.right; i++)
+      roofTruss(p, i * 152, -60 - i * 7, 152, 25, c.ink, c.slate);
+    p.path([b.left, -161 - b.left * 0.05, b.right, -161 - b.right * 0.05], c.slate, 5);
+    p.path([b.left, -182 - b.left * 0.06, b.right, -182 - b.right * 0.06], c.navy, 3);
+    for (let i = Math.floor(b.left / 126) - 1; i * 126 < b.right; i++) {
+      const x = i * 126 + 37,
+        y = -190 - x * 0.055;
+      p.path([x - 8, b.top, x + 19, y, x + 36, y + 21], c.navy, 4);
+      p.rect(x + 25, y + 4, 3, 2, c.slate);
+    }
+  }
+
+  function tileFloor(p, b, tint, edge) {
+    for (const y of [220, 253, 293, 347, 430, 535, 665]) {
+      p.path([b.left, y - b.left * 0.08, 159, y - 15, b.right, y - 15 - (b.right - 159) * 0.1], edge, 2);
+      p.path([b.left, y + 3 - b.left * 0.08, 159, y - 12, b.right, y - 12 - (b.right - 159) * 0.1], tint);
+      for (let j = Math.floor(b.left / 84); j * 84 < b.right; j++) {
+        const x = j * 84 + (y % 43),
+          yy = y - 9 - x * 0.07;
+        p.path([x, yy, x + 8, yy - 2, x + 14, yy - 2], tint);
+      }
+    }
+    for (const x of [-224, -140, 6, 133, 267, 420, 570]) {
+      const x2 = 162 + (x - 162) * (1 + (b.bottom - 182) / 170);
+      p.path([x, Math.max(191, 203 - x * 0.08), x2, b.bottom + 9], edge);
+    }
+  }
+
+  function bellRoom(p, b) {
+    p.rect(b.left, b.top, b.right - b.left, b.bottom - b.top, c.navy);
+    clerestory(p, b, -111, c.steel);
+    // The lifting line carries the bell's weight up to a high lattice gallery.
+    p.path([-42, -207, 68, -213, 148, -217], c.slate, 3);
+    p.path([-38, -218, 68, -224, 143, -228], c.navy, 2);
+    for (const i of [-29, 1, 31, 61, 91, 121]) p.path([i, -208 - i * 0.055, i + 2, -219 - i * 0.055], c.navy, 2);
+    p.path([98, -215, 98, -174, 102, -168, 101, -77], c.ink, 3);
+    p.path([103, -166, 103, -81], c.slate);
+    p.oval(100, -172, 7, 8, c.ink);
+    p.oval(100, -172, 4, 5, c.slate);
+    p.oval(100, -172, 1, 2, c.rust);
+    p.poly([b.left, 30 - b.left * 0.078, b.right, 5 - (b.right - 320) * 0.08, b.right, 132, b.left, 148], c.plum);
+    const windows = [-296, -237, -178, -119, -60, 9, 66, 125, 185, 246, 304, 364, 423, 484, 544, 605];
+    for (const x of windows) {
+      A.arch(p, x, 27, 57, 94, c.night, x < 185 ? c.copper : c.peach);
+      p.rect(x + 6, 79, 45, 37, x < 185 ? c.rust : clay);
+      p.poly([x + 8, 59, x + 26, 39, x + 39, 37, x + 10, 79], x < 185 ? c.ochre : c.sand);
+      p.rect(x + 25, 34, 3, 84, c.plum);
+      p.rect(x + 5, 66, 46, 3, c.brick);
+    }
+    band(p, b, 120, 132, c.plum);
+    band(p, b, 127, 131, c.ink);
+    p.poly(
+      [b.left, 136 - b.left * 0.022, b.right, 129 - (b.right - 320) * 0.022, b.right, b.bottom, b.left, b.bottom],
+      c.navy,
+    );
+    p.path([b.left, 153 - b.left * 0.047, 0, 153, 319, 138, b.right, 138 - (b.right - 319) * 0.047], c.slate, 2);
+    p.path([b.left, 181 - b.left * 0.108, 12, 180, 319, 147, b.right, 147 - (b.right - 319) * 0.108], c.plum, 2);
+    tileFloor(p, b, c.plum, c.night);
+    drain(p, 169, 210, 58);
+    drain(p, -92, 153, 33);
+    drain(p, 391, 159, 46);
+    p.poly(
+      [
+        b.left,
+        -24 - b.left * 0.05,
+        b.right,
+        -37 - b.right * 0.042,
+        b.right,
+        12 - (b.right - 320) * 0.065,
+        320,
+        12,
+        225,
+        18,
+        148,
+        18,
+        66,
+        27,
+        0,
+        29,
+        b.left,
+        29 - b.left * 0.06,
+      ],
+      c.ink,
+    );
+    p.path(
+      [b.left, 30 - b.left * 0.06, 0, 30, 150, 16, 225, 17, 319, 11, b.right, 11 - (b.right - 319) * 0.065],
+      c.copper,
+      2,
+    );
+    p.path([b.left, -15 - b.left * 0.05, b.right, -15 - b.right * 0.05], c.navy, 3);
+    // A manual hoist sits above the bell and follows its actual hanging bracket.
+    p.path([98, -75, 98, -17, 109, -10, 109, 12], c.ink, 3);
+    p.oval(98, -65, 12, 12, c.ink);
+    p.oval(98, -65, 9, 9, c.slate);
+    p.oval(98, -65, 4, 4, c.plum);
+    p.path([100, -76, 146, -69, 184, -47, 179, -25], c.rust, 3);
+    p.path([101, -78, 148, -71, 186, -47], c.ochre);
+    p.poly(
+      [b.left, 9 - b.left * 0.037, 0, 9, 172, 4, 193, 11, 192, 20, 70, 27, 0, 31, b.left, 31 - b.left * 0.06],
+      c.night,
+      c.ink,
+    );
+    p.path([b.left, 25 - b.left * 0.081, -13, 27, -4, 25], c.ochre, 2);
+    p.poly([-5, 7, -1, 6, 1, 10, 1, 30, -4, 32], c.ink);
+    p.path([-5, 9, -5, 25], c.slate);
+    sortingCabinet(p, -167, 56, 68, 49);
+    p.path([386, 17, 386, 90, 399, 101, 424, 101], c.night, 4);
+    p.path([388, 24, 388, 87], c.slate);
+    // Loading chest at the foot of the bell platform.
+    p.poly(
+      [-123, 205, -104, 191, -51, 181, 0, 168, 53, 151, 83, 151, 137, 180, 144, 183, 135, 227, 21, 249, -100, 247],
+      c.night,
+    );
+    p.poly([-94, 213, 27, 201, 133, 184, 130, 222, 21, 241, -91, 240], c.plum);
+    p.path([-107, 209, 19, 200, 108, 185], c.slate, 2);
+    p.path([26, 202, 26, 236, 125, 219], c.night, 3);
+    p.rect(73, 203, 13, 5, c.night);
+    p.rect(75, 202, 9, 2, c.copper);
+    A.crate(p, 365, 119, 47, 32);
+    A.crate(p, 403, 111, 56, 39);
+  }
+
+  function counterRoom(p, b) {
+    p.rect(b.left, b.top, b.right - b.left, b.bottom - b.top, c.navy);
+    clerestory(p, b, -127, c.copper);
+    // A suspended parcel sack waits on the overhead delivery rail.
+    p.path([b.left, -203 - b.left * 0.06, b.right, -203 - b.right * 0.06], c.ink, 5);
+    p.path([b.left, -204 - b.left * 0.06, b.right, -204 - b.right * 0.06], c.slate);
+    p.oval(76, -208, 5, 5, c.ink);
+    p.oval(76, -208, 2, 2, c.slate);
+    p.path([76, -207, 76, -198, 81, -194, 80, -187], c.slate, 2);
+    p.poly(
+      [
+        75, -188, 82, -188, 84, -184, 82, -180, 88, -171, 92, -154, 90, -145, 84, -142, 66, -142, 62, -147, 65, -166,
+        72, -178, 75, -182,
+      ],
+      c.plum,
+      c.ink,
+    );
+    p.path([72, -177, 80, -179, 84, -178], c.brick, 3);
+    p.path([66, -149, 70, -156, 72, -168], c.slate);
+    p.path([72, -144, 85, -144, 89, -149], c.brick, 2);
+    band(p, b, 21, 87, c.plum);
+    for (const x of [-265, -198, -135, -75, -18, 47, 118, 199, 267, 337, 406, 475, 545]) {
+      A.arch(p, x, 22, 51, 71, c.night, x < 120 ? clay : c.copper);
+      p.poly([x + 5, 53, x + 17, 34, x + 34, 31, x + 8, 74], x < 120 ? c.copper : c.sand);
+      p.rect(x + 24, 32, 3, 60, c.brick);
+      p.rect(x + 5, 58, 41, 3, c.brick);
+    }
+    band(p, b, 87, 97, c.night);
+    band(p, b, 88, 90, c.copper);
+    p.poly(
+      [
+        b.left,
+        99 - b.left * 0.04,
+        153,
+        92,
+        320,
+        96,
+        b.right,
+        96 + (b.right - 320) * 0.02,
+        b.right,
+        b.bottom,
+        b.left,
+        b.bottom,
+      ],
+      c.plum,
+    );
+    p.poly([b.left, 140 - b.left * 0.4, 93, 103, 161, 96, 82, 136, 0, 172, b.left, 172 - b.left * 0.44], c.rust);
+    p.poly([6, 145, 104, 111, 133, 108, 51, 141], c.copper);
+    p.path(
+      [b.left, 156 - b.left * 0.26, 0, 156, 136, 120, 319, 112, b.right, 112 - (b.right - 319) * 0.042],
+      c.navy,
+      2,
+    );
+    p.path(
+      [b.left, 174 - b.left * 0.28, 0, 174, 142, 134, 318, 127, b.right, 127 - (b.right - 318) * 0.043],
+      c.night,
+      2,
+    );
+    tileFloor(p, b, c.brick, c.navy);
+    drain(p, 166, 208, 47);
+    // A row of open pigeonholes ends in a shuttered parcel office.
+    sortingCabinet(p, -216, 35, 100, 65);
+    sortingCabinet(p, 409, 25, 111, 73);
+    p.rect(-94, 46, 24, 34, c.night);
+    p.rect(-92, 48, 20, 29, c.teal);
+    A.paw(p, -87, 55, c.sand);
+    p.path([-90, 70, -74, 70], c.green);
+    p.poly([139, 125, 199, 106, 319, 110, 411, 113, 444, 119, 443, 128, 319, 140, 210, 155, 139, 140], c.ink);
+    p.poly([141, 125, 202, 109, 319, 112, 411, 115, 435, 118, 319, 122, 213, 145], c.copper);
+    p.poly([140, 130, 211, 145, 319, 123, 437, 119, 437, 125, 319, 132, 214, 152, 141, 139], c.brick);
+    p.path([143, 128, 212, 144, 319, 122, 434, 118], c.sand, 2);
+    p.poly([319, 110, 323, 110, 324, 138, 319, 140], c.plum);
+    p.path([325, 113, 325, 135], c.night, 2);
+    p.rect(326, 120, 2, 2, c.copper);
+    p.rect(423, 127, 7, 30, c.night);
+    p.rect(425, 128, 2, 24, c.brick);
+    A.crate(p, 290, 62, 35, 24);
+    A.crate(p, 344, 88, 44, 26);
+    p.poly(
+      [
+        b.left,
+        -20 - b.left * 0.02,
+        b.right,
+        -39,
+        b.right,
+        6 - (b.right - 320) * 0.038,
+        320,
+        6,
+        181,
+        12,
+        86,
+        19,
+        0,
+        18,
+        b.left,
+        18 - b.left * 0.022,
+      ],
+      c.ink,
+    );
+    p.path(
+      [b.left, 17 - b.left * 0.022, 1, 17, 84, 17, 182, 10, 319, 5, b.right, 5 - (b.right - 319) * 0.038],
+      c.rust,
+      2,
+    );
+    p.path([b.left, -15, b.right, -27], c.slate, 2);
+    p.rect(229, -62, 3, 64, c.ink);
+    p.rect(230, -57, 1, 48, c.copper);
+    p.poly(
+      [-125, 200, -97, 188, 0, 170, 25, 162, 45, 165, 57, 172, 81, 180, 87, 186, 79, 214, -52, 235, -125, 223],
+      c.night,
+    );
+    p.poly([-112, 201, -49, 196, 82, 183, 76, 208, -51, 229, -111, 220], c.navy);
+    p.path([-101, 203, -48, 208, 55, 189], c.slate, 2);
+    A.crate(p, -168, 131, 42, 26);
+  }
+
+  function oakRoom(p, b) {
+    const l = b.left,
+      r = b.right,
+      t = b.top,
+      z = b.bottom;
+    const back = (x) => -97 - x * 0.1,
+      front = (x) => 293 - x * 0.095;
+    p.rect(l, t, r - l, z - t, c.navy);
+    // Pigeonholes behind the back edge of the worktop; drawer apron and bootwell below it.
+    band(p, b, t, -91, c.plum);
+    for (let i = Math.floor(l / 89) - 1; i * 89 < r; i++) {
+      const x = i * 89 + 5,
+        y = -205 - x * 0.09;
+      sortingCabinet(p, x, y, 85, 66);
+      p.rect(x - 4, y + 69, 89, 8, c.night);
+      p.rect(x - 4, y + 69, 89, 2, c.copper);
+    }
+    for (let i = Math.floor(l / 74) - 1; i * 74 < r; i++) A.crate(p, i * 74 + 10, -276 - (i % 2) * 13, 53, 40);
+    tileFloor(p, b, c.plum, c.night);
+    p.poly([l, front(l) - 4, r, front(r) - 4, r, front(r) + 69, l, front(l) + 69], c.night);
+    p.poly([l, front(l) + 7, r, front(r) + 7, r, front(r) + 58, l, front(l) + 58], c.brick);
+    for (let i = Math.floor(l / 143) - 1; i * 143 < r; i++) {
+      const x = i * 143 + 7,
+        y = front(x);
+      p.poly([x, y + 15, x + 129, y + 3, x + 129, y + 40, x, y + 52], c.plum, c.ink);
+      p.path([x + 2, y + 16, x + 127, y + 5], c.copper);
+      p.poly([x + 47, y + 25, x + 74, y + 22, x + 77, y + 25, x + 74, y + 28, x + 48, y + 31], c.ink);
+      p.path([x + 50, y + 25, x + 71, y + 23], c.ochre, 2);
+    }
+    p.path([l, front(l) + 58, r, front(r) + 58], c.ink, 6);
+    for (const x of [-191, 49, 258, 472]) {
+      const y = front(x) + 60;
+      p.poly([x, y, x + 13, y - 1, x + 11, y + 74, x + 6, y + 85, x + 1, y + 84], c.night);
+      p.path([x + 3, y + 5, x + 3, y + 69], c.plum, 2);
+      p.path([x + 4, y + 84, x + 62, y + 77], c.plum, 3);
+    }
+    p.g.save();
+    p.g.beginPath();
+    p.g.moveTo(l, back(l));
+    p.g.lineTo(r, back(r));
+    p.g.lineTo(r, front(r));
+    p.g.lineTo(l, front(l));
+    p.g.closePath();
+    p.g.clip();
+    p.rect(l, t, r - l, z - t, c.plum);
+    p.poly([l, 41 - (l * 41) / 210, 210, 0, r, -(r - 210) * 0.098, r, z, l, z], c.brick);
+    p.poly(
+      [
+        10 - ((z - 180) * 130) / 169,
+        z,
+        10,
+        180,
+        140,
+        11,
+        221,
+        0,
+        221 - t * 0.72,
+        t,
+        221 - t * 0.71,
+        t,
+        221,
+        0,
+        94,
+        180,
+        94 - ((z - 180) * 127) / 180,
+        z,
+      ],
+      c.copper,
+    );
+    p.poly(
+      [
+        97 - ((z - 180) * 125) / 180,
+        z,
+        97,
+        180,
+        222,
+        0,
+        222 - t * 0.69,
+        t,
+        250 - t * 0.67,
+        t,
+        250,
+        0,
+        130,
+        180,
+        130 - ((z - 180) * 120) / 180,
+        z,
+      ],
+      c.rust,
+    );
+    p.poly(
+      [
+        143 - ((z - 180) * 120) / 180,
+        z,
+        143,
+        180,
+        263,
+        0,
+        263 - t * 0.67,
+        t,
+        316 - t * 0.6,
+        t,
+        316,
+        0,
+        208,
+        180,
+        208 - ((z - 180) * 108) / 180,
+        z,
+      ],
+      c.ochre,
+    );
+    p.poly([224 - ((z - 180) * 59) / 99, z, 224, 180, 283, 81, 320, 75, r, 75 - (r - 320) * 0.16, r, z], c.rust);
+    // Irregular plank lengths and knots stay in fixed world positions across every crop.
+    for (const y of [-187, -145, -106, -70, -31, 23, 57, 96, 136, 175, 216, 259, 299, 341, 389]) {
+      p.path([l, y + 22 - l * 0.125, 104, y + 9, 319, y - 9, r, y - 9 - (r - 319) * 0.084], c.brick, 3);
+      p.path([l, y + 21 - l * 0.125, 104, y + 8, 319, y - 10, r, y - 10 - (r - 319) * 0.084], c.plum);
+      for (let j = Math.floor(l / 79) - 1; j * 79 < r; j++) {
+        const x = j * 79 + (Math.abs(y * 3 + j * 29) % 44),
+          g = y + 11 - x * 0.095;
+        if (x > -1 && x < 317 && g >= 0 && g <= 179) continue;
+        p.path([x, g, x + 13, g - 2, x + 27, g - 2, x + 33, g - 4], c.brick);
+        if (Math.abs(y + j) % 3 === 0) {
+          p.path([x + 20, g + 8, x + 26, g + 5, x + 35, g + 4, x + 40, g + 5, x + 34, g + 7, x + 21, g + 8], c.rust);
+          p.rect(x + 27, g + 5, 5, 1, c.brick);
+        }
+        if (Math.abs(y - j) % 4 === 0) {
+          p.rect(x + 5, g + 5, 3, 2, c.plum);
+          p.rect(x + 5, g + 5, 2, 1, c.copper);
+        }
+      }
+    }
+    p.path([l, back(l) + 1, r, back(r) + 1], c.ochre, 4);
+    p.path([l, front(l) - 5, r, front(r) - 5], c.ochre, 3);
+    p.path([l, front(l) - 1, r, front(r) - 1], c.night, 3);
+    // A copper inkpot, a pot of nibs, and the postal scale live at opposite ends of the desk.
+    p.oval(-84, 54, 23, 6, c.brick);
+    p.poly(
+      [-101, 44, -100, 29, -94, 26, -93, 20, -78, 18, -75, 22, -74, 26, -66, 28, -65, 42, -69, 48, -93, 50],
+      c.night,
+      c.ink,
+    );
+    p.oval(-85, 21, 9, 4, c.copper);
+    p.oval(-85, 21, 6, 2, c.ink);
+    p.path([-97, 32, -96, 42, -88, 44], c.slate, 2);
+    p.path([-86, 20, -81, -9, -71, -19], c.ink, 3);
+    p.path([-82, -6, -74, -15], c.wheat);
+    p.path([-86, 20, -91, -11, -99, -18], c.copper, 2);
+    p.oval(414, 78, 31, 6, c.brick);
+    p.poly([387, 70, 391, 62, 415, 58, 438, 63, 442, 70, 440, 73, 395, 78], c.ink);
+    p.path([393, 64, 416, 61, 435, 65], c.ochre, 2);
+    p.rect(410, 28, 6, 35, c.ink);
+    p.rect(412, 30, 2, 29, c.copper);
+    p.path([383, 30, 413, 25, 441, 30], c.plum, 3);
+    p.path([386, 28, 412, 24, 440, 28], c.gold);
+    p.path([390, 30, 379, 51, 400, 49, 390, 30], c.rust);
+    p.oval(389, 51, 13, 4, c.slate);
+    p.path([378, 50, 388, 52, 399, 50], c.smoke);
+    p.path([432, 29, 422, 48, 443, 48, 432, 29], c.rust);
+    p.oval(432, 48, 13, 4, c.copper);
+    p.path([422, 47, 431, 49, 443, 47], c.sand);
+    p.g.restore();
+  }
+
+  function trayCorner(p, reading) {
+    const lip = reading ? [0, 46, 35, 38, 66, 19, 109, 0] : [0, 51, 37, 41, 52, 26, 78, 0];
+    const end = reading ? 109 : 78;
+    p.poly(
+      [
+        -167,
+        28,
+        -166,
+        -26,
+        -39,
+        -95,
+        61,
+        -95,
+        end + 50,
+        -29,
+        end,
+        0,
+        lip[4],
+        lip[5],
+        lip[2],
+        lip[3],
+        0,
+        lip[1],
+        -112,
+        85,
+      ],
+      c.night,
+    );
+    p.poly(
+      [-165, 30, -162, -26, -38, -92, 61, -92, end + 43, -30, 62, -13, -2, -11, -34, 8, -95, 61, -111, 73],
+      c.plum,
+    );
+    p.poly([-142, -18, -32, -80, 57, -81, end + 21, -32, 10, -17, -30, -5, -98, 51, -144, 35], c.ink);
+    for (const [x, y] of [
+      [-101, 10],
+      [-75, -4],
+      [-49, -17],
+    ]) {
+      p.poly([x - 17, y + 9, x + 14, y - 8, x + 40, y - 6, x + 9, y + 13], c.sand);
+      p.path([x - 12, y + 7, x + 12, y + 4, x + 29, y - 4], c.copper);
+    }
+    p.path([-163, 33, -110, 80, 0, lip[1] - 2, lip[2], lip[3] - 1], c.copper, 2);
+    p.path([-161, -24, -38, -91, 58, -91], c.copper, 2);
+  }
+
+  function readingRoom(p, b) {
+    const l = b.left,
+      r = b.right,
+      z = b.bottom;
+    p.rect(l, b.top, r - l, z - b.top, c.navy);
+    clerestory(p, b, -133, c.steel);
+    // The reading counter's high ventilator has a single open slat.
+    p.poly([166, -227, 254, -233, 253, -211, 166, -204], c.ink);
+    p.poly([169, -224, 251, -230, 250, -213, 169, -207], c.slate);
+    for (const n of [0, 5, 10]) p.path([171, -211 - n, 246, -217 - n], c.night, 2);
+    p.poly([168, -225, 248, -230, 251, -227, 170, -221], c.steel);
+    p.poly([l, 27 - (l - 98) * 0.116, r, 2 - (r - 320) * 0.116, r, 166, l, 169], c.plum);
+    p.poly([-81, 47, 98, 27, 110, 158, -77, 182], c.navy);
+    // The close shot looks along the sorting windows, under the same timber lintel.
+    for (const x of [-451, -248, 122, 330, 538]) {
+      const y = x === 122 ? 29 : 29 - (x - 122) * 0.135;
+      p.poly([x, y, x + 162, y - 22, x + 162, y + 98, x + 1, y + 112], c.copper);
+      p.poly([x + 6, y + 5, x + 154, y - 14, x + 154, y + 96, x + 5, y + 107], c.ochre);
+      p.poly([x + 32, y + 2, x + 78, y - 4, x + 26, y + 94, x + 7, y + 97], c.wheat);
+      p.poly([x + 97, y - 7, x + 116, y - 9, x + 63, y + 104, x + 44, y + 105], c.sand);
+      for (const i of [27, 91, 151]) p.rect(x + i, y - 11, 5, 121, c.rust);
+      p.path([x, y + 43, x + 163, y + 25], c.brick, 5);
+      p.path([x, y + 47, x + 162, y + 31], c.copper, 2);
+    }
+    p.poly(
+      [l, -32 - l * 0.08, r, -57 - r * 0.055, r, 9 - (r - 320) * 0.119, 320, 9, 118, 33, 0, 32, l, 32 + l * 0.008],
+      c.night,
+    );
+    p.path([l, -13 - l * 0.07, r, -13 - r * 0.07], c.slate, 3);
+    p.poly([l, 147 - l * 0.106, r, 113 - (r - 320) * 0.106, r, z, l, z], c.night);
+    p.path([l, 149 - l * 0.106, 0, 149, 319, 115, r, 115 - (r - 319) * 0.106], c.copper, 2);
+    p.poly([l, 220 - l * 0.065, r, 220 - r * 0.065, r, z, l, z], c.plum);
+    tileFloor(p, b, c.brick, c.night);
+    sortingCabinet(p, -223, 60, 93, 76);
+    sortingCabinet(p, 391, 46, 104, 73);
+    A.lamp(p, 348, 63, true);
+    // Counter toward the camera with the drawer fronts and a parcel rail below its lip.
+    p.poly(
+      [
+        l,
+        235 - l * 0.065,
+        117,
+        224,
+        r,
+        205 - (r - 320) * 0.07,
+        r,
+        211 - (r - 320) * 0.07,
+        117,
+        233,
+        l,
+        245 - l * 0.065,
+      ],
+      c.brick,
+    );
+    p.path([l, 236 - l * 0.065, 117, 225, 320, 207, r, 207 - (r - 320) * 0.07], c.ochre, 2);
+    for (const x of [-101, 25, 180, 353, 506]) {
+      const y = 241 - x * 0.08;
+      p.poly([x, y, x + 109, y - 9, x + 108, y + 23, x, y + 34], c.brick, c.night);
+      p.path([x + 1, y + 1, x + 108, y - 8], c.copper, 2);
+      p.rect(x + 45, y + 8, 18, 3, c.plum);
+    }
+  }
 
   function skyline() {
     return tile('six-oclock-yard', 320, 180, (p) => {
@@ -136,8 +887,8 @@
     p.rect(d[0], d[1], 2, 1, c.wheat);
   }
 
-  function wide(p, t) {
-    p.image(skyline(), 0, 0);
+  function wide(p, t, view) {
+    set(p, view, skyline, platformEnd);
     const engineX = px(84 + 101 * t),
       engineY = 58,
       coachY = 81;
@@ -156,7 +907,7 @@
     }
     for (let i = 1; i <= 4; i++) {
       const x = engineX - 84 * i;
-      if (x < 321 && x + 89 > 0)
+      if (x < view.right + 1 && x + 89 > view.left)
         p.image(i === 4 ? brakeVan() : mailCar(), x, coachY + (px(t * 9 + i) % 4 === 0 ? 1 : 0), 86, 45);
     }
     p.image(A.train(), engineX, engineY, 114, 69);
@@ -289,10 +1040,10 @@
     });
   }
 
-  function bellShot(p, t) {
-    p.image(bellBay(), 0, 0);
+  function bellShot(p, t, view) {
+    set(p, view, bellBay, bellRoom);
     const tailX = px(178 + 101 * t);
-    if (t < 1.42) p.image(brakeVan(), tailX, 95, 73, 37);
+    if (t < 1.42 || tailX < view.right) p.image(brakeVan(), tailX, 95, 73, 37);
     p.poly([0, 9, 172, 4, 193, 11, 192, 20, 70, 27, 0, 31], c.night, c.ink);
     p.path([11, 24, 172, 10, 186, 11], c.ochre, 2);
     p.rect(104, 16, 8, 19, c.ink);
@@ -367,8 +1118,8 @@
     });
   }
 
-  function floorClue(p, t) {
-    p.image(sortingDesk(), 0, 0);
+  function floorClue(p, t, view) {
+    set(p, view, sortingDesk, oakRoom);
     // The decaying draught rolls the bottom knot off the bright corner.
     const move = ease(0.16, 1.07, t),
       settle = Math.sin(t * 8) * Math.exp(-t * 2.1);
@@ -376,10 +1127,16 @@
       y = px(74 + 5 * move - 2 * settle);
     p.oval(152, 135, 55, 7, c.brick);
     p.image(A.envelope(), 109, 79, 85, 61);
+    outsideFrame(p, view, () => {
+      braided(p, [-102, 110, -87, 106, -74, 106, -61, 111, -42, 111, -24, 104, -3, 96], 4);
+      p.path([-101, 110, -109, 112, -113, 111], c.wheat, 2);
+      p.path([-100, 112, -106, 115, -113, 115], c.copper, 2);
+    });
     braided(p, [-3, 96, 27, 91, 48, 80, 56, 66, 50, 56, 37, 56, 31, 64, 37, 72, 56, 75, 83, 69, x + 7, y + 8], 4);
     p.image(knot(), x, y, 64, 41);
     p.poly([0, 0, 78, 0, 52, 26, 37, 41, 0, 51], c.night);
     p.path([0, 49, 35, 40, 54, 25], c.copper, 2);
+    outsideFrame(p, view, () => trayCorner(p, false));
     const shade = tile('pip-cast-shadow', 151, 151, (q) => {
       q.image(A.pipPortrait(), 0, 0);
       q.g.globalCompositeOperation = 'source-in';
@@ -387,6 +1144,39 @@
       q.g.globalCompositeOperation = 'source-over';
     });
     const shadowX = px(lerp(-129, -35, ease(0.9, 1.75, t)));
+    if (view.bottom > 180) {
+      outsideFrame(p, view, () =>
+        p.poly(
+          [
+            shadowX + 13,
+            214,
+            shadowX + 111,
+            214,
+            shadowX + 113,
+            218,
+            shadowX + 107,
+            232,
+            shadowX + 82,
+            253,
+            shadowX + 27,
+            281,
+            shadowX - 4,
+            293,
+            shadowX - 56,
+            300,
+            shadowX - 83,
+            303,
+            shadowX - 48,
+            268,
+            shadowX - 11,
+            245,
+            shadowX + 6,
+            225,
+          ],
+          c.plum,
+        ),
+      );
+    }
     p.image(shade, shadowX, 103, 126, 116);
     if (t < 1.28) {
       const k = ease(0, 1.28, t);
@@ -502,8 +1292,8 @@
     p.rect(x + 4, y, 2, 1, c.copper);
   }
 
-  function pickUp(p, t) {
-    p.image(counterHall(), 0, 0);
+  function pickUp(p, t, view) {
+    set(p, view, counterHall, counterRoom);
     const travel = ease(0, 1.09, t),
       stop = ease(1.04, 1.4, t),
       look = ease(1.35, 1.86, t),
@@ -641,14 +1431,160 @@
     p.path([...at(0.14, thickness * 0.67), ...at(0.4, thickness * 0.5), ...at(0.48, thickness * 0.54)], c.ochre, 2);
   }
 
-  function reaction(p, t) {
-    p.image(readingBay(), 0, 0);
+  let gripStage;
+  function farGrip(p, x, y, view) {
+    if (!isExpanded(view)) {
+      p.image(hand(), x, y, 32, 24, true);
+      return;
+    }
+    // Quantize the reflected 43-pixel drawing on the native film grid before the
+    // projector translates it. This keeps its thin digit highlights from flickering.
+    const grip = tile('far-grip-' + x + '-' + y, 32, 24, (q) => {
+      if (!gripStage) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 320;
+        canvas.height = 180;
+        gripStage = new A.PixelPen(canvas);
+      }
+      const g = gripStage.g;
+      g.clearRect(x, y, 32, 24);
+      gripStage.image(hand(), x, y, 32, 24, true);
+      q.g.drawImage(g.canvas, x, y, 32, 24, 0, 0, 32, 24);
+    });
+    p.image(grip, x, y);
+  }
+
+  function readingFigure(face, cel) {
+    return tile('full-reading-figure-' + cel, 211, 237, (q) => {
+      const fur = '#e7c697',
+        light = '#fff0c4',
+        shade = '#c59c75',
+        tan = '#d99a60',
+        brown = '#ac6f46',
+        dark = '#82503e';
+      q.g.translate(35, 0);
+      // Pip sits back on his haunches to study the letter, his dispatch bag resting at his hip.
+      q.poly(
+        [
+          33, 142, 29, 158, 15, 166, 4, 164, -7, 157, -16, 143, -20, 136, -24, 137, -24, 147, -19, 162, -7, 178, 4, 187,
+          18, 189, 36, 181, 52, 161,
+        ],
+        fur,
+        c.ink,
+      );
+      q.poly(
+        [-23, 141, -17, 149, -11, 162, 1, 174, 16, 179, 33, 168, 27, 179, 12, 185, 1, 181, -12, 169, -22, 153],
+        tan,
+      );
+      q.path([-22, 140, -19, 139, -15, 147], light, 2);
+      q.poly(
+        [
+          50, 174, 73, 157, 99, 151, 119, 158, 128, 172, 130, 187, 128, 200, 134, 207, 148, 207, 155, 211, 156, 217,
+          151, 221, 118, 222, 113, 218, 105, 204, 88, 197, 74, 200, 52, 199,
+        ],
+        shade,
+        c.ink,
+      );
+      q.poly(
+        [120, 183, 126, 180, 126, 198, 121, 209, 132, 213, 145, 212, 151, 213, 151, 217, 121, 219, 116, 215, 112, 203],
+        tan,
+      );
+      q.path([137, 217, 137, 215, 140, 213], dark);
+      q.path([145, 217, 146, 215], dark);
+      q.poly(
+        [
+          41, 103, 64, 96, 84, 95, 101, 97, 113, 106, 125, 122, 132, 137, 134, 151, 129, 165, 118, 177, 102, 188, 84,
+          201, 65, 209, 42, 210, 25, 202, 13, 190, 9, 173, 12, 151, 16, 135, 26, 121,
+        ],
+        fur,
+        c.ink,
+      );
+      q.poly(
+        [
+          18, 139, 25, 130, 36, 122, 45, 118, 43, 127, 50, 122, 48, 134, 55, 128, 54, 138, 46, 148, 41, 161, 46, 160,
+          39, 170, 40, 176, 29, 186, 18, 184, 15, 170,
+        ],
+        tan,
+      );
+      q.poly(
+        [
+          54, 110, 76, 100, 98, 102, 109, 111, 113, 124, 107, 143, 99, 153, 101, 155, 91, 166, 88, 175, 77, 186, 63,
+          191, 60, 186, 66, 177, 65, 163, 71, 149, 69, 151, 73, 135, 70, 138, 66, 143, 62, 143, 65, 132, 58, 134,
+        ],
+        light,
+      );
+      q.path([19, 149, 24, 140, 29, 135], dark, 2);
+      q.path([22, 176, 28, 183, 37, 186], brown);
+      // The near hind paw projects past the folded knee and carries the dog's weight.
+      q.poly(
+        [
+          37, 167, 54, 161, 69, 163, 78, 171, 78, 180, 74, 190, 67, 201, 75, 209, 88, 212, 96, 212, 102, 215, 105, 222,
+          100, 228, 90, 229, 71, 229, 56, 226, 37, 219, 29, 212, 23, 199, 23, 183, 28, 173,
+        ],
+        fur,
+        c.ink,
+      );
+      q.poly(
+        [
+          29, 179, 36, 170, 48, 166, 55, 166, 47, 173, 43, 184, 42, 197, 49, 207, 67, 216, 76, 223, 95, 224, 96, 227,
+          73, 227, 57, 224, 38, 217, 31, 210, 25, 198, 25, 186,
+        ],
+        tan,
+      );
+      q.poly([55, 170, 64, 168, 73, 171, 74, 177, 70, 185, 66, 188, 68, 181, 64, 175], light);
+      q.path([81, 224, 82, 219, 87, 217], dark);
+      q.path([92, 225, 94, 221, 98, 220], dark);
+      q.poly([43, 110, 51, 104, 58, 104, 111, 147, 110, 158, 101, 158, 70, 130], dark, c.ink);
+      q.path([49, 107, 72, 124, 101, 148], c.ochre, 2);
+      q.poly([87, 139, 115, 126, 132, 128, 140, 143, 145, 160, 141, 171, 114, 182, 87, 177, 81, 167], dark, c.ink);
+      q.poly([84, 140, 117, 129, 131, 131, 136, 142, 124, 150, 95, 156, 85, 152], brown, c.ink);
+      q.path([87, 141, 117, 132, 128, 133], c.ochre, 2);
+      q.rect(113, 147, 7, 8, c.ink);
+      q.rect(115, 148, 3, 5, c.gold);
+      q.rect(115, 149, 2, 2, dark);
+      q.path([88, 161, 92, 173, 113, 177, 135, 168], brown, 2);
+      // The face, eyes and flying scarf share the same authored cells as the original close-up.
+      q.g.drawImage(face, 0, 0, 151, 114, 0, 0, 151, 114);
+    });
+  }
+
+  function reaction(p, t, view) {
+    set(p, view, readingBay, readingRoom);
     const rise = ease(0.1, 0.88, t),
       focus = ease(1.11, 1.78, t);
     const cel = t > 0.76 && t < 0.92 ? 'blink' : t < 0.34 ? 'normal' : t < 1.17 ? 'down' : 'sharp';
     const face = faceCel(cel);
     const nod = px(3 * rise - 3 * focus);
-    p.g.drawImage(face, 8, 0, 133, 119, -15, 3 + nod, 207, 185);
+    outsideFrame(p, view, () => {
+      const sx = 207 / 133,
+        sy = 185 / 119;
+      const figure = readingFigure(face, cel);
+      p.oval(106, 359, 100, 9, c.night);
+      p.g.drawImage(figure, -15 - 43 * sx, 3 + nod, figure.width * sx, figure.height * sy);
+      p.poly(
+        [129, 170, 142, 165, 154, 167, 166, 180, 175, 180, 181, 188, 174, 198, 162, 204, 150, 202, 139, 193, 129, 185],
+        '#d0a675',
+        c.ink,
+      );
+      p.path([139, 171, 146, 172, 158, 184, 164, 187], c.sand, 3);
+      p.poly(
+        [
+          65, 173, 76, 165, 89, 166, 97, 173, 101, 182, 108, 184, 117, 180, 122, 186, 118, 197, 109, 204, 97, 208, 87,
+          207, 78, 204, 70, 197, 66, 187,
+        ],
+        '#e7c697',
+        c.ink,
+      );
+      p.poly([69, 174, 77, 168, 85, 168, 91, 173, 91, 180, 88, 188, 83, 184, 81, 189, 77, 186, 75, 181], c.cream);
+      p.path([74, 194, 81, 201, 92, 204], c.ochre, 2);
+    });
+    const g = p.g;
+    g.save();
+    g.beginPath();
+    g.rect(0, 0, 320, 180);
+    g.clip();
+    g.drawImage(face, 8, 0, 133, 119, -15, 3 + nod, 207, 185);
+    g.restore();
     // The same paw and sealed face move together as Pip raises the mail to eye level.
     const xx = px(174 - 9 * rise - 4 * focus),
       yy = px(127 - 26 * rise + 2 * focus);
@@ -656,7 +1592,7 @@
     foreleg(p, 103, 187, xx - 19, yy + 55, 15);
     p.image(A.envelope(), xx, yy, 72, 51);
     p.image(hand(), xx - 28, yy + 26, 48, 36);
-    p.image(hand(), xx + 56, yy + 18, 32, 24, true);
+    farGrip(p, xx + 56, yy + 18, view);
     if (t < 1.1) {
       const f = ease(0.22, 1.1, t);
       p.path([247 + f * 7, 94 + f * 18, 250 + f * 7, 93 + f * 18], c.sand);
@@ -727,8 +1663,30 @@
     });
   }
 
-  function readingGrip(p, x, y, side) {
+  function readingGrip(p, x, y, side, view) {
     const transform = (points) => points.map((n, i) => (i % 2 ? y + n : x + n * side));
+    // Both forelegs follow the camera toward the reader. Their elbows are out of the
+    // native shot; on wider lenses their contours taper and turn downward at the joint.
+    outsideFrame(p, view, () => {
+      const leg = side === 1 ? '#e7c697' : '#d5ae7a';
+      p.poly(
+        transform([
+          -107, 87, -128, 103, -147, 118, -156, 129, -163, 151, -167, 167, -166, 191, -174, 226, -195, 266, -232, 318,
+          -267, 383, -290, 456, -221, 468, -191, 381, -168, 330, -138, 291, -124, 258, -114, 219, -109, 192, -108, 177,
+          -101, 158, -88, 141, -73, 111, -64, 92,
+        ]),
+        leg,
+        c.ink,
+      );
+      p.poly(
+        transform([
+          -106, 91, -126, 107, -144, 124, -153, 140, -158, 160, -158, 180, -154, 185, -150, 175, -146, 180, -144, 166,
+          -136, 153, -136, 144, -128, 135, -110, 116, -98, 100,
+        ]),
+        side === 1 ? c.cream : c.wheat,
+      );
+      p.path(transform([-146, 211, -153, 239, -168, 264, -184, 288]), c.ochre, 3);
+    });
     p.poly(
       transform([
         -108, 111, -108, 88, -87, 70, -64, 52, -50, 39, -40, 32, -32, 28, -25, 21, -20, 17, -18, 13, -13, 11, -11, 13,
@@ -738,6 +1696,14 @@
       side === 1 ? '#e7c697' : '#d5ae7a',
       c.ink,
     );
+    outsideFrame(p, view, () => {
+      p.poly(
+        transform([
+          -110, 86, -107, 87, -104, 91, -80, 105, -73, 108, -74, 113, -82, 119, -92, 117, -107, 115, -113, 111,
+        ]),
+        side === 1 ? '#e7c697' : '#d5ae7a',
+      );
+    });
     p.poly(
       transform([
         -106, 90, -73, 62, -48, 41, -34, 31, -25, 23, -18, 16, -14, 14, -13, 16, -21, 27, -15, 24, -5, 13, 0, 8, 3, 8,
@@ -750,10 +1716,11 @@
     p.path(transform([-13, 25, -8, 24, -3, 19]), c.ochre);
   }
 
-  function pawReveal(p, t) {
-    p.image(sortingDesk(), 0, 0);
+  function pawReveal(p, t, view) {
+    set(p, view, sortingDesk, oakRoom);
     p.poly([0, 0, 109, 0, 66, 19, 35, 38, 0, 46], c.night);
     p.path([0, 44, 36, 35, 64, 17], c.rust, 2);
+    outsideFrame(p, view, () => trayCorner(p, true));
     const turn = ease(0.2, 1.5, t),
       push = ease(1.12, 2.45, t);
     const theta = Math.PI * turn;
@@ -765,8 +1732,8 @@
       top = px(centerY - h / 2);
     const handY = px(centerY + 15 - 7 * Math.sin(theta));
     p.oval(centerX + 4, 140, px(w * 0.4), 7, c.brick);
-    readingGrip(p, left, handY, 1);
-    readingGrip(p, left + w, handY - 17, -1);
+    readingGrip(p, left, handY, 1, view);
+    readingGrip(p, left + w, handY - 17, -1, view);
     if (h <= 8) {
       p.path([left + 7, centerY + 4, left + w - 7, centerY - 6], c.ink, 4);
       p.path([left + 8, centerY + 4, left + w - 8, centerY - 6], c.ice, 2);
@@ -869,14 +1836,14 @@
     }
   }
 
-  window.DispatchFilms.opening = function openingFilm(p, part, time = 0) {
+  window.DispatchFilms.opening = function openingFilm(p, part, time = 0, view = nativeView) {
     const t = Math.max(0, Math.min(8, Number.isFinite(time) ? time : 0));
     if (part === 0) {
-      if (t < 3.4) wide(p, t);
-      else if (t < 6.2) bellShot(p, t - 3.4);
-      else floorClue(p, t - 6.2);
-    } else if (t < 2.6) pickUp(p, t);
-    else if (t < 4.75) reaction(p, t - 2.6);
-    else pawReveal(p, t - 4.75);
+      if (t < 3.4) wide(p, t, view);
+      else if (t < 6.2) bellShot(p, t - 3.4, view);
+      else floorClue(p, t - 6.2, view);
+    } else if (t < 2.6) pickUp(p, t, view);
+    else if (t < 4.75) reaction(p, t - 2.6, view);
+    else pawReveal(p, t - 4.75, view);
   };
 })();

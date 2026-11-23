@@ -5,6 +5,634 @@
   const bank = (name, w, h, draw) => plate('boss-film/' + name, w, h, draw);
   const tau = Math.PI * 2;
   const rounded = Math.round;
+  const sets = new Map();
+
+  // Each set uses one source pixel per cell. Resizing can enlarge its cached
+  // canvas; ordinary playback reuses it while the actors and machinery move.
+  function set(p, name, view, paint, dx = 0, dy = 0, sx = 1, sy = 1) {
+    const l = Math.floor((view.left - dx) / sx) - 2,
+      t = Math.floor((view.top - dy) / sy) - 2;
+    const r = Math.ceil((view.right - dx) / sx) + 2,
+      b = Math.ceil((view.bottom - dy) / sy) + 2;
+    let image = sets.get(name);
+    if (!image || image.l > l || image.t > t || image.r < r || image.b < b) {
+      const old = image;
+      image = {
+        l: Math.floor(Math.min(l, old?.l ?? l) / 96) * 96,
+        t: Math.floor(Math.min(t, old?.t ?? t) / 96) * 96,
+        r: Math.ceil(Math.max(r, old?.r ?? r) / 96) * 96,
+        b: Math.ceil(Math.max(b, old?.b ?? b) / 96) * 96,
+      };
+      const canvas = document.createElement('canvas');
+      canvas.width = image.r - image.l;
+      canvas.height = image.b - image.t;
+      const pen = new PixelPen(canvas);
+      pen.g.translate(-image.l, -image.t);
+      paint(pen, image);
+      image.canvas = canvas;
+      sets.set(name, image);
+    }
+    p.g.save();
+    p.g.translate(dx, dy);
+    p.g.scale(sx, sy);
+    p.image(image.canvas, image.l, image.t);
+    p.g.restore();
+  }
+
+  function ray(p, x, y, u, v, end, tone, width = 1) {
+    const slope = (u - x) / (v - y);
+    p.line(x, y, x + (end - y) * slope, end, tone, width);
+  }
+  function masonry(p, l, t, r, b, light, dark) {
+    for (let row = Math.floor(t / 13); row <= Math.ceil(b / 13); row++) {
+      const y = row * 13 + 2;
+      for (let col = Math.floor(l / 36) - 1; col <= Math.ceil(r / 36); col++) {
+        const x = col * 36 + (Math.abs(row) % 2) * 18;
+        const pick = Math.abs(col * 31 + row * 19 + col * row * 11) % 13;
+        if (pick < 5) {
+          p.rect(x + 2, y, 9 + pick * 4, 1, light);
+          p.rect(x + 1, y + 1, 1, 2 + (pick % 3), dark);
+        }
+        if (pick === 7) p.rect(x + 8, y - 3, 7, 1, light);
+      }
+    }
+  }
+  function block(p, x, y, w, h, shade, lit) {
+    p.poly(
+      [x, y + 5, x + w - 12, y - 4, x + w, y, x + w, y + h - 4, x + 11, y + h + 4, x, y + h],
+      shade,
+      c.ink,
+    );
+    p.poly([x, y + 5, x + w - 12, y - 4, x + w, y, x + 11, y + 10], lit, c.ink);
+    p.line(x + 11, y + 11, x + 11, y + h + 2, c.ink);
+    p.path(
+      [x + 16, y + 12, x + w - 5, y + 4, x + w - 5, y + h - 8, x + 16, y + h - 1, x + 16, y + 12],
+      c.night,
+      2,
+    );
+    p.line(x + 18, y + 13, x + w - 8, y + h - 9, c.night, 3);
+  }
+  function grate(p, x, y, w, h) {
+    p.rect(x, y, w, h, c.night);
+    p.rect(x + 2, y + 2, w - 4, h - 4, c.plum);
+    for (let j = 4; j < h - 4; j += 4) p.rect(x + 4, y + j, w - 8, 1, c.slate);
+    for (const dx of [2, w - 4]) p.rect(x + dx, y + 1, 2, 1, c.steel);
+  }
+  function clerestory(p, x, y, w, h, warm) {
+    arch(p, x, y, w, h, c.night, warm ? '#635d72' : '#516a7c');
+    p.poly(
+      [x + 5, y + 32, x + w * 0.42, y + 8, x + w * 0.67, y + 7, x + 5, y + h - 11],
+      warm ? '#7a6c78' : '#637d87',
+    );
+    p.path(
+      [
+        x + 3,
+        y + h - 10,
+        x + 12,
+        y + h - 15,
+        x + 18,
+        y + h - 13,
+        x + w - 13,
+        y + h - 21,
+        x + w - 5,
+        y + h - 19,
+      ],
+      c.navy,
+      3,
+    );
+    p.rect(x + w * 0.49, y + 6, 3, h - 8, c.night);
+    p.rect(x + 2, y + h * 0.57, w - 4, 2, c.night);
+    p.rect(x + 2, y + h, w - 3, 2, warm ? '#8d7278' : '#6d7484');
+  }
+  function hoist(p, x, y, len) {
+    p.oval(x, y, 8, 8, c.ink);
+    p.oval(x, y, 5, 5, c.rust);
+    p.oval(x, y, 2, 2, c.sand);
+    p.line(x - 5, y + 4, x - 5, y + len, c.night, 2);
+    p.line(x + 5, y + 4, x + 3, y + len, c.slate);
+    for (let j = 10; j < len; j += 7) p.rect(x - 4, y + j, 2, 2, c.steel);
+    p.poly(
+      [x - 7, y + len, x + 6, y + len, x + 4, y + len + 6, x - 2, y + len + 9, x - 7, y + len + 5],
+      c.rust,
+      c.ink,
+    );
+    p.path(
+      [
+        x - 1,
+        y + len + 9,
+        x - 1,
+        y + len + 16,
+        x + 4,
+        y + len + 19,
+        x + 9,
+        y + len + 16,
+        x + 9,
+        y + len + 12,
+      ],
+      c.slate,
+      3,
+    );
+  }
+  function hall(p, b) {
+    const { l, t, r, b: bottom } = b;
+    p.rect(l, t, r - l, bottom - t, c.navy);
+    p.poly([206, t, r, t, r, bottom, 180, 90], c.plum);
+    masonry(p, l, t, r, 136, '#485267', '#364052');
+    const beam = (x, y) => {
+      p.path([x, y, x + 56, y + 26, x + 108, y], c.ink, 4);
+      p.line(x + 5, y + 2, x + 56, y + 22, c.slate);
+      p.line(x + 55, y + 2, x + 55, y + 23, c.night, 3);
+    };
+    for (let i = Math.floor((l - 100) / 113); i <= Math.ceil(r / 113); i++) {
+      const x = i * 113 - 10;
+      p.rect(x + 5, t, 5, 126 - t, c.night);
+      p.rect(x + 6, t, 1, 118 - t, '#5c586b');
+      for (let y = -188; y < 20; y += 94) {
+        beam(x, y);
+        p.rect(x, y - 5, 115, 4, c.ink);
+      }
+      if (x < 0 || x > 320)
+        clerestory(p, x + 17, 18 + (Math.abs(i * 7) % 13), 49 + Math.abs(i % 3) * 5, 57, i > 1);
+    }
+    for (const [x, y, w] of [
+      [-222, -121, 74],
+      [-55, -166, 105],
+      [75, -128, 83],
+      [201, -174, 105],
+      [368, -109, 74],
+      [495, -158, 89],
+    ]) {
+      clerestory(p, x, y, w, 46, x > 180);
+    }
+    // This first arched window continues behind the left edge of the old film gate.
+    arch(p, -19, 22, 44, 64, c.ink, c.slate);
+    p.poly([-12, 46, 2, 28, 19, 30, -12, 77], '#647e8b');
+    p.poly([-11, 74, -3, 66, 3, 68, 10, 60, 19, 64, 19, 81, -11, 81], c.navy);
+    p.rect(2, 29, 2, 54, c.night);
+    p.rect(-16, 57, 38, 2, c.night);
+    p.rect(-12, 85, 34, 1, c.steel);
+    p.path([-356, -68, -156, -50, 2, -61, 146, -45, 330, -62, 485, -46, 711, -69], c.ink, 3);
+    p.path([-185, -58, -183, -35, -131, -27, -99, -32], c.slate, 2);
+    hoist(p, 51, -60, 34);
+    hoist(p, 428, -54, 41);
+    for (const [x, y] of [
+      [-191, 70],
+      [-69, 84],
+      [365, 66],
+      [448, 77],
+      [574, 83],
+    ])
+      grate(p, x, y, 25, 17);
+    const fy = (x) => (x <= 178 ? 82 + ((178 - x) * 30) / 178 : 82 + ((x - 178) * 7) / 166);
+    p.poly([l, fy(l), 178, 82, r, fy(r), r, bottom, l, bottom], '#61515c');
+    p.poly(
+      [
+        158,
+        96,
+        190,
+        94,
+        190 + ((53 - 190) * (bottom - 94)) / 90,
+        bottom,
+        158 - (158 * (bottom - 96)) / 55,
+        bottom,
+      ],
+      '#746268',
+    );
+    p.poly(
+      [
+        190,
+        102,
+        263,
+        95,
+        263 + ((228 - 263) * (bottom - 95)) / 91,
+        bottom,
+        190 + ((92 - 190) * (bottom - 102)) / 84,
+        bottom,
+      ],
+      '#795e59',
+    );
+    for (const [x, y, u, v] of [
+      [175, 90, -17, 166],
+      [187, 91, 38, 185],
+      [196, 93, 69, 185],
+      [241, 96, 231, 186],
+      [265, 95, 338, 184],
+      [110, 97, -157, 156],
+      [310, 100, 525, 162],
+    ]) {
+      ray(p, x, y, u, v, bottom, c.night, 2);
+      ray(p, x, y - 1, u, v - 1, bottom, '#9e7b6c');
+    }
+    for (let y = 205; y < bottom; y = Math.round(y * 1.44)) {
+      p.path([l, y + 25, 32, y + 11, 173, y - 3, 286, y - 2, r, y + 13], '#564c58');
+      for (let x = l + 8; x < r; x += 48) p.rect(x, y + Math.round((x - 130) * 0.025), 5, 1, '#88716b');
+    }
+    block(p, -148, 104, 50, 37, c.plum, '#807079');
+    block(p, -116, 92, 33, 26, c.plum, '#8d7676');
+    block(p, 402, 105, 48, 29, c.plum, '#876e72');
+    block(p, 442, 97, 34, 30, c.plum, '#7e6973');
+    for (const [x, y] of [
+      [-102, 186],
+      [412, 159],
+      [201, 246],
+      [-216, 228],
+    ]) {
+      p.poly([x, y, x + 13, y - 4, x + 23, y - 3, x + 10, y + 2], c.smoke, c.plum);
+      p.path([x + 2, y, x + 10, y - 1, x + 13, y - 3], c.violet);
+    }
+  }
+
+  function threshold(p, b) {
+    const { l, t, r, b: bottom } = b;
+    p.rect(l, t, r - l, bottom - t, '#454955');
+    p.rect(l, t, r - l, Math.max(0, -108 - t), '#39465b');
+    for (let i = Math.floor(l / 88) - 1; i <= Math.ceil(r / 88); i++) {
+      const x = i * 88 + 23;
+      for (let j = Math.floor(t / 60); j < -1; j++) {
+        if ((i + j) % 3 !== 0) p.rect(x + (Math.abs(j) % 3) * 9, j * 60 + 12, 1, 1, c.steel);
+      }
+    }
+    p.poly([l, -65, 64, -143, 228, -150, r, -59, r, 190, l, 190], '#5c505e', c.night);
+    p.path([l, -67, 64, -146, 228, -153, r, -61], c.night, 5);
+    p.poly([-113, -110, -112, -154, -105, -159, -94, -157, -93, -112], c.plum, c.night);
+    p.rect(-116, -160, 26, 5, c.night);
+    p.rect(-112, -159, 17, 1, c.slate);
+    p.poly([112, -114, 122, -128, 195, -131, 209, -116, 205, -91, 115, -87], c.night);
+    p.poly([118, -113, 126, -122, 192, -125, 201, -115, 199, -96, 119, -92], c.plum);
+    for (let j = 0; j < 3; j++) p.path([125, -111 + j * 6, 192, -114 + j * 6], c.slate, 2);
+    p.path([l, -63, 67, -140, 225, -146, r, -57], '#7b6974', 2);
+    p.rect(l, -51, r - l, 226, '#6a535d');
+    masonry(p, l, -53, r, 180, '#896569', '#5e4d5a');
+    for (const [x, y, h] of [
+      [-220, -60, 194],
+      [-70, -71, 235],
+      [374, -65, 234],
+      [527, -60, 218],
+    ]) {
+      p.rect(x, y, 13, h, c.plum);
+      p.rect(x + 3, y, 2, h, '#927579');
+      for (let yy = y + 12; yy < y + h; yy += 48) p.rect(x - 2, yy, 18, 5, c.night);
+    }
+    for (const [x, y, w] of [
+      [-278, -26, 45],
+      [-153, -24, 56],
+      [414, -31, 49],
+      [549, -24, 55],
+    ])
+      clerestory(p, x, y, w, 58, true);
+    // Iron running rail, return pockets and the two door rollers above the opening.
+    p.rect(-164, -14, 648, 11, c.ink);
+    p.rect(-162, -12, 644, 3, c.slate);
+    p.rect(-157, -10, 637, 1, c.steel);
+    p.rect(-5, -4, 331, 5, c.ink);
+    for (let x = -156; x < 482; x += 38) rivet(p, x, -9);
+    p.rect(-9, -3, 9, 183, c.night);
+    p.rect(-4, -3, 3, 184, c.steel);
+    p.rect(323, -3, 9, 183, c.night);
+    p.rect(323, -2, 2, 183, c.steel);
+    p.poly([83, -76, 222, -79, 234, -68, 229, -39, 223, -32, 86, -29, 77, -39, 77, -64], c.ink);
+    p.poly([84, -70, 221, -73, 228, -66, 224, -39, 85, -35, 82, -39], c.rust);
+    p.path([87, -67, 218, -70, 224, -66], c.sand, 2);
+    p.poly([135, -59, 177, -59, 177, -43, 135, -42], c.ochre, c.brick);
+    p.path([136, -58, 156, -48, 176, -58], c.wheat, 2);
+    for (const side of [-1, 1])
+      for (let j = 0; j < 3; j++)
+        p.path(
+          [
+            156 + side * 24,
+            -54 + j * 3,
+            156 + side * (43 - j * 4),
+            -61 + j * 4,
+            156 + side * (52 - j * 5),
+            -67 + j * 5,
+          ],
+          c.ochre,
+          2,
+        );
+    p.rect(l, 180, r - l, bottom - 180, '#554f5d');
+    p.poly([l, 189, 76, 187, 321, 186, r, 191, r, 209, l, 213], '#6b6068');
+    p.rect(-165, 181, 646, 3, c.ink);
+    p.rect(-162, 182, 639, 1, c.rust);
+    for (const x of [-220, -65, 38, 168, 305, 442, 645]) {
+      p.line(x, 190, 160 + ((x - 160) * (bottom + 100)) / 290, bottom, '#443f51', 2);
+    }
+    for (let y = 224; y < bottom; y = Math.round(y * 1.32)) p.line(l, y + 5, r, y - 5, '#453f51', 2);
+    for (const [x, y] of [
+      [-92, 151],
+      [367, 152],
+      [503, 188],
+    ])
+      block(p, x, y, 30, 22, c.plum, '#917875');
+    // From outside, the warehouse and its workers are visible only through the doorway.
+    p.g.clearRect(0, 0, 323, 180);
+  }
+
+  function shop(p, b, kind) {
+    const { l, t, r, b: bottom } = b,
+      stamp = kind === 'press',
+      lamp = kind === 'lamp';
+    p.rect(l, t, r - l, bottom - t, stamp ? c.night : c.navy);
+    if (stamp) p.poly([l, t, 147, t, 159, 0, 126, 92, l, 126], c.navy);
+    if (stamp) p.poly([163, 0, 147, t, r, t, r, 124, 151, 100], '#624958');
+    if (!stamp && !lamp) p.poly([189, 0, 205, t, r, t, r, bottom, 105, bottom, 125, 106], c.night);
+    masonry(p, l, t, r, 132, stamp ? '#514958' : '#454e63', '#3b3d51');
+    for (const [x, y, w, h] of [
+      [-270, -49, 67, 111],
+      [-159, -41, 72, 104],
+      [-42, -125, 61, 65],
+      [67, -123, 67, 60],
+      [329, -75, 65, 100],
+      [431, -42, 87, 108],
+      [572, -33, 57, 90],
+    ]) {
+      clerestory(p, x, y, w, h, stamp && x > 150);
+    }
+    p.rect(l, -168, r - l, 6, c.night);
+    p.rect(l, -167, r - l, 1, c.slate);
+    for (let x = Math.floor(l / 170) * 170; x < r; x += 170) {
+      p.path([x - 9, -167, x + 52, -111, x + 117, -167], c.night, 4);
+      p.line(x, -164, x + 52, -115, c.slate);
+      p.line(x + 53, -166, x + 53, -113, c.night, 3);
+      p.rect(x - 8, t, 5, Math.max(0, -169 - t), c.night);
+      if (t < -184) {
+        p.path([x - 7, -191, x + 61, -230, x + 158, -194], c.night, 3);
+        p.path([x + 3, -199, x + 63, -233, x + 148, -201], c.slate);
+      }
+    }
+    p.path([l, -80, -94, -60, 6, -68, 79, -61, 206, -82, 360, -63, r, -79], c.night, 3);
+    for (const x of [-179, 411]) hoist(p, x, -68, 37);
+    const floor = lamp ? 235 : stamp ? 215 : 201;
+    p.poly(
+      [l, floor + 21, 177, floor - 14, r, floor + 8, r, bottom, l, bottom],
+      stamp ? '#544b59' : '#514956',
+    );
+    for (const x of [-269, -130, 10, 81, 188, 280, 357, 511, 625])
+      ray(p, 166, floor - 28, x, floor + 21, bottom, '#494450', 2);
+    for (let y = floor + 47; y < bottom; y = Math.round(y * 1.3)) p.line(l, y + 14, r, y - 2, '#635560');
+    for (const [x, y] of [
+      [-185, floor - 22],
+      [468, floor - 27],
+      [530, floor - 19],
+    ])
+      block(p, x, y, 48, 29, c.plum, '#786873');
+  }
+  function leg(p, x, y, kx, ky, foot, fy) {
+    rod(p, x, y, kx, ky, 12, c.brick, c.copper);
+    pin(p, x, y, 9);
+    rod(p, kx, ky, foot, fy - 10, 7, c.slate, c.ice);
+    rod(p, kx, ky, lerp(kx, foot, 0.54), lerp(ky, fy - 10, 0.54), 10, c.navy, c.steel);
+    pin(p, kx, ky, 7);
+    p.poly(
+      [
+        foot - 27,
+        fy - 3,
+        foot - 17,
+        fy - 15,
+        foot - 3,
+        fy - 19,
+        foot + 8,
+        fy - 16,
+        foot + 15,
+        fy - 5,
+        foot + 13,
+        fy + 2,
+        foot - 28,
+        fy + 4,
+      ],
+      c.slate,
+      c.ink,
+    );
+    p.path([foot - 25, fy - 2, foot - 15, fy - 12, foot - 2, fy - 15], c.steel, 3);
+    for (const dx of [-14, -5, 4]) p.line(foot + dx, fy - 4, foot + dx - 3, fy + 1, c.night, 2);
+  }
+  function pressRoom(p, b) {
+    shop(p, b, 'press');
+    p.poly([-285, 56, 98, 0, 112, 0, -13, 87, -285, 144], '#4b6573');
+    p.poly([-192, 114, 78, 9, 69, 25, -192, 148], '#637c81');
+    p.path([-212, 142, -126, 137, -53, 104, -7, 91, 33, 68], c.ink, 6);
+    p.path([-212, 141, -127, 136, -54, 103, -7, 90, 34, 68], c.steel, 2);
+    for (const x of [12, 90, 204, 306]) {
+      p.rect(x, -85, 5, 179, c.ink);
+      p.rect(x + 1, -82, 1, 157, '#5c5768');
+    }
+    // The return belt travels along the lower face of the cast-iron table.
+    const left = -191,
+      right = 534;
+    p.poly([left, 150, right, 77, right + 2, 132, left + 13, 232], c.navy, c.ink);
+    for (const [x, y, h] of [
+      [-145, 206, 65],
+      [22, 185, 75],
+      [234, 158, 71],
+      [471, 127, 66],
+    ]) {
+      p.poly([x, y, x + 17, y - 2, x + 13, y + h, x + 4, y + h + 4, x - 1, y + h], c.night, c.ink);
+      p.line(x + 4, y + 2, x + 5, y + h - 4, c.slate, 3);
+      p.poly(
+        [x - 7, y + h + 1, x + 13, y + h - 2, x + 24, y + h + 4, x + 4, y + h + 8, x - 8, y + h + 6],
+        c.slate,
+        c.ink,
+      );
+    }
+    p.poly([left, 112, 494, 54, right, 58, right, 81, left, 148], c.ink);
+    p.poly([left, 114, 494, 56, right - 4, 61, right - 2, 67, left, 134], c.brick);
+    p.line(left, 114, right - 1, 55, c.copper, 2);
+    p.poly([left, 147, right, 78, right + 2, 107, left, 198], '#778687', c.ink);
+    p.poly([left, 159, right, 91, right + 2, 103, left, 192], '#a29180');
+    p.path([left, 196, 0, 173, 319, 136, right, 110], c.ink, 3);
+    p.path([left, 201, 0, 177, 319, 140, right, 114], c.copper, 2);
+    p.poly([left, 202, 0, 178, 320, 139, right, 113, right, 126, 320, 162, left, 222], c.navy);
+    for (const [x, y] of [
+      [-183, 195],
+      [-89, 186],
+      [400, 128],
+      [522, 112],
+    ])
+      wheel(p, x, y, 9, 0.7, c.steel);
+    p.poly([left, 202, 0, 178, 320, 139, right, 113, right, 172, left + 12, 248, left, 240], c.navy);
+    p.path([left + 12, 248, -86, 236, 205, 208, 421, 186, right - 1, 172], c.ink, 3);
+    p.path([left + 12, 245, -87, 233, 205, 205, 421, 183, right - 1, 169], c.slate);
+    for (const [x, y] of [
+      [-92, 211],
+      [76, 208],
+      [215, 190],
+      [395, 168],
+    ]) {
+      p.rect(x, y, 8, 1, c.slate);
+      p.rect(x + 2, y + 3, 4, 1, c.night);
+    }
+    // The die guides rejoin the press overhead at the flywheel's bearing.
+    p.poly(
+      [209, 64, 209, -42, 223, -74, 255, -84, 290, -77, 305, -54, 302, 0, 297, 82, 268, 104, 242, 91],
+      c.ink,
+    );
+    p.poly([215, 57, 215, -37, 230, -68, 255, -77, 282, -70, 296, -51, 287, 0, 285, 64, 264, 84], c.rust);
+    p.poly([225, 0, 227, -42, 242, -65, 263, -71, 269, -53, 267, 0, 253, 10, 241, 42, 218, 50], c.copper);
+    p.path([233, -42, 246, -63, 266, -67, 276, -61], c.sand, 3);
+    p.poly([125, 0, 125, -48, 133, -59, 174, -61, 184, -52, 183, 0], c.ink);
+    p.poly([128, 0, 129, -47, 136, -54, 170, -56, 178, -50, 178, 0], c.rust);
+    p.rect(138, -86, 10, 38, c.ink);
+    p.rect(140, -84, 4, 36, c.steel);
+    p.rect(164, -86, 8, 36, c.ink);
+    p.rect(166, -83, 3, 33, c.steel);
+    rod(p, 135, -83, 240, -103, 7, c.brick, c.copper);
+    pin(p, 144, -85, 5);
+    wheel(p, 249, -99, 26, 1.05, c.copper);
+    p.path([248, -127, 286, -146, 334, -151], c.night, 4);
+    p.path([269, -84, 307, -105, 351, -117], c.night, 4);
+    pin(p, 249, -99, 7);
+    for (let i = 0; i < 4; i++) smallMail(p, -147 + i * 11, 144 - i * 2);
+    grate(p, 377, 144, 40, 21);
+  }
+  function boilerRoom(p, b) {
+    shop(p, b, 'boiler');
+    p.poly([b.l, 126 - b.l * 0.16, 125, 106, 145, 86, 135, 197, 24, 204, b.l, 224], c.night);
+    for (const x of [-31, 34, 105]) {
+      p.line(x - 37, -33, x + 46, 41, c.slate, 3);
+      p.line(x + 46, 41, x + 92, -30, c.ink, 3);
+    }
+    p.oval(233, 272, 155, 14, '#443f4d');
+    // The bell belongs to the Hound's barrel. Its folded rear leg and tail
+    // continue around the curved housing and share its copper highlights.
+    leg(p, 202, 157, 184, 196, 206, 254);
+    leg(p, 344, 153, 371, 184, 350, 246);
+    rod(p, 370, 80, 419, 44, 13, c.brick, c.copper);
+    rod(p, 419, 44, 445, 4, 8, c.rust, c.ochre);
+    pin(p, 416, 45, 8);
+    pin(p, 447, 5, 6);
+    p.poly(
+      [
+        296, 7, 320, 19, 353, 29, 374, 47, 385, 66, 392, 98, 383, 139, 361, 163, 327, 182, 271, 187, 189, 184,
+        83, 183, 101, 153, 148, 99,
+      ],
+      c.ink,
+    );
+    p.poly(
+      [
+        300, 14, 320, 26, 348, 35, 369, 52, 380, 72, 384, 103, 374, 134, 351, 155, 308, 170, 253, 176, 198,
+        179, 161, 181, 129, 151, 149, 98,
+      ],
+      c.rust,
+    );
+    p.poly(
+      [
+        291, 25, 320, 34, 344, 43, 359, 59, 369, 84, 369, 99, 348, 119, 334, 124, 320, 117, 299, 147, 280,
+        157, 273, 138, 290, 102,
+      ],
+      c.brick,
+    );
+    p.path([294, 123, 315, 103, 327, 86, 333, 65], c.ink, 7);
+    p.path([294, 120, 315, 101, 325, 86, 330, 67], c.ochre, 3);
+    p.path([306, 145, 341, 132, 365, 109, 376, 85], c.ink, 4);
+    p.path([309, 141, 338, 130, 358, 112], c.copper, 2);
+    p.poly([91, 180, 105, 148, 145, 138, 162, 149, 145, 181, 121, 200, 103, 201], c.ink);
+    p.poly([116, 180, 131, 153, 151, 146, 160, 150, 145, 180, 129, 191, 111, 194], c.slate);
+    leg(p, 140, 184, 132, 218, 108, 269);
+    leg(p, 326, 178, 300, 210, 324, 265);
+    for (const [x, y] of [
+      [335, 45],
+      [369, 79],
+      [340, 143],
+      [206, 185],
+    ])
+      rivet(p, x, y);
+  }
+  function lampRoom(p, b) {
+    shop(p, b, 'lamp');
+    arch(p, -18, 9, 95, 107, c.night, '#5e7781');
+    p.path([-140, 157, 0, 128, 128, 99, 223, 103, 320, 131, 443, 163], c.night, 5);
+    p.oval(299, 290, 143, 13, '#433f4e');
+    leg(p, 255, 175, 242, 219, 257, 273);
+    leg(p, 379, 169, 405, 216, 390, 271);
+    p.poly(
+      [
+        169, 180, 174, 110, 188, 87, 197, 43, 215, 26, 236, 17, 260, 18, 272, 11, 306, 11, 320, 19, 354, 25,
+        390, 47, 405, 73, 415, 111, 410, 145, 389, 169, 359, 188, 306, 198, 246, 202, 192, 198,
+      ],
+      c.ink,
+    );
+    p.poly(
+      [
+        174, 179, 180, 108, 195, 87, 203, 47, 218, 31, 240, 22, 262, 22, 274, 17, 306, 17, 320, 24, 349, 30,
+        384, 51, 399, 78, 406, 111, 403, 139, 381, 164, 353, 181, 306, 190, 243, 195, 192, 191,
+      ],
+      c.brick,
+    );
+    p.poly(
+      [
+        277, 57, 292, 42, 317, 41, 343, 45, 365, 59, 383, 85, 378, 104, 343, 120, 315, 119, 281, 131, 263,
+        114,
+      ],
+      c.rust,
+    );
+    p.path([312, 156, 349, 143, 375, 123, 387, 96], c.ink, 4);
+    p.path([316, 151, 348, 139, 370, 123], c.copper, 2);
+    p.poly([283, 5, 284, -40, 279, -47, 281, -57, 299, -60, 308, -55, 307, -47, 301, -42, 299, 12], c.ink);
+    p.poly([287, 2, 287, -42, 298, -45, 296, 4], c.steel);
+    p.path([289, -40, 294, -42, 293, -9], c.ice, 2);
+    p.poly([280, -55, 297, -58, 305, -54, 304, -49, 285, -46, 280, -48], c.rust, c.ink);
+    p.path([283, -53, 297, -56, 302, -54], c.gold, 2);
+    rod(p, 365, 99, 393, 55, 16, c.brick, c.copper);
+    p.image(houndFace(), 345, -19, 142, 121);
+    p.rect(423, 29, 5, 2, c.wheat);
+    leg(p, 200, 185, 182, 224, 191, 290);
+    leg(p, 339, 186, 318, 222, 340, 287);
+    p.poly([169, 178, 244, 178, 250, 183, 246, 191, 223, 195, 197, 192, 178, 188, 171, 184], c.ink);
+    p.path([181, 186, 203, 190, 226, 191, 242, 188], c.rust, 2);
+    p.path([157, 136, 176, 126, 196, 130, 203, 149, 203, 185, 197, 196], c.slate, 3);
+    for (const [x, y] of [
+      [334, 37],
+      [375, 66],
+      [370, 119],
+      [280, 181],
+    ])
+      rivet(p, x, y);
+    // Noodle leans out of the left foreground. The long low back and his
+    // planted hind paw carry the same weight as the pointing foreleg.
+    p.oval(-35, 244, 133, 10, '#494251');
+    p.poly(
+      [
+        -103, 158, -156, 147, -182, 128, -194, 105, -195, 94, -191, 92, -185, 104, -168, 122, -140, 132, -92,
+        140,
+      ],
+      '#99613e',
+      c.ink,
+    );
+    p.path([-188, 101, -178, 119, -158, 134, -135, 141], '#c2864d', 3);
+    p.poly(
+      [
+        -115, 169, -105, 145, -84, 136, -56, 137, -22, 147, 1, 148, 29, 147, 42, 126, 74, 118, 102, 128, 120,
+        149, 130, 177, 132, 188, 119, 207, 93, 217, 58, 217, 34, 210, 7, 206, -35, 207, -70, 202, -99, 195,
+      ],
+      '#a66944',
+      c.ink,
+    );
+    p.poly(
+      [
+        -105, 158, -82, 143, -55, 145, -27, 154, -3, 154, 27, 149, 18, 167, -12, 174, -46, 177, -80, 172,
+        -101, 178,
+      ],
+      '#bc7c48',
+    );
+    p.path([-95, 151, -78, 145, -56, 146, -36, 151], '#d39754', 3);
+    p.poly([54, 161, 87, 150, 107, 168, 108, 190, 99, 205, 79, 211, 60, 206, 49, 191], '#d9a45e');
+    p.poly([52, 179, 106, 179, 108, 188, 99, 204, 80, 209, 62, 206, 51, 195], '#d9a45e');
+    p.poly(
+      [
+        -99, 176, -72, 179, -67, 195, -80, 212, -96, 224, -94, 233, -83, 235, -82, 241, -105, 242, -113, 234,
+        -112, 218, -106, 194,
+      ],
+      '#955c3c',
+      c.ink,
+    );
+    p.poly([-105, 237, -98, 231, -91, 229, -79, 231, -70, 237, -72, 242, -102, 244], '#c58b51', c.ink);
+    p.poly(
+      [48, 199, 66, 201, 73, 211, 69, 227, 80, 230, 88, 236, 85, 242, 51, 242, 43, 236, 46, 227, 45, 215],
+      '#a56944',
+      c.ink,
+    );
+    p.poly([49, 235, 60, 229, 67, 229, 74, 233, 80, 233, 85, 238, 80, 241, 52, 242], '#d49b58');
+    p.path([62, 238, 65, 234, 68, 234], '#8e603f', 2);
+  }
 
   function pin(p, x, y, r = 4) {
     p.oval(x, y, r, r, c.ink);
@@ -216,8 +844,93 @@
     p.path([x - 7, y, x, y + 1, x + 4, y - 1], c.ochre);
     p.rect(x + 5, y, 2, 1, c.berry);
   }
-  function reveal(p, t) {
+  function outside(p, v, draw) {
+    p.g.save();
+    p.g.beginPath();
+    p.g.rect(
+      Math.floor(v.left) - 1,
+      Math.floor(v.top) - 1,
+      Math.ceil(v.right - v.left) + 3,
+      Math.ceil(v.bottom - v.top) + 3,
+    );
+    p.g.rect(0, 0, 320, 180);
+    p.g.clip('evenodd');
+    draw();
+    p.g.restore();
+  }
+  function foreground(pen, shot) {
+    const art = bank('cargo-foreground/' + shot, 504, 84, (p) => {
+      p.g.translate(96, -150);
+      const tips = { entry: [170, 41], bell: [159, 43], lamp: [172, 42], hall: [163, 51] };
+      const [rise, tip] = tips[shot];
+      p.poly(
+        [
+          -94,
+          rise + 21,
+          -72,
+          rise + 5,
+          -27,
+          rise - 6,
+          0,
+          rise,
+          16,
+          rise - 3,
+          tip,
+          180,
+          tip + 6,
+          203,
+          tip - 8,
+          219,
+          -75,
+          229,
+          -94,
+          219,
+        ],
+        c.ink,
+      );
+      p.poly(
+        [-86, rise + 21, -69, rise + 8, -27, rise - 2, -7, rise + 2, -14, rise + 11, -53, rise + 17],
+        '#424050',
+      );
+      p.path([-84, 201, -53, 207, tip + 3, 194], c.night, 3);
+      p.path([-60, 221, -61, 209, -53, 204, -48, 206, -47, 217], c.plum, 2);
+      if (shot === 'entry' || shot === 'hall') {
+        const tip = shot === 'entry' ? 288 : 267;
+        p.poly(
+          [
+            tip,
+            180,
+            tip + 19,
+            165,
+            305,
+            162,
+            320,
+            165,
+            356,
+            156,
+            384,
+            162,
+            401,
+            180,
+            396,
+            200,
+            301,
+            219,
+            tip - 9,
+            209,
+          ],
+          c.ink,
+        );
+        p.poly([320, 165, 355, 160, 381, 165, 392, 172, 357, 169, 326, 175], c.night);
+        p.path([tip - 5, 200, 304, 207, 394, 190], c.navy, 2);
+      }
+      p.g.clearRect(0, 0, 320, 180);
+    });
+    pen.image(art, -96, 150);
+  }
+  function reveal(p, t, view) {
     const glide = ease(0.55, 2.45, t);
+    if (view) set(p, 'hall', view, hall, -rounded(glide * 7), -1);
     p.image(warehouse(), -rounded(glide * 7), -1);
     track(p, t);
     smallMail(p, 125 + ((t * 12) % 38), 124 - ((t * 12) % 38) * 0.13);
@@ -227,6 +940,16 @@
     // A real latch retracts before the two heavy door leaves can part.
     const open = rounded(158 * ease(0.48, 2.22, t)),
       bolt = rounded(28 * ease(0.23, 0.62, t));
+    if (view) {
+      set(p, 'depot-entry', view, threshold);
+      for (const xx of [17 - open, 135 - open, 185 + open, 299 + open]) {
+        p.rect(xx - 3, -7, 6, 7, c.ink);
+        p.oval(xx, -8, 4, 4, c.ink);
+        p.oval(xx, -8, 2, 2, c.rust);
+      }
+      p.rect(2 - open, 180, 158, 2, c.ink);
+      p.rect(163 + open, 180, 157, 2, c.ink);
+    }
     p.image(doorLeaf(false), -open, 0);
     p.image(doorLeaf(true), 160 + open, 0);
     const x = 143 - open;
@@ -241,6 +964,7 @@
     }
     p.poly([0, 170, 20, 164, 36, 167, 41, 180, 0, 180], c.ink);
     p.poly([288, 180, 300, 168, 319, 164, 320, 180], c.ink);
+    if (view) foreground(p, 'entry');
   }
   function cancellingBench() {
     return bank('press-bed', 320, 180, (p) => {
@@ -423,7 +1147,7 @@
       p.rect(x - 4, y - 2, 7, 2, c.cream);
     }
   }
-  function pressShot(p, t, jam) {
+  function pressShot(p, t, jam, view) {
     const impact = jam ? 3.78 : 3.84,
       delta = t - impact;
     let at, down;
@@ -436,6 +1160,18 @@
     }
     const strain = jam && t > 4.08 ? Math.sin((t - 4.08) * 11) * 1.7 : 0;
     const gearTime = jam ? Math.min(t, 3.84) * 5 + strain * 0.06 : t * 4.6;
+    if (view) {
+      set(p, 'press', view, pressRoom);
+      wheel(p, 249, -99, 26, gearTime * 0.58, c.copper);
+      pin(p, 249, -99, 7);
+      const first = -16 + (Math.floor(gearTime * 4) % 22);
+      for (let i = -8; i < 25; i++) {
+        if (i >= 0 && i < 16) continue;
+        const x = first + i * 22,
+          y = 126 - x * 0.093;
+        if (x >= -188 && x < 529) p.line(x, y, x + 20, y + 25, '#677578', 2);
+      }
+    }
     p.image(cancellingBench(), 0, 0);
     for (let i = 0; i < 16; i++) {
       const x = ((i * 22 + Math.floor(gearTime * 4)) % 352) - 16,
@@ -688,7 +1424,8 @@
     p.rect(ox - 9, oy - 5, 18, 2, c.steel);
     pin(p, ox, oy, 3);
   }
-  function listening(p, t) {
+  function listening(p, t, view) {
+    if (view) set(p, 'boiler', view, boilerRoom);
     p.image(inspectionPlate(), 0, 0);
     const since = t - 6.12;
     const angle =
@@ -711,6 +1448,7 @@
       p.rect(266, 98, 3, 1, c.wheat);
     }
     p.poly([0, 159, 16, 154, 36, 162, 43, 180, 0, 180], c.ink);
+    if (view) foreground(p, 'bell');
   }
   function lampHousing() {
     return bank('lamp-shoulder', 320, 180, (p) => {
@@ -847,7 +1585,8 @@
       p.path([62, 45, 64, 42, 68, 41], c.wheat, 2);
     });
   }
-  function instruction(p, t) {
+  function instruction(p, t, view) {
+    if (view) set(p, 'lamp', view, lampRoom);
     p.image(lampHousing(), 0, 0);
     lampLens(p, 251, 71, 20, false);
     const lift = ease(0.29, 1.1, t),
@@ -855,7 +1594,11 @@
     // The muzzle and leading paw share their sight line with the receiver glass.
     const x = -2 + rounded(3 * lift),
       y = 12 - rounded(3 * lift) + rounded(settle);
-    p.image(noodleTorso(), -3, 105, 142, 84);
+    if (view) {
+      // The old bust has a closed lower edge beyond the camera. Its painted
+      // chest meets the full-length dachshund at the original sight line.
+      p.g.drawImage(noodleTorso(), 0, 0, 142, 75, -3, 105, 142, 75);
+    } else p.image(noodleTorso(), -3, 105, 142, 84);
     const mouth = t > 0.3 && t < 2.46 ? Math.max(0, rounded(4 * Math.sin(t * 14))) : 0;
     p.image(noodleHead(), x, y);
     p.poly(
@@ -997,10 +1740,21 @@
     p.path([px - 5, py - 2, px + 4, py - 6, px + 13, py - 8], c.wheat, 2);
     p.path([px - 2, py + 4, px + 3, py + 1], '#8e603f');
     p.poly([0, 172, 14, 169, 31, 176, 42, 180, 0, 180], c.ink);
+    if (view) foreground(p, 'lamp');
   }
-  function faceOff(p, t) {
+  function faceOff(p, t, view) {
     const enter = ease(5.7, 7.12, t);
+    if (view) set(p, 'hall', view, hall, -21, -11, 350 / 344, 197 / 186);
     p.image(warehouse(), -21, -11, 350, 197);
+    if (view)
+      outside(p, view, () => {
+        p.poly(
+          [-192, 186, 0, 152, 186, 118, 320, 116, 464, 102, 467, 109, 320, 124, 123, 151, 0, 177, -192, 218],
+          '#816665',
+        );
+        p.path([-192, 196, 0, 161, 152, 134, 319, 116, 464, 101], c.ink, 4);
+        p.path([-192, 195, 0, 160, 153, 133, 319, 116, 464, 101], c.sand);
+      });
     p.poly([0, 152, 186, 118, 320, 116, 320, 124, 123, 151, 0, 177], '#816665');
     p.path([0, 161, 152, 134, 319, 116], c.ink, 4);
     p.path([0, 160, 153, 133, 319, 116], c.sand, 1);
@@ -1018,9 +1772,10 @@
     p.poly([0, 163, 18, 159, 43, 166, 51, 180, 0, 180], c.ink);
     p.poly([267, 180, 288, 164, 305, 162, 320, 165, 320, 180], c.ink);
     p.path([278, 177, 291, 166, 306, 165], c.slate, 2);
+    if (view) foreground(p, 'hall');
   }
   let jamCamera;
-  function jamCloseup(p, t) {
+  function jamCloseup(p, t, view) {
     if (!jamCamera) {
       const canvas = bank('jam-camera', 320, 180, () => {});
       jamCamera = { canvas, pen: new PixelPen(canvas) };
@@ -1028,6 +1783,25 @@
     pressShot(jamCamera.pen, t, true);
     // Push toward the coupling as it sticks. Scaling the finished cel preserves native ink edges.
     const advance = rounded(9 * ease(3.78, 4.92, t));
+    if (view) {
+      const dx = -32 - advance,
+        dy = -8 - rounded(advance * 0.4),
+        sx = (358 + advance) / 320,
+        sy = (202 + rounded(advance * 0.56)) / 180;
+      const local = {
+        left: (view.left - dx) / sx,
+        top: (view.top - dy) / sy,
+        right: (view.right - dx) / sx,
+        bottom: (view.bottom - dy) / sy,
+      };
+      // The camera pushes in on the same working press. The original center
+      // below stays a single pixel cel, including during the coupling's tremor.
+      p.g.save();
+      p.g.translate(dx, dy);
+      p.g.scale(sx, sy);
+      pressShot(p, t, true, local);
+      p.g.restore();
+    }
     p.image(
       jamCamera.canvas,
       -32 - advance,
@@ -1036,16 +1810,18 @@
       202 + rounded(advance * 0.56),
     );
   }
-  window.DispatchFilms.boss = function (p, part, time) {
+  window.DispatchFilms.boss = function (p, part, time, view) {
     const t = Math.max(0, Math.min(8, Number.isFinite(time) ? time : 0));
+    const extra =
+      view && (view.left < 0 || view.top < 0 || view.right > 320 || view.bottom > 180) ? view : null;
     if (part === 0) {
-      if (t < 2.52) reveal(p, t);
-      else if (t < 5.52) pressShot(p, t, false);
-      else listening(p, t);
+      if (t < 2.52) reveal(p, t, extra);
+      else if (t < 5.52) pressShot(p, t, false, extra);
+      else listening(p, t, extra);
     } else {
-      if (t < 2.74) instruction(p, t);
-      else if (t < 5.7) jamCloseup(p, t);
-      else faceOff(p, t);
+      if (t < 2.74) instruction(p, t, extra);
+      else if (t < 5.7) jamCloseup(p, t, extra);
+      else faceOff(p, t, extra);
     }
   };
 })();

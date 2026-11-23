@@ -22,7 +22,7 @@ Choose **Adventure → Begin chapter** to play Chapter 1, **The Silent Yard**. T
 
 Adventure uses the same jumps, attacks, specials and shields as Versus. You have 64 stamina and unlimited retries. Each semaphore restores stamina and saves a checkpoint. **Route map → Continue** resumes in this browser. Revisiting an earlier stop preserves the furthest checkpoint. Each stop has one optional postmark. The chapter ends with a delivery to Clover and can be replayed from the route map.
 
-Four animated pixel-art cutscenes play during the chapter, with timed captions and an original score. **Pause** (P or gamepad Start) holds the current frame. **Next** jumps to the next caption and **Skip scene** moves the adventure along. With reduced motion enabled, each scene opens on a still frame and **Play** starts the animation. Rewatch unlocked scenes from **Adventure → Cutscenes**. [Open the cutscene library](https://caleb-guyer.github.io/dog-fight-3/#cutscenes)
+Four animated pixel-art cutscenes play during the chapter, with timed captions and an original score. Each shot fills your screen with scenery that extends around the dogs on ultrawide monitors and in portrait. **Pause** (P or gamepad Start) holds the current frame. **Next** jumps to the next caption and **Skip scene** moves the adventure along. With reduced motion enabled, each scene opens on a still frame and **Play** starts the animation. Rewatch unlocked scenes from **Adventure → Cutscenes**. [Open the cutscene library](https://caleb-guyer.github.io/dog-fight-3/#cutscenes)
 
 The chapter script, dialogue, encounter order, terrain, gates, semaphores and postmarks live in `docs/dispatch-script.js`. The runtime in `docs/dispatch-run.js` plays those encounters using the regular fighting engine.
 

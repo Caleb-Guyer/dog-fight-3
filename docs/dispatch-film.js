@@ -1,4 +1,4 @@
-/* Projection and sound for the four 320 × 180 chapter films. */
+/* Projection and sound for the four chapter films. Shots are staged in a 320 × 180 area. */
 (() => {
   'use strict';
   const partSeconds = 8;
@@ -98,12 +98,33 @@
       [15.12, 'reed', 164.81],
     ],
   };
-  function draw(canvas, key, part, time) {
+  const originalShot = Object.freeze({ left: 0, top: 0, right: 320, bottom: 180 });
+
+  function fitFilm(canvas, { width, height, above, below }) {
+    if (!width || !height) return originalShot;
+    // Frame the original action between the controls. The scenery continues behind them.
+    const space = Math.max(height * 0.32, height - above - below);
+    const pixel = Math.min(width / 324, space / 184);
+    const columns = Math.ceil(width / pixel),
+      rows = Math.ceil(height / pixel);
+    const left = -Math.floor((columns - 320) / 2);
+    const centerY = (height + above - below) / (2 * pixel);
+    const top = -Math.max(0, Math.min(rows - 180, Math.round(centerY - 90)));
+    const resolution = Math.min(1, 2048 / Math.max(columns, rows));
+    const w = Math.max(1, Math.round(columns * resolution)),
+      h = Math.max(1, Math.round(rows * resolution));
+    if (canvas.width !== w) canvas.width = w;
+    if (canvas.height !== h) canvas.height = h;
+    return { left, top, right: left + columns, bottom: top + rows };
+  }
+
+  function draw(canvas, key, part, time, view = originalShot) {
     const pen = new window.DispatchFilmArt.PixelPen(canvas);
     const g = pen.g;
+    const scale = Math.max(canvas.width / (view.right - view.left), canvas.height / (view.bottom - view.top));
     g.save();
-    g.setTransform(canvas.width / 320, 0, 0, canvas.height / 180, 0, 0);
-    window.DispatchFilms[key](pen, part, time);
+    g.setTransform(scale, 0, 0, scale, -view.left * scale, -view.top * scale);
+    window.DispatchFilms[key](pen, part, time, view);
     g.restore();
   }
 
@@ -239,7 +260,7 @@
     }
   }
   class Film {
-    constructor(canvas, key, pages, mixer, onPart, onTime, onEnd) {
+    constructor(canvas, key, pages, mixer, onPart, onTime, onEnd, measure) {
       this.canvas = canvas;
       this.key = key;
       this.duration = pages * partSeconds;
@@ -247,6 +268,8 @@
       this.onPart = onPart;
       this.onTime = onTime;
       this.onEnd = onEnd;
+      this.measure = measure;
+      this.view = originalShot;
       this.frame = -1;
       this.part = -1;
       this.time = 0;
@@ -255,20 +278,23 @@
       this.poster = this.paused;
       this.paint();
     }
-    paint() {
+    paint(reframe = false) {
       const frame = Math.floor(this.time * fps);
-      if (frame === this.frame) return;
+      if (!reframe && frame === this.frame) return;
       this.frame = frame;
       const part = Math.min(Math.ceil(this.duration / partSeconds) - 1, Math.floor(this.time / partSeconds));
       if (part !== this.part) {
         this.part = part;
         this.onPart(part);
+        reframe = true;
       }
+      if (reframe && this.measure) this.view = fitFilm(this.canvas, this.measure());
       draw(
         this.canvas,
         this.key,
         part,
         this.poster ? posters[this.key][part] : frame / fps - part * partSeconds,
+        this.view,
       );
       this.onTime(this.time, this.duration);
     }

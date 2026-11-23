@@ -272,7 +272,7 @@ body:is(.playing, .cinema-active) .full-button span {
   white-space: nowrap;
 }
 
-/* The complete film stays in frame. Subtitles and transport share its lower edge. */
+/* The projector draws scenery across the whole surface, behind the captions and controls. */
 #dispatch-story {
   position: relative;
   isolation: isolate;
@@ -282,15 +282,15 @@ body:is(.playing, .cinema-active) .full-button span {
   border: 0;
   box-shadow: none;
   background: #151925;
+  overflow: hidden;
 }
 #story-cover {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: min(100%, calc(100vh * 16 / 9));
-  width: min(100%, calc(100dvh * 16 / 9));
-  height: auto;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  image-rendering: pixelated;
 }
 .film-heading {
   position: absolute;
@@ -319,7 +319,7 @@ body:is(.playing, .cinema-active) .full-button span {
   right: 0;
   bottom: 0;
   padding: 0 var(--right-edge) var(--bottom-edge) var(--left-edge);
-  background: linear-gradient(transparent, #151925c9 87%);
+  background: linear-gradient(transparent 45%, #15192578);
 }
 .film-caption {
   width: fit-content;
@@ -342,6 +342,10 @@ body:is(.playing, .cinema-active) .full-button span {
 }
 .film-timeline {
   height: 2px;
+}
+#film-time {
+  padding: 3px 5px;
+  background: #202433df;
 }
 
 @media (max-width: 620px), (orientation: portrait) and (max-width: 860px) {
@@ -556,39 +560,6 @@ body:is(.playing, .cinema-active) .full-button span {
   #dispatch-notice {
     bottom: calc(100% + 5px);
     top: auto;
-  }
-}
-@media (max-aspect-ratio: 1/1) {
-  #dispatch-story {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-  }
-  #story-cover {
-    position: static;
-    width: 100%;
-    transform: none;
-    flex: none;
-  }
-  .film-footer {
-    position: static;
-    padding: 0;
-    background: none;
-  }
-  .film-caption {
-    margin: 10px auto;
-  }
-  .film-controls {
-    position: absolute;
-    left: var(--left-edge);
-    right: var(--right-edge);
-    bottom: var(--bottom-edge);
-  }
-  .film-timeline {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: calc(var(--bottom-edge) + 47px);
   }
 }
 @media (max-height: 540px) and (orientation: landscape) {

@@ -10,6 +10,92 @@
     brass = '#d69859',
     straw = '#ffe0a0';
 
+  // A station wall, floor or rooftop has a fixed place in the shot. Cache only the
+  // native-size cells that a screen actually reveals, independent of its CSS size.
+  function surround(p, view, key, paint) {
+    if (!view) return;
+    const firstX = Math.floor(view.left / 320), lastX = Math.ceil(view.right / 320);
+    const firstY = Math.floor(view.top / 180), lastY = Math.ceil(view.bottom / 180);
+    for (let row = firstY; row < lastY; row++) {
+      for (let col = firstX; col < lastX; col++) {
+        if (!row && !col) continue;
+        const left = 320 * col, top = 180 * row;
+        const cell = { left, top, right: left + 320, bottom: top + 180 };
+        if (Math.abs(col) <= 2 && Math.abs(row) <= 3) {
+          const tile = plate('ending-surround-' + key + '-' + col + '-' + row, 320, 180, (q) => {
+            q.g.translate(-left, -top);
+            paint(q, cell);
+          });
+          p.image(tile, left, top);
+        } else {
+          p.g.save();
+          p.g.beginPath();
+          p.g.rect(left, top, 320, 180);
+          p.g.clip();
+          paint(p, cell);
+          p.g.restore();
+        }
+      }
+    }
+  }
+  function band(p, cell, top, bottom, color) {
+    const from = Math.max(top, cell.top), to = Math.min(bottom, cell.bottom);
+    if (to > from) p.rect(cell.left, from, 320, to - from, color);
+  }
+  function salt(x, y) {
+    const n = Math.imul(x + 31827, 198491317) ^ Math.imul(y - 3961, 6542989);
+    return (Math.imul(n ^ (n >>> 14), 122949829) >>> 0);
+  }
+  function scatter(cell, pitchX, pitchY, callback) {
+    for (let row = Math.floor(cell.top / pitchY) - 1; row <= Math.floor(cell.bottom / pitchY); row++) {
+      for (let col = Math.floor(cell.left / pitchX) - 1; col <= Math.floor(cell.right / pitchX); col++) {
+        const n = salt(col, row);
+        callback(col * pitchX + n % pitchX, row * pitchY + (n >>> 9) % pitchY, n);
+      }
+    }
+  }
+  // Sides are specified at y=0 and y=180 to preserve the painted vanishing lines.
+  function shaft(p, cell, a, b, endA, endB, color, limitTop = cell.top, limitBottom = cell.bottom) {
+    const top = Math.max(cell.top, limitTop), bottom = Math.min(cell.bottom, limitBottom);
+    if (top >= bottom) return;
+    const l = (y) => a + (endA - a) * y / 180;
+    const r = (y) => b + (endB - b) * y / 180;
+    if (r((top + bottom) / 2) < l((top + bottom) / 2)) return;
+    p.poly([l(top), top, r(top), top, r(bottom), bottom, l(bottom), bottom], color);
+  }
+  function wheel(p, x, y, r) {
+    p.oval(x, y, r + 2, r + 2, night);
+    p.oval(x, y, r, r, '#768487');
+    p.oval(x, y, r - 2, r - 2, '#344755');
+    for (let i = 0; i < 6; i++) {
+      const a = i * Math.PI / 3;
+      p.line(x, y, x + (r - 3) * Math.cos(a), y + (r - 3) * Math.sin(a), '#7c817a', 2);
+    }
+    p.oval(x, y, Math.max(2, Math.floor(r / 4)), Math.max(2, Math.floor(r / 4)), c.brick);
+    p.rect(x - 1, y - 1, 2, 2, brass);
+  }
+  function trunk(p, x, y, w, h, skin, edge) {
+    p.poly([x, y, x + 6, y - 4, x + w - 5, y - 4, x + w, y, x + w, y + h - 3,
+      x + w - 4, y + h, x + 3, y + h, x, y + h - 3], night);
+    p.rect(x + 2, y, w - 4, h - 2, skin);
+    p.rect(x + 5, y - 2, w - 10, 2, edge);
+    p.rect(x + 2, y + 5, w - 4, 2, night);
+    for (const n of [8, w - 13]) {
+      p.rect(x + n, y - 2, 4, h + 2, edge);
+      p.rect(x + n, y + 5, 5, 4, c.brick);
+      p.rect(x + n + 1, y + 5, 3, 1, brass);
+    }
+    p.path([x + w / 2 - 5, y - 4, x + w / 2 - 5, y - 7, x + w / 2 + 5, y - 7,
+      x + w / 2 + 5, y - 4], night, 2);
+  }
+  function trolley(p, x, y, w) {
+    for (const dx of [11, w - 12]) wheel(p, x + dx, y, 5);
+    p.rect(x - 2, y - 8, w + 4, 4, night);
+    p.rect(x, y - 8, w, 1, verdigris);
+    p.path([x + w - 2, y - 9, x + w - 1, y - 27, x + w + 3, y - 29, x + w + 8, y - 29], iron, 3);
+    trunk(p, x + 2, y - 29, w - 8, 19, '#66575a', '#9d7863');
+  }
+
   function skyline(p, moonX, moonY) {
     const bands = [
       [0, '#29384f'],
@@ -113,7 +199,103 @@
       p.path([48, 49, 50, 46, 52, 48], c.wheat);
     });
   }
-  function platformFloor(p, t) {
+  function flagstones(p, v, y) {
+    if (v.bottom <= y) return;
+    band(p, v, y, v.bottom, '#75665e');
+    band(p, v, y, y + 2, '#dbb488');
+    const start = Math.max(y, v.top), end = v.bottom - 1;
+    const gap = (dy) => 19 + (dy - y) * 64 / (179 - y);
+    const near = gap(start), far = gap(end);
+    const limits = [(v.left - 146) / near, (v.left - 146) / far,
+      (v.right - 146) / near, (v.right - 146) / far];
+    for (let i = Math.floor(Math.min(...limits)); i <= Math.ceil(Math.max(...limits)); i++) {
+      p.line(146 + i * near, start, 146 + i * far, end, '#4d4b50');
+    }
+    for (const n of [4, 14, 32, 77, 139, 231, 362, 552]) band(p, v, y + n, y + n + 1, '#a18a74');
+    scatter(v, 30, 19, (x, py, n) => {
+      if (py > y + 3) p.rect(x, py, 2 + n % 7, 1, n % 3 ? '#897970' : '#baa083');
+    });
+  }
+  function sortingHall(p, v) {
+    band(p, v, v.top, v.bottom, blue);
+    if (v.top < 112) {
+      for (let k = Math.floor((v.left + 20) / 62) - 1; -20 + k * 62 < v.right; k++) {
+        const x = -20 + k * 62;
+        p.rect(x, 1, 45, 82, glass);
+        p.poly([x + 2, 5, x + 40, 5, x + 37, 47, x + 2, 67], '#7b827e');
+        p.poly([x + 5, 8, x + 24, 8, x + 5, 47], '#c6a57d');
+        p.rect(x + 22, 2, 3, 81, iron);
+        p.rect(x, 31, 44, 4, iron);
+        p.rect(x, 63, 44, 2, iron);
+        p.rect(x, -94, 45, 93, glass);
+        p.poly([x + 2, -89, x + 41, -89, x + 33, -49, x + 2, -20], '#737f81');
+        p.poly([x + 4, -86, x + 27, -86, x + 4, -55], '#a19886');
+        p.rect(x + 22, -94, 3, 93, iron);
+        p.rect(x, -56, 45, 3, blue);
+        p.rect(x, -9, 45, 2, iron);
+      }
+      band(p, v, 83, 114, '#4b5055');
+      band(p, v, 86, 89, '#6f6762');
+      for (let x = Math.floor(v.left / 24) * 24; x < v.right; x += 24) p.rect(x, 92, 2, 19, iron);
+    }
+    if (v.top < 0) {
+      band(p, v, v.top, -108, '#364956');
+      for (let r = Math.floor(v.top / 46); r * 46 < Math.min(v.bottom, -98); r++) {
+        const y = r * 46;
+        band(p, v, y, y + 2, '#465967');
+        for (let x = Math.floor(v.left / 94) * 94 - 94; x < v.right; x += 94) {
+          const sx = x + (r % 2 ? 41 : 0);
+          p.rect(sx, y + 2, 2, 43, '#2c4050');
+          p.rect(sx + 4, y + 6, 2, 2, '#738084');
+          p.rect(sx + 4, y + 8, 2, 1, iron);
+        }
+      }
+      band(p, v, -129, -124, night);
+      band(p, v, -125, -121, '#99765e');
+      band(p, v, -120, -107, iron);
+      band(p, v, -109, -108, '#6e797a');
+      for (let k = Math.floor(v.left / 154) - 1; k * 154 < v.right; k++) {
+        const x = k * 154;
+        p.path([x, -121, x + 75, -187, x + 151, -123], '#263b49', 7);
+        p.path([x + 5, -122, x + 75, -181, x + 144, -123], '#70807e', 2);
+      }
+      p.path([71, -243, 214, -243, 223, -236, 223, -208], night, 5);
+      p.path([74, -242, 211, -242, 220, -236], verdigris, 2);
+      wheel(p, 97, -126, 16);
+      p.line(85, -114, 85, -69, night, 2);
+      p.line(108, -113, 99, -67, '#9e8c72', 2);
+      p.path([85, -69, 90, -62, 98, -66, 102, -73], brass, 3);
+      p.rect(175, -210, 68, 23, night);
+      p.rect(178, -208, 62, 18, '#526470');
+      for (let x = 182; x < 236; x += 7) p.rect(x, -206, 3, 13, '#273c4c');
+    }
+    flagstones(p, v, 112);
+    shaft(p, v, 437.3, 368.1, 103, 219, '#ac8b6e', 110);
+    // A bank of sorting bins and a hand truck flank the toppled machine.
+    p.rect(387, 32, 62, 80, night);
+    p.rect(391, 36, 54, 72, '#685c59');
+    for (let row = 0; row < 4; row++) for (let col = 0; col < 3; col++) {
+      const x = 393 + col * 17, y = 38 + row * 16;
+      p.rect(x, y, 14, 12, '#334353');
+      p.rect(x, y + 10, 14, 2, '#a1856b');
+      if ((row + col) % 3) p.poly([x + 2, y + 7, x + 10, y + 5, x + 12, y + 9, x + 2, y + 10], '#baa486');
+    }
+    trolley(p, -154, 112, 73);
+    if (v.bottom > 180) {
+      p.path([-12, 250, 43, 245, 76, 256, 91, 276, 84, 287, 66, 283, 69, 270, 100, 261], '#574f52', 3);
+      p.path([-11, 249, 43, 244, 76, 255, 90, 275], '#aa8e73');
+      for (const y of [189, 251, 343]) {
+        const x = 437.3 - 334.3 * y / 180, end = 368.1 - 149.1 * y / 180;
+        p.line(x, y, end, y, '#c7a782');
+      }
+      p.poly([221, 268, 239, 263, 248, 270, 227, 277], c.brick);
+      p.poly([222, 267, 240, 262, 247, 268, 227, 274], '#cfb392');
+      p.rect(240, 266, 2, 2, '#7d695f');
+      trolley(p, 14, 373, 111);
+      trunk(p, 24, 315, 72, 28, '#55676a', '#997c65');
+    }
+  }
+  function platformFloor(p, t, view) {
     const bg = plate('ending-floor', 320, 180, (q) => {
       q.rect(0, 0, 320, 180, blue);
       for (let x = -20; x < 330; x += 62) {
@@ -131,6 +313,7 @@
       q.poly([233, 110, 277, 110, 219, 180, 103, 180], '#ac8b6e');
       q.path([227, 116, 193, 142, 155, 167], '#d2ac7c');
     });
+    surround(p, view, 'sorting-hall', sortingHall);
     p.image(bg, 0, 0);
     const g = p.g;
     g.save();
@@ -167,6 +350,13 @@
     g.save();
     g.translate(Math.round(x), Math.round(y));
     g.scale(reach, 1);
+    // Elbows turn toward the camera outside the original hand close-ups.
+    p.poly([-291, 239, -274, 180, -249, 119, -213, 89, -198, 83, -192, 106,
+      -211, 132, -229, 171, -242, 236, -253, 286, -297, 286], dark ? '#494151' : c.ochre, c.ink);
+    p.poly([-282, 231, -270, 183, -244, 126, -215, 101, -222, 117, -239, 141, -260, 199], dark ? '#5c5665' : '#be8154');
+    p.poly([-306, 303, -294, 241, -280, 209, -264, 217, -248, 221, -238, 230, -244, 292,
+      -258, 352, -326, 352], dark ? '#4d515e' : '#596a6c', c.ink);
+    p.path([-289, 232, -273, 232, -247, 246], dark ? '#8d7588' : '#a68970', 3);
     p.poly(
       [
         -214, 88, -97, 31, -68, 16, -38, 4, -19, -2, -7, -5, 2, -6, 9, -3, 11, 1, 8, 5, 4, 7, -6, 8, -15, 15,
@@ -185,7 +375,63 @@
     p.path([-43, 12, -29, 6, -32, 10, -24, 6], dark ? '#766974' : c.sand);
     g.restore();
   }
-  function underBell(p, t) {
+  function clockwork(p, v) {
+    band(p, v, v.top, v.bottom, '#3b4b59');
+    // The bell hangs in a steel cradle. The raking light comes from a single louvre.
+    for (let k = Math.floor((v.left - v.bottom * 0.52 + 30) / 66) - 1;
+      -30 + k * 66 + v.top * 0.46 < v.right + 66; k++) {
+      const x = -30 + 66 * k;
+      shaft(p, v, x, x + 9, x + 85, x + 101, '#526270');
+      shaft(p, v, x, x + 3, x + 87, x + 92, '#68747a');
+    }
+    shaft(p, v, 168, 221, 0, 90, '#7a7f7a', -255);
+    shaft(p, v, 194, 209, 49, 76, '#9c9b87', -224);
+    band(p, v, 13, 24, night);
+    band(p, v, 16, 18, brass);
+    for (let x = 5 + 22 * Math.floor((v.left - 5) / 22); x < v.right; x += 22) p.rect(x, 19, 2, 2, c.slate);
+    p.rect(370, -255, 80, 27, night);
+    for (let y = -252; y < -229; y += 5) p.rect(375, y, 70, 2, '#a6a69a');
+    if (v.top < 0) {
+      band(p, v, -191, -173, '#273b4b');
+      band(p, v, -187, -184, '#718285');
+      for (let x = Math.floor(v.left / 36) * 36; x < v.right; x += 36) {
+        p.rect(x, -180, 23, 4, '#455b65');
+        p.rect(x + 2, -181, 2, 2, brass);
+      }
+      p.path([100, -173, 116, -141, 145, -136, 181, -144, 198, -173], night, 5);
+      p.path([106, -173, 118, -147, 141, -141], verdigris, 2);
+      wheel(p, 159, -155, 23);
+      p.line(140, -144, 149, -66, night, 3);
+      p.line(179, -143, 172, -66, night, 3);
+      p.line(142, -141, 151, -67, '#9e8d73');
+      p.line(177, -140, 171, -68, '#9e8d73');
+      p.poly([140, -70, 176, -70, 180, -63, 174, -57, 168, -55, 166, -41,
+        157, -38, 152, -42, 152, -55, 144, -56, 138, -61], '#89674f', night);
+      p.path([143, -65, 147, -68, 174, -68], c.sand, 2);
+      p.rect(155, -55, 4, 12, brass);
+    }
+    p.path([365, 19, 378, 56, 422, 92, 474, 129], night, 6);
+    p.path([390, 16, 431, 41, 472, 81, 499, 125], '#8d8170', 3);
+    wheel(p, 430, 69, 32);
+    wheel(p, 484, 126, 12);
+    wheel(p, -134, 64, 23);
+    p.path([-155, 64, -191, 104, -232, 102], '#273c4c', 3);
+    if (v.bottom > 180) {
+      band(p, v, 232, 242, '#314352');
+      band(p, v, 234, 236, '#9c8b72');
+      for (let k = Math.floor(v.left / 112); k * 112 < v.right; k++) {
+        const x = k * 112;
+        p.rect(x + 6, 265, 96, 51, '#2f4251');
+        p.rect(x + 8, 267, 92, 47, '#52636a');
+        for (let i = 0; i < 8; i++) p.rect(x + 14 + i * 10, 272, 5, 34, '#2c3e4d');
+        p.rect(x + 9, 310, 89, 1, '#8d9082');
+      }
+      p.path([88, 390, 88, 356, 95, 347, 220, 347, 230, 339, 230, 320], '#283a49', 8);
+      p.path([90, 387, 90, 358, 96, 351, 222, 351, 234, 340, 234, 320], '#7c7870', 2);
+      wheel(p, 161, 349, 17);
+    }
+  }
+  function underBell(p, t, view) {
     const bg = plate('ending-bell-socket', 320, 180, (q) => {
       q.rect(0, 0, 320, 180, '#3b4b59');
       for (let x = -30; x < 355; x += 66) {
@@ -198,6 +444,7 @@
       q.rect(0, 16, 320, 2, brass);
       for (let x = 5; x < 320; x += 22) q.rect(x, 19, 2, 2, c.slate);
     });
+    surround(p, view, 'bell-cradle', clockwork);
     p.image(bg, 0, 0);
     p.image(shell(), 73, -43, 178, 157);
     const lift = ease(0.1, 0.97, t);
@@ -215,7 +462,117 @@
       p.line(162, 100 - flare, 162, 100 + flare, c.white);
     }
   }
-  function swingingBell(p, t) {
+  function nightDistrict(p, v) {
+    band(p, v, v.top, v.bottom, '#233347');
+    const bands = [[-4096, '#192636'], [-238, '#1d2b3d'], [-164, '#212f41'], [-96, '#253447'],
+      [-44, '#28374c'], [0, '#29384f'], [22, '#34475c'], [40, '#435d70'], [60, '#567687'],
+      [76, '#718b92'], [91, '#93a6a1'], [106, '#b5b7a2'], [123, '#536c79']];
+    for (let i = 0; i < bands.length; i++) {
+      const [y, color] = bands[i];
+      band(p, v, y, i + 1 < bands.length ? bands[i + 1][0] : v.bottom, color);
+      if (y > -4000 && y < 123 && y >= v.top && y < v.bottom) {
+        for (let x = v.left + ((y % 3 - v.left) % 4 + 4) % 4; x < v.right; x += 4) p.rect(x, y - 1, 1, 1, color);
+      }
+    }
+    scatter(v, 35, 29, (x, y, n) => {
+      if (y < 56 && n % 4) {
+        p.rect(x, y, 1, 1, n % 5 ? '#91a8af' : '#d8d7bc');
+        if (n % 19 === 0) p.rect(x - 1, y, 3, 1, '#99a3a4');
+      }
+    });
+    const clouds = [[-249, 33, 96], [-118, 51, 66], [320, 58, 73], [445, 38, 100],
+      [49, -116, 94], [215, -161, 69], [-115, -38, 89], [363, -68, 95], [91, -242, 61]];
+    for (const [x, y, w] of clouds) {
+      if (x + w > v.left && x < v.right && y + 8 > v.top && y < v.bottom) {
+        cloudStrip(p, x, y, w, y < 0 ? '#34475b' : '#647c87', y < 0 ? '#50616c' : '#95a4a1');
+      }
+    }
+    cloudStrip(p, -8, 49, 83, '#526b7b', '#91a29d');
+    cloudStrip(p, 231, 58, 91, '#667d89', '#9caaa2');
+    // The first and last roofs of the established skyline actually straddle the frame.
+    if (v.top < 123 && v.bottom > 62) {
+      city(p, 113, '#536c79', '#73848a', '#bdab89');
+      for (let k = Math.floor(v.left / 25) - 1; k <= Math.floor(v.right / 25); k++) {
+        const x = 25 * k;
+        if (x >= -30 && x < 325) continue;
+        const n = salt(k, 3), w = 17 + n % 8, y = 81 + (n >>> 8) % 21;
+        p.rect(x, y, w, 113 - y, '#536c79');
+        if (n % 3 === 0) p.poly([x - 1, y, x + w / 2, y - 6, x + w + 1, y], '#536c79');
+        if (n % 3 === 1) p.rect(x + 5, y - 6, 4, 6, '#536c79');
+        p.rect(x, y, w, 2, '#73848a');
+        for (let i = 3; i < w - 2; i += 6) p.rect(x + i, y + 5, 2, 2, '#bdab89');
+      }
+      band(p, v, 113, 123, '#536c79');
+    }
+  }
+  function towerExterior(p, v) {
+    nightDistrict(p, v);
+    band(p, v, 110, 152, '#5c7278');
+    p.poly([-684, 104, -551, 97, -489, 111, -360, 95, -306, 103, -250, 96, -202, 106, -150, 91,
+      -103, 101, -62, 96, 0, 108, 34, 95, 283, 96, 320, 109, 354, 103, 390, 107, 423, 94,
+      470, 102, 519, 92, 562, 106, 636, 98, 846, 107, 846, 153, -684, 153], '#5c7278');
+    p.poly([-607, 144, -319, 132, -214, 120, -137, 130, -71, 123, 0, 140, 108, 115,
+      231, 117, 320, 134, 376, 125, 432, 129, 512, 116, 700, 136, 900, 125, 900, 160, -607, 160], '#475866');
+    p.path([-138, 134, -71, 127, 1, 144, 110, 119], '#849493', 2);
+    p.path([296, 133, 320, 138, 378, 129, 430, 133, 511, 120], '#849493', 2);
+    for (const [x, y] of [[-206, 91], [-158, 94], [-116, 90], [-82, 98], [340, 93], [379, 84],
+      [423, 88], [476, 79]]) {
+      p.rect(x, y, 2, 25, iron);
+      p.rect(x - 4, y + 1, 9, 2, iron);
+    }
+    flagstones(p, v, 145);
+    // A slate bell-tower roof with an open cupola and copper lightning finial.
+    p.poly([-72, 38, -46, 25, 92, -83, 109, -109, 119, -110, 142, -88, 393, -8,
+      411, 0, 320, 5, 125, 13, 0, 29], night);
+    p.poly([-46, 21, 93, -81, 111, -102, 120, -103, 135, -84, 320, -28,
+      226, -24, 115, -19, 5, -7, -40, 12], '#354856');
+    p.poly([112, -99, 125, -80, 149, -20, 115, -19, 5, -7, -40, 12], '#42545d');
+    for (const [x, y] of [[-19, 2], [41, -12], [97, -17], [150, -21], [211, -24], [260, -26], [319, -28]]) {
+      p.path([116, -98, x, y], '#607071', 1);
+    }
+    p.path([-72, 36, 0, 27, 119, 12, 318, 4, 408, -2], '#a98065', 2);
+    p.rect(100, -142, 30, 32, '#314653');
+    p.rect(105, -138, 20, 22, night);
+    for (let x = 105; x < 125; x += 6) p.rect(x, -138, 2, 22, '#79817b');
+    p.poly([90, -143, 101, -149, 112, -164, 119, -164, 129, -150, 140, -143], '#4e6168', night);
+    p.path([92, -144, 110, -154, 114, -163], '#b39879');
+    p.rect(114, -194, 2, 30, night);
+    p.oval(115, -187, 3, 3, brass);
+    p.poly([104, -181, 115, -178, 132, -182, 128, -174, 117, -176, 104, -175], '#9d795e', night);
+    if (v.bottom > 195) {
+      // The foreground tiles end at the cornice. Below them is the working clock face.
+      band(p, v, 202, v.bottom, '#546064');
+      band(p, v, 202, 210, '#394b57');
+      band(p, v, 203, 206, '#a38b72');
+      band(p, v, 216, 223, '#344450');
+      for (let row = 0; 225 + row * 27 < v.bottom; row++) {
+        const y = 225 + row * 27;
+        band(p, v, y, y + 2, '#47555c');
+        for (let k = Math.floor(v.left / 58) - 1; k * 58 < v.right; k++) {
+          const x = k * 58 + (row % 2) * 28;
+          p.rect(x, y + 2, 2, 25, '#47555c');
+          p.rect(x + 5, y + 3, 23, 1, '#647174');
+        }
+      }
+      const cx = 150, cy = 329;
+      p.oval(cx, cy, 57, 57, '#41525c');
+      p.oval(cx, cy, 53, 53, '#968572');
+      p.oval(cx, cy, 47, 47, '#263c4c');
+      p.oval(cx, cy, 43, 43, '#64767a');
+      for (let i = 0; i < 12; i++) {
+        const a = i * Math.PI / 6;
+        p.line(cx + 35 * Math.sin(a), cy - 35 * Math.cos(a), cx + 40 * Math.sin(a),
+          cy - 40 * Math.cos(a), '#d2b58c', 2);
+      }
+      p.path([cx, cy - 30, cx, cy, cx + 22, cy + 8], night, 3);
+      p.oval(cx + 1, cy + 1, 3, 3, brass);
+      for (const x of [25, 264]) {
+        p.poly([x, 357, x, 289, x + 12, 271, x + 25, 289, x + 25, 357], '#394b57');
+        for (let y = 295; y < 354; y += 7) p.rect(x + 4, y, 17, 2, '#647477');
+      }
+    }
+  }
+  function swingingBell(p, t, view) {
     const bg = plate('ending-tower', 320, 180, (q) => {
       skyline(q, 210, 48);
       q.poly(
@@ -249,6 +606,7 @@
       q.rect(98, 13, 5, 17, night);
       q.rect(65, 15, 68, 1, c.copper);
     });
+    surround(p, view, 'bell-tower', towerExterior);
     p.image(bg, 0, 0);
     const pull = ease(0.34, 1.18, t),
       release = ease(1.43, 2.12, t);
@@ -324,7 +682,105 @@
       for (let x = 21; x < 37; x += 4) p.rect(x, 22, 2, 3, iron);
     });
   }
-  function desk(p, t) {
+  function postDesk(p, v) {
+    band(p, v, v.top, v.bottom, '#655558');
+    const low = Math.max(-117, v.top), high = Math.min(v.bottom, 249);
+    if (high > low) {
+      const first = Math.floor((v.left + low * 0.28) / 63) - 1;
+      for (let k = first; k * 63 - high * 0.28 < v.right; k++) {
+        const x = k * 63;
+        shaft(p, v, x, x + 59, x - 49, x + 11, k % 2 ? '#785d58' : '#826359', low, high);
+        p.line(x - low * 49 / 179, low, x - (high - 1) * 49 / 179, high - 1, '#ad8066');
+      }
+      shaft(p, v, 116, 252, 31, 172, '#ab8268', low, high);
+      shaft(p, v, 186, 198, 101, 117, '#c09772', low, high);
+      scatter(v, 29, 23, (x, y, n) => {
+        if (y < low || y >= high) return;
+        p.path([x, y, x + 7 + n % 9, y - 2, x + 13 + n % 11, y - 2], n % 4 ? '#946e5d' : '#ba8c6e');
+      });
+    }
+    if (v.top < -83) {
+      band(p, v, v.top, -116, '#45434a');
+      for (let row = Math.floor((v.top + 115) / 44) - 1; row * 44 - 115 < Math.min(-150, v.bottom); row++) {
+        const y = row * 44 - 115;
+        for (let k = Math.floor(v.left / 83) - 1; k * 83 < v.right; k++) {
+          const x = k * 83;
+          p.rect(x + 3, y, 78, 39, '#343b47');
+          p.rect(x + 7, y + 4, 70, 28, '#3f424c');
+          const contents = salt(k, row), count = contents % 5;
+          for (let i = 0; i < count; i++) {
+            const seed = salt(k + i, row), px = x + 7 + (seed >>> 8) % 18;
+            const py = y + 29 - (count - i) * 4, w = 31 + (seed >>> 15) % 15;
+            const pitch = 2 + (contents >>> 12) % 7;
+            p.poly([px, py, px + w, py - pitch, px + w + 5, py - pitch + 8, px + 3, py + 8],
+              ['#8d8780', '#b39c83', '#8e9d94', '#c0a083'][i], '#504d51');
+            p.path([px + 1, py, px + w / 2, py + 3, px + w - 1, py - pitch], '#6a6260');
+          }
+          p.rect(x, y + 36, 81, 5, '#7b6259');
+          p.rect(x, y + 37, 81, 1, '#ad876a');
+          p.rect(x + 33, y + 35, 14, 5, '#92765e');
+          p.rect(x + 36, y + 36, 8, 2, '#d2b58d');
+        }
+      }
+      band(p, v, -122, -115, '#3e3e48');
+      band(p, v, -116, -113, '#b18a6b');
+      band(p, v, -113, -104, '#795e56');
+    }
+    // Blotter, ink well and cancellation stamp are on the clerk's side of the desk.
+    p.poly([-203, 48, -118, 35, -90, 92, -181, 107], '#51454c', night);
+    p.poly([-200, 48, -120, 38, -97, 90, -180, 102], '#956b5c');
+    p.rect(-172, 55, 29, 20, '#31454c');
+    p.poly([-171, 55, -165, 49, -151, 47, -143, 54, -145, 58, -169, 60], '#627d7b', night);
+    p.rect(-164, 47, 11, 4, '#343844');
+    p.path([-158, 48, -143, 20, -127, 4], '#e1bc8c', 2);
+    p.path([-154, 39, -143, 16, -129, 3, -132, 16, -141, 22], '#a78b78', 2);
+    p.oval(413, 65, 24, 9, '#4b424a');
+    p.oval(413, 61, 23, 7, '#aa8264');
+    p.rect(400, 41, 26, 18, '#876852');
+    for (let y = 42; y < 59; y += 3) p.rect(400, y, 26, 1, '#d8b081');
+    p.oval(413, 39, 22, 6, '#b69570');
+    p.oval(413, 39, 4, 2, '#634f4e');
+    p.path([421, 59, 445, 66, 455, 75, 449, 81, 435, 76, 444, 72, 467, 77], '#c1a67f');
+    p.poly([18, -77, 93, -86, 111, -40, 31, -29], c.brick, night);
+    p.poly([22, -74, 91, -82, 107, -43, 34, -34], '#b9a180');
+    p.path([31, -65, 87, -71, 93, -52, 40, -44, 31, -65], '#917c66');
+    p.path([35, -56, 53, -61, 58, -53, 69, -61, 83, -59], '#586e70');
+    p.path([240, 0, 240, -12, 296, -12, 299, 0], night, 2);
+    p.rect(243, -10, 53, 10, '#ae805f');
+    for (const x of [247, 264, 283]) p.path([x, -2, x, -13, x + 4, -13, x + 5, -1], '#d2ad79', 2);
+    // Finish the leather satchel whose flap crosses the near corner of the close-up.
+    p.poly([-124, 125, -91, 112, -42, 119, 0, 137, 34, 151, 59, 180, 69, 202,
+      55, 223, -70, 211, -124, 176], night);
+    p.path([-122, 126, -90, 115, -42, 122, 0, 139, 33, 154, 52, 176, 65, 201, 54, 218], glass, 2);
+    p.path([-102, 144, -81, 137, -38, 145, -6, 158, 23, 180, 33, 201, -46, 195], '#3c4d5a', 2);
+    p.rect(-49, 190, 16, 8, '#807567');
+    p.rect(-47, 191, 11, 5, '#394653');
+    if (v.bottom > 247) {
+      band(p, v, 248, 254, '#453f46');
+      band(p, v, 249, 251, '#c49b75');
+      band(p, v, 254, 268, '#826252');
+      band(p, v, 265, 270, '#4c4248');
+      band(p, v, 270, 338, '#665557');
+      for (let k = Math.floor(v.left / 148) - 1; k * 148 < v.right; k++) {
+        const x = k * 148;
+        p.rect(x + 7, 275, 134, 51, '#4e444c');
+        p.rect(x + 10, 277, 128, 46, '#81665c');
+        p.path([x + 14, 318, x + 14, 281, x + 133, 281], '#ab876b');
+        p.path([x + 58, 293, x + 62, 298, x + 86, 298, x + 90, 293], '#51484b', 3);
+        p.path([x + 58, 291, x + 62, 295, x + 85, 295, x + 90, 291], '#b79970', 2);
+      }
+      band(p, v, 331, 339, '#403e48');
+      band(p, v, 339, v.bottom, '#4a4951');
+      scatter(v, 71, 25, (x, y, n) => {
+        if (y >= 339) p.rect(x, y, 7 + n % 20, 1, '#58565a');
+      });
+      for (const x of [-114, 37, 289, 449]) {
+        p.poly([x, 337, x + 16, 337, x + 13, 404, x + 9, 410, x + 3, 409], '#604f51', night);
+        p.rect(x + 3, 342, 3, 54, '#7b6258');
+      }
+    }
+  }
+  function desk(p, t, view) {
     const wood = plate('ending-letter-desk', 320, 180, (q) => {
       q.rect(0, 0, 320, 180, '#655558');
       for (let i = -2; i < 6; i++) {
@@ -352,6 +808,7 @@
       q.poly([0, 137, 34, 151, 59, 180, 0, 180], night);
       q.path([0, 139, 33, 154, 52, 176], glass, 2);
     });
+    surround(p, view, 'clerks-desk', postDesk);
     p.image(wood, 0, 0);
     const open = ease(0.55, 1.31, t),
       draw = ease(1.6, 2.85, t);
@@ -411,7 +868,98 @@
       p.rect(2, 38, 4, 3, '#6f777a');
     });
   }
-  function lastTrain(p, t) {
+  function eastYard(p, v) {
+    nightDistrict(p, v);
+    band(p, v, 107, 141, '#405767');
+    p.poly([-690, 105, -498, 99, -330, 103, -270, 92, -229, 98, -193, 87, -153, 99,
+      -121, 92, -78, 101, -43, 92, 0, 104, 25, 96, 279, 90, 320, 95, 368, 101, 409, 89,
+      449, 96, 486, 85, 525, 97, 571, 91, 630, 104, 780, 93, 901, 105, 901, 135, -690, 135], '#405767');
+    for (const [x, y] of [[-233, 80], [-171, 74], [-117, 77], [-63, 69], [361, 77],
+      [421, 68], [480, 72], [543, 66], [607, 68]]) {
+      p.rect(x, y, 2, 49, iron);
+      p.rect(x - 4, y + 2, 10, 2, iron);
+    }
+    p.path([-235, 82, -207, 88, -170, 76, -142, 84, -117, 80, -94, 82, -63, 72, -31, 80,
+      0, 76, 48, 85], iron);
+    p.path([290, 80, 320, 82, 343, 83, 361, 79, 390, 81, 421, 70, 448, 80, 480, 74,
+      512, 78, 543, 68, 572, 73, 607, 70], iron);
+    band(p, v, 118, 144, night);
+    band(p, v, 120, 122, '#9ca3a0');
+    band(p, v, 127, 128, glass);
+    // A water tank and a little signal cabin sit beyond the east end of the platform.
+    p.rect(428, 66, 4, 47, '#415461');
+    p.rect(452, 66, 4, 47, '#415461');
+    p.path([428, 79, 452, 100, 431, 100, 453, 79], '#495e68', 2);
+    p.poly([422, 48, 442, 39, 463, 48, 460, 68, 452, 72, 432, 72, 424, 67], '#435866');
+    p.path([421, 49, 442, 41, 462, 49], '#86918e');
+    p.rect(424, 56, 36, 2, '#697e82');
+    p.rect(425, 64, 34, 2, '#697e82');
+    p.poly([-216, 91, -194, 75, -174, 88, -177, 90, -177, 117, -212, 117], '#455a65');
+    p.path([-218, 91, -195, 74, -173, 88], '#86908c', 2);
+    p.rect(-204, 91, 19, 8, '#89928b');
+    p.rect(-196, 91, 2, 8, '#4b606a');
+  }
+  function platformNorth(p, v) {
+    // This platform lip is in front of the moving wheels, including outside the old frame.
+    band(p, v, 150, v.bottom, '#63565b');
+    p.poly([-760, 150, -509, 146, -352, 142, -182, 137, 0, 129, 195, 120, 320, 127,
+      446, 135, 556, 146, 736, 155, 951, 155, 951, 187, -760, 187], '#63565b');
+    p.path([-740, 148, -350, 146, -181, 142, 0, 134, 195, 124, 320, 130, 446, 138,
+      556, 149, 734, 159, 899, 159], '#c4a47f', 3);
+    p.path([-356, 209, -182, 188, 0, 157, 160, 132, 296, 133], '#987b6b');
+    p.path([345, 137, 432, 154, 589, 194, 798, 250], '#927668');
+    scatter(v, 51, 21, (x, y, n) => {
+      if (y > 153 && y < 273) p.rect(x, y, 3 + n % 9, 1, n % 3 ? '#766368' : '#8c756b');
+    });
+    // The eave over Clover narrows to a genuine tip; the opposite track is open to the sky.
+    p.poly([-313, -45, -198, -132, -155, -143, 189, -67, 247, -50, 155, -9, 134, 0,
+      66, 15, 0, 24, -117, 48, -300, 66], night);
+    p.poly([-289, -43, -196, -122, -154, -134, 184, -60, 221, -50, 150, -36,
+      86, -25, 5, -7, -113, 18, -289, 39], '#354957');
+    p.poly([-191, -116, -155, -131, 184, -59, 217, -50, 96, -45], '#435763');
+    for (const [x, y] of [[-250, 34], [-151, 23], [-84, 12], [-7, -5], [68, -21], [125, -31]]) {
+      p.path([-162, -127, x, y], '#53686e', 2);
+    }
+    p.path([-299, 63, -116, 45, 0, 22, 66, 14, 126, 1, 161, -11, 244, -49], glass, 2);
+    for (const [x, top, end] of [[-243, 57, 166], [-109, 42, 159]]) {
+      steelBeam(p, x, top, end);
+      p.path([x + 3, top + 28, x + 32, top - 3], iron, 3);
+    }
+    p.path([-231, 56, -168, 49, -193, 72], '#415562', 2);
+    // The two shapes at the bottom corners are actual luggage on a platform bench.
+    p.poly([-86, 198, -63, 192, 0, 175, 35, 162, 62, 164, 77, 180, 87, 193,
+      86, 215, 73, 229, -44, 244, -72, 231], night);
+    p.path([-74, 198, -47, 190, 1, 174, 36, 164, 58, 166, 77, 183, 82, 195, 79, 210], iron);
+    p.path([-64, 215, -39, 221, 65, 207, 82, 194], '#3a4b58', 2);
+    p.path([-45, 193, -33, 202, -29, 228], '#4a555d', 3);
+    p.path([37, 167, 48, 180, 54, 213], '#4a555d', 3);
+    p.poly([225, 210, 263, 180, 285, 162, 320, 158, 343, 155, 394, 163, 415, 187,
+      406, 207, 306, 229, 247, 232, 225, 225], night);
+    p.path([231, 208, 275, 178, 289, 165, 318, 161, 343, 157, 393, 165], iron);
+    p.path([244, 220, 279, 196, 337, 183, 394, 174], '#394a56', 2);
+    p.path([353, 159, 366, 170, 375, 209], '#4b555a', 3);
+    p.rect(354, 183, 10, 5, '#7a7065');
+    if (v.bottom > 241) {
+      for (let row = 0; row < 5; row++) {
+        const y = 250 + row * 23;
+        band(p, v, y, y + 2, '#9d8573');
+        band(p, v, y + 2, y + 8, '#544c54');
+        band(p, v, y + 8, y + 21, '#6a5d60');
+        for (let k = Math.floor(v.left / 98) - 1; k * 98 < v.right; k++) {
+          const x = k * 98 + (row % 2 ? 36 : 0);
+          p.rect(x, y + 9, 1, 12, '#5c535a');
+        }
+      }
+      band(p, v, 362, v.bottom, '#514c55');
+      p.path([-55, 392, -19, 341, 14, 311, 42, 303], '#343c49', 6);
+      p.path([-54, 391, -18, 340, 15, 310, 42, 302], '#9a8772', 2);
+      p.line(15, 315, 15, 348, '#39414c', 4);
+      scatter(v, 53, 20, (x, y, n) => {
+        if (y > 364) p.rect(x, y, 3 + n % 11, 1, '#645b60');
+      });
+    }
+  }
+  function lastTrain(p, t, view) {
     const backdrop = plate('ending-east-station', 320, 180, (q) => {
       skyline(q, 215, 45);
       q.poly(
@@ -430,6 +978,7 @@
       q.rect(0, 120, 320, 2, '#9ca3a0');
       q.rect(0, 127, 320, 1, glass);
     });
+    surround(p, view, 'east-yard', eastYard);
     p.image(backdrop, 0, 0);
     const arrive = 1 - Math.pow(1 - Math.min(1, t / 3.75), 2),
       carX = 324 - 352 * arrive;
@@ -450,6 +999,7 @@
       const x = carX - 15 + i * 48 - t * 4;
       steam(p, x, 114 + Math.sin(t * 2 + i) * 2, 37 + i * 2, 8, '#657b83', '#829190');
     }
+    surround(p, view, 'east-platform', platformNorth);
     p.poly([0, 129, 195, 120, 320, 127, 320, 180, 0, 180], '#63565b');
     p.poly([0, 133, 195, 123, 320, 129, 320, 132, 195, 127, 0, 138], '#c4a47f');
     p.path([0, 157, 160, 132, 296, 133], '#987b6b');
@@ -473,10 +1023,10 @@
       p.line(118, 125 - 2 * f, 118, 127, c.cream);
     }
   }
-  window.DispatchFilms.ending = (p, part, t) => {
-    if (part === 1) return t < 4.1 ? desk(p, t) : lastTrain(p, t - 4.1);
-    if (t < 2.55) return platformFloor(p, t);
-    if (t < 4.38) return underBell(p, t - 2.55);
-    swingingBell(p, t - 4.38);
+  window.DispatchFilms.ending = (p, part, t, view) => {
+    if (part === 1) return t < 4.1 ? desk(p, t, view) : lastTrain(p, t - 4.1, view);
+    if (t < 2.55) return platformFloor(p, t, view);
+    if (t < 4.38) return underBell(p, t - 2.55, view);
+    swingingBell(p, t - 4.38, view);
   };
 })();
