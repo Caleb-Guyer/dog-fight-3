@@ -60,6 +60,15 @@ Open **Move list** on the select screen, in Training, or from Pause for illustra
 
 Press **U** as P1, **M** as P2, **Y** on a gamepad, or **Grab** on touch. A catch goes through a shield. Once you catch the rival, tap **forward**, **back**, **up**, or **down** on your movement controls. Forward follows the way you faced when you caught them. Tapping Grab a second time also throws forward. If you get caught, tap action buttons to break free sooner. A more damaged rival takes longer to escape.
 
+For a **dash grab**, hold a direction until your dog is running, then press Grab while moving toward the rival. For a **pivot grab**, run in one direction and press the opposite direction together with Grab, or press Grab just as you turn. If you're running right, **D + U** catches ahead and **A + U** catches behind. On touch, slide your movement thumb onto the opposite arrow as you tap Grab with your other thumb.
+
+| Dog | Dash grab | Pivot grab |
+| --- | --- | --- |
+| **Pip** | **Tag Dash** reaches out quickly with one paw. | **Heel Hook** plants a heel and catches low with very little skid. |
+| **Brisket** | **Freight Hug** carries a two-paw scoop forward. | **Gate Swing** opens wide behind him while his weight carries him onward. |
+| **Noodle** | **Running Loop** casts the lead low and ahead. | **Backcast** sends the longest loop over his shoulder. |
+| **Clover** | **Scoop Slide** skims the disc along the ground. | **Rim Turn** sweeps the rim high enough to catch a low jumper behind her. |
+
 While holding a rival, tap **Attack** to pummel. Use **J** as P1, **Comma** as P2, **X** on a gamepad, or **Attack** on touch. Each hit leaves the rival in your grip. Tap again for another pummel or choose a throw during the strike. The escape timer keeps running, so a rival can break free if you go for one hit too many.
 
 | Dog | Grab and pummel | Forward | Back | Up | Down |
@@ -69,7 +78,7 @@ While holding a rival, tap **Attack** to pummel. Use **J** as P1, **Comma** as P
 | **Noodle** | Lead Loop reels the rival in from a distance. **Knot Tug** jerks the lead inward for 2%. | Sling Cast releases at full lead length. | Reverse Reel flings them low behind you. | Flagpole lifts them to the top of the loop. | Slack Snap pulls them back toward your feet. |
 | **Clover** | Disc Hook catches with the rim during a slide. **Rim Tap** bumps the rival upward for 3%. | Forehand Pass sends them on a flat line. | Bank Pass sends them high behind you. | Set Toss sets up a jumping Sky Volley. | Skip Toss skims them off the next platform they hit. |
 
-Open **Move list → Throws** for each dog's illustrated moves. In Training, try a down throw at the edge and again in the middle. Brisket and Clover both need a platform beneath the rival to get their bounce.
+Open **Move list → Grabs & throws** for each dog's illustrated moves. In Training, start beside the dummy, run a few steps away, then reverse and grab. After a pivot catch, forward throws the way you're now facing. For a down throw, try the edge and then the middle. Brisket and Clover both need a platform beneath the rival to get their bounce.
 
 ## Smash attacks
 

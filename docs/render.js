@@ -202,7 +202,8 @@
       if (f.index === grip.owner) {
         if ((grip.phase === 'throw' || grip.phase === 'pummel') && f.attack)
           return [attackPose(f), attackPhase(f.attack)];
-        return [grip.grabId + 'Hold', phase];
+        const canonical = f.kit?.grab || window.DogFight.kits[f.kind]?.grab || grip.grabId;
+        return [grip.holdPose || canonical + 'Hold', phase];
       }
     }
     if (f.stun > 0) {
@@ -310,6 +311,43 @@
     }
     if (sweet) glint(ctx, tip[0] + 6, tip[1] - 3, 5, cream);
   }
+  function movingGrabFeet(ctx, f) {
+    const a = f.attack;
+    if (!a?.grabAttempt || (a.grabStyle !== 'dash' && a.grabStyle !== 'pivot') || f.ground < 0 || f.grip)
+      return;
+    const pivot = a.grabStyle === 'pivot';
+    const duration = a.start + a.active + (pivot ? 0.075 : 0.045);
+    if (a.time >= duration) return;
+    const phase = clamp(a.time / duration, 0, 1);
+    const speed = clamp(Math.abs(f.vx) / f.stats.speed, 0, 1.25);
+    const travel = a.runFace || (pivot ? -f.face : f.face);
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y, 2));
+    ctx.scale(travel, 1);
+    // Trailing pawprints point back along a dash. A pivot leaves the tail of a
+    // skid behind the dog and kicks a little dust beyond the planted lead foot.
+    const dust = '#c69d78',
+      light = '#efcf99';
+    if (reduced.matches) {
+      if (pivot) pixelLine(ctx, 7, -1, 20, -1, dust, 2, 2);
+      else pixelLine(ctx, -29, -2, -18, -2, dust, 2, 2);
+    } else if (pivot) {
+      const toe = 15 + snap(speed * 6, 2);
+      const plume = 5 + snap(Math.sin(Math.PI * phase) * 8, 2);
+      pixelLine(ctx, -15 - (1 - phase) * 13, -1, 2, -1, dust, 3);
+      pixelLine(ctx, 5, -1, toe, -1, light, 2, 2);
+      pixelLine(ctx, toe, -2, toe + plume * 0.6, -5, dust, 3);
+      pixelLine(ctx, toe + plume * 0.6, -5, toe + plume, -7 - plume * 0.2, light, 2, 2);
+      if (phase > 0.22 && phase < 0.78)
+        pixelLine(ctx, toe + plume - 1, -12, toe + plume + 2, -14, dust, 2, 2);
+    } else {
+      const reach = 23 + snap(speed * 16 + (1 - phase) * 6, 2);
+      pixelLine(ctx, -reach, -2, -13, -2, dust, 3);
+      pixelLine(ctx, -reach + 2, -5, -24, -5, light, 2, 2);
+      if (speed > 0.3 && phase < 0.74) pixelLine(ctx, -reach - 5, -7, -reach - 10, -10, dust, 2, 2);
+    }
+    ctx.restore();
+  }
   function catchReach(ctx, f, a) {
     if (f.grip) return;
     const phase = attackPhase(a);
@@ -327,7 +365,7 @@
       if (hand && extension > 0.06) {
         const ex = hand[0] + (x + rx - hand[0]) * extension;
         const ey = hand[1] + (y - hand[1]) * extension;
-        const slack = 9 * (1 - extension);
+        const slack = (a.grabStyle === 'pivot' ? -12 : a.grabStyle === 'dash' ? 5 : 9) * (1 - extension);
         const tip = [ex, ey];
         ropeTrace(ctx, [hand, [(hand[0] + ex) / 2, (hand[1] + ey) / 2 + slack], tip], tip, false);
       }
@@ -783,6 +821,7 @@
   }
   function drawFighter(ctx, f, world, time) {
     shadow(ctx, f, world.terrain);
+    movingGrabFeet(ctx, f);
     if (f.respawning > 0) oval(ctx, f.x, f.y - 3, 42, 5, team[f.index]);
     if (f.smashCharge && f.charge >= 0) drawSmashCharge(ctx, f);
     else if (f.charge > 0.21) {
@@ -1189,6 +1228,8 @@
         a.grip;
       x = f.kind === 'noodle' ? a.box[0] + a.box[2] : clamp(hand[0] + 3, a.grip[0], a.box[0] + a.box[2]);
       y = f.kind === 'noodle' ? a.box[1] : clamp(hand[1], a.box[1] - a.box[3], a.box[1] + a.box[3]);
+      x *= f.face;
+      face = -f.face;
     } else if (f.kind === 'noodle' && (side === 'back' || side === 'up')) {
       // Show the taut rope one simulation frame before release. This is the same
       // second half of the handoff path that the captive follows during the match.
@@ -1227,7 +1268,8 @@
   function drawMoveThumbnail(canvas, kind, side, category = 'air') {
     const { kits, moves, specials, smashes, grabs, throws, pummels, fighters } = window.DogFight;
     const grapple = category === 'throws',
-      catching = grapple && side === 'grab',
+      movingCatch = grapple && (side === 'dashGrab' || side === 'pivotGrab'),
+      catching = grapple && (side === 'grab' || movingCatch),
       pummeling = grapple && side === 'pummel';
     const id = catching || pummeling ? kits[kind][side] : kits[kind][category][side];
     const book = { air: moves, specials, smashes, throws: catching ? grabs : pummeling ? pummels : throws };
@@ -1243,10 +1285,10 @@
     // Fit the whole silhouette, including the rope or disc beyond the dog's body.
     const source = document.createElement('canvas');
     const smash = category === 'smashes';
-    source.width = grapple ? 420 : smash ? 400 : 320;
+    source.width = movingCatch ? 520 : grapple ? 420 : smash ? 400 : 320;
     source.height = grapple ? 330 : smash ? 312 : 272;
     const ctx = source.getContext('2d');
-    ctx.translate(smash || grapple ? 190 : 150, grapple ? 190 : smash ? 185 : 158);
+    ctx.translate(movingCatch ? 260 : smash || grapple ? 190 : 150, grapple ? 190 : smash ? 185 : 158);
     const beat = (id === 'pipScissors' || id === 'noodleBellPull') && move.second ? move.second : move;
     const a = { ...move, moveId: id, time: beat.start + beat.active * 0.35, power: 0.75 };
     if (category === 'air') a.airSide = side;
@@ -1254,15 +1296,25 @@
       a.smashSide = side;
       a.fired = !!a.projectile;
     } else if (grapple) {
-      if (catching) a.grabAttempt = true;
-      else if (pummeling) a.pummel = true;
+      if (catching) {
+        a.grabAttempt = true;
+        a.grabStyle = side === 'pivotGrab' ? 'pivot' : side === 'dashGrab' ? 'dash' : 'standing';
+        a.runFace = 1;
+      } else if (pummeling) a.pummel = true;
       else a.throwSide = side;
     } else a.specialSide = side;
     if (id === 'noodleLasso') a.anchor = { x: 86, y: -86 };
     const fighter = { kind, index: 0, face: 1, x: 0, y: 0, ground: 0, stats: fighters[kind], attack: a };
+    if (movingCatch) {
+      // Keep the incoming run rightward for both diagrams. The pivot catches
+      // behind that run, with its own paws, disc or rope genuinely facing left.
+      fighter.face = side === 'pivotGrab' ? -1 : 1;
+      fighter.vx = fighter.stats.speed * (side === 'pivotGrab' ? 0.28 : 0.82);
+      movingGrabFeet(ctx, fighter);
+    }
     const release = grapple ? throwGuidePartner(ctx, fighter, side, catching) : null;
     window.DogArt.draw(ctx, kind, 0, 0, {
-      face: 1,
+      face: fighter.face,
       scale: 1,
       time: 0,
       pose: attackPose(fighter),

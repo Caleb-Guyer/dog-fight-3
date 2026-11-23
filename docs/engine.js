@@ -84,6 +84,9 @@
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
   const inputWindow = 7 / 60;
+  const runStick = 0.55;
+  const runSpeed = 0.6;
+  const pivotWindow = 7 / 60;
   const attackHold = 0.21;
   const smashChargeTime = 1;
   const smashHoldLimit = 2;
@@ -92,6 +95,8 @@
     pip: {
       ground: ['pipJab', 'pipCross', 'pipHeel'],
       grab: 'pipCollarTag',
+      dashGrab: 'pipTagDash',
+      pivotGrab: 'pipHeelHook',
       pummel: 'pipPawDrum',
       throws: { forward: 'pipKickoff', back: 'pipSlipTurn', up: 'pipPopFly', down: 'pipTumbleTrip' },
       smashes: { side: 'pipBoltKick', up: 'pipScissors', down: 'pipDustDevil' },
@@ -114,6 +119,8 @@
     brisket: {
       ground: ['brisketCheck', 'brisketLift'],
       grab: 'brisketBearHug',
+      dashGrab: 'brisketFreightHug',
+      pivotGrab: 'brisketGateSwing',
       pummel: 'brisketBearSqueeze',
       throws: {
         forward: 'brisketYardHeave',
@@ -147,6 +154,8 @@
     noodle: {
       ground: ['noodleTrip', 'noodleReel', 'noodleSnap'],
       grab: 'noodleLeadLoop',
+      dashGrab: 'noodleRunningLoop',
+      pivotGrab: 'noodleBackcast',
       pummel: 'noodleKnotTug',
       throws: {
         forward: 'noodleSlingCast',
@@ -174,6 +183,8 @@
     clover: {
       ground: ['cloverTap', 'cloverSet'],
       grab: 'cloverDiscHook',
+      dashGrab: 'cloverScoopSlide',
+      pivotGrab: 'cloverRimTurn',
       pummel: 'cloverRimTap',
       throws: {
         forward: 'cloverForehandPass',
@@ -982,6 +993,82 @@
       step: 285,
     },
   };
+  // Carry is the fraction of incoming run speed retained in the original direction.
+  // Brake is ground deceleration in world units per second squared.
+  Object.assign(grabs, {
+    pipTagDash: {
+      ...grabs.pipCollarTag,
+      label: 'Tag Dash',
+      hint: 'Keep your stride and dart a paw forward. Pip reaches first and recovers quickly on a miss.',
+      frames: [4, 4, 13],
+      box: [40, -34, 27, 21],
+      carry: 1.06,
+      brake: 1450,
+    },
+    pipHeelHook: {
+      ...grabs.pipCollarTag,
+      label: 'Heel Hook',
+      hint: 'Plant a heel and hook low behind you. The sharp stop is good for a close pursuer.',
+      frames: [4, 5, 13],
+      box: [51, -32, 26, 20],
+      carry: 0.34,
+      brake: 2100,
+    },
+    brisketFreightHug: {
+      ...grabs.brisketBearHug,
+      label: 'Freight Hug',
+      hint: 'Carry your weight forward into a two-paw scoop. Start the reach a few steps out.',
+      frames: [8, 6, 24],
+      box: [44, -47, 34, 35],
+      carry: 1.24,
+      brake: 720,
+    },
+    brisketGateSwing: {
+      ...grabs.brisketBearHug,
+      label: 'Gate Swing',
+      hint: 'Swing both paws wide behind you. Brisket keeps sliding as the catch opens.',
+      frames: [7, 7, 23],
+      box: [52, -53, 44, 36],
+      carry: 0.78,
+      brake: 950,
+    },
+    noodleRunningLoop: {
+      ...grabs.noodleLeadLoop,
+      label: 'Running Loop',
+      hint: 'Cast the lead low from a moving start. The loop reaches well ahead of your paws.',
+      frames: [9, 5, 26],
+      box: [85, -32, 70, 13],
+      carry: 0.9,
+      brake: 940,
+    },
+    noodleBackcast: {
+      ...grabs.noodleLeadLoop,
+      label: 'Backcast',
+      hint: 'Throw a long, narrow loop over your shoulder. Catch a pursuer while skidding away.',
+      frames: [8, 5, 27],
+      box: [96, -47, 84, 14],
+      carry: 0.55,
+      brake: 1200,
+    },
+    cloverScoopSlide: {
+      ...grabs.cloverDiscHook,
+      label: 'Scoop Slide',
+      hint: 'Slide the disc close to the floor and scoop the rival onto its rim.',
+      frames: [6, 6, 18],
+      box: [48, -27, 30, 20],
+      carry: 1.15,
+      brake: 810,
+    },
+    cloverRimTurn: {
+      ...grabs.cloverDiscHook,
+      label: 'Rim Turn',
+      hint: 'Plant one foot and sweep the disc upward behind you to catch a low jumper.',
+      frames: [5, 5, 16],
+      box: [49, -59, 35, 29],
+      carry: 0.5,
+      brake: 1500,
+    },
+  });
   // Recoil offsets the captive's chest from this dog's usual grip until the strike recovers.
   const pummels = {
     pipPawDrum: {
@@ -1248,6 +1335,7 @@
       vx: 0,
       vy: 0,
       ground: -1,
+      run: null,
       jumps: 2,
       usedUp: false,
       usedAir: false,
@@ -1301,6 +1389,7 @@
   }
   function beginAttack(f, name, aim = 0, power = 0, moveId = null) {
     cancelCharge(f);
+    f.run = null;
     f.lastSmashPower = null;
     f.shield = false;
     f.landTime = 0;
@@ -1322,6 +1411,29 @@
       recover: 'Up Special',
     };
     f.lastMove = move.label || common[name] || f.stats.move;
+  }
+  function trackGroundRun(f, axis, dt) {
+    const direction = Math.abs(axis) >= runStick ? Math.sign(axis) : 0;
+    if (direction && f.vx * direction >= f.stats.speed * runSpeed) {
+      if (f.run?.face !== direction) f.run = { face: direction, grace: 0, turned: false };
+      f.run.grace = pivotWindow;
+      f.run.turned = false;
+    } else if (f.run) {
+      if (direction) f.run.turned = direction !== f.run.face;
+      f.run.grace -= dt;
+      if (f.run.grace <= 1e-8) f.run = null;
+    }
+  }
+  function beginGrab(f, style, runFace, aim) {
+    const id = style === 'pivot' ? f.kit.pivotGrab : style === 'dash' ? f.kit.dashGrab : f.kit.grab;
+    if (style !== 'standing') f.face = style === 'pivot' ? -runFace : runFace;
+    beginAttack(f, 'grab', aim, 0, id);
+    const attack = f.attack;
+    attack.grabAttempt = true;
+    attack.grabStyle = style;
+    attack.runFace = runFace;
+    if (style !== 'standing') f.vx = runFace * Math.max(0, f.vx * runFace) * attack.carry;
+    else if (f.ground >= 0 && attack.step) f.vx = f.face * Math.max(attack.step, f.vx * f.face);
   }
   function groundStrike(f, aim, heldFor) {
     const step = f.chainWindow > 0 ? f.chainNext : 0;
@@ -1507,13 +1619,15 @@
     captureInput(f, input) {
       const was = f.prev;
       const pressed = (key) => input.tapped?.[key] || (input[key] && !was[key]);
+      const grabX = input.grabX ?? input.x;
       f.prev = { ...input };
       if (f.respawning > 0) return;
       if (f.grip || f.attack?.grabAttempt) {
         const grip = f.grip;
         const face = grip?.face ?? f.face;
-        const direction = airDirection(input.x, input.y, face);
-        const changed = direction !== 'neutral' && direction !== airDirection(was.x, was.y, face);
+        const direction = airDirection(grabX, input.y, face);
+        const changed =
+          direction !== 'neutral' && direction !== airDirection(was.grabX ?? was.x, was.y, face);
         if (grip) {
           if (grip.phase !== 'throw') {
             if (f.index === grip.owner) {
@@ -1534,11 +1648,25 @@
           )
             return;
         }
-        if (!grip && changed && f.attack.time < f.attack.start + f.attack.active)
-          f.attack.queuedThrow = direction;
+        if (!grip) {
+          const a = f.attack;
+          if (
+            a.grabStyle === 'dash' &&
+            f.ground >= 0 &&
+            a.time <= 2 / 60 + 1e-8 &&
+            grabX * a.runFace <= -runStick
+          ) {
+            // Accept a reversal just after Grab as part of the same button chord.
+            beginGrab(f, 'pivot', a.runFace, a.aim);
+            f.attack.time = a.time;
+          } else if (a.grabStyle === 'standing' && changed && a.time < a.start + a.active)
+            a.queuedThrow = direction;
+        }
       }
       if (pressed('jump')) f.jumpBuffer = inputWindow;
       if (pressed('shield')) f.guardBuffer = inputWindow;
+      if (f.command?.grabStyle === 'dash' && grabX * f.command.runFace <= -runStick)
+        f.command.grabStyle = 'pivot';
       if (f.command && !input[f.command.type]) f.command.released = true;
       if (f.charge >= 0 && !input[f.smashCharge?.button || 'attack']) f.chargeReleased = true;
       if (!input.special) {
@@ -1554,7 +1682,7 @@
               ? 'attack'
               : null;
       if (type) {
-        const x = type === 'smash' ? (input.smashX ?? input.x) : input.x;
+        const x = type === 'smash' ? (input.smashX ?? input.x) : type === 'grab' ? grabX : input.x;
         const y = type === 'smash' ? (input.smashY ?? input.y) : input.y;
         const side = airDirection(x, y, f.face);
         f.command = {
@@ -1567,6 +1695,20 @@
           heldFor: 0,
           released: !input[type],
         };
+        if (
+          type === 'grab' &&
+          f.run &&
+          f.ground >= 0 &&
+          !input.shield &&
+          !f.stun &&
+          !f.dodge &&
+          !f.landingLag
+        ) {
+          const side = Math.abs(x) >= runStick ? Math.sign(x) : 0;
+          if (side === -f.run.face || (!side && f.run.turned)) f.command.grabStyle = 'pivot';
+          else if (f.vx * f.run.face >= f.stats.speed * 0.4) f.command.grabStyle = 'dash';
+          if (f.command.grabStyle) f.command.runFace = f.run.face;
+        }
       }
     }
     move(f, input, dt) {
@@ -1723,9 +1865,8 @@
           f.command = null;
           if (command.face && (f.ground >= 0 || command.type !== 'attack')) f.face = command.face;
           if (command.type === 'grab') {
-            beginAttack(f, 'grab', command.aim, 0, f.kit.grab);
-            f.attack.grabAttempt = true;
-            if (grounded && f.attack.step) f.vx = f.face * Math.max(f.attack.step, f.vx * f.face);
+            const style = f.ground >= 0 && command.grabStyle ? command.grabStyle : 'standing';
+            beginGrab(f, style, style === 'standing' ? 0 : command.runFace, command.aim);
           } else if (command.type === 'special') this.special(f, command);
           else if (command.type === 'smash') {
             f.charge = 0;
@@ -1768,6 +1909,8 @@
       if (f.stun > 0) {
         f.vx *= Math.pow(0.68, dt);
         f.vx += input.x * 100 * dt;
+      } else if (f.ground >= 0 && f.attack?.grabAttempt && f.attack.brake) {
+        f.vx = toward(f.vx, 0, f.attack.brake * dt);
       } else if (f.dodge <= 0 && !sliding) {
         const onFloor = f.ground >= 0;
         const mobility = f.shield || f.charge >= 0 ? 0 : f.attack ? (onFloor ? 0.12 : 0.65) : 1;
@@ -1775,6 +1918,9 @@
         const drag = onFloor ? (steppingJab ? 560 : 2630) : Math.abs(input.x) > 0.1 ? f.kit.airAccel : 155;
         f.vx = toward(f.vx, input.x * f.stats.speed * mobility, drag * dt);
       }
+      if (grounded && f.ground >= 0 && free && !f.attack && !f.shield && f.charge < 0 && !f.dodge)
+        trackGroundRun(f, input.grabX ?? input.x, dt);
+      else f.run = null;
       const oldY = f.y;
       f.x += f.vx * dt;
       if (f.ground >= 0) {
@@ -1875,6 +2021,7 @@
       return best;
     }
     hangLedge(f, edge) {
+      f.run = null;
       f.throwBounce = null;
       f.ledge = edge;
       f.ledgeTime = 0;
@@ -1906,6 +2053,7 @@
         target: target.index,
         face,
         grabId: attack.moveId,
+        holdPose: owner.kit.grab + 'Hold',
         phase: 'reel',
         time: 0,
         from,
@@ -1922,6 +2070,7 @@
       this.grapple = owner.grip = target.grip = grip;
       for (const f of [owner, target]) {
         cancelCharge(f);
+        f.run = null;
         f.attack = f.command = f.reaction = f.throwBounce = null;
         f.chainWindow = f.jumpBuffer = f.guardBuffer = f.reboundTime = f.landingLag = f.stun = 0;
         f.hopWindow = f.followPounce = f.landTime = f.skidTime = 0;
@@ -1933,7 +2082,14 @@
       target.ground = -1;
       target.ledge = null;
       target.face = -face;
-      this.emit('grabCatch', { f: owner, target, face, point: { ...grip.anchor }, moveId: grip.grabId });
+      this.emit('grabCatch', {
+        f: owner,
+        target,
+        face,
+        point: { ...grip.anchor },
+        moveId: grip.grabId,
+        grabStyle: attack.grabStyle,
+      });
     }
     clearGrapple() {
       const grip = this.grapple;
@@ -2389,6 +2545,7 @@
             !rival.respawning &&
             !rival.dodge &&
             !rival.regrabLock &&
+            (attack.grabStyle === 'standing' || (rival.x - f.x) * f.face >= 0) &&
             Math.abs(rival.x - area.x) <= area.rx + rival.stats.width &&
             Math.abs(rival.y - rival.stats.height * 0.52 - area.y) <= area.ry + rival.stats.height * 0.4
           )
@@ -2593,6 +2750,7 @@
       target.landTime = 0;
       target.landingLag = 0;
       target.skidTime = 0;
+      target.run = null;
       target.reboundTime = 0;
       target.ledge = null;
       target.ledgeLock = 0.28;
@@ -2924,6 +3082,32 @@
         else result.x = 0;
       }
       if (far > 10 && far < 95 && f.face !== Math.sign(dx)) result.x = Math.sign(dx);
+      if (f.run && f.ground >= 0 && !result.jump && !foe.invuln && !foe.regrabLock) {
+        const face = Math.sign(dx);
+        const pivot = face === -f.run.face;
+        const grab = grabs[pivot ? f.kit.pivotGrab : f.kit.dashGrab];
+        const [x, y, rx, ry] = grab.box;
+        const speed = Math.max(0, f.vx * f.run.face) * grab.carry;
+        const time = Math.min(grab.start, speed / grab.brake);
+        const contactX = f.x + f.run.face * (speed - (grab.brake * time) / 2) * time;
+        const distance = (foe.x + foe.vx * grab.start - contactX) * face;
+        const platform = this.terrain[f.ground];
+        if (
+          (pivot || foe.shield || foe.landingLag > grab.start) &&
+          contactX >= platform.x1 + 8 &&
+          contactX <= platform.x2 - 8 &&
+          distance > 0 &&
+          Math.abs(distance - x) <= rx + foe.stats.width &&
+          Math.abs(foe.y - foe.stats.height * 0.52 - f.y - y) <= ry + foe.stats.height * 0.4
+        ) {
+          brain.hold = brain.guard = 0;
+          brain.hop = null;
+          result.x = face;
+          result.grab = true;
+          result.tapped = { grab: true };
+          return result;
+        }
+      }
       if (brain.timer <= 0) {
         brain.timer = 0.12 + this.random() * 0.14;
         brain.pulse = {};

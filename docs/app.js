@@ -276,6 +276,8 @@
       const pitch = { pip: 470, brisket: 130, noodle: 315, clover: 635 }[detail.f.kind];
       tone(pitch * 1.25, pitch, 0.052, 0, 'square', 0.035);
       tone(pitch, pitch * 0.8, 0.065, 0.01, 'triangle', 0.06);
+      if (detail.grabStyle === 'dash') tone(pitch * 0.72, pitch, 0.043, 0.027, 'triangle', 0.045);
+      if (detail.grabStyle === 'pivot') tone(pitch * 1.42, pitch * 0.9, 0.055, 0.033, 'triangle', 0.05);
     } else if (name === 'pummelHit') {
       const [start, end, wave] = {
         pip: [410, 230, 'square'],
@@ -558,7 +560,7 @@
       'controls',
       'Controls',
       table +
-        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack on the ground for your dog’s combo. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. Holding regular Attack also charges. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
+        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack on the ground for your dog’s combo. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. Holding regular Attack also charges. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
   $('controls').onclick = showControls;
@@ -578,6 +580,8 @@
   const smashInputs = { side: 'Side + Smash', up: 'Up + Smash', down: 'Down + Smash' };
   const throwInputs = {
     grab: 'Press Grab',
+    dashGrab: 'Dash grab · Run + Grab',
+    pivotGrab: 'Pivot grab · Reverse + Grab',
     pummel: 'Pummel · Tap Attack',
     forward: 'After catch · Forward',
     back: 'After catch · Back',
@@ -606,7 +610,15 @@
       section
     ];
     const entries =
-      section === 'throws' ? { grab: kit.grab, pummel: kit.pummel, ...kit.throws } : kit[section];
+      section === 'throws'
+        ? {
+            grab: kit.grab,
+            dashGrab: kit.dashGrab,
+            pivotGrab: kit.pivotGrab,
+            pummel: kit.pummel,
+            ...kit.throws,
+          }
+        : kit[section];
     const rows = Object.entries(entries)
       .map(([side, id]) => {
         const move = moveSet[id];
@@ -629,7 +641,7 @@
         ['air', 'Attacks'],
         ['smashes', 'Smash attacks'],
         ['specials', 'Specials &amp; recovery'],
-        ['throws', 'Throws'],
+        ['throws', 'Grabs &amp; throws'],
       ]
         .map(
           ([key, label]) =>
@@ -646,7 +658,7 @@
     let contents;
     if (section === 'throws') {
       contents =
-        '<p class="recovery-note"><strong>Grab</strong> Catch with U (P1), M (P2), Y on a gamepad, or Grab on touch. Tap Attack for a pummel. Tap again for another, or choose a direction to throw. Forward follows your facing at the catch. Grab again also throws forward. The rival can tap action buttons to escape.</p><ul class="move-rows guide-throws">' +
+        '<p class="recovery-note"><strong>Grab</strong> Use U (P1), M (P2), Y on a gamepad, or Grab on touch. Grab during a run to catch ahead. Reverse and press Grab together to catch behind. After a catch, tap Attack to pummel or tap a direction to throw. Forward follows your new facing. Grab again also throws forward. Tap action buttons when caught to escape.</p><ul class="move-rows guide-throws">' +
         rows +
         '</ul>';
     } else if (section === 'smashes') {
@@ -1034,13 +1046,23 @@
     const key = (action) => held.has(map[action]) || (!i && touches.has(action)) || tapped(action);
     const pad = world.mode === 'local' && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
     const axis = (n) => (Math.abs(pad?.axes?.[n] || 0) > 0.23 ? pad.axes[n] : 0);
-    const x = Number(key('right') || down(pad, 15)) - Number(key('left') || down(pad, 14));
+    const left = key('left') || down(pad, 14),
+      right = key('right') || down(pad, 15);
+    const x = Number(right) - Number(left);
+    let grabX = x || axis(0);
+    if (left && right) {
+      // Rolling one direction key onto the other is a turn even during their brief overlap.
+      const leftTap = tapped('left'),
+        rightTap = tapped('right');
+      grabX = leftTap === rightTap ? (world.dogs[i].prev.grabX ?? 0) : rightTap ? 1 : -1;
+    }
     const y = Number(key('down') || down(pad, 13)) - Number(key('up') || down(pad, 12));
     const rightX = axis(2),
       rightY = axis(3);
     const rightStick = Math.max(Math.abs(rightX), Math.abs(rightY)) > 0.62;
     return {
       x: x || axis(0),
+      grabX,
       y: y || axis(1),
       jump: key('jump') || down(pad, 0),
       attack: key('attack') || down(pad, 2),
