@@ -502,6 +502,81 @@
       pixelLine(ctx, x + dir * (extent - 5), y - 2, x + dir * extent, y - (heavy ? 6 : 4), cream, 2);
     }
   }
+  function ledgeSwing(ctx, f, a) {
+    const phase = attackPhase(a);
+    const active = a.time + 1e-8 >= a.start && a.time < a.start + a.active - 1e-8;
+    const rootX = snap(f.x, 2),
+      rootY = snap(f.y, 2);
+    ctx.save();
+    ctx.translate(rootX, rootY);
+    ctx.scale(f.face, 1);
+    const lip = a.edge ? [(a.edge.x - rootX) * f.face, a.edge.y - rootY] : null;
+    const letGo = a.start + (f.kind === 'noodle' ? a.active : f.kind === 'pip' ? 2 / 60 : 0);
+    if (lip && !a.planted && a.time < letGo - 1e-8) {
+      const support = window.DogArt.pawPoint(f.kind, a.moveId, phase, f.kind === 'pip' ? 'front' : 'rear');
+      if (support && Math.hypot(support[0] - lip[0], support[1] - lip[1]) < 13) {
+        // The scrape belongs to the fixed corner. The animated paw lets go as the body rises.
+        pixelLine(ctx, lip[0] - 3, lip[1] + 2, lip[0] - 7, lip[1] + 5, '#ddb280', 2, 2);
+        if (!reduced.matches) pixelLine(ctx, lip[0] - 5, lip[1] - 3, lip[0] - 9, lip[1] - 4, cream, 2, 2);
+      }
+    }
+    if (f.kind === 'noodle') {
+      const hand = window.DogArt.itemPoint(f.kind, a.moveId, phase);
+      const cast = clamp((a.time / a.start - 0.32) / 0.68, 0, 1);
+      const withdraw = clamp(
+        (a.time - a.start - a.active) / Math.min(0.145, a.end - a.start - a.active),
+        0,
+        1,
+      );
+      const length = cast * (1 - withdraw) ** 2;
+      if (hand && length > 0.07) {
+        const [x, y, rx] = a.box;
+        const span = (x + rx - 6 - hand[0]) * length;
+        const tip = [hand[0] + span, hand[1] + (y - hand[1]) * length];
+        const progress = clamp((a.time - a.start) / a.active, 0, 1);
+        const sag = reduced.matches ? 7 : 7 + 5 * Math.sin(Math.PI * progress);
+        const low = Math.min(lip ? lip[1] - 3 : 0, tip[1] + sag * length);
+        // One inward cast, rising to its eyelet from just above the top of the rail.
+        ropeTrace(
+          ctx,
+          [
+            hand,
+            [hand[0] + span * 0.29, hand[1] + (low - hand[1]) * 0.88],
+            [hand[0] + span * 0.67, low],
+            tip,
+          ],
+          tip,
+          false,
+        );
+      }
+    } else if (active) {
+      const follow = phase >= 0.54;
+      if (f.kind === 'pip') {
+        const [toe, sole] = follow ? [40, -14] : [36, -20];
+        pixelLine(ctx, toe - 18, sole + 11, toe - 7, sole + 8, '#d79972', 3, 2);
+        pixelLine(ctx, toe - 7, sole + 8, toe + 1, sole + 1, cream, 2, 2);
+        if (!reduced.matches) pixelLine(ctx, toe - 11, sole + 12, toe - 5, sole + 10, '#edb487', 2, 2);
+      } else if (f.kind === 'brisket') {
+        const [shoulder, height] = follow ? [50, -34] : [42, -38];
+        arc(ctx, shoulder - 6, height + 2, 12, 14, -1.26, 0.53, gold, 4);
+        pixelLine(ctx, shoulder - 1, height - 2, shoulder + 5, height, cream, 2, 2);
+        if (!reduced.matches)
+          pixelLine(ctx, shoulder - 9, height + 15, shoulder - 2, height + 10, '#cd9d71', 2, 2);
+      } else {
+        const rim = window.DogArt.itemPoint(f.kind, a.moveId, phase);
+        if (rim) {
+          const [x, y] = rim;
+          const [fromX, fromY] = window.DogArt.itemPoint(f.kind, a.moveId, 0.3);
+          const low = Math.min(fromY, lip ? lip[1] - 4 : -3);
+          const turn = Math.max(fromX, x) + 3;
+          pixelLine(ctx, fromX - 4, low, turn, (low + y) / 2 + 3, '#ad92b9', 2, 2);
+          pixelLine(ctx, turn, (low + y) / 2 + 3, x + 2, y + 4, lilac);
+          pixelLine(ctx, x + 2, y + 4, x, y + 1, cream, 2, 2);
+        }
+      }
+    }
+    ctx.restore();
+  }
   function dashFootwork(ctx, f) {
     const a = f.attack;
     if (!a?.dashAttack || f.ground < 0) return;
@@ -1005,6 +1080,7 @@
     if (a?.pummel) return;
     if (a?.grabAttempt) return catchReach(ctx, f, a);
     if (a?.throwSide) return throwFollowThrough(ctx, f, a);
+    if (a?.ledgeAttack) return ledgeSwing(ctx, f, a);
     if (a?.dashAttack) return dashSwing(ctx, f, a);
     if (a?.tiltSide) return tiltSwing(ctx, f, a, floor);
     if (a?.smashSide) return smashSwing(ctx, f, a);
@@ -1499,6 +1575,27 @@
     window.DogArt.draw(ctx, kind, x, y + chestToFeet, { face, scale: 1, time: 0, pose: victimPose, phase });
     return release;
   }
+  function guideLedge(ctx, edge, width) {
+    ctx.save();
+    ctx.translate(snap(edge.x, 2), snap(edge.y, 2));
+    // A short cutaway of the picnic plank leaves the drop visible on the left.
+    ctx.fillStyle = ink;
+    ctx.fillRect(0, 0, width, 13);
+    ctx.fillRect(3, 13, width - 11, 4);
+    ctx.fillRect(13, 16, 8, 13);
+    ctx.fillStyle = '#ab7253';
+    ctx.fillRect(2, 3, width - 5, 8);
+    ctx.fillRect(5, 11, width - 15, 3);
+    ctx.fillRect(15, 15, 4, 12);
+    ctx.fillStyle = '#e4ac72';
+    ctx.fillRect(1, 1, width - 2, 3);
+    ctx.fillStyle = '#674f50';
+    ctx.fillRect(6, 6, 4, 4);
+    ctx.fillStyle = '#f2c78e';
+    ctx.fillRect(6, 6, 2, 2);
+    pixelLine(ctx, 29, 8, 45, 8, '#815b50', 2, 2);
+    ctx.restore();
+  }
   function drawMoveThumbnail(canvas, kind, side, category = 'air') {
     const { kits, moves, specials, smashes, grabs, throws, pummels, fighters } = window.DogFight;
     const grapple = category === 'throws',
@@ -1506,11 +1603,14 @@
       catching = grapple && (side === 'grab' || movingCatch),
       pummeling = grapple && side === 'pummel';
     const dash = category === 'dash';
+    const ledge = category === 'ledge';
     const kit = kits[kind];
-    const id = dash ? kit.dashAttack : catching || pummeling ? kit[side] : kit[category][side];
+    const singleMove = ledge ? kit.ledgeAttack : dash ? kit.dashAttack : null;
+    const id = singleMove || (catching || pummeling ? kit[side] : kit[category][side]);
     const book = {
       air: moves,
       dash: moves,
+      ledge: moves,
       tilts: moves,
       specials,
       smashes,
@@ -1536,7 +1636,12 @@
       (id === 'pipScissors' || id === 'noodleBellPull' || dash || category === 'tilts') && move.second
         ? move.second
         : move;
-    const a = { ...move, moveId: id, time: beat.start + beat.active * (dash ? 0.25 : 0.35), power: 0.75 };
+    const a = {
+      ...move,
+      moveId: id,
+      time: ledge ? move.start : beat.start + beat.active * (dash ? 0.25 : 0.35),
+      power: 0.75,
+    };
     if (category === 'air') a.airSide = side;
     else if (category === 'tilts') a.tiltSide = side;
     else if (smash) {
@@ -1549,9 +1654,16 @@
         a.runFace = 1;
       } else if (pummeling) a.pummel = true;
       else a.throwSide = side;
-    } else if (!dash) a.specialSide = side;
+    } else if (!dash && !ledge) a.specialSide = side;
     if (id === 'noodleLasso') a.anchor = { x: 86, y: -86 };
     const fighter = { kind, index: 0, face: 1, x: 0, y: 0, ground: 0, stats: fighters[kind], attack: a };
+    if (ledge) {
+      const body = window.DogFight.ledgePosition(a);
+      a.edge = { x: -body.x, y: -body.y, index: 0, left: true };
+      a.planted = body.planted;
+      fighter.ground = body.planted ? 0 : -1;
+      guideLedge(ctx, a.edge, Math.max(77, Math.round(body.x + a.box[0] + a.box[2] + 4)));
+    }
     if (dash) {
       fighter.vx = fighter.stats.speed;
       dashFootwork(ctx, fighter);

@@ -47,7 +47,7 @@ In local versus, a single controller plays P2 alongside the P1 keyboard. With tw
 
 ## The four fighters
 
-Open **Move list → Attacks** on the select screen, in Training, or from Pause for each dog's ground combo, tilts, dash attack, and aerials.
+Open **Move list → Attacks** on the select screen, in Training, or from Pause for each dog's ground combo, tilts, dash attack, ledge attack, and aerials.
 
 | Dog | A combo to try | What to practice in the air |
 | --- | --- | --- |
@@ -116,6 +116,19 @@ Use **I** for Player 1, **N** for Player 2, or the **Smash** button on a touchsc
 | **Clover** | **Line Drive** fires a straight disc. Charging increases its speed and range. | **Halo Lift** launches a rival highest when the top rim catches them overhead. | **Rim Rattle** spins low on both sides. The first pass sets up the second. |
 
 Open **Move list → Smash attacks** for the illustrated moves.
+
+## Ledge attacks
+
+Once your dog catches a solid edge, tap **Attack** to climb and strike toward the stage. Use **J** for P1, **Comma** for P2, **X** on a standard gamepad, or **Attack** on touch. The direction comes from the ledge you caught.
+
+| Dog | Ledge attack | What it does |
+| --- | --- | --- |
+| **Pip** | **Rail Kick** | Swings up on one paw for a quick, low 7% kick and a short recovery. |
+| **Brisket** | **Porch Bump** | Hauls a shoulder over the lip for a 12% shove. A shield or a missed shoulder leaves time to punish. |
+| **Noodle** | **Latch Whip** | Snaps the lead across the lip for 6% while his feet are still below the stage. It reels a distant rival toward where he lands. |
+| **Clover** | **Rim Vault** | Springs over the lip and scoops with the disc for 8%. The rival goes up while Clover lands farther in. |
+
+Choose **Training → Practice ledge attack** to start hanging with the dummy in reach. Choose **Left ledge** or **Right ledge** first to set the practice side. You can also do the recovery drill, catch the lip yourself, and tap Attack from there.
 
 ## Specials and recovery
 

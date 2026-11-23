@@ -2654,7 +2654,7 @@
         kneeOut: 3, ear: -1, scarf: 3 },
     },
     brisketYardBuster: {
-      ground: true, primed: true, shoulderDrive: true, lateContactPhase: 0.49,
+      ground: true, primed: true, shoulderDrive: [0, 2, 5, 9, 4, 2, 0, 0], lateContactPhase: 0.49,
       wind: { bodyX: 1, torsoTurn: 11, headTurn: -3, fistX: 2, fistY: -5, rearX: -7,
         leftX: -2, leftY: -4, rightX: 3, ear: -2 },
       lift: { bodyX: 1, bodyY: 4, torsoTurn: 14, headX: -2, headTurn: -8, shoulderY: -3,
@@ -2866,6 +2866,84 @@
       follow: { bodyX: -1, bodyY: 3, torsoTurn: -12, headX: 1, headTurn: -3, fistX: -8,
         fistY: 2, fistTurn: 146, rearX: 2, rearY: -2, leftX: -2, rightX: 3, kneeOut: 2, scarf: 3 },
     },
+    // The lip coordinates are in sprite pixels for stand-alone sheets.
+    // In a match the supporting wrists follow the ledgePosition for each climb frame.
+    pipRailKick: {
+      ground: true, primed: true, trackPaws: true, sole: 'both', openHands: 'rear', openRange: [1, 5],
+      lip: { startup: 7, active: 5, front: 8, rear: -1, plantCel: 5,
+        preview: [[7, -23], [6, -20], [5, -16], [5, -13], [2, -10], [0, -8], [-2, -5], [-4, -2], [-6, -2]] },
+      wind: { bodyX: -7, bodyY: 8, lean: -3, torsoTurn: -4, headX: -2, headY: 2, headTurn: -9,
+        rearX: 4, rearY: -9, rearTurn: -6, leftX: -3, leftY: 7, leftFootTurn: 19,
+        rightX: -8, rightY: 5, rightFootTurn: 13, scarf: 2 },
+      lift: { bodyX: -4, bodyY: 3, torsoTurn: -16, headX: -2, headTurn: -13,
+        rearX: -7, rearY: -8, rearTurn: -43, leftX: 3, leftY: -2, leftFootTurn: 25,
+        rightX: -1, rightY: -7, rightFootTurn: 45, frontKneeY: -4, ear: -2, scarf: 4 },
+      hit: { bodyX: -3, bodyY: -1, torsoTurn: -22, headX: -1, headTurn: 6,
+        fistX: -13, fistY: 12, fistTurn: 35, rearX: -9, rearY: -7, rearTurn: -52,
+        leftX: 19, leftY: -10, leftFootTurn: 41, rightX: 11, rightY: -6, rightFootTurn: 55,
+        frontKneeY: -5, kneeOut: 2, ear: -3, scarf: 5 },
+      beat: { bodyX: 2, bodyY: 1, torsoTurn: 11, headTurn: 4, fistY: -4, rearX: 2,
+        leftX: 3, leftY: 2, rightX: 2, rightY: 2, rightFootTurn: 9, ear: 2 },
+      follow: { bodyX: 2, bodyY: 3, torsoTurn: 9, headX: 1, headTurn: 8, fistX: -3, fistY: 1,
+        rearX: -5, rearY: -2, leftX: 2, rightX: 6, rightFootTurn: 17, kneeOut: 4, scarf: 2 },
+    },
+    brisketPorchBump: {
+      ground: true, primed: true, trackPaws: true, shoulderDrive: [0, 0, 2, 4, 6, 2, 0, 0],
+      lip: { startup: 13, active: 6, front: 6, rear: 12, plantCel: 3,
+        preview: [[7, -23], [6, -21], [6, -20], [5, -18], [5, -16], [4, -14], [3, -13], [2, -11], [0, -9], [-1, -8], [-2, -6], [-4, -4], [-6, -2]] },
+      wind: { bodyX: -7, bodyY: 8, lean: -3, torsoTurn: -4, headX: -2, headY: 2, headTurn: -9,
+        leftX: -3, leftY: 7, leftFootTurn: 19, rightX: -8, rightY: 5, rightFootTurn: 13 },
+      lift: { bodyX: -6, bodyY: 5, lean: -1, torsoTurn: -9, headX: -1, headY: 1, headTurn: -14,
+        fistX: 3, fistY: -6, fistTurn: -16, leftX: -4, leftY: 5, rightX: 1, rightY: -4,
+        rightFootTurn: 28, frontKneeY: -3, ear: -2 },
+      hit: { bodyX: 1, bodyY: 2, lean: 1, torsoTurn: 14, headX: -2, headY: 1, headTurn: -6,
+        shoulderY: -4, fistX: -5, fistY: 3, fistTurn: 38, rearX: -15, rearY: 8, rearTurn: 52,
+        leftX: -2, leftY: -4, leftFootTurn: 22, rightX: 3, kneeOut: 3 },
+      beat: { bodyX: 2, bodyY: 1, torsoTurn: 5, headTurn: 5, shoulderY: 1, rearX: 3, rearY: -4,
+        leftX: 5, leftY: 4, leftFootTurn: -16, rightX: 2, ear: 2 },
+      follow: { bodyX: 2, bodyY: 3, torsoTurn: 8, headTurn: 5, shoulderY: -1, fistX: -3,
+        fistY: 1, fistTurn: 14, rearX: -5, rearY: 1, leftX: 1, rightX: 4, kneeOut: 3 },
+    },
+    noodleLatchWhip: {
+      ground: true, primed: true, trackPaws: true, item: 'rope', clasp: 'front',
+      itemAngles: [-36, -62, -27, -4, -19, -33, -19, 0],
+      lip: { startup: 9, active: 6, front: -1, rear: 14, plantCel: 5,
+        preview: [[7, -23], [6, -21], [6, -19], [5, -17], [5, -14], [4, -13], [4, -11], [3, -10], [2, -8], [2, -7], [0, -6], [-1, -6], [-2, -5], [-3, -4], [-5, -4]] },
+      wind: { bodyX: -7, bodyY: 8, lean: -3, torsoTurn: -4, headX: -2, headY: 2, headTurn: -9,
+        fistX: 1, fistY: -8, fistTurn: -20, leftX: -3, leftY: 7, leftFootTurn: 19,
+        rightX: -8, rightY: 5, rightFootTurn: 13, scarf: 2 },
+      lift: { bodyX: -5, bodyY: 5, torsoTurn: -12, headX: 1, headTurn: -9,
+        fistX: -3, fistY: -11, fistTurn: -42, leftX: -2, leftY: 6, rightX: 3, rightY: -4,
+        rightFootTurn: 27, kneeOut: 2, ear: -4, scarf: 4 },
+      hit: { bodyX: 1, bodyY: 1, lean: 1, torsoTurn: 7, headX: 1, headTurn: -6,
+        fistX: 11, fistY: -5, fistTurn: -8, frontElbowX: 2, rearX: -10, rearY: 7,
+        leftX: -2, leftY: 3, leftFootTurn: 20, rightX: 7, rightY: -7, rightFootTurn: 16,
+        kneeOut: 2, ear: -4, scarf: 5 },
+      beat: { bodyX: -2, torsoTurn: -12, headTurn: 8, fistX: -7, fistY: -1, fistTurn: -13,
+        leftX: 5, leftY: -5, rightY: 2, ear: 2, scarf: -2 },
+      follow: { bodyY: 2, torsoTurn: -5, headTurn: -3, fistX: 1, fistY: -3, fistTurn: -18,
+        rearX: -4, rearY: 2, leftX: 1, rightX: 4, kneeOut: 2, scarf: 1 },
+    },
+    cloverRimVault: {
+      ground: true, primed: true, trackPaws: true, item: 'disc',
+      itemAngles: [-53, -13, 18, -8, 1, -18, -23, -6],
+      lip: { startup: 10, active: 5, front: -1, rear: 9, plantCel: 5,
+        preview: [[7, -23], [6, -21], [5, -18], [4, -16], [4, -13], [2, -10], [0, -7], [-2, -3], [-4, 0], [-7, 3]] },
+      wind: { bodyX: -7, bodyY: 8, lean: -3, torsoTurn: -4, headX: -2, headY: 2, headTurn: -9,
+        fistX: 1, fistY: -4, fistTurn: -27, leftX: -3, leftY: 7, leftFootTurn: 19,
+        rightX: -8, rightY: 5, rightFootTurn: 13, scarf: 2 },
+      lift: { bodyX: -4, bodyY: 3, torsoTurn: -11, headX: 1, headTurn: -8,
+        fistX: 3, fistY: 1, fistTurn: 10, leftX: -2, leftY: 1, rightX: 2, rightY: -7,
+        rightFootTurn: 27, frontKneeY: -4, ear: -2, scarf: 4 },
+      hit: { bodyX: 1, bodyY: -1, torsoTurn: -11, headX: -2, headY: 1, headTurn: -12,
+        fistX: -3, fistY: -7, fistTurn: -37, frontElbowX: 2, rearX: -18, rearY: 17, rearTurn: 55,
+        leftX: 3, leftY: -3, leftFootTurn: 20, rightX: 7, rightY: -10, rightFootTurn: -24,
+        frontKneeY: -4, scarf: -2 },
+      beat: { bodyX: 1, bodyY: -1, torsoTurn: -3, headTurn: -4, fistX: 1, fistY: -4,
+        fistTurn: -12, rearX: 2, rearY: -4, leftY: -1, rightY: 2, scarf: 3 },
+      follow: { bodyX: 1, bodyY: 3, torsoTurn: 7, headTurn: 6, fistX: 2, fistY: -1, fistTurn: -16,
+        rearX: -6, rearY: 1, leftX: 1, rightX: 5, kneeOut: 4, scarf: 2 },
+    },
   };
 
   const specials = { pip: 'pounce', brisket: 'shoulder', noodle: 'cast', clover: 'disc' };
@@ -2958,6 +3036,7 @@
     } else if (frame < 7) addKey(move.follow, frame === 5 ? 1 : 0.43);
     else addKey(move.rest, 1);
     s.guardFloor = !!(grounded || move.sail || (move.floorWind && (frame < 2 || (holdWind && frame === 2))));
+    if (move.lip) s.guardFloor = frame >= move.lip.plantCel;
     if (!grounded && !move.sail && frame >= 6) {
       s.leftY -= 3;
       s.rightY -= 2;
@@ -3013,25 +3092,35 @@
       s.glanceBack = frame === 0;
     }
     s.extraHaunch = !!move.haunch && frame > 0 && frame < 7;
-    if (move.shoulderDrive) s.shoulderLead = [0, 2, 5, 9, 4, 2, 0, 0][frame];
+    if (move.shoulderDrive) s.shoulderLead = move.shoulderDrive[frame];
     s.bellyFirst = !!move.belly && frame >= 2 && frame < 6;
     s.tailType = move.tailType || null;
     s.kitFrame = frame;
   }
 
+  function actionCel(pose, phase) {
+    if (phase < 0.12) return 0;
+    if (phase < 0.24) return 1;
+    if (phase < 0.4) return 2;
+    if (phase < (kitMoves[pose]?.lateContactPhase || 0.54)) return 3;
+    if (phase < 0.68) return 4;
+    if (phase < 0.83) return 5;
+    if (phase < 0.95) return 6;
+    return 7;
+  }
+
   function frameNumber(pose, time, phase) {
     const tick = (period) => Math.floor((Math.abs(time) % 1000000) * period);
     if (captiveLoops.includes(pose) || kitMoves[pose]?.hold) return Math.floor(phase * 8) % 8;
-    if (Object.prototype.hasOwnProperty.call(kitMoves, pose) || captiveFlinches.includes(pose)) {
-      if (phase < 0.12) return 0;
-      if (phase < 0.24) return 1;
-      if (phase < 0.4) return 2;
-      if (phase < (kitMoves[pose]?.lateContactPhase || 0.54)) return 3;
-      if (phase < 0.68) return 4;
-      if (phase < 0.83) return 5;
-      if (phase < 0.95) return 6;
-      return 7;
+    const lip = kitMoves[pose]?.lip;
+    if (lip && phase <= 0.65) {
+      const elapsed = phase < 0.4 ? Math.min(lip.startup - 1, Math.round(lip.startup * phase / 0.39)) :
+        lip.startup + Math.round(lip.active * (phase - 0.4) / 0.25);
+      // Each simulation tick that still bears weight on the rail gets one cached drawing.
+      if (elapsed < lip.preview.length) return 8 + elapsed;
     }
+    if (Object.prototype.hasOwnProperty.call(kitMoves, pose) || captiveFlinches.includes(pose))
+      return actionCel(pose, phase);
     if (pose === 'run') return tick(12) % 6;
     if (pose === 'win') return tick(6) % 4;
     if (pose === 'idle') {
@@ -3150,6 +3239,7 @@
       kickFront: false,
       reverseArm: false,
       grip: false,
+      lipHands: null,
       palmCharm: false,
       ear: 0,
       tail: 0,
@@ -3549,7 +3639,8 @@
 
   function drawPaw(buffer, name, d, s, near, x, y) {
     const handOpened = s.openHands === 'both' || s.openHands === (near ? 'front' : 'rear');
-    let paw = s.grip ? ledgePaws[name] : handOpened ? spreadPaws[name] : d.fist;
+    const onLip = s.lipHands === 'both' || s.lipHands === (near ? 'front' : 'rear');
+    let paw = s.grip || onLip ? ledgePaws[name] : handOpened ? spreadPaws[name] : d.fist;
     if (s.clasp === 'both' || s.clasp === (near ? 'front' : 'rear')) paw = claspPaws[name];
     if (s.impactPaw && (near || s.twoHandsFront)) paw = s.impactPaw;
     turned(buffer, x, y, 14, near ? s.fistTurn : s.rearTurn, (part) => {
@@ -3790,10 +3881,39 @@
     return kitMoves[pose]?.clasp || kitMoves[pose]?.trackPaws;
   }
 
+  function placeGrippingPaws(name, pose, elapsed) {
+    const lip = kitMoves[pose].lip;
+    const phase = elapsed < lip.startup ? 0.39 * elapsed / lip.startup :
+      0.4 + 0.25 * (elapsed - lip.startup) / lip.active;
+    const s = stance(name, pose, actionCel(pose, phase));
+    const game = window.DogFight;
+    const move = game?.moves?.[pose];
+    const feet = move?.climb && game.ledgePosition ? game.ledgePosition(move, elapsed / 60) : null;
+    const [x, y] = feet ? [Math.round(-feet.x / 2), Math.round(-feet.y / 2)] : lip.preview[elapsed];
+    const [baseX, baseY] = fighters[name].pawAt;
+    const front = elapsed <= lip.front;
+    const rear = elapsed <= lip.rear;
+    s.lipHands = front && rear ? 'both' : front ? 'front' : 'rear';
+    if (front) {
+      s.fistX = x - baseX - s.bodyX;
+      s.fistY = y - baseY - s.bodyY;
+      s.fistTurn = 0;
+    }
+    if (rear) {
+      // Space two gripping paws apart. A lone grip sits just inside the corner.
+      s.rearX = x + (lip.front >= 0 ? 3 : 1) - (baseX - 2) - s.bodyX;
+      s.rearY = y - (baseY - 3) - s.bodyY;
+      s.rearTurn = 0;
+      s.twoHandsFront = true;
+    }
+    if (front && rear) s.behindHead = true;
+    return s;
+  }
+
   function getFrame(name, pose, number) {
     const key = name + '/' + pose + '/' + number;
     if (frames.has(key)) return frames.get(key);
-    const s = stance(name, pose, number);
+    const s = number >= 8 ? placeGrippingPaws(name, pose, number - 8) : stance(name, pose, number);
     const pixels = compose(name, s);
     let left = W,
       top = H,

@@ -87,6 +87,8 @@
   const runStick = 0.55;
   const runSpeed = 0.6;
   const pivotWindow = 7 / 60;
+  const ledgeDriftGrace = 12 / 60;
+  const hangingFeet = [0, -13, 46];
   const attackHold = 0.21;
   const smashChargeTime = 1;
   const smashHoldLimit = 2;
@@ -96,6 +98,7 @@
       ground: ['pipJab', 'pipCross', 'pipHeel'],
       tilts: { forward: 'pipStampKick', up: 'pipChinFlick', down: 'pipDewclaw' },
       dashAttack: 'pipGrassSkid',
+      ledgeAttack: 'pipRailKick',
       grab: 'pipCollarTag',
       dashGrab: 'pipTagDash',
       pivotGrab: 'pipHeelHook',
@@ -122,6 +125,7 @@
       ground: ['brisketCheck', 'brisketLift'],
       tilts: { forward: 'brisketGateCheck', up: 'brisketCrownLift', down: 'brisketDoorstop' },
       dashAttack: 'brisketYardBuster',
+      ledgeAttack: 'brisketPorchBump',
       grab: 'brisketBearHug',
       dashGrab: 'brisketFreightHug',
       pivotGrab: 'brisketGateSwing',
@@ -159,6 +163,7 @@
       ground: ['noodleTrip', 'noodleReel', 'noodleSnap'],
       tilts: { forward: 'noodleKnotPoke', up: 'noodleLoopLift', down: 'noodleTailBroom' },
       dashAttack: 'noodleLeadSweep',
+      ledgeAttack: 'noodleLatchWhip',
       grab: 'noodleLeadLoop',
       dashGrab: 'noodleRunningLoop',
       pivotGrab: 'noodleBackcast',
@@ -190,6 +195,7 @@
       ground: ['cloverTap', 'cloverSet'],
       tilts: { forward: 'cloverOneTwoPass', up: 'cloverCanopyTap', down: 'cloverBackspin' },
       dashAttack: 'cloverRimRush',
+      ledgeAttack: 'cloverRimVault',
       grab: 'cloverDiscHook',
       dashGrab: 'cloverScoopSlide',
       pivotGrab: 'cloverRimTurn',
@@ -221,6 +227,78 @@
   // Frames are [startup, active, recovery] at 60 Hz. Boxes are [forward, down from feet, half-width, half-height].
   // The launch angle is measured above horizontal. Negative angles spike an airborne opponent.
   const moves = {
+    // Climb points are [frame, distance inward from the lip, feet below the surface].
+    pipRailKick: {
+      label: 'Rail Kick',
+      hint: 'Swing over the lip on one paw and kick low. Pip lands quickly enough to chase the rival inward.',
+      ledgeAttack: true,
+      frames: [7, 5, 11],
+      climb: [
+        [3, -9, 26],
+        [7, 9, 5],
+        [12, 28, 0],
+      ],
+      box: [35, -21, 33, 17],
+      dmg: 7,
+      base: 160,
+      growth: 3.1,
+      angle: 22,
+    },
+    brisketPorchBump: {
+      label: 'Porch Bump',
+      hint: 'Haul up and drive your shoulder onto the stage. The shove hits hard, but a miss leaves you open.',
+      ledgeAttack: true,
+      frames: [13, 6, 19],
+      climb: [
+        [5, -8, 29],
+        [10, 4, 12],
+        [13, 17, 0],
+        [18, 36, 0],
+      ],
+      box: [38, -36, 39, 28],
+      dmg: 12,
+      base: 234,
+      growth: 4.25,
+      angle: 30,
+      hard: true,
+    },
+    noodleLatchWhip: {
+      label: 'Latch Whip',
+      hint: 'Hang on with one paw and snap the lead across the edge. A distant rival gets pulled toward your landing spot.',
+      ledgeAttack: true,
+      frames: [9, 6, 13],
+      climb: [
+        [4, -10, 29],
+        [9, -3, 14],
+        [15, 12, 6],
+        [18, 20, 0],
+      ],
+      box: [65, -29, 57, 15],
+      dmg: 6,
+      base: 124,
+      growth: 1.85,
+      angle: 35,
+      pull: true,
+      stun: 0.32,
+    },
+    cloverRimVault: {
+      label: 'Rim Vault',
+      hint: 'Vault over the edge and scoop with the held disc. It sends a rival above you as you land farther in.',
+      ledgeAttack: true,
+      frames: [10, 5, 14],
+      climb: [
+        [4, -7, 27],
+        [8, 9, 0],
+        [10, 20, -12],
+        [15, 32, -11],
+        [19, 42, 0],
+      ],
+      box: [28, -47, 33, 37],
+      dmg: 8,
+      base: 236,
+      growth: 3.1,
+      angle: 77,
+    },
     pipStampKick: {
       label: 'Stamp Kick',
       hint: 'Plant one foot and snap the other straight out. The quick recovery lets you chase the low launch.',
@@ -1613,16 +1691,13 @@
       reboundPose: 'special',
     };
   }
-  const attacks = {
-    quick: { start: 0.045, active: 0.095, end: 0.23, dmg: 6, base: 137, growth: 3.35, reach: 0 },
-  };
   function cancelCharge(f) {
     f.charge = -1;
     f.chargeDirection = 'neutral';
     f.chargeReleased = false;
     f.smashCharge = null;
   }
-  function beginAttack(f, name, aim = 0, power = 0, moveId = null) {
+  function beginAttack(f, name, aim, power, moveId) {
     cancelCharge(f);
     f.run = null;
     f.lastSmashPower = null;
@@ -1632,17 +1707,42 @@
     f.reboundTime = 0;
     f.chainNext = 0;
     f.chainWindow = 0;
-    const move = moveId
-      ? moves[moveId] ||
-        specials[moveId] ||
-        smashes[moveId] ||
-        grabs[moveId] ||
-        pummels[moveId] ||
-        throws[moveId]
-      : attacks[name];
+    const move =
+      moves[moveId] ||
+      specials[moveId] ||
+      smashes[moveId] ||
+      grabs[moveId] ||
+      pummels[moveId] ||
+      throws[moveId];
     f.attack = { name, moveId, aim, power, time: 0, hitBeat: -1, ballHit: false, fired: false, ...move };
-    const common = { quick: 'Quick Strike', recover: 'Up Special' };
-    f.lastMove = move.label || common[name] || f.stats.move;
+    f.lastMove = move.label;
+  }
+  function ledgePosition(move, time = move.time) {
+    const frame = time * 60;
+    let previous = hangingFeet;
+    for (const next of move.climb) {
+      if (frame < next[0] - 1e-8) {
+        const t = (frame - previous[0]) / (next[0] - previous[0]);
+        return {
+          x: previous[1] + (next[1] - previous[1]) * t,
+          y: previous[2] + (next[2] - previous[2]) * t,
+          planted: false,
+        };
+      }
+      previous = next;
+    }
+    return { x: previous[1], y: previous[2], planted: true };
+  }
+  function beginLedgeAttack(f) {
+    const edge = f.ledge;
+    beginAttack(f, 'ledgeAttack', 0, 0, f.kit.ledgeAttack);
+    f.attack.edge = edge;
+    f.attack.planted = false;
+    f.face = edge.left ? 1 : -1;
+    f.ledge = f.command = null;
+    f.jumpBuffer = f.guardBuffer = 0;
+    f.ledgeLock = 0.52;
+    f.invuln = Math.min(f.invuln, Math.max(0, f.attack.start - 1 / 60 - 1e-8));
   }
   function trackGroundRun(f, axis, dt) {
     const direction = Math.abs(axis) >= runStick ? Math.sign(axis) : 0;
@@ -1783,7 +1883,7 @@
       this.dogs[1].damage = this.trainingDamage;
       this.lastCombo = { hits: 0, damage: 0 };
     }
-    resetTraining(ledge = false) {
+    resetTraining(ledge = false, fromHang = false) {
       this.dogs.forEach((f) => this.spawn(f, false));
       this.projectiles = [];
       this.ball = null;
@@ -1791,15 +1891,17 @@
       this.hitStop = 0;
       this.lastCombo = { hits: 0, damage: 0 };
       if (ledge) {
-        const f = this.dogs[0],
-          right = ledge === 'right';
-        const ground = this.terrain.filter((p) => !p.thin);
-        const edge = right ? ground[ground.length - 1] : ground[0];
-        f.x = right ? edge.x2 + 68 : edge.x1 - 68;
-        f.y = edge.y + 65;
-        f.face = right ? -1 : 1;
-        f.ground = -1;
-        f.jumps = 1;
+        const [f, dummy] = this.dogs;
+        const left = ledge !== 'right';
+        const solid = this.terrain.filter((p) => !p.thin);
+        const floor = left ? solid[0] : solid[solid.length - 1];
+        const edge = { x: left ? floor.x1 : floor.x2, y: floor.y, index: this.terrain.indexOf(floor), left };
+        const face = left ? 1 : -1;
+        const strike = moves[f.kit.ledgeAttack];
+        const spacing = ledgePosition(strike, strike.start).x + strike.box[0] + strike.box[2];
+        Object.assign(dummy, { x: edge.x + face * spacing, y: floor.y, ground: edge.index, face: -face });
+        if (fromHang) this.hangLedge(f, edge);
+        else Object.assign(f, { x: edge.x - face * 68, y: floor.y + 65, face, ground: -1, jumps: 1 });
       } else {
         const [player, dummy] = this.dogs,
           surface = this.terrain[0];
@@ -1989,23 +2091,42 @@
       if (f.ledge) {
         f.ledgeTime += dt;
         const inward = f.ledge.left ? 1 : -1;
-        if (jumpTap || input.x * inward > 0.45 || attackTap || f.ledgeTime > 2) {
+        const steerIn = input.x * inward > 0.45;
+        if (!steerIn) f.ledge.carriedIn = false;
+        if (attackTap) beginLedgeAttack(f);
+        else if (
+          jumpTap ||
+          (steerIn && (!f.ledge.carriedIn || f.ledgeTime + 1e-8 >= ledgeDriftGrace)) ||
+          f.ledgeTime > 2
+        ) {
           f.x = f.ledge.x + inward * 19;
           f.y = f.ledge.y;
           f.ground = f.ledge.index;
           f.ledge = null;
           f.ledgeLock = 0.52;
           if (!jumpTap) f.jumpBuffer = 0;
-          if (attackTap) {
-            f.command = null;
-            beginAttack(f, 'quick');
-          }
         } else if (input.y > 0.5 || input.x * inward < -0.5) {
           f.ledge = null;
           f.ledgeLock = 0.45;
           f.vy = 65;
           f.jumps = 1;
         } else return;
+      }
+      const getup = f.attack;
+      if (getup?.edge && !getup.planted) {
+        getup.time += dt;
+        const position = ledgePosition(getup);
+        const x = getup.edge.x + f.face * position.x;
+        const y = getup.edge.y + position.y;
+        f.vx = position.planted ? 0 : (x - f.x) / dt;
+        f.vy = position.planted ? 0 : (y - f.y) / dt;
+        f.x = x;
+        f.y = y;
+        if (position.planted) {
+          getup.planted = true;
+          f.ground = getup.edge.index;
+        }
+        return;
       }
       const grounded = f.ground !== -1;
       const current = f.attack;
@@ -2163,7 +2284,8 @@
         f.vx = toward(f.vx, 0, f.attack.brake * dt);
       } else if (f.dodge <= 0 && !sliding) {
         const onFloor = f.ground >= 0;
-        const planted = f.shield || f.charge >= 0 || (onFloor && f.attack?.tiltSide);
+        const planted =
+          f.shield || f.charge >= 0 || (onFloor && (f.attack?.tiltSide || f.attack?.ledgeAttack));
         const mobility = planted ? 0 : f.attack ? (onFloor ? 0.12 : 0.65) : 1;
         const steppingJab = f.attack?.step && f.attack.time < f.attack.start;
         const drag = onFloor ? (steppingJab ? 560 : 2630) : Math.abs(input.x) > 0.1 ? f.kit.airAccel : 155;
@@ -2274,12 +2396,13 @@
     hangLedge(f, edge) {
       f.run = null;
       f.throwBounce = null;
-      f.ledge = edge;
-      f.ledgeTime = 0;
-      f.x = edge.x + (edge.left ? -13 : 13);
-      f.y = edge.y + 46;
-      f.vx = f.vy = 0;
       f.face = edge.left ? 1 : -1;
+      // Give a player drifting toward the stage a moment to choose a get-up attack.
+      f.ledge = { ...edge, carriedIn: f.prev.x * f.face > 0.45 };
+      f.ledgeTime = 0;
+      f.x = edge.x + f.face * hangingFeet[1];
+      f.y = edge.y + hangingFeet[2];
+      f.vx = f.vy = 0;
       f.ground = -1;
       f.attack = f.command = null;
       cancelCharge(f);
@@ -2827,6 +2950,7 @@
         }
         if (attack.hitBeat === beatIndex || rival.invuln > 0 || rival.respawning > 0) continue;
         if (attack.dashAttack && (rival.x - f.x) * f.face < 0) continue;
+        if (attack.edge && (rival.x - attack.edge.x) * f.face < 0) continue;
         if (
           Math.abs(rival.x - area.x) > area.rx + rival.stats.width ||
           Math.abs(rival.y - rival.stats.height * 0.52 - area.y) > area.ry + rival.stats.height * 0.4
@@ -2980,8 +3104,15 @@
         target.vx = face * speed * Math.cos(angle);
         target.vy = -speed * Math.sin(angle) - (angle >= 0 ? 40 : 0);
         if (move.pull) {
-          const pocket = owner.x + face * (owner.stats.width + target.stats.width - 4);
-          target.vx = clamp((pocket - target.x) * 9.5, -350, 350);
+          const spacing = owner.stats.width + target.stats.width;
+          let pocket = owner.x + face * (spacing - 4);
+          let rate = 9.5;
+          if (move.edge) {
+            // Reel toward the paws that will land onstage, over the duration of the hitstun.
+            pocket = move.edge.x + face * (ledgePosition(move, move.end).x + spacing + 2);
+            rate = 1 / move.stun;
+          }
+          target.vx = clamp((pocket - target.x) * rate, -350, 350);
           if (move.lift) target.vy = -Math.max(move.lift, Math.abs(target.vy));
         }
       } else {
@@ -3287,7 +3418,26 @@
       const spacing = f.kind === 'noodle' ? 88 : f.kind === 'clover' ? 57 : 40;
       result.x = Math.abs(targetX - f.x) > (opponentOffstage ? 10 : spacing) ? Math.sign(targetX - f.x) : 0;
       if (f.ledge) {
-        result.x = f.ledge.left ? 1 : -1;
+        const edge = f.ledge;
+        const face = edge.left ? 1 : -1;
+        const strike = moves[f.kit.ledgeAttack];
+        const contact = ledgePosition(strike, strike.start);
+        const [x, y, rx, ry] = strike.box;
+        const gap = (foe.x + foe.vx * strike.start - edge.x) * face;
+        const height = foe.y + foe.vy * strike.start - foe.stats.height * 0.52 - edge.y;
+        result.x = face;
+        result.jump = false;
+        if (
+          !foe.shield &&
+          !foe.invuln &&
+          !foe.respawning &&
+          gap >= 0 &&
+          Math.abs(gap - contact.x - x) <= rx + foe.stats.width &&
+          Math.abs(height - contact.y - y) <= ry + foe.stats.height * 0.4
+        ) {
+          result.attack = true;
+          result.tapped = { attack: true };
+        }
         return result;
       }
       const inside = clamp(f.x, closest.x1 + 52, closest.x2 - 52);
@@ -3541,5 +3691,6 @@
     idleInput,
     clamp,
     attackWindow,
+    ledgePosition,
   };
 })();

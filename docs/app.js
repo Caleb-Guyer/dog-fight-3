@@ -560,7 +560,7 @@
       'controls',
       'Controls',
       table +
-        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
+        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
   $('controls').onclick = showControls;
@@ -642,6 +642,10 @@
     const rows = Object.entries(entries)
       .map(([side, id]) => guideMoveRow(moveSet[id], inputs[side], side, section))
       .join('');
+    const ledgeMove =
+      '<h3 class="guide-section">Ledge attack</h3><ul class="move-rows guide-ledge">' +
+      guideMoveRow(moves[kit.ledgeAttack], 'While hanging · tap Attack', 'ledge', 'ledge') +
+      '</ul>';
     const sections =
       '<div class="guide-tabs" role="group" aria-label="Move categories">' +
       [
@@ -679,7 +683,8 @@
         kit.recovery +
         '</p><ul class="move-rows guide-specials">' +
         rows +
-        '</ul>';
+        '</ul>' +
+        ledgeMove;
     } else {
       contents =
         '<h3 class="guide-section">Ground combo</h3><div class="guide-chain">' +
@@ -693,6 +698,7 @@
         '</ul><h3 class="guide-section">Dash attack</h3><ul class="move-rows guide-dash">' +
         guideMoveRow(moves[kit.dashAttack], 'Run + Attack', 'dash', 'dash') +
         '</ul>' +
+        ledgeMove +
         '<h3 class="guide-section">Aerial attacks</h3><p>Forward follows the way your dog faces. You can drift backward.</p><ul class="move-rows guide-airs">' +
         rows +
         '</ul>';
@@ -813,6 +819,7 @@
     page = 'match';
     drillSide = null;
     drillWaiting = false;
+    practiceSide = 'left';
     $('recovery-tip').hidden = true;
     document.body.classList.add('playing');
     document.body.classList.toggle('training-active', settings.mode === 'training');
@@ -823,6 +830,9 @@
       view.event(name, e);
       sound(name, e);
       if (name === 'ko') announce(e.f.stats.name + ' knocked out');
+      if (name === 'ledge' && drillSide && e.f.index === 0)
+        $('recovery-tip').textContent =
+          'Caught the ' + drillSide + ' ledge. Tap Attack for ' + moves[e.f.kit.ledgeAttack].label + '.';
       if (name === 'ko' && drillSide && e.f.index === 0) {
         drillSide = null;
         $('recovery-tip').textContent = 'Missed the ledge. Pick a side to try again.';
@@ -942,18 +952,23 @@
     updateHUD();
   });
   let drillSide = null,
-    drillWaiting = false;
-  function drill(ledge) {
+    drillWaiting = false,
+    practiceSide = 'left';
+  function drill(ledge, fromHang = false) {
     if (!world) return;
-    world.resetTraining(ledge);
     drillSide = ledge || null;
     drillWaiting = !!ledge;
-    const message = ledge
-      ? 'Jump or use Special to start. ' + world.dogs[0].kit.recovery
-      : 'Positions reset.';
+    if (ledge) practiceSide = ledge;
+    view = new FightView();
+    world.resetTraining(ledge, fromHang);
+    const player = world.dogs[0];
+    let message = 'Positions reset.';
+    if (fromHang)
+      message =
+        'Hanging from the ' + ledge + ' ledge. Tap Attack for ' + moves[player.kit.ledgeAttack].label + '.';
+    else if (ledge) message = 'Jump or use Special to start. ' + player.kit.recovery;
     $('recovery-tip').textContent = message;
     $('recovery-tip').hidden = !ledge;
-    view = new FightView();
     clearInput();
     updateHUD();
     $('game').focus({ preventScroll: true });
@@ -962,6 +977,7 @@
   $('reset-training').onclick = () => drill(false);
   $('ledge-training').onclick = () => drill('left');
   $('ledge-right').onclick = () => drill('right');
+  $('ledge-attack-training').onclick = () => drill(practiceSide, true);
   const keys = [
     {
       left: 'KeyA',
@@ -1152,16 +1168,22 @@
         accumulator += dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
-          if (drillWaiting && (input.jump || input.special || input.tapped.jump || input.tapped.special)) {
-            drillWaiting = false;
-            $('recovery-tip').textContent = world.dogs[0].kit.recovery;
+          const player = world.dogs[0];
+          if (drillWaiting) {
+            const ready = player.ledge
+              ? input.attack || input.jump || Math.abs(input.x) > 0.45 || input.y > 0.5
+              : input.jump || input.special;
+            if (ready) {
+              drillWaiting = false;
+              if (!player.ledge) $('recovery-tip').textContent = player.kit.recovery;
+            }
           }
           if (!drillWaiting) {
             world.step(1 / 60, input, world.mode === 'local' ? playerInput(1, pads) : idleInput);
-            if (drillSide && (world.dogs[0].ledge || world.dogs[0].ground >= 0)) {
-              $('recovery-tip').textContent =
-                (world.dogs[0].ledge ? 'Caught the ' + drillSide + ' ledge.' : 'Back on stage.') +
-                ' Pick a ledge to go again.';
+            if (drillSide && (player.attack?.ledgeAttack || player.ground >= 0)) {
+              $('recovery-tip').textContent = player.attack?.ledgeAttack
+                ? player.lastMove + '. Choose Practice ledge attack to try again.'
+                : 'Back on stage. Pick a ledge to go again.';
               drillSide = null;
             }
           }
