@@ -11,12 +11,12 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=air-dodges-1" />
-    <script defer src="./fighters-art.js?v=air-dodges-1"></script>
+    <link rel="stylesheet" href="./style.css?v=ledge-rolls-1" />
+    <script defer src="./fighters-art.js?v=ledge-rolls-1"></script>
     <script defer src="./arena-art.js"></script>
-    <script defer src="./engine.js?v=air-dodges-1"></script>
-    <script defer src="./render.js?v=air-dodges-1"></script>
-    <script defer src="./app.js?v=air-dodges-1"></script>
+    <script defer src="./engine.js?v=ledge-rolls-1"></script>
+    <script defer src="./render.js?v=ledge-rolls-1"></script>
+    <script defer src="./app.js?v=ledge-rolls-1"></script>
   </head>
   <body>
     <header class="topbar">
@@ -134,6 +134,7 @@
             <output id="launch-status" aria-label="Launch practice" aria-live="polite" hidden></output>
             <output id="shield-status" aria-label="Shield practice" aria-live="polite" hidden></output>
             <output id="air-status" aria-label="Air-dodge practice" aria-live="polite" hidden></output>
+            <output id="roll-status" aria-label="Ledge roll practice" aria-live="polite" hidden></output>
             <output id="training-move" aria-label="Last move" hidden></output>
             <span id="training-charge" hidden></span>
             <output id="training-combo" aria-label="Last combo" hidden></output>
@@ -182,6 +183,12 @@
           </button>
           <button id="ledge-right" type="button" class="utility"><i data-icon="ledge"></i>Right ledge</button>
           <button id="ledge-attack-training" type="button" class="utility">Practice ledge attack</button>
+          <button id="ledge-roll-training" type="button" class="utility">Ledge roll practice</button>
+          <span id="roll-patterns" role="group" aria-label="Ledge roll drill" hidden>
+            <button id="roll-guard" type="button" class="utility" aria-pressed="true">Close guard</button>
+            <button id="roll-read" type="button" class="utility" aria-pressed="false">Read the roll</button>
+            <button id="roll-side" type="button" class="utility">Switch ledge</button>
+          </span>
           <button id="launch-training" type="button" class="utility">Launch practice</button>
           <button id="shield-training" type="button" class="utility">Shield practice</button>
           <span id="shield-patterns" role="group" aria-label="Dummy action" hidden>

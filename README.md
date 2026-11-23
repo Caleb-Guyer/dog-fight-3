@@ -167,6 +167,19 @@ Once your dog catches a solid edge, tap **Attack** to climb and strike toward th
 
 Choose **Training → Practice ledge attack** to start hanging with the dummy in reach. Choose **Left ledge** or **Right ledge** first to set the practice side. You can also do the recovery drill, catch the lip yourself, and tap Attack from there.
 
+## Ledge rolls
+
+While hanging, tap **Shield** to roll past a guard and turn back toward the ledge. Use **L** for P1, **Slash (/)** for P2, either gamepad bumper, or the **Shield** touch button. If you used Shield to air-dodge to the ledge, release it and tap again after the catch.
+
+| Dog | Ledge roll | How to play it |
+| --- | --- | --- |
+| Pip | Rail Tuck | Shortest roll. Pip turns back in 23 frames, fast enough to jab a guard who swung at the lip. |
+| Brisket | Porch Roll | Slow to tuck, then safe from hits and grabs on frames 4 through 19, the longest protected window. |
+| Noodle | Slipknot Roll | Travels farthest. Noodle spends 16 frames unwinding at the endpoint, where a waiting guard can grab him. |
+| Clover | Rim Cartwheel | Plants the disc at the lip and vaults past the guard. Covers more ground than Brisket and turns sooner. |
+
+In **Training → Ledge roll practice**, **Close guard** swings at the lip. Roll past and tap Attack as your dog turns. **Read the roll** waits at the landing spot with a grab. Try jumping from the same position to make the grab miss. **Switch ledge** mirrors either setup.
+
 ## Specials and recovery
 
 Press Special alone for Neutral. Hold left or right, up, or down as you press Special for the other three moves. These inputs work on the ground and in the air. On touchscreens, ↖ and ↗ aim an Up Special toward the stage. Slide your thumb onto a side arrow to steer. In the **Move list**, choose **Specials & recovery** to see the timing and artwork for each move.

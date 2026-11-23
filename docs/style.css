@@ -663,6 +663,8 @@ body.playing .tools .utility,
 }
 #launch-status[data-result='tech'],
 #shield-status[data-result='parry'],
+#roll-status[data-result='passed'],
+#roll-status[data-result='counter'],
 #air-status[data-result='evade'],
 #air-status[data-result='ledge'],
 #air-status[data-result='land'] {
@@ -788,11 +790,13 @@ kbd {
   font-size: 13px;
 }
 #shield-patterns,
+#roll-patterns,
 #air-patterns {
   display: inline-flex;
   gap: 2px;
 }
 #shield-patterns [aria-pressed='true'],
+#roll-patterns [aria-pressed='true'],
 #air-patterns [aria-pressed='true'] {
   background: var(--gold);
   border-color: var(--ink);

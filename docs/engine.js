@@ -89,6 +89,10 @@
   const pivotWindow = 7 / 60;
   const ledgeDriftGrace = 12 / 60;
   const hangingFeet = [0, -13, 46];
+  function smoothStep(value) {
+    const t = clamp(value, 0, 1);
+    return t * t * (3 - 2 * t);
+  }
   const tumbleSpeed = 430;
   const maxDI = (18 * Math.PI) / 180;
   const techWindow = 11 / 60;
@@ -125,6 +129,15 @@
       tilts: { forward: 'pipStampKick', up: 'pipChinFlick', down: 'pipDewclaw' },
       dashAttack: 'pipGrassSkid',
       ledgeAttack: 'pipRailKick',
+      ledgeRoll: {
+        label: 'Rail Tuck',
+        total: 23,
+        safe: [2, 12],
+        plant: 6,
+        arrive: 16,
+        distance: 96,
+        tip: 'Pip rolls just past a close guard. Tap Attack as he turns to jab first.',
+      },
       grab: 'pipCollarTag',
       dashGrab: 'pipTagDash',
       pivotGrab: 'pipHeelHook',
@@ -161,6 +174,15 @@
       tilts: { forward: 'brisketGateCheck', up: 'brisketCrownLift', down: 'brisketDoorstop' },
       dashAttack: 'brisketYardBuster',
       ledgeAttack: 'brisketPorchBump',
+      ledgeRoll: {
+        label: 'Porch Roll',
+        total: 36,
+        safe: [4, 19],
+        plant: 10,
+        arrive: 24,
+        distance: 113,
+        tip: 'Brisket takes longer to tuck his shoulder, then stays untouchable the longest.',
+      },
       grab: 'brisketBearHug',
       dashGrab: 'brisketFreightHug',
       pivotGrab: 'brisketGateSwing',
@@ -208,6 +230,15 @@
       tilts: { forward: 'noodleKnotPoke', up: 'noodleLoopLift', down: 'noodleTailBroom' },
       dashAttack: 'noodleLeadSweep',
       ledgeAttack: 'noodleLatchWhip',
+      ledgeRoll: {
+        label: 'Slipknot Roll',
+        total: 39,
+        safe: [3, 15],
+        plant: 7,
+        arrive: 23,
+        distance: 153,
+        tip: 'Noodle rolls farthest. A guard who waits at the end can grab him while he unwinds.',
+      },
       grab: 'noodleLeadLoop',
       dashGrab: 'noodleRunningLoop',
       pivotGrab: 'noodleBackcast',
@@ -249,6 +280,15 @@
       tilts: { forward: 'cloverOneTwoPass', up: 'cloverCanopyTap', down: 'cloverBackspin' },
       dashAttack: 'cloverRimRush',
       ledgeAttack: 'cloverRimVault',
+      ledgeRoll: {
+        label: 'Rim Cartwheel',
+        total: 29,
+        safe: [3, 14],
+        plant: 7,
+        arrive: 21,
+        distance: 125,
+        tip: 'Clover pivots over her disc and lands farther in than Brisket, ready to turn sooner.',
+      },
       grab: 'cloverDiscHook',
       dashGrab: 'cloverScoopSlide',
       pivotGrab: 'cloverRimTurn',
@@ -1825,6 +1865,28 @@
     f.ledgeLock = 0.52;
     f.invuln = Math.min(f.invuln, Math.max(0, f.attack.start - 1 / 60 - 1e-8));
   }
+  function ledgeRollAction(roll, edge, maxDistance = roll.distance) {
+    return {
+      type: 'ledgeRoll',
+      edge,
+      dir: edge.left ? 1 : -1,
+      time: 0,
+      duration: roll.total / 60,
+      plantAt: roll.plant / 60,
+      arriveAt: roll.arrive / 60,
+      safeFrom: roll.safe[0] / 60,
+      safeUntil: (roll.safe[1] + 1) / 60,
+      distance: Math.min(roll.distance, maxDistance),
+    };
+  }
+  function ledgeRollPosition(action, time = action.time) {
+    const planted = time + 1e-8 >= action.plantAt;
+    return {
+      x: hangingFeet[1] + (action.distance - hangingFeet[1]) * smoothStep(time / action.arriveAt),
+      y: planted ? 0 : hangingFeet[2] * (1 - smoothStep(time / action.plantAt)),
+      planted,
+    };
+  }
   function trackGroundRun(f, axis, dt) {
     const direction = Math.abs(axis) >= runStick ? Math.sign(axis) : 0;
     if (direction && f.vx * direction >= f.stats.speed * runSpeed) {
@@ -1938,6 +2000,7 @@
       this.ball = null;
       this.nextBall = 4;
       this.trainingDamage = 0;
+      this.rollPractice = null;
       this.launchPractice = null;
       this.shieldPractice = null;
       this.airPractice = null;
@@ -1983,6 +2046,7 @@
       this.lastCombo = { hits: 0, damage: 0 };
     }
     resetTraining(ledge = false, fromHang = false) {
+      this.rollPractice = null;
       this.launchPractice = null;
       this.shieldPractice = null;
       this.airPractice = null;
@@ -2021,6 +2085,48 @@
     resetShieldPractice(pattern = 'strike') {
       this.resetTraining();
       this.shieldPractice = { pattern, phase: 'ready', time: 0, outcome: '', lastDodge: '' };
+    }
+    resetLedgeRollPractice(pattern = 'guard', side = 'left') {
+      this.resetTraining(side, true);
+      const [f, dummy] = this.dogs;
+      const distance = f.kit.ledgeRoll.distance;
+      const clearance = f.stats.width + dummy.stats.width;
+      const spacing = pattern === 'read' ? distance + clearance + 1 : Math.min(45, distance - clearance - 2);
+      dummy.x = f.ledge.x + f.face * spacing;
+      this.rollPractice = {
+        pattern,
+        side,
+        phase: 'ready',
+        time: 0,
+        acted: false,
+        rolled: false,
+        evaded: false,
+        outcome: '',
+      };
+    }
+    finishRollPractice(outcome) {
+      const drill = this.rollPractice;
+      if (drill?.phase !== 'active') return;
+      drill.phase = 'done';
+      drill.outcome = outcome;
+      this.emit('rollResult', { f: this.dogs[0], pattern: drill.pattern, outcome, evaded: drill.evaded });
+    }
+    rollPracticeInput(dt) {
+      const drill = this.rollPractice;
+      if (drill.phase !== 'active') return idleInput;
+      const [f, dummy] = this.dogs;
+      drill.time += dt;
+      const read = drill.pattern === 'read';
+      const cue = read ? (f.kit.ledgeRoll.arrive + 3) / 60 - grabs[dummy.kit.grab].start : 3 / 60;
+      if (!drill.acted && drill.time + 1e-8 >= cue) {
+        drill.acted = true;
+        return read ? { ...idleInput, grab: true } : { ...idleInput, attack: true, x: dummy.face };
+      }
+      if (drill.time > (f.kit.ledgeRoll.total + 15) / 60 && !dummy.attack && !f.floorAction) {
+        const past = (f.x - dummy.x) * (drill.side === 'left' ? 1 : -1) > 0;
+        this.finishRollPractice(drill.rolled && past ? 'passed' : 'clear');
+      }
+      return idleInput;
     }
     resetAirPractice(pattern = 'neutral', side = 'left') {
       this.resetTraining();
@@ -2162,6 +2268,22 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      if (this.rollPractice?.phase === 'ready') {
+        if (
+          !(
+            input1.shield ||
+            input1.tapped?.shield ||
+            input1.attack ||
+            input1.tapped?.attack ||
+            input1.jump ||
+            input1.tapped?.jump ||
+            Math.abs(input1.x) > 0.45 ||
+            input1.y > 0.5
+          )
+        )
+          return;
+        this.rollPractice.phase = 'active';
+      }
       if (this.airPractice?.phase === 'ready') {
         const start =
           this.airPractice.pattern === 'neutral'
@@ -2205,7 +2327,9 @@
                 ? this.shieldPracticeInput(dt, input1)
                 : this.airPractice
                   ? this.airPracticeInput(dt)
-                  : idleInput;
+                  : this.rollPractice
+                    ? this.rollPracticeInput(dt)
+                    : idleInput;
       const inputs = [this.launchPractice?.phase === 'ready' ? idleInput : input1, second];
       for (const f of this.dogs) {
         if (f.ground !== -1) f.x += this.terrain[f.ground].x1 - old[f.ground].x1;
@@ -2219,7 +2343,13 @@
       this.resolveMelee();
       for (const f of this.dogs) if (f.attack?.landed) f.attack = null;
       this.updateDiscs(dt);
-      if (this.fetch && !this.launchPractice && !this.shieldPractice && !this.airPractice)
+      if (
+        this.fetch &&
+        !this.launchPractice &&
+        !this.shieldPractice &&
+        !this.airPractice &&
+        !this.rollPractice
+      )
         this.updateBall(dt);
       const out = this.dogs.filter((f) => f.x < -115 || f.x > 1315 || f.y > 765 || f.y < -172);
       if (out.length) this.knockouts(out);
@@ -2456,6 +2586,23 @@
       f.lastMove = dir ? 'Shield Roll' : 'Spot-dodge';
       this.emit(type, { f, dir, point: { x: f.x, y: f.y } });
     }
+    beginLedgeRoll(f) {
+      const edge = f.ledge;
+      const platform = this.terrain[edge.index];
+      const roll = f.kit.ledgeRoll;
+      const action = ledgeRollAction(roll, edge, platform.x2 - platform.x1 - 2);
+      f.floorAction = action;
+      f.ledge = f.guardAim = f.attack = f.command = f.run = null;
+      f.shield = false;
+      f.guardIntent = '';
+      f.invuln = f.shieldDrop = f.guardBuffer = f.jumpBuffer = 0;
+      f.landTime = f.skidTime = f.reboundTime = f.chainWindow = 0;
+      f.face = action.dir;
+      f.ledgeLock = action.duration;
+      f.lastMove = roll.label;
+      if (f.index === 0 && this.rollPractice?.phase === 'active') this.rollPractice.rolled = true;
+      this.emit('ledgeRoll', { f, dir: action.dir, edge, point: { x: edge.x, y: edge.y } });
+    }
     beginAirDodge(f) {
       const aim = f.guardAim || idleInput;
       const length = Math.hypot(aim.x, aim.y);
@@ -2498,10 +2645,7 @@
         return false;
       }
       // Integrate one eased path. A diagonal covers the same distance as a cardinal input.
-      const travel = (time) => {
-        const t = clamp((time * 60 - first + 1) / (last - first + 1), 0, 1);
-        return t * t * (3 - 2 * t);
-      };
+      const travel = (time) => smoothStep((time * 60 - first + 1) / (last - first + 1));
       const speed = ((travel(a.time) - travel(before)) * kit.distance) / dt;
       f.vx = a.x * speed;
       f.vy = a.y * speed;
@@ -2520,11 +2664,21 @@
         else if (a.time + 1e-8 >= a.duration) this.beginFloorAction(f, 'floorRise');
         return;
       }
-      if (a.dir) {
-        const progress = (t) => {
-          const p = clamp((t - 2 / 60) / (a.duration - 8 / 60), 0, 1);
-          return p * p * (3 - 2 * p);
-        };
+      if (a.type === 'ledgeRoll') {
+        const platform = this.terrain[a.edge.index];
+        const local = ledgeRollPosition(a);
+        const x = (a.edge.left ? platform.x1 : platform.x2) + a.dir * local.x;
+        const y = platform.y + local.y;
+        f.vx = (x - f.x) / dt;
+        f.vy = (y - f.y) / dt;
+        f.x = x;
+        f.y = y;
+        if (local.planted && f.ground < 0) {
+          f.ground = a.edge.index;
+          this.emit('ledgeRollPlant', { f, dir: a.dir, edge: a.edge, point: { x, y } });
+        }
+      } else if (a.dir) {
+        const progress = (t) => smoothStep((t - 2 / 60) / (a.duration - 8 / 60));
         const stage = this.terrain[f.ground];
         const distance = a.distance ?? (65 + f.stats.speed * 0.15) * (a.type === 'techRoll' ? 1 : 0.88);
         f.x = clamp(
@@ -2535,8 +2689,12 @@
       }
       if (f.attack?.floorAttack) f.attack.time = a.time;
       if (a.time + 1e-8 >= a.duration) {
-        if (a.type === 'shieldRoll') f.face = -a.dir;
+        if (a.type === 'shieldRoll' || a.type === 'ledgeRoll') f.face = -a.dir;
         f.floorAction = f.attack = null;
+        if (a.type === 'ledgeRoll') {
+          f.vx = f.vy = 0;
+          this.emit('ledgeRollEnd', { f, dir: a.dir, edge: a.edge, point: { x: f.x, y: f.y } });
+        }
       }
     }
     move(f, input, dt) {
@@ -2587,7 +2745,10 @@
         const steerIn = input.x * inward > 0.45;
         if (!steerIn) f.ledge.carriedIn = false;
         if (attackTap) beginLedgeAttack(f);
-        else if (
+        else if (!jumpTap && f.guardBuffer > 0) {
+          this.beginLedgeRoll(f);
+          return this.advanceFloor(f, dt);
+        } else if (
           jumpTap ||
           (steerIn && (!f.ledge.carriedIn || f.ledgeTime + 1e-8 >= ledgeDriftGrace)) ||
           f.ledgeTime > 2
@@ -2597,10 +2758,14 @@
           f.ground = f.ledge.index;
           f.ledge = null;
           f.ledgeLock = 0.52;
+          f.guardBuffer = 0;
+          f.guardAim = null;
           if (!jumpTap) f.jumpBuffer = 0;
         } else if (input.y > 0.5 || input.x * inward < -0.5) {
           f.ledge = null;
           f.ledgeLock = 0.45;
+          f.guardBuffer = 0;
+          f.guardAim = null;
           f.vy = 65;
           f.jumps = 1;
         } else return;
@@ -3007,6 +3172,7 @@
       });
       this.finishShieldPractice(target.index === 0 ? 'grabbed' : 'interrupted');
       this.finishAirPractice(target.index === 0 ? 'hit' : 'interrupted');
+      this.finishRollPractice(target.index === 0 ? 'caught' : 'counter');
     }
     clearGrapple() {
       const grip = this.grapple;
@@ -3462,6 +3628,14 @@
           Math.abs(rival.y - height * 0.52 - area.y) <= area.ry + height * 0.4;
         if (this.shieldPractice) this.recordPracticeDodge(rival, overlaps);
         if (
+          this.rollPractice?.phase === 'active' &&
+          rival.index === 0 &&
+          rival.floorAction?.type === 'ledgeRoll' &&
+          rival.invuln > 0 &&
+          overlaps
+        )
+          this.rollPractice.evaded = true;
+        if (
           this.airPractice?.phase === 'swing' &&
           rival.index === 0 &&
           rival.airDodge &&
@@ -3752,6 +3926,7 @@
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic });
       this.finishShieldPractice(target.index === 0 ? 'hit' : 'interrupted');
       this.finishAirPractice(target.index === 0 ? 'hit' : 'interrupted');
+      this.finishRollPractice(target.index === 0 ? 'hit' : 'counter');
       return true;
     }
     updateDiscs(dt) {
@@ -4149,6 +4324,19 @@
       if (f.ledge) {
         const edge = f.ledge;
         const face = edge.left ? 1 : -1;
+        const guardDistance = (foe.x - edge.x) * face;
+        const threat = foe.attack;
+        if (
+          foe.ground === edge.index &&
+          foe.face === -face &&
+          threat?.box &&
+          !threat.projectile &&
+          threat.time < threat.start + threat.active &&
+          guardDistance >= 0 &&
+          guardDistance + foe.stats.width + f.stats.width <= f.kit.ledgeRoll.distance
+        ) {
+          return { ...idleInput, shield: true, tapped: { shield: true } };
+        }
         const strike = moves[f.kit.ledgeAttack];
         const contact = ledgePosition(strike, strike.start);
         const [x, y, rx, ry] = strike.box;
@@ -4426,5 +4614,7 @@
     clamp,
     attackWindow,
     ledgePosition,
+    ledgeRollAction,
+    ledgeRollPosition,
   };
 })();

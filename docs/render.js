@@ -69,6 +69,17 @@
       let top = -f.stats.height;
       if (f.floorAction?.type === 'downed') top *= 0.58;
       else if (f.floorAction?.type === 'floorAttack') top *= 0.75;
+      else if (f.floorAction?.type === 'ledgeRoll') {
+        const a = f.floorAction;
+        // Clover's disc-supported handstand lifts her hind paws above the usual tag position.
+        const height = f.kind === 'clover' ? 100 : 74;
+        const lift = clamp(
+          Math.min(a.time / a.plantAt, (a.duration - a.time) / (a.duration - a.arriveAt)),
+          0,
+          1,
+        );
+        top -= (height - f.stats.height) * lift;
+      }
       if (f.airDodge?.y > 0) top -= 16 * f.airDodge.y;
       if (f.attack?.smashSide === 'up' || f.attack?.tiltSide === 'up') {
         // Keep the tag above overhead attacks, including Noodle's raised loops.
@@ -1147,6 +1158,56 @@
     if (!reduced.matches) pixelLine(ctx, end - 17, -6, end - 23, -9, '#ddc29a', 2, 2);
     ctx.restore();
   }
+  function ledgeRollTrail(ctx, f) {
+    const a = f.floorAction;
+    if (a?.type !== 'ledgeRoll' || a.time + 1e-8 < a.safeFrom || a.time + 1e-8 >= a.safeUntil) return;
+    const planted = a.time + 1e-8 >= a.plantAt;
+    const inward = (f.x - a.edge.x) * a.dir;
+    const back = -f.stats.width - (planted ? 15 : 23);
+    const shoulder = planted ? -20 : -f.stats.height * 0.42;
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y, 2));
+    ctx.scale(a.dir, 1);
+    // This short sweep follows the trailing shoulder only while the fighter can evade.
+    for (const [color, width] of [
+      ['#52686a', 4],
+      ['#b5cbbd', 2],
+    ]) {
+      pixelLine(ctx, back - 3, shoulder + 7, back - 5, shoulder + 1, color, width, 2);
+      pixelLine(ctx, back - 5, shoulder + 1, back - 1, shoulder - 7, color, width, 2);
+    }
+    if (!planted && !reduced.matches) {
+      const lipY = a.edge.y - f.y;
+      pixelLine(ctx, -inward - 4, lipY + 4, -inward - 9, lipY + 7, '#c9aa86', 2, 2);
+    } else if (planted) {
+      // Only solid ground leaves a tread behind the roll, even at the first touching frame.
+      const end = f.stats.width * 0.66;
+      const start = Math.min(inward - 2, end + (reduced.matches ? 9 : 17));
+      if (start > end + 2) pixelLine(ctx, -start, -2, -end, -2, '#c7ac8c', 2, 2);
+    }
+    ctx.restore();
+  }
+  function ledgeRollDust(ctx, e, p) {
+    const drift = reduced.matches ? 0 : snap(6 * p, 2);
+    ctx.save();
+    ctx.translate(snap(e.x, 2), snap(e.y, 2));
+    ctx.scale(e.face, 1);
+    ctx.globalAlpha *= Math.min(1, (1 - p) * 2);
+    if (e.type === 'lipDust') {
+      // A grain slips down the outer face of the platform as the paw pushes away.
+      pixelLine(ctx, -3 - drift, 1 + drift, -7 - drift, 3 + drift, '#bda185', 3, 2);
+      if (!reduced.matches)
+        pixelLine(ctx, -10 - drift, 6 + 2 * drift, -12 - drift, 7 + 2 * drift, '#b59b87', 2, 2);
+    } else {
+      const back = Math.min(e.room - 1, 18 + drift);
+      if (back > 5) {
+        pixelLine(ctx, -4, -1, -back + 3, -2, '#b99274', 3, 2);
+        pixelLine(ctx, -back + 3, -2, -back, -5, '#dfbc91', 2, 2);
+      }
+      if (!reduced.matches) pixelLine(ctx, 4, -1, 9 + drift, -3, '#ccad8b', 2, 2);
+    }
+    ctx.restore();
+  }
   function shieldSlip(ctx, f) {
     const a = f.floorAction;
     if (a?.type !== 'shieldRoll' && a?.type !== 'spotDodge') return;
@@ -1308,6 +1369,7 @@
   function drawFighter(ctx, f, world, time) {
     shadow(ctx, f, world.terrain);
     floorRollTrack(ctx, f);
+    ledgeRollTrail(ctx, f);
     shieldSlip(ctx, f);
     airDodgeSlip(ctx, f);
     movingGrabFeet(ctx, f);
@@ -1327,7 +1389,8 @@
       face = f.reaction?.face || f.face;
       spriteTime = reduced.matches ? 0.21 : f.tumble.time;
     } else if (f.floorAction) {
-      if (state === 'techRoll' || state === 'shieldRoll') face = f.floorAction.dir || f.face;
+      if (state === 'techRoll' || state === 'shieldRoll' || state === 'ledgeRoll')
+        face = f.floorAction.dir || f.face;
       spriteTime = reduced.matches ? 0 : f.floorAction.time;
     } else if (f.airDodge) {
       spriteTime = reduced.matches ? 0 : f.airDodge.time;
@@ -1335,9 +1398,12 @@
     else if (state === 'skid') face = f.skidFace;
     else if (f.stun > 0 && f.reaction) face = f.reaction.face;
     else if (f.smashCharge) face = f.smashCharge.face;
+    // A ready practice drill holds on the first ledge catch until the player's input.
+    const firstHangFrame = state === 'ledge' && f.ledgeTime === 0;
     ctx.save();
     if (
       f.invuln > 0.01 &&
+      !firstHangFrame &&
       !f.floorAction &&
       !f.airDodge &&
       !(f.parryFlash > 0) &&
@@ -1599,6 +1665,7 @@
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
     if (e.type === 'airGather' || e.type === 'airWake') return airDodgeStart(ctx, e, p);
+    if (e.type === 'lipDust' || e.type === 'ledgePlant') return ledgeRollDust(ctx, e, p);
     if (e.type === 'techLand' || e.type === 'knockDust' || e.type === 'riseScuff' || e.type === 'spotStep') {
       landingEffect(ctx, e, p);
       return;
@@ -1687,6 +1754,19 @@
           };
       }
       if (name === 'tech') this.add('techLand', e.point.x, e.point.y, mint, 0.19, 18, 1, { dir: e.dir });
+      if (name === 'ledgeRoll' || name === 'ledgeRollPlant') {
+        const plant = name === 'ledgeRollPlant';
+        this.add(
+          plant ? 'ledgePlant' : 'lipDust',
+          e.point.x,
+          e.point.y,
+          '#c9aa86',
+          plant ? 0.16 : 0.13,
+          12,
+          e.dir,
+          { behind: true, room: (e.point.x - e.edge.x) * e.dir },
+        );
+      }
       if (name === 'knockdown')
         this.add('knockDust', e.point.x, e.point.y, cream, 0.24, 17 + f.stats.width * 0.45);
       if (name === 'getup' && (e.type === 'floorRise' || e.type === 'getupRoll'))
@@ -2015,6 +2095,19 @@
       time = 0.21;
       pixelLine(ctx, -52, -5, -35, -15, '#c6a984', 3, 2);
       pixelLine(ctx, -45, -1, -36, -7, cream, 2, 2);
+    } else if (side === 'ledgeRoll') {
+      const roll = window.DogFight.kits[kind].ledgeRoll;
+      const tick = Math.round(roll.plant + (roll.safe[1] - roll.plant) * 0.35);
+      const edge = { x: 0, y: 0, index: 0, left: true };
+      const action = window.DogFight.ledgeRollAction(roll, edge);
+      action.time = tick / 60;
+      const body = window.DogFight.ledgeRollPosition(action);
+      f.x = body.x;
+      f.y = body.y;
+      f.floorAction = action;
+      phase = action.time / action.duration;
+      guideLedge(ctx, edge, Math.max(65, Math.round(body.x + f.stats.width + 9)));
+      ledgeRollTrail(ctx, f);
     } else if (side === 'neutralAirDodge' || side === 'directionalAirDodge') {
       const directed = side === 'directionalAirDodge';
       const [total, first, last] = window.DogFight.kits[kind].airDodge[directed ? 'directional' : 'neutral'];
@@ -2059,7 +2152,7 @@
         phase = 0.28;
       }
     }
-    window.DogArt.draw(ctx, kind, 0, 0, {
+    window.DogArt.draw(ctx, kind, f.x, f.y, {
       face: 1,
       scale: 1,
       time,

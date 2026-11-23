@@ -275,6 +275,8 @@
     } else if (name === 'parry') {
       tone(1280, 1640, 0.055, 0, 'square', 0.053);
       tone(760, 1260, 0.14, 0.035, 'triangle', 0.085);
+    } else if (name === 'ledgeRoll') {
+      tone(215, 86, 0.085, 0, 'triangle', 0.045);
     } else if (name === 'shieldRoll' || name === 'spotDodge') {
       tone(name === 'shieldRoll' ? 195 : 315, 76, name === 'shieldRoll' ? 0.1 : 0.055, 0, 'triangle', 0.05);
     } else if (name === 'dodge') {
@@ -775,6 +777,13 @@
         groundRows +
         '</ul><h3 class="guide-section">In the air</h3><p>One dodge per airtime. Landing or catching a ledge refreshes it. Try <strong>Training → Air-dodge practice</strong>.</p><ul class="move-rows guide-air-dodge">' +
         airRows +
+        '</ul><h3 class="guide-section">At the ledge</h3><p>Release Shield after an air dodge, then tap it again once you catch the lip. Try <strong>Training → Ledge roll practice</strong>.</p><ul class="move-rows guide-ledge-roll">' +
+        guideMoveRow(
+          { label: kit.ledgeRoll.label, hint: kit.ledgeRoll.tip },
+          'While hanging · tap Shield',
+          'ledgeRoll',
+          'defense',
+        ) +
         '</ul><h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><ul class="move-rows guide-defense">' +
         rows +
         '</ul>';
@@ -937,6 +946,7 @@
     $('launch-status').hidden = true;
     $('shield-status').hidden = $('shield-patterns').hidden = true;
     $('air-status').hidden = $('air-patterns').hidden = true;
+    $('roll-status').hidden = $('roll-patterns').hidden = true;
     $('recovery-tip').hidden = true;
     document.body.classList.add('playing');
     document.body.classList.toggle('training-active', settings.mode === 'training');
@@ -949,10 +959,21 @@
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (name === 'airStart' || name === 'airCue' || name === 'airResult') airFeedback(name, e);
+      if (world?.rollPractice && e.f?.index === 0 && (name === 'ledgeRoll' || name === 'rollResult'))
+        rollFeedback(name, e);
+      if (name === 'ledgeRollEnd' && drillSide && e.f.index === 0) {
+        $('recovery-tip').textContent =
+          e.f.kit.ledgeRoll.label + ' finished. You’re facing the ledge. Tap Attack to jab.';
+        drillSide = null;
+      }
       if (name === 'ko') announce(e.f.stats.name + ' knocked out');
       if (name === 'ledge' && drillSide && e.f.index === 0)
         $('recovery-tip').textContent =
-          'Caught the ' + drillSide + ' ledge. Tap Attack for ' + moves[e.f.kit.ledgeAttack].label + '.';
+          'Caught the ' +
+          drillSide +
+          ' ledge. Tap Attack for ' +
+          moves[e.f.kit.ledgeAttack].label +
+          ' or Shield to roll.';
       if (name === 'ko' && drillSide && e.f.index === 0) {
         drillSide = null;
         $('recovery-tip').textContent = 'Missed the ledge. Pick a side to try again.';
@@ -1164,29 +1185,72 @@
     else if (e.outcome === 'ledge' || e.outcome === 'land')
       $('recovery-tip').textContent =
         (e.evaded ? 'You slipped the guard’s strike. ' : '') +
-        'Choose At the ledge to retry, or switch sides.';
+        (e.outcome === 'ledge'
+          ? 'Tap Shield again to roll onstage, or tap Attack.'
+          : 'Choose At the ledge to retry, or switch sides.');
     else $('recovery-tip').textContent = 'Choose In place or At the ledge to try another approach.';
+  }
+  function rollFeedback(name, e) {
+    const result = $('roll-status');
+    if (name === 'ledgeRoll') {
+      result.dataset.result = 'active';
+      result.textContent = world.rollPractice.pattern === 'read' ? 'Watch for the grab' : 'Swing at the lip';
+      return;
+    }
+    const labels = {
+      passed: 'Past the guard',
+      counter: 'Counter connected',
+      caught: world.rollPractice.rolled ? 'Roll caught' : 'Grabbed',
+      hit: 'Hit',
+      clear: 'Guard missed',
+    };
+    result.dataset.result = e.outcome;
+    result.textContent = labels[e.outcome];
+    const tips = {
+      passed: e.evaded
+        ? 'You rolled through the swing. Try Attack as your dog turns back.'
+        : 'You cleared the guard. Choose Read the roll to face a waiting grab.',
+      counter: 'Your follow-up connected. Choose Close guard to try the timing again.',
+      caught: world.rollPractice.rolled
+        ? 'The guard waited at the end of your roll. Try jumping from the same ledge.'
+        : 'The guard caught you. Choose the same pattern to try another ledge option.',
+      hit: 'The strike caught you. Choose Close guard and tap Shield from the ledge.',
+      clear: 'The guard missed. Choose either pattern to try another ledge option.',
+    };
+    $('recovery-tip').textContent = tips[e.outcome];
   }
   function drill(ledge, fromHang = false, pattern = 'strike') {
     if (!world) return;
     const launch = ledge === 'launch';
     const shield = ledge === 'shield';
     const air = ledge === 'air';
-    drillSide = launch || shield || air ? null : ledge || null;
+    const roll = ledge === 'roll';
+    drillSide = launch || shield || air || roll ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
     if (launch) world.resetLaunchPractice();
     else if (shield) world.resetShieldPractice(pattern);
     else if (air) world.resetAirPractice(pattern, practiceSide);
+    else if (roll) world.resetLedgeRollPractice(pattern, practiceSide);
     else world.resetTraining(ledge, fromHang);
     const player = world.dogs[0];
     const result = $('launch-status');
     result.hidden = !launch;
     $('shield-status').hidden = $('shield-patterns').hidden = !shield;
     $('air-status').hidden = $('air-patterns').hidden = !air;
+    $('roll-status').hidden = $('roll-patterns').hidden = !roll;
     let message = 'Positions reset.';
-    if (air) {
+    if (roll) {
+      const read = pattern === 'read';
+      $('roll-status').dataset.result = 'ready';
+      $('roll-status').textContent = practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
+      $('roll-guard').setAttribute('aria-pressed', String(!read));
+      $('roll-read').setAttribute('aria-pressed', String(read));
+      message = read
+        ? 'The guard is waiting where your roll ends. Tap Shield to test the read, or jump from the ledge.'
+        : 'Tap Shield to roll through the guard’s swing. As your dog turns back, tap Attack.';
+    } else if (air) {
       const edge = pattern === 'edge';
       $('air-status').dataset.result = 'ready';
       $('air-status').textContent = edge
@@ -1231,6 +1295,13 @@
   $('ledge-training').onclick = () => drill('left');
   $('ledge-right').onclick = () => drill('right');
   $('ledge-attack-training').onclick = () => drill(practiceSide, true);
+  $('ledge-roll-training').onclick = () => drill('roll', false, world?.rollPractice?.pattern || 'guard');
+  $('roll-guard').onclick = () => drill('roll', false, 'guard');
+  $('roll-read').onclick = () => drill('roll', false, 'read');
+  $('roll-side').onclick = () => {
+    practiceSide = practiceSide === 'left' ? 'right' : 'left';
+    drill('roll', false, world.rollPractice.pattern);
+  };
   $('launch-training').onclick = () => drill('launch');
   $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'strike');
   $('shield-strike').onclick = () => drill('shield', false, 'strike');
@@ -1441,7 +1512,12 @@
           const player = world.dogs[0];
           if (drillWaiting) {
             const ready = player.ledge
-              ? input.attack || input.jump || Math.abs(input.x) > 0.45 || input.y > 0.5
+              ? input.attack ||
+                input.jump ||
+                input.shield ||
+                input.tapped?.shield ||
+                Math.abs(input.x) > 0.45 ||
+                input.y > 0.5
               : input.jump || input.special;
             if (ready) {
               drillWaiting = false;
@@ -1450,7 +1526,7 @@
           }
           if (!drillWaiting) {
             world.step(1 / 60, input, world.mode === 'local' ? playerInput(1, pads) : idleInput);
-            if (drillSide && (player.attack?.ledgeAttack || player.ground >= 0)) {
+            if (drillSide && (player.attack?.ledgeAttack || (player.ground >= 0 && !player.floorAction))) {
               $('recovery-tip').textContent = player.attack?.ledgeAttack
                 ? player.lastMove + '. Choose Practice ledge attack to try again.'
                 : 'Back on stage. Pick a ledge to go again.';

@@ -3063,7 +3063,42 @@
       recoil: [-2, -7, -15, -20, -13, -2, 7, 6, 2, 0],
     },
   };
-  const sharedPointPoses = ['floorAttack', 'parry'];
+  const sharedPointPoses = ['floorAttack', 'parry', 'ledgeRoll'];
+  const ledgeRollStyles = {
+    pip: {
+      total: 23, safe: [2, 12], plant: 6, arrive: 16, distance: 96, front: 5, rear: 1,
+      turn: [31, 91, 155, 217, 267, 310, 341], height: [0.92, 0.88, 0.83, 0.85, 0.91, 0.94, 0.98],
+    },
+    brisket: {
+      total: 36, safe: [4, 19], plant: 10, arrive: 24, distance: 113, front: 4, rear: 9,
+      turn: [25, 65, 121, 176, 225, 274, 324], height: [0.86, 0.79, 0.75, 0.77, 0.82, 0.87, 0.93],
+    },
+    noodle: {
+      total: 39, safe: [3, 15], plant: 7, arrive: 23, distance: 153, front: 2, rear: 6,
+      turn: [37, 92, 149, 201, 250, 292, 331], height: [0.8, 0.73, 0.64, 0.67, 0.71, 0.78, 0.86],
+    },
+    clover: {
+      total: 29, safe: [3, 14], plant: 7, arrive: 21, distance: 125, front: 1, rear: 6,
+      turn: [35, 102, 161, 205, 247, 300, 342], height: [1, 0.97, 0.93, 0.91, 0.96, 0.99, 1],
+    },
+  };
+
+  function ledgeRollTiming(name) {
+    return window.DogFight?.kits?.[name]?.ledgeRoll || ledgeRollStyles[name];
+  }
+
+  function ledgeRollFrame(name, phase) {
+    const timing = ledgeRollTiming(name);
+    const tick = Math.min(timing.total - 1, Math.floor(phase * timing.total + 1e-7));
+    // Moving wrists need every climb tick. The planted sequence shares seven spinning and five recovery cels.
+    if (tick < timing.plant) return tick;
+    const last = timing.safe[1];
+    if (tick <= last) return timing.plant + Math.floor(4 * (tick - timing.plant) / (last - timing.plant + 1));
+    if (tick < timing.arrive)
+      return timing.plant + 4 + Math.floor(3 * (tick - last - 1) / (timing.arrive - last - 1));
+    const recovery = (tick - timing.arrive) / (timing.total - 1 - timing.arrive);
+    return timing.plant + 7 + Math.min(4, Math.floor(recovery * 4));
+  }
   const shieldStyles = {
     pip: {
       roll: [24, 2, 11], spot: [18, 2, 9],
@@ -3296,6 +3331,7 @@
 
   function frameNumber(pose, time, phase, name = 'pip', backRoll = false) {
     const tick = (period) => Math.floor((Math.abs(time) % 1000000) * period);
+    if (pose === 'ledgeRoll') return ledgeRollFrame(name, phase);
     if (airDodgePoses.includes(pose)) {
       const directed = pose === 'directionalAirDodge';
       const spec = window.DogFight?.kits?.[name]?.airDodge || aerialStyles[name];
@@ -4074,7 +4110,214 @@
     }
   }
 
+  function ledgeRollClimb(name, tick, timing) {
+    const s = stance(name, 'ledge', 0);
+    if (tick === 0) return s;
+    const style = ledgeRollStyles[name];
+    const p = tick / timing.plant;
+    const r = Math.round;
+    s.grip = false;
+    s.bodyX = -7 + r(7 * p);
+    s.bodyY = 8 - r(6 * p);
+    s.lean = -3 + r(7 * p);
+    s.torsoTurn = -4 + r(23 * p);
+    s.headX = -2 + r(2 * p);
+    s.headY = 2 + r(2 * p);
+    s.headTurn = -9 + r(15 * p);
+    s.rightX = -8 + r(16 * p);
+    s.rightY = 5 - r(12 * p);
+    s.leftY = 7 - r(9 * p);
+    s.leftFootTurn = 19 - r(28 * p);
+    s.rightFootTurn = 13 + r(24 * p);
+    s.frontKneeY = -r(4 * p);
+    s.kneeOut = r(2 * p);
+    s.fistX = -2;
+    s.fistY = -2;
+    s.rearX = -5;
+    s.rearY = -4;
+    s.scarf = 2 + r(4 * p);
+    s.ear = -r(3 * p);
+    s.tail = 2 - r(6 * p);
+    s.foldEars = tick >= timing.safe[0] && name !== 'clover';
+    if (name === 'pip') {
+      s.showSole = p > 0.5;
+      s.kickFront = s.showSole;
+      s.rearX -= r(6 * p);
+      s.rearY -= r(3 * p);
+    } else if (name === 'brisket') {
+      s.bodyY += r(2 * p);
+      s.headTurn -= r(8 * p);
+      s.extraHaunch = p >= 0.5;
+      s.shoulderLead = r(4 * p);
+      s.fistX += r(5 * p);
+      s.fistY -= r(3 * p);
+      s.rightX -= r(3 * p);
+    } else if (name === 'noodle') {
+      s.headX += r(3 * p);
+      s.headY += r(3 * p);
+      s.leftX -= r(4 * p);
+      s.ear -= r(2 * p);
+      s.charmTurn = -14 + r(33 * p);
+    } else if (tick > style.front) {
+      s.hideCharm = true;
+      s.heldItem = 'disc';
+      s.heldAngle = r(-50 + 52 * p);
+      s.fistX = r(5 * p);
+      s.fistY = r(12 * p);
+      s.leftX -= r(3 * p);
+    }
+    const seconds = tick / 60;
+    const path = window.DogFight?.ledgeRollPosition;
+    const ease = (t) => t * t * (3 - 2 * t);
+    const feet = path
+      ? path({ distance: timing.distance, plantAt: timing.plant / 60, arriveAt: timing.arrive / 60 }, seconds)
+      : { x: -13 + (timing.distance + 13) * ease(tick / timing.arrive), y: 46 * (1 - ease(p)) };
+    const near = tick <= style.front;
+    const far = tick <= style.rear;
+    setLipPaws(s, name, r(-feet.x / 2), r(-feet.y / 2), near, far, near && far ? 3 : 1);
+    return s;
+  }
+
+  function ledgeRollSpin(s, name, cel) {
+    const style = ledgeRollStyles[name];
+    const fold = [4, 6, 7, 7, 5, 3, 1][cel];
+    const flare = [2, 3, 2, -1, -3, -2, 1][cel];
+    s.roll = style.turn[cel];
+    s.rollHeight = style.height[cel];
+    s.floorRoll = true;
+    s.bodyY = 2 + Math.floor(fold / 2);
+    s.lean = 1;
+    s.torsoTurn = 5 + fold;
+    s.headX = -1 - Math.floor(fold / 2);
+    s.headY = 1 + fold;
+    s.headTurn = 3 + 3 * fold;
+    s.fistX = 5 - fold;
+    s.fistY = -2 - 2 * fold;
+    s.fistTurn = -16 - 8 * fold;
+    s.rearX = -3 + Math.floor(fold / 2);
+    s.rearY = -3 - fold;
+    s.rearTurn = -7 - 6 * fold;
+    s.leftX = -4 + fold;
+    s.leftY = -1 - 2 * fold;
+    s.rightX = 5 - fold;
+    s.rightY = -2 - 2 * fold;
+    s.rightFootTurn = 15 + 9 * fold;
+    s.leftFootTurn = -8 + 6 * fold;
+    s.frontKneeY = -Math.floor(fold / 2);
+    s.kneeOut = 2;
+    s.packTail = cel < 6;
+    s.foldEars = cel < 5;
+    s.ear = flare;
+    s.scarf = -2 * flare;
+    s.tail = 2 * flare;
+    if (name === 'pip') {
+      s.kickFront = cel < 4;
+      s.showSole = s.kickFront;
+      s.rightX += [7, 3, 0, -1, 5, 6, 4][cel];
+      s.rightY += cel < 2 ? 2 : -1;
+      s.scarf -= flare;
+      s.rearTurn -= 8;
+    } else if (name === 'brisket') {
+      s.extraHaunch = cel < 6;
+      s.powerArm = cel < 5;
+      s.shoulderLead = [6, 5, 3, 1, 0, 0, 0][cel];
+      s.rollWidth = [1.06, 1.1, 1.12, 1.1, 1.08, 1.04, 1][cel];
+      s.headTurn -= 9;
+      s.headY += 2;
+      s.leftX -= 2;
+      s.kneeOut += 2;
+      s.fistX -= 2;
+    } else if (name === 'noodle') {
+      s.rollWidth = [1.08, 1.18, 1.21, 1.17, 1.16, 1.12, 1.04][cel];
+      s.torsoTurn -= 10;
+      s.headX += 3;
+      s.leftX -= 6;
+      s.ear = 2 * flare;
+      s.rightFootTurn -= 19;
+      s.charmTurn = [-21, -48, -69, -40, -6, 18, 11][cel];
+    } else {
+      s.hideCharm = true;
+      s.heldItem = 'disc';
+      s.rightX = [8, 11, 14, 11, 7, 6, 5][cel];
+      s.leftX = [-7, -10, -12, -8, -4, -3, -2][cel];
+      s.rightY = [-4, -1, 0, -2, -6, -5, -2][cel];
+      s.leftY = [-9, -7, -3, -6, -7, -4, -1][cel];
+      s.leftFootTurn = [-16, -30, -45, -28, -4, 9, 5][cel];
+      s.rightFootTurn = [27, 32, 38, 29, 24, 12, 8][cel];
+      s.heldAngle = [0, 0, 0, -128, -93, -58, -34][cel];
+      if (cel < 3) {
+        // Clover plants the flat rim and brings her split legs over that hand.
+        s.plantDisc = true;
+        const [x, y] = rotateAt(5, 4, 0, -18, -s.roll);
+        s.fistX = x - fighters[name].pawAt[0] - s.bodyX;
+        s.fistY = y - fighters[name].pawAt[1] - s.bodyY;
+      }
+    }
+  }
+
+  function ledgeRollFinish(s, name, cel) {
+    // The head spots the edge while the hips are still inward. The hind paws pivot next.
+    if (cel >= 2) s.faceEdge = true;
+    if (cel === 4) return;
+    const crouch = [5, 5, 4, 2][cel];
+    s.guardFloor = true;
+    s.glanceBack = cel === 1;
+    s.bodyY = crouch;
+    s.lean = [4, 2, -2, -1][cel];
+    s.torsoTurn = [18, 12, -10, -4][cel];
+    s.headTurn = [8, -5, -7, -2][cel];
+    s.headX = [0, -2, -1, 0][cel];
+    s.headY = [2, 1, 1, 0][cel];
+    s.rightX = [7, 3, 2, 1][cel];
+    s.leftX = [-5, -2, -2, -1][cel];
+    s.rightFootTurn = [17, 8, -10, -3][cel];
+    s.frontKneeY = -2;
+    s.kneeOut = crouch;
+    s.fistX = [5, -2, 3, 2][cel];
+    s.fistY = [1, -3, -6, -3][cel];
+    s.rearX = [-4, -8, -2, 0][cel];
+    s.rearY = [-2, -5, -4, -2][cel];
+    s.tail = [-4, -3, 3, 1][cel];
+    s.ear = [4, 1, -2, -1][cel];
+    s.scarf = [-5, -2, 4, 2][cel];
+    if (name === 'pip') {
+      s.leftY = cel === 1 ? -3 : 0;
+      s.rearX -= 2;
+    } else if (name === 'brisket') {
+      s.bodyY += cel < 3 ? 2 : 0;
+      s.leftX -= 2;
+      s.rightX += 2;
+      s.shoulderY = 1;
+      s.kneeOut += 1;
+    } else if (name === 'noodle') {
+      s.lowBody = cel < 2;
+      if (s.lowBody) {
+        s.bodyY = 0;
+        s.headY = 7;
+        s.shoulderY = 5;
+      }
+      s.charmTurn = [-23, -14, 17, 5][cel];
+      s.ear *= 2;
+    } else if (cel < 3) {
+      s.hideCharm = true;
+      s.heldItem = 'disc';
+      s.heldAngle = [-44, -95, -142][cel];
+      s.fistY += 2;
+    }
+  }
+
+  function ledgeRollStance(name, frame) {
+    const timing = ledgeRollTiming(name);
+    if (frame < timing.plant) return ledgeRollClimb(name, frame, timing);
+    const s = stance(name, 'idle', 0);
+    const cel = frame - timing.plant;
+    if (cel < 7) ledgeRollSpin(s, name, cel);
+    else ledgeRollFinish(s, name, cel - 7);
+    return s;
+  }
+
   function stance(name, pose, frame, octant = 0) {
+    if (pose === 'ledgeRoll') return ledgeRollStance(name, frame);
     const s = {
       bodyX: 0,
       bodyY: 0,
@@ -4126,6 +4369,7 @@
       rollWidth: 1,
       rollHeight: 1,
       glanceBack: false,
+      faceEdge: false,
       extraHaunch: false,
       bellyFirst: false,
       haunchX: 0,
@@ -4471,6 +4715,7 @@
 
   function itemAnchor(d, s, pixels) {
     if (!s.heldItem || s.heldItem === 'orbit') return null;
+    if (s.plantDisc) return [2 * (s.discFloorX + 12), -6];
     const [x, y] = wrist(d, s, s.heldItem !== 'backDisc');
     const cord = s.heldItem === 'rope';
     const [tipX, tipY] = rotateAt(x + (cord ? 9 : 12), y + (cord ? 1 : -1), x + 1, y, s.heldAngle);
@@ -4542,7 +4787,7 @@
     if (near && s.palmCharm && d.charm) {
       turned(buffer, x + 1, y + 1, 15, -15, (part) => stamp(part, d.charm[2], x - 2, y - 2));
     }
-    const discHand = near ? s.heldItem === 'disc' : s.heldItem === 'backDisc';
+    const discHand = !s.plantDisc && (near ? s.heldItem === 'disc' : s.heldItem === 'backDisc');
     const ropeHand = near && s.heldItem === 'rope';
     if (discHand || ropeHand) {
       const art = discHand ? heldDisc : ropeHandle;
@@ -4791,7 +5036,14 @@
       ink(buffer, glint, 2, 'f');
       ink(buffer, glint + 1, 2, 'f');
     }
-    return tumble(buffer, s);
+    const pixels = tumble(buffer, s);
+    if (s.plantDisc) {
+      // After the split-leg body rotates, keep the weight-bearing rim flat against the surface.
+      const [x, y] = wrist(d, s, true);
+      s.discFloorX = posePoint(x, y, s)[0] - 1;
+      stamp(pixels, heldDisc, s.discFloorX, -heldDisc.length);
+    }
+    return pixels;
   }
 
   function tracksKitPaws(pose) {
@@ -4807,9 +5059,14 @@
     const move = game?.moves?.[pose];
     const feet = move?.climb && game.ledgePosition ? game.ledgePosition(move, elapsed / 60) : null;
     const [x, y] = feet ? [Math.round(-feet.x / 2), Math.round(-feet.y / 2)] : lip.preview[elapsed];
-    const [baseX, baseY] = fighters[name].pawAt;
     const front = elapsed <= lip.front;
     const rear = elapsed <= lip.rear;
+    setLipPaws(s, name, x, y, front, rear, lip.front >= 0 ? 3 : 1);
+    return s;
+  }
+
+  function setLipPaws(s, name, x, y, front, rear, rearOffset) {
+    const [baseX, baseY] = fighters[name].pawAt;
     s.lipHands = front && rear ? 'both' : front ? 'front' : 'rear';
     if (front) {
       s.fistX = x - baseX - s.bodyX;
@@ -4818,13 +5075,12 @@
     }
     if (rear) {
       // Space two gripping paws apart. A lone grip sits just inside the corner.
-      s.rearX = x + (lip.front >= 0 ? 3 : 1) - (baseX - 2) - s.bodyX;
+      s.rearX = x + rearOffset - (baseX - 2) - s.bodyX;
       s.rearY = y - (baseY - 3) - s.bodyY;
       s.rearTurn = 0;
       s.twoHandsFront = true;
     }
     if (front && rear) s.behindHead = true;
-    return s;
   }
 
   function getFrame(name, pose, number, octant = 0) {
@@ -4853,22 +5109,24 @@
     const image = ctx.createImageData(canvas.width, canvas.height);
     for (let sy = 0; sy < canvas.height; sy++) {
       for (let sx = 0; sx < canvas.width; sx++) {
-        const inkIndex = pixels[(top + sy) * W + left + sx];
+        const sourceX = s.faceEdge ? right - sx : left + sx;
+        const inkIndex = pixels[(top + sy) * W + sourceX];
         if (inkIndex) image.data.set(rgba[inkIndex], (sy * canvas.width + sx) * 4);
       }
     }
     ctx.putImageData(image, 0, 0);
     const result = {
       canvas,
-      x: left - originX,
+      x: s.faceEdge ? originX - right - 1 : left - originX,
       y: top - originY,
       item: itemAnchor(fighters[name], s, pixels),
     };
+    if (s.faceEdge && result.item) result.item[0] = -result.item[0] - 2;
     if (tracksKitPaws(pose) || captivePoses.includes(pose) || sharedPointPoses.includes(pose)) {
       result.paws = [true, false].map((near) => {
         const [x, y] = wrist(fighters[name], s, near);
         const [px, py] = posePoint(x, y, s);
-        return [2 * px, 2 * py];
+        return [2 * (s.faceEdge ? -px - 1 : px), 2 * py];
       });
     }
     frames.set(key, result);
@@ -4897,6 +5155,7 @@
     'land',
     'skid',
     'ledge',
+    'ledgeRoll',
     'rise',
     'win',
     ...landingPoses,
