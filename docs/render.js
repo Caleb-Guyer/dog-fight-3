@@ -268,7 +268,9 @@
     }
     if (f.landTime > 0) return ['land', clamp(1 - f.landTime / (f.landDuration || 0.12), 0, 1)];
     if (f.skidTime > 0) return ['skid', 1 - f.skidTime / 0.14];
-    return [Math.abs(f.vx) > 50 ? 'run' : 'idle', 0];
+    if (f.run && f.sprintDir === f.run.face && f.run.age < f.kit.footwork.reverseFrames / 60)
+      return ['dashStart', clamp(f.run.age * 60 / f.kit.footwork.reverseFrames, 0, 1)];
+    return [Math.abs(f.vx) > 16 ? (f.run ? 'run' : 'walk') : 'idle', 0];
   }
   function glint(ctx, x, y, size, color) {
     const d = Math.max(3, snap(size));
@@ -1456,6 +1458,8 @@
       spriteTime = reduced.matches ? 0 : f.airDodge.time;
     } else if (state === 'parry') face = f.parryFace || f.face;
     else if (state === 'skid') face = f.skidFace;
+    else if (state === 'walk' || state === 'run')
+      spriteTime = f.strideDistance / (state === 'walk' ? 100 : 235);
     else if (f.stun > 0 && f.reaction) face = f.reaction.face;
     else if (f.smashCharge) face = f.smashCharge.face;
     // A ready practice drill holds on the first ledge catch until the player's input.
@@ -2047,6 +2051,20 @@
       window.ArenaArt.draw(ctx, world.stage, world.time, {
         left, top, right: left + 2 * halfW, bottom: top + 2 * halfH,
       });
+      if (world.footworkPractice) {
+        const x = snap(world.footworkPractice.mark, 2), y = world.terrain[0].y;
+        const chalk = world.footworkPractice.phase === 'opening' ? mint : cream;
+        for (const side of [-1, 1]) {
+          pixelLine(ctx, x + side * 10, y + 11, x, y + 1, ink, 5, 2);
+          pixelLine(ctx, x + side * 9, y + 10, x, y + 1, chalk, 3, 2);
+        }
+        pixelLine(ctx, x, y + 9, x, y + 15, chalk, 2, 2);
+        if (world.footworkPractice.phase === 'tell') {
+          const hand = b.x - 37, top = b.y - 51;
+          pixelLine(ctx, hand - 7, top - 12, hand - 3, top - 5, gold, 3, 2);
+          pixelLine(ctx, hand - 14, top - 5, hand - 7, top - 2, cream, 2, 2);
+        }
+      }
       if (this.launchTrace) launchDirections(ctx, this.launchTrace);
       if (spread > 14) this.leftFighter = a.x < b.x ? 0 : 1;
       fighterTags(ctx, world, this.leftFighter);

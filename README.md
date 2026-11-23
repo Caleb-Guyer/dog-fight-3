@@ -60,6 +60,7 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 | Action | Player 1 | Player 2 | Standard gamepad |
 | --- | --- | --- | --- |
 | Move or aim | W A S D | Arrow keys | Left stick or D-pad |
+| Walk | Left Shift + A or D | Right Ctrl + Left or Right | Gently tilt the left stick |
 | Jump | Space | Right Shift | A |
 | Attack | J | Comma | X |
 | Smash | I | N | RT or right stick |
@@ -67,6 +68,10 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 | Shield, dodge, parry, or tech | L | Slash | LB or RB |
 | Grab | U | M | Y |
 | Pause | Esc | Esc | Start |
+
+Flick a side to dash. Reverse in the first few steps to dash-dance. Once your dog is running, its paws have to brake before it can turn. Pip can reverse a dash later than Brisket, who skids farther when stopping. To walk on touch, slide from the center dot onto a side arrow. A direct tap on the arrow starts a dash.
+
+In **Training → Footwork practice**, dash right to the chalk and reverse to draw out Brisket’s Bear Hug. As his paws close, turn back and attack before he recovers. The drill reports how many frames he still needed when your punish landed. Choose **Footwork practice** again to retry with the same spacing.
 
 Your dog crouches for three frames before a grounded jump. Release Jump during the crouch for a short hop. Hold Jump through it for a full jump. Press Attack with Jump or during the crouch to launch a short-hop aerial in the direction you aimed. To attack on the way down, jump first and press Attack later. Jump a second time in midair, then use Up + Special to recover. Down + Jump drops through a raised platform.
 

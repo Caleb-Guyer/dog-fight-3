@@ -3395,6 +3395,8 @@
     }
     if (Object.prototype.hasOwnProperty.call(kitMoves, pose) || captiveFlinches.includes(pose))
       return actionCel(pose, phase);
+    if (pose === 'walk') return tick(8) % 6;
+    if (pose === 'dashStart') return Math.min(2, Math.floor(phase * 3));
     if (pose === 'run') return tick(12) % 6;
     if (pose === 'win') return tick(6) % 4;
     if (pose === 'idle') {
@@ -4703,6 +4705,36 @@
         s.fistY = frame === 1 ? -1 : 0;
         if (frame === 2) s.eye = shutEyes;
         break;
+      case 'walk': {
+        const step = [-3, -1, 2, 3, 1, -2][frame];
+        s.leftX = step;
+        s.rightX = -step;
+        s.leftY = frame === 2 ? -2 : 0;
+        s.rightY = frame === 5 ? -2 : 0;
+        s.bodyY = frame % 3 === 1 ? -1 : 0;
+        s.fistX = -step;
+        s.rearX = step;
+        s.tail = frame < 3 ? 1 : -1;
+        s.ear = frame % 3 === 0 ? 1 : 0;
+        break;
+      }
+      case 'dashStart': {
+        const drive = name === 'brisket' ? 3 : 5;
+        s.bodyX = frame + 1;
+        s.bodyY = 3 - frame;
+        s.lean = drive - frame;
+        s.headX = drive;
+        s.headY = 2 - frame;
+        s.leftX = -5 - frame;
+        s.rightX = 4 + frame;
+        s.leftY = -frame;
+        s.fistX = -drive;
+        s.rearX = drive + 1;
+        s.tailLift = 2;
+        s.scarf = -3;
+        s.kneeOut = 2;
+        break;
+      }
       case 'run': {
         const stride = [-6, -3, 2, 6, 3, -2][frame];
         s.bodyX = 1;
@@ -5426,6 +5458,8 @@
   const names = Object.keys(fighters);
   const poses = [
     'idle',
+    'walk',
+    'dashStart',
     'run',
     'jumpSquat',
     'jump',

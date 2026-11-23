@@ -254,12 +254,14 @@
     touches = new Set(),
     touchTaps = new Set(),
     touchPointers = new Map();
+  let walkPointer = null;
   function clearInput() {
     held.clear();
     taps.clear();
     touches.clear();
     touchPointers.clear();
     touchTaps.clear();
+    walkPointer = null;
     document.querySelectorAll('.touch-pad .held').forEach((el) => el.classList.remove('held'));
   }
   let audioContext;
@@ -612,6 +614,7 @@
     const networkGame = !!online.match || page === 'online-lobby';
     const rows = [
       ['Move / aim', 'W A S D', 'Arrow keys', 'Stick / D-pad'],
+      ['Walk', 'Left Shift + A / D', 'Right Ctrl + ← / →', 'Tilt left stick gently'],
       ['Jump', 'Space', 'Right Shift', 'A'],
       ['Attack / charge', 'J', ',', 'X'],
       ['Smash / charge', 'I', 'N', 'RT / right stick'],
@@ -630,6 +633,7 @@
       'controls',
       'Controls',
       table +
+        '<p>Flick a side to dash. Reverse in the first few steps to dash-dance. After a full run your dog plants its paws to turn. On touch, slide from the center dot onto a side arrow to walk, or tap a side arrow to dash.</p>' +
         '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
         '<p>While holding Shield, press Jump, Grab, Up + Smash, or Up + Special. Tap during a blocked hit to start your response as soon as shieldstun ends. An immediate shield grab takes four extra frames to reach. A heavier blow pushes you farther away.</p>' +
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim and tap Shield to dodge in that direction, including diagonally. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Try Training → Air-dodge practice.</p>' +
@@ -1078,6 +1082,7 @@
     drillSide = null;
     drillWaiting = false;
     practiceSide = 'left';
+    $('footwork-status').hidden = true;
     $('launch-status').hidden = true;
     $('wall-status').hidden = $('wall-patterns').hidden = true;
     $('shield-status').hidden = $('shield-patterns').hidden = true;
@@ -1097,6 +1102,7 @@
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
       if (world?.wallPractice && e.f?.index === 0) wallFeedback(name);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
+      if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
       if (name === 'airStart' || name === 'airCue' || name === 'airResult') airFeedback(name, e);
       if (world?.rollPractice && e.f?.index === 0 && (name === 'ledgeRoll' || name === 'rollResult'))
         rollFeedback(name, e);
@@ -1299,6 +1305,23 @@
   let drillSide = null,
     drillWaiting = false,
     practiceSide = 'left';
+  function footworkFeedback(e) {
+    const status = $('footwork-status');
+    const state = e.outcome || e.phase;
+    status.dataset.result = state;
+    status.textContent = {
+      tell: 'Bear Hug coming', opening: 'Grab missed · attack', caught: 'Caught',
+      early: 'Hit first', late: 'Brisket recovered', clash: 'Grabs clashed', punish: 'Whiff punish',
+    }[state];
+    if (e.outcome)
+      $('recovery-tip').textContent = {
+        caught: 'Brisket caught you. Retry and reverse as your lead paw crosses the chalk.',
+        early: 'You beat the grab to the punch. Retry and let his paws close on empty air.',
+        late: 'You cleared Bear Hug. Turn back sooner and attack while his paws are still out.',
+        clash: 'Both grabs met. Retry and let Bear Hug miss before you counter.',
+        punish: 'You caught Brisket with ' + e.remaining + (e.remaining === 1 ? ' frame' : ' frames') + ' left in his recovery.',
+      }[state];
+  }
   function shieldFeedback(name, e) {
     const result = $('shield-status');
     const tip = $('recovery-tip');
@@ -1521,14 +1544,16 @@
     const launch = ledge === 'launch';
     const wall = ledge === 'wall';
     const shield = ledge === 'shield';
+    const footwork = ledge === 'footwork';
     const air = ledge === 'air';
     const roll = ledge === 'roll';
     const trump = ledge === 'trump';
-    drillSide = launch || wall || shield || air || roll || trump ? null : ledge || null;
+    drillSide = launch || wall || shield || footwork || air || roll || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
     if (launch) world.resetLaunchPractice();
+    else if (footwork) world.resetFootworkPractice();
     else if (wall) world.resetWallPractice(pattern);
     else if (shield) world.resetShieldPractice(pattern);
     else if (air) world.resetAirPractice(pattern, practiceSide);
@@ -1540,13 +1565,18 @@
     hudKey = '';
     const result = $('launch-status');
     result.hidden = !launch;
+    $('footwork-status').hidden = !footwork;
     $('wall-status').hidden = $('wall-patterns').hidden = !wall;
     $('shield-status').hidden = $('shield-patterns').hidden = !shield;
     $('air-status').hidden = $('air-patterns').hidden = !air;
     $('roll-status').hidden = $('roll-patterns').hidden = !roll;
     $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
-    if (wall) {
+    if (footwork) {
+      $('footwork-status').dataset.result = 'ready';
+      $('footwork-status').textContent = 'Bait Bear Hug';
+      message = 'Dash right to the chalk, then reverse. When Brisket misses his grab, dash back in and tap Attack. Choose Footwork practice to retry.';
+    } else if (wall) {
       $('wall-status').dataset.result = 'ready';
       $('wall-status').textContent = pattern === 'right' ? 'Right wall' : 'Left wall';
       message =
@@ -1615,6 +1645,7 @@
     announce(message);
   }
   $('reset-training').onclick = () => drill(false);
+  $('footwork-training').onclick = () => drill('footwork');
   $('ledge-training').onclick = () => drill('left');
   $('ledge-right').onclick = () => drill('right');
   $('ledge-attack-training').onclick = () => drill(practiceSide, true);
@@ -2226,6 +2257,7 @@
       up: 'KeyW',
       down: 'KeyS',
       jump: 'Space',
+      walk: 'ShiftLeft',
       attack: 'KeyJ',
       smash: 'KeyI',
       special: 'KeyK',
@@ -2238,6 +2270,7 @@
       up: 'ArrowUp',
       down: 'ArrowDown',
       jump: 'ShiftRight',
+      walk: 'ControlRight',
       attack: 'Comma',
       smash: 'KeyN',
       special: 'Period',
@@ -2280,6 +2313,7 @@
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
+      if (el.dataset.touch === 'neutral') walkPointer = e.pointerId;
       setTouch(e.pointerId, el);
       audioReady();
     });
@@ -2289,7 +2323,10 @@
         const aim = document.elementFromPoint(e.clientX, e.clientY)?.closest('.dpad [data-touch]');
         if (aim) setTouch(e.pointerId, aim);
       });
-    const release = (e) => setTouch(e.pointerId, null);
+    const release = (e) => {
+      if (walkPointer === e.pointerId) walkPointer = null;
+      setTouch(e.pointerId, null);
+    };
     el.addEventListener('pointerup', release);
     el.addEventListener('pointercancel', release);
     el.addEventListener('lostpointercapture', release);
@@ -2394,8 +2431,10 @@
     const rightX = axis(2),
       rightY = axis(3);
     const rightStick = Math.max(Math.abs(rightX), Math.abs(rightY)) > 0.62;
+    const fromCenter = !i && touchPointers.get(walkPointer)?.dataset.touch;
+    const walk = key('walk') || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
     return {
-      x: x || axis(0),
+      x: (walk ? x * (64 / 127) : x) || axis(0),
       grabX,
       y: y || axis(1),
       // Apply the air dodge's radial dead zone to the whole stick, including shallow angles.

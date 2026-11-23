@@ -85,7 +85,6 @@
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
   const inputWindow = 7 / 60;
   const runStick = 0.55;
-  const runSpeed = 0.6;
   const pivotWindow = 7 / 60;
   const ledgeDriftGrace = 12 / 60;
   const hangingFeet = [0, -13, 46];
@@ -118,6 +117,7 @@
   // Dodge frames are [total, first untouchable frame, last untouchable frame], at 60 Hz.
   const kits = {
     pip: {
+      footwork: { walk: 174, burst: 198, acceleration: 1980, traction: 3600, reverseFrames: 7 },
       defense: { rollDistance: 132, roll: [24, 2, 11], spot: [18, 2, 9] },
       // Air options add a fourth value for landing lag. Travel and ledge timing are in frames.
       airDodge: {
@@ -166,6 +166,7 @@
       fastFallSpeed: 855,
     },
     brisket: {
+      footwork: { walk: 121, burst: 122, acceleration: 1580, traction: 1540, reverseFrames: 4 },
       defense: { rollDistance: 96, roll: [32, 4, 17], spot: [25, 3, 15] },
       airDodge: {
         neutral: [32, 4, 18, 8],
@@ -224,6 +225,7 @@
       fastFallSpeed: 960,
     },
     noodle: {
+      footwork: { walk: 144, burst: 151, acceleration: 1820, traction: 2180, reverseFrames: 5 },
       defense: { rollDistance: 150, roll: [30, 3, 15], spot: [22, 2, 12] },
       airDodge: {
         neutral: [28, 3, 14, 7],
@@ -276,6 +278,7 @@
       fastFallSpeed: 730,
     },
     clover: {
+      footwork: { walk: 160, burst: 174, acceleration: 2010, traction: 2920, reverseFrames: 6 },
       defense: { rollDistance: 116, roll: [26, 3, 13], spot: [20, 2, 11] },
       airDodge: {
         neutral: [26, 3, 13, 5],
@@ -1814,6 +1817,9 @@
       vy: 0,
       ground: -1,
       run: null,
+      stickTicks: 0,
+      sprintDir: 0,
+      strideDistance: 0,
       jumps: 2,
       usedUp: false,
       usedAir: false,
@@ -1959,16 +1965,44 @@
       planted,
     };
   }
-  function trackGroundRun(f, axis, dt) {
-    const direction = Math.abs(axis) >= runStick ? Math.sign(axis) : 0;
-    if (direction && f.vx * direction >= f.stats.speed * runSpeed) {
-      if (f.run?.face !== direction) f.run = { face: direction, grace: 0, turned: false };
-      f.run.grace = pivotWindow;
-      f.run.turned = false;
-    } else if (f.run) {
-      if (direction) f.run.turned = direction !== f.run.face;
-      f.run.grace -= dt;
-      if (f.run.grace <= 1e-8) f.run = null;
+  function readDashFlick(f, axis, previous) {
+    const amount = Math.abs(axis);
+    if (amount < 0.23 || axis * previous < 0) f.stickTicks = 0;
+    if (amount < runStick || axis * f.sprintDir < 0) f.sprintDir = 0;
+    if (amount >= 0.74 && (f.stickTicks < 3 || amount - Math.abs(previous) >= 0.43))
+      f.sprintDir = Math.sign(axis);
+    if (amount >= 0.23) f.stickTicks = Math.min(3, f.stickTicks + 1);
+  }
+  function moveOnFoot(f, axis, dt) {
+    const kit = f.kit.footwork, dir = f.sprintDir;
+    let run = f.run;
+    if (dir && run && dir !== run.face) {
+      if (run.age >= kit.reverseFrames / 60 - 1e-8 || run.turned) {
+        // A full run must brake. The old facing remains available for a pivot grab.
+        run.turned = true;
+        run.grace = Math.max(0, run.grace - dt);
+        f.vx = toward(f.vx, 0, kit.traction * 1.3 * dt);
+        if (run.grace > 1e-8 || Math.abs(f.vx) > 1e-8) return;
+      }
+      run = null;
+    }
+    if (dir) {
+      if (!run) {
+        run = f.run = { face: dir, age: 0, grace: pivotWindow, turned: false };
+        f.skidTime = 0;
+        f.vx = dir * Math.max(kit.burst, f.vx * dir);
+      }
+      run.age = Math.min(1, run.age + dt);
+      run.grace = pivotWindow;
+      run.turned = false;
+      f.vx = toward(f.vx, axis * f.stats.speed, kit.acceleration * dt);
+    } else {
+      if (run) {
+        run.age += dt;
+        run.grace -= dt;
+        if (run.grace <= 1e-8 || (axis && Math.abs(f.vx) <= kit.walk)) f.run = null;
+      }
+      f.vx = toward(f.vx, axis * kit.walk, kit.traction * dt);
     }
   }
   function beginGrab(f, style, runFace, aim, shieldGrab = false) {
@@ -2098,6 +2132,7 @@
       this.rollPractice = null;
       this.launchPractice = null;
       this.shieldPractice = null;
+      this.footworkPractice = null;
       this.airPractice = null;
       this.lastCombo = { hits: 0, damage: 0 };
       this.hitStop = 0;
@@ -2143,6 +2178,7 @@
     }
     resetTraining(ledge = false, fromHang = false) {
       if (this.grapple) this.breakGrapple(false);
+      if (this.footworkPractice) this.dogs = this.footworkPractice.originalDogs;
       if (this.shieldPractice?.originalDogs) this.dogs = this.shieldPractice.originalDogs;
       if (this.wallPractice) {
         this.stage = this.wallPractice.original.stage;
@@ -2155,6 +2191,7 @@
       this.rollPractice = null;
       this.launchPractice = null;
       this.shieldPractice = null;
+      this.footworkPractice = null;
       this.airPractice = null;
       this.dogs.forEach((f) => this.spawn(f, false));
       this.projectiles = [];
@@ -2188,6 +2225,55 @@
       this.resetTraining();
       this.dogs[0].damage = 90;
       this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
+    }
+    resetFootworkPractice() {
+      this.resetTraining();
+      const originalDogs = this.dogs;
+      const player = originalDogs[0], dummy = newFighter('brisket', 1);
+      this.dogs = [player, dummy];
+      const floor = this.terrain[0], box = grabs[dummy.kit.grab].box;
+      dummy.x = (floor.x1 + floor.x2) / 2 + 45;
+      const mark = dummy.x - box[0] - box[2] - player.stats.width + 5;
+      player.x = mark - 27;
+      dummy.ground = player.ground = 0;
+      dummy.y = player.y = floor.y;
+      dummy.damage = this.trainingDamage;
+      this.footworkPractice = { phase: 'ready', mark, originalDogs, tell: 0, outcome: '' };
+    }
+    footworkInput(dt) {
+      const drill = this.footworkPractice, [player, dummy] = this.dogs;
+      if (drill.phase === 'ready' && player.ground === 0 && player.x >= drill.mark) {
+        drill.phase = 'tell';
+        this.emit('footworkCue', { phase: 'tell', f: player });
+      }
+      if (drill.phase === 'tell') {
+        drill.tell += dt;
+        if (drill.tell + 1e-8 >= 12 / 60) {
+          drill.phase = 'reach';
+          return { ...idleInput, grab: true };
+        }
+      }
+      const a = dummy.attack;
+      if (drill.phase === 'reach' && a?.grabAttempt && a.time + 1e-8 >= a.start + a.active) {
+        drill.phase = 'opening';
+        this.emit('footworkCue', { phase: 'opening', f: player });
+      } else if (drill.phase === 'reach' && !a) this.finishFootwork(dummy.regrabLock > 0 ? 'clash' : 'late');
+      else if (drill.phase === 'opening' && !a) this.finishFootwork('late');
+      return idleInput;
+    }
+    gradeFootwork(target) {
+      if (!this.footworkPractice || this.footworkPractice.phase === 'done') return;
+      const a = target.attack;
+      if (target.index === 0) this.finishFootwork('caught');
+      else if (a?.grabAttempt && a.time + 1e-8 >= a.start + a.active)
+        this.finishFootwork('punish', Math.ceil((a.end - a.time) * 60 - 1e-8));
+      else this.finishFootwork(this.footworkPractice.phase === 'opening' ? 'late' : 'early');
+    }
+    finishFootwork(outcome, remaining = 0) {
+      const drill = this.footworkPractice;
+      drill.phase = 'done';
+      drill.outcome = outcome;
+      this.emit('footworkResult', { f: this.dogs[0], outcome, remaining });
     }
     resetWallPractice(side = 'left') {
       this.resetTraining();
@@ -2546,17 +2632,19 @@
           ? this.cpu(dt)
           : this.mode === 'local' || this.mode === 'adventure'
             ? input2
-            : this.launchPractice
-              ? this.practiceInput(dt)
-              : this.shieldPractice
-                ? this.shieldPracticeInput(dt, input1)
-                : this.airPractice
-                  ? this.airPracticeInput(dt)
-                  : this.rollPractice
-                    ? this.rollPracticeInput(dt)
-                    : this.trumpPractice
-                      ? this.trumpPracticeInput()
-                      : idleInput;
+            : this.footworkPractice
+              ? this.footworkInput(dt)
+              : this.launchPractice
+                ? this.practiceInput(dt)
+                : this.shieldPractice
+                  ? this.shieldPracticeInput(dt, input1)
+                  : this.airPractice
+                    ? this.airPracticeInput(dt)
+                    : this.rollPractice
+                      ? this.rollPracticeInput(dt)
+                      : this.trumpPractice
+                        ? this.trumpPracticeInput()
+                        : idleInput;
       const settingUpWallHit = wallDrill?.phase === 'swing';
       const inputs = [
         this.launchPractice?.phase === 'ready' || settingUpWallHit ? idleInput : input1,
@@ -2593,6 +2681,7 @@
       this.updateDiscs(dt);
       if (
         this.fetch &&
+        !this.footworkPractice &&
         !this.launchPractice &&
         !this.shieldPractice &&
         !this.airPractice &&
@@ -2627,6 +2716,7 @@
       f.shieldAxis = shieldDirection(grabX, input.y, previousAxis);
       f.prev = { ...input };
       if (f.respawning > 0) return;
+      readDashFlick(f, input.x, was.x);
       if (f.ground < 0 && f.vy >= 0 && input.y >= 0.65 && !(was.y >= 0.65) && controlsFall(f))
         f.fastFall = true;
       const floor = f.floorAction;
@@ -3345,6 +3435,8 @@
         if (a.time >= a.end) f.attack = null;
       }
       const sliding = f.attack?.motionLocked;
+      const onFoot = grounded && f.ground >= 0 && free && !f.attack && !f.shield &&
+        f.charge < 0 && !f.dodge && (!f.encounter || f.encounter.kind === f.kind);
       if (f.tumble) {
         f.vx *= Math.pow(0.68, dt);
         if (!f.stun) f.vx += input.x * 175 * dt;
@@ -3353,6 +3445,9 @@
         f.vx += input.x * 100 * dt;
       } else if (f.ground >= 0 && f.attack?.brake) {
         f.vx = toward(f.vx, 0, f.attack.brake * dt);
+      } else if (onFoot) {
+        moveOnFoot(f, input.x, dt);
+        f.strideDistance += Math.abs(f.vx) * dt;
       } else if (!f.airDodge && f.dodge <= 0 && !sliding) {
         const onFloor = f.ground >= 0;
         const planted =
@@ -3365,9 +3460,7 @@
         const drag = onFloor ? (steppingJab ? 560 : 2630) : Math.abs(input.x) > 0.1 ? f.kit.airAccel : 155;
         f.vx = toward(f.vx, input.x * f.stats.speed * mobility, drag * dt);
       }
-      if (grounded && f.ground >= 0 && free && !f.attack && !f.shield && f.charge < 0 && !f.dodge)
-        trackGroundRun(f, input.grabX ?? input.x, dt);
-      else f.run = null;
+      if (!onFoot) f.run = null;
       const dodgeGlide = f.airDodge && this.advanceAirDodge(f, dt);
       const oldX = f.x,
         oldY = f.y;
@@ -3567,6 +3660,7 @@
     }
     catchRival(owner, target, attack) {
       const spec = grabs[attack.moveId];
+      this.gradeFootwork(target);
       const landingFrames = Math.ceil(target.landingLag * 60 - 1e-8);
       const face = owner.face;
       const chest = target.y - target.stats.height * 0.52;
@@ -4363,6 +4457,7 @@
         this.block(target, owner, damage, name, face, point, projectile, moveId);
         return false;
       }
+      this.gradeFootwork(target);
       if (target.grip) this.breakGrapple(false);
       target.ledgeTrump = null;
       target.wallAction = null;
