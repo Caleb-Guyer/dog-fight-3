@@ -724,6 +724,12 @@
     noodle: tile(`..##.##. .#lL#lL# #LLlLLl# #LcLLcL# .#LccL#. ..#ll#.. ...##...`),
     clover: tile(`..##.##. .#wW#WW# #WWwWWw# #WpWWpW# .#WppW#. ..#ww#.. ...##...`),
   };
+  // Raised pads face the incoming blow, with a dark gap between the outer claws.
+  const parryPaws = {
+    pip: tile(`..##.##.. .#WW#WW#. .#Ww#WW## #WWWWwWWW# #WcWWcWWw# .#WcccWW#. .#Wcccw#.. ..#www#... ...###....`),
+    brisket: tile(`..###.###.. .#iWW#WWW#. .#WWW#WwW## #wWWWwWWWWW# #WWbWWWbWWw# .#WWbbbWWW#. .#iWbbbwW#.. ..#iwwwW#... ...#####....`),
+    noodle: tile(`..##.##.. .#LL#LL#. .#Ll#LL## #LLLLlLLL# #LcLLcLLl# .#LcccLL#. .#Lcccl#.. ..#lll#... ...###....`),
+  };
   // A curled paw leaves a notch between its claw and thumb where a collar or rim sits.
   const claspPaws = {
     pip: tile(`...####. ..#wWWw# .#WWW### #wWW#... #WWww.## .#wWW#w# ..#www#. ...###..`),
@@ -3032,6 +3038,46 @@
   const captiveFlinches = ['grappledFlinch', 'grappledHighFlinch'];
   const captivePoses = [...captiveLoops, ...captiveFlinches];
   const landingPoses = ['tumble', 'tech', 'techRoll', 'downed', 'floorRise', 'floorAttack'];
+  const shieldPoses = ['shieldRoll', 'spotDodge', 'parry'];
+  const sharedPointPoses = ['floorAttack', 'parry'];
+  const shieldStyles = {
+    pip: {
+      roll: [24, 2, 11], spot: [18, 2, 9],
+      turn: [0, 13, 57, 136, 224, 298, 329, 348, -4, 0],
+      height: [1, 1, 0.92, 0.86, 0.88, 0.93, 0.95, 1, 1, 1],
+      sway: [0, -3, -17, -29, -21, -8, 5, 2, -1, 0],
+      slipX: [0, -1, -4, -6, -4, -2, 2, 1, 0, 0], depth: [0, 1, 3, 4, 5, 3, 2, 1, 0, 0],
+      parryX: [6, 8, 6, 2, 0, -2, -1, 0], parryY: [-2, -4, -8, -11, -8, -4, -2, 0],
+      palm: [-8, -21, -43, -71, -59, -39, -19, -5],
+    },
+    brisket: {
+      roll: [32, 4, 17], spot: [25, 3, 15],
+      turn: [0, 8, 37, 101, 177, 243, 295, 328, -8, 0],
+      height: [1, 1, 0.92, 0.79, 0.79, 0.85, 0.91, 0.97, 1, 1],
+      sway: [0, -4, -13, -22, -29, -20, -8, 4, 2, 0],
+      slipX: [0, -1, -3, -5, -6, -5, -3, 1, 1, 0], depth: [0, 1, 2, 3, 3, 4, 3, 2, 1, 0],
+      parryX: [4, 5, 6, 5, 3, 2, 1, 0], parryY: [-2, -3, -5, -6, -4, -3, -1, 0],
+      palm: [-16, -24, -41, -53, -49, -34, -18, -4],
+    },
+    noodle: {
+      roll: [30, 3, 15], spot: [22, 2, 12],
+      turn: [0, 9, 41, 111, 190, 267, 309, 341, -5, 0],
+      height: [1, 1, 0.83, 0.68, 0.65, 0.72, 0.83, 0.94, 1, 1],
+      sway: [0, -3, -9, -14, -7, 5, 7, 2, 0, 0],
+      slipX: [0, -1, -3, -5, -5, -3, 1, 2, 1, 0], depth: [0, 2, 5, 7, 7, 5, 3, 2, 1, 0],
+      parryX: [5, 7, 8, 5, 2, -1, -1, 0], parryY: [0, -3, -5, -9, -7, -4, -1, 0],
+      palm: [8, -8, -26, -59, -53, -32, -14, -2],
+    },
+    clover: {
+      roll: [26, 3, 13], spot: [20, 2, 11],
+      turn: [0, 17, 64, 148, 235, 306, 337, 352, -3, 0],
+      height: [1, 1, 0.94, 0.86, 0.89, 0.95, 0.97, 1, 1, 1],
+      sway: [0, -4, -17, -30, -32, -16, -6, 4, 1, 0],
+      slipX: [0, -1, -3, -5, -6, -4, -2, 1, 1, 0], depth: [0, 1, 2, 2, 3, 2, 1, 1, 0, 0],
+      parryX: [1, 3, 5, 4, 2, 0, -1, -1], parryY: [-2, -3, -5, -7, -6, -3, -1, 0],
+      palm: [-33, -46, -62, -73, -54, -34, -13, 2],
+    },
+  };
 
   const landingStyles = {
     pip: {
@@ -3210,8 +3256,23 @@
     return 7;
   }
 
-  function frameNumber(pose, time, phase) {
+  function shieldFrame(name, pose, phase, backRoll) {
+    if (pose === 'parry') return Math.min(7, Math.floor(phase * 8));
+    const rolling = pose === 'shieldRoll';
+    const key = rolling ? 'roll' : 'spot';
+    const timing = window.DogFight?.kits?.[name]?.defense?.[key] || shieldStyles[name][key];
+    const [length, first, last] = timing;
+    const total = length + (rolling && backRoll ? 2 : 0);
+    const tick = Math.min(total, Math.floor(phase * total + 1e-7));
+    if (tick < first) return Math.floor(2 * tick / first);
+    if (tick <= last) return 2 + Math.floor(4 * (tick - first) / (last - first + 1));
+    if (tick >= total - 1) return 9;
+    return 6 + Math.min(2, Math.floor(3 * (tick - last - 1) / (total - last - 2)));
+  }
+
+  function frameNumber(pose, time, phase, name = 'pip', backRoll = false) {
     const tick = (period) => Math.floor((Math.abs(time) % 1000000) * period);
+    if (shieldPoses.includes(pose)) return shieldFrame(name, pose, phase, backRoll);
     if (pose === 'tumble') return tick(14) % 8;
     if (pose === 'downed') {
       if (phase < 0.13) return 0;
@@ -3605,6 +3666,220 @@
     }
   }
 
+  function shieldGuard(s) {
+    s.bodyY = 4;
+    s.lean = -1;
+    s.headY = 1;
+    s.leftX = -1;
+    s.rightX = 2;
+    s.fistX = 3;
+    s.fistY = -7;
+    s.rearX = 2;
+    s.rearY = -6;
+    s.tail = 3;
+  }
+
+  function shieldRollStance(s, name, frame) {
+    shieldGuard(s);
+    if (frame === 0 || frame === 9) {
+      s.clipFloor = true;
+      return;
+    }
+    const style = shieldStyles[name];
+    const fold = [0, 2, 4, 6, 6, 5, 4, 2, 1, 0][frame];
+    const trail = [0, 1, 3, 4, 2, -2, -4, -2, 1, 0][frame];
+    s.roll = style.turn[frame];
+    s.rollHeight = style.height[frame];
+    s.guardFloor = false;
+    s.floorRoll = true;
+    s.packTail = frame >= 2 && frame <= 6;
+    s.foldEars = frame >= 2 && frame <= 5;
+    s.bodyY = 2 + Math.round(fold / 2);
+    s.torsoTurn = 2 * fold;
+    s.headX = -1 - Math.floor(fold / 2);
+    s.headY = 2 + fold;
+    s.headTurn = 4 + 2 * fold;
+    s.fistX = 3 - fold;
+    s.fistY = -6 - fold;
+    s.fistTurn = -24 - 5 * fold;
+    s.rearX = 2 - Math.floor(fold / 2);
+    s.rearY = -5 - fold;
+    s.rearTurn = -15 - 5 * fold;
+    s.leftX = -1 + fold;
+    s.leftY = -2 * fold;
+    s.rightX = 4 - fold;
+    s.rightY = -1 - 2 * fold;
+    s.rightFootTurn = 17 + 8 * fold;
+    s.leftFootTurn = -11 + 8 * fold;
+    s.frontKneeY = -Math.ceil(fold / 2);
+    s.kneeOut = 1;
+    s.ear = trail;
+    s.scarf = -3 * trail;
+    s.tail = 2 * trail;
+    s.charmTurn = -12 * trail;
+    if (name === 'pip') {
+      s.headTurn += 4;
+      s.rightX += frame === 2 ? 6 : 1;
+      s.leftX += frame === 5 ? 4 : 1;
+      s.scarf -= trail;
+    } else if (name === 'brisket') {
+      s.extraHaunch = frame >= 2 && frame <= 6;
+      s.shoulderLead = [0, 1, 3, 2, 0, 0, 0, 0, 0, 0][frame];
+      s.headX -= 1;
+      s.headTurn -= 12;
+      s.fistX -= 2;
+      s.fistY += 2;
+      s.rightX -= 3;
+      s.kneeOut += 2;
+    } else if (name === 'noodle') {
+      s.torsoTurn -= 8;
+      s.rollWidth = [1, 1, 1.08, 1.14, 1.18, 1.15, 1.08, 1, 1, 1][frame];
+      s.headX += 3;
+      s.headY += 1;
+      s.leftX -= 4;
+      s.rightX += 2;
+      s.ear = 2 * trail;
+      s.tailLift = -2;
+    } else {
+      // The far rim folds back across Clover's chest until her paws come out of the roll.
+      s.hideCharm = true;
+      s.heldItem = 'disc';
+      s.heldAngle = [0, -105, -145, -151, -162, -157, -126, -82, -41, 0][frame];
+      s.fistX += 2;
+      s.fistY += 1;
+    }
+    if (frame >= 6) {
+      const settle = frame - 6;
+      s.rightX = [7, 5, 3][settle];
+      s.rightY = [-4, 0, 0][settle];
+      s.leftX = [0, -4, -2][settle];
+      s.leftY = [-7, -2, 0][settle];
+      s.leftFootTurn = [39, 19, 4][settle];
+      s.rightFootTurn = [24, 10, 2][settle];
+      s.headTurn = [11, 4, -2][settle];
+      s.showSole = frame === 6;
+      s.kickFront = frame === 6;
+    }
+  }
+
+  function spotStance(s, name, frame) {
+    shieldGuard(s);
+    if (frame === 0 || frame === 9) {
+      s.clipFloor = true;
+      return;
+    }
+    s.guardFloor = true;
+    const style = shieldStyles[name];
+    const depth = style.depth[frame];
+    s.bodyX = style.slipX[frame];
+    s.bodyY += depth;
+    s.torsoTurn = style.sway[frame];
+    s.headX = frame < 6 ? -2 : 1;
+    s.headY = 1 + Math.floor(depth / 2);
+    s.headTurn = -Math.round(s.torsoTurn / 2);
+    s.kneeOut = 1 + depth;
+    s.frontKneeY = -Math.floor(depth / 2);
+    s.fistX -= Math.ceil(depth / 2);
+    s.fistY -= depth;
+    s.rearX -= depth;
+    s.rearY += Math.floor(depth / 2);
+    s.ear = frame < 4 ? 3 : -2;
+    s.scarf = frame < 4 ? 5 : -3;
+    s.tail = frame < 5 ? -3 : 4;
+    s.foldEars = frame >= 3 && frame <= 5;
+    if (name === 'pip') {
+      s.headX += frame >= 4 && frame <= 6 ? 3 : -1;
+      s.fistTurn = -24 - 3 * depth;
+      s.rearTurn = 14 + 2 * depth;
+      s.rightFootTurn = frame >= 3 && frame <= 5 ? -12 : 0;
+    } else if (name === 'brisket') {
+      s.leftX -= 2;
+      s.rightX += 2;
+      if (depth > 1) {
+        s.bodyY -= 2;
+        s.headY -= 2;
+      }
+      s.fistX += 2;
+      s.fistY += 1;
+      s.rearX += 4;
+      s.openHands = 'front';
+      s.fistTurn = -19 - 3 * depth;
+      s.charmTurn = -7 * depth;
+    } else if (name === 'noodle') {
+      // His long body folds under the blow while all four paws stay close to the floor.
+      s.lowBody = frame >= 3 && frame <= 5;
+      if (s.lowBody) {
+        s.bodyY = 0;
+        s.headX = 3;
+        s.headY = 8 + Math.floor(depth / 2);
+        s.headTurn = -4;
+        s.shoulderY = 6;
+        s.fistX = 2;
+        s.fistY = 1;
+        s.rearX = -4;
+        s.rearY = 3;
+        s.tail = frame === 4 ? 4 : -2;
+      }
+      s.ear *= 2;
+      s.charmTurn = 24 - 4 * depth;
+    } else {
+      s.hideCharm = true;
+      s.heldItem = 'disc';
+      s.heldAngle = [0, -38, -68, -97, -116, -94, -61, -36, -19, 0][frame];
+      s.fistX += 3;
+      s.fistY -= 1;
+      s.rearX -= 2;
+      s.tail -= 2;
+    }
+  }
+
+  function parryStance(s, name, frame) {
+    const style = shieldStyles[name];
+    shieldGuard(s);
+    s.guardFloor = true;
+    s.bodyX = [-1, -1, 0, 1, 1, 0, 0, 0][frame];
+    s.bodyY += [1, 1, 0, -1, -1, 0, 0, 0][frame];
+    s.torsoTurn = [-7, -9, -3, 8, 7, 3, 1, 0][frame];
+    s.headX = frame < 3 ? -2 : -1;
+    s.headTurn = [-5, -9, -11, -13, -10, -5, -2, 0][frame];
+    s.fistX += style.parryX[frame];
+    s.fistY += style.parryY[frame];
+    s.fistTurn = style.palm[frame];
+    s.rearX += [-1, -1, -2, -3, -3, -2, -1, 0][frame];
+    s.rearY += [-2, -2, -1, 1, 0, 0, 0, 0][frame];
+    s.openHands = frame < 6 ? 'front' : null;
+    s.parryPalm = frame < 5 ? parryPaws[name] : null;
+    s.frontElbowX = [-3, -3, -2, -1, -1, 0, 0, 0][frame];
+    s.frontElbowY = [4, 5, 5, 4, 3, 1, 0, 0][frame];
+    s.kneeOut = [3, 3, 2, 2, 1, 1, 1, 0][frame];
+    s.ear = [2, 1, -2, -3, -1, 1, 1, 0][frame];
+    s.scarf = [4, 5, 3, -4, -3, -1, 1, 0][frame];
+    if (name === 'brisket') {
+      s.twoHandsFront = true;
+      s.powerArm = frame < 5;
+      s.rearX += frame < 4 ? 5 : 1;
+      s.rearY += frame < 4 ? -1 : 0;
+      s.rearTurn = frame < 5 ? -38 : -14;
+      s.leftX -= 2;
+      s.rightX += 2;
+    } else if (name === 'noodle') {
+      s.headX -= 2;
+      s.headY += frame < 3 ? 2 : 0;
+      s.rearX += 3;
+      s.ear *= 2;
+      s.charmTurn = [-19, -31, -28, 16, 22, 12, 5, 0][frame];
+    } else if (name === 'clover') {
+      s.hideCharm = true;
+      s.heldItem = 'disc';
+      s.heldAngle = [-63, -44, -18, -6, -26, -48, -43, -30][frame];
+      s.openHands = null;
+    } else {
+      s.fistX += 1;
+      s.rearX -= 1;
+      s.tail += frame < 4 ? -3 : 2;
+    }
+  }
+
   function stance(name, pose, frame) {
     const s = {
       bodyX: 0,
@@ -3628,7 +3903,9 @@
       kneeOut: 0,
       frontKneeY: 0,
       frontElbowX: 0,
+      frontElbowY: 0,
       guardFloor: false,
+      clipFloor: false,
       brakeHeel: false,
       kickFront: false,
       reverseArm: false,
@@ -3652,6 +3929,8 @@
       heldAngle: 0,
       wholeY: 0,
       roll: 0,
+      rollWidth: 1,
+      rollHeight: 1,
       glanceBack: false,
       extraHaunch: false,
       bellyFirst: false,
@@ -3666,6 +3945,7 @@
       rideDisc: false,
       twoHandsFront: false,
       impactPaw: null,
+      parryPalm: null,
       floorRoll: false,
       floorLift: 0,
       lowBody: false,
@@ -3683,6 +3963,15 @@
       return s;
     }
     switch (pose) {
+      case 'shieldRoll':
+        shieldRollStance(s, name, frame);
+        break;
+      case 'spotDodge':
+        spotStance(s, name, frame);
+        break;
+      case 'parry':
+        parryStance(s, name, frame);
+        break;
       case 'tumble':
       case 'techRoll':
         spinningStance(s, name, pose, frame);
@@ -3902,16 +4191,7 @@
         break;
       }
       case 'shield':
-        s.bodyY = 4;
-        s.lean = -1;
-        s.headY = 1;
-        s.leftX = -1;
-        s.rightX = 2;
-        s.fistX = 3;
-        s.fistY = -7;
-        s.rearX = 2;
-        s.rearY = -6;
-        s.tail = 3;
+        shieldGuard(s);
         break;
       case 'dodge':
         s.bodyX = 2;
@@ -3994,8 +4274,7 @@
     const [x, y] = wrist(d, s, s.heldItem !== 'backDisc');
     const cord = s.heldItem === 'rope';
     const [tipX, tipY] = rotateAt(x + (cord ? 9 : 12), y + (cord ? 1 : -1), x + 1, y, s.heldAngle);
-    const [worldX, rotatedY] = rotateAt(tipX, tipY, 0, -18, s.roll);
-    const worldY = rotatedY + s.wholeY;
+    const [worldX, worldY] = posePoint(tipX, tipY, s);
     // Pixel rotation can round an edge into the neighboring cell. Attach to visible ink.
     const nearby = [
       [0, 0],
@@ -4027,7 +4306,7 @@
     const armClearance = Math.floor((d.fistWidth + 2) / 2) + 2;
     const elbowOffset = y < sy - 9 && !s.grip ? 3 : near ? -2 : -1;
     const elbowX = Math.round((sx + x) / 2) + elbowOffset + (near ? s.frontElbowX : 0);
-    const rawElbowY = Math.round((sy + y) / 2) + (Math.abs(x - sx) > 16 ? 1 : 4);
+    const rawElbowY = Math.round((sy + y) / 2) + (Math.abs(x - sx) > 16 ? 1 : 4) + (near ? s.frontElbowY : 0);
     const elbowY = s.guardFloor ? Math.min(rawElbowY, -armClearance) : rawElbowY;
     const foreX = Math.round(elbowX + (x - elbowX) * 0.62);
     const foreY = Math.round(elbowY + (y + 1 - elbowY) * 0.62);
@@ -4056,6 +4335,7 @@
     let paw = s.grip || onLip ? ledgePaws[name] : handOpened ? spreadPaws[name] : d.fist;
     if (s.clasp === 'both' || s.clasp === (near ? 'front' : 'rear')) paw = claspPaws[name];
     if (s.impactPaw && (near || s.twoHandsFront)) paw = s.impactPaw;
+    if (near && s.parryPalm) paw = s.parryPalm;
     turned(buffer, x, y, 14, near ? s.fistTurn : s.rearTurn, (part) => {
       stamp(part, paw, x - 3, y - 3, 0, !near);
     });
@@ -4150,8 +4430,13 @@
     for (const [px, py] of points.slice(1, -1)) ink(buffer, px, py - 1, 'O');
   }
 
+  function posePoint(x, y, s) {
+    const [px, py] = rotateAt(x, y, 0, -18, s.roll);
+    return [Math.round(px * s.rollWidth), -18 + Math.round((py + 18) * s.rollHeight) + s.wholeY];
+  }
+
   function tumble(pixels, s) {
-    if (s.roll % 360 === 0 && !s.wholeY && !s.floorRoll) return pixels;
+    if (s.roll % 360 === 0 && s.rollWidth === 1 && s.rollHeight === 1 && !s.wholeY && !s.floorRoll) return pixels;
     const output = new Uint8Array(W * H);
     const cx = originX;
     const cy = originY - 18;
@@ -4160,9 +4445,11 @@
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
     for (let y = 0; y < H; y++) {
+      const offsetY = (y - dstY) / s.rollHeight;
       for (let x = 0; x < W; x++) {
-        const sx = cx + Math.round((x - cx) * cos + (y - dstY) * sin);
-        const sy = cy + Math.round((y - dstY) * cos - (x - cx) * sin);
+        const offsetX = (x - cx) / s.rollWidth;
+        const sx = cx + Math.round(offsetX * cos + offsetY * sin);
+        const sy = cy + Math.round(offsetY * cos - offsetX * sin);
         if (sx >= 0 && sx < W && sy >= 0 && sy < H) output[y * W + x] = pixels[sy * W + sx];
       }
     }
@@ -4297,7 +4584,7 @@
     } else drawArm(buffer, name, d, s, true);
     if (s.reverseArm) drawArm(buffer, name, d, s, false);
     // A rotated outline can project its last pixel beyond an otherwise planted stance.
-    if (s.guardFloor) buffer.fill(0, originY * W);
+    if (s.guardFloor || s.clipFloor) buffer.fill(0, originY * W);
     if (s.rideDisc) {
       stamp(buffer, sailDisc, -18, 0);
       const glint = -10 + (s.kitFrame % 5) * 4;
@@ -4343,7 +4630,7 @@
   function getFrame(name, pose, number) {
     const key = name + '/' + pose + '/' + number;
     if (frames.has(key)) return frames.get(key);
-    const s = number >= 8 ? placeGrippingPaws(name, pose, number - 8) : stance(name, pose, number);
+    const s = number >= 8 && kitMoves[pose]?.lip ? placeGrippingPaws(name, pose, number - 8) : stance(name, pose, number);
     const pixels = compose(name, s);
     let left = W,
       top = H,
@@ -4376,11 +4663,11 @@
       y: top - originY,
       item: itemAnchor(fighters[name], s, pixels),
     };
-    if (tracksKitPaws(pose) || captivePoses.includes(pose) || pose === 'floorAttack') {
+    if (tracksKitPaws(pose) || captivePoses.includes(pose) || sharedPointPoses.includes(pose)) {
       result.paws = [true, false].map((near) => {
         const [x, y] = wrist(fighters[name], s, near);
-        const [px, py] = rotateAt(x, y, 0, -18, s.roll);
-        return [2 * px, 2 * (py + s.wholeY)];
+        const [px, py] = posePoint(x, y, s);
+        return [2 * px, 2 * py];
       });
     }
     frames.set(key, result);
@@ -4412,6 +4699,7 @@
     'rise',
     'win',
     ...landingPoses,
+    ...shieldPoses,
     ...captivePoses,
     ...Object.keys(kitMoves),
   ];
@@ -4425,21 +4713,21 @@
     const name = fighterName(kind);
     if (
       typeof pose !== 'string' ||
-      (pose !== 'floorAttack' && (!pose.startsWith(name) || !Object.prototype.hasOwnProperty.call(kitMoves, pose)))
+      (!sharedPointPoses.includes(pose) && (!pose.startsWith(name) || !Object.prototype.hasOwnProperty.call(kitMoves, pose)))
     ) {
       return null;
     }
     const fraction = Number.isFinite(phase) ? Math.max(0, Math.min(1, phase)) : 0.5;
-    const point = getFrame(name, pose, frameNumber(pose, 0, fraction)).item;
+    const point = getFrame(name, pose, frameNumber(pose, 0, fraction, name)).item;
     return point ? point.slice() : null;
   }
 
   // Effects can follow the painted wrists through grabs, releases and paw strikes.
   function pawPoint(kind, pose, phase = 0.5, side = 'front') {
     const name = fighterName(kind);
-    if (typeof pose !== 'string' || (pose !== 'floorAttack' && !captivePoses.includes(pose) && !(tracksKitPaws(pose) && pose.startsWith(name)))) return null;
+    if (typeof pose !== 'string' || (!sharedPointPoses.includes(pose) && !captivePoses.includes(pose) && !(tracksKitPaws(pose) && pose.startsWith(name)))) return null;
     const fraction = Number.isFinite(phase) ? Math.max(0, Math.min(1, phase)) : 0.5;
-    const frame = getFrame(name, pose, frameNumber(pose, 0, fraction));
+    const frame = getFrame(name, pose, frameNumber(pose, 0, fraction, name));
     return frame.paws[side === 'rear' ? 1 : 0].slice();
   }
 
@@ -4452,7 +4740,7 @@
     const time = Number.isFinite(options.time) ? options.time : 0;
     const phase = Number.isFinite(options.phase) ? Math.max(0, Math.min(1, options.phase)) : 0.5;
     const scale = (Number.isFinite(options.scale) ? options.scale : 1) * 2;
-    const frame = getFrame(name, pose, frameNumber(pose, time, phase));
+    const frame = getFrame(name, pose, frameNumber(pose, time, phase, name, options.backRoll));
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.translate(Math.round(x), Math.round(y));

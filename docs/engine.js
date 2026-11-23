@@ -93,6 +93,8 @@
   const maxDI = (18 * Math.PI) / 180;
   const techWindow = 11 / 60;
   const techLockout = 28 / 60;
+  const shieldDropTime = 10 / 60;
+  const parryWindow = 5 / 60;
   // Total frames and initial invulnerability frames for each landing option.
   const floorFrames = {
     tech: [19, 13],
@@ -106,8 +108,10 @@
   const smashChargeTime = 1;
   const smashHoldLimit = 2;
   const aimFor = (y) => (y < -0.45 ? -1 : y > 0.45 ? 1 : 0);
+  // Dodge frames are [total, first untouchable frame, last untouchable frame], at 60 Hz.
   const kits = {
     pip: {
+      defense: { rollDistance: 132, roll: [24, 2, 11], spot: [18, 2, 9] },
       ground: ['pipJab', 'pipCross', 'pipHeel'],
       tilts: { forward: 'pipStampKick', up: 'pipChinFlick', down: 'pipDewclaw' },
       dashAttack: 'pipGrassSkid',
@@ -135,6 +139,7 @@
       gravity: 1.0,
     },
     brisket: {
+      defense: { rollDistance: 96, roll: [32, 4, 17], spot: [25, 3, 15] },
       ground: ['brisketCheck', 'brisketLift'],
       tilts: { forward: 'brisketGateCheck', up: 'brisketCrownLift', down: 'brisketDoorstop' },
       dashAttack: 'brisketYardBuster',
@@ -173,6 +178,7 @@
       gravity: 1.17,
     },
     noodle: {
+      defense: { rollDistance: 150, roll: [30, 3, 15], spot: [22, 2, 12] },
       ground: ['noodleTrip', 'noodleReel', 'noodleSnap'],
       tilts: { forward: 'noodleKnotPoke', up: 'noodleLoopLift', down: 'noodleTailBroom' },
       dashAttack: 'noodleLeadSweep',
@@ -205,6 +211,7 @@
       gravity: 0.93,
     },
     clover: {
+      defense: { rollDistance: 116, roll: [26, 3, 13], spot: [20, 2, 11] },
       ground: ['cloverTap', 'cloverSet'],
       tilts: { forward: 'cloverOneTwoPass', up: 'cloverCanopyTap', down: 'cloverBackspin' },
       dashAttack: 'cloverRimRush',
@@ -1691,6 +1698,11 @@
       drop: 0,
       shield: false,
       shieldHP: 1,
+      shieldAxis: '',
+      guardIntent: '',
+      shieldDrop: 0,
+      parryFlash: 0,
+      parryFace: index ? -1 : 1,
       dodge: 0,
       charge: -1,
       chargeDirection: 'neutral',
@@ -1724,6 +1736,12 @@
     f.chargeDirection = 'neutral';
     f.chargeReleased = false;
     f.smashCharge = null;
+  }
+  function shieldDirection(x, y, previous) {
+    // Use a lower threshold to retain an existing stick direction across small analog fluctuations.
+    if (y >= (previous === 'down' ? 0.4 : 0.62) && y >= Math.abs(x) * 0.85) return 'down';
+    const side = x < 0 ? 'left' : 'right';
+    return Math.abs(x) >= (previous === side ? 0.4 : 0.62) ? side : '';
   }
   function beginAttack(f, name, aim, power, moveId) {
     cancelCharge(f);
@@ -1858,7 +1876,7 @@
   }
   function bodyHeight(f) {
     const action = f.floorAction;
-    if (!action) return f.stats.height;
+    if (!action || action.safeFrom !== undefined) return f.stats.height;
     if (action.type === 'downed') return f.stats.height * 0.42;
     const rise = clamp((action.time / action.duration - 0.55) / 0.45, 0, 1);
     return f.stats.height * (0.55 + 0.45 * rise);
@@ -1884,6 +1902,7 @@
       this.nextBall = 4;
       this.trainingDamage = 0;
       this.launchPractice = null;
+      this.shieldPractice = null;
       this.lastCombo = { hits: 0, damage: 0 };
       this.hitStop = 0;
       this.bot = {
@@ -1911,6 +1930,7 @@
       if (f.index === 1) {
         this.bot.jumpHold = 0;
         this.bot.hop = null;
+        this.bot.guardRead = null;
       }
       if (fromKO) {
         f.invuln = 1.55;
@@ -1925,6 +1945,7 @@
     }
     resetTraining(ledge = false, fromHang = false) {
       this.launchPractice = null;
+      this.shieldPractice = null;
       this.dogs.forEach((f) => this.spawn(f, false));
       this.projectiles = [];
       this.ball = null;
@@ -1956,6 +1977,55 @@
       this.resetTraining();
       this.dogs[0].damage = 90;
       this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
+    }
+    resetShieldPractice(pattern = 'strike') {
+      this.resetTraining();
+      this.shieldPractice = { pattern, phase: 'ready', time: 0, outcome: '', lastDodge: '' };
+    }
+    finishShieldPractice(outcome) {
+      const drill = this.shieldPractice;
+      if (!drill || (drill.phase !== 'attack' && drill.phase !== 'windup')) return;
+      drill.phase = 'done';
+      drill.outcome = outcome;
+      this.emit('shieldResult', {
+        f: this.dogs[0],
+        pattern: drill.pattern,
+        outcome,
+        lastDodge: drill.lastDodge,
+      });
+    }
+    recordPracticeDodge(target, overlaps) {
+      const drill = this.shieldPractice;
+      if (target.index !== 0 || drill?.phase !== 'attack') return;
+      const action = target.floorAction?.type;
+      if (action === 'shieldRoll' || (action === 'spotDodge' && overlaps && target.invuln > 0))
+        drill.lastDodge = action;
+    }
+    shieldPracticeInput(dt, input) {
+      const drill = this.shieldPractice;
+      if (drill.phase === 'ready' && input.shield) {
+        drill.phase = 'windup';
+        this.emit('shieldCue', { f: this.dogs[0], phase: 'windup', pattern: drill.pattern });
+      }
+      if (drill.phase === 'windup') {
+        drill.time += dt;
+        if (drill.time + 1e-8 < 32 / 60) {
+          return drill.pattern === 'strike'
+            ? { ...idleInput, smash: true, smashX: this.dogs[1].face }
+            : idleInput;
+        }
+        drill.phase = 'attack';
+        drill.time = 0;
+        this.emit('shieldCue', { f: this.dogs[0], phase: 'attack', pattern: drill.pattern });
+        return drill.pattern === 'grab' ? { ...idleInput, grab: true } : idleInput;
+      }
+      if (drill.phase === 'attack') {
+        drill.time += dt;
+        const dummy = this.dogs[1];
+        if (drill.time > 0.3 && !dummy.attack && !this.projectiles.some((d) => d.owner === 1))
+          this.finishShieldPractice('miss');
+      }
+      return idleInput;
     }
     practiceInput(dt) {
       const drill = this.launchPractice;
@@ -2027,7 +2097,9 @@
             ? input2
             : this.launchPractice
               ? this.practiceInput(dt)
-              : idleInput;
+              : this.shieldPractice
+                ? this.shieldPracticeInput(dt, input1)
+                : idleInput;
       const inputs = [this.launchPractice?.phase === 'ready' ? idleInput : input1, second];
       for (const f of this.dogs) {
         if (f.ground !== -1) f.x += this.terrain[f.ground].x1 - old[f.ground].x1;
@@ -2041,7 +2113,7 @@
       this.resolveMelee();
       for (const f of this.dogs) if (f.attack?.landed) f.attack = null;
       this.updateDiscs(dt);
-      if (this.fetch && !this.launchPractice) this.updateBall(dt);
+      if (this.fetch && !this.launchPractice && !this.shieldPractice) this.updateBall(dt);
       const out = this.dogs.filter((f) => f.x < -115 || f.x > 1315 || f.y > 765 || f.y < -172);
       if (out.length) this.knockouts(out);
     }
@@ -2063,9 +2135,27 @@
       const was = f.prev;
       const pressed = (key) => input.tapped?.[key] || (input[key] && !was[key]);
       const grabX = input.grabX ?? input.x;
+      const previousAxis = f.shieldAxis;
+      f.shieldAxis = shieldDirection(grabX, input.y, previousAxis);
       f.prev = { ...input };
       if (f.respawning > 0) return;
       const floor = f.floorAction;
+      if (
+        f.ground >= 0 &&
+        !floor &&
+        !f.grip &&
+        !f.attack &&
+        !f.stun &&
+        !f.landingLag &&
+        f.charge < 0 &&
+        f.shieldDrop <= 1e-8
+      ) {
+        if (input.shield && f.shieldAxis && (pressed('shield') || f.shieldAxis !== previousAxis)) {
+          f.guardIntent = f.shieldAxis;
+        } else if (f.shield && was.shield && !input.shield && !f.guardIntent) {
+          f.guardIntent = 'release';
+        }
+      }
       if (floor?.type === 'downed') {
         if (floor.time + inputWindow >= 12 / 60) {
           if (pressed('attack')) floor.choice = { type: 'floorAttack', dir: 0 };
@@ -2235,11 +2325,36 @@
       if (f.index === 0 && this.launchPractice?.phase === 'flight') this.launchPractice.phase = 'landed';
       this.emit(event, { f, type, dir, point: { x: f.x, y: f.y } });
     }
+    beginGroundDodge(f, intent) {
+      const dir = intent === 'down' ? 0 : intent === 'left' ? -1 : 1;
+      const backRoll = !!dir && dir !== f.face;
+      const defense = f.kit.defense;
+      const [total, firstSafe, lastSafe] = dir ? defense.roll : defense.spot;
+      const type = dir ? 'shieldRoll' : 'spotDodge';
+      f.floorAction = {
+        type,
+        dir,
+        backRoll,
+        time: 0,
+        duration: (total + (backRoll ? 2 : 0)) / 60,
+        safeFrom: firstSafe / 60,
+        safeUntil: (lastSafe + 1) / 60,
+        distance: dir ? defense.rollDistance * (backRoll ? 0.9 : 1) : 0,
+      };
+      f.shield = false;
+      f.shieldDrop = f.guardBuffer = f.landTime = f.skidTime = f.chainWindow = f.vx = f.vy = 0;
+      f.command = f.run = null;
+      f.lastMove = dir ? 'Shield Roll' : 'Spot-dodge';
+      this.emit(type, { f, dir, point: { x: f.x, y: f.y } });
+    }
     advanceFloor(f, dt) {
       const a = f.floorAction;
       const before = a.time;
       a.time += dt;
-      if (a.time + 1e-8 >= floorFrames[a.type][1] / 60) f.invuln = 0;
+      if (a.safeFrom !== undefined) {
+        if (a.time + 1e-8 >= a.safeFrom && a.time < a.safeUntil - 1e-8)
+          f.invuln = Math.max(f.invuln, a.safeUntil - a.time - 1e-8);
+      } else if (a.time + 1e-8 >= floorFrames[a.type][1] / 60) f.invuln = 0;
       if (a.type === 'downed') {
         if (a.time + 1e-8 >= 12 / 60 && a.choice) this.beginFloorAction(f, a.choice.type, a.choice.dir);
         else if (a.time + 1e-8 >= a.duration) this.beginFloorAction(f, 'floorRise');
@@ -2251,7 +2366,7 @@
           return p * p * (3 - 2 * p);
         };
         const stage = this.terrain[f.ground];
-        const distance = (65 + f.stats.speed * 0.15) * (a.type === 'techRoll' ? 1 : 0.88);
+        const distance = a.distance ?? (65 + f.stats.speed * 0.15) * (a.type === 'techRoll' ? 1 : 0.88);
         f.x = clamp(
           f.x + a.dir * distance * (progress(a.time) - progress(before)),
           stage.x1 + 2,
@@ -2260,6 +2375,7 @@
       }
       if (f.attack?.floorAttack) f.attack.time = a.time;
       if (a.time + 1e-8 >= a.duration) {
+        if (a.type === 'shieldRoll') f.face = -a.dir;
         f.floorAction = f.attack = null;
       }
     }
@@ -2274,6 +2390,8 @@
         'hopWindow',
         'jumpBuffer',
         'guardBuffer',
+        'shieldDrop',
+        'parryFlash',
         'chainWindow',
         'landTime',
         'landingLag',
@@ -2292,6 +2410,8 @@
       }
       const jumpTap = f.jumpBuffer > 0;
       const attackTap = f.command?.type === 'attack';
+      const guardIntent = f.guardIntent;
+      f.guardIntent = '';
       if (f.floorAction) return this.advanceFloor(f, dt);
       if (f.tumble) {
         if (f.tumble.pending) this.releaseLaunch(f, input);
@@ -2356,7 +2476,21 @@
         const throwFollow = f.command?.type === 'grab' && current.grabCancel;
         if (chainTap || jumpFollow || ropeFollow || throwFollow) f.attack = null;
       }
-      const free = !f.attack && f.stun <= 0 && f.dodge <= 0 && f.landingLag <= 0;
+      const ready = !f.attack && f.stun <= 0 && f.dodge <= 0 && f.landingLag <= 0;
+      const shieldExit = jumpTap || f.command?.type === 'grab';
+      if (shieldExit || f.shieldDrop < 1e-8) f.shieldDrop = 0;
+      if (guardIntent && ready && grounded && !shieldExit && !f.shieldDrop && f.charge < 0) {
+        if (guardIntent === 'release') {
+          if (f.shield) {
+            f.shieldDrop = shieldDropTime;
+            f.vx = 0;
+          }
+        } else {
+          this.beginGroundDodge(f, guardIntent);
+          return this.advanceFloor(f, dt);
+        }
+      }
+      const free = ready && !f.shieldDrop;
       const direction = aimFor(input.y);
       f.shield = free && grounded && input.shield && f.charge < 0 && f.command?.type !== 'grab' && !jumpTap;
       if (grounded && input.shield) f.guardBuffer = 0;
@@ -2500,7 +2634,10 @@
       } else if (f.dodge <= 0 && !sliding) {
         const onFloor = f.ground >= 0;
         const planted =
-          f.shield || f.charge >= 0 || (onFloor && (f.attack?.tiltSide || f.attack?.ledgeAttack));
+          f.shield ||
+          f.shieldDrop > 0 ||
+          f.charge >= 0 ||
+          (onFloor && (f.attack?.tiltSide || f.attack?.ledgeAttack));
         const mobility = planted ? 0 : f.attack ? (onFloor ? 0.12 : 0.65) : 1;
         const steppingJab = f.attack?.step && f.attack.time < f.attack.start;
         const drag = onFloor ? (steppingJab ? 560 : 2630) : Math.abs(input.x) > 0.1 ? f.kit.airAccel : 155;
@@ -2619,6 +2756,8 @@
     }
     hangLedge(f, edge) {
       this.clearTumble(f, 'Ledge catch');
+      f.shieldDrop = f.parryFlash = 0;
+      f.guardIntent = '';
       f.run = null;
       f.throwBounce = null;
       f.face = edge.left ? 1 : -1;
@@ -2671,6 +2810,8 @@
         cancelCharge(f);
         f.tumble = f.floorAction = null;
         f.techBuffer = 0;
+        f.guardIntent = '';
+        f.shieldDrop = f.parryFlash = 0;
         f.run = null;
         f.attack = f.command = f.reaction = f.throwBounce = null;
         f.chainWindow = f.jumpBuffer = f.guardBuffer = f.reboundTime = f.landingLag = f.stun = 0;
@@ -2691,6 +2832,7 @@
         moveId: grip.grabId,
         grabStyle: attack.grabStyle,
       });
+      this.finishShieldPractice(target.index === 0 ? 'grabbed' : 'interrupted');
     }
     clearGrapple() {
       const grip = this.grapple;
@@ -3141,6 +3283,10 @@
         const area = this.attackArea(f);
         const rival = this.dogs[1 - f.index];
         const height = bodyHeight(rival);
+        const overlaps =
+          Math.abs(rival.x - area.x) <= area.rx + rival.stats.width &&
+          Math.abs(rival.y - height * 0.52 - area.y) <= area.ry + height * 0.4;
+        if (this.shieldPractice) this.recordPracticeDodge(rival, overlaps);
         if (attack.grabAttempt) {
           if (
             !this.grapple &&
@@ -3150,8 +3296,7 @@
             !rival.regrabLock &&
             rival.floorAction?.type !== 'downed' &&
             (attack.grabStyle === 'standing' || (rival.x - f.x) * f.face >= 0) &&
-            Math.abs(rival.x - area.x) <= area.rx + rival.stats.width &&
-            Math.abs(rival.y - height * 0.52 - area.y) <= area.ry + height * 0.4
+            overlaps
           )
             catches.push({ f, rival, attack });
           continue;
@@ -3180,11 +3325,7 @@
         if (attack.hitBeat === beatIndex || rival.invuln > 0 || rival.respawning > 0) continue;
         if (attack.dashAttack && (rival.x - f.x) * f.face < 0) continue;
         if (attack.edge && (rival.x - attack.edge.x) * f.face < 0) continue;
-        if (
-          Math.abs(rival.x - area.x) > area.rx + rival.stats.width ||
-          Math.abs(rival.y - height * 0.52 - area.y) > area.ry + height * 0.4
-        )
-          continue;
+        if (!overlaps) continue;
         attack.hitBeat = beatIndex;
         let sweet = null;
         if (beat.sweetSpot) {
@@ -3279,6 +3420,8 @@
     }
     breakShield(f) {
       f.shield = false;
+      f.shieldDrop = f.parryFlash = 0;
+      f.guardIntent = '';
       f.reaction = null;
       f.shieldHP = 0.24;
       f.stun = 0.85;
@@ -3295,10 +3438,45 @@
       target.damage += applied;
       return applied;
     }
+    parry(target, owner, face, point, projectile) {
+      const brace = projectile ? -face : Math.sign(owner.x - target.x) || -face;
+      target.shieldDrop = 0;
+      target.parryFlash = 12 / 60;
+      target.parryFace = brace || target.face;
+      target.lastMove = 'Parry';
+      if (!projectile) {
+        owner.attack = owner.floorAction = owner.run = owner.command = owner.reaction = null;
+        owner.jumpBuffer = owner.guardBuffer = owner.chainWindow = owner.hopWindow = owner.reboundTime = 0;
+        owner.vx *= 0.25;
+        owner.stun = Math.max(owner.stun, 14 / 60);
+      }
+      this.hitStop = Math.max(this.hitStop, 5 / 60);
+      this.emit('parry', {
+        f: target,
+        owner,
+        projectile,
+        face: target.parryFace,
+        point: point || {
+          x: target.x + target.parryFace * target.stats.width,
+          y: target.y - target.stats.height / 2,
+        },
+      });
+      if (target.index === 0) this.finishShieldPractice('parry');
+    }
     hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId) {
       if (target.invuln > 0 || target.respawning > 0) return false;
       if (target.grip?.target === target.index) return false;
       const grab = name === 'throw' || move?.commandGrab;
+      if (!grab && target.ground >= 0 && target.shieldDrop > shieldDropTime - parryWindow + 1e-8) {
+        this.parry(
+          target,
+          owner,
+          face,
+          point,
+          !!move?.projectile || name === 'ball' || name === 'disc' || name === 'snare',
+        );
+        return false;
+      }
       const stance = target.attack;
       if (
         !grab &&
@@ -3322,11 +3500,14 @@
         target.shieldHP -= damage * 0.027;
         if (target.shieldHP <= 0) this.breakShield(target);
         this.emit('block', { f: target, point, face });
+        if (target.index === 0) this.finishShieldPractice('block');
         return false;
       }
       if (target.grip) this.breakGrapple(false);
       target.throwBounce = null;
       target.floorAction = target.tumble = null;
+      target.guardIntent = '';
+      target.shieldDrop = target.parryFlash = 0;
       target.techBuffer = target.dodge = 0;
       this.dealDamage(target, damage, move?.preserveCombo);
       const speed = (base + target.damage * growth) / target.stats.weight;
@@ -3386,6 +3567,7 @@
       const hitFrames = target.tumble ? clamp(4 + Math.floor(launchSpeed / 180), 6, 9) : emphatic ? 4 : 2;
       this.hitStop = Math.max(this.hitStop, hitFrames / 60);
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic });
+      this.finishShieldPractice(target.index === 0 ? 'hit' : 'interrupted');
       return true;
     }
     updateDiscs(dt) {
@@ -3417,13 +3599,12 @@
           const face = Math.sign(d.vx);
           d.x += face * step;
           d.rangeLeft -= step;
-          if (
-            !target.invuln &&
-            !target.respawning &&
+          const overlaps =
             Math.abs(target.x - d.x) <= target.stats.width + 15 &&
             d.y >= target.y - height - 5 &&
-            d.y <= target.y + 5
-          ) {
+            d.y <= target.y + 5;
+          if (this.shieldPractice && overlaps) this.recordPracticeDodge(target, true);
+          if (!target.invuln && !target.respawning && overlaps) {
             impact(face);
             return false;
           }
@@ -3610,6 +3791,50 @@
         });
       out.forEach((f) => this.spawn(f, true));
     }
+    cpuGuard(f, foe) {
+      if (f.ground < 0 || f.attack || f.stun || f.charge >= 0 || f.dodge || f.landingLag) return null;
+      if (f.shieldDrop > 1e-8) return idleInput;
+      const dx = foe.x - f.x;
+      if (f.parryFlash > 0 && foe.stun > 0 && Math.abs(dx) <= f.stats.reach + 15)
+        return { ...idleInput, x: Math.sign(dx), tapped: { attack: true } };
+      const a = foe.attack;
+      if (!a?.box || !a.moveId || a.time >= a.start + a.active || a.pummel || a.throwSide) return null;
+      const wait = a.start - a.time;
+      const [x, y, rx, ry] = a.box;
+      const contact = foe.x + foe.vx * Math.max(0, wait) + foe.face * x;
+      if (
+        Math.abs(f.x - contact) > rx + f.stats.width + 12 ||
+        Math.abs(f.y - f.stats.height * 0.52 - foe.y - y) > ry + f.stats.height * 0.4 + 6
+      )
+        return null;
+      const brain = this.bot;
+      if (brain.guardRead?.attack !== a) {
+        const grab = a.grabAttempt || a.commandGrab;
+        const chance = this.random();
+        const choice = chance < 0.3 ? (grab ? 'spot' : 'parry') : chance < 0.47 ? 'roll' : null;
+        brain.guardRead = { attack: a, choice, used: false };
+      }
+      const read = brain.guardRead;
+      if (read.used || !read.choice) return null;
+      brain.hold = brain.guard = 0;
+      const dodge = read.choice === 'spot' ? f.kit.defense.spot : f.kit.defense.roll;
+      if (
+        wait > (read.choice === 'parry' ? 3 / 60 : (dodge[1] + 2) / 60) ||
+        (read.choice === 'parry' && !f.shield)
+      )
+        return { ...idleInput, shield: true };
+      read.used = true;
+      if (read.choice === 'parry') return idleInput;
+      if (read.choice === 'spot') return { ...idleInput, shield: true, y: 1 };
+      const p = this.terrain[f.ground];
+      const away = -Math.sign(dx) || -f.face;
+      const destination = f.x + away * f.kit.defense.rollDistance;
+      return {
+        ...idleInput,
+        shield: true,
+        x: destination > p.x1 + 5 && destination < p.x2 - 5 ? away : -away,
+      };
+    }
     cpu(dt) {
       const f = this.dogs[1],
         foe = this.dogs[0],
@@ -3752,6 +3977,8 @@
         result.smash = f.charge < brain.smashHold;
         return result;
       }
+      const defense = this.cpuGuard(f, foe);
+      if (defense) return defense;
       if (
         under &&
         f.ground >= 0 &&
@@ -3905,6 +4132,7 @@
       if (f.ground < 0 && foe.y > f.y + 90 && !unsafe) result.y = 1;
       result.attack = brain.hold > 0;
       result.shield = brain.guard > 0;
+      if (result.shield) result.x = result.y = 0;
       if (brain.hop) {
         brain.hopDelay -= dt;
         if (f.stun || f.respawning || brain.hopDelay < -0.15) brain.hop = null;

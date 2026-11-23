@@ -272,6 +272,11 @@
         tone(detail.name === 'jab2' ? 620 : 425, 175, 0.034, 0, 'square', 0.036);
         tone(detail.name === 'jab2' ? 155 : 122, 54, 0.069, 0, 'triangle', 0.095);
       }
+    } else if (name === 'parry') {
+      tone(1280, 1640, 0.055, 0, 'square', 0.053);
+      tone(760, 1260, 0.14, 0.035, 'triangle', 0.085);
+    } else if (name === 'shieldRoll' || name === 'spotDodge') {
+      tone(name === 'shieldRoll' ? 195 : 315, 76, name === 'shieldRoll' ? 0.1 : 0.055, 0, 'triangle', 0.05);
     } else if (name === 'tech') {
       tone(560, 890, 0.055, 0, 'triangle', 0.075);
       tone(910, 1250, 0.07, 0.043, 'square', 0.026);
@@ -566,6 +571,7 @@
       'controls',
       'Controls',
       table +
+        '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
         '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
@@ -698,8 +704,45 @@
       '</div>';
     let contents;
     if (section === 'defense') {
+      const { roll, spot } = kit.defense;
+      const groundRows = [
+        [
+          'shieldRoll',
+          'Shield + Left or Right',
+          'Shield Roll',
+          'Roll through a rival, or roll backward to retreat. ' +
+            f.name +
+            ' finishes a forward roll in ' +
+            roll[0] +
+            ' frames. A backward roll is shorter and takes two more frames.',
+        ],
+        [
+          'spotDodge',
+          'Shield + Down',
+          'Spot-dodge',
+          'Evade in place, including grabs. ' +
+            f.name +
+            ' is untouchable on frames ' +
+            spot[1] +
+            '–' +
+            spot[2] +
+            ' and finishes on frame ' +
+            spot[0] +
+            '.',
+        ],
+        [
+          'parry',
+          'Release Shield just before contact',
+          'Parry',
+          'Release within five frames of a strike to take no damage. Counter a melee attacker immediately. A projectile can be parried from a distance.',
+        ],
+      ]
+        .map(([key, input, label, hint]) => guideMoveRow({ label, hint }, input, key, 'defense'))
+        .join('');
       contents =
-        '<p class="recovery-note">Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again. Shield is L for P1, Slash for P2, or either bumper on a gamepad.</p><ul class="move-rows guide-defense">' +
+        '<p class="recovery-note">Shield is L for P1, Slash for P2, either bumper on a gamepad, or Shield on touch.</p><h3 class="guide-section">On the ground</h3><p>Choose <strong>Training → Shield practice</strong> to face a strike or a grab.</p><ul class="move-rows guide-shield">' +
+        groundRows +
+        '</ul><h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><ul class="move-rows guide-defense">' +
         rows +
         '</ul>';
     } else if (section === 'throws') {
@@ -808,7 +851,10 @@
     if (key === hudKey) return;
     hudKey = key;
     const lastMove = $('training-move');
-    lastMove.hidden = world.mode !== 'training' || !shownMove;
+    lastMove.hidden =
+      world.mode !== 'training' ||
+      !shownMove ||
+      (shownMove === 'Parry' && world.shieldPractice?.outcome === 'parry');
     if (!lastMove.hidden) lastMove.textContent = shownMove;
     const readout = $('training-combo');
     readout.hidden = world.mode !== 'training' || combo.hits === 0;
@@ -856,6 +902,7 @@
     drillWaiting = false;
     practiceSide = 'left';
     $('launch-status').hidden = true;
+    $('shield-status').hidden = $('shield-patterns').hidden = true;
     $('recovery-tip').hidden = true;
     document.body.classList.add('playing');
     document.body.classList.toggle('training-active', settings.mode === 'training');
@@ -866,6 +913,7 @@
       view.event(name, e);
       sound(name, e);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
+      if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (name === 'ko') announce(e.f.stats.name + ' knocked out');
       if (name === 'ledge' && drillSide && e.f.index === 0)
         $('recovery-tip').textContent =
@@ -991,6 +1039,36 @@
   let drillSide = null,
     drillWaiting = false,
     practiceSide = 'left';
+  function shieldFeedback(name, e) {
+    const result = $('shield-status');
+    const tip = $('recovery-tip');
+    const attackName =
+      e.pattern === 'grab'
+        ? grabs[world.dogs[1].kit.grab].label
+        : smashes[world.dogs[1].kit.smashes.side].label;
+    if (name === 'shieldCue') {
+      result.dataset.result = e.phase;
+      result.textContent = e.phase === 'windup' ? attackName + ' coming' : attackName;
+      return;
+    }
+    result.dataset.result = e.outcome;
+    const feedback = {
+      parry: ['Parry', 'Shield released on time. After a melee parry, tap Attack to counter.'],
+      block: ['Blocked', 'You held Shield through contact. Try releasing it just before the hit.'],
+      hit: ['Hit', 'Try holding Shield through the windup, then release as the strike reaches you.'],
+      grabbed: ['Grabbed', 'Hold Shield, then tap Down just before the grab reaches you.'],
+      interrupted: ['Interrupted', 'You caught the dummy first. Choose Strike or Grab to retry.'],
+      miss: [
+        e.lastDodge === 'shieldRoll'
+          ? 'Rolled clear'
+          : e.lastDodge === 'spotDodge'
+            ? 'Spot-dodged'
+            : 'Missed',
+        'Choose Strike or Grab to try another exchange.',
+      ],
+    };
+    [result.textContent, tip.textContent] = feedback[e.outcome];
+  }
   function launchFeedback(name, e) {
     const result = $('launch-status'),
       tip = $('recovery-tip');
@@ -1021,20 +1099,32 @@
     result.textContent = label;
     tip.textContent = message;
   }
-  function drill(ledge, fromHang = false) {
+  function drill(ledge, fromHang = false, pattern = 'strike') {
     if (!world) return;
     const launch = ledge === 'launch';
-    drillSide = launch ? null : ledge || null;
+    const shield = ledge === 'shield';
+    drillSide = launch || shield ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
     if (launch) world.resetLaunchPractice();
+    else if (shield) world.resetShieldPractice(pattern);
     else world.resetTraining(ledge, fromHang);
     const player = world.dogs[0];
     const result = $('launch-status');
     result.hidden = !launch;
+    $('shield-status').hidden = $('shield-patterns').hidden = !shield;
     let message = 'Positions reset.';
-    if (launch) {
+    if (shield) {
+      $('shield-status').dataset.result = 'ready';
+      $('shield-status').textContent = 'Hold Shield to begin';
+      $('shield-strike').setAttribute('aria-pressed', String(pattern === 'strike'));
+      $('shield-grab').setAttribute('aria-pressed', String(pattern === 'grab'));
+      message =
+        pattern === 'strike'
+          ? 'Raise Shield to start. Roll through the strike, or release Shield as it lands to parry.'
+          : 'Raise Shield to start. Tap Down just before the grab to spot-dodge, or tap a side to roll.';
+    } else if (launch) {
       result.dataset.result = 'ready';
       result.textContent = 'Up throw incoming';
       message =
@@ -1055,6 +1145,9 @@
   $('ledge-right').onclick = () => drill('right');
   $('ledge-attack-training').onclick = () => drill(practiceSide, true);
   $('launch-training').onclick = () => drill('launch');
+  $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'strike');
+  $('shield-strike').onclick = () => drill('shield', false, 'strike');
+  $('shield-grab').onclick = () => drill('shield', false, 'grab');
   const keys = [
     {
       left: 'KeyA',

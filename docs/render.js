@@ -8,6 +8,8 @@
   const gold = '#f4c76a';
   const lilac = '#c5a9d3';
   const mint = '#9fe4d7';
+  const parryDuration = 12 / 60;
+  const shieldDropDuration = 10 / 60;
   const chargeColors = { pip: '#ee9775', brisket: gold, noodle: '#e5b47b', clover: lilac };
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const snap = (value, cell = 3) => Math.round(value / cell) * cell;
@@ -240,6 +242,7 @@
       const windup = f.kit.tilts?.[f.chargeDirection] || f.kit.ground[f.chainWindow > 0 ? f.chainNext : 0];
       return [windup, Math.min(0.21, 0.04 + 2 * f.charge)];
     }
+    if (f.parryFlash > 0 && f.ground >= 0) return ['parry', clamp(1 - f.parryFlash / parryDuration, 0, 1)];
     if (f.ledge) return ['ledge', f.ledgeTime];
     if (f.reboundTime > 0) return [f.reboundPose, 0.56 + 0.4 * (1 - f.reboundTime / 0.14)];
     if (f.ground < 0) {
@@ -1142,6 +1145,43 @@
     if (!reduced.matches) pixelLine(ctx, end - 17, -6, end - 23, -9, '#ddc29a', 2, 2);
     ctx.restore();
   }
+  function shieldSlip(ctx, f) {
+    const a = f.floorAction;
+    if (a?.type !== 'shieldRoll' && a?.type !== 'spotDodge') return;
+    if (a.time + 1e-8 < a.safeFrom || a.time + 1e-8 >= a.safeUntil) return;
+    const p = reduced.matches ? 0.45 : (a.time - a.safeFrom) / (a.safeUntil - a.safeFrom);
+    const edge = f.stats.width + 5;
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y, 2));
+    ctx.scale(a.dir || f.face, 1);
+    if (a.type === 'shieldRoll') {
+      // A short crescent follows the rolling shoulder. Its open end points along travel.
+      const skid = snap(5 * Math.sin(Math.PI * p), 2);
+      arc(ctx, -8, -21, edge + skid, 21, 2.82, 3.82, '#b0b5c5', 3);
+      pixelLine(ctx, -edge - skid - 21, -2, -edge - 3, -2, '#d4b38d', 3, 2);
+      if (!reduced.matches) pixelLine(ctx, -edge - skid - 14, -14, -edge - 8, -13, '#a093ac', 2, 2);
+    } else {
+      // The foot stays planted. Upright slip marks sit where the muzzle just was.
+      const high = -f.stats.height * 0.81;
+      const x = edge + 6;
+      pixelLine(ctx, x - 4, high - 2, x, high + 6, '#c3b7cf', 3, 2);
+      pixelLine(ctx, x, high + 6, x, high + 16, '#c3b7cf', 3, 2);
+      if (!reduced.matches) pixelLine(ctx, x + 6, high + 4, x + 6, high + 11, '#90889e', 2, 2);
+      pixelLine(ctx, -7, -1, 1, -1, '#c4ac91', 2, 2);
+    }
+    ctx.restore();
+  }
+  function fallingShield(ctx, f) {
+    const left = clamp(f.shieldDrop / shieldDropDuration, 0, 1);
+    const radius = (34 + f.shieldHP * 15) * (reduced.matches ? 0.76 : 0.57 + 0.36 * left);
+    ctx.save();
+    ctx.translate(snap(f.x, 2), snap(f.y - 36, 2));
+    ctx.scale(f.face, 1);
+    ctx.globalAlpha *= left * 0.55;
+    arc(ctx, 0, 0, radius, radius, 0.22, 0.83, team[f.index], 2);
+    if (!reduced.matches) arc(ctx, 0, 0, radius, radius, 2.3, 2.66, team[f.index], 2);
+    ctx.restore();
+  }
   function swing(ctx, f, floor) {
     const a = f.attack;
     // A pummel lands only through its shared grip and has no free melee hitbox.
@@ -1200,6 +1240,7 @@
   function drawFighter(ctx, f, world, time) {
     shadow(ctx, f, world.terrain);
     floorRollTrack(ctx, f);
+    shieldSlip(ctx, f);
     movingGrabFeet(ctx, f);
     dashFootwork(ctx, f);
     if (f.respawning > 0) oval(ctx, f.x, f.y - 3, 42, 5, team[f.index]);
@@ -1217,13 +1258,20 @@
       face = f.reaction?.face || f.face;
       spriteTime = reduced.matches ? 0.21 : f.tumble.time;
     } else if (f.floorAction) {
-      if (state === 'techRoll') face = f.floorAction.dir || f.face;
+      if (state === 'techRoll' || state === 'shieldRoll') face = f.floorAction.dir || f.face;
       spriteTime = reduced.matches ? 0 : f.floorAction.time;
-    } else if (state === 'skid') face = f.skidFace;
+    } else if (state === 'parry') face = f.parryFace || f.face;
+    else if (state === 'skid') face = f.skidFace;
     else if (f.stun > 0 && f.reaction) face = f.reaction.face;
     else if (f.smashCharge) face = f.smashCharge.face;
     ctx.save();
-    if (f.invuln > 0.01 && !f.floorAction && !reduced.matches && Math.floor(time * 12) % 2)
+    if (
+      f.invuln > 0.01 &&
+      !f.floorAction &&
+      !(f.parryFlash > 0) &&
+      !reduced.matches &&
+      Math.floor(time * 12) % 2
+    )
       ctx.globalAlpha = 0.53;
     window.DogArt.draw(ctx, f.kind, snap(f.x, 2), snap(f.y, 2), {
       face,
@@ -1231,6 +1279,7 @@
       time: spriteTime,
       pose: state,
       phase,
+      backRoll: state === 'shieldRoll' && f.floorAction.backRoll,
     });
     ctx.restore();
     swing(ctx, f, world.terrain[f.ground]);
@@ -1239,7 +1288,15 @@
       oval(ctx, f.x, f.y - 36, r, r, team[f.index] + '36');
       arc(ctx, f.x, f.y - 36, r, r, 0, Math.PI * 2, team[f.index], 4);
       arc(ctx, f.x, f.y - 36, r - 5, r - 5, 3.75, 4.42, cream);
-    }
+    } else if (
+      f.shieldDrop > 0 &&
+      !(f.parryFlash > 0) &&
+      !f.floorAction &&
+      !f.attack &&
+      !f.grip &&
+      f.ground >= 0
+    )
+      fallingShield(ctx, f);
   }
   const ballPixels = [
     '....kkk....',
@@ -1349,10 +1406,44 @@
         pixelLine(ctx, edge - sign * 5, -2, edge, -7, '#e2bc8d', 3, 2);
         if (!reduced.matches) pixelLine(ctx, edge + sign * 4, -8, edge + sign * 7, -11, '#cfaa83', 2, 2);
       }
+    } else if (e.type === 'spotStep') {
+      for (const sign of [-1, 1]) pixelLine(ctx, sign * 8, -1, sign * (spread - 2), -3, '#b6a49e', 2, 2);
     } else {
       ctx.scale(e.face, 1);
       pixelLine(ctx, -13, -2, -spread, -2, '#d6b58b', 2, 2);
       if (!reduced.matches) pixelLine(ctx, -spread - 2, -4, -spread - 5, -7, '#c39875', 2, 2);
+    }
+    ctx.restore();
+  }
+  function parryContact(ctx, x, y, face, projectile, p) {
+    ctx.save();
+    ctx.translate(snap(x, 2), snap(y, 2));
+    ctx.scale(face || 1, 1);
+    ctx.globalAlpha *= Math.min(1, (1 - p) * 2.3);
+    const shift = reduced.matches ? 0 : snap(6 * p, 2);
+    // The gold diamond marks the collision. The aqua pieces glance back toward the incoming blow.
+    const widths = [0, 1, 1, 2, 2, 4, 7, 4, 2, 2, 1, 1, 0];
+    for (let row = 0; row < widths.length; row++) {
+      const w = widths[row] * 2;
+      const y = (row - 6) * 2;
+      ctx.fillStyle = ink;
+      ctx.fillRect(-w - 2, y, w * 2 + 4, 2);
+      if (!w) continue;
+      ctx.fillStyle = gold;
+      ctx.fillRect(-w, y, w * 2, 2);
+      if (row >= 2 && row <= 9) {
+        ctx.fillStyle = cream;
+        const core = Math.max(1, w - 3);
+        ctx.fillRect(-core - 1, y, core * 2, 2);
+      }
+    }
+    for (const [color, width] of [
+      [ink, 4],
+      [mint, 2],
+    ]) {
+      pixelLine(ctx, 8 + shift, -8, 15 + shift, -16, color, width, 2);
+      if (!reduced.matches) pixelLine(ctx, 9 + shift, 7, 15 + shift, 12, color, width, 2);
+      if (projectile) pixelLine(ctx, 17 + shift, -2, 27 + shift, -4, color, width, 2);
     }
     ctx.restore();
   }
@@ -1433,10 +1524,11 @@
   }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
-    if (e.type === 'techLand' || e.type === 'knockDust' || e.type === 'riseScuff') {
+    if (e.type === 'techLand' || e.type === 'knockDust' || e.type === 'riseScuff' || e.type === 'spotStep') {
       landingEffect(ctx, e, p);
       return;
     }
+    if (e.type === 'parry') return parryContact(ctx, e.x, e.y, e.face, e.projectile, p);
     if (e.type === 'pummel') {
       pummelContact(ctx, e.x, e.y, e.kind, e.face, e.count, p);
       return;
@@ -1524,6 +1616,23 @@
         this.add('knockDust', e.point.x, e.point.y, cream, 0.24, 17 + f.stats.width * 0.45);
       if (name === 'getup' && (e.type === 'floorRise' || e.type === 'getupRoll'))
         this.add('riseScuff', e.point.x, e.point.y, cream, 0.14, 23, e.dir || f.face);
+      if (name === 'shieldRoll' || name === 'spotDodge') {
+        const roll = name === 'shieldRoll';
+        this.add(
+          roll ? 'riseScuff' : 'spotStep',
+          e.point.x,
+          e.point.y,
+          cream,
+          0.12,
+          roll ? 23 : 14,
+          e.dir || f.face,
+          { behind: true },
+        );
+      }
+      if (name === 'parry')
+        this.add('parry', e.point.x, e.point.y, gold, parryDuration, 12, e.face, {
+          projectile: e.projectile,
+        });
       if (name === 'jump' || name === 'recover')
         this.add('ring', f.x, f.y, name === 'jump' ? cream : team[f.index], 0.23, 21);
       if (name === 'hit' || name === 'block') {
@@ -1651,7 +1760,7 @@
       drawBall(ctx, world.ball, world.time);
       for (const e of this.effects) {
         if (!e.behind) drawEffect(ctx, e);
-        e.life -= dt;
+        if (e.type !== 'parry' || !(world.hitStop > 0)) e.life -= dt;
       }
       this.effects = this.effects.filter((e) => e.life > 0);
       ctx.restore();
@@ -1825,14 +1934,37 @@
         f.floorAction = { type: 'techRoll', time: phase, duration: 1, dir: 1 };
         landingEffect(ctx, { type: 'techLand', x: -25, y: 0, size: 11, dir: 1 }, 0.3);
         floorRollTrack(ctx, f);
-      } else {
+      } else if (side === 'floorAttack') {
         const move = window.DogFight.moves.getupSweep;
         f.attack = { ...move, time: move.start + move.active * 0.32, moveId: 'getupSweep' };
         phase = attackPhase(f.attack);
+      } else if (side === 'shieldRoll' || side === 'spotDodge') {
+        const rolling = side === 'shieldRoll';
+        const [total, first, last] = window.DogFight.kits[kind].defense[rolling ? 'roll' : 'spot'];
+        const tick = Math.round(first + (last - first) * (rolling ? 0.63 : 0.57));
+        phase = tick / total;
+        f.floorAction = {
+          type: side,
+          time: tick / 60,
+          duration: total / 60,
+          dir: rolling ? 1 : 0,
+          safeFrom: first / 60,
+          safeUntil: (last + 1) / 60,
+        };
+        shieldSlip(ctx, f);
+      } else if (side === 'parry') {
+        phase = 0.28;
       }
     }
     window.DogArt.draw(ctx, kind, 0, 0, { face: 1, scale: 1, time, pose: side, phase });
     if (f.attack) floorSweep(ctx, f, f.attack);
+    if (side === 'parry') {
+      const [x, y] =
+        kind === 'clover'
+          ? window.DogArt.itemPoint(kind, side, phase)
+          : window.DogArt.pawPoint(kind, side, phase);
+      parryContact(ctx, x + 8, y - 3, 1, false, phase);
+    }
   }
   function drawMoveThumbnail(canvas, kind, side, category = 'air') {
     const target = canvas.getContext('2d');

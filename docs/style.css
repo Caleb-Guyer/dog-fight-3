@@ -661,7 +661,8 @@ body.playing .tools .utility,
 #training-move {
   color: var(--gold);
 }
-#launch-status[data-result='tech'] {
+#launch-status[data-result='tech'],
+#shield-status[data-result='parry'] {
   border-left-color: var(--aqua);
   color: var(--aqua);
 }
@@ -782,6 +783,15 @@ kbd {
 .training-tools .utility {
   min-height: 30px;
   font-size: 13px;
+}
+#shield-patterns {
+  display: inline-flex;
+  gap: 2px;
+}
+#shield-patterns [aria-pressed='true'] {
+  background: var(--gold);
+  border-color: var(--ink);
+  color: var(--ink);
 }
 .touch-pad {
   display: none;

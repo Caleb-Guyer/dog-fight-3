@@ -33,7 +33,7 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 | Attack | J | Comma | X |
 | Smash | I | N | RT or right stick |
 | Special | K | Period | B |
-| Shield, air dodge, or landing tech | L | Slash | LB or RB |
+| Shield, dodge, parry, or landing tech | L | Slash | LB or RB |
 | Grab | U | M | Y |
 | Pause | Esc | Esc | Start |
 
@@ -44,6 +44,18 @@ Tap Attack with no direction to start your dog's jab combo. On the ground, aim l
 In midair, press Attack alone or aim forward, back, up, or down as you press it. Forward follows the direction your dog faces. You can drift backward and attack behind you. A short hop gives quick aerials time to connect. A heavy aerial takes longer to recover when it lands.
 
 In local versus, a single controller plays P2 alongside the P1 keyboard. With two controllers, the first plays P1 and the second plays P2.
+
+## Grounded shield defense
+
+Hold **Shield** on the ground to block. On a touchscreen, keep one thumb on Shield and use the other on the direction pad.
+
+- **Shield + Left or Right** rolls in that direction, even through a rival. A forward roll turns you around to face the dog you passed. A backward roll keeps your facing, travels a little less, and takes two extra frames to recover.
+- **Shield + Down** spot-dodges in place. Time the duck to slip a grab and stay close enough to answer. Both dodges have a brief invincible stretch between their vulnerable start and recovery. Keep holding Shield after the dodge to block again.
+- **Release Shield just before a strike** to parry. The first five frames of the release can catch the hit. A melee parry interrupts the attacker and gives you an opening to counter. A projectile parry absorbs the impact at your position. Grabs can catch a blocking dog or a dog trying to parry.
+
+Pip finishes a forward roll fastest at 24 frames. Brisket covers the least ground and starts more slowly, but has the longest invincibility. Noodle travels farthest. Clover recovers from her spot-dodge in 20 frames and can answer with Disc Tap. All timings use 60 game frames per second.
+
+In **Training → Shield practice**, choose **Strike** or **Grab**, then raise Shield. The selected dummy winds up its own side smash or standing grab. Choose the same pattern again to retry the timing. **Move list → Defense** shows each dog's roll, spot-dodge, and parry.
 
 ## Launch defense
 
