@@ -92,6 +92,7 @@
     pip: {
       ground: ['pipJab', 'pipCross', 'pipHeel'],
       grab: 'pipCollarTag',
+      pummel: 'pipPawDrum',
       throws: { forward: 'pipKickoff', back: 'pipSlipTurn', up: 'pipPopFly', down: 'pipTumbleTrip' },
       smashes: { side: 'pipBoltKick', up: 'pipScissors', down: 'pipDustDevil' },
       specials: { neutral: 'pipBark', side: 'pipPounce', up: 'pipHopper', down: 'pipSlide' },
@@ -113,6 +114,7 @@
     brisket: {
       ground: ['brisketCheck', 'brisketLift'],
       grab: 'brisketBearHug',
+      pummel: 'brisketBearSqueeze',
       throws: {
         forward: 'brisketYardHeave',
         back: 'brisketSuplex',
@@ -145,6 +147,7 @@
     noodle: {
       ground: ['noodleTrip', 'noodleReel', 'noodleSnap'],
       grab: 'noodleLeadLoop',
+      pummel: 'noodleKnotTug',
       throws: {
         forward: 'noodleSlingCast',
         back: 'noodleReverseReel',
@@ -171,6 +174,7 @@
     clover: {
       ground: ['cloverTap', 'cloverSet'],
       grab: 'cloverDiscHook',
+      pummel: 'cloverRimTap',
       throws: {
         forward: 'cloverForehandPass',
         back: 'cloverBankPass',
@@ -978,6 +982,41 @@
       step: 285,
     },
   };
+  // Recoil offsets the captive's chest from this dog's usual grip until the strike recovers.
+  const pummels = {
+    pipPawDrum: {
+      label: 'Paw Drum',
+      hint: 'Keep one paw on the collar and drum with the other. A fast 1% tap.',
+      frames: [2, 2, 6],
+      dmg: 1,
+      recoil: [7, -2],
+      hitPause: 1,
+    },
+    brisketBearSqueeze: {
+      label: 'Bear Squeeze',
+      hint: 'Lift and squeeze for 4%. The long windup gives the rival time to wriggle free.',
+      frames: [7, 4, 14],
+      dmg: 4,
+      recoil: [-5, -12],
+      hitPause: 2,
+    },
+    noodleKnotTug: {
+      label: 'Knot Tug',
+      hint: 'Give the loop a short tug. Each pull draws the rival toward you for 2%.',
+      frames: [4, 3, 8],
+      dmg: 2,
+      recoil: [-19, -4],
+      hitPause: 1,
+    },
+    cloverRimTap: {
+      label: 'Rim Tap',
+      hint: 'Flick the disc rim under the collar for 3%, then settle back into the hold.',
+      frames: [5, 3, 11],
+      dmg: 3,
+      recoil: [4, -13],
+      hitPause: 1,
+    },
+  };
   const throws = {
     pipKickoff: {
       label: 'Kickoff',
@@ -1171,7 +1210,7 @@
       bounce: { lift: 125, scale: 0.15, carry: 1.05 },
     },
   };
-  for (const move of [moves, specials, smashes, grabs, throws].flatMap(Object.values)) {
+  for (const move of [moves, specials, smashes, grabs, pummels, throws].flatMap(Object.values)) {
     const [startup, active, recovery] = move.frames;
     move.start = startup / 60;
     move.active = active / 60;
@@ -1270,7 +1309,12 @@
     f.chainNext = 0;
     f.chainWindow = 0;
     const move = moveId
-      ? moves[moveId] || specials[moveId] || smashes[moveId] || grabs[moveId] || throws[moveId]
+      ? moves[moveId] ||
+        specials[moveId] ||
+        smashes[moveId] ||
+        grabs[moveId] ||
+        pummels[moveId] ||
+        throws[moveId]
       : attacks[name];
     f.attack = { name, moveId, aim, power, time: 0, hitBeat: -1, ballHit: false, fired: false, ...move };
     const common = {
@@ -1473,9 +1517,10 @@
         if (grip) {
           if (grip.phase !== 'throw') {
             if (f.index === grip.owner) {
-              if (!grip.pending && (changed || pressed('grab'))) {
+              // One tap can be buffered. A throw always takes priority over another pummel.
+              if ((!grip.pending || grip.pending === 'pummel') && (changed || pressed('grab'))) {
                 grip.pending = changed ? direction : 'forward';
-              }
+              } else if (!grip.pending && pressed('attack')) grip.pending = 'pummel';
             } else if (['jump', 'attack', 'smash', 'special', 'shield', 'grab'].some(pressed)) {
               grip.remaining -= 0.135;
             }
@@ -1869,6 +1914,7 @@
         reelTime: spec.reel + extra,
         remaining: spec.hold + Math.min(0.75, target.damage * 0.005),
         pending: attack.queuedThrow || null,
+        pummelCount: 0,
         direction: null,
         throwId: null,
         comboLink: target.stun > 0,
@@ -1924,6 +1970,39 @@
       target.y = grip.anchor.y + target.stats.height * 0.52;
       target.face = (x < 0 ? 1 : -1) * grip.face;
     }
+    advancePummel(grip, owner, target, rest) {
+      const attack = owner.attack;
+      attack.time = grip.time;
+      const activeEnd = attack.start + attack.active;
+      const pressure =
+        attack.time < attack.start
+          ? attack.time / attack.start
+          : 1 - clamp((attack.time - activeEnd) / (attack.end - activeEnd), 0, 1);
+      this.positionCaptive(grip, rest, attack.contact, pressure);
+      if (!attack.connected && attack.time + 1e-8 >= attack.start) {
+        attack.connected = true;
+        const damage = this.dealDamage(target, attack.dmg, grip.comboLink);
+        grip.comboLink = true;
+        grip.pummelCount++;
+        this.hitStop = Math.max(this.hitStop, attack.hitPause / 60);
+        this.emit('pummelHit', {
+          f: owner,
+          target,
+          moveId: attack.moveId,
+          face: grip.face,
+          point: { ...grip.anchor },
+          count: grip.pummelCount,
+          damage,
+        });
+      }
+      // A throw can take over after contact. Start its windup from the captive's actual position.
+      if (grip.pending && grip.pending !== 'pummel' && attack.time + 1e-8 >= activeEnd)
+        grip.throwFrom = [(grip.anchor.x - owner.x) * grip.face, grip.anchor.y - owner.y];
+      else if (attack.time + 1e-8 < attack.end) return;
+      owner.attack = null;
+      grip.phase = 'hold';
+      grip.time = 0;
+    }
     advanceGrapple(dt) {
       const grip = this.grapple;
       const owner = this.dogs[grip.owner],
@@ -1951,11 +2030,27 @@
         grip.phase = 'hold';
         grip.time = 0;
       }
-      if (grip.phase === 'hold') {
-        this.positionCaptive(grip, grab.grip, grab.grip, 1);
+      if (grip.phase !== 'throw') {
         grip.remaining -= dt;
         if (grip.remaining <= 0) return this.breakGrapple(true);
+      }
+      if (grip.phase === 'pummel') {
+        this.advancePummel(grip, owner, target, grab.grip);
+        if (grip.phase === 'pummel') return;
+      }
+      if (grip.phase === 'hold') {
+        if (!grip.throwFrom) this.positionCaptive(grip, grab.grip, grab.grip, 1);
         if (!grip.pending) return;
+        if (grip.pending === 'pummel') {
+          grip.phase = 'pummel';
+          grip.time = 0;
+          grip.pending = null;
+          beginAttack(owner, 'pummel', 0, 0, owner.kit.pummel);
+          const attack = owner.attack;
+          attack.pummel = true;
+          attack.contact = [grab.grip[0] + attack.recoil[0], grab.grip[1] + attack.recoil[1]];
+          return;
+        }
         grip.phase = 'throw';
         grip.time = 0;
         grip.direction = grip.pending;
@@ -1972,7 +2067,7 @@
       const attack = owner.attack;
       attack.time = grip.time;
       const t = attack.time / attack.start;
-      if (t < 0.5) this.positionCaptive(grip, grab.grip, attack.via, t * 2);
+      if (t < 0.5) this.positionCaptive(grip, grip.throwFrom || grab.grip, attack.via, t * 2);
       else this.positionCaptive(grip, attack.via, attack.release, t * 2 - 1);
       if (attack.time + 1e-8 < attack.start) return;
       this.clearGrapple();
@@ -2273,6 +2368,7 @@
         const attack = f.attack;
         if (
           !attack ||
+          attack.pummel ||
           attack.throwSide ||
           attack.projectile ||
           attack.anchor ||
@@ -2426,6 +2522,16 @@
       cancelCharge(f);
       this.emit('break', { f });
     }
+    dealDamage(target, damage, preserveCombo) {
+      const applied = Math.min(damage, 999 - target.damage);
+      if (this.mode === 'training' && target.index === 1) {
+        if (target.stun <= 0 && !preserveCombo) this.lastCombo = { hits: 0, damage: 0 };
+        this.lastCombo.hits++;
+        this.lastCombo.damage += applied;
+      }
+      target.damage += applied;
+      return applied;
+    }
     hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId) {
       if (target.invuln > 0 || target.respawning > 0) return false;
       if (target.grip?.target === target.index) return false;
@@ -2455,14 +2561,9 @@
         this.emit('block', { f: target, point, face });
         return false;
       }
-      if (this.mode === 'training' && target.index === 1) {
-        if (target.stun <= 0 && !move?.preserveCombo) this.lastCombo = { hits: 0, damage: 0 };
-        this.lastCombo.hits++;
-        this.lastCombo.damage += Math.min(damage, 999 - target.damage);
-      }
       if (target.grip) this.breakGrapple(false);
       target.throwBounce = null;
-      target.damage = Math.min(999, target.damage + damage);
+      this.dealDamage(target, damage, move?.preserveCombo);
       const speed = (base + target.damage * growth) / target.stats.weight;
       if (move) {
         const angle = ((move.angle < 0 && target.ground >= 0 ? 46 : move.angle) * Math.PI) / 180;
@@ -2736,10 +2837,19 @@
         if (grip.phase === 'throw') return result;
         if (grip.target === f.index) {
           result.attack = Math.floor(this.time * 6) % 2 === 0;
-        } else if (grip.phase === 'hold' && grip.time >= 0.13 && !grip.pending) {
+        } else if (
+          grip.phase === 'hold' &&
+          !grip.pending &&
+          (grip.time >= 0.13 || grip.pummelCount || grip.remaining < 0.4)
+        ) {
           const floor = this.terrain[f.ground];
           const edge = floor && Math.min(f.x - floor.x1, floor.x2 - f.x) < 145;
           if (edge && foe.damage >= 40) result.x = f.x - floor.x1 < floor.x2 - f.x ? -1 : 1;
+          else if (
+            grip.pummelCount < (foe.damage >= 35 ? 2 : 1) &&
+            grip.remaining > pummels[f.kit.pummel].end + 0.32
+          )
+            result.attack = true;
           else if (foe.damage < 65 && (f.kind === 'clover' || f.kind === 'pip')) result.y = -1;
           else if (foe.damage < 55) result.y = 1;
           else result.x = grip.face;
@@ -2954,6 +3064,7 @@
     specials,
     smashes,
     grabs,
+    pummels,
     throws,
     smashChargeTime,
     smashPower,

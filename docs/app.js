@@ -1,7 +1,19 @@
 (() => {
   'use strict';
-  const { fighters, kits, moves, specials, smashes, grabs, throws, smashPower, arenas, Battle, idleInput } =
-    window.DogFight;
+  const {
+    fighters,
+    kits,
+    moves,
+    specials,
+    smashes,
+    grabs,
+    pummels,
+    throws,
+    smashPower,
+    arenas,
+    Battle,
+    idleInput,
+  } = window.DogFight;
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
   const $ = (id) => document.getElementById(id);
   const glyphs = {
@@ -264,6 +276,15 @@
       const pitch = { pip: 470, brisket: 130, noodle: 315, clover: 635 }[detail.f.kind];
       tone(pitch * 1.25, pitch, 0.052, 0, 'square', 0.035);
       tone(pitch, pitch * 0.8, 0.065, 0.01, 'triangle', 0.06);
+    } else if (name === 'pummelHit') {
+      const [start, end, wave] = {
+        pip: [410, 230, 'square'],
+        brisket: [145, 62, 'triangle'],
+        noodle: [320, 540, 'triangle'],
+        clover: [885, 610, 'sine'],
+      }[detail.f.kind];
+      tone(start, end, 0.053, 0, wave, wave === 'square' ? 0.033 : 0.085);
+      tone(end * 0.7, end * 0.45, 0.055, 0.009, 'triangle', 0.068);
     } else if (name === 'throwBounce') {
       const heavy = detail.moveId === 'brisketSitSlam';
       tone(heavy ? 109 : 430, heavy ? 45 : 650, 0.1, 0, 'triangle', heavy ? 0.14 : 0.065);
@@ -537,7 +558,7 @@
       'controls',
       'Controls',
       table +
-        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack on the ground for your dog’s combo. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. Holding regular Attack also charges. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Once you catch a rival, tap a direction to throw. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
+        '<p>Tap Jump for a short hop or hold it for a full jump. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack on the ground for your dog’s combo. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. Holding regular Attack also charges. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
   $('controls').onclick = showControls;
@@ -557,6 +578,7 @@
   const smashInputs = { side: 'Side + Smash', up: 'Up + Smash', down: 'Down + Smash' };
   const throwInputs = {
     grab: 'Press Grab',
+    pummel: 'Pummel · Tap Attack',
     forward: 'After catch · Forward',
     back: 'After catch · Back',
     up: 'After catch · Up',
@@ -578,14 +600,16 @@
           '</button>',
       )
       .join('');
-    const moveSet = { air: moves, smashes, specials, throws }[section];
+    const moveSet =
+      section === 'throws' ? { ...grabs, ...pummels, ...throws } : { air: moves, smashes, specials }[section];
     const inputs = { air: airInputs, smashes: smashInputs, specials: specialInputs, throws: throwInputs }[
       section
     ];
-    const entries = section === 'throws' ? { grab: kit.grab, ...kit.throws } : kit[section];
+    const entries =
+      section === 'throws' ? { grab: kit.grab, pummel: kit.pummel, ...kit.throws } : kit[section];
     const rows = Object.entries(entries)
       .map(([side, id]) => {
-        const move = side === 'grab' ? grabs[id] : moveSet[id];
+        const move = moveSet[id];
         return (
           '<li><canvas width="124" height="78" data-direction="' +
           side +
@@ -622,7 +646,7 @@
     let contents;
     if (section === 'throws') {
       contents =
-        '<p class="recovery-note"><strong>Grab</strong> Press U (P1), M (P2), Y on a gamepad, or Grab on touch. Once you catch a rival, tap a direction. Forward is the way you faced at the catch. Tap Grab again for forward. A trapped player can tap action buttons to escape sooner.</p><ul class="move-rows guide-throws">' +
+        '<p class="recovery-note"><strong>Grab</strong> Catch with U (P1), M (P2), Y on a gamepad, or Grab on touch. Tap Attack for a pummel. Tap again for another, or choose a direction to throw. Forward follows your facing at the catch. Grab again also throws forward. The rival can tap action buttons to escape.</p><ul class="move-rows guide-throws">' +
         rows +
         '</ul>';
     } else if (section === 'smashes') {
@@ -687,9 +711,9 @@
       const captive = world.dogs[grip.target].stats.name;
       const text =
         world.mode === 'local'
-          ? holder + ' · Aim to throw / ' + captive + ' · Tap buttons to escape'
+          ? holder + ' · Tap Attack to pummel, aim to throw / ' + captive + ' · Tap buttons to escape'
           : grip.owner === 0
-            ? 'Aim to throw · Grab again for forward'
+            ? 'Tap Attack to pummel · Aim to throw'
             : 'Grabbed · Tap action buttons to escape';
       if (prompt.textContent !== text) prompt.textContent = text;
     }

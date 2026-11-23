@@ -56,16 +56,18 @@ Open **Move list** on the select screen, in Training, or from Pause for illustra
 | **Noodle** | Ankle Tap into Reel In pulls the rival close. Finish with Whiplash or press Special during the pull to cast Tug Rope. | Slip Lead snags from the front, Tail Flick reaches behind, and Underhook lifts a rival from below. |
 | **Clover** | Tap Attack twice for Disc Tap and Set Point. On the second hit, use Jump + Up + Attack for Sky Volley, or Jump + Attack for Orbit. | Orbit hits on two beats if the rival stays close. Skip Shot angles the disc downward for a spike. |
 
-## Grabs and throws
+## Grabs, pummels and throws
 
 Press **U** as P1, **M** as P2, **Y** on a gamepad, or **Grab** on touch. A catch goes through a shield. Once you catch the rival, tap **forward**, **back**, **up**, or **down** on your movement controls. Forward follows the way you faced when you caught them. Tapping Grab a second time also throws forward. If you get caught, tap action buttons to break free sooner. A more damaged rival takes longer to escape.
 
-| Dog | Grab | Forward | Back | Up | Down |
+While holding a rival, tap **Attack** to pummel. Use **J** as P1, **Comma** as P2, **X** on a gamepad, or **Attack** on touch. Each hit leaves the rival in your grip. Tap again for another pummel or choose a throw during the strike. The escape timer keeps running, so a rival can break free if you go for one hit too many.
+
+| Dog | Grab and pummel | Forward | Back | Up | Down |
 | --- | --- | --- | --- | --- | --- |
-| **Pip** | Collar Tag catches quickly at close range. | Kickoff boots the rival away. | Slip Turn flicks them low behind you. | Pop Fly sets up a jump into an aerial. | Tumble Trip sets up a dash after their fall. |
-| **Brisket** | Bear Hug lifts the rival and holds longest. | Yard Heave sends them in a heavy arc. | Backyard Suplex launches them over your shoulder. | Bench Press launches almost straight up. | Sit-Down Slam bounces them high off the floor. |
-| **Noodle** | Lead Loop catches from a distance and reels them in. | Sling Cast releases at full lead length. | Reverse Reel flings them low behind you. | Flagpole lifts them to the top of the loop. | Slack Snap pulls them back toward your feet. |
-| **Clover** | Disc Hook slides forward and catches with the rim. | Forehand Pass sends them on a flat line. | Bank Pass sends them high behind you. | Set Toss sets up a jumping Sky Volley. | Skip Toss skims them off the next platform they hit. |
+| **Pip** | Collar Tag catches quickly at close range. **Paw Drum** taps with the free paw for 1%. | Kickoff boots the rival away. | Slip Turn flicks them low behind you. | Pop Fly sets up a jump into an aerial. | Tumble Trip sets up a dash after their fall. |
+| **Brisket** | Bear Hug holds longest. **Bear Squeeze** slowly lifts and squeezes for 4%. | Yard Heave sends them in a heavy arc. | Backyard Suplex launches them over your shoulder. | Bench Press launches almost straight up. | Sit-Down Slam bounces them high off the floor. |
+| **Noodle** | Lead Loop reels the rival in from a distance. **Knot Tug** jerks the lead inward for 2%. | Sling Cast releases at full lead length. | Reverse Reel flings them low behind you. | Flagpole lifts them to the top of the loop. | Slack Snap pulls them back toward your feet. |
+| **Clover** | Disc Hook catches with the rim during a slide. **Rim Tap** bumps the rival upward for 3%. | Forehand Pass sends them on a flat line. | Bank Pass sends them high behind you. | Set Toss sets up a jumping Sky Volley. | Skip Toss skims them off the next platform they hit. |
 
 Open **Move list → Throws** for each dog's illustrated moves. In Training, try a down throw at the edge and again in the middle. Brisket and Clover both need a platform beneath the rival to get their bounce.
 

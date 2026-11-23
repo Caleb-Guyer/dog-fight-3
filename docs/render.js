@@ -186,14 +186,22 @@
     if (a.aim > 0) return 'low';
     return a.name === 'heavy' ? 'heavy' : 'attack';
   }
-  function pose(f, winner) {
+  function pose(f, winner, holder) {
     if (winner === f.index) return ['win', 0];
     if (f.grip) {
       const grip = f.grip;
       const phase = reduced.matches ? 0.25 : (grip.time / 0.64) % 1;
-      if (f.index === grip.target) return [grip.high ? 'grappledHigh' : 'grappled', phase];
+      if (f.index === grip.target) {
+        if (grip.phase === 'pummel' && holder?.attack?.pummel) {
+          const impact = attackPhase(holder.attack);
+          if (impact >= 0.4 && impact < 0.95)
+            return [grip.high ? 'grappledHighFlinch' : 'grappledFlinch', impact];
+        }
+        return [grip.high ? 'grappledHigh' : 'grappled', phase];
+      }
       if (f.index === grip.owner) {
-        if (grip.phase === 'throw' && f.attack) return [attackPose(f), attackPhase(f.attack)];
+        if ((grip.phase === 'throw' || grip.phase === 'pummel') && f.attack)
+          return [attackPose(f), attackPhase(f.attack)];
         return [grip.grabId + 'Hold', phase];
       }
     }
@@ -349,6 +357,38 @@
     const from = [snap(owner.x, 2) + grip.face * hand[0], snap(owner.y, 2) + hand[1]];
     const tip = [grip.anchor.x, grip.anchor.y];
     ropeTrace(ctx, [from, tip], tip, false);
+  }
+  function pummelContact(ctx, x, y, kind, face, count, progress) {
+    ctx.save();
+    ctx.translate(snap(x, 2), snap(y, 2));
+    ctx.scale(face, 1);
+    const drift = reduced.matches ? 0 : snap(4 * progress, 2);
+    const tick = (x1, y1, x2, y2, color) => {
+      pixelLine(ctx, x1, y1, x2, y2, ink, 4, 2);
+      pixelLine(ctx, x1, y1, x2, y2, color, 2, 2);
+    };
+    // The brief contact marks all fit on the captive's chest. The held line
+    // and disc remain with their regular sprite layers.
+    if (kind === 'pip') {
+      const tap = count % 2 === 0 ? 2 : -2;
+      tick(3 + drift, -3 + tap, 8 + drift, -7 + tap, cream);
+      tick(5 + drift, 1 + tap, 11 + drift, 1 + tap, '#ee9775');
+    } else if (kind === 'brisket') {
+      for (const sign of [-1, 1]) {
+        const edge = sign * (11 - drift);
+        tick(edge + sign * 3, -5, edge, -2, gold);
+        tick(edge, 1, edge + sign * 3, 4, '#f6d69c');
+      }
+    } else if (kind === 'noodle') {
+      // Two tension ticks above the existing knot, with no second strand.
+      tick(-5 - drift, -7, -8 - drift, -11, '#a6ceb0');
+      tick(2, -8, 4, -12 - drift, cream);
+    } else {
+      arc(ctx, 1, 0, 10 + drift, 6, -1.1, 0.53, ink, 4);
+      arc(ctx, 1, 0, 10 + drift, 6, -1.1, 0.53, lilac, 2);
+      tick(6 + drift, -5, 9 + drift, -9, cream);
+    }
+    ctx.restore();
   }
   function throwVector(move, side, face) {
     const angle = (move.angle * Math.PI) / 180;
@@ -692,6 +732,8 @@
   }
   function swing(ctx, f) {
     const a = f.attack;
+    // A pummel lands only through its shared grip and has no free melee hitbox.
+    if (a?.pummel) return;
     if (a?.grabAttempt) return catchReach(ctx, f, a);
     if (a?.throwSide) return throwFollowThrough(ctx, f, a);
     if (a?.smashSide) return smashSwing(ctx, f, a);
@@ -749,7 +791,7 @@
       for (let i = 0; i < 4; i++)
         arc(ctx, f.x, f.y - 34, r, r, spin + (i * Math.PI) / 2, spin + (i * Math.PI) / 2 + 0.4, gold);
     }
-    const [state, phase] = pose(f, world.end);
+    const [state, phase] = pose(f, world.end, f.grip ? world.dogs[f.grip.owner] : null);
     ctx.save();
     if (f.invuln > 0.01 && !reduced.matches && Math.floor(time * 12) % 2) ctx.globalAlpha = 0.53;
     window.DogArt.draw(ctx, f.kind, snap(f.x, 2), snap(f.y, 2), {
@@ -863,6 +905,10 @@
   }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
+    if (e.type === 'pummel') {
+      pummelContact(ctx, e.x, e.y, e.kind, e.face, e.count, p);
+      return;
+    }
     if (e.type === 'toss') {
       throwTrail(ctx, e.x, e.y, e.dx, e.dy, e.kind, p);
       return;
@@ -952,6 +998,11 @@
         this.add('sweet', e.point.x + (e.face || 1) * 8, e.point.y - 9, tint, 0.17, 8);
       }
       if (name === 'grabCatch') this.add('grip', e.point.x, e.point.y, chargeColors[f.kind], 0.14, 15);
+      if (name === 'pummelHit')
+        this.add('pummel', e.point.x, e.point.y, chargeColors[f.kind], 0.11, 12, e.face, {
+          kind: f.kind,
+          count: e.count,
+        });
       if (name === 'grabEscape') this.add('escape', e.point.x, e.point.y, '#b9dddd', 0.17, 17);
       if (name === 'grabClash') this.add('block', e.point.x, e.point.y, cream, 0.15, 42);
       if (name === 'throwRelease') {
@@ -1112,7 +1163,26 @@
       victimPose = 'grappled',
       phase = 0.25,
       release = null;
-    if (catching) {
+    if (a.pummel) {
+      const { kits, grabs } = window.DogFight;
+      const grabId = kits[f.kind].grab;
+      const hold = grabs[grabId].grip;
+      // The first contact frame and the captive's peak recoil share this anchor.
+      a.time = a.start;
+      x = hold[0] + a.recoil[0];
+      y = hold[1] + a.recoil[1];
+      f.grip = {
+        owner: 0,
+        target: 1,
+        face: 1,
+        grabId,
+        phase: 'pummel',
+        time: a.time,
+        anchor: { x, y },
+        high: y < -70,
+      };
+      [victimPose, phase] = pose({ index: 1, grip: f.grip }, null, f);
+    } else if (catching) {
       const hand =
         window.DogArt.itemPoint(f.kind, a.moveId, attackPhase(a)) ||
         window.DogArt.pawPoint?.(f.kind, a.moveId, attackPhase(a)) ||
@@ -1155,11 +1225,12 @@
     return release;
   }
   function drawMoveThumbnail(canvas, kind, side, category = 'air') {
-    const { kits, moves, specials, smashes, grabs, throws, fighters } = window.DogFight;
+    const { kits, moves, specials, smashes, grabs, throws, pummels, fighters } = window.DogFight;
     const grapple = category === 'throws',
-      catching = grapple && side === 'grab';
-    const id = catching ? kits[kind].grab : kits[kind][category][side];
-    const book = { air: moves, specials, smashes, throws: catching ? grabs : throws };
+      catching = grapple && side === 'grab',
+      pummeling = grapple && side === 'pummel';
+    const id = catching || pummeling ? kits[kind][side] : kits[kind][category][side];
+    const book = { air: moves, specials, smashes, throws: catching ? grabs : pummeling ? pummels : throws };
     const move = book[category][id];
     const target = canvas.getContext('2d');
     const cacheKey = id + '/' + canvas.width + '/' + canvas.height;
@@ -1184,6 +1255,7 @@
       a.fired = !!a.projectile;
     } else if (grapple) {
       if (catching) a.grabAttempt = true;
+      else if (pummeling) a.pummel = true;
       else a.throwSide = side;
     } else a.specialSide = side;
     if (id === 'noodleLasso') a.anchor = { x: 86, y: -86 };
@@ -1198,6 +1270,10 @@
     });
     swing(ctx, fighter);
     if (fighter.grip) gripLead(ctx, fighter, fighter.grip);
+    if (pummeling) {
+      const point = fighter.grip.anchor;
+      pummelContact(ctx, point.x, point.y, kind, 1, 1, 0.25);
+    }
     if (release) {
       throwTrail(
         ctx,

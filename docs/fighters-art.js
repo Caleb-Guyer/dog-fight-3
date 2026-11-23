@@ -2428,10 +2428,58 @@
       follow: { bodyX: 2, bodyY: 3, headTurn: 8, torsoTurn: 11, fistX: 5,
         fistY: 2, fistTurn: 15, rearX: -2, rearY: -3, leftX: -3, rightX: 4, kneeOut: 3 },
     },
+
+    // Pummels offset the existing grip. The first and last drawings return to that exact hold.
+    pipPawDrum: {
+      fromHold: 'pipCollarTagHold', ground: true, clasp: 'front', rearStrike: true,
+      openHands: 'rear', openRange: [3, 3],
+      wind: { bodyX: -1, bodyY: 1, torsoTurn: -12, headTurn: -6, headX: -1,
+        fistX: 1, fistY: -1, rearX: -4, rearY: 4, rearTurn: 25, scarf: -2 },
+      hit: { bodyX: 2, bodyY: -1, lean: 1, headX: -1, headTurn: 3, torsoTurn: 13,
+        fistX: -1, fistY: -3, fistTurn: -4, rearX: 13, rearY: 1, rearTurn: -9, ear: -2 },
+      beat: { bodyX: -1, fistX: 1, rearX: -5, rearY: 2, rearTurn: 13, headTurn: -4, scarf: 2 },
+      follow: { bodyX: 1, bodyY: 1, headTurn: 4, torsoTurn: 4, fistY: -1, rearX: 2, rearY: 2, rearTurn: 7 },
+    },
+    brisketBearSqueeze: {
+      fromHold: 'brisketBearHugHold', ground: true, bothHands: true, behindHead: true, clasp: 'both',
+      wind: { bodyY: 3, headTurn: 5, torsoTurn: 5, shoulderY: 1, fistX: 3, fistY: -1,
+        fistTurn: 15, rearX: -2, rearY: -4, rearTurn: -12, kneeOut: 3 },
+      hit: { bodyX: -2, bodyY: -4, torsoTurn: -11, headX: 2, headY: -1, headTurn: -12,
+        shoulderY: -3, fistX: -2, fistY: -6, fistTurn: -28, rearX: -3, rearY: -3,
+        rearTurn: 17, frontElbowX: 4, kneeOut: -1, charmTurn: -15 },
+      beat: { bodyY: -1, fistX: -1, fistY: 1, rearX: 1, headTurn: -3, ear: 2 },
+      follow: { bodyX: -1, bodyY: -1, torsoTurn: -5, headTurn: -6, fistX: -1,
+        fistY: -3, fistTurn: -9, rearX: -1, rearY: -1, rearTurn: 8, frontElbowX: 2 },
+    },
+    noodleKnotTug: {
+      fromHold: 'noodleLeadLoopHold', ground: true, bothHands: true, behindHead: true, clasp: 'both',
+      item: 'rope', itemAngles: [-6, -3, 4, -22, -28, -20, -10, -6],
+      wind: { bodyX: 2, bodyY: -1, headX: 1, headTurn: 4, torsoTurn: 10,
+        fistX: 1, rearX: 1, rearY: 1, scarf: -3, kneeOut: -1 },
+      hit: { bodyX: -3, bodyY: 2, torsoTurn: -18, headX: 1, headY: -1, headTurn: -12,
+        fistX: -7, fistY: -3, fistTurn: -15, rearX: -4, rearY: -4, rearTurn: -18,
+        kneeOut: 3, frontElbowX: -2, tailLift: -2, scarf: -4 },
+      beat: { bodyY: -1, fistX: -2, fistY: 1, rearX: -1, headTurn: 4, scarf: 3 },
+      follow: { bodyX: -2, bodyY: 1, headTurn: -5, torsoTurn: -9, fistX: -4,
+        fistY: -1, fistTurn: -9, rearX: -2, rearY: -1, kneeOut: 2 },
+    },
+    cloverRimTap: {
+      fromHold: 'cloverDiscHookHold', ground: true, bothHands: true, behindHead: true, clasp: 'rear',
+      item: 'disc', itemAngles: [-65, -43, -18, -64, -82, -46, -58, -65],
+      wind: { bodyY: 2, torsoTurn: 7, headTurn: 4, fistX: 2, fistY: 2, fistTurn: 26,
+        rearX: -1, rearY: -1, kneeOut: 2 },
+      hit: { bodyX: 1, bodyY: -2, torsoTurn: -6, headX: -1, headTurn: -12, shoulderY: -1,
+        fistX: 2, fistY: -5, fistTurn: -20, rearX: 2, rearY: -5, rearTurn: -11, scarf: 2 },
+      beat: { fistX: 2, fistY: -1, fistTurn: -15, headTurn: -4, rearY: -1 },
+      follow: { bodyY: 1, headTurn: -4, torsoTurn: 2, fistX: 1, fistY: -2,
+        fistTurn: 7, rearX: 1, rearY: -1, rearTurn: -4 },
+    },
   };
 
   const specials = { pip: 'pounce', brisket: 'shoulder', noodle: 'cast', clover: 'disc' };
-  const captivePoses = ['grappled', 'grappledHigh'];
+  const captiveLoops = ['grappled', 'grappledHigh'];
+  const captiveFlinches = ['grappledFlinch', 'grappledHighFlinch'];
+  const captivePoses = [...captiveLoops, ...captiveFlinches];
   const torsoAngles = {
     attack: [-4, 1, 7, 5, 1, 0],
     jab2: [7, 2, -8, -4, 1, 0],
@@ -2501,7 +2549,10 @@
       if (!key) return;
       for (const [part, offset] of Object.entries(key)) s[part] += Math.round(offset * amount);
     };
-    if (move.hold) {
+    if (move.fromHold) addKey(kitMoves[move.fromHold].hold, 1);
+    if (move.fromHold && frame < 3) {
+      addKey(move.wind, [0, 0.7, 1][frame]);
+    } else if (move.hold) {
       addKey(move.hold, 1);
       addKey(move.tug, [0, 0.28, 0.65, 1, 0.75, 0.44, 0.2, 0][frame]);
     } else if (frame === 1 && move.lift) addKey(move.lift, 1);
@@ -2520,9 +2571,9 @@
       s.rightY -= 2;
       s.fistY -= 2;
     }
-    const driving = !!move.hold || (frame >= (move.smash ? 3 : move.lift ? 1 : 2) && frame <= 5);
+    const driving = !!(move.hold || move.fromHold) || (frame >= (move.smash ? 3 : move.lift ? 1 : 2) && frame <= 5);
     if (!move.base) {
-      const drag = (move.hold ? [0, 1, 2, 1, 0, -1, -2, -1] : [1, 2, -1, -3, -4, -2, 2, 0])[frame];
+      const drag = (move.hold ? [0, 1, 2, 1, 0, -1, -2, -1] : [move.fromHold ? 0 : 1, 2, -1, -3, -4, -2, 2, 0])[frame];
       s.ear += name === 'noodle' ? 2 * drag : drag;
       s.tail += drag;
       s.scarf -= drag;
@@ -2548,6 +2599,7 @@
     if (move.bark) s.barkJaw = frame === 3 ? 2 : frame === 4 ? 1 : 0;
     if (move.bark || move.sail || move.crossedGuard || pose === 'noodleTripLine') s.powerArm = false;
     if (move.crossedGuard && frame >= 1 && frame < 7) s.reverseArm = true;
+    if (move.rearStrike && (frame === 3 || frame === 4)) s.reverseArm = true;
     if ((pose === 'noodleLasso' || pose === 'noodleReelLedge') && driving) {
       s.grip = true;
       s.twoHandsFront = true;
@@ -2572,8 +2624,8 @@
 
   function frameNumber(pose, time, phase) {
     const tick = (period) => Math.floor((Math.abs(time) % 1000000) * period);
-    if (captivePoses.includes(pose) || kitMoves[pose]?.hold) return Math.floor(phase * 8) % 8;
-    if (Object.prototype.hasOwnProperty.call(kitMoves, pose)) {
+    if (captiveLoops.includes(pose) || kitMoves[pose]?.hold) return Math.floor(phase * 8) % 8;
+    if (Object.prototype.hasOwnProperty.call(kitMoves, pose) || captiveFlinches.includes(pose)) {
       if (phase < 0.12) return 0;
       if (phase < 0.24) return 1;
       if (phase < 0.4) return 2;
@@ -2651,6 +2703,28 @@
     } else if (frame === 3) s.eye = shutEyes;
   }
 
+  function flinchStance(s, name, high, frame) {
+    // The holder supplies the body's travel. Keep one heel planted, or both knees tucked aloft.
+    captiveStance(s, name, high, [0, 1, 1, 1, 1, 1, 0, 0][frame]);
+    const jolt = [0, 0, 0, 3, 2, 1, -1, 0][frame];
+    s.bodyX -= Math.round(jolt * 0.65);
+    s.bodyY += Math.round(jolt * 0.5);
+    s.headX -= jolt;
+    s.headY -= Math.round(jolt * 0.5);
+    s.torsoTurn -= 2 * jolt;
+    s.headTurn -= 5 * jolt;
+    s.fistX -= jolt;
+    s.fistY -= 2 * jolt;
+    s.rearX -= jolt;
+    s.rearY -= jolt;
+    s.rightY -= jolt;
+    s.ear -= jolt * (name === 'noodle' ? 2 : 1);
+    s.tail += jolt;
+    s.scarf += 2 * jolt;
+    if (high) s.roll -= 2 * jolt;
+    if (frame === 3) s.eye = shutEyes;
+  }
+
   function stance(name, pose, frame) {
     const s = {
       bodyX: 0,
@@ -2721,6 +2795,10 @@
       return s;
     }
     switch (pose) {
+      case 'grappledFlinch':
+      case 'grappledHighFlinch':
+        flinchStance(s, name, pose === 'grappledHighFlinch', frame);
+        break;
       case 'grappled':
       case 'grappledHigh':
         captiveStance(s, name, pose === 'grappledHigh', frame);
