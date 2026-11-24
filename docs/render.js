@@ -2379,6 +2379,10 @@
         clamp(30 + e.speed * 0.06, 40, 64), e.dir);
       if (name === 'skid') this.add('skid', f.x - e.face * 9, f.y, cream, 0.18, 56, e.face);
       if (name === 'turnJump') this.add('skid', f.x - e.dir * 8, f.y, '#d6b687', 0.13, 28, e.dir);
+      if (name === 'attackCancel') {
+        const dir = Math.sign(f.vx) || e.face;
+        this.add('skid', e.point.x - dir * 8, e.point.y - 3, mint, .16, 32, dir);
+      }
       if (name === 'swat') this.add('star', e.ball.x, e.ball.y, gold, 0.2, 25);
       if (name === 'ko') {
         this.add('burst', clamp(e.x, 30, (e.stageWidth ?? 1200) - 30), clamp(e.y, 38, 620), teamColor(f), 0.7, 108);
@@ -2665,7 +2669,7 @@
         }
       } else if (world.footworkPractice) {
         const x = snap(world.footworkPractice.mark, 2), y = world.terrain[0].y;
-        const chalk = ['opening', 'atMark'].includes(world.footworkPractice.phase) ? mint : cream;
+        const chalk = ['opening', 'atMark', 'cancelNow'].includes(world.footworkPractice.phase) ? mint : cream;
         for (const side of [-1, 1]) {
           pixelLine(ctx, x + side * 10, y + 11, x, y + 1, ink, 5, 2);
           pixelLine(ctx, x + side * 9, y + 10, x, y + 1, chalk, 3, 2);
