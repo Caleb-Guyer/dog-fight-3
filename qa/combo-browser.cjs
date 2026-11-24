@@ -484,6 +484,16 @@ async function testFrameAdvance(page, mobile) {
 
 async function testJumpCancel(page, mobile) {
   await page.goto(root + '#training/catch-the-landing');
+  await page.evaluate(()=>{
+    const proto=window.DogFight.Battle.prototype, capture=proto.captureInput;
+    window.catchInputs=[];
+    proto.captureInput=function(f,input) {
+      if(f.index===0 && this.footworkPractice?.phase==='atMark' && window.catchInputs.length<14)
+        window.catchInputs.push([input.y,input.jump,input.smash,input.smashY,!!input.tapped?.smash,f.lastMove]);
+      return capture.call(this,f,input);
+    };
+    window.finishCatchTrace=()=>{proto.captureInput=capture;};
+  });
   const status=page.locator('#footwork-status');
   const activate=id=>mobile?page.locator('#'+id).tap():page.locator('#'+id).click();
   const session=mobile && await page.context().newCDPSession(page);
@@ -497,7 +507,7 @@ async function testJumpCancel(page, mobile) {
       if(await status.getAttribute('data-result')===result) return;
       await page.clock.runFor(16);
     }
-    assert.fail('Expected '+result+', saw '+await status.innerText());
+    assert.fail('Expected '+result+', saw '+await status.innerText()+' '+JSON.stringify(await page.evaluate(()=>window.catchInputs)));
   }
   for(const charge of [false,true]) {
     if(charge) {
@@ -528,6 +538,7 @@ async function testJumpCancel(page, mobile) {
   }
   await activate('reset-training');
   assert(await status.isHidden());
+  await page.evaluate(()=>window.finishCatchTrace());
   console.log((mobile?'Phone two-thumb slide':'Desktop keyboard')+' passed a running anti-air and a late swing into shield.');
 }
 
@@ -824,6 +835,26 @@ async function testRage(page, mobile) {
   await press('freshness-percent');
   assert.equal(await meter.count(),0);
   assert.equal(await prior.textContent(),'At 150% · '+hard);
+  // Sample Up alone, then release the smash and aim before the next simulation tick.
+  if(mobile) {
+    const cdp=await page.context().newCDPSession(page);
+    const point=async (name,id)=>{
+      const box=await page.locator('[data-touch="'+name+'"]').boundingBox();
+      return {id,x:box.x+box.width/2,y:box.y+box.height/2};
+    };
+    const up=await point('up',1);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[up]});
+    await page.clock.runFor(66);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[up,await point('smash',2)]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  } else {
+    await page.keyboard.down('w');
+    await page.clock.runFor(66);
+    await page.keyboard.press('i');
+    await page.keyboard.up('w');
+  }
+  await page.clock.runFor(1400);
+  assert.equal(await page.locator('#freshness-list li').first().textContent(),'Roof Raiser');
   await press('reset-training');
   assert(await contact.isHidden());
   console.log((mobile?'Touch':'Keyboard')+' passed a landing at zero rage and a top KO at max rage with the same fully charged smash.');
