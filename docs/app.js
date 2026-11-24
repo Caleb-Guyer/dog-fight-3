@@ -304,6 +304,9 @@
         const note = detail.lock === 2 ? 285 : 206;
         tone(note, 78, 0.061, 0, 'triangle', 0.09);
         tone(note * 2, note, 0.032, 0.018, 'square', 0.031);
+      } else if (detail.timing === 'late' && !detail.emphatic) {
+        const pitch = { pip: 410, brisket: 155, noodle: 325, clover: 510 }[detail.owner.kind];
+        tone(pitch, pitch * 0.63, 0.045, 0, 'triangle', 0.09);
       } else if (detail.emphatic) {
         tone(218, 56, 0.09, 0, 'sawtooth', 0.059);
         tone(105, 32, 0.19, 0.006, 'triangle', 0.17);
@@ -735,6 +738,8 @@
       move.label +
       '</strong><span>' +
       move.hint +
+      (category === 'air' && move.late ? ' Clean ' + move.dmg + '%. Late ' + move.late.dmg +
+        '% from frame ' + Math.round(move.late.start * 60) + '.' : '') +
       (move.landingWindow ? ' Landing on frames ' + move.landingWindow[0] + '–' + (move.landingWindow[1] - 1) +
         ' takes ' + move.land + ' frames to recover. Elsewhere in the move it takes 2.' : '') +
       '</span></div></li>'
@@ -957,7 +962,7 @@
         guideMoveRow(moves[kit.dashAttack], 'Run + Attack', 'dash', 'dash') +
         '</ul>' +
         ledgeMove +
-        '<h3 class="guide-section">Aerial attacks</h3><p>Jump + Attack gives a rising short-hop aerial. To attack on the way down, jump first and time the swing yourself. Tap Down after the apex to fast-fall. Forward follows your facing.</p><p>Steer with the left stick and flick the right stick to swing in a separate direction. On keyboard, aim left/right/up/down with R/Y/T/G for P1 or numpad 4/6/8/2 for P2. On touch, flick outward from Smash. To jump backward into a back air, run, tap the opposite direction with Jump, then steer back along your original path. Try <strong>Training → Back air practice</strong>.</p><ul class="move-rows guide-airs">' +
+        '<h3 class="guide-section">Aerial attacks</h3><p>Jump + Attack gives a rising short-hop aerial. To swing on the way down, jump first and time Attack yourself. Tap Down after the apex to fast-fall. Forward follows your facing.</p><p>Each forward air has a clean hit and a softer follow-through. Practice landing the late hit into a jab in <strong>Training → Aerial practice → Landing hits</strong>.</p><p>Steer with the left stick and flick the right stick to swing in a separate direction. On keyboard, aim left/right/up/down with R/Y/T/G for P1 or numpad 4/6/8/2 for P2. On touch, flick outward from Smash. For a running back air, reverse direction with Jump and steer back along your original path. Try <strong>Aerial practice → Approach</strong>.</p><ul class="move-rows guide-airs">' +
         rows +
         '</ul>';
     }
@@ -1212,7 +1217,7 @@
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
       if (name === 'waveContact' || name === 'waveResult') waveFeedback();
-      if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingResult'))
+      if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingJab' || name === 'spacingResult'))
         spacingFeedback(name, e);
       if (name === 'escapeCue' || name === 'escapeResult') escapeFeedback(e);
       if (world?.climbPractice && (name === 'climbCue' || name === 'climbResult' ||
@@ -1440,6 +1445,31 @@
     practiceSide = 'left';
   function spacingFeedback(name, e) {
     const practice = world.spacingPractice, status = $('spacing-status');
+    if (practice.pattern === 'landing') {
+      const labels = { clean: 'Clean hit · ' + practice.damage + '%', string: 'True combo · ' + world.lastCombo.damage + '%',
+        gap: 'Gap before the jab', guarded: (practice.timing === 'clean' ? 'Clean hit' : 'Late hit') + ' · jab shielded',
+        escaped: 'Rival escaped', miss: 'Missed the aerial',
+        other: 'Different attack', away: 'Left the setup' };
+      status.dataset.result = e.outcome || name;
+      if (!e.outcome) {
+        status.textContent = name === 'spacingJab' ? 'Tap Attack for jab' :
+          name === 'spacingLand' ? 'Landed · center the stick' : (practice.timing === 'clean' ? 'Clean hit' : 'Late hit') + ' · ' + practice.damage + '%';
+        return;
+      }
+      status.textContent = labels[e.outcome];
+      const tips = { clean: 'The leading hit connected. To try the late hit, swing earlier at the gold fork.',
+        string: moves[practice.contact].label + ' into ' + moves[world.dogs[0].kit.ground[0]].label +
+          ' connected before the rival could act. Try the green stripe for the clean hit.',
+        guarded: practice.timing === 'clean' ? 'The clean hit gave the rival time to shield your jab. Swing at the gold fork to try the follow-through.' :
+          'The rival raised Shield before your jab. Tap Attack as the landing cue appears.',
+        gap: 'Both hits landed. The rival had time to act between them.',
+        escaped: 'The rival recovered. Release the direction on landing and tap Attack at the jab cue.',
+        miss: 'Hold toward the rival for the whole short hop. Tap Attack over either floor mark.',
+        other: 'Aim forward for the aerial, then center the direction for your jab.',
+        away: 'Stay on this stretch of floor for the landing.' };
+      $('recovery-tip').textContent = tips[e.outcome] + ' Choose Landing hits to retry.';
+      return;
+    }
     if (name === 'spacingContact') {
       status.dataset.result = 'contact';
       status.textContent = moves[e.moveId].label + ' hit shield';
@@ -2014,11 +2044,12 @@
       const run = practice.dir > 0 ? 'right' : 'left', back = practice.dir > 0 ? 'left' : 'right';
       const key = practice.dir > 0 ? 'R' : 'Y';
       $('spacing-approach').setAttribute('aria-pressed', String(approach));
-      $('spacing-retreat').setAttribute('aria-pressed', String(!approach));
+      $('spacing-retreat').setAttribute('aria-pressed', String(pattern === 'retreat'));
+      $('spacing-landing').setAttribute('aria-pressed', String(pattern === 'landing'));
       $('spacing-slow').setAttribute('aria-pressed', String(practice.slow));
       $('spacing-status').dataset.result = 'ready';
-      $('spacing-status').textContent = approach ? 'Jump past the shield' : 'Jump away from the shield';
-      message = 'Running ' + run + '. ' + (approach
+      $('spacing-status').textContent = pattern === 'landing' ? 'Tap Jump and hold ' + run : approach ? 'Jump past the shield' : 'Jump away from the shield';
+      message = pattern === 'landing' ? 'Short-hop ' + run + '. Tap Attack over the gold fork for a late hit or the green stripe for a clean hit. Center the direction and jab on landing.' : 'Running ' + run + '. ' + (approach
         ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
         : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
     } else if (climb) {
@@ -2174,6 +2205,7 @@
   $('spacing-training').onclick = () => drill('spacing', false, world.spacingPractice?.pattern || 'approach');
   $('spacing-approach').onclick = () => drill('spacing', false, 'approach');
   $('spacing-retreat').onclick = () => drill('spacing', false, 'retreat');
+  $('spacing-landing').onclick = () => drill('spacing', false, 'landing');
   $('spacing-side').onclick = () => drill('spacing', false, world.spacingPractice.pattern, -world.spacingPractice.dir);
   $('spacing-slow').onclick = () => {
     const practice = world.spacingPractice;

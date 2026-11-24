@@ -728,14 +728,15 @@
     },
     pipDiveKick: {
       label: 'Flying Kick',
-      hint: 'Kick forward and gain a short burst of speed.',
-      frames: [4, 7, 9],
+      hint: 'The extended heel kicks the rival away. The trailing paw pops them up for Quick Paw on landing.',
+      frames: [4, 10, 6],
       box: [44, -34, 37, 24],
       dmg: 8,
       base: 165,
       growth: 4.0,
       angle: 27,
       burst: 205,
+      late: { start: 7 / 60, active: 7 / 60, box: [33, -24, 32, 21], dmg: 4, base: 96, growth: 2.0, angle: 62, stun: 0.29 },
       land: 5,
       landingWindow: [3, 14],
     },
@@ -815,8 +816,8 @@
     },
     brisketRam: {
       label: 'Air Ram',
-      hint: 'Commit your weight to a forward shoulder. It carries you past the hit.',
-      frames: [8, 9, 16],
+      hint: 'The leading shoulder launches hard. Clip them with the falling body to land close enough for Body Check.',
+      frames: [8, 12, 13],
       box: [41, -38, 39, 30],
       dmg: 13,
       base: 227,
@@ -824,6 +825,7 @@
       angle: 29,
       burst: 310,
       hard: true,
+      late: { start: 12 / 60, active: 8 / 60, box: [23, -26, 33, 27], dmg: 7, base: 122, growth: 2.6, angle: 53, stun: 0.37 },
       land: 12,
       landingWindow: [4, 27],
     },
@@ -917,8 +919,8 @@
     },
     noodleCast: {
       label: 'Slip Lead',
-      hint: 'Cast a long, narrow loop forward and pull the rival within reach.',
-      frames: [7, 7, 13],
+      hint: 'The outward cast reaches farthest. The shorter returning loop draws the rival in for Ankle Tap.',
+      frames: [7, 13, 7],
       box: [65, -37, 61, 17],
       dmg: 6,
       base: 128,
@@ -929,6 +931,7 @@
       land: 7,
       landingWindow: [5, 20],
       rope: 'front',
+      late: { start: 11 / 60, active: 9 / 60, box: [47, -27, 46, 20], dmg: 4, base: 88, growth: 1.65, angle: 28, pull: true, stun: 0.32 },
     },
     noodleTail: {
       label: 'Tail Flick',
@@ -1011,13 +1014,14 @@
     },
     cloverFore: {
       label: 'Forehand',
-      hint: 'Sweep the disc forward to send your opponent outward.',
-      frames: [5, 7, 10],
+      hint: 'The leading rim sends the rival outward. Brush them with the end of the sweep for a lift into Disc Tap.',
+      frames: [5, 10, 7],
       box: [45, -42, 42, 26],
       dmg: 8,
       base: 164,
       growth: 3.85,
       angle: 34,
+      late: { start: 8 / 60, active: 7 / 60, box: [33, -27, 35, 23], dmg: 5, base: 104, growth: 2.0, angle: 73, stun: 0.30 },
       land: 5,
       landingWindow: [3, 15],
     },
@@ -1920,6 +1924,7 @@
       lastSmashPower: null,
       attack: null,
       lastMove: '',
+      landingFollowUntil: 0,
       landingLag: 0,
       waveSlide: 0,
       takeoffWindow: 0,
@@ -2157,6 +2162,9 @@
   function attackWindow(attack) {
     const next = attack.second || attack.late;
     return next && attack.time + 1e-8 >= next.start ? next : attack;
+  }
+  function aerialHitTiming(attack, beat) {
+    return attack?.airSide === 'forward' && attack.late ? (beat === attack.late ? 'late' : 'clean') : '';
   }
   // The newest connection has the most weight. A shield-only entry counts half.
   const staleWeights = [90, 82, 74, 66, 58, 50, 42, 34, 26];
@@ -2592,6 +2600,19 @@
       const [f, guard] = this.dogs;
       const ground = this.stage === 'laundry' && dir < 0 ? 1 : 0;
       const floor = this.terrain[ground], approach = pattern === 'approach';
+      if (pattern === 'landing') {
+        // Run-in distance and the two takeoff-relative floor marks for each dog's short hop.
+        const [runIn, softMark, cleanMark] = {
+          pip: [224, 95, 155], brisket: [180, 41, 76], noodle: [240, 58, 119], clover: [216, 79, 134],
+        }[f.kind];
+        const gap = runIn + guard.stats.width, middle = (floor.x1 + floor.x2) / 2;
+        Object.assign(guard, { x: middle + dir * gap / 2, y: floor.y, ground, face: -dir });
+        Object.assign(f, { x: middle - dir * gap / 2, y: floor.y, ground, face: dir,
+          vx: dir * f.stats.speed, sprintDir: dir, stickTicks: 3, prev: { ...idleInput, x: dir, grabX: dir } });
+        this.spacingPractice = { pattern, dir, slow, ground, mark: f.x + dir * softMark, cleanMark: f.x + dir * cleanMark,
+          phase: 'ready', time: 0, contact: '', timing: '', damage: 0, airborne: false, landing: null, outcome: '' };
+        return;
+      }
       const gap = approach ? 66 + f.stats.speed * 0.045 : f.stats.width + guard.stats.width + 1;
       const corner = dir > 0 ? floor.x1 : floor.x2;
       const guardX = corner + dir * (floor.x2 - floor.x1) * (approach ? 0.39 : 0.17);
@@ -2608,6 +2629,7 @@
     spacingPracticeInput() {
       const drill = this.spacingPractice, guard = this.dogs[1];
       if (drill.phase === 'done') return idleInput;
+      if (drill.pattern === 'landing') return drill.contact ? { ...idleInput, shield: true } : idleInput;
       if (drill.landing !== null && !drill.grabSent && guard.shieldStun < 1e-8 && guard.impactLag < 1e-8) {
         drill.grabSent = true;
         return { ...idleInput, shield: true, tapped: { grab: true } };
@@ -2630,6 +2652,16 @@
         drill.landing = (f.x - guard.x) * drill.dir;
         drill.landingX = f.x;
         this.emit('spacingLand', { f, gap: drill.landing });
+      }
+      if (drill.pattern === 'landing') {
+        if (f.respawning || guard.respawning || f.ledge) this.finishSpacingPractice('away');
+        else if (drill.landing !== null && !drill.contact) this.finishSpacingPractice('miss');
+        else if (drill.time > 1.6) this.finishSpacingPractice(drill.timing === 'clean' ? 'clean' : drill.contact ? 'escaped' : 'miss');
+        else if (drill.contact && f.ground >= 0 && !drill.jabCue && f.landingLag <= 5 / 60 + 1e-8) {
+          drill.jabCue = true;
+          this.emit('spacingJab', { f });
+        }
+        return;
       }
       if (f.grip?.target === 0) return this.finishSpacingPractice('caught');
       if (drill.grabSent && !guard.attack && !guard.command) {
@@ -3235,7 +3267,7 @@
         drill.jumped = true;
         return { ...idleInput, jump: true };
       }
-      if (drill.time + 1e-8 < (high ? 28 : 30) / 60) return idleInput;
+      if (drill.time + 1e-8 < 30 / 60) return idleInput;
       drill.phase = 'attack';
       drill.time = 0;
       this.emit('shieldCue', { f: this.dogs[0], phase: 'attack', pattern: drill.pattern });
@@ -5489,13 +5521,16 @@
         target.run = null;
       }
       this.sampleFreshness(owner, use, moveId, power, 0, stunFrames, true);
-      this.emit('block', { f: target, owner, point, attackName: name, face: away, moveId, impactFrames, stunFrames, projectile, power });
+      const timing = use?.airSide ? aerialHitTiming(use, attackWindow(use)) : '';
+      this.emit('block', { f: target, owner, point, attackName: name, face: away, moveId, impactFrames, stunFrames, projectile, power, timing });
       if (this.escapePractice?.spacing === 'counter' && target.index === 0 && moveId === 'pipStampKick')
         this.finishEscapePractice('shieldedKick');
       if (!broken && this.escapePractice?.spacing === 'break' && this.escapePractice.contact === 'plant' && target.index === 0)
         this.finishEscapePractice('blockedReply');
       if (this.platformPractice?.pattern === 'hold' && target.index === 0 && !broken) this.finishPlatformPractice('guarded', moveId);
       if (this.spacingPractice?.phase === 'active' && owner.index === 0 && target.index === 1 &&
+          this.spacingPractice.pattern === 'landing' && this.spacingPractice.contact) this.finishSpacingPractice('guarded');
+      else if (this.spacingPractice?.phase === 'active' && owner.index === 0 && target.index === 1 &&
           owner.attack?.airSide && !this.spacingPractice.contact) {
         this.spacingPractice.contact = moveId;
         this.emit('spacingContact', { f: owner, moveId });
@@ -5625,6 +5660,7 @@
       target.guardBuffer = 0;
       target.landTime = 0;
       target.landingLag = 0;
+      target.landingFollowUntil = 0;
       target.skidTime = 0;
       target.run = null;
       target.reboundTime = 0;
@@ -5664,7 +5700,20 @@
         target.index === 1
       )
         this.trumpPractice.phase = 'intercepted';
-      this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic, power, damage: applied });
+      const timing = aerialHitTiming(use, move);
+      this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic, power, damage: applied, timing });
+      if (timing === 'late' && this.cpuControlled(owner)) owner.landingFollowUntil = this.time + 0.55;
+      const spacing = this.spacingPractice;
+      if (spacing?.pattern === 'landing' && spacing.phase === 'active' && owner.index === 0 && target.index === 1) {
+        if (!spacing.contact && timing) {
+          spacing.contact = moveId;
+          spacing.timing = timing;
+          spacing.damage = applied;
+          this.emit('spacingContact', { f: owner, moveId });
+        } else if (spacing.contact && owner.ground >= 0 && moveId === owner.kit.ground[0])
+          this.finishSpacingPractice(this.lastCombo.hits === 2 ? 'string' : 'gap');
+        else this.finishSpacingPractice('other');
+      }
       if (braced) this.emit('crouchCancel', { f: target, owner, moveId, planted, face, frames: Math.ceil(target.stun * 60 - 1e-8),
         point: { x: target.x, y: this.terrain[groundAtHit].y } });
       if (this.escapePractice) this.gradeCrouchHit(owner, moveId, name, braced, planted, stance);
@@ -6384,6 +6433,24 @@
       brain.guard = Math.max(0, brain.guard - dt);
       const dx = foe.x - f.x,
         far = Math.abs(dx);
+      if (f.attack?.moveId === f.kit.ground[0]) f.landingFollowUntil = 0;
+      if (f.landingFollowUntil > this.time && !unsafe && !f.stun && !f.grip && !f.floorAction && foe.stun > 0) {
+        if (f.command?.type === 'attack' || f.charge >= 0) return idleInput;
+        const towardRival = Math.sign(dx), floor = under || closest;
+        if (f.ground < 0 && f.attack?.airSide === 'forward') {
+          const ahead = f.x + towardRival * 30;
+          return { ...idleInput, x: ahead >= floor.x1 && ahead <= floor.x2 ? towardRival : 0 };
+        }
+        if (f.ground >= 0 && !f.attack && towardRival === f.face) {
+          const jab = moves[f.kit.ground[0]], reach = jab.box[0] + jab.box[2] + foe.stats.width;
+          const wait = f.landingLag + jab.start;
+          if (far + (foe.vx - f.vx) * f.face * wait <= reach && foe.stun + dt >= wait) {
+            if (f.landingLag > 4 / 60 + 1e-8) return idleInput;
+            brain.hold = brain.guard = brain.jumpHold = 0;
+            return { ...idleInput, tapped: { attack: true } };
+          }
+        }
+      }
       const counter = !unsafe && this.crouchCounterInput(f, foe);
       if (counter) return counter;
       if (f.reaction?.planted && f.stun && f.command) return idleInput;

@@ -11,14 +11,14 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=shield-coverage-1" />
+    <link rel="stylesheet" href="./style.css?v=landing-hits-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=bandstand-1" />
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=crouch-counter-1"></script>
     <script defer src="./arena-art.js?v=bandstand-1"></script>
-    <script defer src="./engine.js?v=shield-coverage-1"></script>
-    <script defer src="./render.js?v=shield-coverage-1"></script>
+    <script defer src="./engine.js?v=landing-hits-1"></script>
+    <script defer src="./render.js?v=landing-hits-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=shield-coverage-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./online.js?v=shield-coverage-1"></script>
-    <script defer src="./app.js?v=shield-coverage-1"></script>
+    <script defer src="./online.js?v=landing-hits-1"></script>
+    <script defer src="./app.js?v=landing-hits-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -312,7 +312,7 @@
           <span id="grapple-prompt" role="status" hidden></span>
           <div class="training-readouts">
             <output id="footwork-status" aria-label="Footwork practice" aria-live="polite" hidden></output>
-            <output id="spacing-status" aria-label="Back air practice" aria-live="polite" hidden></output>
+            <output id="spacing-status" aria-label="Aerial practice" aria-live="polite" hidden></output>
             <output id="escape-status" aria-label="Combo escape" aria-live="polite" hidden></output>
             <output id="platform-status" aria-label="Platform practice" aria-live="polite" hidden></output>
             <output id="launch-status" aria-label="Launch practice" aria-live="polite" hidden></output>
@@ -398,10 +398,11 @@
             <button id="footwork-side" type="button" class="utility" hidden>Switch sides</button>
             <button id="footwork-slow" type="button" class="utility" aria-pressed="true" hidden>Half speed</button>
           </span>
-          <button id="spacing-training" type="button" class="utility">Back air practice</button>
-          <span id="spacing-patterns" role="group" aria-label="Back air approach" hidden>
+          <button id="spacing-training" type="button" class="utility">Aerial practice</button>
+          <span id="spacing-patterns" role="group" aria-label="Aerial exercises" hidden>
             <button id="spacing-approach" type="button" class="utility" aria-pressed="true">Approach</button>
             <button id="spacing-retreat" type="button" class="utility" aria-pressed="false">Retreat</button>
+            <button id="spacing-landing" type="button" class="utility" aria-pressed="false">Landing hits</button>
             <button id="spacing-side" type="button" class="utility">Switch sides</button>
             <button id="spacing-slow" type="button" class="utility" aria-pressed="true">Half speed</button>
           </span>

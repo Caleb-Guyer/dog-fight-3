@@ -104,7 +104,11 @@ A running jump carries your ground speed into the air. Let go to coast, or steer
 
 During a full run, tap the opposite direction with Jump to turn around while your momentum carries you forward. Steer back along your original path and tap Attack for a backward strike toward the opponent. You can also choose an aerial with the aim keys or right stick while steering independently. On touch, swipe outward from **Smash** toward the target while your other thumb steers.
 
-In **Training → Back air practice**, **Approach** starts you running toward a shield. Turn in the jump, tag the shield with your back air and land behind the grab. **Retreat** starts you running away. Aim your back air toward the rival as you jump and carry on out of reach. The two drills work with either facing and your selected matchup.
+In **Training → Aerial practice → Landing hits**, hold toward the rival and tap Jump. Tap Attack over the first mark, a gold fork, so your forward aerial catches with its follow-through. Release the direction as you land, then tap Attack at the jab cue. The rival holds Shield after the first hit. **True combo** means your jab arrived while the rival was still in hitstun. Choose Landing hits to retry, then wait for the green stripe to swing with the leading hit. Both sides and all starting damage settings are playable. The timing marks are tuned for a short hop at 0%.
+
+Pip’s Flying Kick deals 8% clean or 4% late. Brisket’s Air Ram deals 13% or 7%. Noodle’s Slip Lead reaches farthest on the 6% cast and draws the rival close with its shorter 4% return. Clover’s Forehand sends the rival outward for 8% or lifts them with the trailing rim for 5%. These are fresh-move values. Each swing can hit the same rival once.
+
+In **Aerial practice → Approach**, turn in a running jump, tag the shield with your back air and land behind the grab. **Retreat** starts you running away. Aim your back air toward the rival as you jump and carry on out of reach. The two drills work with either facing and your selected matchup.
 
 ## Wavedashes and wavelands
 

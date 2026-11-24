@@ -178,8 +178,14 @@
     if (a.diving) return 0.44 + 0.16 * Math.min(a.diveTime * 4, 1);
     if (a.moveId === 'cloverSail' && !a.folded && a.time >= a.start + a.active) return 0.57;
     if (a.anchor && a.time >= a.start) return 0.45 + Math.min(0.17, (a.time - a.start) * 0.7);
-    // A late shoulder hit is the follow-through of one rush, so its pose keeps advancing.
-    const beat = a.dashAttack && a.late ? a : attackWindow(a);
+    // A lingering hit is the follow-through of the same swing.
+    const beat = a.late ? a : attackWindow(a);
+    if (a.airSide && a.late && a.time >= a.start) {
+      const late = a.late, end = late.start + late.active;
+      if (a.time < late.start) return 0.4 + 0.15 * (a.time - a.start) / (late.start - a.start);
+      if (a.time < end) return 0.55 + 0.25 * (a.time - late.start) / late.active;
+      return 0.8 + 0.2 * clamp((a.time - end) / (a.end - end), 0, 1);
+    }
     if (a.time < beat.start - 1e-8) {
       const held = a.smashSide ? 0.08 + 0.26 * a.power : 0;
       return held + (0.39 - held) * clamp(a.time / beat.start, 0, 1);
@@ -983,7 +989,7 @@
     ctx.save();
     ctx.translate(snap(f.x), snap(f.y));
     ctx.scale(f.face, 1);
-    const [x, y, rx, ry] = a.box;
+    const [x, y, rx, ry] = beat.box || a.box;
     if (a.rope) {
       const extension = 1 - 0.3 * Math.max(0, (progress - 0.58) / 0.42);
       const endX = a.rope === 'up' ? x + 3 : a.rope === 'down' ? x + 14 : (x + rx - 6) * extension;
@@ -2022,9 +2028,9 @@
             e.emphatic ? 'impact' : 'light',
             point.x,
             point.y,
-            e.emphatic ? gold : cream,
+            e.emphatic ? gold : e.timing === 'late' ? mint : cream,
             e.emphatic ? 0.19 : 0.14,
-            (e.emphatic ? (e.name === 'finisher' ? 54 : 62) : 45) * (0.65 + 0.35 * (e.power ?? 1)),
+            (e.emphatic ? (e.name === 'finisher' ? 54 : 62) : e.timing === 'late' ? 28 : 45) * (0.65 + 0.35 * (e.power ?? 1)),
             face,
           );
           if (!reduced.matches && e.emphatic) this.shake = Math.min(7, 2 + e.speed * 0.006);
@@ -2219,11 +2225,22 @@
       if (world.spacingPractice) {
         const drill = world.spacingPractice, floor = world.terrain[drill.ground];
         const x = snap(drill.mark, 2), y = floor.y + 5;
-        for (const color of [ink, cream]) {
-          const w = color === ink ? 5 : 2;
-          pixelLine(ctx, x - 11, y + 2, x + 11, y + 2, color, w, 2);
-          pixelLine(ctx, x - 11, y - 1, x - 11, y + 3, color, w, 2);
-          pixelLine(ctx, x + 11, y - 1, x + 11, y + 3, color, w, 2);
+        if (drill.pattern === 'landing') {
+          // A fork and a single stripe stay distinct against all three floors.
+          for (const [at, fork, tint] of [[x, true, gold], [snap(drill.cleanMark, 2), false, mint]]) {
+            for (const color of [ink, tint]) {
+              const w = color === ink ? 6 : 3;
+              pixelLine(ctx, at - (fork ? 10 : 7), y + 5, at, y - 2, color, w, 2);
+              if (fork) pixelLine(ctx, at, y - 2, at + 10, y + 5, color, w, 2);
+            }
+          }
+        } else {
+          for (const color of [ink, cream]) {
+            const w = color === ink ? 5 : 2;
+            pixelLine(ctx, x - 11, y + 2, x + 11, y + 2, color, w, 2);
+            pixelLine(ctx, x - 11, y - 1, x - 11, y + 3, color, w, 2);
+            pixelLine(ctx, x + 11, y - 1, x + 11, y + 3, color, w, 2);
+          }
         }
         if (drill.landingX !== undefined) {
           const at = snap(drill.landingX, 2);
