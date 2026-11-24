@@ -2347,9 +2347,9 @@
       f.vy = Math.min(0, f.vy);
     }
   }
-  function attackWindow(attack) {
+  function attackWindow(attack, time = attack.time) {
     const next = attack.second || attack.late;
-    return next && attack.time + 1e-8 >= next.start ? next : attack;
+    return next && time + 1e-8 >= next.start ? next : attack;
   }
   function aerialHitTiming(attack, beat) {
     return attack?.airSide === 'forward' && attack.late ? (beat === attack.late ? 'late' : 'clean') : '';
@@ -2517,6 +2517,11 @@
     const t = f.tumble;
     return !!t?.meteor && !t.pending && f.stun > 0 && f.vy > 0 && f.ground < 0 && (f.jumps > 0 || !f.usedUp) &&
       t.time * 60 + 1e-8 >= moves[t.meteor].meteor;
+  }
+  // A fading launch opens a dodge first, then a slower, closer-to-neutral aerial reply.
+  function fadeWindow(time, speed, stun, aerial) {
+    return stun > 1/60 + 1e-8 && stun <= (aerial ? 7 : 10)/60 + 1e-8 &&
+      time + 1e-8 >= (aerial ? 17 : 14)/60 && speed <= (aerial ? 370 : 470);
   }
   function jumpRunDirection(f) {
     const run = f.run;
@@ -2942,7 +2947,8 @@
         return { ...idleInput, x: Math.sign(rival.x - this.dogs[0].x) || this.dogs[0].face };
       if (d.reply !== 'guard') return idleInput;
       if (rival.ground >= 0) return { ...idleInput, shield: true };
-      if (frozen || rival.stun > dt + 1e-8 || rival.usedDodge || rival.airDodge || rival.ledge) return idleInput;
+      if (frozen || (rival.stun > dt + 1e-8 && !this.canEscapeHitstun(rival,false)) ||
+          rival.usedDodge || rival.airDodge || rival.ledge) return idleInput;
       return { ...idleInput, shield: true, tapped: { shield: !rival.guardBuffer } };
     }
     comboContact(target, kind, moveId, damage = 0) {
@@ -2954,7 +2960,19 @@
       if (kind !== 'grab' && kind !== 'block') { d.hits++; d.damage += damage; }
     }
     resetLaunchPractice(pattern, dir = 1, slow = true, chase = false) {
+      const pauseAtWindow = this.launchPractice?.pauseAtWindow ?? true;
       this.resetTraining();
+      if (pattern === 'breakaway') {
+        const original = {dogs:this.dogs,stage:this.stage};
+        this.stage = 'nightmail';
+        this.terrain = platforms(this.stage,this.time);
+        const player = newFighter('clover',0), rival = newFighter('pip',1), y = this.terrain[0].y;
+        this.dogs = [player,rival];
+        Object.assign(rival,{x:600,y,ground:0,face:dir});
+        Object.assign(player,{x:600+dir*(rival.stats.width+player.stats.width+2),y,ground:0,face:-dir,damage:153});
+        this.launchPractice = {original,pattern,dir,slow,late:chase,pauseAtWindow,phase:'waiting',frame:0,opened:false};
+        return;
+      }
       if (pattern === 'juggle') {
         const original = { dogs: this.dogs, stage: this.stage };
         this.stage = 'picnic';
@@ -4458,6 +4476,20 @@
     }
     practiceInput(dt) {
       const drill = this.launchPractice;
+      if (drill.pattern === 'breakaway') {
+        if (drill.phase === 'opening') {
+          drill.phase = 'lift';
+          return {...idleInput, aimStick:true, tiltMode:true, smashY:-1};
+        }
+        if (drill.phase === 'lift' && this.dogs[0].tumble?.fromHit) drill.phase = 'chase';
+        if (drill.phase !== 'chase') return idleInput;
+        const frame = drill.frame++;
+        if (frame >= 65) {
+          this.finishBreakaway(drill.evaded ? 'evaded' : 'clear');
+          return idleInput;
+        }
+        return {...idleInput, jump:frame>=10 && frame<22, aimStick:frame===(drill.late ? 25 : 13), smashX:drill.dir};
+      }
       if (drill.phase === 'ready') {
         drill.time += dt;
         if (drill.time >= 0.32 && !drill.grabStarted) {
@@ -4478,6 +4510,12 @@
         }
       }
       return idleInput;
+    }
+    finishBreakaway(outcome, moveId) {
+      const d=this.launchPractice;
+      d.phase='done';
+      d.outcome=outcome;
+      this.emit('breakawayResult',{f:this.dogs[0],outcome,moveId});
     }
     juggleInput(guard, foe, read) {
       const floor = this.terrain[read.floor], dir = read.dir;
@@ -4557,6 +4595,11 @@
         }
         path.zone = blastZone(path.x, path.y, this.stageWidth, this.blastInset(path.ticks));
         if (path.zone) break;
+        if (!path.dodgeFrame && (f.tumble?.pending || f.tumble?.fromHit) && !f.tumble.meteor && !f.usedDodge && !f.throwBounce &&
+            fadeWindow(f.tumble.time+n*dt,Math.hypot(vx,vy),f.stun-n*dt,false)) {
+          const future={...f,...path,vx,vy};
+          if (this.floorAhead(future,techWindow+dt)<0 && !this.wallAhead(future,techWindow+dt)) path.dodgeFrame=n+1;
+        }
       }
       return path;
     }
@@ -4590,6 +4633,7 @@
       f.vx = v.x;
       f.vy = v.y;
       f.tumble.pending = false;
+      f.tumble.fromHit = true;
       f.tumble.downLaunch = Math.max(0, v.y);
       if (this.survivalPractice && f.index === 0) {
         this.survivalPractice.angle = v.angle;
@@ -4651,6 +4695,37 @@
       else this.finishMatch(p.stocks > q.stocks ? 0 : 1, 'time');
     }
     stepFighters(dt, input1, input2) {
+      const breakaway = this.launchPractice?.pattern === 'breakaway' && this.launchPractice;
+      if (breakaway) {
+        if (breakaway.phase === 'waiting') {
+          if (!input1.attack && !input1.tapped?.attack) return;
+          breakaway.phase='opening';
+          breakaway.consumeAttack=true;
+        }
+        if (breakaway.consumeAttack) {
+          breakaway.consumeAttack=!!input1.attack;
+          input1={...input1,attack:false,tapped:{...input1.tapped,attack:false}};
+        }
+        if (breakaway.phase==='chase' && !breakaway.opened && this.canEscapeHitstun(this.dogs[0],true)) {
+          breakaway.opened=true;
+          breakaway.paused=breakaway.pauseAtWindow;
+          breakaway.previous=this.dogs[0].prev;
+          this.emit('breakawayWindow',{f:this.dogs[0]});
+        }
+        if (breakaway.paused && breakaway.pauseAtWindow) {
+          const key=['shield','aimStick','attack','jump'].find(k=>input1.tapped?.[k] || (input1[k] && !breakaway.previous[k]));
+          breakaway.previous=input1;
+          if (!key) return;
+          breakaway.consumeJump=key==='jump';
+          input1={...input1,tapped:{...input1.tapped,[key]:true}};
+          breakaway.paused=false;
+        }
+        if (breakaway.consumeJump) {
+          breakaway.consumeJump=!!input1.jump;
+          input1={...input1,jump:false,tapped:{...input1.tapped,jump:false}};
+        }
+        if (breakaway.phase==='opening' || breakaway.phase==='lift') input1=idleInput;
+      }
       const juggle = this.launchPractice?.pattern === 'juggle' && this.launchPractice;
       if (juggle?.phase === 'waiting') {
         if (!input1.attack && !input1.tapped?.attack) return;
@@ -5437,6 +5512,17 @@
           f.tumble.cancel = f.command;
         else if (pressed('jump') && f.jumps > 0) f.tumble.cancel = 'jump';
       }
+      if (f.tumble?.fromHit && !f.tumble.escape) {
+        const combo=this.comboPractice;
+        if (combo?.contacts.length && f.index===1 && combo.firstFree===null &&
+            (this.canEscapeHitstun(f,false) || this.canEscapeHitstun(f,true))) combo.firstFree=combo.clock;
+        const dodge = pressed('shield');
+        const aerial = !dodge && (button === 'attack' || button === 'aimStick') && f.command?.type === 'attack';
+        if ((dodge || aerial) && this.canEscapeHitstun(f,!!aerial)) {
+          f.tumble.escape = {aerial:!!aerial, frames:Math.ceil(f.stun*60-1e-8)-1,
+            command:aerial ? f.command : null, aim:dodge ? f.guardAim : null};
+        }
+      }
       if ((pressed('jump') || pressed('shortHop')) && !input.shield && !f.guardBuffer &&
           (!f.command || f.command.type === 'attack')) {
         const source = cancelableWindup(f);
@@ -5450,6 +5536,14 @@
         }
       }
       if (f.jumpSquat) bufferSquatInput(f, input);
+    }
+    canEscapeHitstun(f, aerial) {
+      const t=f.tumble;
+      if (!t?.fromHit || t.pending || t.meteor || f.throwBounce || f.grip || f.wallAction ||
+          f.floorAction || f.ledge || f.ground >= 0 || f.impactLag || f.attack || f.ledgeTrump ||
+          (!aerial && f.usedDodge) || (f.encounter && f.encounter.kind !== f.kind)) return false;
+      return fadeWindow(t.time,Math.hypot(f.vx,f.vy),f.stun,aerial) &&
+        this.floorAhead(f,techWindow+1/60)<0 && !this.wallAhead(f,techWindow+1/60);
     }
     floorAhead(f, horizon) {
       if (f.vy < 0) return -1;
@@ -6014,6 +6108,26 @@
       if (f.clashRecoil) {
         f.clashRecoil.time += dt;
         if (f.clashRecoil.time + 1e-8 >= f.clashRecoil.duration) f.clashRecoil = null;
+      }
+      if (f.tumble?.escape) {
+        const {aerial,frames,command,aim}=f.tumble.escape;
+        this.clearTumble(f,aerial ? 'Aerial' : 'Air dodge');
+        f.stun = f.jumpBuffer = f.guardBuffer = 0;
+        f.command = f.reaction = null;
+        if (aerial) {
+          aerialStrike(f,command);
+          f.attack.hitstunCancelFrames=frames;
+        }
+        else {
+          f.guardAim=aim;
+          this.beginAirDodge(f);
+          f.airDodge.hitstunCancelFrames=frames;
+        }
+        if (f.index===0 && this.launchPractice?.pattern==='breakaway') {
+          this.launchPractice.saved=frames;
+        }
+        this.emit('hitstunCancel',{f,frames,option:aerial?'aerial':'dodge',moveId:f.attack?.moveId,
+          point:{x:f.x,y:f.y-f.stats.height*.52}});
       }
       if (f.tumble?.cancel && f.tumble.meteor) {
         const { cancel, meteor } = f.tumble, jump = cancel === 'jump';
@@ -7322,6 +7436,8 @@
             Math.abs(rival.x - area.x) <= area.rx + rival.stats.width &&
             Math.abs(rival.y - height * 0.52 - area.y) <= area.ry + height * 0.4;
           if (this.shieldPractice) this.recordPracticeDodge(rival, overlaps);
+          if (this.launchPractice?.pattern==='breakaway' && rival.index===0 && rival.airDodge && rival.invuln>0 && overlaps)
+            this.launchPractice.evaded=true;
           const edge = this.edgePractice;
           if (edge?.timeCatch && edge.phase === 'hanging' && f.index === 0 && rival.ledge && overlaps && rival.invuln > 0)
             edge.earlyFrames = Math.ceil(rival.invuln * 60);
@@ -7731,6 +7847,7 @@
         return false;
       }
       const poked = target.shield && !grab && !covered;
+      const caughtDodge = target.airDodge?.hitstunCancelFrames && target.airDodge.time>=target.airDodge.safeUntil-1e-8;
       const parryPunish = owner.index === 0 && target.index === 1 && owner.ground >= 0 && target.stun > 0 &&
         this.spacingPractice?.pattern === 'fastfall' && this.spacingPractice.parried;
       const pressure = this.bot.pressure;
@@ -7896,6 +8013,11 @@
       const timing = aerialHitTiming(use, move);
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic, power, damage: applied, timing,
         meteor: !!target.tumble?.meteor });
+      const breakaway = this.launchPractice;
+      if (breakaway?.pattern==='breakaway' && breakaway.phase==='chase') {
+        if (owner.index===0) this.finishBreakaway(use?.hitstunCancelFrames ? 'counter' : 'otherHit',moveId);
+        else this.finishBreakaway(caughtDodge ? 'caughtDodge' : 'caught',moveId);
+      }
       const edge = this.edgePractice;
       if (edge && edge.phase !== 'done') {
         if (target.index === 0) this.finishEdgePractice('caught', moveId);
@@ -7909,7 +8031,7 @@
       if (target.tumble?.pending && (!target.encounter || target.encounter.kind === target.kind) &&
           ((target.stocks === 1 && this.mode !== 'training') || (target.index === 0 && this.survivalPractice))) {
         const line = this.projectLaunch(target, target.vx, target.vy);
-        if (line.zone) {
+        if (line.zone && !line.dodgeFrame) {
           target.tumble.threat = line.zone;
           if (this.survivalPractice) this.survivalPractice.zone = line.zone;
           const finalHit = this.survivalPractice?.pattern === 'lastStock' ||
@@ -8859,6 +8981,37 @@
       this.bot.timer = .25;
       return {...idleInput, x:behind ? -f.face : 0, y:behind ? 0 : -1, jump:true, tapped:{jump:true}};
     }
+    tumbleReply(f,foe) {
+      const swing=foe.attack;
+      if (!f.tumble?.fromHit || !swing?.airSide || protectionTime(foe) || foe.ground>=0) return null;
+      const dodge=this.canEscapeHitstun(f,false), aerial=this.canEscapeHitstun(f,true);
+      if (!dodge && !aerial) return null;
+      const overlaps=(striker,target,box,t)=>{
+        const [x,y,rx,ry]=box, height=bodyHeight(target);
+        const dx=target.x-striker.x+(target.vx-striker.vx)*t;
+        const dy=target.y-striker.y+(target.vy-striker.vy)*t+770*(target.kit.gravity-striker.kit.gravity)*t*t;
+        return Math.abs(dx*striker.face-x)<=rx+target.stats.width &&
+          Math.abs(dy-height*.52-y)<=ry+height*.4;
+      };
+      let impact=Infinity;
+      for (let n=1;n<=10;n++) {
+        const t=n/60, beat=attackWindow(swing,swing.time+t);
+        if (beat.box && swing.time+t+1e-8>=beat.start && swing.time+t<beat.start+beat.active-1e-8 &&
+            overlaps(foe,f,beat.box,t)) {impact=t;break;}
+      }
+      if (aerial) {
+        const toward=Math.sign(foe.x-f.x)||f.face, side=toward===f.face?'forward':'back';
+        for (const aim of ['neutral',side,'down']) {
+          const move=moves[f.kit.air[aim]];
+          if (move.start>=impact || move.start>swing.end-swing.time || !overlaps(f,foe,move.box,move.start)) continue;
+          return {...idleInput,aimStick:true,tapped:{aimStick:true},smashX:aim===side?toward:0,smashY:aim==='down'?1:0};
+        }
+      }
+      const [,first,last]=f.kit.airDodge.neutral, wear=dodgeWear(f);
+      if (dodge && impact>=(first+wear)/60 && impact<=(last-wear)/60)
+        return {...idleInput,shield:true,tapped:{shield:true}};
+      return null;
+    }
     angledTiltInput(f, foe) {
       if (f.ground < 0 || f.run || f.attack || f.landingLag || f.stun || f.grip || f.shield || f.floorAction ||
           f.command || f.charge >= 0 || foe.ground >= 0 || foe.ledge || protectionTime(foe)) return null;
@@ -9247,6 +9400,11 @@
         }
         return result;
       }
+      if (this.cpuLevel==='rival' && this.canEscapeHitstun(f,false)) {
+        const zone=this.projectLaunch(f,f.vx,f.vy).zone;
+        if (zone) return {...idleInput,shield:true,tapped:{shield:true},
+          x:zone==='left'?1:zone==='right'?-1:0,y:zone==='top'?1:zone==='bottom'?-1:0};
+      }
       if (f.tumble && !f.tumble.pending && !f.usedDodge && f.stun > 0 && f.stun <= inputWindow - dt + 1e-8 &&
           this.floorAhead(f, techWindow + dt) < 0) {
         const x = f.x + f.vx * (f.stun + 4 * dt), y = f.y + f.vy * (f.stun + 4 * dt);
@@ -9261,6 +9419,10 @@
         const inward = f.x < closest.x1 ? 1 : f.x > closest.x2 ? -1 : Math.sign((closest.x1 + closest.x2) / 2 - f.x);
         if (f.jumps) return { ...idleInput, x: inward, jump: true, tapped: { jump: true } };
         return { ...idleInput, x: inward, y: -1, special: true, tapped: { special: true } };
+      }
+      if (this.cpuLevel==='rival' && !unsafe) {
+        const reply=this.tumbleReply(f,foe);
+        if (reply) return reply;
       }
       if (brain.driftEscape) {
         const d = brain.driftEscape;
