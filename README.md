@@ -84,6 +84,7 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 | Move or aim | W A S D | Arrow keys | Left stick or D-pad |
 | Walk | Left Shift + A or D | Right Ctrl + Left or Right | Gently tilt the left stick |
 | Jump | Space | Right Shift | A |
+| Short hop | E | Apostrophe | LT / L2 |
 | Attack | J | Comma | X |
 | Smash | I | N | RT or right stick |
 | Aim a strike left / right / up / down | R / Y / T / G | Numpad 4 / 6 / 8 / 2 | Right stick |
@@ -121,6 +122,8 @@ In **Training → Platform practice**, choose **Rival below** to catch the other
 Choose **Hold the top** for a drill on Moonbell Bandstand with your selected dogs. Tap Attack to start the climb. The challenger jumps onto the right wing, then comes up through the high platform with their own up air. Try shielding it once. Repeat the drill and tap Down + Attack as the challenger jumps off the wing to intercept them. Returning to free practice or a different setup restores your arena.
 
 Your dog crouches for three frames before a grounded jump. Release Jump during the crouch for a short hop. Hold Jump through it for a full jump. Press Attack with Jump or during the crouch to launch a short-hop aerial in the direction you aimed. To attack on the way down, jump first and press Attack later. Jump a second time in midair, then use Up + Special to recover. Down + Jump drops through a raised platform.
+
+**Short hop on demand.** Hold the Short hop button for a low takeoff, then swing whenever you choose. On touch, use **Hop**. In the air it uses your normal remaining jump. Try a full jump in Landing hits, choose Landing hits again, then hold Hop. Compare the two measured heights and the chalk marks at each apex. [Play the jump comparison](https://caleb-guyer.github.io/dog-fight-3/#training/short-hops)
 
 Hold Jump just before an aerial or air dodge lands, during landing recovery, or after the last active hit of a grounded attack. Your dog starts one grounded jump on the first frame the move allows. You can release during jump squat for a short hop. Releasing earlier leaves the usual seven-frame tap window measured from the original press. Getting hit interrupts the queued jump.
 

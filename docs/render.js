@@ -2445,6 +2445,12 @@
           }
         } else if (drill.pattern === 'landing') {
           // A fork and a single stripe stay distinct against all three floors.
+          for (const [peak, tint, halfWidth] of [[drill.previousPeak, cream, 10], [drill.peak, mint, 6]]) {
+            if (!peak?.complete) continue;
+            const px = snap(peak.x, 2), py = snap(peak.y, 2);
+            pixelLine(ctx, px - halfWidth, py, px + halfWidth, py, ink, 5, 2);
+            pixelLine(ctx, px - halfWidth, py, px + halfWidth, py, tint, 2, 2);
+          }
           for (const [at, fork, tint] of [[x, true, gold], [snap(drill.cleanMark, 2), false, mint]]) {
             for (const color of [ink, tint]) {
               const w = color === ink ? 6 : 3;

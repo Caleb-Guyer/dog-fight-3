@@ -1,11 +1,11 @@
 (() => {
   'use strict';
 
-  const prefix = 'dogfight3-cg-versus-v33-';
-  const channel = 'dogfight3-v33';
+  const prefix = 'dogfight3-cg-versus-v34-';
+  const channel = 'dogfight3-v34';
   const quickId = prefix + 'quickplay';
   const roomAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick', 'tiltMode'];
+  const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick', 'tiltMode', 'shortHop'];
   const axes = ['x', 'y', 'grabX', 'smashX', 'smashY', 'airDodgeX', 'airDodgeY'];
   const predictionLimit = 8;
   const fighter = (kind) => typeof kind === 'string' && Object.hasOwn(window.DogFight.fighters, kind);
