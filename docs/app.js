@@ -368,6 +368,9 @@
       }[detail.f.kind];
       tone(start, end, 0.053, 0, wave, wave === 'square' ? 0.033 : 0.085);
       tone(end * 0.7, end * 0.45, 0.055, 0.009, 'triangle', 0.068);
+    } else if (name === 'blastThreat') {
+      tone(180, 290, 0.075, 0, 'triangle', 0.11);
+      tone(310, 160, 0.1, 0.065, 'square', 0.035);
     } else if (name === 'stockReady') {
       tone(360, 445, 0.07, 0, 'triangle', 0.07);
       tone(560, 660, 0.08, 0.06, 'triangle', 0.07);
@@ -915,6 +918,7 @@
         ) +
         '</ul><h3 class="guide-section">Ledge trumping</h3><p>Catch an occupied ledge to bump the other dog outward. A fresh catch protects you for 15 frames. Regrabs leave you open until you land or take a hit. Play either side in <strong>Training → Contested ledge</strong>.</p>' +
         '<h3 class="guide-section">Between hits</h3><p>Flick a fresh direction during impact freeze to move a short distance. Center the stick and flick again for a second shift if time allows. On a keyboard or touch screen, tap a direction at the spark. Try <strong>Training → Combo escape</strong> at two distances.</p>' +
+        '<h3 class="guide-section">Surviving a finisher</h3><p>On your last stock, two amber chevrons point toward the blast line if a centered stick would carry you out during hitstun. Hold across the throw during the freeze to bend your flight. On shallow launches, Down also slows you and Up adds speed. A late tap of Shield toward the stage queues an air dodge in open air. Try <strong>Training → Launch practice → Survival DI</strong>.</p>' +
         '<h3 class="guide-section">After a knockout</h3><p>Watch the lamps on the airmail lift. When they turn mint, tap Down, a side, Jump, or an aerial move to leave. Leaving early gives you more protection on landing. The last gold mail tag goes dark when you can be hit again. Try both sides in <strong>Training → Launch practice → Take the lift</strong> and <strong>Catch the return</strong>.</p>' +
         '<h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><p>On a strong meteor, tap Shield just before the platform to stop the bounce. Over open air, tap a fresh Jump or Up + Special when the gold streaks turn mint, then steer home. Try <strong>Spike landing</strong> and <strong>Offstage spike</strong>.</p><ul class="move-rows guide-defense">' +
         rows +
@@ -1102,7 +1106,7 @@
     const combo = world.lastCombo;
     const grip = world.grapple;
     const prompt = $('grapple-prompt');
-    prompt.hidden = !grip || grip.phase === 'throw' || !!world.launchPractice || !!world.stockPractice;
+    prompt.hidden = !grip || grip.phase === 'throw' || !!world.launchPractice || !!world.stockPractice || !!world.survivalPractice;
     if (!prompt.hidden) {
       const holder = world.dogs[grip.owner].stats.name;
       const captive = world.dogs[grip.target].stats.name;
@@ -1240,6 +1244,7 @@
       sound(name, e);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
       if (world?.meteorPractice && e.f?.index === 0) meteorFeedback(name, e);
+      if (world?.survivalPractice && e.f?.index === 0) survivalFeedback(name, e);
       if (world?.stockPractice && e.f?.index === world.stockPractice.slot && name.startsWith('stock'))
         stockFeedback(name, e);
       if (name === 'chaseCue' || name === 'chaseResult') chaseFeedback(name, e);
@@ -1265,6 +1270,7 @@
           e.f.kit.ledgeRoll.label + ' finished. You’re facing the ledge. Tap Attack to jab.';
         drillSide = null;
       }
+      if (name === 'blastThreat' && !world.survivalPractice) announce(e.f.stats.name + ' near the ' + e.zone + ' blast line');
       if (name === 'ko') announce(e.f.stats.name + ' knocked out');
       if (name === 'ledge' && drillSide && e.f.index === 0)
         $('recovery-tip').textContent =
@@ -1460,7 +1466,12 @@
   $('dummy-damage').addEventListener('input', (e) => {
     if (!world) return;
     const d = world.escapePractice;
-    if (world.meteorPractice) {
+    if (world.survivalPractice) {
+      const s = world.survivalPractice;
+      world.resetSurvivalPractice(s.dir, s.slow, Number(e.target.value));
+      survivalFeedback('survivalReady', {});
+      $('damage-output').textContent = world.survivalPractice.baseline + '%';
+    } else if (world.meteorPractice) {
       const m = world.meteorPractice;
       world.resetMeteorPractice(m.pattern, m.dir, m.slow, Number(e.target.value));
       meteorFeedback('meteorReady', {});
@@ -1837,6 +1848,35 @@
     status.textContent = label;
     tip.textContent = message + ' Choose ' + (attack ? 'Jab lock' : 'Escape the lock') + ' to retry.';
   }
+  function survivalFeedback(name, e) {
+    const d = world.survivalPractice, status = $('launch-status'), tip = $('recovery-tip');
+    const inward = d.dir > 0 ? 'left' : 'right', move = throws[d.moveId].label;
+    const aim = d.moveId === 'cloverForehandPass' ? 'Hold Down to slow the low throw' : 'Hold Up + ' + inward + ' to bend the throw higher';
+    let label, message;
+    if (name === 'survivalReady' || name === 'survivalStart') {
+      label = name === 'survivalReady' ? 'Tap Attack to start' : move;
+      message = name === 'survivalReady' ? 'Take ' + move + ' with the stick centered. Tap Attack to retry from the same mark.' :
+        aim + ' at the hit spark. Then steer ' + inward + ' toward the ledge.';
+    } else if (name === 'blastThreat') {
+      label = 'Blast line · aim now';
+    } else if (name === 'launchDI') {
+      label = Math.round(e.scale * 100) + '% speed · ' + Math.round(Math.abs(e.angle) * 180 / Math.PI) + '° turn';
+      message = 'At the mint arrow, aim up-' + inward + ' and tap Shield. Jump toward the ledge and use Up + Special if you need more height.';
+    } else if (name === 'survivalBuffer') {
+      label = 'Shield + up-' + inward;
+    } else if (name === 'survivalFree') {
+      label = 'Recover to the ledge';
+    } else if (name === 'survivalResult') {
+      label = { ko: 'Ring-out', ledge: 'Caught the ledge', land: 'Back onstage', miss: 'Missed grab' }[e.outcome];
+      message = e.outcome === 'ko' ? (d.free ? 'You survived the throw. Try dodging inward sooner, then use your recovery.' :
+        aim + ' during the freeze.') : e.outcome === 'miss' ? 'The rival missed the setup.' :
+        'Your launch was ' + Math.round(d.scale * 100) + '% speed. The gold trail on a retry marks your last flight.';
+      message += ' Tap Attack to retry.';
+    } else return;
+    status.dataset.result = e.outcome || name;
+    status.textContent = label;
+    if (message) tip.textContent = message;
+  }
   function stockFeedback(name, e) {
     const d = world.stockPractice, status = $('launch-status'), tip = $('recovery-tip');
     let label, message;
@@ -2088,6 +2128,7 @@
     const launch = ledge === 'launch';
     const chase = launch && (pattern === 'attack' || pattern === 'defend');
     const stock = launch && (pattern === 'stockReturn' || pattern === 'stockCatch');
+    const survival = launch && pattern === 'survival';
     const meteor = launch && (pattern === 'spikeFloor' || pattern === 'spikeEdge');
     const wall = ledge === 'wall';
     const shield = ledge === 'shield';
@@ -2109,6 +2150,8 @@
     else if (meteor) world.resetMeteorPractice(pattern, direction ?? world.meteorPractice?.dir ?? 1,
       world.meteorPractice?.slow ?? true, world.meteorPractice?.baseline ?? 100);
     else if (stock) world.resetStockPractice(pattern, direction ?? world.stockPractice?.dir ?? 1, world.stockPractice?.slow ?? true);
+    else if (survival) world.resetSurvivalPractice(direction ?? world.survivalPractice?.dir ?? 1, world.survivalPractice?.slow ?? true,
+      world.survivalPractice?.baseline);
     else if (launch) world.resetLaunchPractice();
     else if (wave) world.resetWavePractice(pattern, direction ?? world.wavePractice?.dir ?? 1, world.wavePractice?.slow ?? true);
     else if (freshness) {
@@ -2135,25 +2178,27 @@
     $('freshness-readout').hidden = $('freshness-controls').hidden = !freshness;
     $('wave-readout').hidden = $('wave-patterns').hidden = !wave;
     const counterDrill = escape && pattern === 'counter';
-    showDamageControl(counterDrill || meteor, freshness && world.freshnessPractice.koTest, meteor ? 'launch-side' : undefined);
+    showDamageControl(counterDrill || meteor || survival, freshness && world.freshnessPractice.koTest, meteor || survival ? 'launch-side' : undefined);
     $('damage-control').hidden = stock;
-    $('dummy-damage').value = meteor ? world.meteorPractice.baseline : counterDrill ? world.escapePractice.baseline : world.trainingDamage;
+    $('dummy-damage').value = survival ? world.survivalPractice.baseline : meteor ? world.meteorPractice.baseline : counterDrill ? world.escapePractice.baseline : world.trainingDamage;
     $('damage-output').textContent = $('dummy-damage').value + '%';
     $('match-stage').textContent = arenas[world.stage].name;
     hudKey = '';
     const result = $('launch-status');
     result.hidden = !launch;
     $('launch-patterns').hidden = !launch;
-    $('launch-side').hidden = $('launch-slow').hidden = !chase && !meteor && !stock;
+    const launchOptions = world.survivalPractice || world.stockPractice || world.meteorPractice || world.chasePractice;
+    $('launch-side').hidden = $('launch-slow').hidden = !launchOptions;
     if (launch) {
-      $('launch-throw').setAttribute('aria-pressed', String(!chase && !meteor && !stock));
+      $('launch-throw').setAttribute('aria-pressed', String(!launchOptions));
+      $('launch-survival').setAttribute('aria-pressed', String(survival));
       $('launch-stock-return').setAttribute('aria-pressed', String(pattern === 'stockReturn'));
       $('launch-stock-catch').setAttribute('aria-pressed', String(pattern === 'stockCatch'));
       $('launch-floor-spike').setAttribute('aria-pressed', String(pattern === 'spikeFloor'));
       $('launch-edge-spike').setAttribute('aria-pressed', String(pattern === 'spikeEdge'));
       $('launch-lock').setAttribute('aria-pressed', String(chase && pattern === 'attack'));
       $('launch-escape').setAttribute('aria-pressed', String(chase && pattern === 'defend'));
-      if (chase || meteor || stock) $('launch-slow').setAttribute('aria-pressed', String((world.chasePractice || world.meteorPractice || world.stockPractice).slow));
+      if (launchOptions) $('launch-slow').setAttribute('aria-pressed', String(launchOptions.slow));
     }
     $('footwork-status').hidden = $('footwork-patterns').hidden = !footwork;
     $('spacing-status').hidden = $('spacing-patterns').hidden = !spacing;
@@ -2303,6 +2348,9 @@
         high: 'Hold Shield. Noodle jumps for your ears. Aim Up as the lead swings over the bubble.',
         poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + moves[player.kit.tilts.down].label + '.',
       }[pattern];
+    } else if (survival) {
+      survivalFeedback('survivalReady', {});
+      message = $('recovery-tip').textContent;
     } else if (stock) {
       result.dataset.result = 'ready';
       result.textContent = 'Tap Attack to begin';
@@ -2422,13 +2470,14 @@
   $('launch-floor-spike').onclick = () => drill('launch', false, 'spikeFloor');
   $('launch-edge-spike').onclick = () => drill('launch', false, 'spikeEdge');
   $('launch-stock-return').onclick = () => drill('launch', false, 'stockReturn');
+  $('launch-survival').onclick = () => drill('launch', false, 'survival');
   $('launch-stock-catch').onclick = () => drill('launch', false, 'stockCatch');
   $('launch-side').onclick = () => {
-    const d = world.meteorPractice || world.stockPractice || world.chasePractice;
+    const d = world.survivalPractice || world.meteorPractice || world.stockPractice || world.chasePractice;
     drill('launch', false, d.pattern || d.role, -d.dir);
   };
   $('launch-slow').onclick = () => {
-    const d = world.meteorPractice || world.stockPractice || world.chasePractice;
+    const d = world.survivalPractice || world.meteorPractice || world.stockPractice || world.chasePractice;
     d.slow = !d.slow;
     $('launch-slow').setAttribute('aria-pressed', String(d.slow));
     $('game').focus({ preventScroll: true });
@@ -3370,7 +3419,7 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += world.footworkPractice?.slow || world.wavePractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow ? dt / 2 : dt;
+        accumulator += world.footworkPractice?.slow || world.wavePractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];

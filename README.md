@@ -169,6 +169,12 @@ In **Training → Combo escape → Crouch counter**, choose Brisket and tap Atta
 
 **Directional influence (DI).** During the brief freeze of a strong hit or throw, hold across the launch path to bend it by up to 18 degrees. Against a near-vertical throw, left or right changes where you come down. Against a sideways hit, holding up can buy height for a recovery. Your final direction during the freeze sets the angle. After hitstun ends, you can jump, use an aerial, or air dodge out of tumble.
 
+**Launch speed influence.** On a shallow launch, holding Down during the freeze can slow your initial speed to 92%. Holding Up can raise it to 109.5%. Analog inputs give intermediate values. A launch within 25 degrees of straight up or down keeps its speed. An upward and inward diagonal can buy height against Brisket’s Suplex. Down can take speed off Clover’s low Forehand Pass.
+
+On your last stock, a double chevron and a two-note cue warn when a centered stick would take you across a blast boundary before you regain control. In open air, you can tap Shield toward the stage in the final few frames of hitstun to dodge back as soon as you can act. Near an incoming floor or wall, the same Shield tap attempts a tech.
+
+In **Training → Launch practice → Survival DI**, take your chosen rival’s throw at the outside lip. Tap Attack to start with the stick centered. After the ring-out, tap Attack to retry at the same damage. Steer during the freeze. At the mint arrow, point diagonally up toward the stage and tap Shield, then use your jump and recovery to reach the ledge. The dashed gold trail shows your previous flight and the mint trail shows this one. Switch sides, change your starting damage, or turn off half speed to rehearse the matchup at match speed.
+
 **Landing tech.** Tap Shield in the last 11 frames before your tumbling dog hits a platform. Tap it alone for a quick recovery in place. Add left or right to roll through a waiting opponent. A roll covers more ground and leaves a longer opening at the end. A mistimed press starts a 28-frame lockout, so timing beats repeated taps.
 
 **Meteor smashes.** Pip’s Pogo Paw, Brisket’s airborne Belly Drop and Clover’s Skip Shot can drive a rival straight into a platform. A strong spike rebounds once off the first surface it meets and leaves the rival open to another attack. Tap Shield before impact to tech in place or add a side to tech roll. Pip still springs off his own hit. Brisket’s landing splash pops rivals up, and Noodle’s Underhook pulls a rival up from below.

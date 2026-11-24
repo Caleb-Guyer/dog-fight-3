@@ -1490,6 +1490,17 @@
   }
   function drawFighter(ctx, f, world, time) {
     shadow(ctx, f, world.terrain);
+    const danger = f.tumble?.threat;
+    if (danger && f.tumble.time < 8 / 60) {
+      const dx = danger === 'left' ? -1 : danger === 'right' ? 1 : 0;
+      const dy = danger === 'top' ? -1 : danger === 'bottom' ? 1 : 0;
+      const spread = reduced.matches ? 0 : Math.min(8, Math.floor(f.tumble.time * 90));
+      const x = f.x + dx * (f.stats.width + 17 + spread), y = f.y - f.stats.height * 0.5 + dy * (f.stats.height * 0.5 + 14 + spread);
+      for (const offset of [0, 11]) for (const [color, weight] of [[ink, 7], [offset ? gold : '#f68866', 4]]) {
+        const at = x + dx * offset, up = y + dy * offset;
+        for (const side of [-1, 1]) pixelLine(ctx, at - dx * 9 + dy * side * 9, up - dy * 9 + dx * side * 9, at, up, color, weight, 2);
+      }
+    }
     floorRollTrack(ctx, f);
     ledgeRollTrail(ctx, f);
     shieldSlip(ctx, f);
@@ -1778,6 +1789,7 @@
   }
   function launchDirections(ctx, trace) {
     const length = 146;
+    const steeredLength = length * trace.scale;
     const base = trace.raw,
       steered = trace.velocity;
     ctx.save();
@@ -1792,18 +1804,17 @@
       for (let at = 10; at < length - 8; at += 24)
         along(base, at, Math.min(at + 9, length - 7), color, width);
     };
-    // Equal-length rays show only the change in initial direction. Paint both outlines
-    // first so a straight launch still shows the amber dashes around its aqua center.
+    // A straight launch still shows the amber dashes around its aqua center.
     dashes(ink, 8);
-    along(steered, 7, length, ink, 6);
+    along(steered, 7, steeredLength, ink, 6);
     dashes(gold, 6);
-    along(steered, 7, length, mint, 3);
+    along(steered, 7, steeredLength, mint, 3);
     const bx = base.x * length,
       by = base.y * length;
     arc(ctx, bx, by, 6, 6, 0, Math.PI * 2, ink, 5);
     arc(ctx, bx, by, 6, 6, 0, Math.PI * 2, gold, 3);
-    const sx = steered.x * length,
-      sy = steered.y * length;
+    const sx = steered.x * steeredLength,
+      sy = steered.y * steeredLength;
     for (const [color, width] of [
       [ink, 6],
       [mint, 3],
@@ -1827,7 +1838,8 @@
   }
   function launchKey(ctx, trace, displayedWidth) {
     const degrees = Math.round((trace.turn * 180) / Math.PI);
-    const second = degrees ? 'Yours · ' + degrees + '° turn' : 'Yours · no turn';
+    const speed = Math.round(trace.scale * 100);
+    const second = (degrees ? 'Yours · ' + degrees + '° turn' : 'Yours · no turn') + (speed === 100 ? '' : ' · ' + speed + '% speed');
     ctx.save();
     ctx.font = '19px "Brawl Pixel", monospace';
     const width = Math.ceil(Math.max(ctx.measureText('Unsteered').width, ctx.measureText(second).width)) + 48;
@@ -2054,6 +2066,7 @@
             raw: { x: e.raw.x / base, y: e.raw.y / base },
             velocity: { x: e.velocity.x / speed, y: e.velocity.y / speed },
             turn: Math.abs(e.angle),
+            scale: speed / base,
           };
       }
       if (name === 'tech') this.add('techLand', e.point.x, e.point.y, mint, 0.19, 18, 1, { dir: e.dir });
@@ -2216,9 +2229,10 @@
       const off = [a, b].some((f) => f.x < 155 || f.x > 1045 || f.y > 490 || f.y < 80);
       const wideShot = Math.min(1, width / 1200, height / 675);
       const koTest = world.freshnessPractice?.koTest;
+      const survival = world.survivalPractice;
       let targetZoom = off || reduced.matches ? wideShot :
         clamp(Math.min(width / (spread + 505), height / (vertical + 345)), wideShot, 1.5);
-      let launchCenterY;
+      let launchCenterY, survivalX;
       if (koTest) {
         const floorY = world.terrain[0].y, scale = height / (canvas.clientHeight || height);
         // Keep the roof and blast line clear of the score and menu on small screens.
@@ -2227,12 +2241,20 @@
         targetZoom = Math.min(width / 575, (height - above - below) / (floorY - topBlastY));
         launchCenterY = (floorY + topBlastY) / 2 + (below - above) / (2 * targetZoom);
       }
-      const blend = resized || koTest ? 1 : 1 - Math.exp(-dt * (targetZoom < this.zoom ? 7.5 : 4));
+      if (survival) {
+        const edge = survival.dir > 0 ? world.stageWidth + 115 : -115, floor = world.terrain[survival.ground];
+        const inner = survival.lip - survival.dir * 183, outer = edge + survival.dir * 54;
+        const high = Math.min(floor.y - 245, a.y - a.stats.height - 78), low = Math.max(floor.y + 88, a.y + 52);
+        targetZoom = Math.min(1.45, width / Math.abs(outer - inner), height / (low - high + 152));
+        survivalX = (inner + outer) / 2;
+        launchCenterY = (low + high) / 2 - 18;
+      }
+      const blend = resized || koTest || survival ? 1 : 1 - Math.exp(-dt * (targetZoom < this.zoom ? 7.5 : 4));
       this.zoom += (targetZoom - this.zoom) * blend;
       const halfW = width / (2 * this.zoom), halfH = height / (2 * this.zoom);
-      const centerX = koTest ? world.freshnessPractice.marks[0] + (a.kind === 'clover' ? 176 : 89) :
+      const centerX = survival ? survivalX : koTest ? world.freshnessPractice.marks[0] + (a.kind === 'clover' ? 176 : 89) :
         halfW >= 600 ? 600 : clamp((a.x + b.x) / 2, halfW, 1200 - halfW);
-      const centerY = koTest ? launchCenterY : halfH >= 337.5 ? 337.5 : clamp((a.y + b.y) / 2 - 67, halfH, 675 - halfH);
+      const centerY = koTest || survival ? launchCenterY : halfH >= 337.5 ? 337.5 : clamp((a.y + b.y) / 2 - 67, halfH, 675 - halfH);
       this.cx += (centerX - this.cx) * blend;
       this.cy += (centerY - this.cy) * blend;
       const steady = reduced.matches || this.shakeEnabled === false;
@@ -2376,6 +2398,30 @@
           const hand = b.x - 37, top = b.y - 51;
           pixelLine(ctx, hand - 7, top - 12, hand - 3, top - 5, gold, 3, 2);
           pixelLine(ctx, hand - 14, top - 5, hand - 7, top - 2, cream, 2, 2);
+        }
+      }
+      if (survival) {
+        const boundary = survival.dir > 0 ? world.stageWidth + 115 : -115;
+        for (let y = Math.floor(top / 22) * 22; y < top + 2 * halfH; y += 22) {
+          pixelLine(ctx, boundary, y, boundary, y + 11, ink, 5, 2);
+          pixelLine(ctx, boundary, y + 2, boundary, y + 9, '#ec977b', 3, 2);
+        }
+        for (const [trail, previous] of [[survival.previous, true], [survival.trace, false]]) {
+          if (!trail?.length) continue;
+          for (let i = 1; i < trail.length; i++) {
+            if (previous && i % 2 === 0) continue;
+            const p = trail[i - 1], q = trail[i];
+            pixelLine(ctx, p.x, p.y, q.x, q.y, ink, previous ? 5 : 4, 2);
+            pixelLine(ctx, p.x, p.y, q.x, q.y, previous ? gold : mint, 2, 2);
+          }
+        }
+        if (survival.cue && !survival.free && survival.phase === 'active') {
+          const x = a.x - survival.dir * (a.stats.width + 18), y = a.y - a.stats.height * 0.55 - 7;
+          for (const [color, size] of [[ink, 7], [mint, 4]]) {
+            pixelLine(ctx, x + survival.dir * 11, y, x, y, color, size, 2);
+            pixelLine(ctx, x, y + 11, x, y, color, size, 2);
+            pixelLine(ctx, x + survival.dir * 13, y + 13, x, y, color, size, 2);
+          }
         }
       }
       if (this.launchTrace) launchDirections(ctx, this.launchTrace);

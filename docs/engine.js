@@ -111,6 +111,20 @@
   }
   const tumbleSpeed = 430;
   const maxDI = (18 * Math.PI) / 180;
+  const verticalLaunch = Math.sin(65 * Math.PI / 180);
+  const blastZone = (x, y, width) => x < -115 ? 'left' : x > width + 115 ? 'right' :
+    y < topBlastY ? 'top' : y > 765 ? 'bottom' : '';
+  function launchInfluence(vx, vy, input) {
+    const speed = Math.hypot(vx, vy), stick = Math.hypot(input.x, input.y);
+    if (!speed || stick <= 0.2) return { x: vx, y: vy, angle: 0, scale: 1 };
+    const magnitude = Math.max(1, stick), x = input.x / magnitude, y = input.y / magnitude;
+    const angle = maxDI * clamp((vx * y - vy * x) / speed, -1, 1);
+    const dx = vx * Math.cos(angle) - vy * Math.sin(angle);
+    const dy = vx * Math.sin(angle) + vy * Math.cos(angle);
+    // Steep throws and meteors keep their speed. Analog diagonals share one circular range.
+    const scale = Math.abs(dy) >= speed * verticalLaunch ? 1 : 1 - y * (y > 0 ? 0.08 : 0.095);
+    return { x: dx * scale, y: dy * scale, angle, scale };
+  }
   const octant = Math.PI / 4;
   const diagonal = Math.SQRT1_2;
   const shiftDirections = [
@@ -2342,10 +2356,6 @@
     const rise = clamp((action.time / action.duration - 0.55) / 0.45, 0, 1);
     return f.stats.height * (0.55 + 0.45 * rise);
   }
-  function cpuLaunchAim(f) {
-    const towardCenter = f.x < 600 ? 1 : -1;
-    return { x: towardCenter, y: Math.abs(f.vx) > Math.abs(f.vy) ? -1 : 0 };
-  }
   class Battle {
     constructor(config, event = () => {}, random = Math.random) {
       this.stage = config.stage;
@@ -2372,6 +2382,7 @@
       this.launchPractice = null;
       this.meteorPractice = null;
       this.stockPractice = null;
+      this.survivalPractice = null;
       this.shieldPractice = null;
       this.footworkPractice = null;
       this.freshnessPractice = null;
@@ -2519,6 +2530,7 @@
       this.launchPractice = null;
       this.meteorPractice = null;
       this.stockPractice = null;
+      this.survivalPractice = null;
       this.shieldPractice = null;
       this.footworkPractice = null;
       this.freshnessPractice = null;
@@ -2560,6 +2572,65 @@
       this.resetTraining();
       this.dogs[0].damage = 90;
       this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
+    }
+    resetSurvivalPractice(dir = 1, slow = true, damage) {
+      this.resetTraining();
+      const [dog, rival] = this.dogs;
+      const ground = this.terrain.reduce((best, surface, i, all) => {
+        if (surface.thin) return best;
+        return (dir > 0 ? surface.x2 > all[best].x2 : surface.x1 < all[best].x1) ? i : best;
+      }, 0);
+      const floor = this.terrain[ground], lip = dir > 0 ? floor.x2 : floor.x1;
+      const gap = dog.stats.width + rival.stats.width + 2;
+      const forehand = rival.kind === 'clover', face = forehand ? dir : -dir;
+      const moveId = rival.kit.throws[forehand ? 'forward' : 'back'];
+      // The distance from the outside lip to the blast line differs on each stage.
+      // Start each matchup at the first few percent where its actual throw threatens a stock.
+      const speeds = {
+        picnic: { pip: 745.6, brisket: 824, noodle: 672, clover: 763 },
+        laundry: { pip: 699, brisket: 746, noodle: 608, clover: 707 },
+        bandstand: { pip: 854.4, brisket: 938, noodle: 792, clover: 871 },
+      };
+      const move = throws[moveId];
+      const percent = Math.ceil((speeds[this.stage][rival.kind] * dog.stats.weight - move.base) / move.growth - move.dmg);
+      const baseline = clamp(Math.round(damage ?? percent), 0, 200);
+      Object.assign(rival, { x: lip - dir * (forehand ? 64 : 14), y: floor.y, face, ground });
+      Object.assign(dog, { x: rival.x + face * gap, y: floor.y, face: -face, ground, damage: baseline });
+      this.survivalPractice = { pattern: 'survival', dir, slow, baseline, ground, lip, phase: 'ready', ticks: 0, moveId,
+        grabSent: false, released: false, free: false, angle: 0, scale: 1, zone: '', outcome: '', trace: [], previous: null };
+    }
+    survivalInput() {
+      const d = this.survivalPractice;
+      if (d.ticks >= 10 && !d.grabSent) {
+        d.grabSent = true;
+        return { ...idleInput, grab: true, tapped: { grab: true } };
+      }
+      return d.ticks >= 38 && this.grapple?.phase === 'hold' ? { ...idleInput, x: d.dir } : idleInput;
+    }
+    finishSurvivalPractice(outcome) {
+      const d = this.survivalPractice;
+      if (d.phase === 'done') return;
+      d.phase = 'done';
+      d.outcome = outcome;
+      this.emit('survivalResult', { f: this.dogs[0], outcome });
+    }
+    checkSurvivalPractice() {
+      const d = this.survivalPractice, f = this.dogs[0];
+      if (!d.released) {
+        if (d.ticks > 110) this.finishSurvivalPractice('miss');
+        return;
+      }
+      if (!d.free && !f.tumble?.pending && (!d.trace.length || d.ticks % 3 === 0 || f.stun <= 0))
+        d.trace.push({ x: f.x, y: f.y - f.stats.height * 0.52 });
+      if (f.tumble && !f.tumble.pending && !d.cue && f.stun > 0 && f.stun <= inputWindow - 1 / 60 + 1e-8) {
+        d.cue = true;
+        this.emit('survivalBuffer', { f });
+      }
+      if (f.ledge || f.ground >= 0) this.finishSurvivalPractice(f.ledge ? 'ledge' : 'land');
+      else if (!d.free && f.stun <= 0 && !f.tumble?.pending) {
+        d.free = true;
+        this.emit('survivalFree', { f });
+      }
     }
     resetStockPractice(pattern = 'stockReturn', dir = 1, slow = true) {
       this.resetTraining();
@@ -3529,19 +3600,64 @@
       }
       return idleInput;
     }
+    projectLaunch(f, vx, vy) {
+      const dt = 1 / 60, drag = Math.pow(0.68, dt);
+      const stop = f.tumble?.meteor && (f.jumps || !f.usedUp)
+        ? Math.min(f.stun, moves[f.tumble.meteor].meteor * dt) : f.stun;
+      const path = { x: f.x, y: f.y, ticks: 0, zone: '', drop: f.drop, dropPlatform: f.dropPlatform };
+      // A wall, landing or first actionable frame ends the forecast. Each can change the flight.
+      for (let n = 1; n * dt < stop - 1e-8; n++) {
+        const x = path.x, y = path.y, time = this.time + n * dt;
+        vx *= drag;
+        vy = Math.min(vy + 1540 * f.kit.gravity * dt, 970);
+        path.x += vx * dt;
+        path.y += vy * dt;
+        path.ticks = n;
+        path.drop = Math.max(0, path.drop - dt);
+        const terrain = !this.layout && this.stage === 'laundry' ? platforms(this.stage, time) : this.terrain;
+        if (this.wallContact(f, x, y, path.x, path.y) ||
+            (vy >= 0 && this.landingSurface(path, y, x, f.tumble?.meteor ? dt : 0, terrain, time) >= 0)) break;
+        path.zone = blastZone(path.x, path.y, this.stageWidth);
+        if (path.zone) break;
+      }
+      return path;
+    }
+    cpuLaunchAim(f) {
+      const home = f.x < this.stageWidth / 2 ? 1 : -1;
+      const normal = { x: home, y: Math.abs(f.vx) > Math.abs(f.vy) ? -1 : 0 };
+      const margin = p => Math.min(p.x + 115, this.stageWidth + 115 - p.x, p.y - topBlastY, 765 - p.y);
+      const forecast = input => {
+        const v = launchInfluence(f.vx, f.vy, input);
+        return this.projectLaunch(f, v.x, v.y);
+      };
+      const usual = forecast(normal);
+      if (!usual.zone && margin(usual) >= 80) return normal;
+      const floors = this.terrain.filter(p => !p.thin);
+      const deck = floors.reduce((best, p) => Math.abs(f.x - clamp(f.x, p.x1, p.x2)) <
+        Math.abs(f.x - clamp(f.x, best.x1, best.x2)) ? p : best);
+      const score = p => p.zone ? -1000 + p.ticks : margin(p) - Math.max(0, p.y - deck.y) * 0.35;
+      let best = normal, bestScore = score(usual);
+      for (const x of [home, 0, -home]) for (const y of [-1, 0, 1]) {
+        const value = score(forecast({ x, y }));
+        if (value > bestScore + 1e-6) { bestScore = value; best = { x, y }; }
+      }
+      return best;
+    }
     releaseLaunch(f, input) {
       const raw = { x: f.vx, y: f.vy };
-      const speed = Math.hypot(raw.x, raw.y);
-      // The perpendicular component rotates the launch once. Parallel input preserves the line.
-      const stick = Math.hypot(input.x, input.y);
-      const cross = (raw.x * input.y - raw.y * input.x) / (speed * Math.max(1, stick));
-      const angle = stick > 0.2 ? maxDI * clamp(cross, -1, 1) : 0;
-      f.vx = raw.x * Math.cos(angle) - raw.y * Math.sin(angle);
-      f.vy = raw.x * Math.sin(angle) + raw.y * Math.cos(angle);
+      const v = launchInfluence(f.vx, f.vy, input);
+      f.vx = v.x;
+      f.vy = v.y;
       f.tumble.pending = false;
+      if (this.survivalPractice && f.index === 0) {
+        this.survivalPractice.angle = v.angle;
+        this.survivalPractice.scale = v.scale;
+        this.survivalPractice.trace.push({ x: f.x, y: f.y - f.stats.height * 0.52 });
+      }
       this.emit('launchDI', {
         f,
-        angle,
+        angle: v.angle,
+        scale: v.scale,
         raw,
         velocity: { x: f.vx, y: f.vy },
         point: { x: f.x, y: f.y - f.stats.height * 0.52 },
@@ -3549,24 +3665,30 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
-      let stock = this.stockPractice;
-      if (stock && stock.phase !== 'active') {
+      let exercise = this.stockPractice || this.survivalPractice;
+      if (exercise && exercise.phase !== 'active') {
         const tap = input1.tapped?.attack || (input1.attack && !this.dogs[0].prev.attack);
-        if (!tap || stock.consumeAttack) {
-          stock.consumeAttack = !!input1.attack && stock.consumeAttack;
+        if (!tap || exercise.consumeAttack) {
+          exercise.consumeAttack = !!input1.attack && exercise.consumeAttack;
           this.dogs[0].prev = { ...input1 };
           return;
         }
-        if (stock.phase === 'done') {
-          this.resetStockPractice(stock.pattern, stock.dir, stock.slow);
-          stock = this.stockPractice;
+        if (exercise.phase === 'done') {
+          if (this.survivalPractice) {
+            const last = exercise.trace;
+            this.resetSurvivalPractice(exercise.dir, exercise.slow, exercise.baseline);
+            this.survivalPractice.previous = last;
+          }
+          else this.resetStockPractice(exercise.pattern, exercise.dir, exercise.slow);
+          exercise = this.stockPractice || this.survivalPractice;
         }
-        stock.phase = 'active';
-        stock.consumeAttack = true;
-        this.emit('stockStart', { f: this.dogs[stock.slot] });
+        exercise.phase = 'active';
+        exercise.consumeAttack = true;
+        if (this.stockPractice) this.emit('stockStart', { f: this.dogs[exercise.slot] });
+        else this.emit('survivalStart', { f: this.dogs[0] });
       }
-      if (stock?.consumeAttack) {
-        stock.consumeAttack = !!input1.attack;
+      if (exercise?.consumeAttack) {
+        exercise.consumeAttack = !!input1.attack;
         input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
       }
       let meteorDrill = this.meteorPractice;
@@ -3748,11 +3870,12 @@
             this.shiftDuringHit(f, human || cpu);
           }
           if (!this.hitStop && f.tumble?.pending)
-            this.releaseLaunch(f, human || (this.cpuControlled(f) ? cpuLaunchAim(f) : idleInput));
+            this.releaseLaunch(f, human || (this.cpuControlled(f) ? this.cpuLaunchAim(f) : idleInput));
         }
         return;
       }
       this.time += dt;
+      if (this.survivalPractice) this.survivalPractice.ticks++;
       if (wave?.phase === 'active') wave.frame++;
       const old = this.terrain;
       this.terrain = this.layout?.terrain || platforms(this.stage, this.time);
@@ -3761,7 +3884,8 @@
       else if (this.mode === 'training') second = this.trainingRivalInput(dt, input1);
       const settingUpWallHit = wallDrill?.phase === 'swing';
       const inputs = [
-        this.launchPractice?.phase === 'ready' || settingUpWallHit ? idleInput : input1,
+        this.launchPractice?.phase === 'ready' || (this.survivalPractice && !this.survivalPractice.released) ||
+          settingUpWallHit ? idleInput : input1,
         ...(Array.isArray(second) ? second : [second]),
       ];
       if (settingUpWallHit && !wallDrill.swung) {
@@ -3804,14 +3928,15 @@
       if (wave) this.checkWavePractice();
       if (this.chasePractice) this.checkChasePractice(dt);
       if (meteorDrill) this.checkMeteorPractice(dt);
-      if (stock) this.checkStockPractice(dt);
+      if (this.stockPractice) this.checkStockPractice(dt);
+      if (this.survivalPractice) this.checkSurvivalPractice();
       if (
         this.fetch &&
         !this.platformPractice &&
         !this.spacingPractice &&
         !this.chasePractice &&
         !meteorDrill &&
-        !stock &&
+        !exercise &&
         !this.escapePractice &&
         !this.footworkPractice &&
         !this.freshnessPractice &&
@@ -3825,13 +3950,12 @@
         !wallDrill
       )
         this.updateBall(dt);
-      const out = this.dogs.filter(
-        (f) => !f.absent && (f.x < -115 || f.x > this.stageWidth + 115 || f.y > 765 || f.y < topBlastY),
-      );
+      const out = this.dogs.filter(f => !f.absent && blastZone(f.x, f.y, this.stageWidth));
       if (this.freshnessPractice) this.traceFreshness(out.includes(this.dogs[1]));
       if (out.length) this.knockouts(out);
     }
     trainingRivalInput(dt, player) {
+      if (this.survivalPractice) return this.survivalInput();
       if (this.stockPractice) return this.stockPracticeInput();
       if (this.meteorPractice) return this.meteorPracticeInput();
       if (this.platformPractice?.pattern === 'hold') {
@@ -4014,7 +4138,7 @@
             f.tumble.techDir = Math.abs(input.x) > 0.45 ? Math.sign(input.x) : 0;
           }
           if (
-            f.stun > 0 ||
+            f.stun + 1e-8 >= inputWindow ||
             this.floorAhead(f, techWindow + 1 / 60) >= 0 ||
             this.wallAhead(f, techWindow + 1 / 60)
           )
@@ -4476,8 +4600,8 @@
         f.vx *= Math.pow(0.72, dt * 60);
         return;
       }
+      f.stun = f.stun <= dt + 1e-8 ? 0 : f.stun - dt;
       for (const key of [
-        'stun',
         'invuln',
         'ledgeLock',
         'drop',
@@ -4501,10 +4625,7 @@
       ])
         f[key] = Math.max(0, f[key] - dt);
       if (f.landingLag <= 1e-8 || f.ground < 0) f.waveSlide = 0;
-      if (f.reaction?.planted && f.stun < 1e-8) {
-        f.stun = 0;
-        f.reaction = null;
-      }
+      if (f.reaction?.planted && !f.stun) f.reaction = null;
       if (f.respawning > 0) return;
       if (f.ledgeTrump) {
         f.ledgeTrump.time += dt;
@@ -4982,16 +5103,16 @@
           f.invuln = Math.max(f.invuln, dt - 1e-8);
       }
     }
-    landingSurface(f, oldY, oldX = f.x, dt = 0) {
+    landingSurface(f, oldY, oldX = f.x, dt = 0, terrain = this.terrain, time = this.time) {
       let landing = -1;
-      for (const [i, p] of this.terrain.entries()) {
+      for (const [i, p] of terrain.entries()) {
         if (p.thin && f.drop > 0 && f.dropPlatform === i) continue;
         if (oldY > p.y + (f.drop > 0 ? 1e-8 : 2) || f.y < p.y ||
-            (landing >= 0 && p.y >= this.terrain[landing].y)) continue;
+            (landing >= 0 && p.y >= terrain[landing].y)) continue;
         const t = dt ? floorCrossing(oldY, f.y, p.y) : 1;
         const x = oldX + (f.x - oldX) * t;
         const surface = dt && !this.layout && this.stage === 'laundry' && i === 2
-          ? platforms(this.stage, this.time - (1 - t) * dt)[i] : p;
+          ? platforms(this.stage, time - (1 - t) * dt)[i] : p;
         if (x >= surface.x1 - 5 && x <= surface.x2 + 5) landing = i;
       }
       return landing;
@@ -6089,6 +6210,17 @@
       const timing = aerialHitTiming(use, move);
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic, power, damage: applied, timing,
         meteor: !!target.tumble?.meteor });
+      if (this.survivalPractice && this.survivalPractice.moveId === moveId && target.index === 0)
+        this.survivalPractice.released = true;
+      if (target.tumble?.pending && (!target.encounter || target.encounter.kind === target.kind) &&
+          ((target.stocks === 1 && this.mode !== 'training') || (target.index === 0 && this.survivalPractice))) {
+        const line = this.projectLaunch(target, target.vx, target.vy);
+        if (line.zone) {
+          target.tumble.threat = line.zone;
+          if (this.survivalPractice) this.survivalPractice.zone = line.zone;
+          this.emit('blastThreat', { f: target, zone: line.zone, point: { x: target.x, y: target.y - target.stats.height * 0.52 } });
+        }
+      }
       if (timing === 'late' && this.cpuControlled(owner)) owner.landingFollowUntil = this.time + 0.55;
       const spacing = this.spacingPractice;
       if (spacing?.pattern === 'landing' && spacing.phase === 'active' && owner.index === 0 && target.index === 1) {
@@ -6381,6 +6513,11 @@
       this.emit('ko', { f, x: f.x, y: f.y, stageWidth: this.stageWidth, remaining: f.stocks });
     }
     knockouts(out) {
+      if (this.survivalPractice && out.includes(this.dogs[0])) {
+        this.loseStock(this.dogs[0]);
+        this.finishSurvivalPractice('ko');
+        return;
+      }
       for (const f of out) {
         if (this.stockPractice) this.finishStockPractice('ko');
         if (f.index === 0 && this.launchPractice) this.launchPractice.phase = 'out';
@@ -6975,6 +7112,16 @@
         }
         return result;
       }
+      if (f.tumble && !f.tumble.pending && !f.usedDodge && f.stun > 0 && f.stun <= inputWindow - dt + 1e-8 &&
+          this.floorAhead(f, techWindow + dt) < 0) {
+        const x = f.x + f.vx * (f.stun + 4 * dt), y = f.y + f.vy * (f.stun + 4 * dt);
+        const out = blastZone(x, y, this.stageWidth);
+        if (out) {
+          const inward = f.x < closest.x1 ? 1 : f.x > closest.x2 ? -1 : Math.sign(this.stageWidth / 2 - f.x);
+          const duck = out === 'top' ? 1 : f.y > closest.y + 25 ? -1 : 0;
+          return { ...idleInput, x: inward, y: duck, shield: !f.guardBuffer };
+        }
+      }
       if (canCancelMeteor(f) && this.floorAhead(f, 0.24) < 0) {
         const inward = f.x < closest.x1 ? 1 : f.x > closest.x2 ? -1 : Math.sign((closest.x1 + closest.x2) / 2 - f.x);
         if (f.jumps) return { ...idleInput, x: inward, jump: true, tapped: { jump: true } };
@@ -7339,6 +7486,7 @@
     clamp,
     attackWindow,
     canCancelMeteor,
+    launchInfluence,
     liftReserve,
     protectionTime,
     isReversalPractice,
