@@ -559,6 +559,55 @@ async function testStockClock(page, mobile) {
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed stock rules, saved timer, pause, tiebreak, KO and rematch.');
 }
 
+async function testAngledTilts(page, mobile) {
+  await page.goto(root+'#training/angled-tilts');
+  const status = page.locator('#footwork-status');
+  const press = id => mobile ? page.locator('#'+id).tap() : page.locator('#'+id).click();
+  const session = mobile && await page.context().newCDPSession(page);
+  const touch = (type,points) => session.send('Input.dispatchTouchEvent',{type,touchPoints:points});
+  async function point(key,id) {
+    const box = await page.locator('[data-touch="'+key+'"]').boundingBox();
+    return {x:box.x+box.width/2,y:box.y+box.height/2,id};
+  }
+  for (const [low,angle] of [[false,false],[false,true],[true,true]]) {
+    await press('footwork-'+(low?'angleLow':'angleHigh'));
+    if (low) await press('footwork-side');
+    const side = low?'left':'right', vertical = low?'down':'up';
+    if (mobile) {
+      const aim = await point(angle ? vertical+'-'+side : side,1);
+      await touch('touchStart',[await point('neutral',1)]);
+      await touch('touchMove',[aim]);
+      await touch('touchStart',[aim,await point('attack',2)]);
+      await page.clock.runFor(45);
+      await touch('touchEnd',[]);
+    } else {
+      await page.keyboard.down('ShiftLeft');
+      await page.keyboard.down(low?'a':'d');
+      if (angle) await page.keyboard.down(low?'s':'w');
+      await page.keyboard.down('j');
+      await page.clock.runFor(45);
+      for (const key of ['j','w','s','a','d','ShiftLeft']) await page.keyboard.up(key);
+    }
+    await page.clock.runFor(1200);
+    assert.equal(await status.getAttribute('data-result'), angle?'angledHit':'missedAngle', await status.innerText());
+  }
+  const distinct = await page.evaluate(() => {
+    const canvas = document.createElement('canvas'); canvas.width=260; canvas.height=190;
+    const ctx = canvas.getContext('2d');
+    return ['pipStampKick','brisketGateCheck','noodleKnotPoke','cloverOneTwoPass','cloverOneTwoPassFinish'].every(move => {
+      const kind = move.match(/^[a-z]+/)[0];
+      const variants = ['','High','Low','idle'].map(suffix => {
+        ctx.clearRect(0,0,260,190);
+        window.DogArt.draw(ctx,kind,90,150,{pose:suffix==='idle'?'idle':move+suffix,phase:.46});
+        return canvas.toDataURL();
+      });
+      return new Set(variants).size===4;
+    });
+  });
+  assert(distinct,'Every dog and both One-Two Pass poses have distinct high, level and low contact art');
+  console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -625,6 +674,7 @@ async function testDevice(browser, mobile) {
     await testFrameAdvance(page, mobile);
     await testJumpCancel(page, mobile);
     await testStockClock(page, mobile);
+    await testAngledTilts(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
