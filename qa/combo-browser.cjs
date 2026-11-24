@@ -796,6 +796,39 @@ async function testFlickJumps(page, mobile) {
   console.log((mobile?'Touch':'Keyboard and analog controller')+' passed flick height, gentle aim, trial override and per-player preferences.');
 }
 
+async function testRage(page, mobile) {
+  await page.goto(root+'?rage-comparison#training/rage');
+  const contact=page.locator('#freshness-contact'), prior=page.locator('#freshness-previous');
+  const {hold,press}=await trainingControls(page,mobile,contact);
+  const meter=page.locator('.hud-card').first().locator('.rage-meter');
+  assert.equal(await page.locator('#freshness-name').textContent(),'Brisket at 0% · Rage +0%');
+  assert.equal(await contact.textContent(),'Pip at 95%');
+  assert.equal(await meter.count(),0);
+  async function swing() {
+    await hold(['up','smash']);
+    await page.clock.runFor(1120);
+    assert.equal(await page.locator('#freshness-charge').textContent(),'Full charge');
+    await hold([]);
+    await page.clock.runFor(3400);
+    return contact.textContent();
+  }
+  const soft=await swing();
+  assert.match(soft,/21% damage · \d+ px\/s · Landed$/);
+  await press('freshness-percent');
+  assert.equal(await meter.getAttribute('aria-label'),'Rage +10% knockback');
+  assert.equal(await page.locator('#freshness-name').textContent(),'Brisket at 150% · Rage +10%');
+  assert.equal(await prior.textContent(),'At 0% · '+soft);
+  const hard=await swing();
+  assert.match(hard,/21% damage · \d+ px\/s · Top KO$/);
+  assert(Number(hard.match(/(\d+) px/)[1])>Number(soft.match(/(\d+) px/)[1]));
+  await press('freshness-percent');
+  assert.equal(await meter.count(),0);
+  assert.equal(await prior.textContent(),'At 150% · '+hard);
+  await press('reset-training');
+  assert(await contact.isHidden());
+  console.log((mobile?'Touch':'Keyboard')+' passed a landing at zero rage and a top KO at max rage with the same fully charged smash.');
+}
+
 async function testBlastRadar(page, mobile) {
   await page.goto(root + '#training/blast-radar');
   const radar = page.locator('#blast-radar'), status = page.locator('#launch-status');
@@ -1204,6 +1237,7 @@ async function testDevice(browser, mobile) {
     await testWallJumps(page, mobile);
     await testShortHops(page, mobile);
     await testFlickJumps(page, mobile);
+    await testRage(page, mobile);
     await testBlastRadar(page, mobile);
     await testNightMail(page, mobile);
     await testJumpIns(page, mobile);
