@@ -64,6 +64,7 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 | Jump | Space | Right Shift | A |
 | Attack | J | Comma | X |
 | Smash | I | N | RT or right stick |
+| Aim a strike left / right / up / down | R / Y / T / G | Numpad 4 / 6 / 8 / 2 | Right stick |
 | Special | K | Period | B |
 | Shield, dodge, parry, or tech | L | Slash | LB or RB |
 | Grab | U | M | Y |
@@ -84,6 +85,12 @@ Tap Attack with no direction to start your dog's jab combo. On the ground, aim l
 In midair, press Attack alone or aim forward, back, up, or down as you press it. Forward follows the direction your dog faces. Tap Down once after the top of your jump to fast-fall, then release Down to aim your attack. Brisket falls fastest, followed by Pip, Clover, and Noodle. Each aerial has its own landing window in the Move list. Outside that window, a landing during the move takes two frames to recover. Landing during Pip’s Scramble takes three frames in its committed window. Brisket’s Belly Drop takes eighteen.
 
 In local versus, a single controller plays P2 alongside the P1 keyboard. With two controllers, the first plays P1 and the second plays P2.
+
+A running jump carries your ground speed into the air. Let go to coast, or steer opposite your travel to brake. Clover changes direction quickly. Brisket takes longer to reverse and keeps sliding when you let go. Most aerial attacks let you keep steering. Flying Kick, Air Ram and Belly Drop each commit to their own movement.
+
+During a full run, tap the opposite direction with Jump to turn around while your momentum carries you forward. Steer back along your original path and tap Attack for a backward strike toward the opponent. You can also choose an aerial with the aim keys or right stick while steering independently. On touch, swipe outward from **Smash** toward the target while your other thumb steers.
+
+In **Training → Back air practice**, **Approach** starts you running toward a shield. Turn in the jump, tag the shield with your back air and land behind the grab. **Retreat** starts you running away. Aim your back air toward the rival as you jump and carry on out of reach. The two drills work with either facing and your selected matchup.
 
 ## Grounded shield defense
 

@@ -3406,7 +3406,7 @@
       return tick(2.8) % 2;
     }
     if (pose === 'ledge') return tick(3) % 4;
-    if (pose === 'jumpSquat') return Math.min(2, Math.round(phase * 2));
+    if (pose === 'jumpSquat' || pose === 'turnJumpSquat' || pose === 'backDrift') return Math.min(2, Math.round(phase * 2));
     if (pose === 'rise') return phase < 0.2 ? 0 : 1 + (tick(10) % 3);
     if (pose === 'jump' || pose === 'fall') return phase < 0.3 ? 0 : phase < 0.72 ? 1 : 2;
     if (pose === 'hurt' || pose === 'launch') return Math.min(3, Math.floor(phase * 4));
@@ -4831,6 +4831,27 @@
         s.guardFloor = true;
         break;
       }
+      case 'backDrift': {
+        s.bodyX = [-2,-1,0][frame];
+        s.lean = -3;
+        s.headX = 3;
+        s.headTurn = [-8,-3,3][frame];
+        s.torsoTurn = [-13,-9,-4][frame];
+        s.leftX = [-8,-5,-7][frame];
+        s.leftY = [-1,-7,-2][frame];
+        s.rightX = [5,7,3][frame];
+        s.rightY = [-6,-9,-3][frame];
+        s.rightFootTurn = [18,26,8][frame];
+        s.fistX = name === 'brisket' ? 6 : 3;
+        s.fistY = [-5,-3,-2][frame];
+        s.rearX = -5;
+        s.rearY = -4;
+        s.scarf = [5,7,4][frame];
+        s.tail = [4,6,2][frame];
+        s.ear = name === 'noodle' ? -6 : -2;
+        break;
+      }
+      case 'turnJumpSquat':
       case 'jumpSquat': {
         const depth = [2, 3, 4][frame] + (name === 'brisket' ? 1 : 0);
         s.bodyY = depth;
@@ -4846,6 +4867,18 @@
         s.tailLift = frame;
         s.scarf = -frame;
         s.guardFloor = true;
+        if (pose === 'turnJumpSquat') {
+          s.bodyX = [-3,-2,0][frame];
+          s.headX = [2,3,2][frame];
+          s.torsoTurn = [-15,-21,-12][frame];
+          s.headTurn = [-10,-7,-4][frame];
+          s.leftX = [-8,-7,-4][frame];
+          s.rightX = [5,7,6][frame];
+          s.leftFootTurn = [-18,-12,6][frame];
+          s.fistX = 5;
+          s.rearX = -7;
+          s.scarf = [2,5,6][frame];
+        }
         break;
       }
       case 'jump':
@@ -5539,6 +5572,8 @@
     'run',
     'crouch',
     'jumpSquat',
+    'turnJumpSquat',
+    'backDrift',
     'jump',
     'fall',
     'attack',

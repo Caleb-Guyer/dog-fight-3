@@ -655,6 +655,8 @@ body.playing .tools .utility,
 #shield-status[data-result='parry'],
 #shield-status[data-result='punish'],
 #footwork-status[data-result='punish'],
+#spacing-status[data-result='crossed'],
+#spacing-status[data-result='spaced'],
 #escape-status[data-result='escaped'],
 #platform-status[data-result='aerial'],
 #platform-status[data-result='tilt'],
@@ -792,6 +794,7 @@ kbd {
   font-size: 13px;
 }
 #platform-patterns,
+#spacing-patterns,
 #escape-patterns,
 #shield-patterns,
 #wall-patterns,
@@ -803,6 +806,7 @@ kbd {
   gap: 2px;
 }
 #platform-patterns [aria-pressed='true'],
+#spacing-patterns [aria-pressed='true'],
 #escape-patterns [aria-pressed='true'],
 #shield-patterns [aria-pressed='true'],
 #roll-patterns [aria-pressed='true'],

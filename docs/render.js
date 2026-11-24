@@ -248,7 +248,7 @@
     }
     if (f.airDodge) return [f.airDodge.type, clamp(f.airDodge.time / f.airDodge.duration, 0, 1)];
     if (f.dodge > 0) return ['dodge', 1 - f.dodge / 0.27];
-    if (f.jumpSquat) return ['jumpSquat', clamp((f.jumpSquat.time * 60 - 1) / 2, 0, 1)];
+    if (f.jumpSquat) return [f.jumpSquat.turned ? 'turnJumpSquat' : 'jumpSquat', clamp((f.jumpSquat.time * 60 - 1) / 2, 0, 1)];
     if (f.shield) return ['shield', 0];
     if (f.crouch) return ['crouch', 0];
     if (f.attack) return [attackPose(f), attackPhase(f.attack)];
@@ -264,6 +264,7 @@
     if (f.ledge) return ['ledge', f.ledgeTime];
     if (f.reboundTime > 0) return [f.reboundPose, 0.56 + 0.4 * (1 - f.reboundTime / 0.14)];
     if (f.ground < 0) {
+      if (f.vx * f.face < -85) return ['backDrift', clamp(0.5 + f.vy / (2 * f.stats.jump), 0, 1)];
       if (f.vy < 0) return ['jump', clamp(1 + f.vy / f.stats.jump, 0, 1)];
       return ['fall', clamp(f.vy / f.stats.jump, 0, 1)];
     }
@@ -2006,6 +2007,7 @@
       if (name === 'skip') this.add('ring', e.x, e.y, gold, 0.14, 15);
       if (name === 'land') this.add('land', f.x, f.y, cream, 0.2, clamp(35 + e.speed * 0.045, 46, 72));
       if (name === 'skid') this.add('skid', f.x - e.face * 9, f.y, cream, 0.18, 56, e.face);
+      if (name === 'turnJump') this.add('skid', f.x - e.dir * 8, f.y, '#d6b687', 0.13, 28, e.dir);
       if (name === 'swat') this.add('star', e.ball.x, e.ball.y, gold, 0.2, 25);
       if (name === 'ko') {
         this.add('burst', clamp(e.x, 30, (e.stageWidth ?? 1200) - 30), clamp(e.y, 38, 620), teamColor(f), 0.7, 108);
@@ -2089,6 +2091,21 @@
             pixelLine(ctx, x, y, x + 6, y - 6, color, width, 2);
             pixelLine(ctx, x, y, x + 6, y + 6, color, width, 2);
           }
+        }
+      }
+      if (world.spacingPractice) {
+        const drill = world.spacingPractice, floor = world.terrain[drill.ground];
+        const x = snap(drill.mark, 2), y = floor.y + 5;
+        for (const color of [ink, cream]) {
+          const w = color === ink ? 5 : 2;
+          pixelLine(ctx, x - 11, y + 2, x + 11, y + 2, color, w, 2);
+          pixelLine(ctx, x - 11, y - 1, x - 11, y + 3, color, w, 2);
+          pixelLine(ctx, x + 11, y - 1, x + 11, y + 3, color, w, 2);
+        }
+        if (drill.landingX !== undefined) {
+          const at = snap(drill.landingX, 2);
+          pixelLine(ctx, at - 4, y + 9, at, y + 5, mint, 3, 2);
+          pixelLine(ctx, at, y + 5, at + 4, y + 9, mint, 3, 2);
         }
       }
       if (world.footworkPractice) {

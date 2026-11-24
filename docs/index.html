@@ -11,14 +11,14 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=ledge-climb-1" />
+    <link rel="stylesheet" href="./style.css?v=air-spacing-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=missions-1" />
     <link rel="stylesheet" href="./online.css?v=online-1" />
-    <script defer src="./fighters-art.js?v=ledge-climb-1"></script>
+    <script defer src="./fighters-art.js?v=air-spacing-1"></script>
     <script defer src="./arena-art.js?v=screen-1"></script>
-    <script defer src="./engine.js?v=ledge-climb-1"></script>
-    <script defer src="./render.js?v=ledge-climb-1"></script>
+    <script defer src="./engine.js?v=air-spacing-1"></script>
+    <script defer src="./render.js?v=air-spacing-1"></script>
     <script defer src="./dispatch-script.js?v=chapter-lead-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=shield-pressure-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./online.js?v=ledge-climb-1"></script>
-    <script defer src="./app.js?v=ledge-climb-1"></script>
+    <script defer src="./online.js?v=air-spacing-1"></script>
+    <script defer src="./app.js?v=air-spacing-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -308,6 +308,7 @@
           <span id="grapple-prompt" role="status" hidden></span>
           <div class="training-readouts">
             <output id="footwork-status" aria-label="Footwork practice" aria-live="polite" hidden></output>
+            <output id="spacing-status" aria-label="Back air practice" aria-live="polite" hidden></output>
             <output id="escape-status" aria-label="Combo escape" aria-live="polite" hidden></output>
             <output id="platform-status" aria-label="Platform practice" aria-live="polite" hidden></output>
             <output id="launch-status" aria-label="Launch practice" aria-live="polite" hidden></output>
@@ -364,6 +365,13 @@
             <i data-icon="reset"></i>Reset positions
           </button>
           <button id="footwork-training" type="button" class="utility">Footwork practice</button>
+          <button id="spacing-training" type="button" class="utility">Back air practice</button>
+          <span id="spacing-patterns" role="group" aria-label="Back air approach" hidden>
+            <button id="spacing-approach" type="button" class="utility" aria-pressed="true">Approach</button>
+            <button id="spacing-retreat" type="button" class="utility" aria-pressed="false">Retreat</button>
+            <button id="spacing-side" type="button" class="utility">Switch sides</button>
+            <button id="spacing-slow" type="button" class="utility" aria-pressed="true">Half speed</button>
+          </span>
           <button id="platform-training" type="button" class="utility">Platform practice</button>
           <span id="platform-patterns" role="group" aria-label="Platform matchup" hidden>
             <button id="platform-below" type="button" class="utility" aria-pressed="true">Rival below</button>

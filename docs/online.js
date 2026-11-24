@@ -1,11 +1,11 @@
 (() => {
   'use strict';
 
-  const prefix = 'dogfight3-cg-versus-v8-';
-  const channel = 'dogfight3-v8';
+  const prefix = 'dogfight3-cg-versus-v9-';
+  const channel = 'dogfight3-v9';
   const quickId = prefix + 'quickplay';
   const roomAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab'];
+  const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick'];
   const axes = ['x', 'y', 'grabX', 'smashX', 'smashY', 'airDodgeX', 'airDodgeY'];
   const predictionLimit = 8;
   const fighter = (kind) => typeof kind === 'string' && Object.hasOwn(window.DogFight.fighters, kind);
@@ -21,7 +21,7 @@
   }
   function validInput(values) {
     return Array.isArray(values) && values.length === 9 && Array.from(values).every((v, i) =>
-      Number.isInteger(v) && (i < 7 ? Math.abs(v) <= 127 : v >= 0 && v <= 63));
+      Number.isInteger(v) && (i < 7 ? Math.abs(v) <= 127 : v >= 0 && v < (1 << buttons.length)));
   }
   function unpack(values) {
     const input = { tapped: {} };

@@ -77,6 +77,7 @@
     jump: false,
     attack: false,
     smash: false,
+    aimStick: false,
     special: false,
     shield: false,
     grab: false,
@@ -178,6 +179,7 @@
       combo:
         'Tap Attack three times for Heel Kick. For an aerial finish, press Jump, Forward and Attack together as Cross connects.',
       airAccel: 1060,
+      airDrift: { speed: 314, brake: 1600, friction: 112 },
       gravity: 1.0,
       fallSpeed: 630,
       fastFallSpeed: 855,
@@ -238,6 +240,7 @@
       combo:
         'Tap Attack for Body Check. As the shoulder connects, tap Attack for Bell Ringer or press Grab for Bear Hug. Once you catch the rival, tap a direction to throw.',
       airAccel: 540,
+      airDrift: { speed: 226, brake: 820, friction: 66 },
       gravity: 1.17,
       fallSpeed: 740,
       fastFallSpeed: 960,
@@ -292,6 +295,7 @@
       combo:
         'Tap Attack for Ankle Tap, then again for Reel In. After the pull connects, tap Attack for Whiplash or press Special for Tug Rope.',
       airAccel: 715,
+      airDrift: { speed: 258, brake: 1160, friction: 83 },
       gravity: 0.93,
       fallSpeed: 545,
       fastFallSpeed: 730,
@@ -346,6 +350,7 @@
       combo:
         'Tap Attack twice. When Set Point connects, press Jump, Up and Attack together for Sky Volley. Jump with Attack alone for both beats of Orbit.',
       airAccel: 950,
+      airDrift: { speed: 330, brake: 1870, friction: 140 },
       gravity: 0.96,
       fallSpeed: 585,
       fastFallSpeed: 790,
@@ -2040,6 +2045,16 @@
       f.vx = toward(f.vx, axis * kit.walk, kit.traction * dt);
     }
   }
+  function airVelocity(f, vx, axis, dt) {
+    const drift = f.kit.airDrift;
+    if (Math.abs(axis) < 0.12) return toward(vx, 0, drift.friction * dt);
+    const target = axis * drift.speed;
+    // Carry excess takeoff speed. Holding the original direction bleeds it off at the dog's air friction.
+    if (vx * Math.sign(axis) > Math.abs(target)) return toward(vx, target, drift.friction * dt);
+    const strength = 0.3 + 0.7 * Math.abs(axis);
+    const acceleration = (vx * axis < 0 ? drift.brake : f.kit.airAccel) * strength;
+    return toward(vx, target, acceleration * dt);
+  }
   function beginGrab(f, style, runFace, aim, shieldGrab = false) {
     const id = style === 'pivot' ? f.kit.pivotGrab : style === 'dash' ? f.kit.dashGrab : f.kit.grab;
     if (style !== 'standing') f.face = style === 'pivot' ? -runFace : runFace;
@@ -2133,7 +2148,18 @@
   function bufferSquatInput(f, input) {
     const squat = f.jumpSquat;
     if (squat.time + 1e-8 >= jumpSquatTime) return;
+    if (squat.runDir && (squat.turned || input.x * squat.runDir <= -runStick)) {
+      squat.turned = true;
+      f.face = -squat.runDir;
+    }
     if (f.command?.type === 'attack') squat.aerial ??= f.command;
+    // A buffered stick direction stays fixed on the screen as the dog turns underneath it.
+    const aerial = squat.aerial;
+    if (aerial && aerial.facing !== f.face) {
+      if (aerial.airSide === 'forward') aerial.airSide = 'back';
+      else if (aerial.airSide === 'back') aerial.airSide = 'forward';
+      aerial.facing = f.face;
+    }
     if (!input.jump || squat.aerial) squat.short = true;
   }
   function bodyHeight(f) {
@@ -2176,6 +2202,7 @@
       this.footworkPractice = null;
       this.escapePractice = null;
       this.platformPractice = null;
+      this.spacingPractice = null;
       this.airPractice = null;
       this.lastCombo = { hits: 0, damage: 0 };
       this.hitStop = 0;
@@ -2206,6 +2233,8 @@
         this.bot.jumpHold = 0;
         this.bot.hop = null;
         this.bot.platformRoute = null;
+        this.bot.backAir = null;
+        this.bot.passRead = null;
         this.bot.climbRead = null;
         this.bot.guardRead = null;
         this.bot.airRead = null;
@@ -2241,6 +2270,7 @@
       this.footworkPractice = null;
       this.escapePractice = null;
       this.platformPractice = null;
+      this.spacingPractice = null;
       this.airPractice = null;
       this.dogs.forEach((f) => this.spawn(f, false));
       this.projectiles = [];
@@ -2305,6 +2335,58 @@
       } else if (f.ground !== drill.platform) this.finishPlatformPractice('left');
       else if (f.attack) drill.swing = true;
       else if (drill.swing) this.finishPlatformPractice('stayed');
+    }
+    resetSpacingPractice(pattern = 'approach', dir = 1, slow = true) {
+      this.resetTraining();
+      const [f, guard] = this.dogs;
+      const ground = this.stage === 'laundry' && dir < 0 ? 1 : 0;
+      const floor = this.terrain[ground], approach = pattern === 'approach';
+      const gap = approach ? 66 + f.stats.speed * 0.045 : f.stats.width + guard.stats.width + 1;
+      const corner = dir > 0 ? floor.x1 : floor.x2;
+      const guardX = corner + dir * (floor.x2 - floor.x1) * (approach ? 0.39 : 0.17);
+      Object.assign(guard, { x: guardX, y: floor.y, ground, face: approach ? -dir : dir, shield: true });
+      Object.assign(f, { x: guardX + (approach ? -1 : 1) * dir * gap, y: floor.y, ground, face: dir,
+        vx: dir * f.stats.speed, sprintDir: dir, stickTicks: 3, prev: { ...idleInput, x: dir, grabX: dir } });
+      moveOnFoot(f, dir, 1 / 60);
+      f.run.age = 0.4;
+      const grab = grabs[guard.kit.grab].box;
+      const mark = guardX + dir * (approach ? f.stats.width + guard.stats.width + 6 : grab[0] + grab[2] + f.stats.width + 10);
+      this.spacingPractice = { pattern, dir, slow, ground, gap, mark, phase: 'ready', time: 0, contact: '', turned: false,
+        airborne: false, landing: null, grabSent: false, outcome: '' };
+    }
+    spacingPracticeInput() {
+      const drill = this.spacingPractice, guard = this.dogs[1];
+      if (drill.phase === 'done') return idleInput;
+      if (drill.landing !== null && !drill.grabSent && guard.shieldStun < 1e-8 && guard.impactLag < 1e-8) {
+        drill.grabSent = true;
+        return { ...idleInput, shield: true, tapped: { grab: true } };
+      }
+      return { ...idleInput, shield: true };
+    }
+    finishSpacingPractice(outcome) {
+      const drill = this.spacingPractice;
+      if (drill.phase === 'done') return;
+      drill.phase = 'done';
+      drill.outcome = outcome;
+      this.emit('spacingResult', { f: this.dogs[0], outcome, moveId: drill.contact });
+    }
+    checkSpacingPractice(dt) {
+      const drill = this.spacingPractice, [f, guard] = this.dogs;
+      if (drill.phase !== 'active') return;
+      drill.time += dt;
+      if (f.ground < 0) drill.airborne = true;
+      else if (drill.airborne && drill.landing === null) {
+        drill.landing = (f.x - guard.x) * drill.dir;
+        drill.landingX = f.x;
+        this.emit('spacingLand', { f, gap: drill.landing });
+      }
+      if (f.grip?.target === 0) return this.finishSpacingPractice('caught');
+      if (drill.grabSent && !guard.attack && !guard.command) {
+        if (drill.contact !== f.kit.air.back) return this.finishSpacingPractice(drill.contact ? 'other' : 'miss');
+        const approach = drill.pattern === 'approach';
+        const placed = approach ? drill.turned && drill.landing > 0 : drill.landing > drill.gap + 20;
+        this.finishSpacingPractice(placed ? (approach ? 'crossed' : 'spaced') : 'close');
+      } else if (f.ledge || f.respawning || drill.time > 3) this.finishSpacingPractice('away');
     }
     resetEscapePractice(spacing = 'tip', slow = true) {
       this.resetTraining();
@@ -2729,6 +2811,10 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      if (this.spacingPractice?.phase === 'ready') {
+        if (!input1.jump && !input1.tapped?.jump) return;
+        this.spacingPractice.phase = 'active';
+      }
       if (this.climbPractice) {
         const drill = this.climbPractice;
         if (drill.phase === 'ready') {
@@ -2859,9 +2945,11 @@
       this.updateDiscs(dt);
       if (this.platformPractice) this.checkPlatformPractice();
       if (this.climbPractice) this.checkClimbPractice();
+      if (this.spacingPractice) this.checkSpacingPractice(dt);
       if (
         this.fetch &&
         !this.platformPractice &&
+        !this.spacingPractice &&
         !this.escapePractice &&
         !this.footworkPractice &&
         !this.launchPractice &&
@@ -2879,6 +2967,7 @@
       if (out.length) this.knockouts(out);
     }
     trainingRivalInput(dt, player) {
+      if (this.spacingPractice) return this.spacingPracticeInput();
       if (this.escapePractice) return this.escapePracticeInput(dt);
       if (this.footworkPractice) return this.footworkInput(dt);
       if (this.launchPractice) return this.practiceInput(dt);
@@ -2969,7 +3058,7 @@
               if ((!grip.pending || grip.pending === 'pummel') && (changed || pressed('grab'))) {
                 grip.pending = changed ? direction : 'forward';
               } else if (!grip.pending && pressed('attack')) grip.pending = 'pummel';
-            } else if (['jump', 'attack', 'smash', 'special', 'shield', 'grab'].some(pressed)) {
+            } else if (['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick'].some(pressed)) {
               grip.remaining -= 0.135;
             }
           }
@@ -2997,7 +3086,11 @@
             a.queuedThrow = direction;
         }
       }
-      if (pressed('jump')) f.jumpBuffer = inputWindow;
+      if (pressed('jump')) {
+        f.jumpBuffer = inputWindow;
+        if (f.run) f.run.turnJump = false;
+      }
+      if (f.jumpBuffer > 0 && f.run && input.x * f.run.face <= -runStick) f.run.turnJump = true;
       if (pressed('shield')) {
         f.guardBuffer = inputWindow;
         // Keep the initial world-space aim when Shield is tapped during a freeze or recovery.
@@ -3018,23 +3111,22 @@
       }
       if (f.command?.grabStyle === 'dash' && grabX * f.command.runFace <= -runStick)
         f.command.grabStyle = 'pivot';
-      if (f.command && !input[f.command.type]) f.command.released = true;
+      if (f.command && !input[f.command.button || f.command.type]) f.command.released = true;
       if (f.charge >= 0 && !input[f.smashCharge?.button || 'attack']) f.chargeReleased = true;
       if (!input.special) {
         if (f.attack?.specialSide === 'up') f.attack.released = true;
       }
-      const type = pressed('grab')
+      const button = pressed('grab')
         ? 'grab'
         : pressed('special')
           ? 'special'
-          : pressed('smash')
-            ? 'smash'
-            : pressed('attack')
-              ? 'attack'
-              : null;
-      if (type) {
-        const x = type === 'smash' ? (input.smashX ?? input.x) : type === 'grab' ? grabX : input.x;
-        const y = type === 'smash' ? (input.smashY ?? input.y) : input.y;
+          : pressed('aimStick') ? 'aimStick' : pressed('smash') ? 'smash' : pressed('attack') ? 'attack' : null;
+      if (button) {
+        const stickAerial = button === 'aimStick' && !f.ledge && (f.ground < 0 || f.jumpSquat || f.jumpBuffer > 0);
+        const type = button === 'aimStick' ? (stickAerial ? 'attack' : 'smash') : button;
+        const independent = button === 'aimStick' || button === 'smash';
+        const x = independent ? (input.smashX ?? input.x) : type === 'grab' ? grabX : input.x;
+        const y = independent ? (input.smashY ?? input.y) : input.y;
         const side = airDirection(x, y, f.face);
         const groundX = type === 'attack' && f.ground >= 0 ? grabX : x;
         f.command = {
@@ -3045,8 +3137,10 @@
           airSide: side,
           life: inputWindow,
           heldFor: 0,
-          released: !input[type],
+          released: !input[button],
         };
+        if (button === 'aimStick') f.command.button = button;
+        if (stickAerial) f.command.airOnly = true;
         if (f.ground >= 0 && (f.shield || input.shield)) {
           f.command.shieldCounter = (type === 'special' || type === 'smash') && side === 'up';
           if (type === 'grab' && f.shield && (f.shieldStun > 1e-8 || f.shieldGrabWindow > 1e-8))
@@ -3371,7 +3465,11 @@
     }
     advanceJumpSquat(f, input, dt) {
       if (!f.jumpSquat) {
-        f.jumpSquat = { time: 0, short: false, aerial: null };
+        const run = f.run;
+        const runDir = run && (run.turned || run.age + 1e-8 >= f.kit.footwork.reverseFrames / 60) &&
+          f.vx * run.face >= f.kit.footwork.walk ? run.face : 0;
+        f.jumpSquat = { time: 0, short: false, aerial: null, runDir,
+          turned: !!runDir && (f.face === -runDir || !!run.turnJump) };
         bufferSquatInput(f, input);
         f.run = null;
         cancelCharge(f);
@@ -3387,6 +3485,10 @@
         return false;
       }
       f.vy = -f.stats.jump * (squat.short ? 0.60 : 1);
+      if (squat.turned) {
+        if (this.spacingPractice && f.index === 0) this.spacingPractice.turned = true;
+        this.emit('turnJump', { f, dir: squat.runDir, point: { x: f.x, y: f.y } });
+      }
       if (squat.aerial) f.command = squat.aerial;
       f.jumpSquat = null;
       return true;
@@ -3630,6 +3732,7 @@
           f.skidTime = 0;
           f.reboundTime = 0;
         }
+        if (f.command?.airOnly && f.ground >= 0) f.command = null;
         const command = f.command;
         if (f.charge >= 0 && (f.smashCharge || !command || command.type === 'attack')) {
           const before = f.charge;
@@ -3663,7 +3766,7 @@
           else if (command.type === 'smash') {
             f.charge = 0;
             f.chargeReleased = false;
-            lockSmash(f, 'smash', command.aim, command.face || command.facing);
+            lockSmash(f, command.button || 'smash', command.aim, command.face || command.facing);
             if (command.released) {
               releaseSmash(f);
               this.emit('smashRelease', { f });
@@ -3724,6 +3827,9 @@
       } else if (onFoot) {
         moveOnFoot(f, input.x, dt);
         f.strideDistance += Math.abs(f.vx) * dt;
+      } else if (f.ground < 0 && dogMovement && !f.airDodge && f.dodge <= 0 &&
+          (!f.attack || (f.attack.airSide && !f.attack.plunge && !f.attack.burst))) {
+        f.vx = airVelocity(f, f.vx, input.x, dt);
       } else if (!f.airDodge && f.dodge <= 0 && !sliding) {
         const onFloor = f.ground >= 0;
         const planted =
@@ -3798,6 +3904,7 @@
               return;
             }
             f.ground = landing;
+            if (f.command?.airOnly) f.command = null;
             f.y = this.terrain[landing].y;
             f.vy = 0;
             if (f.airDodge) {
@@ -4707,6 +4814,11 @@
         target.run = null;
       }
       this.emit('block', { f: target, owner, point, face: away, moveId, impactFrames, stunFrames, projectile });
+      if (this.spacingPractice?.phase === 'active' && owner.index === 0 && target.index === 1 &&
+          owner.attack?.airSide && !this.spacingPractice.contact) {
+        this.spacingPractice.contact = moveId;
+        this.emit('spacingContact', { f: owner, moveId });
+      }
       if (this.climbPractice?.climbed && target.index === this.climbPractice.slot && moveId === owner.kit.ground[0])
         this.finishClimbPractice(this.climbPractice.role === 'trap' ? 'late' : 'guarded');
       if (target.index === 0) this.finishShieldPractice(broken ? 'break' : 'block');
@@ -5162,6 +5274,47 @@
       }
       return { ...idleInput, x: aimX, y: aimY, shield: true, tapped: { shield: true } };
     }
+    cpuBackAirInput(f, foe) {
+      const brain = this.bot;
+      let pass = brain.backAir;
+      if (!pass) {
+        const run = f.run, floor = this.terrain[f.ground];
+        if (!run || !floor || f.ground !== foe.ground || !foe.shield || f.attack || f.stun || f.landingLag ||
+            f.shield || f.charge >= 0 || run.turned || run.age < f.kit.footwork.reverseFrames / 60 ||
+            f.vx * run.face < f.stats.speed * 0.75 || brain.passRead === run) return null;
+        // A worn shield or a recent grab escape gives the CPU a reason to try a passing aerial.
+        if (foe.shieldHP > 0.84 && !foe.regrabLock) return null;
+        const gap = (foe.x - f.x) * run.face;
+        const runway = run.face > 0 ? floor.x2 - foe.x : foe.x - floor.x1;
+        if (gap < 72 || gap > 125 || runway < f.stats.width + foe.stats.width + 50) return null;
+        brain.passRead = run;
+        if (this.random() >= 0.43) return null;
+        const flight = 2 * f.stats.jump * 0.6 / (1540 * f.kit.gravity);
+        const carry = Math.abs(f.vx) * (jumpSquatTime + flight) - (f.stats.width + foe.stats.width) * 0.75;
+        pass = brain.backAir = { dir: run.face, ground: f.ground, takeoffGap: Math.min(110, carry),
+          phase: 'run', frames: 0, airborne: false };
+        brain.hop = null;
+        brain.hold = brain.guard = brain.jumpHold = 0;
+      }
+      if (f.ground < 0) pass.airborne = true;
+      if (f.stun || f.tumble || f.grip || f.ledge || f.airDodge || ++pass.frames > 62 ||
+          (pass.airborne && f.ground >= 0) || (pass.phase === 'run' && (!f.run || !foe.shield))) {
+        brain.backAir = null;
+        return null;
+      }
+      if (pass.phase === 'run') {
+        if ((foe.x - f.x) * pass.dir > pass.takeoffGap) return { ...idleInput, x: pass.dir };
+        pass.phase = 'jump';
+        return { ...idleInput, x: -pass.dir, jump: true, tapped: { jump: true } };
+      }
+      if (pass.phase === 'jump' && f.jumpSquat) {
+        pass.phase = 'swing';
+        return { ...idleInput, x: pass.dir, aimStick: true, smashX: pass.dir };
+      }
+      const floor = this.terrain[pass.ground];
+      const runout = pass.dir > 0 ? floor.x2 - f.x : f.x - floor.x1;
+      return { ...idleInput, x: runout > f.stats.width + 35 ? pass.dir : -pass.dir };
+    }
     cpuPlatformInput(f, foe) {
       const brain = this.bot;
       const floor = this.terrain[foe.ground];
@@ -5359,8 +5512,12 @@
       const airDefense = this.cpuAirEvade(f, foe, closest, unsafe);
       if (airDefense) {
         brain.platformRoute = null;
+        brain.backAir = null;
         return airDefense;
       }
+      if (unsafe) brain.backAir = null;
+      const passInput = !unsafe && this.cpuBackAirInput(f, foe);
+      if (passInput) return passInput;
       const platformInput = !unsafe && this.cpuPlatformInput(f, foe);
       if (platformInput) return platformInput;
       if (f.attack?.charging) {
@@ -5552,11 +5709,12 @@
         brain.hopDelay -= dt;
         if (f.stun || f.respawning || brain.hopDelay < -0.15) brain.hop = null;
         else if (f.ground < 0 && !f.attack && brain.hopDelay <= 0) {
-          result.x = brain.hop === 'forward' ? f.face : 0;
-          result.y = brain.hop === 'down' ? 1 : 0;
-          result.attack = true;
+          result.smashX = brain.hop === 'forward' ? f.face : 0;
+          result.smashY = brain.hop === 'down' ? 1 : 0;
+          result.aimStick = true;
+          result.attack = false;
           result.special = result.grab = result.shield = false;
-          result.tapped = { attack: true };
+          result.tapped = { aimStick: true };
           brain.hop = null;
           brain.hold = 0;
         }

@@ -255,6 +255,8 @@
     touchTaps = new Set(),
     touchPointers = new Map();
   let walkPointer = null;
+  let touchFlick = null, flickAim = null;
+  const rightStickHeld = [false, false];
   function clearInput() {
     held.clear();
     taps.clear();
@@ -262,6 +264,8 @@
     touchPointers.clear();
     touchTaps.clear();
     walkPointer = null;
+    touchFlick = flickAim = null;
+    rightStickHeld.fill(false);
     document.querySelectorAll('.touch-pad .held').forEach((el) => el.classList.remove('held'));
   }
   let audioContext;
@@ -619,6 +623,7 @@
       ['Walk', 'Left Shift + A / D', 'Right Ctrl + ← / →', 'Tilt left stick gently'],
       ['Jump', 'Space', 'Right Shift', 'A'],
       ['Attack / charge', 'J', ',', 'X'],
+      ['Aim strike ← / → / ↑ / ↓', 'R / Y / T / G', 'Numpad 4 / 6 / 8 / 2', 'Right stick'],
       ['Smash / charge', 'I', 'N', 'RT / right stick'],
       ['Special', 'K', '.', 'B'],
       ['Shield / air dodge / tech', 'L', '/', 'LB / RB'],
@@ -636,6 +641,7 @@
       'Controls',
       table +
         '<p>Flick a side to dash. Reverse in the first few steps to dash-dance. After a full run your dog plants its paws to turn. On touch, slide from the center dot onto a side arrow to walk, or tap a side arrow to dash.</p>' +
+        '<p>In a running jump, tap the opposite direction with Jump to turn your dog while carrying your speed. Steer back toward the rival and hit them with your back air. In the air you can aim a strike independently with the right stick, the aim keys, or a swipe out from Smash on touch.</p>' +
         '<p>On a raised platform, flick Down to drop through with an air jump in reserve. Tap Attack as you fall to swing. Press Down and Attack together to keep your grounded down tilt. For a low crouch, ease the stick down, hold Walk + Down on a keyboard, or slide from the center dot onto Down on touch. Try both heights in Training → Platform practice.</p>' +
         '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
         '<p>While holding Shield, press Jump, Grab, Up + Smash, or Up + Special. Tap during a blocked hit to start your response as soon as shieldstun ends. An immediate shield grab takes four extra frames to reach. A heavier blow pushes you farther away.</p>' +
@@ -917,7 +923,7 @@
         guideMoveRow(moves[kit.dashAttack], 'Run + Attack', 'dash', 'dash') +
         '</ul>' +
         ledgeMove +
-        '<h3 class="guide-section">Aerial attacks</h3><p>Jump + Attack gives a rising short-hop aerial. To attack on the way down, jump first and time the swing yourself. Tap Down after the apex to fast-fall. Forward follows your facing.</p><ul class="move-rows guide-airs">' +
+        '<h3 class="guide-section">Aerial attacks</h3><p>Jump + Attack gives a rising short-hop aerial. To attack on the way down, jump first and time the swing yourself. Tap Down after the apex to fast-fall. Forward follows your facing.</p><p>Steer with the left stick and flick the right stick to swing in a separate direction. On keyboard, aim left/right/up/down with R/Y/T/G for P1 or numpad 4/6/8/2 for P2. On touch, flick outward from Smash. To jump backward into a back air, run, tap the opposite direction with Jump, then steer back along your original path. Try <strong>Training → Back air practice</strong>.</p><ul class="move-rows guide-airs">' +
         rows +
         '</ul>';
     }
@@ -1093,6 +1099,7 @@
     drillWaiting = false;
     practiceSide = 'left';
     $('footwork-status').hidden = true;
+    $('spacing-status').hidden = $('spacing-patterns').hidden = true;
     $('escape-status').hidden = $('escape-patterns').hidden = true;
     $('platform-status').hidden = $('platform-patterns').hidden = true;
     $('launch-status').hidden = true;
@@ -1116,6 +1123,8 @@
       if (world?.wallPractice && e.f?.index === 0) wallFeedback(name);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
+      if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingResult'))
+        spacingFeedback(name, e);
       if (name === 'escapeCue' || name === 'escapeResult') escapeFeedback(e);
       if (world?.climbPractice && (name === 'climbCue' || name === 'climbResult' ||
           (name === 'ledgeClimbPlant' && world.climbPractice.phase === 'active')))
@@ -1324,6 +1333,27 @@
   let drillSide = null,
     drillWaiting = false,
     practiceSide = 'left';
+  function spacingFeedback(name, e) {
+    const practice = world.spacingPractice, status = $('spacing-status');
+    if (name === 'spacingContact') {
+      status.dataset.result = 'contact';
+      status.textContent = moves[e.moveId].label + ' hit shield';
+    } else if (name === 'spacingLand') {
+      status.dataset.result = 'landing';
+      status.textContent = 'Landed · watch the grab';
+    } else {
+      const outcome = e.outcome;
+      status.dataset.result = outcome;
+      status.textContent = { crossed: 'Landed behind', spaced: 'Outside the grab', caught: 'Grabbed',
+        miss: 'Shield untouched', other: 'Different aerial', close: 'Check your landing', away: 'Left the setup' }[outcome];
+      const tip = { crossed: 'You tagged the shield and passed the waiting grab.', spaced: 'Your back air touched the shield as you drifted out of reach.',
+        caught: 'The grab reached you. Keep moving through the landing.', miss: 'Swing toward the shield during takeoff.',
+        other: 'Your back air strikes behind your facing.', close: practice.pattern === 'approach'
+          ? 'Turn during the running jump, then carry your back air past the guard.' : 'Keep drifting away after your hit.',
+        away: 'Use a short hop to keep the fight on this stretch of floor.' }[outcome];
+      $('recovery-tip').textContent = tip + ' Choose ' + (practice.pattern === 'approach' ? 'Approach' : 'Retreat') + ' to retry.';
+    }
+  }
   function climbFeedback(name, e) {
     const drill = world.climbPractice, status = $('climb-status'), trap = drill.role === 'trap';
     const labels = {
@@ -1624,24 +1654,27 @@
     status.textContent = label;
     $('recovery-tip').textContent = tip;
   }
-  function drill(ledge, fromHang = false, pattern = 'strike') {
+  function drill(ledge, fromHang = false, pattern = 'strike', direction) {
     if (!world) return;
     const launch = ledge === 'launch';
     const wall = ledge === 'wall';
     const shield = ledge === 'shield';
     const footwork = ledge === 'footwork';
+    const spacing = ledge === 'spacing';
     const escape = ledge === 'escape';
     const platform = ledge === 'platform';
     const air = ledge === 'air';
     const roll = ledge === 'roll';
     const climb = ledge === 'climb';
     const trump = ledge === 'trump';
-    drillSide = launch || wall || shield || footwork || escape || platform || air || roll || climb || trump ? null : ledge || null;
+    drillSide = launch || wall || shield || footwork || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
     if (launch) world.resetLaunchPractice();
     else if (footwork) world.resetFootworkPractice();
+    else if (spacing) world.resetSpacingPractice(pattern, direction ?? world.spacingPractice?.dir ?? 1,
+      world.spacingPractice?.slow ?? true);
     else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true);
     else if (platform) world.resetPlatformPractice(pattern);
     else if (wall) world.resetWallPractice(pattern);
@@ -1657,6 +1690,7 @@
     const result = $('launch-status');
     result.hidden = !launch;
     $('footwork-status').hidden = !footwork;
+    $('spacing-status').hidden = $('spacing-patterns').hidden = !spacing;
     $('escape-status').hidden = $('escape-patterns').hidden = !escape;
     $('platform-status').hidden = $('platform-patterns').hidden = !platform;
     $('wall-status').hidden = $('wall-patterns').hidden = !wall;
@@ -1666,7 +1700,19 @@
     $('climb-status').hidden = $('climb-patterns').hidden = !climb;
     $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
-    if (climb) {
+    if (spacing) {
+      const practice = world.spacingPractice, approach = pattern === 'approach';
+      const run = practice.dir > 0 ? 'right' : 'left', back = practice.dir > 0 ? 'left' : 'right';
+      const key = practice.dir > 0 ? 'R' : 'Y';
+      $('spacing-approach').setAttribute('aria-pressed', String(approach));
+      $('spacing-retreat').setAttribute('aria-pressed', String(!approach));
+      $('spacing-slow').setAttribute('aria-pressed', String(practice.slow));
+      $('spacing-status').dataset.result = 'ready';
+      $('spacing-status').textContent = approach ? 'Jump past the shield' : 'Jump away from the shield';
+      message = 'Running ' + run + '. ' + (approach
+        ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
+        : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
+    } else if (climb) {
       const trap = pattern === 'trap', inward = practiceSide === 'left' ? 'right' : 'left';
       $('climb-escape').setAttribute('aria-pressed', String(!trap));
       $('climb-trap').setAttribute('aria-pressed', String(trap));
@@ -1765,6 +1811,16 @@
   }
   $('reset-training').onclick = () => drill(false);
   $('footwork-training').onclick = () => drill('footwork');
+  $('spacing-training').onclick = () => drill('spacing', false, world.spacingPractice?.pattern || 'approach');
+  $('spacing-approach').onclick = () => drill('spacing', false, 'approach');
+  $('spacing-retreat').onclick = () => drill('spacing', false, 'retreat');
+  $('spacing-side').onclick = () => drill('spacing', false, world.spacingPractice.pattern, -world.spacingPractice.dir);
+  $('spacing-slow').onclick = () => {
+    const practice = world.spacingPractice;
+    practice.slow = !practice.slow;
+    $('spacing-slow').setAttribute('aria-pressed', String(practice.slow));
+    $('game').focus({ preventScroll: true });
+  };
   $('platform-training').onclick = () => drill('platform', false, world.platformPractice?.pattern || 'below');
   $('platform-below').onclick = () => drill('platform', false, 'below');
   $('platform-top').onclick = () => drill('platform', false, 'top');
@@ -2407,6 +2463,7 @@
       special: 'KeyK',
       shield: 'KeyL',
       grab: 'KeyU',
+      aimLeft: 'KeyR', aimRight: 'KeyY', aimUp: 'KeyT', aimDown: 'KeyG',
     },
     {
       left: 'ArrowLeft',
@@ -2420,6 +2477,7 @@
       special: 'Period',
       shield: 'Slash',
       grab: 'KeyM',
+      aimLeft: 'Numpad4', aimRight: 'Numpad6', aimUp: 'Numpad8', aimDown: 'Numpad2',
     },
   ];
   const matchKeys = new Set(keys.flatMap((k) => Object.values(k)));
@@ -2475,6 +2533,7 @@
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
       if (el.dataset.touch === 'neutral') walkPointer = e.pointerId;
+      if (el.dataset.touch === 'smash') touchFlick = { id: e.pointerId, x: e.clientX, y: e.clientY, fired: false };
       setTouch(e.pointerId, el);
       audioReady();
     });
@@ -2484,8 +2543,18 @@
         const aim = document.elementFromPoint(e.clientX, e.clientY)?.closest('.dpad [data-touch]');
         if (aim) setTouch(e.pointerId, aim);
       });
+    if (el.dataset.touch === 'smash')
+      el.addEventListener('pointermove', (e) => {
+        if (e.pointerId !== touchFlick?.id || touchFlick.fired) return;
+        const dx = e.clientX - touchFlick.x, dy = e.clientY - touchFlick.y;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < 14) return;
+        touchFlick.fired = true;
+        flickAim = Math.abs(dx) > Math.abs(dy) ? { x: Math.sign(dx), y: 0 } : { x: 0, y: Math.sign(dy) };
+        touchTaps.add('aimStick');
+      });
     const release = (e) => {
       if (walkPointer === e.pointerId) walkPointer = null;
+      if (touchFlick?.id === e.pointerId) touchFlick = null;
       setTouch(e.pointerId, null);
     };
     el.addEventListener('pointerup', release);
@@ -2593,7 +2662,12 @@
     const digitalAim = left || right || up || downAim || (!i && touches.has('neutral'));
     const rightX = axis(2),
       rightY = axis(3);
-    const rightStick = Math.max(Math.abs(rightX), Math.abs(rightY)) > 0.62;
+    const rightStick = Math.max(Math.abs(rightX), Math.abs(rightY)) > (rightStickHeld[i] ? 0.38 : 0.62);
+    rightStickHeld[i] = rightStick;
+    const keyAimX = Number(key('aimRight')) - Number(key('aimLeft'));
+    const keyAimY = Number(key('aimDown')) - Number(key('aimUp'));
+    const flick = !i && (touchFlick?.fired || touchTaps.has('aimStick')) ? flickAim : null;
+    const aimStick = !!(rightStick || keyAimX || keyAimY || flick);
     const fromCenter = !i && touchPointers.get(walkPointer)?.dataset.touch;
     const walk = key('walk') || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
     const shield = key('shield') || down(pad, 4) || down(pad, 5);
@@ -2607,9 +2681,10 @@
       airDodgeY: digitalAim ? y : pad?.axes?.[1] || 0,
       jump: key('jump') || down(pad, 0),
       attack: key('attack') || down(pad, 2),
-      smash: key('smash') || down(pad, 7) || rightStick,
-      smashX: rightStick ? rightX : x || axis(0),
-      smashY: rightStick ? rightY : y || axis(1),
+      smash: key('smash') || down(pad, 7),
+      aimStick,
+      smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : x || axis(0),
+      smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : y || axis(1),
       special: key('special') || down(pad, 1),
       shield,
       grab: key('grab') || down(pad, 3),
@@ -2617,6 +2692,8 @@
         jump: tapped('jump'),
         attack: tapped('attack'),
         smash: tapped('smash'),
+        aimStick: !!(flick && touchTaps.has('aimStick')) ||
+          ['aimLeft','aimRight','aimUp','aimDown'].some(tapped),
         special: tapped('special'),
         shield: tapped('shield'),
         grab: tapped('grab'),
@@ -2714,7 +2791,7 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += world.escapePractice?.slow || world.climbPractice?.slow ? dt / 2 : dt;
+        accumulator += world.escapePractice?.slow || world.climbPractice?.slow || world.spacingPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];
