@@ -1958,6 +1958,7 @@
       stockGuard: 0,
       ledge: null,
       ledgeLock: 0,
+      ledgeDropJump: false,
       ledgeTime: 0,
       airborneTime: 0,
       ledgeProtectionReady: true,
@@ -2052,6 +2053,7 @@
   const slideCarry = 1.25, slideFriction = 0.4;
   function beginAttack(f, name, aim, power, moveId) {
     cancelCharge(f);
+    f.ledgeDropJump = false;
     f.heldRecoveryJump = false;
     f.run = null;
     f.lastSmashPower = null;
@@ -2399,6 +2401,7 @@
     if (attack.plunge) f.fastFall = false;
   }
   function restoreAir(f) {
+    f.ledgeDropJump = false;
     f.usedWallKick = false;
     f.wallKickDir = 0;
     f.footstools = 0;
@@ -5143,6 +5146,7 @@
     }
     kickOffWall(f, wall, dir) {
       const kick = f.kit.wallKick;
+      f.ledgeDropJump = false;
       f.wallAction = { type:'wallKick', time:0, duration:kick.frames/60, wall, dir };
       f.usedWallKick = true;
       f.x = wall.x + dir * f.stats.width;
@@ -5228,6 +5232,7 @@
     }
     footstool(f, target) {
       const head = target.y - bodyHeight(target), airborne = target.ground < 0;
+      f.ledgeDropJump = false;
       this.clearTumble(f, 'Footstool');
       f.y = Math.min(f.y, head);
       f.vy = -f.stats.jump * [1.08, .78, .56][Math.min(f.footstools, 2)];
@@ -5243,6 +5248,7 @@
       const guarding = target.shield || (target.prev.shield && !target.attack && !target.stun && !target.landingLag &&
         !target.jumpSquat && target.charge < 0 && !target.shieldDrop);
       if (airborne || !guarding) {
+        target.ledgeDropJump = false;
         target.attack = target.command = target.run = target.jumpSquat = target.reaction = null;
         target.jumpBuffer = target.guardBuffer = target.coyote = target.hopWindow = target.chainWindow = 0;
         target.cutJump = target.fastFall = false;
@@ -5336,6 +5342,7 @@
       this.emit(type, { f, dir: action.dir, edge, point: { x: edge.x, y: edge.y } });
     }
     beginAirDodge(f) {
+      f.ledgeDropJump = false;
       f.fastFall = false;
       const aim = f.guardAim || idleInput;
       const length = Math.hypot(aim.x, aim.y);
@@ -5610,6 +5617,7 @@
       if (f.ledge?.dropQueued) {
         const edge = f.ledge;
         f.ledge = null;
+        f.ledgeDropJump = true;
         f.invuln = Math.min(f.invuln,(shortCatchFrames-1)/60-1e-8);
         f.ledgeLock = .45;
         f.coyote = 0;
@@ -5817,7 +5825,8 @@
           }
           f.jumps--;
           f.takeoffWindow = groundJump ? 5 / 60 : 0;
-          f.cutJump = !groundJump;
+          f.cutJump = !groundJump && !f.ledgeDropJump;
+          f.ledgeDropJump = false;
           f.fastFall = false;
           this.emit('jump', { f });
           const drill = this.climbPractice;
@@ -6292,6 +6301,7 @@
       };
       this.grapple = owner.grip = target.grip = grip;
       for (const f of [owner, target]) {
+        f.ledgeDropJump = false;
         f.dropPrep = null;
         f.crouch = false;
         cancelCharge(f);
@@ -7268,6 +7278,7 @@
       }
       target.coyote = 0;
       target.jumpSquat = null;
+      target.ledgeDropJump = false;
       target.fastFall = false;
       target.cutJump = false;
       target.chainWindow = 0;

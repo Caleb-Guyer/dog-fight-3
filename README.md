@@ -373,7 +373,7 @@ Choose **Training → Practice ledge attack** to start hanging with the dummy in
 
 ## Ledge climbs
 
-**Attack from below.** While hanging, tap Down or away to let go. Jump on that beat or just after to rise from below the lip. This spends your air jump. Release Down, steer inward and tap Attack for your forward aerial, then keep steering to land onstage. Jump alone springs from the top of the lip and leaves your air jump available. If you drifted into the catch holding away, center the stick before flicking away to release.
+**Attack from below.** While hanging, tap Down or away to let go. Tap Jump on that beat or just after to spend your air jump and rise from below the lip. You can release Jump immediately and still reach full height. Release Down, steer inward and tap Attack for your forward aerial, then keep steering to land onstage. Jump alone springs from the top of the lip and leaves your air jump available. If you drifted into the catch holding away, center the stick before flicking away to release.
 
 In **Ledge timing → Attack from below**, the guard tries to check the lip with a low tilt. Land your rising aerial and get both paws back onstage. Choose **Cover the return** to defend against the same route. Hold Shield once, then retry and release just before the swing to parry. Rival can also attack from below when it sees you charging or recovering from a missed swing near the edge. [Play the ledge return](https://caleb-guyer.github.io/dog-fight-3/#training/ledge-return)
 
