@@ -863,6 +863,59 @@ async function testRage(page, mobile) {
   console.log((mobile?'Touch':'Keyboard')+' passed a landing at zero rage and a top KO at max rage with the same fully charged smash.');
 }
 
+async function testFinalHit(page,mobile) {
+  const size=page.viewportSize();
+  if(!mobile) await page.setViewportSize({width:1920,height:720});
+  await page.goto(root+'?finish#training/last-stock');
+  await page.evaluate(()=>{
+    const proto=window.DogFightView.FightView.prototype, draw=proto.draw;
+    window.finishShots=[];
+    proto.draw=function(canvas,world,...args){
+      const value=draw.call(this,canvas,world,...args);
+      const f=world.dogs[0],s=world.survivalPractice;
+      if(s?.pattern==='lastStock' && f.tumble?.pending && f.tumble.finalHit) {
+        const w=canvas.width,h=canvas.height,z=this.zoom;
+        const inside=world.dogs.every(d=>Math.abs(d.x-this.cx)+d.stats.width < w/(2*z) &&
+          d.y< this.cy+h/(2*z) && d.y-d.stats.height>this.cy-h/(2*z));
+        const v=window.DogFight.launchInfluence(f.vx,f.vy,f.prev),speed=Math.hypot(f.vx,f.vy);
+        const x=w/2+(f.x+f.vx/speed*(f.stats.width+10)+v.x/speed*62-this.cx)*z;
+        const y=h/2+(f.y-f.stats.height*.52+f.vy/speed*f.stats.height*.52+v.y/speed*62-this.cy)*z;
+        const data=canvas.getContext('2d').getImageData(Math.round(x)-12,Math.round(y)-12,25,25).data;
+        let arrow=false;
+        for(let i=0;i<data.length;i+=4) if(data[i]===159&&data[i+1]===228&&data[i+2]===215){arrow=true;break;}
+        window.finishShots.push({inside,arrow,z,steer:f.prev.y,reduced:matchMedia('(prefers-reduced-motion: reduce)').matches});
+      }
+      return value;
+    };
+  });
+  const status=page.locator('#launch-status'), {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  await hold(['attack']); await waitFor('blastThreat'); await hold([]);
+  assert.match(await status.textContent(),/steer now/);
+  await waitFor('ko');
+  const shots=await page.evaluate(()=>window.finishShots);
+  assert(shots.length>4 && shots.every(s=>s.inside) && shots.some(s=>s.arrow),JSON.stringify(shots));
+  assert(shots.at(-1).z>shots[0].z+.1,'close-up should ease toward both dogs');
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await press('launch-side');
+  await hold(['attack']); await waitFor('blastThreat'); await hold(['down']);
+  await waitFor('launchDI');
+  assert.match(await status.textContent(),/92% speed.*room to recover/);
+  const steady=await page.evaluate(()=>window.finishShots.filter(s=>s.reduced));
+  assert(steady.some(s=>s.steer>0 && s.arrow) && steady.every(s=>s.inside));
+  assert(Math.max(...steady.map(s=>s.z))-Math.min(...steady.map(s=>s.z))<.001,'reduced motion keeps the camera steady');
+  await hold(['right']); await waitFor('survivalBuffer');
+  await hold(mobile?['up-right','shield']:['up','right','shield']);
+  await page.clock.runFor(64); await hold(['right']);
+  await waitFor('survivalFree'); await hold([]);
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  if(!mobile) await page.setViewportSize(size);
+  await page.goto(root+'#solo/last-stock');
+  assert.deepEqual(await page.locator('#hud .percentage').allTextContents(),['125%','125%']);
+  assert.equal(await page.locator('.lives[aria-label="1 stock"]').count(),2);
+  assert.match(await page.locator('#match-mode').textContent(),/Last stock/);
+  console.log((mobile?'Touch':'Ultrawide keyboard')+' passed the last-stock close-up, neutral KO, aimed save and reduced-motion view.');
+}
+
 async function testBlastRadar(page, mobile) {
   await page.goto(root + '#training/blast-radar');
   const radar = page.locator('#blast-radar'), status = page.locator('#launch-status');
@@ -1481,6 +1534,7 @@ async function testDevice(browser, mobile) {
     await testFastFallPressure(page, mobile);
     await testAttackCancel(page, mobile);
     await testBlastRadar(page, mobile);
+    await testFinalHit(page, mobile);
     await testNightMail(page, mobile);
     await testJumpIns(page, mobile);
     await testLedgeReturn(page, mobile);
