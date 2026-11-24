@@ -73,6 +73,38 @@ async function testEdges(page, mobile) {
   await activate('edge-training');
   assert(await page.locator('#edge-tip').isVisible());
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed ledge walk, timed low tilt, edge cancel, follow-up and mirrored deep landing.');
+  await page.goto(root + '#training/ledge-catch');
+  assert.match(await status.innerText(), /Short recovery/);
+  await attack();
+  await waitFor('ledge');
+  assert.match(await status.innerText(), /0% · 15f protected/);
+  await attack(true);
+  await waitFor('tooEarly');
+  assert.match(await status.innerText(), /protection left/);
+  await activate('edge-longCatch');
+  await activate('edge-side');
+  await attack();
+  await waitFor('ledge');
+  assert.match(await status.innerText(), /0% · 34f protected/);
+  await waitFor('edgeOpen');
+  await attack(true);
+  await waitFor('timedHit');
+  assert.match(await status.innerText(), /Doorstop caught the hang · 34f catch/);
+  await activate('edge-shortCatch');
+  const damage = page.getByRole('slider', {name:'Dummy damage'});
+  if (mobile) {
+    await damage.scrollIntoViewIfNeeded();
+    const box = await damage.boundingBox();
+    await page.touchscreen.tap(box.x + box.width - 8, box.y + box.height/2);
+  } else await damage.press('End');
+  assert(Number(await damage.inputValue()) >= 120);
+  await attack();
+  await waitFor('ledge');
+  assert.match(await status.innerText(), /6f protected/);
+  await attack(true);
+  await waitFor('timedHit');
+  assert.match(await status.innerText(), /Doorstop caught the hang · 6f catch/);
+  console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed short and long catches, changing rival damage and punishing the worn catch.');
 }
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
@@ -148,4 +180,8 @@ async function main() {
     await browser.close();
   }
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+main().catch(error => {
+  console.error(error);
+  console.log('::error::' + error.message.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n','%0A'));
+  process.exitCode = 1;
+});
