@@ -830,18 +830,18 @@ async function testNightMail(page, mobile) {
   assert(await tile.locator('canvas').evaluate(c => c.getContext('2d').getImageData(150,114,1,1).data[3] === 255));
   await press('[data-stage="nightmail"]');
   await page.reload();
-  assert.equal(await page.locator('#stage-title').innerText(),'Night Mail');
+  assert.equal(await page.locator('#stage-title').textContent(),'Night Mail');
   await press('[data-mode="training"]');
   await press('#start');
   const stage = page.locator('#match-stage');
-  assert.equal(await stage.innerText(),'Night Mail');
+  assert.equal(await stage.textContent(),'Night Mail');
   await press('#platform-training');
-  assert.equal(await stage.innerText(),'Picnic Table');
+  assert.equal(await stage.textContent(),'Picnic Table');
   await press('#reset-training');
-  assert.equal(await stage.innerText(),'Night Mail');
+  assert.equal(await stage.textContent(),'Night Mail');
   await page.goto(root + '#online');
   await page.selectOption('#online-stage','nightmail');
-  assert.equal(await page.locator('#online-stage option:checked').innerText(),'Night Mail');
+  assert.equal(await page.locator('#online-stage option:checked').textContent(),'Night Mail');
 
   async function scenery() {
     return page.evaluate(() => {
@@ -870,8 +870,8 @@ async function testNightMail(page, mobile) {
   const session = mobile && await page.context().newCDPSession(page);
   for (const [route, arena, landing] of [['night-mail','Night Mail',0],['picnic-table','Picnic Table',1]]) {
     await page.goto(root + '?landing=' + route + '#solo/' + route);
-    assert.equal(await stage.innerText(),arena);
-    assert.match(await page.locator('#match-mode').innerText(),/Rival CPU/);
+    assert.equal(await stage.textContent(),arena);
+    assert.match(await page.locator('#match-mode').textContent(),/Rival CPU/i);
     assert.equal(await page.locator('.lives[aria-label="3 stocks"]').count(),2);
     assert.equal(await page.locator('#match-clock').innerText(),'7:00');
     await page.evaluate(() => {
