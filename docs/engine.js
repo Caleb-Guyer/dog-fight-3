@@ -1908,6 +1908,8 @@
       attack: null,
       lastMove: '',
       landingLag: 0,
+      waveSlide: 0,
+      takeoffWindow: 0,
       command: null,
       guardBuffer: 0,
       chainNext: 0,
@@ -1939,6 +1941,14 @@
     const side = x < 0 ? 'left' : 'right';
     return Math.abs(x) >= (previous === side ? 0.4 : 0.62) ? side : '';
   }
+  function downDiagonal(aim) {
+    return !!aim && aim.y > 0.14 && Math.abs(aim.x) > 0.14;
+  }
+  function dodgeProgress(kit, time) {
+    const [first, last] = kit.travel;
+    return smoothStep((time * 60 - first + 1) / (last - first + 1));
+  }
+  const slideCarry = 1.25, slideFriction = 0.4;
   function beginAttack(f, name, aim, power, moveId) {
     cancelCharge(f);
     f.run = null;
@@ -2292,6 +2302,7 @@
       this.shieldPractice = null;
       this.footworkPractice = null;
       this.freshnessPractice = null;
+      this.wavePractice = null;
       this.escapePractice = null;
       this.platformPractice = null;
       this.spacingPractice = null;
@@ -2326,6 +2337,7 @@
         this.bot.jumpHold = 0;
         this.bot.hop = null;
         this.bot.platformRoute = null;
+        this.bot.wavePlatform = null;
         this.bot.backAir = null;
         this.bot.passRead = null;
         this.bot.rollChase = null;
@@ -2371,6 +2383,7 @@
       this.shieldPractice = null;
       this.footworkPractice = null;
       this.freshnessPractice = null;
+      this.wavePractice = null;
       this.escapePractice = null;
       this.platformPractice = null;
       this.spacingPractice = null;
@@ -2590,6 +2603,62 @@
       drill.phase = 'done';
       drill.outcome = outcome;
       this.emit('escapeResult', { f: this.dogs[0], outcome, spacing: drill.spacing, outward: drill.outward });
+    }
+    resetWavePractice(pattern = 'back', dir = 1, slow = true) {
+      this.resetTraining();
+      this.time = 0;
+      this.terrain = platforms(this.stage, 0);
+      const [f, rival] = this.dogs;
+      const platform = pattern === 'back' ? 0 : this.stage === 'laundry' ? 2 : dir > 0 ? 1 : 2;
+      const floor = this.terrain[platform], span = floor.x2 - floor.x1;
+      const grab = grabs[(pattern === 'back' ? rival : f).kit.grab];
+      const reach = grab.box[0] + grab.box[2] + (pattern === 'back' ? f : rival).stats.width;
+      const gap = pattern === 'back' ? reach - 15 + (grab.step ? 12 : 0) : Math.min(span - 22, reach + 42);
+      const center = (floor.x1 + floor.x2) / 2;
+      Object.assign(rival, { x: center + dir * gap / 2, y: floor.y, ground: platform, face: -dir, shield: pattern === 'platform' });
+      Object.assign(f, { x: center - dir * gap / 2, y: floor.y, ground: platform, face: dir });
+      if (pattern === 'platform') Object.assign(f, { ground: -1, y: floor.y - 24, vy: 40, jumps: 1 });
+      this.wavePractice = { pattern, platform, dir, slow, phase: 'ready', frame: 0, outcome: '',
+        start: f.x - floor.x1, contact: null, distance: 0, forward: false, grabSent: false };
+    }
+    wavePracticeInput() {
+      const d = this.wavePractice;
+      if (d.pattern === 'platform') return { ...idleInput, shield: true };
+      if (d.phase === 'active' && d.frame === 14) {
+        d.grabSent = true;
+        return { ...idleInput, tapped: { grab: true } };
+      }
+      return idleInput;
+    }
+    checkWavePractice() {
+      const d = this.wavePractice;
+      if (d.phase !== 'active') return;
+      const [f, rival] = this.dogs, floor = this.terrain[d.platform];
+      if (f.waveSlide && f.ground === d.platform && d.contact === null) {
+        d.contact = f.x - floor.x1;
+        d.forward = f.vx * d.dir > 0;
+        this.emit('waveContact', { f, dir: Math.sign(f.vx) });
+      }
+      if (d.contact !== null && f.waveSlide && f.ground === d.platform && !f.grip) {
+        d.distance = Math.round(Math.abs(f.x - floor.x1 - d.contact));
+      }
+      let outcome = '';
+      if (f.grip) {
+        if (f.grip.owner !== 0) outcome = 'caught';
+        else outcome = d.pattern === 'platform' && d.contact !== null && d.forward ? 'grabbed' : 'otherGrab';
+      } else if (f.respawning || f.ledge || (f.ground >= 0 && f.ground !== d.platform)) outcome = 'missedFloor';
+      else if (d.pattern === 'back' && d.grabSent && !rival.attack && !rival.command)
+        outcome = d.contact !== null && !d.forward && f.face === d.dir ? 'clear' : 'otherDodge';
+      else if (d.pattern === 'platform') {
+        if (f.attack?.grabAttempt) d.grabSent = true;
+        else if (d.grabSent && !f.command) outcome = 'short';
+      }
+      if (!outcome && d.frame >= 150) outcome = 'late';
+      if (outcome) {
+        d.phase = 'done';
+        d.outcome = outcome;
+        this.emit('waveResult', { f, outcome });
+      }
     }
     resetFreshnessPractice(repeat = false, guard = false, koTest = false, damage) {
       const prior = this.freshnessPractice;
@@ -3069,6 +3138,11 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      const wave = this.wavePractice;
+      if (wave?.phase === 'ready') {
+        if (!['jump', 'shield', 'grab', 'attack'].some(key => input1[key] || input1.tapped?.[key])) return;
+        wave.phase = 'active';
+      }
       if (this.freshnessPractice?.waiting) {
         if (!input1.x && !input1.y && !['jump', 'attack', 'smash', 'special', 'grab', 'shield', 'aimStick']
           .some(key => input1[key] || input1.tapped?.[key])) return;
@@ -3189,6 +3263,7 @@
         return;
       }
       this.time += dt;
+      if (wave?.phase === 'active') wave.frame++;
       const old = this.terrain;
       this.terrain = this.layout?.terrain || platforms(this.stage, this.time);
       let second = input2;
@@ -3232,6 +3307,7 @@
       if (this.platformPractice) this.checkPlatformPractice();
       if (this.climbPractice) this.checkClimbPractice();
       if (this.spacingPractice) this.checkSpacingPractice(dt);
+      if (wave) this.checkWavePractice();
       if (this.chasePractice) this.checkChasePractice(dt);
       if (
         this.fetch &&
@@ -3241,6 +3317,7 @@
         !this.escapePractice &&
         !this.footworkPractice &&
         !this.freshnessPractice &&
+        !this.wavePractice &&
         !this.launchPractice &&
         !this.shieldPractice &&
         !this.airPractice &&
@@ -3257,6 +3334,7 @@
       if (out.length) this.knockouts(out);
     }
     trainingRivalInput(dt, player) {
+      if (this.wavePractice) return this.wavePracticeInput();
       if (this.freshnessPractice) return this.freshnessPractice.guard ? { ...idleInput, shield: true } : idleInput;
       if (this.chasePractice) return this.chasePracticeInput();
       if (this.spacingPractice) return this.spacingPracticeInput();
@@ -3690,6 +3768,7 @@
         safeFrom: first / 60,
         safeUntil: (last + 1) / 60,
         landingLag: landing / 60,
+        fromHop: f.takeoffWindow > 1e-8,
       };
       f.usedDodge = true;
       f.dodge = f.airDodge.duration;
@@ -3706,15 +3785,14 @@
       f.dodge = Math.max(0, a.duration - a.time);
       if (a.type === 'neutralAirDodge') return a.time < a.safeUntil - 1e-8;
       const kit = f.kit.airDodge;
-      const [first, last] = kit.travel;
+      const last = kit.travel[1];
       if (a.time > last / 60 + 1e-8) {
         f.vx = 0;
         if (before <= last / 60 + 1e-8) f.vy = 0;
         return false;
       }
       // Integrate one eased path. A diagonal covers the same distance as a cardinal input.
-      const travel = (time) => smoothStep((time * 60 - first + 1) / (last - first + 1));
-      const speed = ((travel(a.time) - travel(before)) * kit.distance) / dt;
+      const speed = ((dodgeProgress(kit, a.time) - dodgeProgress(kit, before)) * kit.distance) / dt;
       f.vx = a.x * speed;
       f.vy = a.y * speed;
       return true;
@@ -3862,6 +3940,7 @@
         'chainWindow',
         'landTime',
         'landingLag',
+        'takeoffWindow',
         'skidTime',
         'reboundTime',
         'coyote',
@@ -3869,6 +3948,7 @@
         'regrabLock',
       ])
         f[key] = Math.max(0, f[key] - dt);
+      if (f.landingLag <= 1e-8 || f.ground < 0) f.waveSlide = 0;
       if (f.respawning > 0) return;
       if (f.ledgeTrump) {
         f.ledgeTrump.time += dt;
@@ -3992,9 +4072,10 @@
       }
       const free = ready && !f.shieldDrop;
       const direction = aimFor(input.y);
+      const waveChord = jumpTap && !f.command && f.guardBuffer > 0 && downDiagonal(f.guardAim);
       f.shield = free && grounded && input.shield && f.charge < 0 && !shieldExit;
       if (!f.shield) f.shieldGrabWindow = 0;
-      if (grounded && input.shield && !f.jumpSquat) f.guardBuffer = 0;
+      if (grounded && input.shield && !f.jumpSquat && !waveChord) f.guardBuffer = 0;
       f.shieldHP = clamp(f.shieldHP + (f.shield ? -0.13 : 0.24) * dt, 0, 1);
       if (f.shield && f.shieldHP <= 0) this.breakShield(f);
       if (free && !grounded && f.guardBuffer > 0 && !f.usedDodge) {
@@ -4005,7 +4086,7 @@
       const stanceFree = canStand && dogMovement && f.charge < 0;
       const canJump = jumpTap && !f.smashCharge && (f.jumps > 0 || f.coyote > 0) &&
         !(f.tumble && f.techBuffer > 1e-8 && this.wallAhead(f, f.techBuffer));
-      const droppingByJump = canStand && canJump && !attackTap && direction === 1 && this.terrain[f.ground].thin;
+      const droppingByJump = canStand && canJump && !attackTap && !waveChord && direction === 1 && this.terrain[f.ground].thin;
       // Let a Down + Attack chord keep its tilt. A new aim after releasing Down can punch through on departure.
       const earlyAerial = prep?.frames > 0 && attackTap && direction !== 1;
       let dropNow = droppingByJump;
@@ -4045,6 +4126,7 @@
             if (this.cpuControlled(f)) this.bot.jumpHold = this.bot.hop && f.kind !== 'brisket' ? 0.07 : 0.34;
           }
           f.jumps--;
+          f.takeoffWindow = groundJump ? 5 / 60 : 0;
           f.cutJump = !groundJump;
           f.fastFall = false;
           this.emit('jump', { f });
@@ -4140,6 +4222,8 @@
         f.charge < 0 && !f.dodge && dogMovement;
       if (f.clashRecoil) {
         f.vx = toward(f.vx, 0, (grounded ? f.kit.footwork.traction * 0.35 : 120) * dt);
+      } else if (f.waveSlide) {
+        f.vx = toward(f.vx, 0, f.kit.footwork.traction * slideFriction * dt);
       } else if (f.tumble) {
         f.vx *= Math.pow(0.68, dt);
         if (!f.stun) f.vx += input.x * 175 * dt;
@@ -4178,6 +4262,7 @@
         const p = this.terrain[f.ground];
         if (f.x < p.x1 - 7 || f.x > p.x2 + 7) {
           f.ground = -1;
+          f.waveSlide = 0;
           f.dropPrep = null;
           f.crouch = false;
           f.jumps = 1;
@@ -4236,7 +4321,13 @@
             f.vy = 0;
             if (f.airDodge) {
               f.landingLag = f.airDodge.landingLag;
-              f.vx = clamp(f.vx * 0.24, -f.stats.speed * 0.75, f.stats.speed * 0.75);
+              f.waveSlide = downDiagonal(f.airDodge) && Math.abs(f.vx) > 1 ? Math.sign(f.vx) : 0;
+              if (f.waveSlide) {
+                // Carry the sideways impulse at contact. Late, steep dodges carry less speed.
+                f.vx *= slideCarry;
+                f.lastMove = f.airDodge.fromHop ? 'Wavedash' : 'Waveland';
+                this.emit('waveland', { f, dir: Math.sign(f.vx), point: { x: f.x, y: f.y }, speed: Math.abs(f.vx) });
+              } else f.vx = clamp(f.vx * 0.24, -f.stats.speed * 0.75, f.stats.speed * 0.75);
               f.guardBuffer = 0;
               this.emit('airDodgeLand', { f, type: f.airDodge.type });
             }
@@ -4263,11 +4354,11 @@
               f.attack.landed = true;
             }
             restoreAir(f);
-            if (f.attack?.airSide || landingSpeed > 225) {
+            if (f.waveSlide || f.attack?.airSide || landingSpeed > 225) {
               f.landDuration = Math.max(0.12, f.landingLag);
               f.landTime = f.landDuration;
             }
-            if (landingSpeed > 225) this.emit('land', { f, speed: landingSpeed });
+            if (landingSpeed > 225 && !f.waveSlide) this.emit('land', { f, speed: landingSpeed });
             if (f.stun > 0) f.stun *= 0.62;
           }
         }
@@ -4413,6 +4504,7 @@
         f.ledgeTrump = null;
         f.tumble = f.floorAction = null;
         f.airDodge = f.guardAim = null;
+        f.waveSlide = f.takeoffWindow = 0;
         f.dodge = 0;
         f.techBuffer = 0;
         f.guardIntent = '';
@@ -5236,6 +5328,7 @@
       target.throwBounce = null;
       target.floorAction = target.tumble = null;
       target.airDodge = target.guardAim = null;
+      target.waveSlide = target.takeoffWindow = 0;
       target.guardIntent = '';
       target.impactLag = target.shieldStun = target.shieldGrabWindow = 0;
       target.shieldDrop = target.parryFlash = 0;
@@ -5726,6 +5819,52 @@
       }
       return { ...idleInput, x: Math.abs(end - f.x) > reach - 8 ? Math.sign(end - f.x) : 0 };
     }
+    cpuWavelandInput(f, foe) {
+      const brain = this.bot, platform = foe.ground, floor = this.terrain[platform];
+      if (!floor || !foe.shield || foe.invuln || f.stun || f.tumble || f.grip || f.attack || f.ledge) {
+        brain.wavePlatform = null;
+        return null;
+      }
+      const dx = foe.x - f.x, gap = Math.abs(dx), dir = Math.sign(dx);
+      const box = grabs[f.kit.grab].box, reach = box[0] + box[2] + foe.stats.width;
+      if (brain.wavePlatform !== platform) brain.wavePlatform = null;
+      if (brain.wavePlatform === platform) {
+        if (f.airDodge || (f.waveSlide && f.landingLag > 3 / 60)) return idleInput;
+        brain.wavePlatform = null;
+        if (f.ground === platform && gap <= reach && dx * f.face > 0)
+          return { ...idleInput, tapped: { grab: true } };
+      }
+      const height = floor.y - f.y;
+      if (f.ground >= 0 || f.airDodge || f.usedDodge || f.vy < 0 || height < 10 || height > 58 ||
+          f.dodge || f.floorAction || f.command || dx * f.face <= 0 || gap < reach + 6 ||
+          gap > reach + 100 || this.floorAhead(f, 0.45) !== platform) return null;
+      const kit = f.kit.airDodge;
+      let previous = 0;
+      for (let frame = kit.travel[0]; frame <= kit.travel[1]; frame++) {
+        const travel = diagonal * kit.distance * dodgeProgress(kit, frame / 60);
+        const at = this.stage === 'laundry' && floor.thin && !this.layout ?
+          platforms(this.stage, this.time + frame / 60)[platform] : floor;
+        if (f.y + travel >= at.y) {
+          const contact = f.x + dir * travel - at.x1;
+          const span = at.x2 - at.x1;
+          if (contact < 3 || contact > span - 3) return null;
+          // Work in platform-local coordinates, including for the moving laundry basket.
+          let stop = contact, velocity = (travel - previous) * 60 * slideCarry;
+          for (let tick = 1; tick < kit.directional[3]; tick++) {
+            velocity = Math.max(0, velocity - f.kit.footwork.traction * slideFriction / 60);
+            stop += dir * velocity / 60;
+          }
+          const remaining = (foe.x - floor.x1 - stop) * dir;
+          if (stop < 4 || stop > span - 4 || remaining < -foe.stats.width || remaining > reach - 3) return null;
+          brain.wavePlatform = platform;
+          brain.hold = brain.guard = brain.jumpHold = 0;
+          brain.hop = null;
+          return { ...idleInput, x: dir, y: 1, shield: true, tapped: { shield: true } };
+        }
+        previous = travel;
+      }
+      return null;
+    }
     cpuBackAirInput(f, foe) {
       const brain = this.bot;
       let pass = brain.backAir;
@@ -6007,6 +6146,8 @@
         return airDefense;
       }
       if (unsafe) brain.backAir = null;
+      const waveInput = this.cpuWavelandInput(f, foe);
+      if (waveInput) return waveInput;
       const passInput = !unsafe && this.cpuBackAirInput(f, foe);
       if (passInput) return passInput;
       const platformInput = !unsafe && this.cpuPlatformInput(f, foe);
@@ -6249,6 +6390,7 @@
     smashPower,
     moveFreshness,
     savedMoveHistory,
+    inputWindow,
     arenas,
     platforms,
     topBlastY,

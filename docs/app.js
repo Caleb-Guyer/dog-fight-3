@@ -333,6 +333,8 @@
       if (detail.type === 'directionalAirDodge')
         tone(470, 155 - detail.dirY * 55, 0.12, 0, 'triangle', 0.065);
       else tone(260, 370, 0.07, 0, 'sine', 0.07);
+    } else if (name === 'waveland') {
+      tone(175, 64, 0.095, 0, 'triangle', 0.055);
     } else if (name === 'wallTech' || name === 'wallTechJump') {
       tone(630, 920, 0.052, 0, 'triangle', 0.075);
       if (name === 'wallTechJump') tone(870, 1440, 0.082, 0.04, 'square', 0.024);
@@ -658,7 +660,7 @@
         '<p>On a raised platform, flick Down to drop through with an air jump in reserve. Tap Attack as you fall to swing. Press Down and Attack together to keep your grounded down tilt. For a low crouch, ease the stick down, hold Walk + Down on a keyboard, or slide from the center dot onto Down on touch. Try both heights in Training → Platform practice.</p>' +
         '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
         '<p>While holding Shield, press Jump, Grab, Up + Smash, or Up + Special. Tap during a blocked hit to start your response as soon as shieldstun ends. An immediate shield grab takes four extra frames to reach. A heavier blow pushes you farther away.</p>' +
-        '<p>In midair, tap Shield with the stick centered to dodge in place. Aim and tap Shield to dodge in that direction, including diagonally. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Try Training → Air-dodge practice.</p>' +
+        '<p>In midair, tap Shield with the stick centered to dodge in place. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Aim diagonally down and tap Shield to slide onto a platform. Do this just after jumping to wavedash. Try Training → Air-dodge practice or Training → Wavedash.</p>' +
         '<p>Flick a direction during the hit spark to shift your dog. You can slide sideways on the ground or in eight directions in the air. Try escaping the second swing in Training → Combo escape.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
         '<p>Your dog crouches for three frames. Tap Jump for a short hop, or hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Tap Down once after the top of your jump to fast-fall, then aim freely. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
@@ -858,7 +860,7 @@
       contents =
         '<p class="recovery-note">Shield is L for P1, Slash for P2, either bumper on a gamepad, or Shield on touch.</p><h3 class="guide-section">On the ground</h3><p>Keep Shield held and press Jump, Grab, Up + Smash, or Up + Special. You can tap during impact. A grab immediately after a block needs four extra startup frames.</p><p>In <strong>Training → Shield practice</strong>, use Clover’s Disc Hook against Pip’s spaced kick and Brisket’s Belly Drop. Choose Strike or Grab to practice a parry or dodge with your own dog.</p><ul class="move-rows guide-shield">' +
         groundRows +
-        '</ul><h3 class="guide-section">In the air</h3><p>One dodge per airtime. Landing or catching a ledge refreshes it. Try <strong>Training → Air-dodge practice</strong>.</p><ul class="move-rows guide-air-dodge">' +
+        '</ul><h3 class="guide-section">In the air</h3><p>One dodge per airtime. Landing or catching a ledge refreshes it. Try <strong>Training → Air-dodge practice</strong>.</p><p>For a wavedash, tap Jump, then aim diagonally down and tap Shield. Release the direction to slide forward or backward and keep your facing. Do the same on the way down to waveland on a platform. Try <strong>Training → Wavedash</strong>.</p><ul class="move-rows guide-air-dodge">' +
         airRows +
         '</ul><h3 class="guide-section">At the ledge</h3><p>Try <strong>Training → Ledge timing</strong> to practice the climb from either side.</p><ul class="move-rows guide-ledge-climb">' +
         guideMoveRow({ label: 'Ledge climb', hint: 'On a fresh catch, protection ends ' +
@@ -1072,13 +1074,23 @@
       if (prompt.textContent !== text) prompt.textContent = text;
     }
     const player = world.dogs[0], lab = world.freshnessPractice;
+    const wave = world.wavePractice;
+    if (wave?.pattern === 'platform' && wave.phase === 'active' && wave.contact !== null) {
+      const bar = $('wave-recovery'), tip = $('wave-tip'), lag = Math.max(0, Math.ceil(player.landingLag * 60 - 1e-8));
+      const canBuffer = player.landingLag <= window.DogFight.inputWindow + 1e-8;
+      if (bar.value !== bar.max - lag) bar.value = bar.max - lag;
+      if (bar.classList.contains('ready') !== canBuffer) bar.classList.toggle('ready', canBuffer);
+      const cue = player.attack?.grabAttempt ? 'Reaching for the shield.' : player.command?.type === 'grab' ? 'Grab queued.' :
+        canBuffer ? 'Tap Grab now.' : 'Landing recovery · ' + lag + ' frames';
+      if (tip.textContent !== cue) tip.textContent = cue;
+    }
     const chargeReadout = $(lab ? 'freshness-charge' : 'training-charge');
     if (lab) {
       $('training-charge').hidden = true;
       $('recovery-tip').hidden = !lab.waiting;
     }
     const power = player.smashCharge ? smashPower(player.charge) : player.lastSmashPower;
-    chargeReadout.hidden = world.mode !== 'training' || power === null || (!!lab && !player.smashCharge);
+    chargeReadout.hidden = world.mode !== 'training' || !!world.wavePractice || power === null || (!!lab && !player.smashCharge);
     if (!chargeReadout.hidden) {
       const value = player.smashCharge
         ? power >= 1
@@ -1105,11 +1117,12 @@
     lastMove.hidden =
       world.mode !== 'training' ||
       !!world.freshnessPractice ||
+      !!world.wavePractice ||
       !shownMove ||
       (shownMove === 'Parry' && world.shieldPractice?.outcome === 'parry');
     if (!lastMove.hidden) lastMove.textContent = shownMove;
     const readout = $('training-combo');
-    readout.hidden = world.mode !== 'training' || !!world.freshnessPractice || combo.hits === 0;
+    readout.hidden = world.mode !== 'training' || !!world.freshnessPractice || !!world.wavePractice || combo.hits === 0;
     if (!readout.hidden) {
       readout.textContent =
         combo.hits + (combo.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(combo.damage) + '% damage';
@@ -1149,11 +1162,12 @@
     for (const id of ['home', 'online-lobby', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
       $(id).hidden = true;
     $('hud').hidden = false;
-    document.body.classList.remove('menu-screen', 'adventure-active', 'freshness-lab');
+    document.body.classList.remove('menu-screen', 'adventure-active', 'with-drill-readout');
     drillSide = null;
     drillWaiting = false;
     practiceSide = 'left';
     $('freshness-readout').hidden = $('freshness-controls').hidden = true;
+    $('wave-readout').hidden = $('wave-patterns').hidden = true;
     $('dummy-damage').step = '5';
     $('footwork-status').hidden = $('footwork-patterns').hidden = true;
     $('spacing-status').hidden = $('spacing-patterns').hidden = true;
@@ -1181,6 +1195,7 @@
       if (world?.wallPractice && e.f?.index === 0) wallFeedback(name);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
+      if (name === 'waveContact' || name === 'waveResult') waveFeedback();
       if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingResult'))
         spacingFeedback(name, e);
       if (name === 'escapeCue' || name === 'escapeResult') escapeFeedback(e);
@@ -1772,6 +1787,39 @@
     status.textContent = label;
     $('recovery-tip').textContent = tip;
   }
+  function waveFeedback() {
+    const d = world.wavePractice, back = d.pattern === 'back', [f, rival] = world.dogs;
+    const side = (back ? -d.dir : d.dir) > 0 ? 'right' : 'left';
+    const grab = grabs[rival.kit.grab].label;
+    const status = $('wave-status'), tip = $('wave-tip');
+    const bar = $('wave-recovery');
+    bar.hidden = back || d.phase === 'done';
+    status.dataset.result = d.outcome || d.phase;
+    if (d.phase === 'ready') {
+      bar.max = f.kit.airDodge.directional[3];
+      bar.value = 0;
+      bar.classList.remove('ready');
+      status.textContent = back ? 'Slip past ' + grab : 'Catch the shield';
+      tip.textContent = (back ? 'Tap Jump, then aim down-' : 'Aim down-') + side + ' and tap Shield. ' +
+        (back ? 'Release the direction to keep facing the grab.' : 'Release the direction and tap Grab as your paws settle.');
+    } else if (d.phase === 'active') {
+      status.textContent = f.lastMove;
+      tip.textContent = back ? 'Release the direction to keep facing the rival.' : 'Tap Grab as the slide ends.';
+    } else {
+      const result = {
+        clear: ['Grab whiffed', 'You slid back and kept facing ' + rival.stats.name + '.'],
+        caught: ['Caught by ' + grab, 'Dodge diagonally away just after jumping.'],
+        grabbed: ['Shield caught', grabs[f.kit.grab].label + ' reached the shield. Aim now to throw.'],
+        otherGrab: ['Grab connected', 'Try landing with a diagonal dodge before the catch.'],
+        otherDodge: ['Grab missed', 'Try clearing it with a backward wavedash.'],
+        short: ['Grab fell short', 'Dodge toward the shield and grab as you finish sliding.'],
+        missedFloor: ['Missed the platform', 'Aim the diagonal onto the platform.'],
+        late: ['Time up', 'Choose the exercise again to retry.'],
+      }[d.outcome];
+      status.textContent = result[0] + (d.distance ? ' · ' + d.distance + ' px slide' : '');
+      tip.textContent = result[1];
+    }
+  }
   function drill(ledge, fromHang = false, pattern = 'strike', direction) {
     if (!world) return;
     const launch = ledge === 'launch';
@@ -1780,6 +1828,7 @@
     const shield = ledge === 'shield';
     const footwork = ledge === 'footwork';
     const freshness = ledge === 'freshness';
+    const wave = ledge === 'wave';
     const spacing = ledge === 'spacing';
     const escape = ledge === 'escape';
     const platform = ledge === 'platform';
@@ -1787,12 +1836,13 @@
     const roll = ledge === 'roll';
     const climb = ledge === 'climb';
     const trump = ledge === 'trump';
-    drillSide = launch || wall || shield || footwork || freshness || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
+    drillSide = launch || wall || shield || footwork || freshness || wave || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
     if (chase) world.resetChasePractice(pattern, direction ?? world.chasePractice?.dir ?? 1, world.chasePractice?.slow ?? true);
     else if (launch) world.resetLaunchPractice();
+    else if (wave) world.resetWavePractice(pattern, direction ?? world.wavePractice?.dir ?? 1, world.wavePractice?.slow ?? true);
     else if (freshness) {
       const lab = world.freshnessPractice;
       world.resetFreshnessPractice(pattern === 'repeat' || pattern === 'guard',
@@ -1813,8 +1863,9 @@
     else if (trump) world.resetLedgeTrumpPractice(pattern, practiceSide);
     else world.resetTraining(ledge, fromHang);
     const player = world.dogs[0];
-    document.body.classList.toggle('freshness-lab', freshness);
+    document.body.classList.toggle('with-drill-readout', freshness || wave);
     $('freshness-readout').hidden = $('freshness-controls').hidden = !freshness;
+    $('wave-readout').hidden = $('wave-patterns').hidden = !wave;
     $('dummy-damage').step = freshness && world.freshnessPractice.koTest ? '1' : '5';
     $('dummy-damage').value = world.trainingDamage;
     $('damage-output').textContent = world.trainingDamage + '%';
@@ -1841,7 +1892,14 @@
     $('climb-status').hidden = $('climb-patterns').hidden = !climb;
     $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
-    if (freshness) {
+    if (wave) {
+      const d = world.wavePractice;
+      $('wave-back').setAttribute('aria-pressed', String(d.pattern === 'back'));
+      $('wave-platform').setAttribute('aria-pressed', String(d.pattern === 'platform'));
+      $('wave-slow').setAttribute('aria-pressed', String(d.slow));
+      waveFeedback();
+      message = $('wave-tip').textContent;
+    } else if (freshness) {
       const lab = world.freshnessPractice;
       $('freshness-ko').setAttribute('aria-pressed', String(lab.koTest));
       $('freshness-guard').setAttribute('aria-pressed', String(lab.guard));
@@ -1968,7 +2026,7 @@
         'Hanging from the ' + ledge + ' ledge. Tap Attack for ' + moves[player.kit.ledgeAttack].label + '.';
     else if (ledge) message = 'Jump or use Special to start. ' + player.kit.recovery;
     $('recovery-tip').textContent = message;
-    $('recovery-tip').hidden = !ledge;
+    $('recovery-tip').hidden = !ledge || wave;
     clearInput();
     updateHUD();
     $('game').focus({ preventScroll: true });
@@ -1976,6 +2034,15 @@
   }
   $('reset-training').onclick = () => drill(false);
   $('freshness-training').onclick = () => drill('freshness', false, 'repeat');
+  $('wave-training').onclick = () => drill('wave', false, world.wavePractice?.pattern || 'back');
+  for (const pattern of ['back', 'platform']) $('wave-' + pattern).onclick = () => drill('wave', false, pattern);
+  $('wave-side').onclick = () => drill('wave', false, world.wavePractice.pattern, -world.wavePractice.dir);
+  $('wave-slow').onclick = () => {
+    const d = world.wavePractice;
+    d.slow = !d.slow;
+    $('wave-slow').setAttribute('aria-pressed', String(d.slow));
+    $('game').focus({ preventScroll: true });
+  };
   for (const action of ['repeat','clear','guard','ko'])
     $('freshness-' + action).onclick = () => drill('freshness', false, action);
   $('footwork-training').onclick = () => drill('footwork', false, world.footworkPractice?.pattern || 'bait');
@@ -2106,7 +2173,7 @@
     page = id;
     drillSide = null;
     drillWaiting = false;
-    document.body.classList.remove('playing', 'training-active', 'adventure-active', 'freshness-lab');
+    document.body.classList.remove('playing', 'training-active', 'adventure-active', 'with-drill-readout');
     document.body.classList.add('menu-screen');
     document.body.classList.toggle('cinema-active', id === 'dispatch-story');
     for (const screen of ['home', 'online-lobby', 'dispatch-route', 'dispatch-story', 'lobby', 'match'])
@@ -2307,8 +2374,8 @@
       $(id).hidden = true;
     $('match').hidden = $('dispatch-hud').hidden = $('dispatch-orders').hidden = false;
     $('countdown').textContent = '';
-    document.body.classList.remove('menu-screen', 'training-active', 'cinema-active', 'freshness-lab');
-    $('freshness-readout').hidden = true;
+    document.body.classList.remove('menu-screen', 'training-active', 'cinema-active', 'with-drill-readout');
+    $('freshness-readout').hidden = $('wave-readout').hidden = true;
     document.body.classList.add('playing', 'adventure-active');
     saveProgress({ room: index, checkpoint, pending: '' });
     view = new window.DispatchView();
@@ -2978,7 +3045,7 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += world.footworkPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow ? dt / 2 : dt;
+        accumulator += world.footworkPractice?.slow || world.wavePractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];

@@ -102,6 +102,14 @@ During a full run, tap the opposite direction with Jump to turn around while you
 
 In **Training → Back air practice**, **Approach** starts you running toward a shield. Turn in the jump, tag the shield with your back air and land behind the grab. **Retreat** starts you running away. Aim your back air toward the rival as you jump and carry on out of reach. The two drills work with either facing and your selected matchup.
 
+## Wavedashes and wavelands
+
+Tap Jump, then aim diagonally down and tap Shield during takeoff to **wavedash**. Release the direction to slide along the floor while keeping your facing. To slide backward on the P1 keyboard while facing right, tap **Space**, then **S + A + L**. A fresh diagonal Shield tap also works together with Jump. Holding an already-raised shield and jumping gives you your regular jump.
+
+To **waveland**, dodge diagonally down onto a platform during a fall. Your angle and speed at contact determine how much sideways motion you carry. Clover can act first. Noodle travels farthest from the same short hop. You can be hit or grabbed from the moment your paws touch down. Each dog keeps its usual directional-dodge landing recovery. Tap a grounded move near the end to have it come out as soon as you can act.
+
+In **Training → Wavedash**, **Dodge the grab** starts you inside the rival's grab range. Slide backward to make the grab miss while you still face them. **Platform grab** starts you above a shielded rival's platform. Slide toward them, let go of the direction, and tap Grab as you settle. Laundry Line uses the moving basket. The mint line measures your slide along the surface. Repeat either exercise or switch sides to practice in the other direction.
+
 ## Grounded shield defense
 
 Hold **Shield** on the ground to block. On a touchscreen, keep one thumb on Shield and use the other on the direction pad.

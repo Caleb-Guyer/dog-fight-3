@@ -250,6 +250,8 @@
     }
     if (f.airDodge) return [f.airDodge.type, clamp(f.airDodge.time / f.airDodge.duration, 0, 1)];
     if (f.dodge > 0) return ['dodge', 1 - f.dodge / 0.27];
+    if (f.waveSlide) return [f.waveSlide * f.face < 0 ? 'wavelandBack' : 'waveland',
+      clamp(1 - f.landingLag * 60 / f.kit.airDodge.directional[3], 0, 1)];
     if (f.jumpSquat) return [f.jumpSquat.turned ? 'turnJumpSquat' : 'jumpSquat', clamp((f.jumpSquat.time * 60 - 1) / 2, 0, 1)];
     if (f.shield) return ['shield', 0];
     if (f.crouch) return ['crouch', 0];
@@ -2039,6 +2041,8 @@
       if (name === 'catch') this.add('star', f.x + f.face * 24, f.y - 40, cream, 0.17, 24);
       if (name === 'skip') this.add('ring', e.x, e.y, gold, 0.14, 15);
       if (name === 'land') this.add('land', f.x, f.y, cream, 0.2, clamp(35 + e.speed * 0.045, 46, 72));
+      if (name === 'waveland') this.add('skid', e.point.x - e.dir * 8, e.point.y, cream, 0.22,
+        clamp(30 + e.speed * 0.06, 40, 64), e.dir);
       if (name === 'skid') this.add('skid', f.x - e.face * 9, f.y, cream, 0.18, 56, e.face);
       if (name === 'turnJump') this.add('skid', f.x - e.dir * 8, f.y, '#d6b687', 0.13, 28, e.dir);
       if (name === 'swat') this.add('star', e.ball.x, e.ball.y, gold, 0.2, 25);
@@ -2118,6 +2122,18 @@
       window.ArenaArt.draw(ctx, world.stage, world.time, {
         left, top, right: left + 2 * halfW, bottom: top + 2 * halfH,
       });
+      if (world.wavePractice) {
+        const d = world.wavePractice, floor = world.terrain[d.platform], x = floor.x1 + d.start;
+        const forward = d.pattern === 'back' ? -d.dir : d.dir, tip = x + forward * 21, y = floor.y + 5;
+        pixelLine(ctx, x, y, tip, y, cream, 3, 2);
+        pixelLine(ctx, tip - forward * 6, y - 5, tip, y, cream, 3, 2);
+        if (d.contact !== null) {
+          const land = floor.x1 + d.contact, end = land + d.distance * (d.forward ? d.dir : -d.dir);
+          pixelLine(ctx, land, y + 5, end, y + 5, ink, 5, 2);
+          pixelLine(ctx, land, y + 5, end, y + 5, mint, 3, 2);
+          for (const at of [land, end]) pixelLine(ctx, at, y + 1, at, y + 6, gold, 3, 2);
+        }
+      }
       if (world.freshnessPractice) {
         const lab = world.freshnessPractice, floor = world.terrain[0].y;
         if (koTest) {

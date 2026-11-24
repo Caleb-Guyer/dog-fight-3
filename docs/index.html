@@ -11,14 +11,14 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=move-freshness-1" />
+    <link rel="stylesheet" href="./style.css?v=waveland-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
-    <link rel="stylesheet" href="./screen.css?v=move-freshness-1" />
+    <link rel="stylesheet" href="./screen.css?v=waveland-1" />
     <link rel="stylesheet" href="./online.css?v=online-1" />
-    <script defer src="./fighters-art.js?v=move-freshness-1"></script>
+    <script defer src="./fighters-art.js?v=waveland-1"></script>
     <script defer src="./arena-art.js?v=screen-1"></script>
-    <script defer src="./engine.js?v=move-freshness-1"></script>
-    <script defer src="./render.js?v=move-freshness-1"></script>
+    <script defer src="./engine.js?v=waveland-1"></script>
+    <script defer src="./render.js?v=waveland-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./online.js?v=move-freshness-1"></script>
-    <script defer src="./app.js?v=move-freshness-1"></script>
+    <script defer src="./online.js?v=waveland-1"></script>
+    <script defer src="./app.js?v=waveland-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -324,7 +324,12 @@
           </div>
           <div id="countdown" class="countdown" aria-hidden="true"></div>
         </div>
-        <section id="freshness-readout" aria-label="Move freshness measurements" hidden>
+        <section id="wave-readout" class="drill-readout" aria-label="Wavedash practice" hidden>
+          <output id="wave-status" aria-live="polite"></output>
+          <span id="wave-tip"></span>
+          <progress id="wave-recovery" aria-label="Landing recovery elapsed" value="0" max="1" hidden></progress>
+        </section>
+        <section id="freshness-readout" class="drill-readout" aria-label="Move freshness measurements" hidden>
           <div class="freshness-heading"><strong id="freshness-name"></strong><span id="freshness-charge" hidden></span></div>
           <output id="freshness-contact" aria-live="polite"></output>
           <span id="freshness-previous" hidden></span>
@@ -373,6 +378,13 @@
           <button id="reset-training" type="button" class="utility">
             <i data-icon="reset"></i>Reset positions
           </button>
+          <button id="wave-training" type="button" class="utility">Wavedash</button>
+          <span id="wave-patterns" role="group" aria-label="Wavedash exercises" hidden>
+            <button id="wave-back" type="button" class="utility" aria-pressed="true">Dodge the grab</button>
+            <button id="wave-platform" type="button" class="utility" aria-pressed="false">Platform grab</button>
+            <button id="wave-side" type="button" class="utility">Switch sides</button>
+            <button id="wave-slow" type="button" class="utility" aria-pressed="true">Half speed</button>
+          </span>
           <button id="freshness-training" type="button" class="utility">Move freshness</button>
           <span id="freshness-controls" role="group" aria-label="Move freshness controls" hidden>
             <button id="freshness-repeat" type="button" class="utility">Return to marks</button>

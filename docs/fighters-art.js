@@ -3415,7 +3415,7 @@
     if (pose === 'rise') return phase < 0.2 ? 0 : 1 + (tick(10) % 3);
     if (pose === 'jump' || pose === 'fall') return phase < 0.3 ? 0 : phase < 0.72 ? 1 : 2;
     if (pose === 'hurt' || pose === 'launch') return Math.min(3, Math.floor(phase * 4));
-    if (pose === 'land' || pose === 'skid') {
+    if (pose === 'land' || pose === 'skid' || pose === 'waveland' || pose === 'wavelandBack') {
       if (phase < 0.12) return 0;
       if (phase < 0.34) return 1;
       if (phase < 0.56) return 2;
@@ -4980,6 +4980,25 @@
         s.guardFloor = true;
         break;
       }
+      case 'waveland':
+      case 'wavelandBack': {
+        const dir = pose === 'waveland' ? 1 : -1, brace = [3, 6, 6, 4, 2, 1][frame];
+        s.bodyY = brace + (name === 'brisket' ? 2 : 0);
+        s.bodyX = -dir * Math.round(brace * 0.7);
+        s.lean = -dir * brace;
+        s.headTurn = (dir > 0 ? -2 : 1) * brace;
+        s.kneeOut = brace;
+        s.leftX = -dir * brace;
+        s.rightX = dir * (brace + 1);
+        s.fistX = (name === 'clover' ? 2 : 1) * brace;
+        s.fistY = -brace;
+        s.rearX = -brace;
+        s.tail = -dir * brace;
+        s.scarf = -dir * (brace + 1);
+        s.ear = (name === 'noodle' ? 2 : 1) * brace;
+        s.guardFloor = true;
+        break;
+      }
       case 'skid':
         // The lead foot stays fixed through the brake. The trailing foot catches up on release.
         s.bodyX = [-2, -3, -3, -2, -1, 0][frame];
@@ -5637,6 +5656,8 @@
     'dodge',
     'land',
     'skid',
+    'waveland',
+    'wavelandBack',
     'ledge',
     'ledgeRoll',
     'ledgeClimb',

@@ -214,7 +214,7 @@ body:is(.playing, .cinema-active) .full-button span {
   top: calc(var(--top-edge) + 43px);
   right: var(--right-edge);
 }
-#freshness-readout {
+.drill-readout {
   position: absolute;
   z-index: 2;
   top: calc(var(--top-edge) + 43px);
@@ -510,10 +510,10 @@ body:is(.playing, .cinema-active) .full-button span {
   #match {
     grid-template-rows: minmax(0, 1fr) auto auto;
   }
-  body.freshness-lab #match {
+  body.with-drill-readout #match {
     grid-template-rows: minmax(0, 1fr) auto auto auto;
   }
-  #freshness-readout {
+  .drill-readout {
     position: static;
     grid-row: 2;
     width: 100%;
@@ -523,8 +523,8 @@ body:is(.playing, .cinema-active) .full-button span {
     border-width: 2px 0 0;
     border-color: #827a80;
   }
-  body.freshness-lab #match .touch-pad { grid-row: 3; }
-  body.freshness-lab #training-tools { grid-row: 4; }
+  body.with-drill-readout #match .touch-pad { grid-row: 3; }
+  body.with-drill-readout #training-tools { grid-row: 4; }
   #match .touch-pad {
     position: static;
     grid-row: 2;

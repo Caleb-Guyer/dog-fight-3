@@ -649,7 +649,7 @@ body.playing .tools .utility,
 #training-move {
   color: var(--gold);
 }
-#freshness-readout {
+.drill-readout {
   display: grid;
   gap: 3px;
   width: max-content;
@@ -664,6 +664,16 @@ body.playing .tools .utility,
 }
 .freshness-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; }
 #freshness-name { color: var(--gold); }
+.drill-readout:where(#wave-readout) { width: min(252px, 85vw); }
+#wave-status { color: var(--gold); font-weight: bold; }
+#wave-status[data-result='clear'], #wave-status[data-result='grabbed'] { color: var(--aqua); }
+#wave-tip { max-width: 36ch; font: 500 14px/1.25 var(--body); }
+#wave-recovery { width: 100%; height: 6px; appearance: none; border: 0; background: #474454; color: var(--gold); }
+#wave-recovery::-webkit-progress-bar { background: #474454; }
+#wave-recovery::-webkit-progress-value { background: var(--gold); }
+#wave-recovery::-moz-progress-bar { background: var(--gold); }
+#wave-recovery.ready::-webkit-progress-value { background: var(--aqua); }
+#wave-recovery.ready::-moz-progress-bar { background: var(--aqua); }
 #freshness-charge { color: var(--aqua); }
 #freshness-contact { padding: 0; border: 0; background: none; font: inherit; }
 #freshness-previous { color: #a5dace; }
@@ -820,6 +830,7 @@ kbd {
   font-size: 13px;
 }
 #launch-patterns,
+#wave-patterns,
 #freshness-controls,
 #platform-patterns,
 #footwork-patterns,
@@ -836,6 +847,7 @@ kbd {
 }
 #launch-patterns { flex-wrap: wrap; }
 #launch-patterns [aria-pressed='true'],
+#wave-patterns [aria-pressed='true'],
 #freshness-controls [aria-pressed='true'],
 #platform-patterns [aria-pressed='true'],
 #footwork-patterns [aria-pressed='true'],
