@@ -3376,7 +3376,7 @@
     if (shieldPoses.includes(pose)) return shieldFrame(name, pose, phase, backRoll);
     if (pose === 'clashRecoil' || pose === 'crouchHit') return Math.min(3, Math.floor(phase * 4));
     if (pose === 'tumble') return tick(14) % 8;
-    if (pose === 'righting') return Math.min(3, Math.floor(phase * 4));
+    if (pose === 'righting' || pose === 'footstool') return Math.min(3, Math.floor(phase * 4));
     if (pose === 'jabLock') {
       if (phase < 0.40) return Math.min(3, Math.floor(phase * 10));
       return phase < 0.70 ? 4 : phase < 0.86 ? 5 : 6;
@@ -4757,6 +4757,22 @@
         s.charmTurn = [24,15,-9,-2][frame];
         break;
       }
+      case 'footstool': {
+        const kick = { pip: 9, brisket: 4, noodle: 7, clover: 11 }[name];
+        s.bodyY = [3, 0, -3, -2][frame];
+        s.headTurn = [12, 8, -9, -4][frame];
+        s.torsoTurn = [6, -4, -9, -2][frame];
+        s.leftX = [-5, -7, -4, -2][frame];
+        s.leftY = [-6, -8, -10, -6][frame];
+        s.rightX = [3, 5, kick, 4][frame];
+        s.rightY = [-2, 4, -5, -7][frame];
+        s.fistX = [4, 7, 3, 1][frame];
+        s.fistY = [-4, -9, -12, -7][frame];
+        s.rearX = [-3, -7, -6, -2][frame];
+        s.scarf = [0, 4, 6, 2][frame];
+        s.ear = [3, 1, -4, -2][frame];
+        break;
+      }
       case 'tumble':
       case 'techRoll':
         spinningStance(s, name, pose, frame);
@@ -5693,6 +5709,7 @@
     'turnJumpSquat',
     'backDrift',
     'righting',
+    'footstool',
     'jump',
     'fall',
     'attack',

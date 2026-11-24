@@ -128,6 +128,10 @@ Pip’s Flying Kick deals 8% clean or 4% late. Brisket’s Air Ram deals 13% or 
 
 In **Aerial practice → Approach**, turn in a running jump, tag the shield with your back air and land behind the grab. **Retreat** starts you running away. Aim your back air toward the rival as you jump and carry on out of reach. The two drills work with either facing and your selected matchup.
 
+**Footstools.** Press Jump as your paws reach the top of another dog’s head. You can spring off even after using your air jump. Hold Jump for height or release it for a shorter bounce. The step deals no damage. An airborne rival tumbles downward and can tech the landing with Shield. A standing rival flinches briefly, and a rival who keeps shielding can hold their guard. Repeated footstools before landing give less height.
+
+In **Aerial practice → Footstool rescue**, start the fall with Attack, hold Jump when the head marks light up, and steer to the ledge. **Tech a footstool** puts you underneath. Try taking the fall, then retry and tap Shield just before touchdown. Add a horizontal direction for a tech roll.
+
 **Turnaround specials and B-reverses.** While airborne, flick behind your dog, release the direction, then tap neutral Special. Your dog aims back and carries its sideways speed through the turn. To reverse the drift as well, tap neutral Special first and immediately flick behind you. Flick within the first three frames after the cast begins, before its hitbox or disc comes out. Holding a side as you press Special gives your usual Side Special.
 
 **Wavebounce.** Flick back, center the direction, tap Special, then flick forward and release. Your neutral special points along your original path while your dog slides backward. You can follow the cast with any jump, air dodge or recovery you saved.

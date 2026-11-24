@@ -15,6 +15,7 @@
     Battle,
     idleInput,
     isReversalPractice,
+    isFootstoolPractice,
     clamp,
   } = window.DogFight;
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
@@ -389,6 +390,9 @@
     } else if (name === 'meteorBounce') {
       tone(143, 43, 0.12, 0, 'triangle', 0.15);
       tone(296, 130, 0.055, 0.012, 'square', 0.035);
+    } else if (name === 'footstool') {
+      tone(165, 95, .06, 0, 'triangle', .08);
+      tone(310, 620, .09, .025, 'triangle', .06);
     } else if (name === 'tumbleWiggle') {
       tone(460, 740, 0.065, 0, 'triangle', 0.045);
     } else if (name === 'meteorCancel') {
@@ -706,7 +710,7 @@
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Aim diagonally down and tap Shield to slide onto a platform. Do this just after jumping to wavedash. Try Training → Air-dodge practice or Training → Wavedash.</p>' +
         '<p>Flick a direction during the hit spark to shift your dog. You can slide sideways on the ground or in eight directions in the air. Try escaping the second swing in Training → Combo escape.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
-        '<p>Your dog crouches for three frames. Tap Jump for a short hop, or hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Tap Down once after the top of your jump to fast-fall, then aim freely. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. With the default Smash stick, hold the right stick in a direction and release to swing. Choose Tilt under Options for instant grounded tilts with the aim stick, aim keys, or a swipe from Smash.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
+        '<p>Your dog crouches for three frames. Tap Jump for a short hop, or hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Tap Down once after the top of your jump to fast-fall, then aim freely. Jump again in midair. Press Jump just above a rival’s head for a footstool, even with your air jump spent. A rival stepped on in the air can tech the fall with Shield. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. With the default Smash stick, hold the right stick in a direction and release to swing. Choose Tilt under Options for instant grounded tilts with the aim stick, aim keys, or a swipe from Smash.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
   $('controls').onclick = showControls;
@@ -1308,7 +1312,8 @@
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
       if (name === 'waveContact' || name === 'waveResult') waveFeedback();
       if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingJab' ||
-          name === 'spacingCancelStart' || name === 'spacingCancelCue' ||
+          name === 'spacingCancelStart' || name === 'spacingCancelCue' || name === 'footstoolCue' ||
+          (name === 'footstool' && isFootstoolPractice(world.spacingPractice)) ||
           name === 'spacingResult' || name === 'spacingRetry' || (name === 'specialTurn' && e.f.index === 0 && isReversalPractice(world.spacingPractice))))
         spacingFeedback(name, e);
       if (name === 'escapeCue' || name === 'escapeResult') escapeFeedback(e);
@@ -1568,6 +1573,19 @@
   }
   function spacingFeedback(name, e) {
     const practice = world.spacingPractice, status = $('spacing-status');
+    if (isFootstoolPractice(practice)) {
+      const rescue = practice.pattern === 'footstool';
+      status.dataset.result = e.outcome || name;
+      status.textContent = {
+        footstoolCue:'Jump off their head', footstool:rescue ? 'Footstool · steer in' : 'Footstooled · tech the landing',
+        saved:'Back onstage · footstool rescue', fell:'Missed the ledge', otherSave:'Recovered without a footstool',
+        tech:'Teched in place', techRoll:'Tech roll', downed:'Missed tech', evaded:'Avoided the footstool', landed:'Landed',
+      }[e.outcome || name];
+      if (e.outcome) $('recovery-tip').textContent = rescue ?
+        'Retry from the same height. Hold Jump through the bounce for more lift and steer toward the ledge.' :
+        'Retry and tap Shield just before you land. Add left or right to roll through the landing.';
+      return;
+    }
     if (practice.pattern === 'cancel') {
       const tip = $('recovery-tip'), counter = moves[world.dogs[1].kit.tilts.down].label;
       status.dataset.result = e.outcome || name;
@@ -2459,15 +2477,20 @@
       $('spacing-retreat').setAttribute('aria-pressed', String(pattern === 'retreat'));
       $('spacing-landing').setAttribute('aria-pressed', String(pattern === 'landing'));
       $('spacing-cancel').setAttribute('aria-pressed', String(pattern === 'cancel'));
+      for (const id of ['footstool','footstoolTech']) $('spacing-' + id).setAttribute('aria-pressed', String(pattern === id));
       $('spacing-reverse').setAttribute('aria-pressed', String(pattern === 'reverse'));
       $('spacing-wavebounce').setAttribute('aria-pressed', String(pattern === 'wavebounce'));
       $('spacing-guard').hidden = pattern !== 'wavebounce';
       $('spacing-guard').setAttribute('aria-pressed', String(!!practice.guard));
       $('spacing-slow').setAttribute('aria-pressed', String(practice.slow));
       $('spacing-status').dataset.result = 'ready';
-      $('spacing-status').textContent = pattern === 'cancel' ? 'Down + Attack' : isReversalPractice(practice) ? (pattern === 'reverse' ? 'Rival behind' : 'Rival ahead') :
+      $('spacing-status').textContent = isFootstoolPractice(practice) ? (pattern === 'footstool' ? 'Footstool rescue' : 'Tech a footstool') :
+        pattern === 'cancel' ? 'Down + Attack' : isReversalPractice(practice) ? (pattern === 'reverse' ? 'Rival behind' : 'Rival ahead') :
         pattern === 'landing' ? 'Tap Jump and hold ' + run : approach ? 'Jump past the shield' : 'Jump away from the shield';
-      message = pattern === 'cancel' ? 'Press Down + Attack. Try holding Shield only after touchdown. On the retry, start holding it as the chalk turns mint.' :
+      message = isFootstoolPractice(practice) ? (pattern === 'footstool' ?
+        'Your jumps are spent. Tap Attack to fall, then press Jump at the mint marks over the rival’s head. Hold Jump and steer ' + run + ' to the ledge.' :
+        'Tap Attack to start. The rival will jump off your head. Tap Shield before you hit the floor to tech, or add a direction for a tech roll.') :
+        pattern === 'cancel' ? 'Press Down + Attack. Try holding Shield only after touchdown. On the retry, start holding it as the chalk turns mint.' :
         isReversalPractice(practice) ? reversalTip(practice) : pattern === 'landing' ? 'Short-hop ' + run + '. Tap Attack over the gold fork for a late hit or the green stripe for a clean hit. Center the direction and jab on landing.' : 'Running ' + run + '. ' + (approach
         ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
         : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
@@ -2706,6 +2729,7 @@
   $('spacing-retreat').onclick = () => drill('spacing', false, 'retreat');
   $('spacing-landing').onclick = () => drill('spacing', false, 'landing');
   $('spacing-cancel').onclick = () => drill('spacing', false, 'cancel');
+  for (const id of ['footstool','footstoolTech']) $('spacing-' + id).onclick = () => drill('spacing', false, id);
   $('spacing-reverse').onclick = () => drill('spacing', false, 'reverse');
   $('spacing-wavebounce').onclick = () => drill('spacing', false, 'wavebounce');
   $('spacing-guard').onclick = () => {
@@ -3807,6 +3831,12 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
       drill('edge', false, hash === '#training/ledge-catch' ? 'shortCatch' : 'lip');
+    }
+    else if (hash === '#training/footstools') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', stage:'picnic', fetch:false });
+      drill('spacing', false, 'footstool');
     }
     else if (hash === '#training/braking') {
       menuScreen('match');

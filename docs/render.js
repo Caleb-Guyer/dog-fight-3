@@ -275,7 +275,8 @@
     }
     if (f.parryFlash > 0 && f.ground >= 0) return ['parry', clamp(1 - f.parryFlash / parryDuration, 0, 1)];
     if (f.ledge) return ['ledge', f.ledgeTime];
-    if (f.reboundTime > 0) return [f.reboundPose, 0.56 + 0.4 * (1 - f.reboundTime / 0.14)];
+    if (f.reboundTime > 0) return [f.reboundPose, f.reboundPose === 'footstool'
+      ? reduced.matches ? .62 : clamp(1 - f.reboundTime * 5, 0, 1) : 0.56 + 0.4 * (1 - f.reboundTime / 0.14)];
     if (f.ground < 0) {
       if (f.righting > 1e-8) return ['righting', reduced.matches ? .9 : clamp(1 - f.righting * 60 / 8, 0, 1)];
       if (f.vx * f.face < -85) return ['backDrift', clamp(0.5 + f.vy / (2 * f.stats.jump), 0, 1)];
@@ -2168,6 +2169,7 @@
       }
       if (name === 'jump' || name === 'recover')
         this.add('ring', f.x, f.y, name === 'jump' ? cream : teamColor(f), 0.23, 21);
+      if (name === 'footstool') this.add('ring', e.point.x, e.point.y, mint, .18, 22);
       if (name === 'hit' || name === 'block') {
         const face = e.face || 1;
         const point = e.point || { x: f.x - face * f.stats.width * 0.7, y: f.y - f.stats.height * 0.54 };
@@ -2389,7 +2391,16 @@
       if (world.spacingPractice) {
         const drill = world.spacingPractice, floor = world.terrain[drill.ground];
         const x = snap(drill.mark, 2), y = floor.y + 5;
-        if (isReversalPractice(drill)) {
+        if (window.DogFight.isFootstoolPractice(drill)) {
+          const rescue = drill.pattern === 'footstool', dog = rescue ? b : a;
+          const y = snap(drill.stepped && !rescue ? floor.y : dog.y - dog.stats.height, 2);
+          const x = snap(dog.x, 2), lit = drill.stepped || drill.cue;
+          for (const side of [-1, 1]) {
+            const at = x + side * (dog.stats.width + 7);
+            pixelLine(ctx, at, y, at + side * 9, y, ink, 5, 2);
+            pixelLine(ctx, at, y, at + side * 9, y, lit ? mint : gold, 2, 2);
+          }
+        } else if (isReversalPractice(drill)) {
           for (const [color, width] of [[ink, 6], [cream, 3]]) {
             pixelLine(ctx, x, y - 3, x, y + 8, color, width, 2);
             pixelLine(ctx, x, y + 3, x + drill.dir * 15, y + 3, color, width, 2);
