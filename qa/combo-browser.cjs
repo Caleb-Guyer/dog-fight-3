@@ -672,6 +672,7 @@ async function testShortHops(page, mobile) {
   }
   assert(await compare.isHidden());
   const full = await jump('jump');
+  assert.equal(await page.locator('#spacing-status').innerText(), 'Jump measured');
   assert.match(full, /^Full jump · \d+ px$/);
   await activate(retry);
   assert.equal(await compare.innerText(), 'Previous: ' + full);
