@@ -1887,6 +1887,7 @@
       shieldDrop: 0,
       parryEligible: false,
       impactLag: 0,
+      clashRecoil: null,
       shieldStun: 0,
       shieldGrabWindow: 0,
       parryFlash: 0,
@@ -2132,6 +2133,52 @@
     const next = attack.second || attack.late;
     return next && attack.time + 1e-8 >= next.start ? next : attack;
   }
+  function strikeStrength(a) {
+    if (a.smashSide) return smashStrength(a.power);
+    return a.moveId === 'brisketCannon' ? 1 + a.power * 0.35 : 1;
+  }
+  function sweetSpotAt(f, beat, x, y) {
+    if (!beat.sweetSpot) return null;
+    const [sx, sy, rx, ry] = beat.sweetSpot.box;
+    return Math.abs((x - f.x) * f.face - sx) <= rx && Math.abs(y - f.y - sy) <= ry ? beat.sweetSpot : null;
+  }
+  function overlapPoint(a, b) {
+    const left = Math.max(a.x - a.rx, b.x - b.rx), right = Math.min(a.x + a.rx, b.x + b.rx);
+    const top = Math.max(a.y - a.ry, b.y - b.ry), bottom = Math.min(a.y + a.ry, b.y + b.ry);
+    return left <= right && top <= bottom ? { x: (left + right) / 2, y: (top + bottom) / 2 } : null;
+  }
+  // Time of first contact along the disc's path, including discs starting inside a box.
+  function segmentEntry(x, y, dx, dy, box) {
+    let enter = 0, leave = 1;
+    for (const [origin, step, center, radius] of [[x, dx, box.x, box.rx], [y, dy, box.y, box.ry]]) {
+      if (!step) {
+        if (Math.abs(origin - center) > radius) return Infinity;
+      } else {
+        const a = (center - radius - origin) / step, b = (center + radius - origin) / step;
+        enter = Math.max(enter, Math.min(a, b));
+        leave = Math.min(leave, Math.max(a, b));
+      }
+    }
+    return enter <= leave ? enter : Infinity;
+  }
+  const physicalSwings = new Set(['jab', 'jab2', 'finisher', 'tilt', 'dash', 'heavy', 'aerial']);
+  const physicalSpecials = new Set(['brisketCharge', 'pipSlide', 'noodleTug', 'noodleSling']);
+  function canClash({ f, attack }) {
+    return (!f.encounter || f.encounter.kind === f.kind) && !attack.shockwave &&
+      (physicalSwings.has(attack.name) || physicalSpecials.has(attack.moveId));
+  }
+  function clashDamage({ f, attack, beat }, point) {
+    return (beat.dmg + (sweetSpotAt(f, beat, point.x, point.y)?.bonus || 0)) * strikeStrength(attack);
+  }
+  const clashMargin = 9;
+  function recoilFromClash({ f, attack }, damage, away) {
+    const duration = Math.min(22, 6 + Math.round(damage * 0.85)) / 60;
+    f.clashRecoil = { time: 0, duration };
+    f.attack = f.run = null;
+    f.chainWindow = f.chainNext = f.hopWindow = f.followPounce = 0;
+    f.vx = away * (112 + 4 * Math.min(damage, 23)) / f.stats.weight;
+    if (attack.plunge) f.fastFall = false;
+  }
   function restoreAir(f) {
     f.drop = 0;
     f.dropPlatform = -1;
@@ -2152,7 +2199,7 @@
     f.reboundTime = 0;
   }
   function controlsFall(f) {
-    return !f.stun && !f.tumble && !f.grip && !f.ledge && !f.ledgeTrump && !f.wallAction &&
+    return !f.stun && !f.tumble && !f.grip && !f.ledge && !f.ledgeTrump && !f.wallAction && !f.clashRecoil &&
       !f.airDodge && !f.throwBounce && !f.attack?.plunge && !f.attack?.motionLocked;
   }
   function bufferSquatInput(f, input) {
@@ -2501,22 +2548,49 @@
       drill.outcome = outcome;
       this.emit('escapeResult', { f: this.dogs[0], outcome, spacing: drill.spacing, outward: drill.outward });
     }
-    resetFootworkPractice() {
+    resetFootworkPractice(pattern = 'bait', dir = 1, slow = true) {
       this.resetTraining();
       const originalDogs = this.dogs;
-      const player = originalDogs[0], dummy = newFighter('brisket', 1);
+      const player = pattern === 'power' ? newFighter('pip', 0) : originalDogs[0];
+      const kind = { bait: 'brisket', match: player.kind, power: 'brisket', disc: 'clover' }[pattern];
+      const dummy = newFighter(kind, 1);
       this.dogs = [player, dummy];
-      const floor = this.terrain[0], box = grabs[dummy.kit.grab].box;
-      dummy.x = (floor.x1 + floor.x2) / 2 + 45;
-      const mark = dummy.x - box[0] - box[2] - player.stats.width + 5;
-      player.x = mark - 27;
+      const floor = this.terrain[0], center = (floor.x1 + floor.x2) / 2;
+      const box = grabs[dummy.kit.grab].box, jab = moves[player.kit.ground[0]];
+      const gap = pattern === 'disc' ? 225 : pattern === 'power' ? 135 : (jab.box[0] + jab.box[2]) * 2 - 14;
+      dummy.x = pattern === 'bait' ? center + 45 : center + dir * gap / 2;
+      const mark = pattern === 'bait' ? dummy.x - box[0] - box[2] - player.stats.width + 5 : center;
+      player.x = pattern === 'bait' ? mark - 27 : center - dir * gap / 2;
+      player.face = dir;
+      dummy.face = -dir;
       dummy.ground = player.ground = 0;
       dummy.y = player.y = floor.y;
       dummy.damage = this.trainingDamage;
-      this.footworkPractice = { phase: 'ready', mark, originalDogs, tell: 0, outcome: '' };
+      const discBeat = { pip: 60, brisket: 64, noodle: 65, clover: 62 };
+      const sendAt = pattern === 'disc' ? discBeat[player.kind] : pattern === 'power' ? 74 : 75;
+      this.footworkPractice = { phase: 'ready', pattern, dir, slow: pattern !== 'bait' && slow,
+        mark, originalDogs, tell: 0, beat: 0, sent: false, sendAt, outcome: '' };
     }
     footworkInput(dt) {
       const drill = this.footworkPractice, [player, dummy] = this.dogs;
+      if (drill.pattern !== 'bait') {
+        if (drill.phase === 'done') return idleInput;
+        drill.tell += dt;
+        const frame = Math.round(drill.tell * 60);
+        if (frame === 24 || frame === 48 || frame === 72) {
+          drill.beat = frame / 24;
+          this.emit('footworkCue', { phase: drill.beat === 3 ? 'go' : 'count', beat: drill.beat, f: player });
+        }
+        // The dummy commits on a fixed count. Player input never changes its timing.
+        if (!drill.sent && frame >= drill.sendAt) {
+          drill.sent = true;
+          drill.phase = 'swing';
+          const button = drill.pattern === 'disc' ? 'special' : 'attack';
+          return { ...idleInput, tapped: { [button]: true } };
+        }
+        if (frame >= (drill.pattern === 'disc' ? 152 : 99)) this.finishFootwork('missedSwing');
+        return idleInput;
+      }
       if (drill.phase === 'ready' && player.ground === 0 && player.x >= drill.mark) {
         drill.phase = 'tell';
         this.emit('footworkCue', { phase: 'tell', f: player });
@@ -2538,6 +2612,10 @@
     }
     gradeFootwork(target) {
       if (!this.footworkPractice || this.footworkPractice.phase === 'done') return;
+      if (this.footworkPractice.pattern !== 'bait') {
+        this.finishFootwork(target.index === 0 ? 'hitTaken' : 'hitFirst');
+        return;
+      }
       const a = target.attack;
       if (target.index === 0) this.finishFootwork('caught');
       else if (a?.grabAttempt && a.time + 1e-8 >= a.start + a.active)
@@ -2888,6 +2966,18 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      const footwork = this.footworkPractice;
+      if (footwork && footwork.pattern !== 'bait') {
+        if (footwork.phase === 'ready') {
+          if (!input1.attack && !input1.tapped?.attack) return;
+          footwork.phase = 'count';
+          footwork.consumeAttack = true;
+        }
+        if (footwork.consumeAttack) {
+          footwork.consumeAttack = !!input1.attack;
+          input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
+        }
+      }
       const chase = this.chasePractice;
       if (chase?.phase === 'ready') {
         if (!input1.attack && !input1.tapped?.attack) return;
@@ -3682,6 +3772,10 @@
         if (!f.command.released) f.command.heldFor += dt;
         if (f.command.life < -0.00001) f.command = null;
       }
+      if (f.clashRecoil) {
+        f.clashRecoil.time += dt;
+        if (f.clashRecoil.time + 1e-8 >= f.clashRecoil.duration) f.clashRecoil = null;
+      }
       const jumpTap = f.jumpBuffer > 0 || !!f.jumpSquat;
       const jumpingFromLedge = jumpTap && !!f.ledge;
       const attackTap = f.command?.type === 'attack';
@@ -3764,6 +3858,7 @@
       }
       const ready =
         !f.attack &&
+        !f.clashRecoil &&
         !f.airDodge &&
         !f.ledgeTrump &&
         f.wallAction?.type !== 'wallTechJump' &&
@@ -3932,7 +4027,9 @@
       const sliding = f.attack?.motionLocked;
       const onFoot = grounded && f.ground >= 0 && free && !f.attack && !f.shield &&
         f.charge < 0 && !f.dodge && dogMovement;
-      if (f.tumble) {
+      if (f.clashRecoil) {
+        f.vx = toward(f.vx, 0, (grounded ? f.kit.footwork.traction * 0.35 : 120) * dt);
+      } else if (f.tumble) {
         f.vx *= Math.pow(0.68, dt);
         if (!f.stun) f.vx += input.x * 175 * dt;
       } else if (f.stun > 0 || f.ledgeTrump || f.wallAction?.type === 'wallTechJump') {
@@ -4131,6 +4228,7 @@
         rival.vy = -230;
       }
       this.clearTumble(f, 'Ledge catch');
+      f.clashRecoil = null;
       f.impactLag = f.shieldStun = f.shieldGrabWindow = 0;
       f.shieldDrop = f.parryFlash = 0;
       f.guardIntent = '';
@@ -4209,7 +4307,7 @@
         f.guardIntent = '';
         f.shieldDrop = f.parryFlash = 0;
         f.run = null;
-        f.attack = f.command = f.reaction = f.throwBounce = null;
+        f.attack = f.command = f.reaction = f.throwBounce = f.clashRecoil = null;
         f.jumpSquat = null;
         f.fastFall = false;
         f.chainWindow = f.jumpBuffer = f.guardBuffer = f.reboundTime = f.landingLag = f.stun = 0;
@@ -4667,30 +4765,54 @@
     opponents(f) {
       return [this.dogs[1 - f.index]];
     }
+    activeSwing(f) {
+      const attack = f.attack;
+      if (!attack || f.impactLag > 1e-8 || attack.pummel || attack.throwSide || attack.projectile ||
+          attack.anchor || attack.charging || attack.diving || (attack.moveId === 'brisketBrace' && !attack.riposte))
+        return null;
+      const beat = attackWindow(attack);
+      if (attack.time + 1e-8 < beat.start || attack.time >= beat.start + beat.active - 1e-8) return null;
+      return { f, attack, beat, area: this.attackArea(f), beatIndex: beat === attack.second ? 1 : 0 };
+    }
+    clashGroundSwings(active) {
+      const ground = active.filter(s => s.f.ground >= 0 && !s.attack.airSide && canClash(s));
+      const recoil = new Map();
+      for (let i = 0; i < ground.length; i++) {
+        const a = ground[i], rivals = this.opponents(a.f);
+        for (const b of ground.slice(i + 1)) {
+          if (!rivals.includes(b.f) || a.attack.hitTargets?.get(b.f) === a.beatIndex ||
+              b.attack.hitTargets?.get(a.f) === b.beatIndex) continue;
+          const point = overlapPoint(a.area, b.area);
+          if (!point) continue;
+          const da = clashDamage(a, point), db = clashDamage(b, point);
+          const direction = Math.sign(b.f.x - a.f.x) || a.f.face;
+          const winner = da >= db + clashMargin ? a : db >= da + clashMargin ? b : null;
+          if (winner !== a) recoil.set(a, [da, -direction]);
+          if (winner !== b) recoil.set(b, [db, direction]);
+          this.clashContact(a.f, b.f, point, winner?.f);
+        }
+      }
+      for (const [swing, [damage, away]] of recoil) recoilFromClash(swing, damage, away);
+    }
+    clashContact(a, b, point, winner, projectile = false) {
+      this.hitStop = Math.max(this.hitStop, (winner ? 2 : 3) / 60);
+      const face = winner ? Math.sign((winner === a ? b : a).x - winner.x) || winner.face : a.face;
+      this.emit('attackClash', { f: a, target: b, point, winner: winner?.index ?? null, face, projectile });
+      const drill = this.footworkPractice;
+      if (drill?.phase !== 'swing') return;
+      if (projectile && drill.pattern === 'disc') this.finishFootwork(winner === b ? 'overpowered' : 'batted');
+      else if (drill.pattern === 'match' || drill.pattern === 'power')
+        this.finishFootwork(winner ? winner.index === 0 ? 'brokeThrough' : 'overpowered' : 'matched');
+    }
     resolveMelee() {
       // Collect both active hitboxes before either hit can interrupt the other fighter.
       const hits = [],
         catches = [],
         swats = [];
-      for (const f of this.dogs) {
-        const attack = f.attack;
-        if (
-          !attack ||
-          f.impactLag > 1e-8 ||
-          attack.pummel ||
-          attack.throwSide ||
-          attack.projectile ||
-          attack.anchor ||
-          attack.charging ||
-          attack.diving ||
-          (attack.moveId === 'brisketBrace' && !attack.riposte)
-        )
-          continue;
-        const beat = attackWindow(attack);
-        if (attack.time + 1e-8 < beat.start || attack.time >= beat.start + beat.active - 1e-8) continue;
-        // A late hit changes the strength of one swing. Only a second strike can hit twice.
-        const beatIndex = beat === attack.second ? 1 : 0;
-        const area = this.attackArea(f);
+      const active = this.dogs.map(f => this.activeSwing(f)).filter(Boolean);
+      if (active.length > 1) this.clashGroundSwings(active);
+      for (const { f, attack, beat, beatIndex, area } of active) {
+        if (f.attack !== attack) continue;
         for (const rival of this.opponents(f)) {
           const height = bodyHeight(rival);
           const overlaps =
@@ -4759,15 +4881,7 @@
           if (!overlaps) continue;
           (attack.hitTargets ??= new Map()).set(rival, beatIndex);
           attack.hitBeat = beatIndex;
-          let sweet = null;
-          if (beat.sweetSpot) {
-            const [sx, sy, rx, ry] = beat.sweetSpot.box;
-            if (
-              Math.abs((rival.x - f.x) * f.face - sx) <= rx &&
-              Math.abs(rival.y - height * 0.52 - f.y - sy) <= ry
-            )
-              sweet = beat.sweetSpot;
-          }
+          const sweet = sweetSpotAt(f, beat, rival.x, rival.y - height * 0.52);
           hits.push({
             f,
             rival,
@@ -4792,11 +4906,7 @@
         this.swat(winner.f, winner.aim, winner.face);
       }
       for (const { f, rival, attack, beat, face, point, sweet } of hits) {
-        const strength = attack.smashSide
-          ? smashStrength(attack.power)
-          : attack.moveId === 'brisketCannon'
-            ? 1 + attack.power * 0.35
-            : 1;
+        const strength = strikeStrength(attack);
         const launch = (beat.setupHit ? 1 : strength) * (sweet?.launch || 1);
         attack.connected = this.hit(
           rival,
@@ -4993,6 +5103,7 @@
         return true;
       }
       if (target.grip) this.breakGrapple(false);
+      target.clashRecoil = null;
       target.ledgeTrump = null;
       target.crouch = false;
       target.dropPrep = null;
@@ -5109,15 +5220,62 @@
       this.finishRollPractice(target.index === 0 ? 'hit' : 'counter');
       return true;
     }
+    discContacts(d, oldX, oldY, damage, rivals, impact) {
+      const returning = d.type === 'return', dx = d.x - oldX, dy = d.y - oldY;
+      const radius = returning ? 16 : d.type === 'drive' ? 15 : 13, contacts = [];
+      for (const f of rivals) {
+        const slot = (d.back ? 1 : 0) + 2 * f.index;
+        if (returning && d.hit[slot]) continue;
+        const height = bodyHeight(f);
+        const body = { x: f.x, rx: f.stats.width + radius,
+          y: returning ? f.y - (f.floorAction ? height * 0.52 : 39) : f.y - height / 2 - (d.type === 'skip' ? 1 : 0),
+          ry: returning ? (f.floorAction ? height * 0.5 + 8 : 42) : height / 2 + (d.type === 'skip' ? 6 : 5) };
+        const bodyTime = segmentEntry(oldX, oldY, dx, dy, body);
+        // A dog finishing an intangible roll has already cleared a disc leaving its hurtbox.
+        const stillInside = Math.abs(d.x - body.x) <= body.rx && Math.abs(d.y - body.y) <= body.ry;
+        if (bodyTime < Infinity && (bodyTime > 0 || stillInside)) {
+          if (this.shieldPractice && d.type === 'drive') this.recordPracticeDodge(f, true);
+          if (!f.invuln && !f.respawning) contacts.push({ time: bodyTime, f, slot });
+        }
+        const swing = this.activeSwing(f);
+        if (!swing || !canClash(swing)) continue;
+        const { area } = swing;
+        const time = segmentEntry(oldX, oldY, dx, dy, { ...area, rx: area.rx + radius, ry: area.ry + 7 });
+        if (time < Infinity) contacts.push({ time, f, swing });
+      }
+      contacts.sort((a, b) => a.time - b.time || Number(!!b.swing) - Number(!!a.swing) || a.f.index - b.f.index);
+      const owner = this.dogs[d.owner];
+      for (const { time, f, swing, slot } of contacts) {
+        const point = { x: oldX + dx * time, y: oldY + dy * time };
+        if (swing) {
+          if (f.attack !== swing.attack) continue;
+          const a = swing.area;
+          point.x = clamp(point.x, a.x - a.rx, a.x + a.rx);
+          point.y = clamp(point.y, a.y - a.ry, a.y + a.ry);
+          const power = clashDamage(swing, point);
+          const winner = damage >= power + clashMargin ? owner : power >= damage + clashMargin ? f : null;
+          if (winner !== f && (f.ground >= 0 || winner === owner))
+            recoilFromClash(swing, power, Math.sign(dx) || -f.face);
+          this.clashContact(f, owner, point, winner, true);
+          if (winner !== owner) return true;
+        } else {
+          impact(f, Math.sign(d.vx), point);
+          if (!returning) return true;
+          d.hit[slot] = true;
+        }
+      }
+      return false;
+    }
     updateDiscs(dt) {
       this.projectiles = this.projectiles.filter((d) => {
         const owner = this.dogs[d.owner];
         if (d.caught) return false;
         const rivals = this.opponents(owner);
         d.age += dt;
-        const impact = (target, direction) => {
-          const spec = smashes[d.moveId] || specials[d.moveId] || specials.cloverRound;
-          const strength = d.type === 'drive' ? smashStrength(d.power) : 1;
+        const oldX = d.x, oldY = d.y;
+        const spec = smashes[d.moveId] || specials[d.moveId] || specials.cloverRound;
+        const strength = d.type === 'drive' ? smashStrength(d.power) : 1;
+        const impact = (target, direction, point = { x: d.x, y: d.y }) => {
           this.hit(
             target,
             owner,
@@ -5127,7 +5285,7 @@
             0,
             d.type === 'drive' ? 'heavy' : d.type === 'snare' ? 'snare' : 'disc',
             direction || owner.face,
-            { x: d.x, y: d.y },
+            point,
             spec,
             d.moveId,
           );
@@ -5137,15 +5295,7 @@
           const face = Math.sign(d.vx);
           d.x += face * step;
           d.rangeLeft -= step;
-          for (const target of rivals) {
-            if (Math.abs(target.x - d.x) > target.stats.width + 15 ||
-                d.y < target.y - bodyHeight(target) - 5 || d.y > target.y + 5) continue;
-            if (this.shieldPractice) this.recordPracticeDodge(target, true);
-            if (!target.invuln && !target.respawning) {
-              impact(target, face);
-              return false;
-            }
-          }
+          if (this.discContacts(d, oldX, oldY, spec.dmg * strength, rivals, impact)) return false;
           if (this.ball && Math.abs(d.x - this.ball.x) < 29 && Math.abs(d.y - this.ball.y) < 19) {
             this.swat(owner, 0, face);
             return false;
@@ -5165,7 +5315,6 @@
               return false;
             }
           } else {
-            const oldY = d.y;
             d.x += d.vx * dt;
             d.vy += (d.type === 'snare' ? 900 : 875) * dt;
             d.y += d.vy * dt;
@@ -5195,13 +5344,7 @@
                 }
               }
             }
-            const target = d.type === 'skip' && rivals.find((f) =>
-              !f.invuln && !f.respawning && Math.abs(f.x - d.x) < f.stats.width + 13 &&
-              d.y >= f.y - bodyHeight(f) - 7 && d.y <= f.y + 5);
-            if (target) {
-              impact(target, Math.sign(d.vx));
-              return false;
-            }
+            if (d.type === 'skip' && this.discContacts(d, oldX, oldY, spec.dmg, rivals, impact)) return false;
           }
           return d.age < 2.65 && d.x > -135 && d.x < this.stageWidth + 135 && d.y < 780;
         }
@@ -5216,16 +5359,7 @@
         }
         d.x += d.vx * dt;
         d.y += d.vy * dt;
-        const pass = d.back ? 1 : 0;
-        for (const target of rivals) {
-          const height = bodyHeight(target), slot = pass + 2 * target.index;
-          if (!d.hit[slot] && Math.abs(target.x - d.x) < target.stats.width + 16 &&
-              Math.abs(target.y - (target.floorAction ? height * 0.52 : 39) - d.y) <
-                (target.floorAction ? height * 0.5 + 8 : 42) && target.invuln <= 0) {
-            impact(target, Math.sign(d.vx));
-            d.hit[slot] = true;
-          }
-        }
+        if (this.discContacts(d, oldX, oldY, spec.dmg, rivals, impact)) return false;
         return d.age < 2.6 && d.x > -130 && d.x < this.stageWidth + 130;
       });
     }
@@ -5584,6 +5718,18 @@
       brain.guard = Math.max(0, brain.guard - dt);
       const dx = foe.x - f.x,
         far = Math.abs(dx);
+      if ((f.clashRecoil && f.clashRecoil.duration - f.clashRecoil.time > 3 / 60) ||
+          (foe.clashRecoil && f.command?.type === 'attack')) return idleInput;
+      if (foe.clashRecoil && f.ground >= 0 && f.ground === foe.ground && !f.attack &&
+          !f.stun && !f.grip && !f.floorAction && !f.shield && !f.command && f.charge < 0) {
+        const jab = moves[f.kit.ground[0]], window = foe.clashRecoil.duration - foe.clashRecoil.time;
+        const ownLag = f.clashRecoil ? f.clashRecoil.duration - f.clashRecoil.time : 0;
+        const reach = jab.box[0] + jab.box[2] + foe.stats.width;
+        if (Math.sign(dx) === f.face && far <= reach && window + dt >= jab.start + ownLag) {
+          brain.hold = brain.guard = brain.jumpHold = 0;
+          return { ...idleInput, tapped: { attack: true } };
+        }
+      }
       const opponentOffstage =
         foe.ground < 0 && (foe.x < outerLeft - 5 || foe.x > outerRight + 5 || foe.y > closest.y + 38);
       const targetX = opponentOffstage ? clamp(foe.x, closest.x1 + 37, closest.x2 - 37) : foe.x;

@@ -361,6 +361,14 @@
     } else if (name === 'throwBounce') {
       const heavy = detail.moveId === 'brisketSitSlam';
       tone(heavy ? 109 : 430, heavy ? 45 : 650, 0.1, 0, 'triangle', heavy ? 0.14 : 0.065);
+    } else if (name === 'attackClash') {
+      const pitch = detail.projectile ? 1130 : 880;
+      tone(pitch, pitch * 0.72, 0.055, 0, 'square', 0.035);
+      tone(pitch * 1.51, pitch * 1.42, 0.09, 0.009, 'sine', 0.085);
+      if (detail.winner !== null) tone(270, 105, 0.075, 0.025, 'triangle', 0.105);
+    } else if (name === 'footworkCue' && detail.beat) {
+      const pitch = detail.beat === 3 ? 890 : 490;
+      tone(pitch, pitch * 0.96, 0.047, 0, 'triangle', 0.085);
     } else if (name === 'grabEscape' || name === 'grabClash') {
       tone(475, 795, 0.055, 0, 'triangle', 0.065);
     } else if (name === 'smashReady') {
@@ -919,6 +927,7 @@
         kit.ground.map((id) => moves[id].label).join(' / ') +
         '</div><p>' +
         kit.combo +
+        '</p><p>When two ground swings meet, both dogs recoil. A swing worth at least 9 percentage points more carries through. You can also bat Clover’s flying discs. Try Training → Footwork practice → Clash jabs.' +
         '</p><p>If the rival misses a landing, tap neutral Attack for ' + moves[kit.ground[0]].label +
         '. You can jab lock twice before finishing with ' + smashes[kit.smashes.down].label + ' (Down + Smash). Try Training → Launch practice → Jab lock.' +
         '</p><h3 class="guide-section">Ground tilts</h3><p>Aim and tap Attack. For a forward tilt, tap before your dog gets running.</p><ul class="move-rows guide-tilts">' +
@@ -1104,7 +1113,7 @@
     drillSide = null;
     drillWaiting = false;
     practiceSide = 'left';
-    $('footwork-status').hidden = true;
+    $('footwork-status').hidden = $('footwork-patterns').hidden = true;
     $('spacing-status').hidden = $('spacing-patterns').hidden = true;
     $('escape-status').hidden = $('escape-patterns').hidden = true;
     $('platform-status').hidden = $('platform-patterns').hidden = true;
@@ -1431,6 +1440,28 @@
     const status = $('footwork-status');
     const state = e.outcome || e.phase;
     status.dataset.result = state;
+    const pattern = world.footworkPractice.pattern;
+    if (pattern !== 'bait') {
+      status.textContent = {
+        count: 'Beat ' + e.beat, go: pattern === 'power' ? 'Release!' : 'Swing!',
+        matched: 'Paws clashed', brokeThrough: 'Breakthrough', overpowered: 'Swing beaten',
+        batted: 'Disc batted away', hitTaken: 'Rival hit first', hitFirst: 'You hit first', missedSwing: 'No contact',
+      }[state];
+      if (e.outcome) {
+        const result = {
+          matched: pattern === 'power' ? 'Both swings recoiled. Start charging before the first beat.' :
+            'Both dogs recoiled at the point of contact. Neither took damage.',
+          brokeThrough: 'Your swing beat the rival’s and carried on.',
+          overpowered: 'The stronger attack broke through your swing.',
+          batted: 'Your swing knocked Clover’s disc out of play.',
+          hitTaken: 'Their attack reached your dog first. Watch the chalk lights and take your swing sooner.',
+          hitFirst: 'You landed a clean hit before the attacks met.',
+          missedSwing: 'The attacks missed each other. Hold your ground and time your swing to the third light.',
+        }[state];
+        $('recovery-tip').textContent = result + ' Choose the exercise again to retry.';
+      }
+      return;
+    }
     status.textContent = {
       tell: 'Bear Hug coming', opening: 'Grab missed · attack', caught: 'Caught',
       early: 'Hit first', late: 'Brisket recovered', clash: 'Grabs clashed', punish: 'Whiff punish',
@@ -1718,7 +1749,8 @@
     view = new FightView();
     if (chase) world.resetChasePractice(pattern, direction ?? world.chasePractice?.dir ?? 1, world.chasePractice?.slow ?? true);
     else if (launch) world.resetLaunchPractice();
-    else if (footwork) world.resetFootworkPractice();
+    else if (footwork) world.resetFootworkPractice(pattern, pattern === 'bait' ? 1 : direction ?? world.footworkPractice?.dir ?? 1,
+      world.footworkPractice?.pattern !== 'bait' ? world.footworkPractice?.slow ?? true : true);
     else if (spacing) world.resetSpacingPractice(pattern, direction ?? world.spacingPractice?.dir ?? 1,
       world.spacingPractice?.slow ?? true);
     else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true);
@@ -1743,7 +1775,7 @@
       $('launch-escape').setAttribute('aria-pressed', String(chase && pattern === 'defend'));
       if (chase) $('launch-slow').setAttribute('aria-pressed', String(world.chasePractice.slow));
     }
-    $('footwork-status').hidden = !footwork;
+    $('footwork-status').hidden = $('footwork-patterns').hidden = !footwork;
     $('spacing-status').hidden = $('spacing-patterns').hidden = !spacing;
     $('escape-status').hidden = $('escape-patterns').hidden = !escape;
     $('platform-status').hidden = $('platform-patterns').hidden = !platform;
@@ -1792,9 +1824,22 @@
       $('escape-status').textContent = 'Rim Rattle';
       message = 'Tap Attack to start. Watch Clover’s disc, then flick left on the first hit spark.';
     } else if (footwork) {
+      const practice = world.footworkPractice;
+      for (const id of ['bait', 'match', 'power', 'disc'])
+        $('footwork-' + id).setAttribute('aria-pressed', String(practice.pattern === id));
+      $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
+      $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
       $('footwork-status').dataset.result = 'ready';
-      $('footwork-status').textContent = 'Bait Bear Hug';
-      message = 'Dash right to the chalk, then reverse. When Brisket misses his grab, dash back in and tap Attack. Choose Footwork practice to retry.';
+      $('footwork-status').textContent = {
+        bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
+      }[pattern];
+      const discInput = player.kind === 'noodle' ? 'aim toward Clover and tap Attack' : 'tap Attack';
+      message = {
+        bait: 'Dash right to the chalk, then reverse. When Brisket misses his grab, dash back in and tap Attack. Choose Footwork practice to retry.',
+        match: 'Tap Attack to start the count. On the third chalk light, tap Attack again to meet the other dog’s jab.',
+        power: 'You’re Pip. Tap Attack to start and immediately hold Smash. Release on the third light to kick through Brisket’s Body Check.',
+        disc: 'Tap Attack to start. Clover throws Round Trip. On the third light, ' + discInput + ' to bat the disc away.',
+      }[pattern];
     } else if (wall) {
       $('wall-status').dataset.result = 'ready';
       $('wall-status').textContent = pattern === 'right' ? 'Right wall' : 'Left wall';
@@ -1869,7 +1914,16 @@
     announce(message);
   }
   $('reset-training').onclick = () => drill(false);
-  $('footwork-training').onclick = () => drill('footwork');
+  $('footwork-training').onclick = () => drill('footwork', false, world.footworkPractice?.pattern || 'bait');
+  for (const pattern of ['bait', 'match', 'power', 'disc'])
+    $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
+  $('footwork-side').onclick = () => drill('footwork', false, world.footworkPractice.pattern, -world.footworkPractice.dir);
+  $('footwork-slow').onclick = () => {
+    const practice = world.footworkPractice;
+    practice.slow = !practice.slow;
+    $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
+    $('game').focus({ preventScroll: true });
+  };
   $('spacing-training').onclick = () => drill('spacing', false, world.spacingPractice?.pattern || 'approach');
   $('spacing-approach').onclick = () => drill('spacing', false, 'approach');
   $('spacing-retreat').onclick = () => drill('spacing', false, 'retreat');
@@ -2859,7 +2913,7 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += world.escapePractice?.slow || world.climbPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow ? dt / 2 : dt;
+        accumulator += world.footworkPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];

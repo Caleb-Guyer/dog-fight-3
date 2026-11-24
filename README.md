@@ -74,6 +74,10 @@ Flick a side to dash. Reverse in the first few steps to dash-dance. Once your do
 
 In **Training → Footwork practice**, dash right to the chalk and reverse to draw out Brisket’s Bear Hug. As his paws close, turn back and attack before he recovers. The drill reports how many frames he still needed when your punish landed. Choose **Footwork practice** again to retry with the same spacing.
 
+Under **Footwork practice**, choose **Clash jabs** to meet a mirror opponent at the tips of your paws. Tap Attack to start the count, then tap it again on the third chalk light. When two grounded strikes meet, comparable attacks recoil. A swing worth at least 9 percentage points more at the point of contact carries through and can still reach the rival. Charge, sweet spots and the late part of a swing all count. Two airborne attacks can trade hits.
+
+In **Break through**, start the count, hold Smash immediately, then release Pip’s Bolt Kick on the third light to beat Brisket’s Body Check. Try the same release with a short charge to see both paws recoil. In **Bat the disc**, time a swing against Clover’s Round Trip. You can swat her Skip Serve and Line Drive in a match, too. A sufficiently strong disc will beat a weak paw. An aerial that clears a disc can keep going. Each exercise has a side switch and a half-speed toggle.
+
 Flick **Down** on a raised platform to slip through it. Your horizontal momentum carries into the fall, and you keep an air jump. As your paws pass through, aim your aerial and tap **Attack**. To down tilt on top, press **Down + Attack** together. For a crouch that lets high hits sail over your head, tilt the stick down gently, hold your keyboard Walk modifier with Down, or slide your thumb from the center dot onto Down. Low sweeps can still reach a crouching dog.
 
 In **Training → Platform practice**, choose **Rival below** to catch the other dog with a falling aerial. Choose **Rival on top** to catch them with your down tilt on the same platform. On Laundry Line the second setup puts you both on the moving basket. Select either setup again to retry with your fighters and stage.

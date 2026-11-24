@@ -3374,6 +3374,7 @@
       return firstCel + Math.min(10 - firstCel, Math.floor((elapsed - release) * (11 - firstCel) / (total - release)));
     }
     if (shieldPoses.includes(pose)) return shieldFrame(name, pose, phase, backRoll);
+    if (pose === 'clashRecoil') return Math.min(3, Math.floor(phase * 4));
     if (pose === 'tumble') return tick(14) % 8;
     if (pose === 'jabLock') {
       if (phase < 0.40) return Math.min(3, Math.floor(phase * 10));
@@ -4797,6 +4798,29 @@
         s.ear = frame % 3 === 0 ? 1 : 0;
         break;
       }
+      case 'clashRecoil': {
+        const spring = { pip: 6, brisket: 3, noodle: 8, clover: 5 }[name];
+        const pull = [3, spring, Math.ceil(spring / 2), 1][frame];
+        s.bodyX = -pull;
+        s.bodyY = [1, -1, 3, 1][frame];
+        s.headX = -pull;
+        s.headTurn = [-5, -15, -7, 0][frame];
+        s.lean = -pull;
+        s.fistX = [7, -2, -3, 1][frame];
+        s.fistY = [-5, -9, -4, -1][frame];
+        s.rearX = [2, -4, -3, 0][frame];
+        s.rearY = -pull;
+        s.rightX = [3, 5, 4, 1][frame];
+        s.leftX = -pull;
+        s.rightY = frame === 1 && name !== 'brisket' ? -3 : 0;
+        s.kneeOut = name === 'brisket' ? 4 : 2;
+        s.ear = frame === 1 ? spring : 1;
+        s.scarf = frame < 2 ? 3 : -1;
+        s.tailLift = pull;
+        s.eye = frame === 1 ? shutEyes : null;
+        if (name === 'clover') s.charmTurn = [18, -22, 9, 0][frame];
+        break;
+      }
       case 'dashStart': {
         const drive = name === 'brisket' ? 3 : 5;
         s.bodyX = frame + 1;
@@ -5590,6 +5614,7 @@
     'idle',
     'walk',
     'dashStart',
+    'clashRecoil',
     'run',
     'crouch',
     'jumpSquat',

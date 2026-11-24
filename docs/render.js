@@ -243,6 +243,7 @@
     if (f.ledgeTrump) return ['ledgeTrump', clamp(f.ledgeTrump.time / f.ledgeTrump.duration, 0, 1)];
     if (f.wallAction) return [f.wallAction.type, clamp(f.wallAction.time / f.wallAction.duration, 0, 1)];
     if (f.tumble) return ['tumble', 0];
+    if (f.clashRecoil) return ['clashRecoil', f.clashRecoil.time / f.clashRecoil.duration];
     if (f.stun > 0) {
       if (!f.reaction) return ['hurt', 0.3];
       return [f.reaction.hard ? 'launch' : 'hurt', clamp(1 - f.stun / f.reaction.duration, 0, 1)];
@@ -1793,6 +1794,21 @@
       }
       return;
     }
+    if (e.type === 'attackClash') {
+      const spread = reduced.matches ? 3 : snap(p * 13, 2);
+      const reach = p > 0.65 ? 5 : 10;
+      for (const side of [-1, 1]) for (const vertical of [-1, 1]) {
+        const lead = e.breakthrough && e.face === side ? 8 : 0;
+        const x = e.x + side * (4 + spread), y = e.y + vertical * (3 + spread / 2);
+        const endX = x + side * (reach + lead), endY = y + vertical * reach;
+        pixelLine(ctx, x, y, endX, endY, ink, 5, 2);
+        pixelLine(ctx, x, y, endX, endY, lead ? gold : e.projectile ? mint : cream, 3, 2);
+      }
+      if (p < 0.5) glint(ctx, e.x, e.y, reduced.matches ? 4 : 7, cream);
+      if (e.breakthrough) pixelLine(ctx, e.x + e.face * spread, e.y,
+        e.x + e.face * (spread + 20), e.y - 1, gold, 3, 2);
+      return;
+    }
     if (e.type === 'jabLock') {
       const out = e.size + (reduced.matches ? 0 : snap(9 * p, 2));
       for (const side of [-1,1]) {
@@ -1892,6 +1908,8 @@
     }
     event(name, e) {
       const f = e.f;
+      if (name === 'attackClash') this.add(name, e.point.x, e.point.y, cream, 0.17, 14, e.face,
+        { breakthrough: e.winner !== null, projectile: e.projectile });
       if (name === 'platformDrop') this.add(name, e.point.x, e.point.y, cream, 8 / 60, f.stats.width / 2);
       if (name === 'hitShift')
         this.add('hitShift', e.point.x, e.point.y, mint, 8 / 60, f.stats.width + 4, 1, { dx: e.dx, dy: e.dy });
@@ -2129,7 +2147,17 @@
           pixelLine(ctx, at, y + 5, at + 4, y + 9, mint, 3, 2);
         }
       }
-      if (world.footworkPractice) {
+      if (world.footworkPractice && world.footworkPractice.pattern !== 'bait') {
+        const drill = world.footworkPractice, x = snap(drill.mark, 2), y = world.terrain[0].y + 9;
+        for (let i = 0; i < 3; i++) {
+          const lamp = x + (i - 1) * 16;
+          ctx.fillStyle = ink;
+          ctx.fillRect(lamp - 6, y - 4, 12, 8);
+          ctx.fillStyle = drill.beat > i ? (i === 2 ? mint : gold) : '#726d76';
+          ctx.fillRect(lamp - 4, y - 2, 8, 4);
+          if (i === 2 && drill.beat === 3) pixelLine(ctx, lamp - 3, y + 6, lamp + 3, y + 6, mint, 2, 2);
+        }
+      } else if (world.footworkPractice) {
         const x = snap(world.footworkPractice.mark, 2), y = world.terrain[0].y;
         const chalk = world.footworkPractice.phase === 'opening' ? mint : cream;
         for (const side of [-1, 1]) {

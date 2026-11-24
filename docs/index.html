@@ -11,14 +11,14 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=knockdown-chase-1" />
+    <link rel="stylesheet" href="./style.css?v=attack-clashes-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=missions-1" />
     <link rel="stylesheet" href="./online.css?v=online-1" />
-    <script defer src="./fighters-art.js?v=knockdown-chase-1"></script>
+    <script defer src="./fighters-art.js?v=attack-clashes-1"></script>
     <script defer src="./arena-art.js?v=screen-1"></script>
-    <script defer src="./engine.js?v=knockdown-chase-1"></script>
-    <script defer src="./render.js?v=knockdown-chase-1"></script>
+    <script defer src="./engine.js?v=attack-clashes-1"></script>
+    <script defer src="./render.js?v=attack-clashes-1"></script>
     <script defer src="./dispatch-script.js?v=chapter-lead-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=shield-pressure-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./online.js?v=knockdown-chase-1"></script>
-    <script defer src="./app.js?v=knockdown-chase-1"></script>
+    <script defer src="./online.js?v=attack-clashes-1"></script>
+    <script defer src="./app.js?v=attack-clashes-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -365,6 +365,14 @@
             <i data-icon="reset"></i>Reset positions
           </button>
           <button id="footwork-training" type="button" class="utility">Footwork practice</button>
+          <span id="footwork-patterns" role="group" aria-label="Footwork exercises" hidden>
+            <button id="footwork-bait" type="button" class="utility" aria-pressed="true">Bait a grab</button>
+            <button id="footwork-match" type="button" class="utility" aria-pressed="false">Clash jabs</button>
+            <button id="footwork-power" type="button" class="utility" aria-pressed="false">Break through</button>
+            <button id="footwork-disc" type="button" class="utility" aria-pressed="false">Bat the disc</button>
+            <button id="footwork-side" type="button" class="utility" hidden>Switch sides</button>
+            <button id="footwork-slow" type="button" class="utility" aria-pressed="true" hidden>Half speed</button>
+          </span>
           <button id="spacing-training" type="button" class="utility">Back air practice</button>
           <span id="spacing-patterns" role="group" aria-label="Back air approach" hidden>
             <button id="spacing-approach" type="button" class="utility" aria-pressed="true">Approach</button>
