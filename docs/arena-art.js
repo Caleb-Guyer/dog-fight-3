@@ -1753,7 +1753,120 @@
       ctx.fillRect(deck.x1+Math.round((hub+2*Math.cos(phase))*sx),deck.y+(40+Math.round(2*Math.sin(phase)))*3,3,3);
   }
 
+  function canalBank() {
+    return sprite('canal-bank', 412, 88, p => {
+      const rng = random(831);
+      // Pollarded willows, brickwork and moored narrowboats on the far bank.
+      for (let x = -10; x < 420; x += 11) {
+        const h = 5 + Math.floor(rng() * 10);
+        p.disk(x, 52 - h, 12, h, '#8ca998');
+        p.r(x - 1, 48 - h, 2, h + 5, '#81998a');
+      }
+      p.r(0, 52, 412, 7, '#81998a');
+      p.r(0, 59, 412, 29, '#709892');
+      for (let i = 0; i < 95; i++) p.r(rng()*412, 61+rng()*25, 3+rng()*11, 1, '#88aaa0');
+      p.r(83,31,41,24,'#c5b397');
+      p.poly([77,32,89,17,117,17,130,32], '#916e61');
+      p.line(89,17,117,17,'#ceb691'); p.r(111,11,4,12,'#967b6c'); p.r(110,10,6,2,'#86695e');
+      for (const x of [88,98,114]) {
+        p.r(x,36,5,8,'#777b73'); p.r(x,36,5,1,'#ad9981'); p.r(x+2,37,1,7,'#b9a58a');
+      }
+      p.r(102,45,6,10,'#79766a');
+      for (const x of [9,147,298]) {
+        p.poly([x,62,x+48,62,x+43,66,x+6,66],'#546d67');
+        p.r(x+7,56,29,6,'#a57162'); p.r(x+6,55,31,2,'#d0b99a');
+        for(let j=11;j<34;j+=7) p.r(x+j,58,3,3,'#ddd0a9');
+        p.r(x+31,52,2,4,'#6e766c'); p.r(x+7,68,31,1,'#60877f');
+      }
+      // A former pumping station with an arched engine-room window.
+      p.r(201,27,43,28,'#b48c73');
+      p.poly([197,27,222,14,247,27], '#7f7d72');
+      p.r(207,11,6,34,'#ad8974'); p.r(206,9,8,3,'#967866');
+      for (const x of [217,231]) {
+        p.disk(x,37,4,4,'#808981'); p.r(x-4,37,9,11,'#808981');
+        p.r(x,35,1,13,'#bba388'); p.r(x-4,40,9,1,'#bba388');
+      }
+      for (let x=255;x<315;x+=11) { p.r(x,48,2,8,'#737f72'); p.r(x,50,11,1,'#8c9382'); }
+    });
+  }
+
+  function canalGate() {
+    return sprite('canal-gate', 294, 42, p => {
+      p.r(0,0,294,5,'#283d42');
+      p.r(0,0,294,1,'#bce2c6');
+      p.r(2,5,290,29,'#344b4b'); p.r(5,34,284,8,'#314648');
+      for (let x=4;x<290;x+=9) {
+        p.r(x,6,7,27,x%2 ? '#5b6257' : '#626659');
+        p.r(x+1,8+(x%7),1,12,'#797564'); p.r(x+4,26,2,7,'#4b5951');
+      }
+      for (let x=5;x<288;x+=48) {
+        p.poly([x,30,x+42,6,x+47,6,x+47,9,x+5,33,x,33],'#394b49');
+        p.line(x+2,30,x+43,7,'#899077');
+        p.r(x,4,4,30,'#374d4a'); p.r(x,6,2,26,'#728171');
+        p.dot(x+1,9,'#c0aa83'); p.dot(x+1,29,'#c0aa83');
+      }
+      p.r(2,32,290,2,'#83917a');
+      p.r(143,5,8,36,'#34494a'); p.r(147,7,2,33,'#a09472');
+      for (const x of [17,271]) {
+        p.r(x,9,4,21,'#d8c7a0');
+        for (let i=0;i<7;i++) p.r(x,10+i*3,i%2 ? 2 : 3,1,'#656f64');
+      }
+      for (const x of [4,279]) { p.r(x,1,11,3,'#c7814e'); p.r(x+5,1,3,3,'#514e48'); }
+      for(let x=18;x<278;x+=15) p.r(x,2,3,1,'#899988');
+    });
+  }
+
+  function drawCanal(ctx, seconds, bounds) {
+    const b = bounds || {left:0,top:0,right:1200,bottom:675};
+    const time = Number.isFinite(seconds) ? seconds : 0;
+    const [gate, ferry] = window.DogFight.platforms('canal',time);
+    const rect = (x,y,w,h,color) => { ctx.fillStyle=color; ctx.fillRect(x,y,w,h); };
+    rect(b.left,b.top,b.right-b.left,b.bottom-b.top,'#bad1ba');
+    rect(b.left,210,b.right-b.left,97,'#d8d6b6');
+    rect(b.left,307,b.right-b.left,Math.max(0,b.bottom-307),'#709892');
+    const bank = canalBank();
+    for(let x=Math.floor(b.left/(bank.width*3))*bank.width*3;x<b.right;x+=bank.width*3)
+      ctx.drawImage(bank,x,174,bank.width*3,bank.height*3);
+    const ripple = sprite('canal-water',132,33,p=>{
+      const rng=random(124);
+      for(let i=0;i<38;i++){
+        const x=rng()*132,y=rng()*33;
+        p.r(x,y,2+rng()*9,1,'#84a59a');
+        if(i%4===0) p.r(x-2,y+1,3,1,'#658e88');
+      }
+    });
+    const flow = reducedScenery?.matches ? 0 : Math.floor(time*4)%ripple.width*3;
+    for(let y=438;y<b.bottom;y+=ripple.height*3)
+      for(let x=Math.floor((b.left-flow)/(ripple.width*3))*ripple.width*3+flow;x<b.right;x+=ripple.width*3)
+        ctx.drawImage(ripple,x,y,ripple.width*3,ripple.height*3);
+    // The trolley follows a taut cable. Only the yellow timber deck is a landing surface.
+    rect(24,196,1152,3,'#667a70');
+    const tower=sprite('canal-mast',16,96,p=>{
+      p.r(7,0,3,96,'#65786b'); p.r(6,3,6,3,'#879383'); p.r(3,1,12,2,'#687a6d');
+      p.line(2,95,7,73,'#738575'); p.line(10,73,15,95,'#738575');
+      p.r(6,10,4,2,'#a5a389'); p.r(6,60,4,3,'#a5a389');
+    });
+    for(const x of [0,1152]) ctx.drawImage(tower,x,189,48,288);
+    const load=sprite('canal-ferry',64,62,p=>{
+      p.r(25,1,14,3,'#4c6059');
+      for(const x of [27,36]) {p.disk(x,2,2,2,'#40534f'); p.dot(x,2,'#bcb18b');}
+      p.line(27,4,4,55,'#67766a'); p.line(36,4,59,55,'#67766a');
+      p.r(0,56,64,4,'#563e38'); p.r(0,56,64,1,'#ffe09a'); p.r(2,57,60,2,'#bd794d');
+      for(const x of [3,19,42,58]) {p.r(x,57,3,4,'#604e43'); p.dot(x+1,57,'#efc384');}
+      p.r(5,60,54,2,'#404d49');
+    });
+    ctx.drawImage(load,ferry.x1,ferry.y-168,ferry.x2-ferry.x1,186);
+    ctx.drawImage(canalGate(),gate.x1,gate.y,gate.x2-gate.x1,126);
+  }
+
   function draw(ctx, stageId, seconds = 0, bounds) {
+    if (stageId === 'canal') {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      drawCanal(ctx,seconds,bounds);
+      ctx.restore();
+      return;
+    }
     if (stageId === 'nightmail') {
       ctx.save();
       ctx.imageSmoothingEnabled = false;

@@ -142,9 +142,9 @@
     const t = reduced.matches ? 1.4 : Math.floor(time * 9) / 9;
     const stageTime = rooftops ? (1.5 * Math.PI + 0.28 * Math.sin(t * 0.75)) / 0.7 : t;
     const ground = platforms(config.stage, stageTime);
-    const flat = ground.length === 1;
-    const podiums = flat ? [ground[0], ground[0]] : rooftops ? [ground[2], ground[3]] : [ground[1], ground[2]];
-    const positions = flat ? window.DogFight.arenas[config.stage].spawn : podiums.map((p) => (p.x1 + p.x2) / 2);
+    const onDeck = ground.length < 3;
+    const podiums = onDeck ? [ground[0], ground[0]] : rooftops ? [ground[2], ground[3]] : [ground[1], ground[2]];
+    const positions = onDeck ? window.DogFight.arenas[config.stage].spawn : podiums.map((p) => (p.x1 + p.x2) / 2);
     const center = (positions[0] + positions[1]) / 2;
     const width = Math.round(viewportWidth),
       height = Math.max(1, Math.round(viewportHeight));

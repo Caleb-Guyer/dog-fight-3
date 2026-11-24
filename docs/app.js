@@ -2027,25 +2027,26 @@
       }
       return;
     }
-    if (world.platformPractice.pattern === 'hold') {
+    if (world.platformPractice.defend) {
+      const ferry = world.platformPractice.pattern === 'ferry';
       if (name === 'platformDrop') return;
       if (name === 'platformClimb') {
-        status.textContent = world.platformPractice.phase === 'wing' ? 'Rival on the right wing' : 'Watch the right wing';
+        status.textContent = ferry ? 'Watch their takeoff' : world.platformPractice.phase === 'wing' ? 'Rival on the right wing' : 'Watch the right wing';
         status.dataset.result = 'approach';
         return;
       }
       const feedback = {
-        intercept: [label + ' caught the jump', 'You kept the high platform.'],
+        intercept: [label + ' caught the jump', ferry ? 'You hit the challenger before they boarded.' : 'You kept the high platform.'],
         guarded: ['Blocked ' + label, 'You shielded the rising aerial. Try meeting the next jump with an attack.'],
         parried: ['Parried the approach', 'Your shield release caught the incoming aerial.'],
         tagged: [label + ' got through', 'Their up air reaches through the floor. Shield or strike as they rise.'],
-        claimed: ['Rival took the top', 'Cover the right edge before the challenger lands.'],
-        vacated: ['Left the high platform', 'Meet the last jump from above the right wing.'],
+        claimed: [ferry ? 'Rival boarded' : 'Rival took the top', ferry ? 'Meet the jump on the approaching side of the ferry.' : 'Cover the right edge before the challenger lands.'],
+        vacated: [ferry ? 'Back on the gate' : 'Left the high platform', ferry ? 'Time your drop to meet the rising dog.' : 'Meet the last jump from above the right wing.'],
         low: ['Caught the first jump', 'Let the rival reach the wing, then catch the jump toward the top.'],
       }[e.outcome];
       status.dataset.result = e.outcome;
       status.textContent = feedback[0];
-      tip.textContent = feedback[1] + ' Choose Hold the top to retry.';
+      tip.textContent = feedback[1] + (ferry ? ' Choose Defend the ferry to retry.' : ' Choose Hold the top to retry.');
       return;
     }
     if (name === 'platformDrop') {
@@ -3031,13 +3032,14 @@
         : 'Press ' + inward + ' to climb. Release the direction and hold Shield as your dog stands up.';
     } else if (platform) {
       const below = pattern === 'below', hold = pattern === 'hold';
-      const drop = pattern === 'shield-drop';
-      for (const id of ['below','top','hold','shield-drop']) $('platform-' + id).setAttribute('aria-pressed', String(pattern === id));
-      $('platform-slow').hidden = !drop;
+      const drop = pattern === 'shield-drop', ferry = pattern === 'ferry';
+      for (const id of ['below','top','hold','shield-drop','ferry']) $('platform-' + id).setAttribute('aria-pressed', String(pattern === id));
+      $('platform-slow').hidden = !(drop || ferry);
       $('platform-slow').setAttribute('aria-pressed', String(!!world.platformPractice.slow));
       $('platform-status').dataset.result = 'ready';
-      $('platform-status').textContent = drop ? 'Hold Shield to start' : hold ? 'Defend the high platform' : below ? 'Rival below' : 'Rival on top';
-      message = drop ? 'Hold Shield. When the rising aerial hits your shield, keep holding it, flick down-right and tap Attack for ' + moves[player.kit.air.down].label + '.'
+      $('platform-status').textContent = ferry ? 'Challenger on the gate' : drop ? 'Hold Shield to start' : hold ? 'Defend the high platform' : below ? 'Rival below' : 'Rival on top';
+      message = ferry ? 'Tap Attack to send the ferry left. Watch the challenger jump from the gate. Block the rising aerial or drop through and strike first.'
+        : drop ? 'Hold Shield. When the rising aerial hits your shield, keep holding it, flick down-right and tap Attack for ' + moves[player.kit.air.down].label + '.'
         : hold ? 'Tap Attack to start. Watch the right wing. Shield the rising aerial or intercept the second jump.'
         : below
         ? 'Tap Down to drop. As your paws pass the platform, aim down and tap Attack for ' + moves[player.kit.air.down].label + '.'
@@ -3343,6 +3345,7 @@
   $('platform-below').onclick = () => drill('platform', false, 'below');
   $('platform-top').onclick = () => drill('platform', false, 'top');
   $('platform-hold').onclick = () => drill('platform', false, 'hold');
+  $('platform-ferry').onclick = () => drill('platform', false, 'ferry');
   $('platform-shield-drop').onclick = () => drill('platform', false, 'shield-drop');
   $('platform-slow').onclick = () => {
     const practice = world.platformPractice;
@@ -4521,10 +4524,11 @@
   }
   function openLink() {
     const hash = location.hash;
-    if (hash === '#solo/night-mail' || hash === '#solo/picnic-table') {
+    const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
+    if (Object.hasOwn(openingStages, hash)) {
       leaveOnline();
       afterStory = null;
-      const stage = hash === '#solo/night-mail' ? 'nightmail' : 'picnic';
+      const stage = openingStages[hash];
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage,
         cpuLevel:'rival', minutes:7, fetch:false }, undefined, 42);
     } else if (hash === '#solo/last-stock') {
@@ -4652,6 +4656,12 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'clover', p2: 'pip', stage: 'picnic', fetch: false });
       drill('combo', false, 'example');
+    }
+    else if (hash === '#training/ferry') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'brisket', p2:'pip', stage:'canal', fetch:false });
+      drill('platform', false, 'ferry');
     }
     else if (hash === '#training/shield-drop') {
       menuScreen('match');
