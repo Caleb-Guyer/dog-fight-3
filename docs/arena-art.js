@@ -1760,6 +1760,7 @@
       for (let x = -10; x < 420; x += 11) {
         const h = 5 + Math.floor(rng() * 10);
         p.disk(x, 52 - h, 12, h, '#8ca998');
+        p.r(x-6,48-h,2,6,'#9db29b'); p.r(x-3,44-h,3,2,'#9db29b');
         p.r(x - 1, 48 - h, 2, h + 5, '#81998a');
       }
       p.r(0, 52, 412, 7, '#81998a');
@@ -1772,11 +1773,12 @@
         p.r(x,36,5,8,'#777b73'); p.r(x,36,5,1,'#ad9981'); p.r(x+2,37,1,7,'#b9a58a');
       }
       p.r(102,45,6,10,'#79766a');
-      for (const x of [9,147,298]) {
-        p.poly([x,62,x+48,62,x+43,66,x+6,66],'#546d67');
-        p.r(x+7,56,29,6,'#a57162'); p.r(x+6,55,31,2,'#d0b99a');
-        for(let j=11;j<34;j+=7) p.r(x+j,58,3,3,'#ddd0a9');
-        p.r(x+31,52,2,4,'#6e766c'); p.r(x+7,68,31,1,'#60877f');
+      for (const [x,length,cabin,paint] of [[9,48,29,'#936e61'],[147,36,15,'#738d82'],[298,53,34,'#a57864']]) {
+        p.poly([x,62,x+length,62,x+length-5,66,x+6,66],'#546d67');
+        p.r(x+7,56,cabin,6,paint); p.r(x+6,55,cabin+2,2,'#d0b99a');
+        for(let j=10;j<cabin+5;j+=7) p.r(x+j,58,3,3,'#ddd0a9');
+        p.r(x+cabin+2,52,2,4,'#6e766c'); p.r(x+7,68,length-14,1,'#60877f');
+        p.line(x+length-3,62,x+length+6,58,'#839286');
       }
       // A former pumping station with an arched engine-room window.
       p.r(201,27,43,28,'#b48c73');
@@ -1787,6 +1789,14 @@
         p.r(x,35,1,13,'#bba388'); p.r(x-4,40,9,1,'#bba388');
       }
       for (let x=255;x<315;x+=11) { p.r(x,48,2,8,'#737f72'); p.r(x,50,11,1,'#8c9382'); }
+      // A lock keeper's skiff tied up beside a clump of reeds.
+      p.poly([354,71,373,71,369,74,358,74],'#5c7670');
+      p.r(358,70,12,1,'#bf9f7f'); p.line(362,69,374,75,'#8e7968');
+      for(let i=0;i<18;i++){
+        const x=326+Math.floor(rng()*17),y=63+Math.floor(rng()*3);
+        p.line(x,y,x-2,y-4-rng()*4,'#7f947f');
+        if(i%3===0) p.r(x-3,y-9,2,3,'#8e8371');
+      }
     });
   }
 
@@ -1824,6 +1834,18 @@
     rect(b.left,b.top,b.right-b.left,b.bottom-b.top,'#bad1ba');
     rect(b.left,210,b.right-b.left,97,'#d8d6b6');
     rect(b.left,307,b.right-b.left,Math.max(0,b.bottom-307),'#709892');
+    const sky=sprite('canal-sky',416,80,p=>{
+      p.disk(296,34,13,13,'#e8dbab');
+      for(const [x,y,w] of [[32,29,52],[153,48,35],[284,40,28],[361,15,32]]){
+        p.r(x,y,w,2,'#ccd8bc'); p.r(x+5,y-2,w-13,2,'#d7ddc0');
+        p.r(x+13,y-4,w-23,2,'#e0dfc2'); p.r(x+w+4,y+1,6,1,'#cdd9bb');
+      }
+      for(const [x,y] of [[105,22],[114,19],[120,24]]) {
+        p.line(x-2,y-1,x,y+1,'#7f9787'); p.line(x,y+1,x+3,y-1,'#7f9787');
+      }
+    });
+    for(let x=Math.floor(b.left/(sky.width*3))*sky.width*3;x<b.right;x+=sky.width*3)
+      ctx.drawImage(sky,x,5,sky.width*3,sky.height*3);
     const bank = canalBank();
     for(let x=Math.floor(b.left/(bank.width*3))*bank.width*3;x<b.right;x+=bank.width*3)
       ctx.drawImage(bank,x,174,bank.width*3,bank.height*3);
