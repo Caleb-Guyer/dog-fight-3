@@ -1201,6 +1201,38 @@ async function testDodgeTiming(page,mobile) {
   assert(await status.isHidden());
 }
 
+async function testImpactTech(page,mobile) {
+  await page.goto(root+'?impact#training/impact-tech');
+  const wall=page.locator('#wall-status');
+  let {hold,press,waitFor}=await trainingControls(page,mobile,wall);
+  assert.equal(await page.locator('#wall-impact').getAttribute('aria-pressed'),'true');
+  await waitFor('flight'); await hold(['shield']); await waitFor('hardImpact'); await hold([]);
+  assert.match(await wall.textContent(),/Too fast to tech · 917 px\/s/);
+  await press('wall-retry');
+  await waitFor('flight'); await hold(['up','shield']); await waitFor('wallTech'); await hold([]);
+  assert.match(await wall.textContent(),/Wall tech · 849 px\/s/);
+  await press('wall-side');
+  await waitFor('flight'); await hold(['up','shield','jump']); await waitFor('wallTechJump'); await hold([]);
+  await press('wall-impact');
+  assert.equal(await page.locator('#wall-impact').getAttribute('aria-pressed'),'false');
+  await waitFor('flight'); await hold(['shield']); await waitFor('wallTech'); await hold([]);
+  assert.equal(await wall.textContent(),'Wall tech');
+
+  await page.goto(root+'?spike-impact#training/spike-impact');
+  const floor=page.locator('#launch-status');
+  ({hold,press,waitFor}=await trainingControls(page,mobile,floor));
+  for (const steer of [false,true]) {
+    if(steer) await press('launch-floor-spike');
+    await hold(['attack']); await waitFor('hit');
+    await hold(steer?['right','shield']:['shield']);
+    await waitFor(steer?'techRoll':'hardImpact'); await hold([]);
+    assert.match(await floor.textContent(),steer?/Tech roll/:/Too fast to tech · 970 px\/s/);
+  }
+  await press('reset-training');
+  assert(await floor.isHidden());
+  console.log((mobile?'Touch':'Keyboard')+' passed the heavy wall slam, steered wall tech and jump, ordinary brace, spike bounce and steered roll.');
+}
+
 async function testShieldBreak(page,mobile) {
   await page.goto(root+'?break-practice#training/shield-break');
   const status=page.locator('#shield-status');
@@ -1331,6 +1363,7 @@ async function testDevice(browser, mobile) {
     await testFlickJumps(page, mobile);
     await testRage(page, mobile);
     await testShieldBreak(page, mobile);
+    await testImpactTech(page, mobile);
     await testBlastRadar(page, mobile);
     await testNightMail(page, mobile);
     await testJumpIns(page, mobile);
