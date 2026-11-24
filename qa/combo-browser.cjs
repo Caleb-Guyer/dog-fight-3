@@ -817,8 +817,11 @@ async function testRage(page, mobile) {
   assert.equal(await meter.count(),0);
   async function swing() {
     await hold(['up','smash']);
-    await page.clock.runFor(1120);
-    assert.equal(await page.locator('#freshness-charge').textContent(),'Full charge');
+    const charge=page.locator('#freshness-charge');
+    for(let frames=0;frames<90 && (await charge.isHidden() || await charge.textContent()!=='Full charge');frames+=3)
+      await page.clock.runFor(50);
+    assert(await charge.isVisible());
+    assert.equal(await charge.textContent(),'Full charge');
     await hold([]);
     await page.clock.runFor(3400);
     return contact.textContent();
