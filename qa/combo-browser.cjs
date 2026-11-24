@@ -242,6 +242,55 @@ async function testBraking(page, mobile) {
   await status.waitFor({state:'hidden', timeout:4000});
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed dash attack, brake tilt, saved tilt-stick setting and mirrored pivot punish.');
 }
+async function testFootstools(page, mobile) {
+  await page.goto(root+'#training/footstools');
+  const status=page.locator('#spacing-status');
+  const button = id => mobile ? page.locator('#'+id).tap() : page.locator('#'+id).click();
+  const start = () => mobile ? page.locator('[data-touch="attack"]').tap() : page.keyboard.press('j');
+  const cdp=mobile && await page.context().newCDPSession(page);
+  const keys={left:'a',right:'d',jump:'Space',shield:'l'};
+  async function hold(names) {
+    if (!mobile) {
+      for (const name of names) await page.keyboard.down(keys[name]);
+      return;
+    }
+    const points=[];
+    for (const name of names) {
+      const el=page.locator('[data-touch="'+name+'"]');
+      await el.scrollIntoViewIfNeeded();
+      const box=await el.boundingBox();
+      points.push({id:points.length+1,x:box.x+box.width/2,y:box.y+box.height/2});
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[...points]});
+    }
+  }
+  async function release() {
+    if (mobile) await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    else for(const key of Object.values(keys)) await page.keyboard.up(key);
+  }
+  async function waitFor(result) {
+    for(let i=0;i<140;i++){
+      if(await status.getAttribute('data-result')===result)return;
+      await page.clock.runFor(32);
+    }
+    assert.fail('Expected '+result+', saw '+await status.innerText());
+  }
+  assert.match(await status.innerText(),/Footstool rescue/);
+  await start(); await waitFor('fell');
+  await button('spacing-footstool'); await button('spacing-side');
+  await start(); await waitFor('footstoolCue');
+  await hold(['left','jump']); await waitFor('saved'); await release();
+  assert.match(await status.innerText(),/Back onstage/);
+  await button('spacing-footstoolTech');
+  await start(); await waitFor('downed');
+  await button('spacing-footstoolTech');
+  await start(); await waitFor('footstool');
+  // The victim hits the floor eleven frames after the bounce in this matchup.
+  await page.clock.runFor(96);
+  await hold(['right','shield']); await waitFor('techRoll'); await release();
+  await button('reset-training'); await page.clock.runFor(400);
+  await status.waitFor({state:'hidden',timeout:4000});
+  console.log((mobile?'Phone touch':'Desktop keyboard')+' passed exhausted footstool rescue, missed tech and directional floor tech.');
+}
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -303,6 +352,7 @@ async function testDevice(browser, mobile) {
     await testEdges(page, mobile);
     await testTumble(page, mobile);
     await testBraking(page, mobile);
+    await testFootstools(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
