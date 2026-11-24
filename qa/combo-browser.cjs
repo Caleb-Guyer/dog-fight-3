@@ -937,6 +937,56 @@ async function testJumpIns(page,mobile) {
   assert(await result.isHidden());
 }
 
+async function testLedgeReturn(page,mobile) {
+  await page.goto(root+'?release-return#training/ledge-return');
+  const status=page.locator('#climb-status');
+  const press=id=>mobile?page.locator('#'+id).tap():page.locator('#'+id).click();
+  const cdp=mobile && await page.context().newCDPSession(page);
+  const keys={down:'s',jump:'Space',attack:'j',left:'a',right:'d',shield:'l'};
+  let held=[];
+  async function hold(names) {
+    if(mobile) {
+      if(held.length) await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      const points=[];
+      for(const [i,name] of names.entries()){
+        const box=await page.locator('[data-touch="'+name+'"]').boundingBox();
+        assert(box && box.x>=0 && box.y>=0 && box.y+box.height<=844);
+        points.push({id:i+1,x:box.x+box.width/2,y:box.y+box.height/2});
+        await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points});
+      }
+    } else {
+      for(const name of held.filter(n=>!names.includes(n)))await page.keyboard.up(keys[name]);
+      for(const name of names.filter(n=>!held.includes(n)))await page.keyboard.down(keys[name]);
+    }
+    held=names;
+  }
+  async function waitFor(result) {
+    for(let n=0;n<100;n++){
+      if(await status.getAttribute('data-result')===result)return;
+      await page.clock.runFor(25);
+    }
+    assert.equal(await status.getAttribute('data-result'),result,await status.textContent());
+  }
+  for(const [side,inward] of [['Left','right'],['Right','left']]){
+    assert.equal(await status.textContent(),side+' ledge');
+    await hold(['down','jump']);
+    await waitFor('rise');
+    await hold([inward,'attack']);
+    await waitFor('strike');
+    await hold([inward]);
+    await waitFor('landedHit');
+    await hold([]);
+    assert.match(await status.textContent(),/Flying Kick/);
+    if(side==='Left')await press('climb-side');
+  }
+  await press('climb-coverRise');
+  await hold(['shield']); await waitFor('blockedRise'); await hold([]);
+  await press('climb-escape');
+  assert.equal(await page.locator('#climb-rise').getAttribute('aria-pressed'),'false');
+  await press('reset-training');
+  assert(await status.isHidden());
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -1009,6 +1059,7 @@ async function testDevice(browser, mobile) {
     await testBlastRadar(page, mobile);
     await testNightMail(page, mobile);
     await testJumpIns(page, mobile);
+    await testLedgeReturn(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
