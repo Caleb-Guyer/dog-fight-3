@@ -2631,6 +2631,32 @@
     announce(message);
   }
   $('reset-training').onclick = () => drill(false);
+  // Chromium can omit click on a training button after two thumbs release the fight controls.
+  const trainingTools = $('training-tools');
+  let trainingPress = null, activatedTouchButton = null;
+  trainingTools.addEventListener('pointerdown', e => {
+    activatedTouchButton = null;
+    const button = e.target.closest('button');
+    trainingPress = button && !button.disabled && e.pointerType === 'touch'
+      ? { button, id: e.pointerId, x: e.clientX, y: e.clientY } : null;
+  });
+  trainingTools.addEventListener('pointercancel', () => { trainingPress = null; });
+  trainingTools.addEventListener('pointerup', e => {
+    const press = trainingPress;
+    trainingPress = null;
+    if (!press || press.id !== e.pointerId || press.button.disabled ||
+        Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8 ||
+        document.elementFromPoint(e.clientX, e.clientY)?.closest('button') !== press.button) return;
+    activatedTouchButton = press.button;
+    press.button.click();
+  });
+  trainingTools.addEventListener('click', e => {
+    if (e.detail > 0 && activatedTouchButton && e.target.closest('button') === activatedTouchButton) {
+      activatedTouchButton = null;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }, true);
   $('combo-training').onclick = () => drill('combo', false, 'example');
   for (const source of ['example','late','record','replay']) $('combo-' + source).onclick = () => drill('combo', false, source);
   $('combo-reply').onchange = e => {
