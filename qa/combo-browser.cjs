@@ -106,6 +106,64 @@ async function testEdges(page, mobile) {
   assert.match(await status.innerText(), /Doorstop caught the hang · 6f catch/);
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed short and long catches, changing rival damage and punishing the worn catch.');
 }
+async function testTumble(page, mobile) {
+  await page.goto(root + '#training/tumble');
+  const status = page.locator('#launch-status');
+  const activate = id => mobile ? page.locator('#' + id).tap() : page.locator('#' + id).click();
+  const attack = () => mobile ? page.locator('[data-touch="attack"]').tap() : page.keyboard.press('j');
+  const session = mobile && await page.context().newCDPSession(page);
+  async function side(dir) {
+    if (!mobile) {
+      await page.keyboard.up('a'); await page.keyboard.up('d');
+      if (dir) await page.keyboard.down(dir === 'left' ? 'a' : 'd');
+    } else {
+      if (side.held) await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      if (dir) {
+        const el = page.locator('[data-touch="' + dir + '"]');
+        await el.scrollIntoViewIfNeeded();
+        const b = await el.boundingBox();
+        await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:b.x+b.width/2,y:b.y+b.height/2}]});
+      }
+      side.held = !!dir;
+    }
+  }
+  async function waitFor(result) {
+    for(let i=0;i<85;i++) {
+      if(await status.getAttribute('data-result')===result) return;
+      await page.clock.runFor(80);
+    }
+    assert.fail('Expected '+result+', saw '+await status.innerText());
+  }
+  assert.match(await status.innerText(),/Escape the juggle/);
+  await attack();
+  await waitFor('juggled');
+  assert.match(await status.innerText(),/Crown Lift caught you/);
+  await activate('launch-juggle');
+  await attack();
+  await waitFor('juggleCue');
+  await side('right');
+  await waitFor('clean');
+  assert.match(await status.innerText(),/jump and dodge saved/);
+  await side(null);
+  await activate('juggle-chase');
+  await attack();
+  await waitFor('juggleCue');
+  await side('right');
+  await waitFor('juggled');
+  assert.match(await status.innerText(),/Crown Bump caught you/);
+  await side(null);
+  await activate('launch-side');
+  await attack();
+  await waitFor('juggleCue');
+  await side('left');
+  await page.clock.runFor(240);
+  await side('right');
+  await waitFor('clean');
+  await side(null);
+  await activate('reset-training');
+  assert(await status.isHidden());
+  console.log((mobile ? 'Phone touch' : 'Desktop keyboard')+' passed neutral landing, tumble wiggle, aerial chase and reversed drift.');
+}
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -165,6 +223,7 @@ async function testDevice(browser, mobile) {
     assert(await page.locator('#combo-replay').isDisabled());
     console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed examples, recording, replay, reply changes and free-training reset.');
     await testEdges(page, mobile);
+    await testTumble(page, mobile);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
