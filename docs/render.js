@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const { clamp, platforms, attackWindow, topBlastY, shieldBubble } = window.DogFight;
+  const { clamp, platforms, attackWindow, topBlastY, shieldBubble, isReversalPractice } = window.DogFight;
   const team = ['#ef926e', '#98d0d1'];
   const teamColor = (fighter) => team[fighter.index === 0 ? 0 : 1];
   const ink = '#252337';
@@ -1828,6 +1828,17 @@
       }
       return;
     }
+    if (e.type === 'specialTurn') {
+      const extent = reduced.matches ? 15 : 10 + 13 * p, dir = e.face;
+      const at = e.x + dir * (e.size + extent), y = e.y + 5;
+      for (const [color, width] of [[ink, 5], [e.color, 3]]) {
+        pixelLine(ctx, at - dir * 13, y - 5, at - dir * 17, y, color, width, 2);
+        pixelLine(ctx, at - dir * 17, y, at, y, color, width, 2);
+        pixelLine(ctx, at, y, at - dir * 5, y - 5, color, width, 2);
+      }
+      if (e.wave) pixelLine(ctx, at - dir * 19, y + 5, at - dir * 10, y + 5, cream, 2, 2);
+      return;
+    }
     if (e.type === 'meteorBounce' || e.type === 'meteorCancel') {
       const bounce = e.type === 'meteorBounce', spread = reduced.matches ? 6 : 4 + p * 17;
       for (const side of [-1, 1]) {
@@ -1961,6 +1972,8 @@
     }
     event(name, e) {
       const f = e.f;
+      if (name === 'specialTurn') this.add(name, e.point.x, e.point.y, e.turn === 'turnaround' ? gold : mint,
+        0.16, f.stats.width, e.turn === 'turnaround' ? e.face : Math.sign(e.vx) || e.face, { wave: e.turn === 'wavebounce' });
       if (name === 'meteorBounce' || name === 'meteorCancel')
         this.add(name, e.point.x, e.point.y, name === 'meteorBounce' ? '#ec946a' : mint, 0.22, 20);
       if (name === 'attackClash') this.add(name, e.point.x, e.point.y, cream, 0.17, 14, e.face,
@@ -2251,7 +2264,14 @@
       if (world.spacingPractice) {
         const drill = world.spacingPractice, floor = world.terrain[drill.ground];
         const x = snap(drill.mark, 2), y = floor.y + 5;
-        if (drill.pattern === 'landing') {
+        if (isReversalPractice(drill)) {
+          for (const [color, width] of [[ink, 6], [cream, 3]]) {
+            pixelLine(ctx, x, y - 3, x, y + 8, color, width, 2);
+            pixelLine(ctx, x, y + 3, x + drill.dir * 15, y + 3, color, width, 2);
+            pixelLine(ctx, x + drill.dir * 15, y + 3, x + drill.dir * 10, y - 2, color, width, 2);
+          }
+          if (drill.landingX !== undefined) pixelLine(ctx, x, y + 8, drill.landingX, y + 8, mint, 2, 2);
+        } else if (drill.pattern === 'landing') {
           // A fork and a single stripe stay distinct against all three floors.
           for (const [at, fork, tint] of [[x, true, gold], [snap(drill.cleanMark, 2), false, mint]]) {
             for (const color of [ink, tint]) {

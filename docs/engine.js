@@ -133,6 +133,8 @@
   const parryWindow = 5 / 60;
   const shieldGrabPenalty = 4 / 60;
   const jumpSquatTime = 3 / 60;
+  const turnaroundWindow = 4, bReverseWindow = 3;
+  const isReversalPractice = drill => drill?.pattern === 'reverse' || drill?.pattern === 'wavebounce';
   // Total frames and initial invulnerability frames for each landing option.
   const floorFrames = {
     tech: [19, 13],
@@ -1866,6 +1868,7 @@
       moveHistory: [],
       face: index ? -1 : 1,
       prev: idleInput,
+      specialFlick: null,
       x: 0,
       y: 0,
       vx: 0,
@@ -2657,11 +2660,24 @@
       else if (d.time > 4 || target.ledge || target.respawning || this.dogs[1 - d.slot].respawning)
         this.finishChase('away');
     }
-    resetSpacingPractice(pattern = 'approach', dir = 1, slow = true) {
+    resetSpacingPractice(pattern = 'approach', dir = 1, slow = true, shieldGrab = true) {
       this.resetTraining();
       const [f, guard] = this.dogs;
       const ground = this.stage === 'laundry' && dir < 0 ? 1 : 0;
       const floor = this.terrain[ground], approach = pattern === 'approach';
+      if (pattern === 'reverse' || pattern === 'wavebounce') {
+        const originX = (floor.x1 + floor.x2) / 2, behind = pattern === 'reverse';
+        const guardOn = !behind && shieldGrab;
+        const reach = guardOn ? { pip: 104, brisket: 55, noodle: 128, clover: 130 }[f.kind] :
+          { pip: 32, brisket: 25, noodle: 74, clover: 78 }[f.kind] + guard.stats.width;
+        Object.assign(f, { x: originX, y: floor.y - 23, vy: -96, vx: dir * (guardOn ? f.stats.speed : f.kit.airDrift.speed),
+          ground: -1, face: dir, jumps: 1 });
+        Object.assign(guard, { x: originX + (behind ? -dir : dir) * reach, y: floor.y, ground,
+          face: behind ? dir : -dir, shield: guardOn || (behind && f.kind === 'brisket') });
+        this.spacingPractice = { pattern, dir, slow, ground, originX, mark: originX, phase: 'ready', time: 0,
+          guard: guardOn, turn: '', cast: '', contact: '', damage: 0, airborne: true, landing: null, outcome: '' };
+        return;
+      }
       if (pattern === 'landing') {
         // Run-in distance and the two takeoff-relative floor marks for each dog's short hop.
         const [runIn, softMark, cleanMark] = {
@@ -2691,6 +2707,14 @@
     spacingPracticeInput() {
       const drill = this.spacingPractice, guard = this.dogs[1];
       if (drill.phase === 'done') return idleInput;
+      if (isReversalPractice(drill)) {
+        if (drill.blocked && drill.landing !== null && !drill.grabSent && guard.shieldStun < 1e-8 && guard.impactLag < 1e-8) {
+          drill.grabSent = true;
+          return { ...idleInput, shield: true, tapped: { grab: true } };
+        }
+        return { ...idleInput, shield: drill.guard || (drill.pattern === 'reverse' && this.dogs[0].kind === 'brisket'),
+          y: drill.guard && this.dogs[0].kind === 'clover' ? -0.45 : 0 };
+      }
       if (drill.pattern === 'landing') return drill.contact ? { ...idleInput, shield: true } : idleInput;
       if (drill.landing !== null && !drill.grabSent && guard.shieldStun < 1e-8 && guard.impactLag < 1e-8) {
         drill.grabSent = true;
@@ -2714,6 +2738,21 @@
         drill.landing = (f.x - guard.x) * drill.dir;
         drill.landingX = f.x;
         this.emit('spacingLand', { f, gap: drill.landing });
+      }
+      if (isReversalPractice(drill)) {
+        if (!drill.cast && f.attack) drill.cast = f.attack.moveId;
+        if (guard.attack?.grabAttempt && guard.attack.time + 1e-8 >= guard.attack.start) drill.grabLive = true;
+        if (f.grip?.owner === 1) return this.finishSpacingPractice('caught');
+        if (f.respawning || f.ledge || drill.time > 1.8) return this.finishSpacingPractice('away');
+        if (drill.blocked && (!drill.grabSent || guard.attack || guard.command)) return;
+        if (drill.landing === null || (!drill.contact && drill.time < 0.65)) return;
+        const travel = (drill.landingX - drill.originX) * drill.dir;
+        if (drill.cast && drill.cast !== f.kit.specials.neutral) this.finishSpacingPractice('other');
+        else if (!drill.contact) this.finishSpacingPractice('miss');
+        else if (drill.blocked && !drill.grabLive) this.finishSpacingPractice(drill.damage ? 'intercept' : 'guarded');
+        else if (drill.turn && (drill.turn === 'turnaround' ? travel < 2 : travel > -2)) this.finishSpacingPractice('short');
+        else this.finishSpacingPractice(drill.turn || 'straight');
+        return;
       }
       if (drill.pattern === 'landing') {
         if (f.respawning || guard.respawning || f.ledge) this.finishSpacingPractice('away');
@@ -3454,9 +3493,18 @@
         chase.consumeAttack = !!input1.attack;
         input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
       }
-      if (this.spacingPractice?.phase === 'ready') {
-        if (!input1.jump && !input1.tapped?.jump) return;
-        this.spacingPractice.phase = 'active';
+      const spacing = this.spacingPractice;
+      if (isReversalPractice(spacing) && spacing.phase === 'done' &&
+          (input1.tapped?.attack || (input1.attack && !this.dogs[0].prev.attack))) {
+        this.resetSpacingPractice(spacing.pattern, spacing.dir, spacing.slow, spacing.guard);
+        this.emit('spacingRetry', { f: this.dogs[0] });
+        return;
+      }
+      if (spacing?.phase === 'ready') {
+        const start = isReversalPractice(spacing) ? Math.abs(input1.x) > 0.28 || input1.special || input1.tapped?.special
+          : input1.jump || input1.tapped?.jump;
+        if (!start) return;
+        spacing.phase = 'active';
       }
       if (this.climbPractice) {
         const drill = this.climbPractice;
@@ -3701,6 +3749,25 @@
         else if (input.x * dir > 0.45 && was.x * dir <= 0.45) f.ledge.climbQueued = true;
       }
       readDashFlick(f, input.x, was.x);
+      const horizontal = Math.abs(input.y) < 0.5 && Math.abs(input.x) >= 0.65 ? Math.sign(input.x) : 0;
+      const flick = horizontal && was.x * horizontal < 0.55 ? horizontal : 0;
+      // A neutral special buffered near the end of another move can carry its directional follow-up.
+      const buffered = f.command;
+      if (buffered?.turnFrames > 0) {
+        buffered.turnFrames--;
+        if (f.ground < 0 && flick === -(buffered.turnTo || buffered.facing)) buffered.reverseQueued = true;
+      }
+      if (f.ground >= 0 || f.grip || f.ledge || f.stun || f.dodge || f.floorAction) f.specialFlick = null;
+      else {
+        if (f.specialFlick && --f.specialFlick.frames === 0) f.specialFlick = null;
+        if (flick) {
+          const a = f.attack;
+          if (a?.airNeutral && !a.reversed && flick === -f.face &&
+              a.time <= bReverseWindow / 60 + 1e-8 && a.time < a.start - 1e-8)
+            a.reverseQueued = true;
+          f.specialFlick = { dir: flick, frames: turnaroundWindow + 1 };
+        }
+      }
       const down = input.y || 0, lastDown = was.y || 0;
       if (down < 0.28) f.downTicks = 0;
       const downFlick = down >= 0.74 && lastDown < 0.74 && (f.downTicks < 3 || down - lastDown >= 0.45);
@@ -3836,6 +3903,11 @@
         };
         if (button === 'aimStick') f.command.button = button;
         if (stickAerial) f.command.airOnly = true;
+        if (type === 'special' && side === 'neutral' && f.ground < 0) {
+          f.command.turnFrames = bReverseWindow;
+          if (f.specialFlick?.dir === -f.face) f.command.turnTo = f.specialFlick.dir;
+        }
+        if (type === 'special') f.specialFlick = null;
         if (f.ground >= 0 && (f.shield || input.shield)) {
           f.command.shieldCounter = (type === 'special' || type === 'smash') && side === 'up';
           if (type === 'grab' && f.shield && (f.shieldStun > 1e-8 || f.shieldGrabWindow > 1e-8))
@@ -4521,7 +4593,8 @@
         } else if (command && (command.type !== 'smash' || f.ground >= 0)) {
           f.throwBounce = null;
           f.command = null;
-          if (command.face && (f.ground >= 0 || command.type !== 'attack')) f.face = command.face;
+          const neutralInAir = command.type === 'special' && command.airSide === 'neutral' && f.ground < 0;
+          if (command.face && !neutralInAir && (f.ground >= 0 || command.type !== 'attack')) f.face = command.face;
           if (command.type === 'grab') {
             const style = f.ground >= 0 && command.grabStyle ? command.grabStyle : 'standing';
             beginGrab(f, style, style === 'standing' ? 0 : command.runFace, command.aim, command.shieldGrab);
@@ -4554,6 +4627,15 @@
       if (f.attack) {
         if (f.tumble) this.clearTumble(f, 'Aerial action');
         const a = f.attack;
+        if (a.reverseQueued) {
+          a.reverseQueued = false;
+          if (f.ground < 0 && a.airNeutral && !a.reversed) {
+            a.reversed = true;
+            f.face = -f.face;
+            f.vx = -f.vx;
+            this.specialTurn(f, a.turned ? 'wavebounce' : 'bReverse');
+          }
+        }
         a.time += dt;
         if (
           a.shieldGrab && a.step &&
@@ -4690,6 +4772,7 @@
               return;
             }
             f.ground = landing;
+            if (f.attack?.airNeutral) f.attack.airNeutral = false;
             if (f.command?.airOnly) f.command = null;
             f.y = this.terrain[landing].y;
             f.vy = 0;
@@ -5080,6 +5163,12 @@
         point,
       });
     }
+    specialTurn(f, turn) {
+      const d = this.spacingPractice;
+      if (isReversalPractice(d) && d.phase === 'active' && f.index === 0) d.turn = turn;
+      this.emit('specialTurn', { f, moveId: f.attack.moveId, turn, face: f.face, vx: f.vx,
+        point: { x: f.x, y: f.y - f.stats.height * 0.45 } });
+    }
     special(f, command) {
       const side = ['forward', 'back'].includes(command.airSide) ? 'side' : command.airSide;
       const id = f.kit.specials[side];
@@ -5104,6 +5193,15 @@
       const a = f.attack;
       a.specialSide = side;
       a.released = !!command.released;
+      if (air && side === 'neutral') {
+        a.airNeutral = true;
+        a.reverseQueued = !!command.reverseQueued;
+        if (command.turnTo && command.turnTo !== f.face) {
+          f.face = command.turnTo;
+          a.turned = true;
+          this.specialTurn(f, 'turnaround');
+        }
+      }
       if (side === 'side' && air) f.usedAir = true;
       if (side === 'up') {
         f.usedUp = true;
@@ -5645,6 +5743,13 @@
       if (!broken && this.escapePractice?.spacing === 'break' && this.escapePractice.contact === 'plant' && target.index === 0)
         this.finishEscapePractice('blockedReply');
       if (this.platformPractice?.pattern === 'hold' && target.index === 0 && !broken) this.finishPlatformPractice('guarded', moveId);
+      const spacing = this.spacingPractice;
+      if (!broken && spacing?.guard && spacing.phase === 'active' && owner.index === 0 && target.index === 1 &&
+          moveId === owner.kit.specials.neutral) {
+        spacing.blocked = true;
+        spacing.contact = moveId;
+        this.emit('spacingContact', { f: owner, moveId });
+      }
       if (this.spacingPractice?.phase === 'active' && owner.index === 0 && target.index === 1 &&
           this.spacingPractice.pattern === 'landing' && this.spacingPractice.contact) this.finishSpacingPractice('guarded');
       else if (this.spacingPractice?.phase === 'active' && owner.index === 0 && target.index === 1 &&
@@ -5840,6 +5945,12 @@
         } else if (spacing.contact && owner.ground >= 0 && moveId === owner.kit.ground[0])
           this.finishSpacingPractice(this.lastCombo.hits === 2 ? 'string' : 'gap');
         else this.finishSpacingPractice('other');
+      }
+      if (isReversalPractice(spacing) && spacing.phase === 'active' && owner.index === 0 && target.index === 1 &&
+          moveId === owner.kit.specials.neutral) {
+        spacing.contact = moveId;
+        spacing.damage = Math.round((spacing.damage + applied) * 10) / 10;
+        this.emit('spacingContact', { f: owner, moveId });
       }
       if (braced) this.emit('crouchCancel', { f: target, owner, moveId, planted, face, frames: Math.ceil(target.stun * 60 - 1e-8),
         point: { x: target.x, y: this.terrain[groundAtHit].y } });
@@ -6505,6 +6616,37 @@
       }
       return best;
     }
+    cpuSpecialTurnInput(f, foe, floor, unsafe) {
+      const brain = this.bot, plan = brain.specialTurn;
+      if (plan) {
+        brain.specialTurn = null;
+        if (unsafe || f.ground >= 0 || f.grip || f.stun || f.ledge) return null;
+        if (plan.step === 'flick') return f.attack?.airNeutral ? { ...idleInput, x: -f.face } : null;
+        if (f.attack || f.specialFlick?.dir !== -f.face) return null;
+        if (plan.turn === 'wavebounce') brain.specialTurn = { step: 'flick' };
+        return { ...idleInput, special: true, tapped: { special: true } };
+      }
+      if (unsafe || brain.timer > 0 || f.ground >= 0 || f.attack || f.command || f.stun || f.tumble || f.dodge ||
+          f.ledge || f.grip || f.vx * f.face < f.kit.airDrift.speed * 0.45 ||
+          foe.invuln || foe.respawning || foe.ledge || foe.grip || (foe.shield && f.kind !== 'brisket')) return null;
+      const behind = (foe.x - f.x) * f.face < -5;
+      const safeX = f.x - f.vx * 0.25, canReverse = safeX > floor.x1 + 18 && safeX < floor.x2 - 18;
+      if (!behind && (!canReverse || !['noodle','clover'].includes(f.kind) || !(foe.attack || foe.vx * f.face < -120))) return null;
+      const turn = behind ? (canReverse ? 'bReverse' : 'turnaround') : 'wavebounce';
+      const move = specials[f.kit.specials.neutral], t = move.start + (turn === 'bReverse' ? 0 : 1 / 60);
+      const nextY = f.y + f.vy * t + 770 * f.kit.gravity * t * t;
+      const rivalY = foe.ground >= 0 ? foe.y : foe.y + foe.vy * t + 770 * foe.kit.gravity * t * t;
+      const nextX = f.x + (canReverse ? -f.vx : f.vx) * t;
+      const gap = (foe.x + foe.vx * t - nextX) * (behind ? -f.face : f.face);
+      const [x, y, rx, ry] = move.box;
+      const reach = move.projectile ? 185 : x + rx;
+      if (nextY >= floor.y || gap < Math.max(-2, x - rx - foe.stats.width) || gap > reach + foe.stats.width - 5 ||
+          Math.abs(rivalY - bodyHeight(foe) * 0.52 - nextY - y) > ry + bodyHeight(foe) * 0.4 - 4) return null;
+      brain.hop = null;
+      brain.timer = 0.45;
+      brain.specialTurn = { turn, step: turn === 'bReverse' ? 'flick' : 'cast' };
+      return turn === 'bReverse' ? { ...idleInput, special: true, tapped: { special: true } } : { ...idleInput, x: -f.face };
+    }
     cpuDownAir(f, foe, floor) {
       if (f.ground >= 0 || f.attack || f.stun || f.tumble || f.airDodge || f.ledge || f.command ||
           foe.invuln || foe.respawning || foe.shield || foe.ledge || foe.y - f.y < foe.stats.height * 0.42 ||
@@ -6581,6 +6723,10 @@
       brain.guard = Math.max(0, brain.guard - dt);
       const dx = foe.x - f.x,
         far = Math.abs(dx);
+      if (brain.specialTurn) {
+        const follow = this.cpuSpecialTurnInput(f, foe, closest, unsafe);
+        if (follow) return follow;
+      }
       if (f.attack?.moveId === f.kit.ground[0]) f.landingFollowUntil = 0;
       if (f.landingFollowUntil > this.time && !unsafe && !f.stun && !f.grip && !f.floorAction && foe.stun > 0) {
         if (f.command?.type === 'attack' || f.charge >= 0) return idleInput;
@@ -6748,6 +6894,8 @@
       if (passInput) return passInput;
       const platformInput = !unsafe && this.cpuPlatformInput(f, foe);
       if (platformInput) return platformInput;
+      const specialTurn = this.cpuSpecialTurnInput(f, foe, closest, unsafe);
+      if (specialTurn) return specialTurn;
       const downward = brain.timer <= 0 && this.cpuDownAir(f, foe, closest);
       if (downward) return downward;
       if (f.attack?.charging) {
@@ -7007,6 +7155,7 @@
     clamp,
     attackWindow,
     canCancelMeteor,
+    isReversalPractice,
     shieldBubble,
     shieldContact,
     ledgePosition,

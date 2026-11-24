@@ -110,6 +110,12 @@ Pip’s Flying Kick deals 8% clean or 4% late. Brisket’s Air Ram deals 13% or 
 
 In **Aerial practice → Approach**, turn in a running jump, tag the shield with your back air and land behind the grab. **Retreat** starts you running away. Aim your back air toward the rival as you jump and carry on out of reach. The two drills work with either facing and your selected matchup.
 
+**Turnaround specials and B-reverses.** While airborne, flick behind your dog, release the direction, then tap neutral Special. Your dog aims back and carries its sideways speed through the turn. To reverse the drift as well, tap neutral Special first and immediately flick behind you. Flick within the first three frames after the cast begins, before its hitbox or disc comes out. Holding a side as you press Special gives your usual Side Special.
+
+**Wavebounce.** Flick back, center the direction, tap Special, then flick forward and release. Your neutral special points along your original path while your dog slides backward. You can follow the cast with any jump, air dodge or recovery you saved.
+
+In **Training → Aerial practice → B-reverse**, your dog is already drifting past a rival. Try reversing into them, then tap Attack to retry and turn away with an early flick. Compare where your paws land against the chalk. **Wavebounce** puts a shielding rival ahead. Try a straight special and let them grab your landing. Repeat with a wavebounce to pull your paws out of reach. Brisket can scoop the guard through the shield with Collar Toss. Toggle **Guard and grab** to try against an open target. Both exercises use your chosen matchup, can be mirrored, and start at half speed.
+
 ## Wavedashes and wavelands
 
 Tap Jump, then aim diagonally down and tap Shield during takeoff to **wavedash**. Release the direction to slide along the floor while keeping your facing. To slide backward on the P1 keyboard while facing right, tap **Space**, then **S + A + L**. A fresh diagonal Shield tap also works together with Jump. Holding an already-raised shield and jumping gives you your regular jump.

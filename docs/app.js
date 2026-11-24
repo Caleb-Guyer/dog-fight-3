@@ -14,6 +14,7 @@
     arenas,
     Battle,
     idleInput,
+    isReversalPractice,
     clamp,
   } = window.DogFight;
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
@@ -367,6 +368,9 @@
       }[detail.f.kind];
       tone(start, end, 0.053, 0, wave, wave === 'square' ? 0.033 : 0.085);
       tone(end * 0.7, end * 0.45, 0.055, 0.009, 'triangle', 0.068);
+    } else if (name === 'specialTurn') {
+      const turned = detail.turn === 'turnaround';
+      tone(turned ? 300 : 460, turned ? 390 : 235, 0.06, 0, 'triangle', 0.065);
     } else if (name === 'meteorBounce') {
       tone(143, 43, 0.12, 0, 'triangle', 0.15);
       tone(296, 130, 0.055, 0.012, 'square', 0.035);
@@ -949,7 +953,7 @@
       contents =
         '<p class="recovery-note"><strong>Offstage</strong> ' +
         kit.recovery +
-        '</p><ul class="move-rows guide-specials">' +
+        '</p><p>In the air, tap neutral Special, then immediately flick behind you for a <strong>B-reverse</strong>. Your dog turns and reverses its sideways speed. Flick back and release <em>before</em> Special for a turnaround that keeps your drift. Combine both inputs for a <strong>wavebounce</strong>. Try Training → Aerial practice.</p><ul class="move-rows guide-specials">' +
         rows +
         '</ul>' +
         ledgeMove;
@@ -1226,7 +1230,8 @@
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
       if (name === 'waveContact' || name === 'waveResult') waveFeedback();
-      if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingJab' || name === 'spacingResult'))
+      if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingJab' ||
+          name === 'spacingResult' || name === 'spacingRetry' || (name === 'specialTurn' && e.f.index === 0 && isReversalPractice(world.spacingPractice))))
         spacingFeedback(name, e);
       if (name === 'escapeCue' || name === 'escapeResult') escapeFeedback(e);
       if (world?.climbPractice && (name === 'climbCue' || name === 'climbResult' ||
@@ -1457,8 +1462,39 @@
   let drillSide = null,
     drillWaiting = false,
     practiceSide = 'left';
+  function reversalTip(d) {
+    const back = d.dir > 0 ? 'left' : 'right', forward = d.dir > 0 ? 'right' : 'left';
+    return d.pattern === 'reverse' ? 'Drifting ' + forward + ', rival behind. Tap Special with no direction, then flick ' + back +
+      ' to reverse into them. On a retry, flick and release ' + back + ' before Special to hit while drifting away.' :
+      'Rival ahead. Flick ' + back + ', release, tap Special, then immediately flick ' + forward +
+      ' and release. ' + (d.guard && world.dogs[0].kind !== 'brisket' ? 'Land beyond the shield grab.' :
+        d.guard ? 'Catch the shield with Collar Toss while sliding back.' : 'Hit the rival while sliding back past the chalk.');
+  }
   function spacingFeedback(name, e) {
     const practice = world.spacingPractice, status = $('spacing-status');
+    if (isReversalPractice(practice)) {
+      const labels = { bReverse: 'B-reverse', turnaround: 'Turnaround', wavebounce: 'Wavebounce', straight: 'Straight cast',
+        miss: 'Missed the rival', short: 'Landed near the mark', other: 'Different move', away: 'Left the setup',
+        caught: 'Shield grab caught you', intercept: 'Grab interrupted', guarded: 'Rival held shield' };
+      const tip = $('recovery-tip');
+      status.dataset.result = e.outcome || name;
+      if (name === 'spacingRetry') {
+        status.textContent = practice.pattern === 'reverse' ? 'Rival behind' : 'Rival ahead';
+        tip.textContent = reversalTip(practice);
+      } else if (e.outcome) {
+        const result = practice.blocked && practice.grabLive && e.outcome !== 'caught' ? ' · grab missed' :
+          practice.damage ? ' · ' + practice.damage + '%' : '';
+        status.textContent = labels[e.outcome] + result;
+        const traveled = Math.round((practice.landingX - practice.originX) * practice.dir);
+        const route = Number.isFinite(traveled) ? 'Landed ' + Math.abs(traveled) + ' px ' + (traveled < 0 ? 'back' : 'ahead') + ' of the chalk.' : '';
+        const advice = e.outcome === 'caught' ? 'Try the same cast with a wavebounce to land outside the grab.' :
+          e.outcome === 'other' ? 'Center the direction when you press Special.' :
+          e.outcome === 'miss' ? 'Aim toward the rival as your move comes out.' : route;
+        tip.textContent = advice + ' Tap Attack to retry.';
+      } else if (name === 'specialTurn') status.textContent = labels[e.turn];
+      else if (name === 'spacingContact') status.textContent = practice.blocked ? 'Shield contact' : specials[practice.contact].label + ' · ' + practice.damage + '%';
+      return;
+    }
     if (practice.pattern === 'landing') {
       const labels = { clean: 'Clean hit · ' + practice.damage + '%', string: 'True combo · ' + world.lastCombo.damage + '%',
         gap: 'Gap before the jab', guarded: (practice.timing === 'clean' ? 'Clean hit' : 'Late hit') + ' · jab shielded',
@@ -2034,7 +2070,7 @@
     else if (footwork) world.resetFootworkPractice(pattern, pattern === 'bait' ? 1 : direction ?? world.footworkPractice?.dir ?? 1,
       world.footworkPractice?.pattern !== 'bait' ? world.footworkPractice?.slow ?? true : true);
     else if (spacing) world.resetSpacingPractice(pattern, direction ?? world.spacingPractice?.dir ?? 1,
-      world.spacingPractice?.slow ?? true);
+      world.spacingPractice?.slow ?? true, world.spacingPractice?.pattern === 'wavebounce' ? world.spacingPractice.guard : true);
     else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true, world.escapePractice?.baseline);
     else if (platform) world.resetPlatformPractice(pattern);
     else if (wall) world.resetWallPractice(pattern);
@@ -2097,10 +2133,15 @@
       $('spacing-approach').setAttribute('aria-pressed', String(approach));
       $('spacing-retreat').setAttribute('aria-pressed', String(pattern === 'retreat'));
       $('spacing-landing').setAttribute('aria-pressed', String(pattern === 'landing'));
+      $('spacing-reverse').setAttribute('aria-pressed', String(pattern === 'reverse'));
+      $('spacing-wavebounce').setAttribute('aria-pressed', String(pattern === 'wavebounce'));
+      $('spacing-guard').hidden = pattern !== 'wavebounce';
+      $('spacing-guard').setAttribute('aria-pressed', String(!!practice.guard));
       $('spacing-slow').setAttribute('aria-pressed', String(practice.slow));
       $('spacing-status').dataset.result = 'ready';
-      $('spacing-status').textContent = pattern === 'landing' ? 'Tap Jump and hold ' + run : approach ? 'Jump past the shield' : 'Jump away from the shield';
-      message = pattern === 'landing' ? 'Short-hop ' + run + '. Tap Attack over the gold fork for a late hit or the green stripe for a clean hit. Center the direction and jab on landing.' : 'Running ' + run + '. ' + (approach
+      $('spacing-status').textContent = isReversalPractice(practice) ? (pattern === 'reverse' ? 'Rival behind' : 'Rival ahead') :
+        pattern === 'landing' ? 'Tap Jump and hold ' + run : approach ? 'Jump past the shield' : 'Jump away from the shield';
+      message = isReversalPractice(practice) ? reversalTip(practice) : pattern === 'landing' ? 'Short-hop ' + run + '. Tap Attack over the gold fork for a late hit or the green stripe for a clean hit. Center the direction and jab on landing.' : 'Running ' + run + '. ' + (approach
         ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
         : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
     } else if (climb) {
@@ -2260,6 +2301,13 @@
   $('spacing-approach').onclick = () => drill('spacing', false, 'approach');
   $('spacing-retreat').onclick = () => drill('spacing', false, 'retreat');
   $('spacing-landing').onclick = () => drill('spacing', false, 'landing');
+  $('spacing-reverse').onclick = () => drill('spacing', false, 'reverse');
+  $('spacing-wavebounce').onclick = () => drill('spacing', false, 'wavebounce');
+  $('spacing-guard').onclick = () => {
+    const practice = world.spacingPractice;
+    practice.guard = !practice.guard;
+    drill('spacing', false, 'wavebounce', practice.dir);
+  };
   $('spacing-side').onclick = () => drill('spacing', false, world.spacingPractice.pattern, -world.spacingPractice.dir);
   $('spacing-slow').onclick = () => {
     const practice = world.spacingPractice;
