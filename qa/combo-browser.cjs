@@ -720,6 +720,107 @@ async function testShortHops(page, mobile) {
   console.log((mobile ? 'Touch' : 'Keyboard and controller mapping') + ' passed held short-hop and full-jump comparison.');
 }
 
+async function testBlastRadar(page, mobile) {
+  await page.goto(root + '#training/blast-radar');
+  const radar = page.locator('#blast-radar'), status = page.locator('#launch-status');
+  const session = mobile && await page.context().newCDPSession(page);
+  const keys = {down:'s',attack:'j'};
+  let held = [];
+  async function hold(next) {
+    if (mobile) {
+      if (held.length) await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      const points = [];
+      for (const action of next) {
+        const box = await page.locator('[data-touch="'+action+'"]').boundingBox();
+        points.push({id:points.length+1, x:box.x+box.width/2, y:box.y+box.height/2});
+        await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points});
+      }
+    } else {
+      for (const action of held) if (!next.includes(action)) await page.keyboard.up(keys[action]);
+      for (const action of next) if (!held.includes(action)) await page.keyboard.down(keys[action]);
+    }
+    held = next;
+  }
+  async function waitFor(text) {
+    for (let i=0;i<110;i++) {
+      if (text.test(await status.innerText())) return;
+      await page.clock.runFor(32);
+    }
+    assert.fail('Expected '+text+', saw '+await status.innerText());
+  }
+  async function hasColor(rgb) {
+    return radar.evaluate((canvas,[r,g,b]) => {
+      const data=canvas.getContext('2d').getImageData(0,0,canvas.width,canvas.height).data;
+      for(let i=0;i<data.length;i+=4) if(data[i]===r && data[i+1]===g && data[i+2]===b && data[i+3]===255) return true;
+      return false;
+    },rgb);
+  }
+  const tapAttack = async (aim=[]) => {
+    await hold([...aim,'attack']); await page.clock.runFor(55); await hold(aim);
+  };
+  await page.clock.runFor(64);
+  const box = await radar.boundingBox(), arena = await page.locator('#game').boundingBox();
+  assert(box && box.x>=arena.x && box.y>=arena.y && box.x+box.width<=arena.x+arena.width && box.y+box.height<=arena.y+arena.height);
+  assert.equal(await radar.evaluate(el=>getComputedStyle(el).pointerEvents),'none');
+  assert(await hasColor([237,150,121]),'visible blast border');
+  await tapAttack();
+  await waitFor(/Crosses right boundary in 23f/);
+  assert(await hasColor([255,152,125]),'dangerous projected course');
+  await page.clock.runFor(940);
+  assert.match(await status.innerText(),/23f/);
+  await hold(['down']); await waitFor(/Control returns inside/);
+  assert(await hasColor([159,228,215]),'escape course');
+  await hold([]); await waitFor(/Crosses right/);
+  await tapAttack(); await waitFor(/Ring-out/);
+  await tapAttack(); await waitFor(/Crosses right/);
+  await hold(['down']); await waitFor(/Control returns inside/);
+  await tapAttack(['down']); await hold([]);
+  await waitFor(/92% speed/);
+  await waitFor(/Shield \+ up-left/);
+  const reset=page.locator('#reset-training');
+  if (mobile) await reset.tap(); else await reset.click();
+  await page.clock.runFor(120);
+  assert(await radar.isHidden());
+  if (!mobile) {
+    const probe = await page.evaluate(() => {
+      const b = new window.DogFight.Battle({mode:'local',stage:'laundry',p1:'pip',p2:'brisket'});
+      const canvas = document.createElement('canvas'); canvas.width=160; canvas.height=108; canvas.hidden=true;
+      const view = new window.DogFightView.FightView(canvas), ctx=canvas.getContext('2d');
+      view.drawRadar(b,0,0,1200,675);
+      const quiet = canvas.hidden;
+      Object.assign(b.dogs[0],{x:-50,y:330,ground:-1,vy:160});
+      b.startTumble(b.dogs[0],false);
+      view.drawRadar(b,0,0,1200,675);
+      const detected = !canvas.hidden && canvas.getAttribute('aria-label').includes('near the left boundary');
+      function leftBorder() {
+        const row=ctx.getImageData(0,35,160,1).data;
+        for(let i=0;i<row.length;i+=4) if(row[i]===237 && row[i+1]===150 && row[i+2]===121) return i/4;
+      }
+      const full = leftBorder();
+      b.startSuddenDeath(); b.suddenDeath.frames=840;
+      view.drawRadar(b,0,0,1200,675);
+      const narrowed = leftBorder();
+      const calls = [], original = window.DogArt;
+      window.DogArt = {...original, draw(ctx,kind,x,y,options) {
+        calls.push({pose:options.pose,x,y});
+        return original.draw(ctx,kind,x,y,options);
+      }};
+      try {
+        Object.assign(b.dogs[0],{x:-45,y:340,ground:-1});
+        Object.assign(b.dogs[1],{x:-52,y:344,ground:-1,vy:210});
+        b.startTumble(b.dogs[0],false);
+        view.drawOffscreen(ctx,b,0,0,1200,675,1,1);
+      } finally { window.DogArt=original; }
+      return {quiet,detected,full,narrowed,calls};
+    });
+    assert(probe.quiet && probe.detected && probe.narrowed>probe.full+15);
+    assert.equal(probe.calls[0].pose,'tumble');
+    assert.equal(probe.calls.length,2);
+    assert(Math.abs(probe.calls[0].y-probe.calls[1].y)>=48,'offscreen portraits remain separate');
+  }
+  console.log((mobile?'Touch':'Keyboard')+' passed launch study, aim changes, live flight, and radar visibility.');
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -789,6 +890,7 @@ async function testDevice(browser, mobile) {
     await testAngledTilts(page, mobile);
     await testWallJumps(page, mobile);
     await testShortHops(page, mobile);
+    await testBlastRadar(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
