@@ -18,6 +18,14 @@ The game fills the browser window. On browsers with fullscreen support, starting
 
 On **Moonbell Bandstand**, hold Jump beneath either wing. Once your paws land, jump inward to reach the high center platform with your midair jump still available. The right and left ends of the high platform overlap the wings below. Tap Down there to retreat one level. Dropping through the middle takes you back to the deck.
 
+## Solo opponents
+
+Choose **CPU** in Fighter select. **Rookie** pauses between grounded attacks, **Arcade** plays the original mix of combos and counters, and **Rival** also learns how you escape after blocking. All three use the selected dog's regular damage, speed, stocks and recovery.
+
+In **Try Rival · Pip vs. Noodle**, close the distance until Noodle can reach your shield with his lead. Block and tap Down while holding Shield to spot-dodge. Repeat it after two separate blocked attacks. On another block, Noodle can wait out the dodge and sweep your paws with Tail Broom. Try jumping over the sweep or grabbing him during the wait. The pause and results screens count the delayed tilts that caught a dodge. [Play the three-stock matchup](https://caleb-guyer.github.io/dog-fight-3/#solo/shield-read)
+
+**Restart match** and **Rematch** replay the same opening. **Pause → Replay with another CPU** restarts with the same dogs, arena and random seed at the level you choose. Starting a fresh solo match from Fighter select draws a new seed.
+
 ## Online versus
 
 Pick your dog and select **Quickplay** to fight the next available player on a random arena. To play a friend, choose an **Opening arena**, select **Create room**, and share the six-character code or invite link. Your friend picks a dog and selects **Join room**. The fight starts when both players connect. [Open Online versus](https://caleb-guyer.github.io/dog-fight-3/#online)

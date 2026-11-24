@@ -16,6 +16,8 @@
     idleInput,
     isReversalPractice,
     isFootstoolPractice,
+    cpuLevels,
+    seededRandom,
     clamp,
   } = window.DogFight;
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
@@ -228,6 +230,7 @@
   const settings = {
     stage: 'picnic',
     mode: 'solo',
+    cpuLevel: 'arcade',
     p1: 'pip',
     p2: 'brisket',
     fetch: true,
@@ -240,6 +243,7 @@
     const s = JSON.parse(localStorage.getItem('dog-fight-3.config') || '{}');
     if (Object.hasOwn(arenas, s.stage)) settings.stage = s.stage;
     if (Object.hasOwn(modes, s.mode)) settings.mode = s.mode;
+    if (Object.hasOwn(cpuLevels, s.cpuLevel)) settings.cpuLevel = s.cpuLevel;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
     for (const key of ['fetch', 'sound', 'shake', 'tiltStick']) if (typeof s[key] === 'boolean') settings[key] = s[key];
     if (Number.isFinite(s.volume)) settings.volume = Math.max(0, Math.min(100, s.volume));
@@ -484,7 +488,8 @@
     hudKey = '';
   const labelFor = (i) => {
     if (online.match) return 'P' + (i + 1) + (i === online.side ? ' · YOU' : '');
-    return i === 0 ? 'P1' : settings.mode === 'local' ? 'P2' : settings.mode === 'training' ? 'DUMMY' : 'CPU';
+    const mode = page === 'match' && world ? world.mode : settings.mode;
+    return i === 0 ? 'P1' : mode === 'local' ? 'P2' : mode === 'training' ? 'DUMMY' : 'CPU';
   };
   const slotLabel = (i) =>
     i === 0
@@ -512,6 +517,8 @@
     ctx.restore();
   }
   function syncLobby() {
+    $('cpu-level').hidden = settings.mode !== 'solo';
+    $('cpu-level').textContent = 'CPU · ' + cpuLevels[settings.cpuLevel].name;
     document
       .querySelectorAll('[data-mode]')
       .forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.mode === settings.mode)));
@@ -634,7 +641,7 @@
   }
   function exitDialog() {
     if (dialogType === 'result' || dialogType === 'dispatch-fall' || dialogType === 'online-result') return;
-    if ((dialogType === 'controls' || dialogType === 'moves') && backToPause) {
+    if ((dialogType === 'controls' || dialogType === 'moves' || dialogType === 'cpu-level') && backToPause) {
       backToPause = false;
       showPause();
       return;
@@ -1260,7 +1267,39 @@
       })
       .join('');
   }
-  function startMatch(config = settings, random = Math.random) {
+  let matchConfig, soloSeed;
+  function showCpuLevels() {
+    const restart = page === 'match';
+    backToPause = restart;
+    const level = restart ? world.cpuLevel : settings.cpuLevel;
+    const choices = Object.entries(cpuLevels).map(([id, cpu]) =>
+      '<button type="button" data-cpu="' + id + '" aria-pressed="' + (level === id) + '">' +
+      '<strong>' + cpu.name + '</strong><span>' + cpu.tip + '</span></button>').join('');
+    showDialog('cpu-level', restart ? 'Replay the opening' : 'CPU opponent',
+      (restart ? '<p>Choose an opponent to restart this three-stock match from the same opening.</p>' : '') +
+      '<div class="cpu-choices">' + choices + '</div>' + (restart ? '' :
+        '<div class="dialog-actions"><button class="utility" data-do="shield-read-match">Try Rival · Pip vs. Noodle</button></div>'));
+    document.querySelector('[data-cpu="' + level + '"]').focus({preventScroll:true});
+  }
+  $('cpu-level').onclick = showCpuLevels;
+  function startShieldReadMatch() {
+    leaveOnline();
+    afterStory = null;
+    startMatch({ ...settings, p1:'pip', p2:'noodle', mode:'solo', cpuLevel:'rival', stage:'picnic', fetch:false },
+      undefined, 42);
+  }
+  function cpuReadReport() {
+    const tries = world.bot.spotReads;
+    if (world.mode !== 'solo' || world.cpuLevel !== 'rival' || !tries) return '';
+    return '<p>Rival expected a spot-dodge ' + tries + (tries === 1 ? ' time' : ' times') +
+      ' and caught ' + (world.bot.spotPunishes || 0) + ' with a delayed down tilt.</p>';
+  }
+  function startMatch(config = settings, random = Math.random, opening) {
+    matchConfig = { ...config };
+    if (config.mode === 'solo') {
+      soloSeed = opening ?? crypto.getRandomValues(new Uint32Array(1))[0];
+      random = seededRandom(soloSeed);
+    }
     audioReady();
     dismiss();
     page = 'match';
@@ -1350,7 +1389,8 @@
     $('training-tools').hidden = config.mode !== 'training';
     $('dummy-damage').value = '0';
     $('damage-output').textContent = '0%';
-    const matchName = online.match ? 'Online · You are P' + (online.side + 1) : modes[config.mode];
+    const matchName = online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
+      'Solo · ' + cpuLevels[world.cpuLevel].name + ' CPU' : modes[config.mode];
     $('match-mode').textContent = matchName;
     $('match-stage').textContent = arenas[config.stage].name;
     $('pause-label').textContent = online.match ? 'Match menu' : 'Pause';
@@ -1413,7 +1453,9 @@
         icon('play') +
         'Resume</button><button class="utility" data-do="controls">' +
         icon('keyboard') +
-        'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div><div class="dialog-actions"><button class="utility" data-do="rematch">' +
+        'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div>' +
+        cpuReadReport() + '<div class="dialog-actions">' + (world.mode === 'solo' ?
+          '<button class="utility" data-do="cpu-level">Replay with another CPU</button>' : '') + '<button class="utility" data-do="rematch">' +
         icon('reset') +
         'Restart match</button><button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
     );
@@ -1449,7 +1491,7 @@
         (f.stocks === 1 ? 'stock' : 'stocks') +
         ' left · ' +
         duration +
-        '</p></div></div><div class="dialog-actions"><button class="primary" data-do="rematch">' +
+        '</p></div></div>' + cpuReadReport() + '<div class="dialog-actions"><button class="primary" data-do="rematch">' +
         icon('reset') +
         'Rematch</button><button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
       false,
@@ -1460,6 +1502,18 @@
   $('start').onclick = () => startMatch();
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
+    const choice = e.target.closest('[data-cpu]')?.dataset.cpu;
+    if (choice && Object.hasOwn(cpuLevels, choice)) {
+      settings.cpuLevel = choice;
+      save();
+      if (page === 'match') startMatch({ ...matchConfig, cpuLevel:choice }, undefined, soloSeed);
+      else {
+        dismiss();
+        syncLobby();
+        $('cpu-level').focus({preventScroll:true});
+      }
+      return;
+    }
     const reel = e.target.closest('[data-reel]');
     if (reel && !reel.disabled) {
       audioReady();
@@ -1513,7 +1567,9 @@
     }
     if (action === 'resume' || action === 'close') exitDialog();
     if (action === 'lobby') toLobby();
-    if (action === 'rematch') startMatch();
+    if (action === 'cpu-level') showCpuLevels();
+    if (action === 'shield-read-match') startShieldReadMatch();
+    if (action === 'rematch') startMatch(matchConfig, undefined, soloSeed);
     if (action === 'controls') showControls();
     if (action === 'moves') showMoves(world?.dogs[0].kind || settings.p1);
   });
@@ -3823,7 +3879,13 @@
   }
   function openLink() {
     const hash = location.hash;
-    if (hash === '#cutscenes') openFilmLibraryLink();
+    if (hash === '#solo/shield-read') startShieldReadMatch();
+    else if (hash === '#solo') {
+      settings.mode = 'solo';
+      editing = 0;
+      toLobby();
+    }
+    else if (hash === '#cutscenes') openFilmLibraryLink();
     else if (hash === '#adventure') showRoute();
     else if (hash === '#online') showOnline();
     else if (hash === '#training/edges' || hash === '#training/ledge-catch') {

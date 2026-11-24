@@ -161,6 +161,19 @@
   const turnaroundWindow = 4, bReverseWindow = 3;
   const isReversalPractice = drill => drill?.pattern === 'reverse' || drill?.pattern === 'wavebounce';
   const isFootstoolPractice = drill => drill?.pattern === 'footstool' || drill?.pattern === 'footstoolTech';
+  const cpuLevels = {
+    rookie: { name: 'Rookie', tip: 'Leaves a beat between attacks. Practice spacing and whiff punishes.' },
+    arcade: { name: 'Arcade', tip: 'Mixes approaches, combos and defensive counters.' },
+    rival: { name: 'Rival', tip: 'Learns repeated spot-dodges after you block. Vary your escape.' },
+  };
+  function seededRandom(seed) {
+    const next = () => {
+      next.state = (Math.imul(next.state, 1664525) + 1013904223) >>> 0;
+      return next.state / 4294967296;
+    };
+    next.state = seed >>> 0;
+    return next;
+  }
   // Total frames and initial invulnerability frames for each landing option.
   const floorFrames = {
     tech: [19, 13],
@@ -2405,6 +2418,7 @@
       this.layout = config.layout || null;
       this.stageWidth = this.layout?.length || 1200;
       this.mode = config.mode;
+      this.cpuLevel = config.mode === 'solo' && Object.hasOwn(cpuLevels, config.cpuLevel) ? config.cpuLevel : 'arcade';
       this.fetch = config.fetch;
       this.time = 0;
       this.end = null;
@@ -2452,6 +2466,10 @@
       else this.dogs.forEach((f) => this.spawn(f, false));
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
+      if (fromKO && this.mode === 'solo') {
+        this.bot.pressure = null;
+        this.bot.rookieNext = 0;
+      }
       if (this.grapple && (this.dogs.length === 2 || f.grip)) this.breakGrapple(false);
       const point = this.layout?.spawns[f.index];
       const ground = point ? point.ground : this.stage === 'laundry' && f.index === 1 ? 1 : 0;
@@ -4860,7 +4878,7 @@
       f.tumble = {
         time: 0,
         pending,
-        willTech: this.cpuControlled(f) && this.random() < 0.72,
+        willTech: this.cpuControlled(f) && this.random() < (this.cpuLevel === 'rookie' ? 0.28 : 0.72),
       };
     }
     beginFloorAction(f, type, dir = 0) {
@@ -6614,6 +6632,15 @@
       }
       target.shieldHP -= damage * 0.027;
       const broken = target.shieldHP <= 0;
+      if (this.cpuLevel === 'rival' && owner.index === 1 && target.index === 0 && !projectile &&
+          owner.ground >= 0 && owner.ground === target.ground && !broken) {
+        const brain = this.bot, previous = brain.pressure;
+        // A multi-hit move gives the defender one chance to respond after the last hit.
+        if (previous && previous.swing !== use && !previous.observed) brain.spotStreak = 0;
+        if (brain.spotStreak >= 2 && previous?.swing !== use) brain.spotReads = (brain.spotReads || 0) + 1;
+        brain.pressure = { swing: use, opens: this.time + (impactFrames + stunFrames) / 60, x: target.x,
+          ground: owner.ground, face: away, delay: brain.spotStreak >= 2 ? brain.spotDelay : null };
+      }
       if (broken) this.breakShield(target);
       else {
         target.impactLag = Math.max(target.impactLag, impactFrames / 60);
@@ -6695,6 +6722,12 @@
         return false;
       }
       const poked = target.shield && !grab && !covered;
+      const pressure = this.bot.pressure;
+      if (pressure?.strike && pressure.strike === use && !pressure.scored && target.index === 0 &&
+          owner.index === 1 && target.floorAction?.type === 'spotDodge') {
+        pressure.scored = true;
+        this.bot.spotPunishes = (this.bot.spotPunishes || 0) + 1;
+      }
       if (poked) this.emit('shieldPoke', { f: target, owner, attackName: name, moveId, point, face });
       this.gradeFootwork(target);
       const downed = target.floorAction?.type === 'downed' ? target.floorAction : null;
@@ -7681,6 +7714,68 @@
         return { ...idleInput, x: Math.sign(gap) * (Math.abs(gap) > 42 ? 1 : 0.48) };
       return { ...idleInput, shield: !foe.stockLift && Math.abs(dx) < 108 && Math.abs(foe.y - f.y) < 89 };
     }
+    rookieNeutral(f, foe) {
+      if (f.ground < 0 || f.ground !== foe.ground || f.floorAction || f.ledge || foe.ledge ||
+          f.tumble || f.dodge || f.grip || protectionTime(foe)) return null;
+      const brain = this.bot, dx = foe.x - f.x, dir = Math.sign(dx) || f.face;
+      if (foe.floorAction) {
+        brain.rookieNext = this.time + .28;
+        return idleInput;
+      }
+      const tilt = moves[f.kit.tilts.forward], jab = moves[f.kit.ground[0]];
+      const reach = tilt.box[0] + tilt.box[2] + foe.stats.width - 6;
+      if (f.attack || f.command || f.stun || f.landingLag || f.clashRecoil || f.impactLag) return idleInput;
+      if (Math.abs(dx) > reach || f.face !== dir) {
+        brain.rookieNext = this.time + .28;
+        return { ...idleInput, x: dir * (Math.abs(dx) > reach + 112 ? 1 : .5) };
+      }
+      brain.rookieNext ||= this.time + .28;
+      if (this.time < brain.rookieNext) return idleInput;
+      brain.rookieNext = this.time + .56 + this.random() * .24;
+      if (foe.attack && foe.attack.time >= .1 && this.random() < .45) {
+        brain.rookieGuard = this.time + .18;
+        return { ...idleInput, shield:true };
+      }
+      if (foe.shield && Math.abs(dx) <= grabs[f.kit.grab].box[0] + grabs[f.kit.grab].box[2] + foe.stats.width &&
+          this.random() < .52) return { ...idleInput, tapped:{grab:true} };
+      if (foe.damage >= 75 && this.random() < .44) return { ...idleInput, smashX:dir, tapped:{smash:true} };
+      const close = Math.abs(dx) <= jab.box[0] + jab.box[2] + foe.stats.width;
+      return close && this.random() < .55 ? { ...idleInput, tapped:{attack:true} } :
+        { ...idleInput, aimStick:true, tiltMode:true, smashX:dir };
+    }
+    readShieldEscape(f, foe) {
+      const brain = this.bot, p = brain.pressure;
+      if (!p) return null;
+      if (p.sent && !p.strike && f.attack?.moveId === f.kit.tilts.down) p.strike = f.attack;
+      const elapsed = this.time - p.opens;
+      if (f.stun || f.grip || f.floorAction || f.ground !== p.ground || elapsed > .55) {
+        if (!p.observed) brain.spotStreak = 0;
+        brain.pressure = null;
+        return null;
+      }
+      if (!p.observed && elapsed >= -1e-8) {
+        if (foe.floorAction?.type === 'spotDodge') {
+          const delay = Math.max(0, elapsed - foe.floorAction.time);
+          brain.spotDelay = brain.spotStreak ? (brain.spotDelay + delay) / 2 : delay;
+          brain.spotStreak = (brain.spotStreak || 0) + 1;
+          p.observed = true;
+        } else if (foe.floorAction || foe.jumpSquat || foe.ground < 0 || foe.attack || elapsed > .32) {
+          brain.spotStreak = 0;
+          p.observed = true;
+        }
+      }
+      if (p.delay === null || p.sent) return null;
+      // Commit to the timing learned from earlier blocks, even if this time the defender jumps away.
+      if (f.attack || f.impactLag || f.landingLag || f.command || f.charge >= 0) return idleInput;
+      const low = moves[f.kit.tilts.down], gap = (p.x - f.x) * p.face;
+      const reach = low.box[0] + low.box[2] + foe.stats.width - 9;
+      if (gap > reach) return { ...idleInput, x: p.face * .5 };
+      if (elapsed + low.start < p.delay + (foe.kit.defense.spot[2] + 2) / 60)
+        return f.face === p.face ? idleInput : { ...idleInput, x:p.face*.5 };
+      p.sent = true;
+      brain.spotBaits = (brain.spotBaits || 0) + 1;
+      return { ...idleInput, x:p.face*.5, y:1, tapped:{attack:true} };
+    }
     cpu(dt) {
       const f = this.dogs[1],
         foe = this.dogs[0],
@@ -7690,6 +7785,10 @@
       const result = { ...idleInput, jump: brain.jumpHold > 0 };
       if (this.grapple) {
         const grip = this.grapple;
+        if (brain.pressure) {
+          if (!brain.pressure.observed) brain.spotStreak = 0;
+          brain.pressure = null;
+        }
         result.jump = false;
         if (grip.phase === 'throw') return result;
         if (grip.target === f.index) {
@@ -7734,6 +7833,25 @@
         outerRight = solid[solid.length - 1].x2;
       const outside = f.x < outerLeft || f.x > outerRight;
       const unsafe = f.ground < 0 && (outside || f.y > closest.y + 28 || (!under && f.y > closest.y - 46));
+      if (this.cpuLevel === 'rookie') {
+        if (brain.rookieGuard > this.time && !f.stun && f.ground >= 0) return { ...idleInput, shield:true };
+        const basic = this.rookieNeutral(f, foe);
+        if (basic) return basic;
+      } else if (this.cpuLevel === 'rival') {
+        const bait = this.readShieldEscape(f, foe);
+        if (bait) return bait;
+        // Space a quick forward tilt at the shield's rim. In close the normal grab mixup still applies.
+        if (foe.shield && f.ground >= 0 && f.ground === foe.ground && !f.attack && !f.stun && !f.grip &&
+            !f.floorAction && !f.shield && !f.command && !f.landingLag && f.charge < 0 &&
+            this.time >= (brain.nextProbe || 0) && !protectionTime(foe)) {
+          const tilt = moves[f.kit.tilts.forward], gap = Math.abs(foe.x - f.x);
+          const reach = tilt.box[0] + tilt.box[2] + foe.stats.width + (f.run ? Math.abs(f.vx) * tilt.start * .5 : 0);
+          if (gap > f.stats.width + foe.stats.width + 4 && gap <= reach) {
+            brain.nextProbe = this.time + .68;
+            return { ...idleInput, x:f.run?.face || 0, aimStick:true, tiltMode:true, smashX:Math.sign(foe.x-f.x) };
+          }
+        }
+      }
       if (unsafe && !f.jumps && this.footstoolTarget(f) === foe) {
         brain.jumpHold = .22;
         return { ...idleInput, x: Math.sign((closest.x1 + closest.x2) / 2 - f.x), jump:true, tapped:{jump:true} };
@@ -8226,6 +8344,8 @@
     }
   }
   window.DogFight = {
+    cpuLevels,
+    seededRandom,
     fighters,
     kits,
     moves,

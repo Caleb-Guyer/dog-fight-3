@@ -1088,6 +1088,29 @@ dialog[data-view='moves'] {
   display: grid;
   gap: 8px;
 }
+.cpu-choices {
+  display: grid;
+  gap: 8px;
+}
+.cpu-choices button {
+  display: grid;
+  gap: 3px;
+  padding: 10px 14px;
+  background: #332f40;
+  border: 2px solid #706878;
+  text-align: left;
+  color: var(--cream);
+}
+.cpu-choices button[aria-pressed='true'] {
+  border-color: var(--gold);
+}
+.cpu-choices strong {
+  font-family: var(--pixel);
+  color: var(--gold);
+}
+.cpu-choices span {
+  font-size: 14px;
+}
 .stage-option {
   display: grid;
   grid-template-columns: 93px 1fr;
