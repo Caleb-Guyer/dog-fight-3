@@ -940,7 +940,7 @@ async function testJumpIns(page,mobile) {
 async function trainingControls(page,mobile,status) {
   const press=id=>mobile?page.locator('#'+id).tap():page.locator('#'+id).click();
   const cdp=mobile && await page.context().newCDPSession(page);
-  const keys={down:'s',jump:'Space',attack:'j',smash:'i',left:'a',right:'d',shield:'l'};
+  const keys={down:'s',up:'w',jump:'Space',attack:'j',grab:'u',smash:'i',left:'a',right:'d',shield:'l'};
   let held=[];
   async function hold(names) {
     if(mobile) {
@@ -1018,6 +1018,23 @@ async function testSpotCounter(page,mobile) {
   }
   await press('reset-training');
   assert(await status.isHidden());
+}
+
+async function testGripEscape(page,mobile) {
+  await page.goto(root+'?grip#training/grab-escape');
+  const status=page.locator('#escape-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  await hold(['attack']);await waitFor('gripped');await hold([]);
+  await waitFor('throwLanded');assert.match(await status.textContent(),/2 pummels · 0 escape inputs/);
+  await press('escape-gripEscape');await hold(['attack']);await waitFor('gripped');
+  for(let n=0;n<16&&await status.getAttribute('data-result')!=='brokeFree';n++){
+    await hold([n%2?'left':'right']);await page.clock.runFor(65);
+  }
+  await waitFor('brokeFree');assert.match(await status.textContent(),/Pip broke free/);
+  await hold([]);await press('escape-gripThrow');await hold(['grab']);await waitFor('gripped');
+  await hold(['attack']);await waitFor('pummel');await hold(['up']);await waitFor('throwLanded');
+  assert.match(await status.textContent(),/Pop Fly · 1 pummel ·/);
+  await hold([]);await press('reset-training');assert(await status.isHidden());
 }
 
 async function testDodgeTiming(page,mobile) {
@@ -1116,6 +1133,7 @@ async function testDevice(browser, mobile) {
     await testLedgeReturn(page, mobile);
     await testSpotCounter(page, mobile);
     await testDodgeTiming(page, mobile);
+    await testGripEscape(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
