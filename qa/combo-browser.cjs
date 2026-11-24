@@ -937,12 +937,10 @@ async function testJumpIns(page,mobile) {
   assert(await result.isHidden());
 }
 
-async function testLedgeReturn(page,mobile) {
-  await page.goto(root+'?release-return#training/ledge-return');
-  const status=page.locator('#climb-status');
+async function trainingControls(page,mobile,status) {
   const press=id=>mobile?page.locator('#'+id).tap():page.locator('#'+id).click();
   const cdp=mobile && await page.context().newCDPSession(page);
-  const keys={down:'s',jump:'Space',attack:'j',left:'a',right:'d',shield:'l'};
+  const keys={down:'s',jump:'Space',attack:'j',smash:'i',left:'a',right:'d',shield:'l'};
   let held=[];
   async function hold(names) {
     if(mobile) {
@@ -967,6 +965,13 @@ async function testLedgeReturn(page,mobile) {
     }
     assert.equal(await status.getAttribute('data-result'),result,await status.textContent());
   }
+  return {hold,press,waitFor};
+}
+
+async function testLedgeReturn(page,mobile) {
+  await page.goto(root+'?release-return#training/ledge-return');
+  const status=page.locator('#climb-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
   for(const [side,inward] of [['Left','right'],['Right','left']]){
     assert.equal(await status.textContent(),side+' ledge');
     await hold(['down','jump']);
@@ -983,6 +988,34 @@ async function testLedgeReturn(page,mobile) {
   await hold(['shield']); await waitFor('blockedRise'); await hold([]);
   await press('climb-escape');
   assert.equal(await page.locator('#climb-rise').getAttribute('aria-pressed'),'false');
+  await press('reset-training');
+  assert(await status.isHidden());
+}
+
+async function testSpotCounter(page,mobile) {
+  await page.goto(root+'?spot-counter#training/spot-counter');
+  const status=page.locator('#shield-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for(const response of ['jab','charge','stand']){
+    if(response!=='jab')await press('shield-counterGrab');
+    await waitFor('ready');
+    await hold(['shield']);
+    await waitFor('attack');
+    if(response==='stand'){
+      await waitFor('grabbed');
+    }else{
+      await hold(['shield','down']);
+      await waitFor('counterTap');
+      await hold(['shield',response==='jab'?'attack':'smash']);
+      if(response==='charge'){
+        await page.clock.runFor(1200);
+        await hold(['shield']);
+      }
+      await waitFor(response==='jab'?'spotPunish':'counterBlocked');
+      if(response==='jab')assert.match(await status.textContent(),/Dodge counter · [1-9]\d*f left/);
+    }
+    await hold([]);
+  }
   await press('reset-training');
   assert(await status.isHidden());
 }
@@ -1060,6 +1093,7 @@ async function testDevice(browser, mobile) {
     await testNightMail(page, mobile);
     await testJumpIns(page, mobile);
     await testLedgeReturn(page, mobile);
+    await testSpotCounter(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
