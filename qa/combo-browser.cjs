@@ -1117,11 +1117,11 @@ async function testCanal(page,mobile) {
   await page.goto(root+'?lock-preview#solo');
   await click('#choose-stage');
   await click('[data-stage="canal"]');
-  assert.equal(await page.locator('#stage-title').innerText(),'Canal Lock');
+  assert.equal(await page.locator('#stage-title').textContent(),'Canal Lock');
   await page.clock.runFor(80);
   await page.goto(root+'?lock-opener#online');
   await page.selectOption('#online-stage','canal');
-  assert.equal(await page.locator('#online-stage option:checked').innerText(),'Canal Lock');
+  assert.equal(await page.locator('#online-stage option:checked').textContent(),'Canal Lock');
   for(const preference of ['reduce','no-preference']) {
     await page.emulateMedia({reducedMotion:preference});
     const samples=await page.evaluate(()=>{
@@ -1147,13 +1147,13 @@ async function testCanal(page,mobile) {
   const {hold,press,waitFor}=await trainingControls(page,mobile,status);
   for(const result of ['tagged','guarded']){
     await press('platform-ferry');
-    assert.equal(await status.innerText(),'Challenger on the gate');
+    assert.equal(await status.textContent(),'Challenger on the gate');
     await hold(['attack']);await waitFor('approach');
     await hold(result==='guarded'?['shield']:[]);await waitFor(result);
     await hold([]);
   }
   await press('reset-training');
-  assert.equal(await page.locator('#match-stage').innerText(),'Canal Lock');
+  assert.equal(await page.locator('#match-stage').textContent(),'Canal Lock');
 }
 
 async function testJumpIns(page,mobile) {
