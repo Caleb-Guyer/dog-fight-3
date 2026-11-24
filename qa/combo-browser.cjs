@@ -1201,6 +1201,35 @@ async function testDodgeTiming(page,mobile) {
   assert(await status.isHidden());
 }
 
+async function testFastFallPressure(page,mobile) {
+  await page.goto(root+'?apex#training/fast-fall');
+  const status=page.locator('#spacing-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for (const choice of ['float','drop','parry']) {
+    if (choice==='drop') await press('spacing-fastfall');
+    if (choice==='parry') await press('spacing-side');
+    await hold(['attack']); await waitFor('apex'); await hold([]);
+    await page.clock.runFor(500);
+    assert.equal(await status.getAttribute('data-result'),'apex');
+    await hold(choice==='float'?['shield']:['down','shield']);
+    if(choice==='parry'){
+      await waitFor('apexGuard');
+      await hold([]); await waitFor('apexParry');
+      await hold(['up','attack']); await page.clock.runFor(34); await hold([]);
+      await waitFor('punish');
+      assert.match(await status.textContent(),/Parry into Loop Lift/);
+    } else {
+      await waitFor(choice==='float'?'clipped':'blocked'); await hold([]);
+      assert.match(await status.textContent(),choice==='float'?/still airborne/:/grounded and ready \+9f/);
+    }
+  }
+  await press('spacing-fastfall'); await press('spacing-apex-pause'); await press('spacing-slow');
+  await hold(['attack']); await page.clock.runFor(900); await hold([]);
+  assert.equal(await status.getAttribute('data-result'),'clipped');
+  await press('reset-training'); assert(await status.isHidden());
+  console.log((mobile?'Touch':'Keyboard')+' passed the float, apex drop, grounded guard and parry into Loop Lift.');
+}
+
 async function testAerialSweetSpots(page,mobile) {
   const cases=[
     ['noodle',9,12,'Tail tip'],['pip',7,9,'High heel'],['brisket',12,15,'Hip smash'],['clover',8,9,'Rim scoop'],
@@ -1406,6 +1435,7 @@ async function testDevice(browser, mobile) {
     await testShieldBreak(page, mobile);
     await testImpactTech(page, mobile);
     await testAerialSweetSpots(page, mobile);
+    await testFastFallPressure(page, mobile);
     await testBlastRadar(page, mobile);
     await testNightMail(page, mobile);
     await testJumpIns(page, mobile);
