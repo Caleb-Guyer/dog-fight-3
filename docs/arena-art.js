@@ -1607,7 +1607,160 @@
     }
   }
 
+  const reducedScenery = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)');
+
+  function mailValley() {
+    return sprite('mail-valley', 336, 112, p => {
+      const rng = random(903);
+      const ridge = x => 34 + Math.round(10 * Math.cos(x * Math.PI / 84) + 7 * Math.sin(x * Math.PI / 56));
+      for (let x = 0; x < 336; x += 2) {
+        const y = ridge(x);
+        p.r(x,y,2,112-y,'#655670');
+        if (x % 18 < 12) p.r(x,y,2,1,'#897384');
+      }
+      for (let i = 0; i < 120; i++) {
+        const x = Math.floor(rng()*336), y = ridge(x) + 9 + rng()*14;
+        p.line(x,y,x+3,y-1,'#726078');
+      }
+      // A distant ribbon of water winds behind the trees.
+      p.poly([0,77,73,74,141,65,234,68,336,57,336,62,234,72,142,68,74,78,0,81], '#aa848e');
+      for (let x = 0; x < 336; x += 3) {
+        const y = 82 + Math.round(7 * Math.cos(x*Math.PI/56)), h = 2 + Math.floor(rng()*5);
+        p.r(x,y,3,112-y,'#46465e');
+        p.line(x,y,x+1,y-h,'#46465e');
+      }
+    });
+  }
+
+  function mailStation() {
+    return sprite('mail-station', 420, 83, p => {
+      const rng = random(706);
+      for (let x = 0; x < 420; x += 4) {
+        const y = 56 + Math.round(4*Math.cos(x*Math.PI/70)), h = 5 + Math.floor(rng()*16);
+        p.r(x,y,4,83-y,'#34384b');
+        p.poly([x-3,y,x+1,y-h,x+5,y], '#404355');
+        p.poly([x-3,y+3,x+1,y-h+4,x+5,y+3], '#34384b');
+      }
+      p.r(43,40,43,15,'#48404d'); p.r(38,54,56,3,'#515062');
+      p.poly([38,40,47,32,82,32,90,40], '#343849');
+      p.line(47,32,82,32,'#7b6974'); p.r(79,27,3,6,'#424253');
+      for (const x of [47,55,72,80]) {
+        p.r(x,43,4,6,'#c69885'); p.r(x,46,4,1,'#6d5860');
+      }
+      p.r(63,44,6,11,'#343643'); p.r(65,45,2,3,'#b98a7d');
+      // Telegraph wires sag between consecutive poles and meet at the tile seam.
+      for (const x of [-12,128,268]) {
+        p.line(x,21,x+61,27,'#585266'); p.line(x+61,27,x+80,27,'#585266');
+        p.line(x+80,27,x+140,21,'#585266');
+      }
+      p.line(408,21,420,22,'#585266');
+      for (const x of [128,268,408]) {
+        p.r(x,18,2,39,'#484451'); p.r(x-4,21,10,2,'#484451');
+        p.r(x-3,19,2,2,'#a29299'); p.dot(x+3,20,'#a29299');
+      }
+    });
+  }
+
+  function mailCar() {
+    return sprite('mail-car', 294, 48, p => {
+      const red = '#963f46', dark = '#572f40', metal = '#484052';
+      // Each inset corresponds to a collision band on the outside of the car.
+      p.r(0,0,294,4,ink); p.r(0,0,294,1,'#ffe3a6'); p.r(1,1,292,1,'#dfa87d');
+      p.r(2,4,290,28,dark); p.r(3,5,288,23,red);
+      p.r(3,6,288,1,'#c96959'); p.r(3,25,288,2,'#da9a72');
+      p.r(3,28,288,2,'#743447'); p.r(6,32,282,6,ink); p.r(6,32,282,1,'#875b63');
+      for (let x = 6; x < 290; x += 9) {
+        p.r(x,8,1,16,'#853b45'); p.dot(x,8,'#cf7362'); p.dot(x,23,'#ba5954');
+        p.dot(x,30,'#b76a60');
+      }
+      for (const x of [11,27,43,240,256,272]) {
+        p.r(x,9,13,13,dark); p.r(x+1,10,11,9,'#26505c');
+        p.r(x+2,11,8,2,'#73a3a0'); p.r(x+2,13,2,4,'#59878b');
+        p.r(x+1,19,11,1,'#c38469'); p.r(x+6,10,1,9,metal);
+      }
+      for (const x of [74,201]) {
+        p.r(x-2,6,23,2,ink); p.r(x,8,19,22,dark); p.r(x+1,9,17,20,'#a54b4b');
+        for (let y = 11; y < 28; y += 4) p.r(x+2,y,15,1,'#bf6358');
+        p.line(x+2,27,x+15,13,'#753a46'); p.r(x+14,16,2,5,'#e3b883');
+      }
+      // Enamel railway crest: a cream envelope between two feathered wings.
+      p.r(123,8,48,16,'#6e3943'); p.r(124,9,46,14,'#854349');
+      for (let i = 0; i < 3; i++) {
+        p.r(126+i*3,12+i*3,11-i*3,2,'#e4b37c');
+        p.r(157,12+i*3,11-i*3,2,'#e4b37c');
+      }
+      p.r(138,11,18,11,dark); p.r(139,12,16,9,'#ffe1a0');
+      p.line(139,12,147,17,'#985850'); p.line(147,17,154,12,'#985850');
+      for (const x of [25,237]) {
+        p.r(x-4,35,36,5,metal); p.r(x,37,27,3,'#787082');
+        for (const hub of [x+1,x+23]) {
+          p.disk(hub,40,7,7,ink); p.disk(hub,40,5,5,'#675a69'); p.disk(hub,40,3,3,metal);
+          p.dot(hub,40,'#ceb39a');
+        }
+      }
+      for (const x of [3,287]) {
+        p.r(x,11,4,6,dark); p.r(x+1,12,2,3,'#ffad69');
+      }
+    });
+  }
+
+  function drawNightMail(ctx, seconds, bounds) {
+    const b = bounds || { left:0, top:0, right:1200, bottom:675 };
+    const time = reducedScenery?.matches || !Number.isFinite(seconds) ? 0 : seconds;
+    function band(start, end, color) {
+      const y = Math.max(start,b.top), bottom = Math.min(end,b.bottom);
+      if (bottom > y) { ctx.fillStyle = color; ctx.fillRect(b.left,y,b.right-b.left,bottom-y); }
+    }
+    function repeat(image, y, speed) {
+      const width = image.width*3, shift = Math.floor(time*speed/3)*3 % width;
+      for (let x = Math.floor((b.left+shift)/width)*width-shift; x < b.right; x += width)
+        ctx.drawImage(image,x,y,width,image.height*3);
+    }
+    band(b.top,150,'#30324b'); band(150,229,'#494660'); band(229,285,'#6c5972');
+    band(285,325,'#966f80'); band(325,375,'#c28b88'); band(375,447,'#dca390');
+    band(447,b.bottom,'#34384b');
+    const sky = sprite('mail-sky', 350, 90, p => {
+      const rng = random(279);
+      for (let i = 0; i < 65; i++) {
+        const x = Math.floor(rng()*350), y = Math.floor(rng()*82);
+        p.dot(x,y,i%5 ? '#777289' : '#cbb2ae');
+        if (i%19 === 0) p.r(x-1,y,3,1,'#b4a3aa');
+      }
+    });
+    repeat(sky,-80,0);
+    const moon = sprite('mail-moon', 22, 24, p => {
+      p.disk(11,11,9,10,'#f3cfab');
+      p.disk(7,8,8,9,'#30324b');
+      p.dot(14,17,'#d9ae9b'); p.r(12,20,2,1,'#d9ae9b');
+    });
+    ctx.drawImage(moon,903,64,66,72);
+    repeat(mailValley(),249,10);
+    repeat(mailStation(),345,49);
+    // Low embankment sleepers pass below the axles. The roof stays still in world space.
+    const ballast = sprite('mail-ballast', 112, 19, p => {
+      const rng = random(553);
+      p.r(0,1,112,2,'#525063');
+      for (let x = 0; x < 112; x += 14) p.poly([x,5,x+6,5,x+2,9,x-4,9],'#514b59');
+      for (let i = 0; i < 46; i++) p.r(rng()*112,10+rng()*8,2,1,'#403e50');
+    });
+    repeat(ballast,596,160);
+    const [deck] = window.DogFight.platforms('nightmail',0), car = mailCar();
+    const sx = (deck.x2-deck.x1)/car.width;
+    ctx.drawImage(car,deck.x1,deck.y,deck.x2-deck.x1,car.height*3);
+    const phase = Math.floor(time*9) * Math.PI/4;
+    ctx.fillStyle = '#b99b8d';
+    for (const hub of [26,48,238,260])
+      ctx.fillRect(deck.x1+Math.round((hub+2*Math.cos(phase))*sx),deck.y+(40+Math.round(2*Math.sin(phase)))*3,3,3);
+  }
+
   function draw(ctx, stageId, seconds = 0, bounds) {
+    if (stageId === 'nightmail') {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      drawNightMail(ctx,seconds,bounds);
+      ctx.restore();
+      return;
+    }
     if (stageId === 'bandstand') {
       ctx.save();
       ctx.imageSmoothingEnabled = false;

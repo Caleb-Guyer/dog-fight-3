@@ -4120,7 +4120,13 @@
   }
   function openLink() {
     const hash = location.hash;
-    if (hash === '#solo/sudden-death') {
+    if (hash === '#solo/night-mail' || hash === '#solo/picnic-table') {
+      leaveOnline();
+      afterStory = null;
+      const stage = hash === '#solo/night-mail' ? 'nightmail' : 'picnic';
+      startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage,
+        cpuLevel:'rival', minutes:7, fetch:false }, undefined, 42);
+    } else if (hash === '#solo/sudden-death') {
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
