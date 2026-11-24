@@ -687,6 +687,9 @@ body.playing .tools .utility,
 #combo-list { margin: 4px 0 0; padding-left: 1.7em; max-height: 6em; overflow-y: auto; }
 #combo-reply { background: var(--ink); color: var(--cream); padding: 4px; font: inherit; }
 #launch-status[data-result='tech'],
+#launch-status[data-result='clean'],
+#launch-status[data-result='counter'],
+#launch-status[data-result='tumbleWiggle'],
 #launch-status[data-result='techRoll'],
 #launch-status[data-result='saved'],
 #launch-status[data-result='land'],
