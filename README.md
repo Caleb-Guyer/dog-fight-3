@@ -10,6 +10,10 @@ From the main menu, choose **Adventure**, **Solo fight**, **Local versus**, **On
 
 Each dog starts with three stocks. Dealing damage makes the next hit launch a rival farther. Knock a dog beyond the arena boundary to take a stock. When a hard hit sends you tumbling, you can bend the launch and choose how to land. A midair jump and **Up + Special** can bring you back to the ledge.
 
+After a knockout, your next stock arrives on an airmail lift. When its lamps turn mint, tap **Down** to drop, a **side** to step off, or **Jump** to spring away with an air jump in reserve. An aerial attack, Special or air dodge can also take you off the lift. Four mail tags show how much protection you carry. Leave as it docks for up to 96 frames of protection. Wait the full two seconds and it drops you with 24 frames. Both players can see the last tag go out.
+
+In **Training → Launch practice → Take the lift**, tap Attack to start. Drop immediately and watch the rival’s grab pass through. Retry, ride until the lift releases you, and see if the same grab catches your landing. In **Catch the return**, play the waiting dog and time the grab yourself. Both drills use your chosen dogs, with mirrored landings and a half-speed toggle.
+
 The game fills the browser window. On browsers with fullscreen support, starting your first fight or chapter also hides the browser controls. Select **Fullscreen** or press **F** to switch at any time. On a phone, rotate to landscape for a wider view with the touch controls over the arena.
 
 On **Moonbell Bandstand**, hold Jump beneath either wing. Once your paws land, jump inward to reach the high center platform with your midair jump still available. The right and left ends of the high platform overlap the wings below. Tap Down there to retreat one level. Dropping through the middle takes you back to the deck.

@@ -133,6 +133,9 @@
   const parryWindow = 5 / 60;
   const shieldGrabPenalty = 4 / 60;
   const jumpSquatTime = 3 / 60;
+  const liftArrival = 24 / 60, liftWait = 120 / 60;
+  const liftReserve = time => clamp(96 - Math.round(Math.max(0, time - liftArrival) * 36), 24, 96);
+  const protectionTime = f => Math.max(f.invuln || 0, f.respawning || 0, f.stockGuard || 0);
   const turnaroundWindow = 4, bReverseWindow = 3;
   const isReversalPractice = drill => drill?.pattern === 'reverse' || drill?.pattern === 'wavebounce';
   // Total frames and initial invulnerability frames for each landing option.
@@ -1893,6 +1896,8 @@
       techLock: 0,
       invuln: 0,
       respawning: 0,
+      stockLift: null,
+      stockGuard: 0,
       ledge: null,
       ledgeLock: 0,
       ledgeTime: 0,
@@ -2366,6 +2371,7 @@
       this.climbPractice = null;
       this.launchPractice = null;
       this.meteorPractice = null;
+      this.stockPractice = null;
       this.shieldPractice = null;
       this.footworkPractice = null;
       this.freshnessPractice = null;
@@ -2390,11 +2396,11 @@
       if (this.mode === 'training') this.resetTraining();
       else this.dogs.forEach((f) => this.spawn(f, false));
     }
-    spawn(f, fromKO) {
+    spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
       if (this.grapple && (this.dogs.length === 2 || f.grip)) this.breakGrapple(false);
       const point = this.layout?.spawns[f.index];
       const ground = point ? point.ground : this.stage === 'laundry' && f.index === 1 ? 1 : 0;
-      const stocks = f.stocks;
+      const stocks = f.stocks, previous = f.prev;
       Object.assign(f, newFighter(f.kind, f.index));
       f.stocks = stocks;
       f.x = point?.x ?? arenas[this.stage].spawn[f.index];
@@ -2407,6 +2413,7 @@
         this.bot.ascent = null;
         this.bot.wavePlatform = null;
         this.bot.backAir = null;
+        this.bot.specialTurn = null;
         this.bot.passRead = null;
         this.bot.rollChase = null;
         this.bot.lastRoll = 0;
@@ -2415,10 +2422,67 @@
         this.bot.airRead = null;
       }
       if (fromKO) {
-        f.invuln = 1.55;
-        f.respawning = 0.42;
+        if (previous) f.prev = previous;
+        if (useLift) this.beginStockReturn(f);
+        else {
+          f.invuln = 1.55;
+          f.respawning = 0.42;
+        }
       }
       if (this.mode === 'training' && f.index === 1) f.damage = this.trainingDamage;
+    }
+    beginStockReturn(f, lane = f.index) {
+      const ground = this.layout?.spawns[lane]?.ground ?? (this.stage === 'laundry' && lane === 1 ? 1 : 0);
+      const floor = this.terrain[ground], middle = (floor.x1 + floor.x2) / 2;
+      const x = this.terrain.filter(p => !p.thin).length > 1 ? middle :
+        clamp(middle + (lane ? 62 : -62), floor.x1 + f.stats.width, floor.x2 - f.stats.width);
+      let landing = ground;
+      for (const [i, p] of this.terrain.entries())
+        if (x >= p.x1 && x <= p.x2 && p.y < this.terrain[landing].y) landing = i;
+      const y = Math.min(floor.y - 146, this.terrain[landing].y - 78);
+      f.stockLift = { x, y, landing, time: 0, ready: false, exit: null };
+      f.x = x; f.y = y - 80;
+      f.vx = f.vy = f.invuln = f.stockGuard = 0;
+      f.face = lane ? -1 : 1;
+      f.ground = -1;
+      f.jumps = 1;
+      f.respawning = liftArrival + liftWait;
+      this.emit('stockLift', { f, point: { x, y } });
+    }
+    advanceStockReturn(f, input, dt) {
+      const lift = f.stockLift;
+      lift.time += dt;
+      f.respawning = Math.max(0, liftArrival + liftWait - lift.time);
+      const descent = Math.min(1, lift.time / liftArrival);
+      f.x = lift.x;
+      f.y = lift.y - 80 * (1 - descent) ** 2;
+      if (lift.time + 1e-8 < liftArrival) return false;
+      if (!lift.ready) {
+        lift.ready = true;
+        this.emit('stockReady', { f, point: { x: f.x, y: f.y } });
+      }
+      if (!lift.exit && f.respawning > 1e-8) return false;
+      const exit = lift.exit, option = exit?.option || 'auto', frames = liftReserve(lift.time);
+      f.stockLift = null;
+      f.respawning = 0;
+      f.stockGuard = frames / 60;
+      f.vx = (exit?.input.x || 0) * f.kit.airDrift.speed * 0.72;
+      f.vy = option === 'jump' ? -f.stats.jump * 0.88 : option === 'drop' ? 285 : 88;
+      if (option === 'step') f.face = Math.sign(f.vx);
+      f.cutJump = option === 'jump';
+      if (exit && Object.keys(exit.input.tapped).length) {
+        const command = { ...exit.input, jump: false, tapped: { ...exit.input.tapped, jump: false } };
+        this.captureInput(f, command);
+        f.prev = { ...input };
+      }
+      if (option === 'jump') this.emit('jump', { f });
+      const drill = this.stockPractice;
+      if (drill?.slot === f.index && drill.phase === 'active') {
+        drill.frames = frames;
+        drill.option = option;
+      }
+      this.emit('stockLeave', { f, option, frames, point: { x: lift.x, y: lift.y } });
+      return true;
     }
     setDummyDamage(value) {
       const damage = clamp(Number(value) || 0, 0, 200);
@@ -2454,6 +2518,7 @@
       this.climbPractice = null;
       this.launchPractice = null;
       this.meteorPractice = null;
+      this.stockPractice = null;
       this.shieldPractice = null;
       this.footworkPractice = null;
       this.freshnessPractice = null;
@@ -2495,6 +2560,47 @@
       this.resetTraining();
       this.dogs[0].damage = 90;
       this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
+    }
+    resetStockPractice(pattern = 'stockReturn', dir = 1, slow = true) {
+      this.resetTraining();
+      const slot = pattern === 'stockCatch' ? 1 : 0, lane = dir > 0 ? slot : 1 - slot;
+      const dog = this.dogs[slot], guard = this.dogs[1 - slot];
+      this.stockPractice = { pattern, dir, slow, slot, phase: 'ready', after: 0, frames: 0, option: '',
+        sent: false, live: false, covered: false, outcome: '' };
+      dog.damage = 0;
+      this.beginStockReturn(dog, lane);
+      const lift = dog.stockLift, floor = this.terrain[lift.landing];
+      const gap = (guard.stats.width + dog.stats.width) * 0.85 + 4;
+      guard.x = clamp(lift.x + (lane ? -gap : gap), floor.x1 + 5, floor.x2 - 5);
+      guard.y = floor.y;
+      guard.ground = lift.landing;
+      guard.face = Math.sign(lift.x - guard.x) || (lane ? 1 : -1);
+    }
+    stockPracticeInput() {
+      const d = this.stockPractice, lift = this.dogs[d.slot].stockLift;
+      if (d.slot === 1)
+        return lift && lift.time + 1e-8 >= liftArrival + 0.4 ? { ...idleInput, y: 1 } : idleInput;
+      if (d.frames && d.after + 1e-8 >= 30 / 60 && !d.sent) {
+        d.sent = true;
+        return { ...idleInput, grab: true, tapped: { grab: true } };
+      }
+      return idleInput;
+    }
+    finishStockPractice(outcome) {
+      const d = this.stockPractice;
+      if (d.phase !== 'active') return;
+      d.phase = 'done';
+      d.outcome = outcome;
+      this.emit('stockResult', { f: this.dogs[d.slot], outcome });
+    }
+    checkStockPractice(dt) {
+      const d = this.stockPractice, guard = this.dogs[1 - d.slot];
+      if (d.frames) d.after += dt;
+      if (this.grapple?.target === d.slot) this.finishStockPractice(d.slot ? 'timed' : 'caught');
+      else if (!d.slot && guard.damage > this.trainingDamage) this.finishStockPractice('hit');
+      else if (d.live && !guard.attack?.grabAttempt)
+        this.finishStockPractice(d.slot ? (d.covered ? 'early' : 'miss') : (d.covered ? 'protected' : 'clear'));
+      else if (d.after > 5) this.finishStockPractice('timeout');
     }
     resetMeteorPractice(pattern = 'spikeFloor', dir = 1, slow = true, startingDamage = 100) {
       this.resetTraining();
@@ -3443,6 +3549,26 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      let stock = this.stockPractice;
+      if (stock && stock.phase !== 'active') {
+        const tap = input1.tapped?.attack || (input1.attack && !this.dogs[0].prev.attack);
+        if (!tap || stock.consumeAttack) {
+          stock.consumeAttack = !!input1.attack && stock.consumeAttack;
+          this.dogs[0].prev = { ...input1 };
+          return;
+        }
+        if (stock.phase === 'done') {
+          this.resetStockPractice(stock.pattern, stock.dir, stock.slow);
+          stock = this.stockPractice;
+        }
+        stock.phase = 'active';
+        stock.consumeAttack = true;
+        this.emit('stockStart', { f: this.dogs[stock.slot] });
+      }
+      if (stock?.consumeAttack) {
+        stock.consumeAttack = !!input1.attack;
+        input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
+      }
       let meteorDrill = this.meteorPractice;
       if (meteorDrill?.phase === 'ready' || meteorDrill?.phase === 'done') {
         const tap = input1.tapped?.attack || (input1.attack && !this.dogs[0].prev.attack);
@@ -3644,6 +3770,10 @@
       }
       for (const f of this.dogs) {
         f.hitShift = null;
+        if (f.stockGuard > 0) {
+          f.stockGuard = f.stockGuard <= dt + 1e-8 ? 0 : f.stockGuard - dt;
+          if (!f.stockGuard) this.emit('stockOpen', { f, point: { x: f.x, y: f.y - f.stats.height * 0.5 } });
+        }
         if (f.ground !== -1) {
           f.x += this.terrain[f.ground].x1 - old[f.ground].x1;
           if (f.impactLag > 1e-8 || f.shieldStun > 1e-8) f.y = this.terrain[f.ground].y;
@@ -3674,12 +3804,14 @@
       if (wave) this.checkWavePractice();
       if (this.chasePractice) this.checkChasePractice(dt);
       if (meteorDrill) this.checkMeteorPractice(dt);
+      if (stock) this.checkStockPractice(dt);
       if (
         this.fetch &&
         !this.platformPractice &&
         !this.spacingPractice &&
         !this.chasePractice &&
         !meteorDrill &&
+        !stock &&
         !this.escapePractice &&
         !this.footworkPractice &&
         !this.freshnessPractice &&
@@ -3700,6 +3832,7 @@
       if (out.length) this.knockouts(out);
     }
     trainingRivalInput(dt, player) {
+      if (this.stockPractice) return this.stockPracticeInput();
       if (this.meteorPractice) return this.meteorPracticeInput();
       if (this.platformPractice?.pattern === 'hold') {
         const drill = this.platformPractice;
@@ -3739,6 +3872,23 @@
       const was = f.prev;
       const pressed = (key) => input.tapped?.[key] || (input[key] && !was[key]);
       const grabX = input.grabX ?? input.x;
+      if (f.stockLift) {
+        const r = f.stockLift;
+        if (!r.exit && r.time + 1e-8 >= liftArrival - 4 / 60) {
+          const side = Math.abs(input.x) >= 0.45 && was.x * Math.sign(input.x) < 0.45;
+          const drop = input.y >= 0.45 && was.y < 0.45;
+          const action = ['grab','special','aimStick','attack','shield'].find(pressed);
+          const jump = pressed('jump');
+          if (side || drop || jump || action) {
+            const command = { ...idleInput, x: input.x, y: input.y, grabX,
+              smashX: input.smashX, smashY: input.smashY, airDodgeX: input.airDodgeX, airDodgeY: input.airDodgeY, tapped: {} };
+            if (action) { command[action] = !!input[action]; command.tapped[action] = true; }
+            r.exit = { option: jump ? 'jump' : action ? 'action' : drop ? 'drop' : 'step', input: command };
+          }
+        }
+        f.prev = { ...input };
+        return;
+      }
       const previousAxis = f.shieldAxis;
       f.shieldAxis = shieldDirection(input.x || grabX, input.y, previousAxis);
       f.prev = { ...input };
@@ -4313,6 +4463,7 @@
       }
     }
     move(f, input, dt) {
+      if (f.stockLift && !this.advanceStockReturn(f, input, dt)) return;
       const prep = f.dropPrep;
       f.dropPrep = null;
       f.crouch = false;
@@ -5515,6 +5666,11 @@
           )
             this.airPractice.evaded = rival.airDodge.type;
           if (attack.grabAttempt) {
+            const stock = this.stockPractice;
+            if (stock?.phase === 'active' && rival.index === stock.slot) {
+              stock.live = true;
+              if (overlaps && (rival.stockLift || rival.stockGuard)) stock.covered = true;
+            }
             const drill = this.shieldPractice;
             if (f.index === 0 && drill?.phase === 'counter') {
               const gap = Math.max(0, Math.abs(rival.x - area.x) - area.rx - rival.stats.width);
@@ -5522,8 +5678,7 @@
             }
             if (
               !this.grapple &&
-              !rival.invuln &&
-              !rival.respawning &&
+              !protectionTime(rival) &&
               (!rival.dodge || rival.airDodge) &&
               !rival.regrabLock &&
               rival.floorAction?.type !== 'downed' &&
@@ -5554,7 +5709,7 @@
               distance: Math.hypot(this.ball.x - area.x, this.ball.y - area.y),
             });
           }
-          if (attack.hitTargets?.get(rival) === beatIndex || rival.invuln > 0 || rival.respawning > 0) continue;
+          if (attack.hitTargets?.get(rival) === beatIndex || protectionTime(rival)) continue;
           if (attack.dashAttack && (rival.x - f.x) * f.face < 0) continue;
           if (attack.edge && (rival.x - attack.edge.x) * f.face < 0) continue;
           if (!overlaps && (!rival.shield && !canParry(rival) || attack.commandGrab)) continue;
@@ -5763,7 +5918,7 @@
       else if (this.shieldPractice?.pattern === 'poke') this.finishShieldPractice(broken ? 'brokeGuard' : 'sealed');
     }
     hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId, use, covered = true) {
-      if (target.invuln > 0 || target.respawning > 0) return false;
+      if (protectionTime(target)) return false;
       if (target.grip?.target === target.index) return false;
       const grab = name === 'throw' || move?.commandGrab;
       const projectile = !!move?.projectile || name === 'ball' || name === 'disc' || name === 'snare';
@@ -6009,7 +6164,7 @@
         const bubble = (f.shield || canParry(f)) && shieldBubble(f);
         const guardTime = bubble ? shieldEntry(bubble, oldX, oldY, dx, dy, 9) : Infinity;
         const timeOfHit = Math.min(bodyTime, guardTime);
-        if (timeOfHit < Infinity && !f.invuln && !f.respawning)
+        if (timeOfHit < Infinity && !protectionTime(f))
           contacts.push({ time: timeOfHit, f, slot, bubble: guardTime <= bodyTime && bubble });
         const swing = this.activeSwing(f);
         if (!swing || !canClash(swing)) continue;
@@ -6088,7 +6243,7 @@
             if (d.armedIn <= 0) {
               const area = { x: d.x, y: d.y - 3, rx: 22, ry: 6 };
               for (const f of rivals) {
-                if (f.ground !== d.platform || f.invuln || f.respawning) continue;
+                if (f.ground !== d.platform || protectionTime(f)) continue;
                 const guard = shieldContact(f, area);
                 if (!guard && Math.abs(f.x - d.x) >= f.stats.width + area.rx) continue;
                 impact(f, Math.sign(f.x - owner.x), guard || { x: d.x, y: d.y }, !!guard);
@@ -6190,7 +6345,7 @@
         const bubble = (target.shield || canParry(target)) && shieldBubble(target);
         const guardTime = bubble ? shieldEntry(bubble, oldX, oldY, dx, dy, 11) : Infinity;
         const time = Math.min(guardTime, bodyTime);
-        if (target.invuln <= 0 && !target.respawning && time < Infinity) {
+        if (!protectionTime(target) && time < Infinity) {
           const covered = guardTime <= bodyTime, x = oldX + time * dx, y = oldY + time * dy;
           this.hit(
             target,
@@ -6227,6 +6382,7 @@
     }
     knockouts(out) {
       for (const f of out) {
+        if (this.stockPractice) this.finishStockPractice('ko');
         if (f.index === 0 && this.launchPractice) this.launchPractice.phase = 'out';
         if (f.index === 0 && this.meteorPractice) this.finishMeteorPractice('ko');
         this.loseStock(f);
@@ -6244,7 +6400,7 @@
       out.forEach((f) => this.spawn(f, true));
     }
     crouchCounterInput(f, foe) {
-      if (!f.reaction?.planted || !f.stun || f.ground < 0 || f.command || foe.invuln || foe.respawning) return null;
+      if (!f.reaction?.planted || !f.stun || f.ground < 0 || f.command || protectionTime(foe)) return null;
       const low = moves[f.kit.tilts.down], [x, y, rx, ry] = low.box;
       const time = f.stun + low.start;
       const gap = (foe.x + foe.vx * time - f.x) * f.face;
@@ -6395,7 +6551,7 @@
       const position = time => clamp(foe.x + travel * (rollProgress(roll, time) - now), floor.x1 + 2, floor.x2 - 2);
       const ahead = position(roll.time + low.start);
       const reach = low.box[0] + low.box[2] + foe.stats.width - 4;
-      if (foe.invuln < low.start && Math.abs(ahead - f.x) <= reach) {
+      if (protectionTime(foe) < low.start && Math.abs(ahead - f.x) <= reach) {
         chase.swung = true;
         return { ...idleInput, x: (Math.sign(ahead - f.x) || f.face) * 0.5, y: 1, tapped: { attack: true } };
       }
@@ -6406,7 +6562,7 @@
         const carry = speed * travelTime - 0.5 * dash.brake * travelTime * travelTime;
         const gap = (position(roll.time + dash.start) - f.x) * dir;
         const room = dir > 0 ? floor.x2 - f.x : f.x - floor.x1;
-        if (foe.invuln < dash.start && gap > 0 && gap <= carry + dash.box[0] + dash.box[2] + foe.stats.width - 4 &&
+        if (protectionTime(foe) < dash.start && gap > 0 && gap <= carry + dash.box[0] + dash.box[2] + foe.stats.width - 4 &&
             room > speed * speed / (2 * dash.brake) + f.stats.width) {
           chase.swung = true;
           return { ...idleInput, x: dir, tapped: { attack: true } };
@@ -6416,7 +6572,7 @@
     }
     cpuWavelandInput(f, foe) {
       const brain = this.bot, platform = foe.ground, floor = this.terrain[platform];
-      if (!floor || !foe.shield || foe.invuln || f.stun || f.tumble || f.grip || f.attack || f.ledge) {
+      if (!floor || !foe.shield || protectionTime(foe) || f.stun || f.tumble || f.grip || f.attack || f.ledge) {
         brain.wavePlatform = null;
         return null;
       }
@@ -6551,7 +6707,7 @@
       const dx = landing - f.x - f.vx * 0.15;
       const x = Math.abs(dx) < 5 ? 0 : clamp(dx / 42, -1, 1);
       const input = { ...idleInput, x, jump: !!f.jumpSquat };
-      if (route.step === route.goal && f.ground < 0 && !route.swung && !f.attack && !foe.invuln) {
+      if (route.step === route.goal && f.ground < 0 && !route.swung && !f.attack && !protectionTime(foe)) {
         const move = moves[f.kit.air.up], t = move.start, [bx, by, rx, ry] = move.box;
         const rise = f.vy*t + 0.5*1540*f.kit.gravity*t*t;
         if (Math.abs(foe.x + foe.vx*t - f.x - f.vx*t - bx*f.face) <= rx + foe.stats.width &&
@@ -6568,7 +6724,7 @@
       const strike = moves[f.kit.air.down], [x, y, rx, ry] = strike.box;
       const targetX = foe.x + foe.vx * strike.start;
       const reach = Math.abs(targetX - (f.x + f.vx * strike.start + f.face * x));
-      if (!floor || foe.shield || foe.invuln || f.stun || f.attack || f.grip || f.dodge ||
+      if (!floor || foe.shield || protectionTime(foe) || f.stun || f.attack || f.grip || f.dodge ||
           f.shield || f.shieldDrop || f.charge >= 0 || f.landingLag ||
           f.x < floor.x1 + 10 || f.x > floor.x2 - 10 || reach > rx + foe.stats.width) {
         brain.platformRoute = null;
@@ -6628,7 +6784,7 @@
       }
       if (unsafe || brain.timer > 0 || f.ground >= 0 || f.attack || f.command || f.stun || f.tumble || f.dodge ||
           f.ledge || f.grip || f.vx * f.face < f.kit.airDrift.speed * 0.45 ||
-          foe.invuln || foe.respawning || foe.ledge || foe.grip || (foe.shield && f.kind !== 'brisket')) return null;
+          protectionTime(foe) || foe.ledge || foe.grip || (foe.shield && f.kind !== 'brisket')) return null;
       const behind = (foe.x - f.x) * f.face < -5;
       const safeX = f.x - f.vx * 0.25, canReverse = safeX > floor.x1 + 18 && safeX < floor.x2 - 18;
       if (!behind && (!canReverse || !['noodle','clover'].includes(f.kind) || !(foe.attack || foe.vx * f.face < -120))) return null;
@@ -6649,7 +6805,7 @@
     }
     cpuDownAir(f, foe, floor) {
       if (f.ground >= 0 || f.attack || f.stun || f.tumble || f.airDodge || f.ledge || f.command ||
-          foe.invuln || foe.respawning || foe.shield || foe.ledge || foe.y - f.y < foe.stats.height * 0.42 ||
+          protectionTime(foe) || foe.shield || foe.ledge || foe.y - f.y < foe.stats.height * 0.42 ||
           (foe.ground >= 0 && foe.damage < 45)) return null;
       const move = moves[f.kit.air.down], t = move.start;
       const x = f.x + f.vx * t;
@@ -6667,10 +6823,37 @@
       return { ...idleInput, x: off ? Math.sign((floor.x1 + floor.x2) / 2 - f.x) : 0,
         aimStick: true, smashY: 1, tapped: { aimStick: true } };
     }
+    cpuLiftExit(f, foe) {
+      const lift = f.stockLift;
+      if (!lift.ready) return idleInput;
+      const dx = foe.x - f.x, move = foe.attack;
+      const camping = Math.abs(dx) < 145 && foe.y > f.y && foe.y - f.y < 195;
+      if (camping && (foe.smashCharge || (move && move.time < move.start + move.active)) &&
+          lift.time < liftArrival + 0.38) return idleInput;
+      const floor = this.terrain[lift.landing], space = floor.x2 - f.x > f.x - floor.x1 ? 1 : -1;
+      let side = dx ? -Math.sign(dx) : space;
+      if (f.x + side * 82 < floor.x1 + 12 || f.x + side * 82 > floor.x2 - 12) side = space;
+      return { ...idleInput, y: 1, x: camping ? side * 0.84 : 0 };
+    }
+    cpuWaitForReturn(f, foe) {
+      if ((!foe.stockLift && !foe.stockGuard) || f.ground < 0 || f.stun || f.dodge || f.floorAction || f.grip) return null;
+      if (f.attack || f.command) return idleInput;
+      const dx = foe.x - f.x, floor = this.terrain[f.ground], jab = moves[f.kit.ground[0]];
+      if (!foe.stockLift && foe.ground === f.ground && foe.stockGuard <= jab.start + 1e-8 && !foe.shield &&
+          f.face * dx >= 0 && Math.abs(dx + (foe.vx - f.vx) * jab.start) <= jab.box[0] + jab.box[2] + foe.stats.width - 3)
+        return { ...idleInput, tapped: { attack: true } };
+      const away = dx ? -Math.sign(dx) : f.x < (floor.x1 + floor.x2) / 2 ? 1 : -1;
+      const safe = clamp(foe.x + away * 158, floor.x1 + 38, floor.x2 - 38);
+      const gap = safe - f.x;
+      if (Math.abs(dx) < 152 && Math.abs(gap) > 7)
+        return { ...idleInput, x: Math.sign(gap) * (Math.abs(gap) > 42 ? 1 : 0.48) };
+      return { ...idleInput, shield: !foe.stockLift && Math.abs(dx) < 108 && Math.abs(foe.y - f.y) < 89 };
+    }
     cpu(dt) {
       const f = this.dogs[1],
         foe = this.dogs[0],
         brain = this.bot;
+      if (f.stockLift) return this.cpuLiftExit(f, foe);
       brain.jumpHold = Math.max(0, brain.jumpHold - dt);
       const result = { ...idleInput, jump: brain.jumpHold > 0 };
       if (this.grapple) {
@@ -6718,6 +6901,8 @@
         outerRight = solid[solid.length - 1].x2;
       const outside = f.x < outerLeft || f.x > outerRight;
       const unsafe = f.ground < 0 && (outside || f.y > closest.y + 28 || (!under && f.y > closest.y - 46));
+      const wait = this.cpuWaitForReturn(f, foe);
+      if (wait) return wait;
       brain.timer -= dt;
       brain.hold = Math.max(0, brain.hold - dt);
       brain.guard = Math.max(0, brain.guard - dt);
@@ -6846,8 +7031,7 @@
         result.jump = false;
         if (
           !foe.shield &&
-          !foe.invuln &&
-          !foe.respawning &&
+          !protectionTime(foe) &&
           gap >= 0 &&
           Math.abs(gap - contact.x - x) <= rx + foe.stats.width &&
           Math.abs(height - contact.y - y) <= ry + foe.stats.height * 0.4
@@ -6955,7 +7139,7 @@
         else result.x = 0;
       }
       if (far > 10 && far < 95 && f.face !== Math.sign(dx)) result.x = Math.sign(dx);
-      if (f.run && f.ground >= 0 && !result.jump && !foe.invuln) {
+      if (f.run && f.ground >= 0 && !result.jump && !protectionTime(foe)) {
         const face = Math.sign(dx);
         const pivot = face === -f.run.face;
         const grab = grabs[pivot ? f.kit.pivotGrab : f.kit.dashGrab];
@@ -7017,7 +7201,7 @@
           brain.hop = null;
           return result;
         }
-        if (canStrike && !result.jump && !foe.invuln && far < 155) {
+        if (canStrike && !result.jump && !protectionTime(foe) && far < 155) {
           const face = Math.sign(dx) || f.face;
           const closing = foe.vx * face < -40;
           const aimLow = above < -6 || (far < 75 && (closing || foe.attack));
@@ -7155,6 +7339,8 @@
     clamp,
     attackWindow,
     canCancelMeteor,
+    liftReserve,
+    protectionTime,
     isReversalPractice,
     shieldBubble,
     shieldContact,

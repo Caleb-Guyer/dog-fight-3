@@ -89,6 +89,7 @@
           if (box) top = Math.min(top, box[1] - box[3]);
         }
       } else if (f.attack?.aim === -1 || f.smashCharge?.side === 'up') top -= 12;
+      if (f.stockGuard) top = Math.min(top, -f.stats.height - 7);
       return snap(f.y + top - 33, 2);
     });
     for (const f of world.dogs) {
@@ -217,6 +218,7 @@
   }
   function pose(f, winner, holder) {
     if (winner === f.index) return ['win', 0];
+    if (f.stockLift) return ['idle', 0];
     if (f.grip) {
       const grip = f.grip;
       const phase = reduced.matches ? 0.25 : (grip.time / 0.64) % 1;
@@ -1440,6 +1442,52 @@
     }
     ctx.restore();
   }
+  function drawMailLift(ctx, f, time) {
+    const x = snap(f.x, 2), y = snap(f.y, 2);
+    const step = reduced.matches ? 0 : Math.floor(time * 14) % 4;
+    ctx.save();
+    ctx.translate(x, y);
+    for (const side of [-1, 1]) {
+      const hub = side * 38, blade = [11, 7, 3, 7][step];
+      ctx.fillStyle = ink;
+      ctx.fillRect(hub - 4, 2, 8, 12);
+      ctx.fillRect(hub - blade - 2, 0, blade * 2 + 4, 4);
+      ctx.fillStyle = gold;
+      ctx.fillRect(hub - blade, 0, blade * 2, 2);
+      ctx.fillRect(hub - 2, 5, 4, 7);
+    }
+    ctx.fillStyle = ink;
+    ctx.fillRect(-35, 0, 70, 10);
+    ctx.fillRect(-28, 10, 56, 8);
+    ctx.fillStyle = '#bb8b64';
+    ctx.fillRect(-26, 8, 52, 8);
+    ctx.fillStyle = cream;
+    ctx.fillRect(-32, 2, 64, 6);
+    ctx.fillRect(-14, 8, 28, 6);
+    for (const [i, start] of [-28, -19, 13, 22].entries())
+      pixelLine(ctx, start, 6, start + 4, 2, i % 2 ? '#4a8181' : '#b8584d', 2, 2);
+    pixelLine(ctx, -14, 8, 0, 13, '#94694f', 2, 2);
+    pixelLine(ctx, 0, 13, 14, 8, '#94694f', 2, 2);
+    ctx.fillStyle = f.stockLift.ready ? mint : gold;
+    for (const at of [-22, 18]) ctx.fillRect(at, 10, 4, 4);
+    ctx.restore();
+  }
+  function drawReturnTags(ctx, f) {
+    const frames = f.stockLift ? window.DogFight.liftReserve(f.stockLift.time) : f.stockGuard * 60;
+    const count = Math.ceil(frames / 24 - 1e-8);
+    const x = snap(f.x - 15, 2), y = snap(f.stockLift ? f.y + 23 : f.y - f.stats.height - 12, 2);
+    for (let i = 0; i < 4; i++) {
+      const at = x + i * 8;
+      ctx.fillStyle = ink;
+      ctx.fillRect(at, y, 7, 7);
+      ctx.fillStyle = i < count ? (count === 1 ? gold : mint) : '#665762';
+      ctx.fillRect(at + 1, y + 1, 5, i < count ? 5 : 2);
+      if (i < count) {
+        ctx.fillStyle = cream;
+        ctx.fillRect(at + 2, y + 1, 2, 2);
+      }
+    }
+  }
   function drawFighter(ctx, f, world, time) {
     shadow(ctx, f, world.terrain);
     floorRollTrack(ctx, f);
@@ -1455,7 +1503,8 @@
     }
     movingGrabFeet(ctx, f);
     dashFootwork(ctx, f);
-    if (f.respawning > 0) oval(ctx, f.x, f.y - 3, 42, 5, teamColor(f));
+    if (f.stockLift) drawMailLift(ctx, f, time);
+    else if (f.respawning > 0) oval(ctx, f.x, f.y - 3, 42, 5, teamColor(f));
     if (f.smashCharge && f.charge >= 0) drawSmashCharge(ctx, f);
     else if (f.charge > 0.21) {
       const r = 37 + f.charge * 10;
@@ -1527,6 +1576,7 @@
       dodgeY: f.airDodge?.y || 0,
     });
     ctx.restore();
+    if (f.stockLift || f.stockGuard > 0) drawReturnTags(ctx, f);
     if (state === 'ledgeTrump') slippingPaw(ctx, f, face, phase, world.dogs[1 - f.index]?.ledge);
     swing(ctx, f, world.terrain[f.ground]);
     if (f.shield) raisedShield(ctx, f);
@@ -1828,6 +1878,15 @@
       }
       return;
     }
+    if (e.type === 'stockLeave') {
+      const spread = reduced.matches ? 8 : Math.round(16 * p);
+      for (const side of [-1, 1]) {
+        const at = e.x + side * (30 + spread), y = e.y + 5 + spread * 0.5;
+        pixelLine(ctx, at, y, at + side * 8, y + 4, mint, 3, 2);
+        pixelLine(ctx, at + side * 5, y + 7, at + side * 10, y + 7, cream, 2, 2);
+      }
+      return;
+    }
     if (e.type === 'specialTurn') {
       const extent = reduced.matches ? 15 : 10 + 13 * p, dir = e.face;
       const at = e.x + dir * (e.size + extent), y = e.y + 5;
@@ -1972,6 +2031,7 @@
     }
     event(name, e) {
       const f = e.f;
+      if (name === 'stockLeave') this.add(name, e.point.x, e.point.y, mint, 0.18, 24);
       if (name === 'specialTurn') this.add(name, e.point.x, e.point.y, e.turn === 'turnaround' ? gold : mint,
         0.16, f.stats.width, e.turn === 'turnaround' ? e.face : Math.sign(e.vx) || e.face, { wave: e.turn === 'wavebounce' });
       if (name === 'meteorBounce' || name === 'meteorCancel')

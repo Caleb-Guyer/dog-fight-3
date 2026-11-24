@@ -368,6 +368,13 @@
       }[detail.f.kind];
       tone(start, end, 0.053, 0, wave, wave === 'square' ? 0.033 : 0.085);
       tone(end * 0.7, end * 0.45, 0.055, 0.009, 'triangle', 0.068);
+    } else if (name === 'stockReady') {
+      tone(360, 445, 0.07, 0, 'triangle', 0.07);
+      tone(560, 660, 0.08, 0.06, 'triangle', 0.07);
+    } else if (name === 'stockLeave') {
+      tone(310, 160, 0.09, 0, 'triangle', 0.055);
+    } else if (name === 'stockOpen') {
+      tone(720, 430, 0.08, 0, 'sine', 0.07);
     } else if (name === 'specialTurn') {
       const turned = detail.turn === 'turnaround';
       tone(turned ? 300 : 460, turned ? 390 : 235, 0.06, 0, 'triangle', 0.065);
@@ -908,6 +915,7 @@
         ) +
         '</ul><h3 class="guide-section">Ledge trumping</h3><p>Catch an occupied ledge to bump the other dog outward. A fresh catch protects you for 15 frames. Regrabs leave you open until you land or take a hit. Play either side in <strong>Training → Contested ledge</strong>.</p>' +
         '<h3 class="guide-section">Between hits</h3><p>Flick a fresh direction during impact freeze to move a short distance. Center the stick and flick again for a second shift if time allows. On a keyboard or touch screen, tap a direction at the spark. Try <strong>Training → Combo escape</strong> at two distances.</p>' +
+        '<h3 class="guide-section">After a knockout</h3><p>Watch the lamps on the airmail lift. When they turn mint, tap Down, a side, Jump, or an aerial move to leave. Leaving early gives you more protection on landing. The last gold mail tag goes dark when you can be hit again. Try both sides in <strong>Training → Launch practice → Take the lift</strong> and <strong>Catch the return</strong>.</p>' +
         '<h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><p>On a strong meteor, tap Shield just before the platform to stop the bounce. Over open air, tap a fresh Jump or Up + Special when the gold streaks turn mint, then steer home. Try <strong>Spike landing</strong> and <strong>Offstage spike</strong>.</p><ul class="move-rows guide-defense">' +
         rows +
         '</ul><h3 class="guide-section">At a wall</h3><p>Try <strong>Training → Wall tech practice</strong> to take Pip’s Back Heel into either wall of Laundry Line.</p><ul class="move-rows guide-wall">' +
@@ -1094,7 +1102,7 @@
     const combo = world.lastCombo;
     const grip = world.grapple;
     const prompt = $('grapple-prompt');
-    prompt.hidden = !grip || grip.phase === 'throw' || !!world.launchPractice;
+    prompt.hidden = !grip || grip.phase === 'throw' || !!world.launchPractice || !!world.stockPractice;
     if (!prompt.hidden) {
       const holder = world.dogs[grip.owner].stats.name;
       const captive = world.dogs[grip.target].stats.name;
@@ -1133,8 +1141,14 @@
       if (chargeReadout.textContent !== value) chargeReadout.textContent = value;
     }
     const shownMove = player.smashCharge ? smashes[player.smashCharge.moveId].label : player.lastMove;
+    const returns = scores.map((f, i) => {
+      if (!f.stockLift) return f.stockGuard ? (f.stockGuard <= 24 / 60 + 1e-8 ? 'Last tag' : 'Protected') : '';
+      if (!f.stockLift.ready) return 'Returning';
+      const human = online.match ? online.side === i : world.mode === 'local' || i === 0;
+      return human ? '↓ or Jump' : 'Lift ready';
+    });
     const key =
-      scores.map((f) => f.kind + ':' + Math.floor(f.damage) + ':' + f.stocks).join('|') +
+      scores.map((f, i) => f.kind + ':' + Math.floor(f.damage) + ':' + f.stocks + returns[i]).join('|') +
       world.mode +
       '/' +
       combo.hits +
@@ -1169,7 +1183,7 @@
         return (
           '<div class="hud-card ' +
           (i ? 'two' : '') +
-          '"><img alt="" src="' +
+          '">' + (returns[i] ? '<span class="stock-alert' + (returns[i] === 'Last tag' ? ' last' : '') + '">' + returns[i] + '</span>' : '') + '<img alt="" src="' +
           portrait(f.kind) +
           '"><div><span class="hud-name"><small>' +
           labelFor(i) +
@@ -1202,6 +1216,7 @@
     $('freshness-readout').hidden = $('freshness-controls').hidden = true;
     $('wave-readout').hidden = $('wave-patterns').hidden = true;
     showDamageControl(false);
+    $('damage-control').hidden = false;
     $('footwork-status').hidden = $('footwork-patterns').hidden = true;
     $('spacing-status').hidden = $('spacing-patterns').hidden = true;
     $('escape-status').hidden = $('escape-patterns').hidden = true;
@@ -1225,6 +1240,8 @@
       sound(name, e);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
       if (world?.meteorPractice && e.f?.index === 0) meteorFeedback(name, e);
+      if (world?.stockPractice && e.f?.index === world.stockPractice.slot && name.startsWith('stock'))
+        stockFeedback(name, e);
       if (name === 'chaseCue' || name === 'chaseResult') chaseFeedback(name, e);
       if (world?.wallPractice && e.f?.index === 0) wallFeedback(name);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
@@ -1820,6 +1837,37 @@
     status.textContent = label;
     tip.textContent = message + ' Choose ' + (attack ? 'Jab lock' : 'Escape the lock') + ' to retry.';
   }
+  function stockFeedback(name, e) {
+    const d = world.stockPractice, status = $('launch-status'), tip = $('recovery-tip');
+    let label, message;
+    if (name === 'stockStart') {
+      label = 'Lift arriving';
+      message = d.slot ? 'Face the landing. Time your grab as the last mail tag goes out.' :
+        'Tap Down when the lamps turn mint, or stay aboard and let the lift drop you.';
+    } else if (name === 'stockReady') {
+      label = d.slot ? 'Watch the mail tags' : 'Lift ready';
+    } else if (name === 'stockLeave') {
+      label = 'Protected · ' + e.frames + ' frames';
+    } else if (name === 'stockOpen') {
+      label = 'Open to a grab';
+    } else if (name === 'stockResult') {
+      [label, message] = {
+        protected: ['Grab passed through', 'You landed with protection. Try staying on the lift until it drops you.'],
+        caught: ['Caught on landing', 'The last tag expired before the grab. Leave earlier or jump over the rival.'],
+        clear: ['Clear of the grab', 'Their paws missed you. Try dropping straight onto the landing.'],
+        hit: ['Hit the guard', 'You struck the rival during your return.'],
+        timed: ['Grab timed', 'Your grab became active after the last tag went out.'],
+        early: ['Still protected', 'Your grab reached the dog while a tag was lit. Try grabbing later.'],
+        miss: ['Out of reach', 'Face the landing and let the dog reach paw height before grabbing.'],
+        timeout: ['Landing uncontested', 'Try a grab when the last tag goes out.'],
+        ko: ['Lost the stock', 'Aim back toward the landing.'],
+      }[e.outcome];
+      message += ' Tap Attack to retry.';
+    } else return;
+    status.dataset.result = e.outcome || name;
+    status.textContent = label;
+    if (message) tip.textContent = message;
+  }
   function meteorFeedback(name, e) {
     const d = world.meteorPractice, floor = d.pattern === 'spikeFloor', status = $('launch-status'), tip = $('recovery-tip');
     if (d.phase === 'done' && name !== 'meteorResult') return;
@@ -2039,6 +2087,7 @@
     if (!world) return;
     const launch = ledge === 'launch';
     const chase = launch && (pattern === 'attack' || pattern === 'defend');
+    const stock = launch && (pattern === 'stockReturn' || pattern === 'stockCatch');
     const meteor = launch && (pattern === 'spikeFloor' || pattern === 'spikeEdge');
     const wall = ledge === 'wall';
     const shield = ledge === 'shield';
@@ -2059,6 +2108,7 @@
     if (chase) world.resetChasePractice(pattern, direction ?? world.chasePractice?.dir ?? 1, world.chasePractice?.slow ?? true);
     else if (meteor) world.resetMeteorPractice(pattern, direction ?? world.meteorPractice?.dir ?? 1,
       world.meteorPractice?.slow ?? true, world.meteorPractice?.baseline ?? 100);
+    else if (stock) world.resetStockPractice(pattern, direction ?? world.stockPractice?.dir ?? 1, world.stockPractice?.slow ?? true);
     else if (launch) world.resetLaunchPractice();
     else if (wave) world.resetWavePractice(pattern, direction ?? world.wavePractice?.dir ?? 1, world.wavePractice?.slow ?? true);
     else if (freshness) {
@@ -2086,6 +2136,7 @@
     $('wave-readout').hidden = $('wave-patterns').hidden = !wave;
     const counterDrill = escape && pattern === 'counter';
     showDamageControl(counterDrill || meteor, freshness && world.freshnessPractice.koTest, meteor ? 'launch-side' : undefined);
+    $('damage-control').hidden = stock;
     $('dummy-damage').value = meteor ? world.meteorPractice.baseline : counterDrill ? world.escapePractice.baseline : world.trainingDamage;
     $('damage-output').textContent = $('dummy-damage').value + '%';
     $('match-stage').textContent = arenas[world.stage].name;
@@ -2093,14 +2144,16 @@
     const result = $('launch-status');
     result.hidden = !launch;
     $('launch-patterns').hidden = !launch;
-    $('launch-side').hidden = $('launch-slow').hidden = !chase && !meteor;
+    $('launch-side').hidden = $('launch-slow').hidden = !chase && !meteor && !stock;
     if (launch) {
-      $('launch-throw').setAttribute('aria-pressed', String(!chase && !meteor));
+      $('launch-throw').setAttribute('aria-pressed', String(!chase && !meteor && !stock));
+      $('launch-stock-return').setAttribute('aria-pressed', String(pattern === 'stockReturn'));
+      $('launch-stock-catch').setAttribute('aria-pressed', String(pattern === 'stockCatch'));
       $('launch-floor-spike').setAttribute('aria-pressed', String(pattern === 'spikeFloor'));
       $('launch-edge-spike').setAttribute('aria-pressed', String(pattern === 'spikeEdge'));
       $('launch-lock').setAttribute('aria-pressed', String(chase && pattern === 'attack'));
       $('launch-escape').setAttribute('aria-pressed', String(chase && pattern === 'defend'));
-      if (chase || meteor) $('launch-slow').setAttribute('aria-pressed', String((world.chasePractice || world.meteorPractice).slow));
+      if (chase || meteor || stock) $('launch-slow').setAttribute('aria-pressed', String((world.chasePractice || world.meteorPractice || world.stockPractice).slow));
     }
     $('footwork-status').hidden = $('footwork-patterns').hidden = !footwork;
     $('spacing-status').hidden = $('spacing-patterns').hidden = !spacing;
@@ -2250,6 +2303,11 @@
         high: 'Hold Shield. Noodle jumps for your ears. Aim Up as the lead swings over the bubble.',
         poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + moves[player.kit.tilts.down].label + '.',
       }[pattern];
+    } else if (stock) {
+      result.dataset.result = 'ready';
+      result.textContent = 'Tap Attack to begin';
+      message = pattern === 'stockReturn' ? 'Tap Down when the lift lights up. The rival will grab at your landing. Retry and stay aboard to compare.'
+        : 'The rival will drop in front of you. Try an early grab, then retry and time it as the last mail tag goes out.';
     } else if (meteor) {
       meteorFeedback('meteorReady', {});
       message = $('recovery-tip').textContent;
@@ -2363,12 +2421,14 @@
   $('launch-escape').onclick = () => drill('launch', false, 'defend');
   $('launch-floor-spike').onclick = () => drill('launch', false, 'spikeFloor');
   $('launch-edge-spike').onclick = () => drill('launch', false, 'spikeEdge');
+  $('launch-stock-return').onclick = () => drill('launch', false, 'stockReturn');
+  $('launch-stock-catch').onclick = () => drill('launch', false, 'stockCatch');
   $('launch-side').onclick = () => {
-    const d = world.meteorPractice || world.chasePractice;
+    const d = world.meteorPractice || world.stockPractice || world.chasePractice;
     drill('launch', false, d.pattern || d.role, -d.dir);
   };
   $('launch-slow').onclick = () => {
-    const d = world.meteorPractice || world.chasePractice;
+    const d = world.meteorPractice || world.stockPractice || world.chasePractice;
     d.slow = !d.slow;
     $('launch-slow').setAttribute('aria-pressed', String(d.slow));
     $('game').focus({ preventScroll: true });
@@ -3310,7 +3370,7 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += world.footworkPractice?.slow || world.wavePractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow ? dt / 2 : dt;
+        accumulator += world.footworkPractice?.slow || world.wavePractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];

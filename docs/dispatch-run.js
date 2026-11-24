@@ -93,11 +93,11 @@
         for (let j = i + 1; j < bodies.length; j++) super.separateGroundedFighters(bodies[i], bodies[j]);
     }
     park(f) {
-      Object.assign(f, { absent: true, attack: null, ground: -1, x: -4096, y: 0, respawning: Infinity, invuln: Infinity });
+      Object.assign(f, { absent: true, attack: null, stockLift: null, stockGuard: 0, ground: -1, x: -4096, y: 0, respawning: Infinity, invuln: Infinity });
     }
     placeOpponent(e, returning) {
       const { f, spec } = e, hero = this.dogs[0], floor = this.terrain[0];
-      this.spawn(f, returning);
+      this.spawn(f, returning, false);
       f.absent = false;
       f.x = spec.x;
       if ((this.wave || returning) && Math.abs(f.x - hero.x) < 150)
@@ -105,6 +105,7 @@
       f.face = f.x < hero.x ? 1 : -1;
       if (machines[e.kind]) f.stats = { ...f.stats, ...machines[e.kind] };
       f.encounter = e;
+      if (returning && e.kind === 'brisket') this.beginStockReturn(f);
       Object.assign(e, { cycle: 0, move: 'stamp', face: f.face, spent: false, hurt: 0, jumpHold: 0 });
       phase(e, 'approach', 1);
     }
@@ -189,7 +190,7 @@
     }
     machineInput(e, dt) {
       const { f, kind } = e, hero = this.dogs[0];
-      if (!f.stocks || f.respawning || (kind === 'conductor' && e.hp <= 0)) return idleInput;
+      if (!f.stocks || (f.respawning && !f.stockLift) || (kind === 'conductor' && e.hp <= 0)) return idleInput;
       if (kind === 'brisket') return this.cpu(dt);
       if (f.grip || f.impactLag > 1e-8) return idleInput;
       if (f.ledge) return { ...idleInput, x: f.ledge.left ? 1 : -1, jump: true };
@@ -256,6 +257,7 @@
     machineContact(e) {
       const { f, kind } = e, hero = this.dogs[0];
       if (e.phase !== 'strike' || e.spent || !f.stocks || f.respawning || f.stun > 0 || f.grip || f.ground < 0) return;
+      if (hero.stockLift || hero.stockGuard) return;
       const body = machines[kind], boss = kind === 'conductor', rush = e.move === 'charge';
       const dx = (hero.x - f.x) * e.face;
       const back = rush ? -36 : -12, front = boss && rush ? 64 : body.reach, high = boss ? 73 : body.height - 10;

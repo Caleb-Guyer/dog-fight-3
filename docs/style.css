@@ -685,6 +685,9 @@ body.playing .tools .utility,
 #launch-status[data-result='techRoll'],
 #launch-status[data-result='saved'],
 #launch-status[data-result='clear'],
+#launch-status[data-result='protected'],
+#launch-status[data-result='timed'],
+#launch-status[data-result='hit'],
 #wall-status[data-result='wallTech'],
 #wall-status[data-result='wallTechJump'],
 #shield-status[data-result='parry'],
@@ -730,6 +733,7 @@ body.playing .tools .utility,
 }
 .hud-card {
   --side: var(--tomato);
+  position: relative;
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: stretch;
@@ -741,6 +745,21 @@ body.playing .tools .utility,
 }
 .hud-card.two {
   --side: var(--aqua);
+}
+.stock-alert {
+  position: absolute;
+  bottom: 100%;
+  left: -2px;
+  padding: 2px 5px;
+  color: var(--cream);
+  background: #263d42;
+  border: 1px solid var(--aqua);
+  font: 400 clamp(10px, 1vw, 14px)/1 var(--pixel);
+  white-space: nowrap;
+}
+.stock-alert.last {
+  border-color: var(--gold);
+  color: var(--gold);
 }
 .hud-card img {
   display: block;
