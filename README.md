@@ -270,6 +270,10 @@ Choose **Record your combo** and move or attack to start. It records 2½ seconds
 
 ## Ground tilts
 
+All four forward tilts can hit high, level or low. Hold mostly sideways on a stick and add a little vertical aim, then tap Attack. On keyboard, hold Walk (P1 Left Shift, P2 Right Ctrl) and a diagonal as you tap Attack. On touch, slide from the center dot to a diagonal before tapping Attack. With Tilt stick enabled you can also hold Up or Down on the movement controls and flick the aim stick sideways. A high tilt reaches a jumper and launches them higher. A low tilt reaches under the lip and sends them farther sideways.
+
+In **Training → Footwork practice**, choose **Tag the hop** or **Clip the recovery**. Try the same forward tilt level, then angle it to meet the rival. Switch sides to practice either ledge. In solo matches, a grounded Rival CPU can aim at your jump or low recovery when its level tilt would miss. [Try Noodle’s Knot Poke against Pip](https://caleb-guyer.github.io/dog-fight-3/#training/angled-tilts)
+
 Aim with the movement keys, left stick, D-pad, or touch arrows and tap **Attack**. Use **J** for P1, **Comma** for P2, **X** on a standard gamepad, or the **Attack** button on touch. In Training, try all three next to the dummy, then take a step back to test their reach.
 
 | Dog | Forward tilt | Up tilt | Down tilt |

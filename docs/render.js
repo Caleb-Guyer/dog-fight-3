@@ -205,6 +205,10 @@
     if (a.folded) return 'fall';
     if (a.diving) return 'pipSlideDive';
     if (a.anchor && a.time + 1e-8 >= a.start) return 'noodleReelLedge';
+    if (a.tiltAngle) {
+      const strike = a.secondPose && a.time + 1e-8 >= a.start + a.active ? a.secondPose : a.moveId;
+      return strike + (a.tiltAngle < 0 ? 'High' : 'Low');
+    }
     if ((a.dashAttack || a.tiltSide) && a.secondPose && a.time + 1e-8 >= a.start + a.active)
       return a.secondPose;
     if (a.secondPose && attackWindow(a) === a.second) return a.secondPose;
@@ -727,7 +731,7 @@
     ctx.restore();
   }
   function tiltLead(ctx, f, a, phase) {
-    const hand = window.DogArt.itemPoint(f.kind, a.moveId, phase);
+    const hand = window.DogArt.itemPoint(f.kind, attackPose(f), phase);
     if (!hand) return;
     const [x, y, rx, ry] = a.box;
     const payOut = clamp((a.time / a.start - 0.28) / 0.72, 0, 1);
@@ -791,7 +795,7 @@
       const [wx, wy] = wrist || [x + rx - 9, y];
       switch (a.moveId) {
         case 'pipStampKick': {
-          const [heel, height] = follow ? [38, -26] : [40, -30];
+          const heel = follow ? 38 : 40, height = (follow ? -26 : -30) + (a.tiltAngle || 0) * 19;
           pixelLine(ctx, heel - 11, height + 5, heel + 1, height + 1, '#ed9c79', 3, 2);
           pixelLine(ctx, heel + 1, height + 1, heel + 5, height - 2, cream, 2, 2);
           break;

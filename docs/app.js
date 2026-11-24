@@ -1012,7 +1012,7 @@
         '</p><p>When two ground swings meet, both dogs recoil. A swing worth at least 9 percentage points more carries through. You can also bat Clover’s flying discs. Try Training → Footwork practice → Clash jabs.' +
         '</p><p>If the rival misses a landing, tap neutral Attack for ' + moves[kit.ground[0]].label +
         '. You can jab lock twice before finishing with ' + smashes[kit.smashes.down].label + ' (Down + Smash). Try Training → Launch practice → Jab lock.' +
-        '</p><h3 class="guide-section">Ground tilts</h3><p>Aim and tap Attack. Out of a run, release forward briefly, then press forward and Attack together to slide into a tilt. Reverse and tap Attack to strike behind you while your paws still skid forward. Up and down tilts work straight out of the run. You can also set your aim stick to Tilt in Options.</p><ul class="move-rows guide-tilts">' +
+        '</p><h3 class="guide-section">Ground tilts</h3><p>Aim and tap Attack. Angle a forward tilt with a shallow diagonal on the stick, Walk + a diagonal on keyboard, or a slide from the center dot to a diagonal on touch. Aim high to tag a jumper or low to cover a recovery. With Tilt stick enabled, hold Up or Down and flick the aim stick sideways.</p><p>Out of a run, release forward briefly, then press forward and Attack together to slide into a tilt. Reverse and tap Attack to strike behind you while your paws still skid forward. Up and down tilts work straight out of the run.</p><ul class="move-rows guide-tilts">' +
         Object.entries(kit.tilts)
           .map(([side, id]) => guideMoveRow(moves[id], tiltInputs[side], side, 'tilts'))
           .join('') +
@@ -2031,6 +2031,12 @@
     const state = e.outcome || e.phase;
     status.dataset.result = state;
     const pattern = world.footworkPractice.pattern;
+    if (pattern === 'angleHigh' || pattern === 'angleLow') {
+      const move = world.dogs[0].lastMove;
+      status.textContent = state === 'missedAngle' ? 'Miss · ' + (move || 'no swing') :
+        move + (state === 'angledHit' ? (pattern === 'angleLow' ? ' · caught the recovery' : ' · caught the hop') : ' · hit');
+      return;
+    }
     if (pattern === 'antiAir') {
       const move = world.dogs[0].lastMove;
       status.textContent = {
@@ -2711,17 +2717,22 @@
         'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
     } else if (footwork) {
       const practice = world.footworkPractice;
-      for (const id of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir'])
+      for (const id of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow'])
         $('footwork-' + id).setAttribute('aria-pressed', String(practice.pattern === id));
       $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
       $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
       $('footwork-status').dataset.result = 'ready';
       $('footwork-status').textContent = {
         brake: 'Brake at the chalk', pivot: 'Catch the chase', antiAir: 'Catch the landing',
+        angleHigh: 'Tag the hop', angleLow: 'Clip the recovery',
         bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
       }[pattern];
       const discInput = player.kind === 'noodle' ? 'aim toward Clover and tap Attack' : 'tap Attack';
+      const diagonal = (pattern === 'angleLow' ? 'down-' : 'up-') + (practice.dir > 0 ? 'right' : 'left');
+      const angleTip = 'Tap Attack to start the swing. Aim ' + diagonal +
+        ' with Shift on keyboard, slide from the center dot on touch, or tilt the stick sideways with a little vertical aim. Repeat with level aim to compare.';
       message = {
+        angleHigh: angleTip, angleLow: angleTip,
         antiAir: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk as the rival hops. Hold Up and tap Jump + Smash together. Hold Smash longer to compare.',
         brake: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Release forward for a beat, then press forward and tap Attack together. Compare that with holding forward and tapping Attack.',
         pivot: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk with the rival on your heels. Press back and tap Attack together to catch them during your skid.',
@@ -2886,7 +2897,7 @@
     $('game').focus({ preventScroll: true });
   };
   $('footwork-training').onclick = () => drill('footwork', false, world.footworkPractice?.pattern || 'bait');
-  for (const pattern of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir'])
+  for (const pattern of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow'])
     $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
   $('footwork-side').onclick = () => drill('footwork', false, world.footworkPractice.pattern, -world.footworkPractice.dir);
   $('footwork-slow').onclick = () => {
@@ -4070,6 +4081,12 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', stage:'picnic', fetch:false });
       drill('spacing', false, 'footstool');
+    }
+    else if (hash === '#training/angled-tilts') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'noodle', p2:'pip', stage:'picnic', fetch:false });
+      drill('footwork', false, 'angleHigh');
     }
     else if (hash === '#training/braking' || hash === '#training/catch-the-landing') {
       menuScreen('match');

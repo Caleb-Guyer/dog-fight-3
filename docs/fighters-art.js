@@ -3236,6 +3236,20 @@
     }
   }
 
+  // The supporting foot stays planted while the striking limb follows the player's aim.
+  const tiltLimbs = {
+    pipStampKick: { rightY:10, frontKneeY:4, rightFootTurn:-23, torsoTurn:4, headTurn:3 },
+    brisketGateCheck: { fistY:12, shoulderY:2, fistTurn:19, bodyY:2, headTurn:4 },
+    noodleKnotPoke: { fistY:8, shoulderY:2, fistTurn:18, headTurn:4 },
+    cloverOneTwoPass: { rearY:10, rearTurn:14, headTurn:3 },
+    cloverOneTwoPassFinish: { fistY:12, fistTurn:18, shoulderY:2, headTurn:4 },
+  };
+  for (const [pose, limbs] of Object.entries(tiltLimbs)) {
+    for (const dir of [-1,1]) kitMoves[pose + (dir < 0 ? 'High' : 'Low')] = {
+      ...kitMoves[pose], tiltLimbs:limbs, tiltAngle:dir,
+    };
+  }
+
   function kitStance(s, name, pose, frame) {
     const move = kitMoves[pose];
     const grounded = move.ground || move.smash;
@@ -3261,6 +3275,7 @@
       if (frame === 4) addKey(move.beat, 1);
     } else if (frame < 7) addKey(move.follow, frame === 5 ? 1 : 0.43);
     else addKey(move.rest, 1);
+    if (move.tiltLimbs) addKey(move.tiltLimbs, move.tiltAngle * [0.12,.38,.75,1,1,.68,.24,0][frame]);
     s.guardFloor = !!(grounded || move.sail || (move.floorWind && (frame < 2 || (holdWind && frame === 2))));
     if (move.lip) s.guardFloor = frame >= move.lip.plantCel;
     if (!grounded && !move.sail && frame >= 6) {
