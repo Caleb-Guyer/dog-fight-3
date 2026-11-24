@@ -650,6 +650,51 @@ async function testWallJumps(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' passed crossing the gap, turning toward the near ledge, and spending an ordinary jump on retry.');
 }
 
+async function testShortHops(page, mobile) {
+  await page.goto(root + '#training/short-hops');
+  const compare = page.locator('#hop-compare');
+  const retry = page.locator('#spacing-landing');
+  const session = mobile && await page.context().newCDPSession(page);
+  const activate = locator => mobile ? locator.tap() : locator.click();
+  await activate(page.locator('#spacing-slow'));
+  async function jump(name) {
+    if (mobile) {
+      const box = await page.locator('[data-touch="' + name + '"]').boundingBox();
+      assert(box && box.x >= 0 && box.x + box.width <= 390 && box.y + box.height <= 844);
+      await session.send('Input.dispatchTouchEvent', {type:'touchStart', touchPoints:[
+        {x:box.x + box.width / 2, y:box.y + box.height / 2, id:1}
+      ]});
+    } else await page.keyboard.down(name === 'hop' ? 'e' : 'Space');
+    await page.clock.runFor(1450);
+    if (mobile) await session.send('Input.dispatchTouchEvent', {type:'touchEnd', touchPoints:[]});
+    else await page.keyboard.up(name === 'hop' ? 'e' : 'Space');
+    return compare.innerText();
+  }
+  assert(await compare.isHidden());
+  const full = await jump('jump');
+  assert.match(full, /^Full jump · \d+ px$/);
+  await activate(retry);
+  assert.equal(await compare.innerText(), 'Previous: ' + full);
+  const both = await jump('hop');
+  const short = both.split(' / ')[0];
+  assert.match(short, /^Short hop · \d+ px$/);
+  assert.equal(both, short + ' / Previous: ' + full);
+  assert(Number(full.match(/\d+/)[0]) > Number(short.match(/\d+/)[0]) * 2);
+  if (!mobile) {
+    await activate(retry);
+    await page.evaluate(() => {
+      const pad = {axes:[0,0,0,0], buttons:Array.from({length:17}, (_,i) => ({pressed:i === 6}))};
+      Object.defineProperty(navigator, 'getGamepads', {configurable:true, value:() => [pad]});
+    });
+    await page.clock.runFor(1450);
+    assert.equal(await compare.innerText(), short + ' / Previous: ' + short);
+    await page.evaluate(() => { delete navigator.getGamepads; });
+  }
+  await activate(page.locator('#reset-training'));
+  assert(await compare.isHidden());
+  console.log((mobile ? 'Touch' : 'Keyboard and controller mapping') + ' passed held short-hop and full-jump comparison.');
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -718,6 +763,7 @@ async function testDevice(browser, mobile) {
     await testStockClock(page, mobile);
     await testAngledTilts(page, mobile);
     await testWallJumps(page, mobile);
+    await testShortHops(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
