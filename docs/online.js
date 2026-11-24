@@ -32,14 +32,7 @@
     });
     return input;
   }
-  function seededRandom(seed) {
-    const next = () => {
-      next.state = (Math.imul(next.state, 1664525) + 1013904223) >>> 0;
-      return next.state / 4294967296;
-    };
-    next.state = seed >>> 0;
-    return next;
-  }
+  const { seededRandom } = window.DogFight;
 
   function heldInput(values) {
     if (!values[8]) return values;
