@@ -741,6 +741,7 @@
         '<p>While holding Shield, press Jump, Grab, Up + Smash, or Up + Special. On a raised platform, flick a lower diagonal to fall through your shield. Tap Attack with the diagonal for a down air, or aim a different aerial as you fall. Try Shield drop in Platform practice.</p>' +
         '<p>Tap during a blocked hit to start your response as soon as shieldstun ends. An immediate shield grab takes four extra frames to reach. A heavier blow pushes you farther away.</p>' +
         '<p>During the three-frame jump crouch, Up + Smash starts a grounded up smash and Up + Special starts your recovery move. A running up smash carries your speed. On touch, hold Up and slide your other thumb from Jump onto Smash or Special. Try Footwork practice → Catch the landing.</p>' +
+        '<p>During the first two frames of a jab opener, tilt, or dash attack, press Jump or Hop and aim to turn the windup into a short-hop aerial. Start a tilt facing away, then aim toward the rival as you jump for a rising back air. Try Footwork practice → Turn into back air.</p>' +
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Aim diagonally down and tap Shield to slide onto a platform. Do this just after jumping to wavedash. Try Training → Air-dodge practice or Training → Wavedash.</p>' +
         '<p>Flick a direction during the hit spark to shift your dog. You can slide sideways on the ground or in eight directions in the air. Try escaping the second swing in Training → Combo escape.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
@@ -1339,7 +1340,8 @@
     if (f.stun > 0) return 'Hitstun ' + frames(f.stun) + 'f';
     if (f.shieldStun > 0) return 'Shieldstun ' + frames(f.shieldStun) + 'f';
     if (f.landingLag > 1e-8) return 'Landing recovery ' + frames(f.landingLag) + 'f';
-    if (f.jumpSquat) return 'Jump squat ' + Math.round(f.jumpSquat.time * 60) + '/3';
+    if (f.jumpSquat) return 'Jump squat ' + Math.round(f.jumpSquat.time * 60) + '/3' +
+      (f.jumpSquat.aerial?.fromWindup ? ' · canceled ' + moves[f.jumpSquat.aerial.fromWindup].label : '');
     const dodge = f.airDodge || f.floorAction;
     if (dodge?.wear !== undefined) {
       const label = f.airDodge ? 'Air dodge' : dodge.type === 'spotDodge' ? 'Spot-dodge' : 'Roll';
@@ -1349,7 +1351,8 @@
     }
     if (f.floorAction) return 'Floor action · ' + frames(f.floorAction.duration - f.floorAction.time) + 'f';
     if (f.clashRecoil) return 'Clash recoil';
-    if (f.attack) return f.lastMove + (f.attack.fromJumpSquat ? ' · jump cancel' : '') + ' · frame ' + Math.round(f.attack.time * 60);
+    if (f.attack) return f.lastMove + (f.attack.fromWindup ? ' · from ' + moves[f.attack.fromWindup].label :
+      f.attack.fromJumpSquat ? ' · jump cancel' : '') + ' · frame ' + Math.round(f.attack.time * 60);
     if (f.smashCharge) return 'Charging ' + smashes[f.smashCharge.moveId].label + (f.smashCharge.fromJumpSquat ? ' · jump cancel' : '');
     if (f.shield) return 'Shield up';
     if (f.shieldDrop > 0) return 'Lowering shield';
@@ -2186,6 +2189,22 @@
     const state = e.outcome || e.phase;
     status.dataset.result = state;
     const pattern = world.footworkPractice.pattern;
+    if (pattern === 'cancelDash' || pattern === 'cancelTurn') {
+      const practice = world.footworkPractice, player = world.dogs[0], dash = pattern === 'cancelDash';
+      const aim = dash ? 'Up' : practice.dir > 0 ? 'Right' : 'Left';
+      if (state === 'cancelNow') {
+        status.textContent = moves[e.moveId].label + ' · windup';
+        $('recovery-tip').textContent = 'Press ' + aim + ' + Jump to switch to a rising aerial.' +
+          (practice.pauseOnWindup ? ' Or release Attack and tap it again to finish the ground swing.' : '');
+      } else {
+        status.textContent = {risingCatch:player.lastMove + ' · caught the hop',
+          backCatch:player.lastMove + ' · back air connected', otherHit:player.lastMove + ' · hit',
+          airMiss:'Aerial missed', groundMiss:'Ground swing missed'}[state];
+        $('recovery-tip').textContent = state === 'groundMiss' ? 'The rival cleared the swing. Retry and jump during the windup.' :
+          'Turn off Pause at windup and Half speed to practice at match speed. Switch sides to mirror the opening.';
+      }
+      return;
+    }
     if (pattern === 'angleHigh' || pattern === 'angleLow') {
       const move = world.dogs[0].lastMove;
       status.textContent = state === 'missedAngle' ? 'Miss · ' + (move || 'no swing') :
@@ -3007,14 +3026,17 @@
         'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
     } else if (footwork) {
       const practice = world.footworkPractice;
-      for (const id of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow'])
+      for (const id of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
         $('footwork-' + id).setAttribute('aria-pressed', String(practice.pattern === id));
       $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
       $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
+      $('footwork-pause').hidden = practice.pauseOnWindup === undefined;
+      $('footwork-pause').setAttribute('aria-pressed', String(!!practice.pauseOnWindup));
       $('footwork-status').dataset.result = 'ready';
       $('footwork-status').textContent = {
         brake: 'Brake at the chalk', pivot: 'Catch the chase', antiAir: 'Catch the landing',
         angleHigh: 'Tag the hop', angleLow: 'Clip the recovery',
+        cancelDash:'Catch the hop from a run', cancelTurn:'Turn away, then swing back',
         bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
       }[pattern];
       const discInput = player.kind === 'noodle' ? 'aim toward Clover and tap Attack' : 'tap Attack';
@@ -3022,6 +3044,10 @@
       const angleTip = 'Tap Attack to start the swing. Aim ' + diagonal +
         ' with Shift on keyboard, slide from the center dot on touch, or tilt the stick sideways with a little vertical aim. Repeat with level aim to compare.';
       message = {
+        cancelDash:'You’re already running. Hold ' + (practice.dir > 0 ? 'Right' : 'Left') +
+          ' and tap Attack for a dash attack. Immediately press Up + Jump to catch the rival above you.',
+        cancelTurn:'Tap ' + (practice.dir > 0 ? 'Left' : 'Right') + ' + Attack to start a tilt facing away. Immediately press ' +
+          (practice.dir > 0 ? 'Right' : 'Left') + ' + Jump to swing a back air toward the rival.',
         angleHigh: angleTip, angleLow: angleTip,
         antiAir: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk as the rival hops. Hold Up and tap Jump + Smash together. Hold Smash longer to compare.',
         brake: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Release forward for a beat, then press forward and tap Attack together. Compare that with holding forward and tapping Attack.',
@@ -3210,9 +3236,15 @@
     $('game').focus({ preventScroll: true });
   };
   $('footwork-training').onclick = () => drill('footwork', false, world.footworkPractice?.pattern || 'bait');
-  for (const pattern of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow'])
+  for (const pattern of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
     $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
   $('footwork-side').onclick = () => drill('footwork', false, world.footworkPractice.pattern, -world.footworkPractice.dir);
+  $('footwork-pause').onclick = () => {
+    const d = world.footworkPractice;
+    d.pauseOnWindup = !d.pauseOnWindup;
+    $('footwork-pause').setAttribute('aria-pressed', String(d.pauseOnWindup));
+    $('game').focus({preventScroll:true});
+  };
   $('footwork-slow').onclick = () => {
     const practice = world.footworkPractice;
     practice.slow = !practice.slow;
@@ -4515,6 +4547,12 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'noodle', stage:'picnic', fetch:false });
       drill('launch', false, 'spikeFloor', 1, 'impact');
+    }
+    else if (hash === '#training/attack-cancel') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'noodle', p2:'pip', stage:'nightmail', fetch:false });
+      drill('footwork', false, 'cancelDash');
     }
     else if (hash === '#training/angled-tilts') {
       menuScreen('match');

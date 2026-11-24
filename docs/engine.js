@@ -2318,11 +2318,27 @@
     }
     f.lastSmashPower = power;
   }
+  function cancelableWindup(f) {
+    if (f.ground < 0 || f.stun || f.grip || f.shield || f.floorAction || f.dodge ||
+        f.shieldStun || f.landingLag || f.clashRecoil || f.jumpSquat || f.smashCharge ||
+        f.impactLag || f.stockLift || (f.encounter && f.encounter.kind !== f.kind)) return null;
+    const a = f.attack;
+    if (a) {
+      if (!['jab','tilt','dash'].includes(a.name) || a.spotCounter || a.hitBeat >= 0 ||
+          a.connected || a.time > 2/60 + 1e-8 || a.time + 1e-8 >= a.start) return null;
+      return a.moveId;
+    }
+    // A held Attack tracks the jab or tilt's startup before release chooses it over a smash.
+    if (f.charge < 0 || f.charge > 2/60 + 1e-8) return null;
+    const id = f.kit.tilts[f.chargeDirection] || (!f.chainWindow && f.kit.ground[0]);
+    return id && f.charge + 1e-8 < moves[id].start ? id : null;
+  }
   function aerialStrike(f, command) {
     const side = command.airSide;
     f.face = command.facing;
     beginAttack(f, 'aerial', side === 'up' ? -1 : side === 'down' ? 1 : 0, 0, f.kit.air[side]);
     f.attack.airSide = side;
+    if (command.fromWindup) f.attack.fromWindup = command.fromWindup;
     if (f.attack.plunge) {
       f.fastFall = false;
       f.cutJump = false;
@@ -3754,12 +3770,13 @@
       if (report.outcome) lab.revision++;
     }
     resetFootworkPractice(pattern = 'bait', dir = 1, slow = true) {
+      const pauseOnWindup = this.footworkPractice?.pauseOnWindup ?? true;
       this.resetTraining();
       const originalDogs = this.dogs;
       const player = pattern === 'power' ? newFighter('pip', 0) : originalDogs[0];
       const kind = { bait: 'brisket', match: player.kind, power: 'brisket', disc: 'clover', brake: 'pip',
         pivot: player.kind, antiAir: originalDogs[1].kind, angleHigh: originalDogs[1].kind,
-        angleLow: originalDogs[1].kind }[pattern];
+        angleLow: originalDogs[1].kind, cancelDash: originalDogs[1].kind, cancelTurn: originalDogs[1].kind }[pattern];
       const dummy = newFighter(kind, 1);
       this.dogs = [player, dummy];
       const floor = this.terrain[0], center = (floor.x1 + floor.x2) / 2;
@@ -3773,6 +3790,20 @@
       dummy.ground = player.ground = 0;
       dummy.y = player.y = floor.y;
       dummy.damage = this.trainingDamage;
+      if (pattern === 'cancelDash' || pattern === 'cancelTurn') {
+        const running = pattern === 'cancelDash';
+        player.x = mark = center - dir * 55;
+        dummy.x = player.x + dir * (running ? 55 : 58);
+        dummy.y = floor.y - (running ? 100 : 45);
+        dummy.vy = running ? -70 : -95;
+        dummy.ground = -1;
+        if (running) {
+          Object.assign(player, {vx:dir * player.stats.speed, sprintDir:dir, stickTicks:3,
+            prev:{...idleInput, x:dir, grabX:dir}});
+          moveOnFoot(player, dir, 1/60);
+          player.run.age = .4;
+        }
+      }
       if (pattern === 'angleHigh' || pattern === 'angleLow') {
         const low = pattern === 'angleLow';
         const move = moves[player.kit.tilts.forward];
@@ -3804,9 +3835,16 @@
       const sendAt = pattern === 'disc' ? discBeat[player.kind] : pattern === 'power' ? 74 : 75;
       this.footworkPractice = { phase: 'ready', pattern, dir, slow: pattern !== 'bait' && slow,
         mark, originalDogs, tell: 0, beat: 0, sent: false, sendAt, outcome: '' };
+      if (pattern === 'cancelDash' || pattern === 'cancelTurn') this.footworkPractice.pauseOnWindup = pauseOnWindup;
     }
     footworkInput(dt) {
       const drill = this.footworkPractice, [player, dummy] = this.dogs;
+      if (drill.pauseOnWindup !== undefined) {
+        if (player.attack?.fromWindup) drill.aerial = true;
+        if (drill.phase !== 'done' && (drill.tell += dt) >= .75)
+          this.finishFootwork(drill.aerial ? 'airMiss' : 'groundMiss');
+        return idleInput;
+      }
       if (drill.pattern === 'angleHigh' || drill.pattern === 'angleLow') {
         if (drill.phase === 'swing' && (drill.tell += dt) >= .45) this.finishFootwork('missedAngle');
         return idleInput;
@@ -3872,6 +3910,14 @@
     gradeFootwork(target) {
       const drill = this.footworkPractice;
       if (!drill || drill.phase === 'done') return;
+      if (drill.pauseOnWindup !== undefined) {
+        if (target.index !== 1) return;
+        const player = this.dogs[0], a = player.attack, dash = drill.pattern === 'cancelDash';
+        const route = a?.fromWindup === (dash ? player.kit.dashAttack : player.kit.tilts.forward) &&
+          a.airSide === (dash ? 'up' : 'back');
+        this.finishFootwork(route ? (dash ? 'risingCatch' : 'backCatch') : 'otherHit');
+        return;
+      }
       if (drill.pattern === 'angleHigh' || drill.pattern === 'angleLow') {
         const swing = this.dogs[0].attack;
         if (target.index === 1) this.finishFootwork(swing?.tiltAngle === (drill.pattern === 'angleLow' ? 1 : -1)
@@ -4678,6 +4724,31 @@
         this.freshnessPractice.waiting = false;
       }
       const footwork = this.footworkPractice;
+      if (footwork && footwork.pauseOnWindup !== undefined) {
+        const attack = input1.attack || input1.tapped?.attack || input1.aimStick || input1.tapped?.aimStick;
+        if (footwork.phase === 'ready') {
+          if (!attack) return;
+          footwork.phase = 'starting';
+          footwork.attackHeld = !!input1.attack;
+        } else if (footwork.phase === 'starting' || footwork.phase === 'cancelNow') {
+          if (footwork.phase === 'starting' && cancelableWindup(this.dogs[0])) {
+            footwork.phase = 'cancelNow';
+            this.emit('footworkCue', {f:this.dogs[0], phase:'cancelNow', moveId:cancelableWindup(this.dogs[0])});
+          }
+          if (footwork.phase === 'cancelNow' && footwork.pauseOnWindup &&
+              !(input1.jump || input1.shortHop || input1.tapped?.jump || input1.tapped?.shortHop)) {
+            const continueSwing = input1.tapped?.attack || (input1.attack && !footwork.attackHeld);
+            footwork.attackHeld = !!input1.attack;
+            if (!continueSwing) return;
+            footwork.consumeAttack = true;
+          }
+          footwork.phase = 'swing';
+        }
+        if (footwork.consumeAttack) {
+          footwork.consumeAttack = !!input1.attack;
+          input1 = {...input1, attack:false, tapped:{...input1.tapped,attack:false}};
+        }
+      }
       if (footwork?.phase === 'ready' && (footwork.pattern === 'angleHigh' || footwork.pattern === 'angleLow')) {
         if (!(input1.attack || input1.tapped?.attack || input1.aimStick || input1.tapped?.aimStick)) return;
         footwork.phase = 'swing';
@@ -5353,6 +5424,18 @@
         if (pressed('special') && f.command?.airSide === 'up' && f.command.type === 'special' && !f.usedUp)
           f.tumble.cancel = f.command;
         else if (pressed('jump') && f.jumps > 0) f.tumble.cancel = 'jump';
+      }
+      if ((pressed('jump') || pressed('shortHop')) && !input.shield && !f.guardBuffer &&
+          (!f.command || f.command.type === 'attack')) {
+        const source = cancelableWindup(f);
+        if (source) {
+          const airSide = button === 'aimStick' ? f.command.airSide : airDirection(input.x, input.y, f.face);
+          f.attack = f.run = null;
+          f.chainWindow = f.chainNext = 0;
+          cancelCharge(f);
+          f.command = {type:'attack', airOnly:true, airSide, facing:f.face, face:0, life:inputWindow,
+            heldFor:0, released:true, fromWindup:source};
+        }
       }
       if (f.jumpSquat) bufferSquatInput(f, input);
     }
@@ -6227,7 +6310,11 @@
               releaseSmash(f);
               this.emit('smashRelease', { f });
             } else this.emit('smashCharge', { f });
-          } else if (f.ground < 0) aerialStrike(f, command);
+          } else if (f.ground < 0) {
+            aerialStrike(f, command);
+            if (command.fromWindup) this.emit('attackCancel', {f, source:command.fromWindup,
+              moveId:f.attack.moveId, face:f.face, point:{x:f.x,y:f.y}});
+          }
           else if (command.runFace) {
             f.face = command.runFace;
             beginAttack(f, 'dash', 0, 0, f.kit.dashAttack);
@@ -8727,6 +8814,32 @@
       return close && this.random() < .55 ? { ...idleInput, tapped:{attack:true} } :
         { ...idleInput, aimStick:true, tiltMode:true, smashX:dir };
     }
+    attackCancelInput(f, foe) {
+      if (foe.ground >= 0 || foe.ledge || foe.airDodge || foe.grip || protectionTime(foe) ||
+          f.guardBuffer || f.command) return null;
+      const source = cancelableWindup(f);
+      if (!source) return null;
+      const floor = this.terrain[f.ground], height = bodyHeight(foe);
+      const reaches = (move, t, rise) => {
+        const x = f.x + f.vx*t;
+        if (x < floor.x1 + f.stats.width || x > floor.x2 - f.stats.width) return false;
+        const feet = foe.y + foe.vy*t + 770*foe.kit.gravity*t*t;
+        const [bx,by,rx,ry] = move.box;
+        return Math.abs((foe.x + foe.vx*t - x)*f.face - bx) <= rx + foe.stats.width - 3 &&
+          Math.abs(feet - height*.52 - (f.y + rise + by)) <= ry + height*.4 - 3;
+      };
+      const ground = f.attack || moves[source], elapsed = f.attack?.time ?? f.charge;
+      for (let t = ground.start - elapsed; t < ground.start + ground.active - elapsed - 1e-8; t += 1/60) {
+        if (reaches(ground,t,0)) return null;
+      }
+      const behind = (foe.x - f.x)*f.face < -8;
+      const air = moves[f.kit.air[behind ? 'back' : 'up']], t = jumpSquatTime + air.start;
+      const rise = -f.stats.jump*.60*air.start + 770*f.kit.gravity*air.start*air.start;
+      if (this.floorAhead(foe,t) >= 0 || !reaches(air,t,rise)) return null;
+      this.bot.hop = null;
+      this.bot.timer = .25;
+      return {...idleInput, x:behind ? -f.face : 0, y:behind ? 0 : -1, jump:true, tapped:{jump:true}};
+    }
     angledTiltInput(f, foe) {
       if (f.ground < 0 || f.run || f.attack || f.landingLag || f.stun || f.grip || f.shield || f.floorAction ||
           f.command || f.charge >= 0 || foe.ground >= 0 || foe.ledge || protectionTime(foe)) return null;
@@ -8990,7 +9103,7 @@
           return idleInput;
         }
         const answer = this.rivalLedgeReturn(f, foe) || this.readShieldEscape(f, foe) || this.rivalJumpIn(f, foe, dt) ||
-          this.runningAntiAir(f, foe) || this.angledTiltInput(f, foe);
+          this.attackCancelInput(f, foe) || this.runningAntiAir(f, foe) || this.angledTiltInput(f, foe);
         if (answer) return answer;
         // Space a quick forward tilt at the shield's rim. In close the normal grab mixup still applies.
         if (foe.shield && f.ground >= 0 && f.ground === foe.ground && !f.attack && !f.stun && !f.grip &&
