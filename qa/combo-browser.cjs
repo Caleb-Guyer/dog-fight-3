@@ -863,6 +863,26 @@ async function testRage(page, mobile) {
   console.log((mobile?'Touch':'Keyboard')+' passed a landing at zero rage and a top KO at max rage with the same fully charged smash.');
 }
 
+async function testHitstunCancel(page,mobile) {
+  await page.goto(root+'?juggle#training/breakaway');
+  const status=page.locator('#launch-status'),{hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for(const [i,[key,outcome]] of [['jump','caught'],['attack','counter'],['shield','evaded'],
+      ['shield','caughtDodge'],['jump','clear']].entries()){
+    if(i===2)await press('launch-side');
+    else if(i===3)await press('breakaway-late');
+    else if(i>0)await press('launch-breakaway');
+    await hold(['attack']); await page.clock.runFor(70); await hold([]); await waitFor('window');
+    await page.clock.runFor(500);assert.equal(await status.getAttribute('data-result'),'window');
+    await hold([key]);await waitFor(outcome);await hold([]);
+    if(key!=='jump')assert.match(await status.textContent(),/2f early/);
+  }
+  await press('breakaway-late');await press('breakaway-pause');await press('launch-slow');
+  await hold(['attack']);await page.clock.runFor(34);await hold([]);
+  await waitFor('caught');
+  await press('reset-training');assert(await status.isHidden());
+  console.log((mobile?'Touch':'Keyboard')+' passed Orbit, neutral dodge, the delayed punish and real-time juggle.');
+}
+
 async function testFinalHit(page,mobile) {
   const size=page.viewportSize();
   if(!mobile) await page.setViewportSize({width:1920,height:720});
@@ -1535,6 +1555,7 @@ async function testDevice(browser, mobile) {
     await testAttackCancel(page, mobile);
     await testBlastRadar(page, mobile);
     await testFinalHit(page, mobile);
+    await testHitstunCancel(page, mobile);
     await testNightMail(page, mobile);
     await testJumpIns(page, mobile);
     await testLedgeReturn(page, mobile);
