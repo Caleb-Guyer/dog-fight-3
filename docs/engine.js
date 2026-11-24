@@ -68,6 +68,7 @@
     laundry: {
       name: 'Laundry Line',
       description: 'Two rooftops and a basket that crosses the gap.',
+      movingPlatform: 2,
       spawn: [355, 852],
     },
     bandstand: {
@@ -78,6 +79,12 @@
     nightmail: {
       name: 'Night Mail',
       description: 'One long mail-car roof. Land on the deck or recover along its sides.',
+      spawn: [397, 803],
+    },
+    canal: {
+      name: 'Canal Lock',
+      description: 'Ride the cable ferry out past either end of the lock gate.',
+      movingPlatform: 1,
       spawn: [397, 803],
     },
   };
@@ -1921,6 +1928,10 @@
   const verticalAim = (side) => (side === 'up' ? -1 : side === 'down' ? 1 : 0);
   const platform = (x1, x2, y, thin = false) => ({ x1, x2, y, thin });
   function platforms(stage, time) {
+    if (stage === 'canal') {
+      const center = 600 - 444 * Math.sin(time * Math.PI / 4.8);
+      return [platform(160, 1040, 455), platform(center - 96, center + 96, 365, true)];
+    }
     if (stage === 'nightmail') return [platform(160, 1040, 455)];
     if (stage === 'picnic')
       return [platform(160, 1040, 455), platform(315, 508, 325, true), platform(705, 898, 325, true)];
@@ -1944,6 +1955,7 @@
             [3, 15, 18],
             [9, 18, 225],
           ]
+        : stage === 'canal' ? [[0, 0, 15], [6, 15, 102], [15, 102, 126]]
         : stage === 'nightmail' ? [[0, 0, 12], [6, 12, 96], [18, 96, 114]]
         : stage === 'bandstand' ? [[0, 0, 15], [3, 15, 24], [9, 24, 36], [18, 36, 45]] : [
             [0, 0, 14],
@@ -2671,9 +2683,13 @@
       const x = this.terrain.filter(p => !p.thin).length > 1 ? middle :
         clamp(middle + (lane ? 62 : -62), floor.x1 + f.stats.width, floor.x2 - f.stats.width);
       let landing = ground;
+      let clearance = floor.y - 146;
       for (const [i, p] of this.terrain.entries())
-        if (x >= p.x1 && x <= p.x2 && p.y < this.terrain[landing].y) landing = i;
-      const y = Math.min(floor.y - 146, this.terrain[landing].y - 78);
+        if (x >= p.x1 && x <= p.x2) {
+          clearance = Math.min(clearance, p.y - 78);
+          if (p.y < this.terrain[landing].y && (this.layout || i !== arenas[this.stage]?.movingPlatform)) landing = i;
+        }
+      const y = clearance;
       f.stockLift = { x, y, landing, time: 0, ready: false, exit: null };
       f.x = x; f.y = y - 80;
       f.vx = f.vy = f.invuln = f.stockGuard = 0;
@@ -2757,7 +2773,7 @@
         this.terrain = platforms(this.stage, this.time);
         this.practiceHomeStage = null;
       }
-      if (needsPlatforms && !this.terrain.some(p => p.thin)) {
+      if (needsPlatforms && this.terrain.length < 3) {
         this.practiceHomeStage = this.stage;
         this.stage = 'picnic';
         this.terrain = platforms(this.stage, this.time);
@@ -3008,8 +3024,8 @@
         bandstand: { pip: 854.4, brisket: 938, noodle: 792, clover: 871 },
       };
       const move = throws[moveId];
-      // The mail car and picnic table have the same lip position and blast lines.
-      const launchSpeed = speeds[this.stage === 'nightmail' ? 'picnic' : this.stage][rival.kind];
+      // The canal gate and mail car share the picnic table's lip and blast lines.
+      const launchSpeed = (speeds[this.stage] ?? speeds.picnic)[rival.kind];
       const percent = Math.ceil((launchSpeed * dog.stats.weight - move.base) / move.growth - move.dmg);
       const baseline = clamp(Math.round(damage ?? percent), 0, 200);
       Object.assign(rival, { x: lip - dir * (forehand ? 64 : 14), y: floor.y, face, ground });
@@ -3070,6 +3086,11 @@
     }
     resetStockPractice(pattern = 'stockReturn', dir = 1, slow = true) {
       this.resetTraining();
+      if (this.stage === 'canal') {
+        // Start the ferry clear of both return lanes for the scripted landing grab.
+        this.time = 1;
+        this.terrain = platforms(this.stage, this.time);
+      }
       const slot = pattern === 'stockCatch' ? 1 : 0, lane = dir > 0 ? slot : 1 - slot;
       const dog = this.dogs[slot], guard = this.dogs[1 - slot];
       this.stockPractice = { pattern, dir, slow, slot, phase: 'ready', after: 0, frames: 0, option: '',
@@ -3161,7 +3182,19 @@
       else if (f.ledge || f.ground >= 0) this.finishMeteorPractice(d.cancel ? 'saved' : 'returned');
     }
     resetPlatformPractice(pattern = 'below', slow = true) {
-      this.resetTraining(false, false, pattern !== 'hold' && pattern !== 'shield-drop');
+      this.resetTraining(false, false, pattern === 'top' || pattern === 'below');
+      if (pattern === 'ferry') {
+        const originalStage = this.stage;
+        this.stage = 'canal';
+        this.time = 0;
+        this.terrain = platforms(this.stage, this.time);
+        this.bot.ascent = null;
+        const [rider, challenger] = this.dogs, [gate, ferry] = this.terrain;
+        Object.assign(rider, { x:ferry.x1 + 80, y:ferry.y, ground:1, face:-1 });
+        Object.assign(challenger, { x:370, y:gate.y, ground:0, face:1 });
+        this.platformPractice = { pattern, defend:true, platform:1, originalStage, slow, phase:'ready', outcome:'' };
+        return;
+      }
       if (pattern === 'hold' || pattern === 'shield-drop') {
         const originalStage = this.stage;
         this.stage = 'bandstand';
@@ -3176,7 +3209,7 @@
         }
         Object.assign(guard, { x: top.x2 - 46, y: top.y, ground: 3, face: 1 });
         Object.assign(challenger, { x: arenas.bandstand.spawn[1], y: this.terrain[0].y, ground: 0, face: -1 });
-        this.platformPractice = { pattern, platform: 3, originalStage, mark: guard.x, phase: 'ready', outcome: '' };
+        this.platformPractice = { pattern, defend:true, platform: 3, originalStage, mark: guard.x, phase: 'ready', outcome: '' };
         return;
       }
       const onTop = pattern === 'top';
@@ -3211,9 +3244,9 @@
           this.finishPlatformPractice(drill.phase === 'blocked' ? 'held' : 'missed');
         return;
       }
-      if (drill.pattern === 'hold') {
+      if (drill.defend) {
         const rival = this.dogs[1];
-        if (drill.phase === 'climbing' && rival.ground === 2) {
+        if (drill.pattern === 'hold' && drill.phase === 'climbing' && rival.ground === 2) {
           drill.phase = 'wing';
           this.emit('platformClimb', { f: rival });
         }
@@ -4582,7 +4615,7 @@
         path.ticks = n;
         if (points) points.push({x:path.x, y:path.y});
         path.drop = Math.max(0, path.drop - dt);
-        const terrain = !this.layout && this.stage === 'laundry' ? platforms(this.stage, time) : this.terrain;
+        const terrain = !this.layout && arenas[this.stage]?.movingPlatform != null ? platforms(this.stage, time) : this.terrain;
         if (this.wallContact(f, x, y, path.x, path.y)) {
           path.contact = 'wall';
           path.hardImpact = Math.abs(vx) >= maxTechSpeed;
@@ -4995,7 +5028,7 @@
         if (!input1.shield) return;
         guardTop.phase = 'approach';
       }
-      if (guardTop?.pattern === 'hold') {
+      if (guardTop?.defend) {
         if (guardTop.phase === 'ready') {
           if (!input1.attack && !input1.tapped?.attack) return;
           guardTop.phase = 'climbing';
@@ -5185,10 +5218,11 @@
         }
         return drill.swung && rival.ground >= 0 ? { ...idleInput, shield: true } : idleInput;
       }
-      if (this.platformPractice?.pattern === 'hold') {
+      if (this.platformPractice?.defend) {
         const drill = this.platformPractice;
         if (drill.phase === 'done') return idleInput;
-        return this.cpuAscentInput(this.dogs[1], { ground: drill.platform, x: drill.mark }, this.dogs[0]) || idleInput;
+        const mark = drill.mark ?? this.terrain[drill.platform].x1 + 80;
+        return this.cpuAscentInput(this.dogs[1], { ground: drill.platform, x: mark }, this.dogs[0]) || idleInput;
       }
       if (this.wavePractice) return this.wavePracticeInput();
       if (this.freshnessPractice) return this.freshnessPractice.guard ? { ...idleInput, shield: true } : idleInput;
@@ -5555,7 +5589,7 @@
         const t = timeToFloor(f, height);
         if (t >= soonest) continue;
         const x = f.x + f.vx * t;
-        const atContact = p.thin && !this.layout && this.stage === 'laundry' ? platforms(this.stage, this.time + t)[i] : p;
+        const atContact = !this.layout && i === arenas[this.stage]?.movingPlatform ? platforms(this.stage, this.time + t)[i] : p;
         if (x < atContact.x1 - 6 || x > atContact.x2 + 6) continue;
         soonest = t;
         result = i;
@@ -5573,8 +5607,9 @@
         path.x += vx*dt;
         path.y += vy*dt;
         path.drop = Math.max(0,path.drop-dt);
-        const terrain = i && !this.layout && this.stage === 'laundry' ? platforms(this.stage,this.time+i*dt) : this.terrain;
-        if (this.landingSurface(path,oldY,path.x,0,terrain) >= 0) return true;
+        const time = this.time + i * dt;
+        const terrain = i && !this.layout && arenas[this.stage]?.movingPlatform != null ? platforms(this.stage,time) : this.terrain;
+        if (this.landingSurface(path,oldY,path.x-vx*dt,dt,terrain,time) >= 0) return true;
       }
       return false;
     }
@@ -6749,7 +6784,7 @@
             (landing >= 0 && p.y >= terrain[landing].y)) continue;
         const t = dt ? floorCrossing(oldY, f.y, p.y) : 1;
         const x = oldX + (f.x - oldX) * t;
-        const surface = dt && !this.layout && this.stage === 'laundry' && i === 2
+        const surface = dt && !this.layout && i === arenas[this.stage]?.movingPlatform
           ? platforms(this.stage, time - (1 - t) * dt)[i] : p;
         if (x >= surface.x1 - 5 && x <= surface.x2 + 5) landing = i;
       }
@@ -7724,7 +7759,7 @@
       if (target.index === 0) this.finishShieldPractice('parry');
       if (this.escapePractice?.spacing === 'counter' && this.escapePractice.phase === 'swing' && target.index === 0)
         this.finishEscapePractice('parriedKick');
-      if (target.index === 0 && (this.platformPractice?.pattern === 'hold' || this.platformPractice?.pattern === 'shield-drop'))
+      if (target.index === 0 && (this.platformPractice?.defend || this.platformPractice?.pattern === 'shield-drop'))
         this.finishPlatformPractice('parried');
     }
     block(target, owner, damage, name, face, point, projectile, moveId, use, power) {
@@ -7773,7 +7808,7 @@
         this.finishEscapePractice('shieldedKick');
       if (!broken && this.escapePractice?.spacing === 'break' && this.escapePractice.contact === 'plant' && target.index === 0)
         this.finishEscapePractice('blockedReply');
-      if (this.platformPractice?.pattern === 'hold' && target.index === 0 && !broken) this.finishPlatformPractice('guarded', moveId);
+      if (this.platformPractice?.defend && target.index === 0 && !broken) this.finishPlatformPractice('guarded', moveId);
       if (this.platformPractice?.pattern === 'shield-drop' && !broken) {
         const drill = this.platformPractice;
         if (target.index === 0 && drill.phase === 'approach' && moveId === owner.kit.air.up) {
@@ -8101,10 +8136,10 @@
           this.finishClimbPractice(jab ? (drill.role === 'trap' ? 'timed' : 'caught') : 'other');
         }
       }
-      if (this.platformPractice?.pattern === 'hold') {
+      if (this.platformPractice?.defend) {
         const drill = this.platformPractice;
         if (owner.index === 1) this.finishPlatformPractice('tagged', moveId);
-        else if (drill.phase === 'wing' && target.y < this.terrain[2].y - 3) this.finishPlatformPractice('intercept', moveId);
+        else if (drill.pattern === 'ferry' || (drill.phase === 'wing' && target.y < this.terrain[2].y - 3)) this.finishPlatformPractice('intercept', moveId);
         else this.finishPlatformPractice('low', moveId);
       } else if (this.platformPractice?.pattern === 'shield-drop') {
         const drill = this.platformPractice;
@@ -8616,13 +8651,13 @@
       let previous = 0;
       for (let frame = kit.travel[0]; frame <= kit.travel[1]; frame++) {
         const travel = diagonal * kit.distance * dodgeProgress(kit, frame / 60);
-        const at = this.stage === 'laundry' && floor.thin && !this.layout ?
+        const at = platform === arenas[this.stage]?.movingPlatform && !this.layout ?
           platforms(this.stage, this.time + frame / 60)[platform] : floor;
         if (f.y + travel >= at.y) {
           const contact = f.x + dir * travel - at.x1;
           const span = at.x2 - at.x1;
           if (contact < 3 || contact > span - 3) return null;
-          // Work in platform-local coordinates, including for the moving laundry basket.
+          // Measure the slide and the defender's position relative to the same deck.
           let stop = contact, velocity = (travel - previous) * 60 * slideCarry;
           for (let tick = 1; tick < kit.directional[3]; tick++) {
             velocity = Math.max(0, velocity - f.kit.footwork.traction * slideFriction / 60);
@@ -8695,18 +8730,24 @@
         const from = floors[f.ground];
         if (!from || f.attack || f.charge >= 0) return null;
         const peak = f.stats.jump ** 2 / (2 * 1540 * f.kit.gravity) - f.stats.jump / 120;
-        if (from.y - dest.y <= peak) return null;
-        // Score both wings by the ground approach and the horizontal gap to the next tier.
-        let step = -1, best = Infinity;
-        for (const [i, p] of floors.entries()) {
-          if (!p.thin || p.y >= from.y || from.y - p.y > peak || p.y <= dest.y || p.y - dest.y > peak) continue;
-          const gap = Math.max(0, dest.x1 - p.x2, p.x1 - dest.x2);
-          if (gap > f.kit.airDrift.speed * f.stats.jump / (1540 * f.kit.gravity)) continue;
-          const cost = Math.abs(f.x - clamp(f.x, p.x1 + 18, p.x2 - 18)) +
-            Math.abs(goal.x - clamp(goal.x, p.x1 + 18, p.x2 - 18)) * 0.5;
-          if (cost < best) { best = cost; step = i; }
+        const moving = !this.layout && goal.ground === arenas[this.stage]?.movingPlatform;
+        let step = goal.ground;
+        if (from.y - dest.y <= peak) {
+          if (!moving) return null;
+        } else {
+          // Score both wings by the ground approach and the horizontal gap to the next tier.
+          step = -1;
+          let best = Infinity;
+          for (const [i, p] of floors.entries()) {
+            if (!p.thin || p.y >= from.y || from.y - p.y > peak || p.y <= dest.y || p.y - dest.y > peak) continue;
+            const gap = Math.max(0, dest.x1 - p.x2, p.x1 - dest.x2);
+            if (gap > f.kit.airDrift.speed * f.stats.jump / (1540 * f.kit.gravity)) continue;
+            const cost = Math.abs(f.x - clamp(f.x, p.x1 + 18, p.x2 - 18)) +
+              Math.abs(goal.x - clamp(goal.x, p.x1 + 18, p.x2 - 18)) * 0.5;
+            if (cost < best) { best = cost; step = i; }
+          }
+          if (step < 0) return null;
         }
-        if (step < 0) return null;
         route = brain.ascent = { goal: goal.ground, step, from: f.ground, swung: false };
         brain.hop = brain.backAir = null;
       }
@@ -8718,7 +8759,16 @@
       if (f.ground >= 0 && f.ground !== route.from) { brain.ascent = null; return null; }
       const to = floors[route.step], from = floors[route.from];
       const inset = route.step === route.goal ? 24 : 50;
-      const landing = clamp(goal.x, to.x1 + inset, to.x2 - inset);
+      let landing = clamp(goal.x, to.x1 + inset, to.x2 - inset);
+      if (!this.layout && route.step === arenas[this.stage]?.movingPlatform) {
+        // Lead the ferry by this dog's remaining flight to its descending crossing.
+        const airborne = f.ground < 0, gravity = 1540 * f.kit.gravity;
+        const vy = airborne ? f.vy : -f.stats.jump;
+        const disc = vy * vy + 2 * gravity * (to.y - f.y);
+        const flight = Math.max(0, (Math.sqrt(Math.max(0, disc)) - vy) / gravity);
+        const squat = airborne ? 0 : Math.max(0, jumpSquatTime - (f.jumpSquat?.time || 0));
+        landing += platforms(this.stage, this.time + squat + flight)[route.step].x1 - to.x1;
+      }
       const takeoff = clamp(landing, from.x1 + 18, from.x2 - 18);
       if (f.ground >= 0 && !f.jumpSquat) {
         if (route.settle > 0) { route.settle--; return idleInput; }
