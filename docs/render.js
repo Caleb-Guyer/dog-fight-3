@@ -2317,6 +2317,22 @@
       window.ArenaArt.draw(ctx, world.stage, world.time, {
         left, top, right: left + 2 * halfW, bottom: top + 2 * halfH,
       });
+      if (world.suddenDeath) {
+        const inset = world.blastInset();
+        for (const dir of [1,-1]) {
+          const line = dir === 1 ? -115 + inset : world.stageWidth + 115 - inset;
+          const outer = dir === 1 ? left : left + 2*halfW;
+          if ((line - outer)*dir < 0) continue;
+          ctx.fillStyle = 'rgba(146, 35, 42, .43)';
+          ctx.fillRect(outer, top, line - outer, halfH * 2);
+          ctx.fillStyle = '#3c2431';
+          ctx.fillRect(line-2, top, 5, halfH*2);
+          for (let y=Math.floor(top/26)*26; y<top+halfH*2; y+=26) {
+            pixelLine(ctx, line-dir*5, y, line, y+5, gold, 3, 2);
+            pixelLine(ctx, line, y+5, line-dir*5, y+10, gold, 3, 2);
+          }
+        }
+      }
       if (world.wavePractice) {
         const d = world.wavePractice, floor = world.terrain[d.platform], x = floor.x1 + d.start;
         const forward = d.pattern === 'back' ? -d.dir : d.dir, tip = x + forward * 21, y = floor.y + 5;
