@@ -194,6 +194,11 @@
   }
   const techWindow = 11 / 60;
   const techLockout = 28 / 60;
+  const maxTechSpeed = 900;
+  // Gravity alone cannot turn a fall into an untechable spike.
+  function floorImpactSpeed(vy, downLaunch, time) {
+    return Math.min(vy, (downLaunch || 0) * Math.pow(0.68, time));
+  }
   const shieldDropTime = 10 / 60;
   const parryWindow = 5 / 60;
   const shieldGrabPenalty = 4 / 60;
@@ -3095,7 +3100,8 @@
         else if (d.time > 0.6) this.finishMeteorPractice('avoided');
       } else if (f.floorAction?.type === 'tech' || f.floorAction?.type === 'techRoll')
         this.finishMeteorPractice(f.floorAction.type);
-      else if (f.tumble && !f.tumble.meteor && f.vy < 0 && d.pattern === 'spikeFloor') this.finishMeteorPractice('bounce');
+      else if (f.tumble && !f.tumble.meteor && f.vy < 0 && d.pattern === 'spikeFloor')
+        this.finishMeteorPractice(d.hardSpeed ? 'hardImpact' : 'bounce');
       else if (f.ledge || f.ground >= 0) this.finishMeteorPractice(d.cancel ? 'saved' : 'returned');
     }
     resetPlatformPractice(pattern = 'below', slow = true) {
@@ -3844,7 +3850,7 @@
       drill.outcome = outcome;
       this.emit('footworkResult', { f: this.dogs[0], outcome, remaining });
     }
-    resetWallPractice(side = 'left', runner = '') {
+    resetWallPractice(side = 'left', runner = '', heavy = false) {
       this.resetTraining();
       const original = { stage: this.stage, dogs: this.dogs };
       this.stage = 'laundry';
@@ -3865,7 +3871,7 @@
       }
       this.dogs = [newFighter('noodle', 0), newFighter('pip', 1)];
       const [noodle, pip] = this.dogs;
-      Object.assign(noodle, { x: lip - inward * 58, y: roof.y + 121, face: inward, damage: 90, jumps: 1 });
+      Object.assign(noodle, { x: lip - inward * 58, y: roof.y + 121, face: inward, damage: heavy ? 185 : 90, jumps: 1 });
       Object.assign(pip, {
         x: lip - inward * 106,
         y: roof.y + 121,
@@ -3873,7 +3879,7 @@
         jumps: 1,
         damage: this.trainingDamage,
       });
-      this.wallPractice = { phase: 'ready', time: 0, side, inward, swung: false, outcome: '', original };
+      this.wallPractice = { phase: 'ready', time: 0, side, inward, heavy, swung: false, outcome: '', original };
     }
     finishWallReturn(f, route, platform) {
       const d = this.wallPractice;
@@ -4410,6 +4416,7 @@
     }
     projectLaunch(f, vx, vy, points) {
       const dt = 1 / 60, drag = Math.pow(0.68, dt);
+      const downLaunch = f.tumble?.pending ? Math.max(0, vy) : f.tumble?.downLaunch;
       const stop = f.tumble?.meteor && (f.jumps || !f.usedUp)
         ? Math.min(f.stun, moves[f.tumble.meteor].meteor * dt) : f.stun;
       const path = { x: f.x, y: f.y, ticks: 0, zone: '', contact:'', drop: f.drop, dropPlatform: f.dropPlatform };
@@ -4424,9 +4431,14 @@
         if (points) points.push({x:path.x, y:path.y});
         path.drop = Math.max(0, path.drop - dt);
         const terrain = !this.layout && this.stage === 'laundry' ? platforms(this.stage, time) : this.terrain;
-        if (this.wallContact(f, x, y, path.x, path.y)) { path.contact = 'wall'; break; }
+        if (this.wallContact(f, x, y, path.x, path.y)) {
+          path.contact = 'wall';
+          path.hardImpact = Math.abs(vx) >= maxTechSpeed;
+          break;
+        }
         if (vy >= 0 && this.landingSurface(path, y, x, f.tumble?.meteor ? dt : 0, terrain, time) >= 0) {
           path.contact = 'floor';
+          path.hardImpact = !f.throwBounce && floorImpactSpeed(vy, downLaunch, (f.tumble?.time || 0) + n * dt) >= maxTechSpeed;
           break;
         }
         path.zone = blastZone(path.x, path.y, this.stageWidth, this.blastInset(path.ticks));
@@ -4443,11 +4455,13 @@
         return this.projectLaunch(f, v.x, v.y);
       };
       const usual = forecast(normal);
-      if (!usual.zone && margin(usual) >= 80) return normal;
+      const readImpact = this.cpuLevel === 'rival';
+      if (!usual.zone && margin(usual) >= 80 && !(readImpact && usual.hardImpact)) return normal;
       const floors = this.terrain.filter(p => !p.thin);
       const deck = floors.reduce((best, p) => Math.abs(f.x - clamp(f.x, p.x1, p.x2)) <
         Math.abs(f.x - clamp(f.x, best.x1, best.x2)) ? p : best);
-      const score = p => p.zone ? -1000 + p.ticks : margin(p) - Math.max(0, p.y - deck.y) * 0.35;
+      const score = p => p.zone ? -10000 + p.ticks : margin(p) - Math.max(0, p.y - deck.y) * 0.35 -
+        (readImpact && p.hardImpact ? 1000 : 0);
       let best = normal, bestScore = score(usual);
       for (const x of [home, 0, -home]) for (const y of [-1, 0, 1]) {
         const value = score(forecast({ x, y }));
@@ -4462,6 +4476,7 @@
       f.vx = v.x;
       f.vy = v.y;
       f.tumble.pending = false;
+      f.tumble.downLaunch = Math.max(0, v.y);
       if (this.survivalPractice && f.index === 0) {
         this.survivalPractice.angle = v.angle;
         this.survivalPractice.scale = v.scale;
@@ -5394,7 +5409,10 @@
         const nextX = x + vx * dt,
           nextY = y + vy * dt;
         const contact = this.wallContact(f, x, y, nextX, nextY);
-        if (contact) return contact;
+        if (contact) {
+          contact.hard = !free && Math.abs(vx) >= maxTechSpeed;
+          return contact;
+        }
         x = nextX;
         y = nextY;
       }
@@ -5404,10 +5422,13 @@
       const { wall, dir, feet } = contact;
       f.x = contact.x;
       f.y = feet;
-      const type = f.techBuffer > 1e-8 ? (jump ? 'wallTechJump' : 'wallTech') : 'wallBounce';
+      const speed = Math.abs(f.vx), hard = f.stun > 0 && speed >= maxTechSpeed;
+      const type = !hard && f.techBuffer > 1e-8 ? (jump ? 'wallTechJump' : 'wallTech') : 'wallBounce';
       if (type === 'wallBounce') {
+        f.techBuffer = 0;
         f.vx = -f.vx * 0.72;
         f.vy *= 0.82;
+        if (f.tumble.downLaunch) f.tumble.downLaunch *= 0.82;
       } else {
         this.clearTumble(f, jump ? 'Wall-tech jump' : 'Wall tech');
         f.reaction = f.command = f.guardAim = f.throwBounce = null;
@@ -5422,9 +5443,10 @@
       f.wallAction = { type, time: 0, duration: (type === 'wallBounce' ? 6 : jump ? 8 : 10) / 60, dir, wall };
       if (this.wallPractice?.phase === 'flight' && f.index === 0) {
         this.wallPractice.phase = 'done';
-        this.wallPractice.outcome = type;
+        this.wallPractice.outcome = hard ? 'hardImpact' : type;
+        this.wallPractice.speed = speed;
       }
-      this.emit(type, { f, wall, dir, point: { x: wall.x, y: feet - f.stats.height * 0.52 } });
+      this.emit(type, { f, wall, dir, hard, speed, point: { x: wall.x, y: feet - f.stats.height * 0.52 } });
     }
     clearTumble(f, option) {
       if (f.tumble && f.index === 0 && this.launchPractice?.phase === 'flight' && this.launchPractice.pattern !== 'juggle') {
@@ -6305,7 +6327,9 @@
               const floor = this.terrain[landing], t = floorCrossing(oldY, f.y, floor.y);
               f.x = clamp(oldX + (f.x - oldX) * t, floor.x1, floor.x2);
             }
-            if (meteor && f.techBuffer <= 1e-8) {
+            const speed = f.tumble && floorImpactSpeed(landingSpeed, f.tumble.downLaunch, f.tumble.time);
+            const hard = !f.throwBounce && f.stun > 0 && speed >= maxTechSpeed;
+            if (hard || (meteor && f.techBuffer <= 1e-8)) {
               const moveId = f.tumble.meteor, floor = this.terrain[landing];
               f.y = floor.y - 1;
               f.vy = -Math.min(700, landingSpeed * 0.72);
@@ -6313,7 +6337,10 @@
               f.stun = Math.max(f.stun, Math.min(20 / 60, Math.abs(f.vy) / 1700));
               f.tumble.meteor = null;
               f.tumble.cancel = null;
-              this.emit('meteorBounce', { f, moveId, platform: landing, speed: landingSpeed, point: { x: f.x, y: floor.y } });
+              f.tumble.downLaunch = f.techBuffer = 0;
+              if (hard && this.meteorPractice && f.index === 0) this.meteorPractice.hardSpeed = speed;
+              this.emit(meteor ? 'meteorBounce' : 'floorBounce', { f, moveId, hard, platform: landing,
+                speed: hard ? speed : landingSpeed, point: { x: f.x, y: floor.y } });
               return;
             }
             if (f.throwBounce) {
@@ -8936,6 +8963,7 @@
       const wall = f.tumble && this.wallAhead(f, 7 / 60);
       if (wall) {
         result.x = 0;
+        if (this.cpuLevel === 'rival' && wall.hard) return result;
         result.jump = f.tumble.willTech && f.y > wall.wall.top + f.stats.height;
         if (f.tumble.willTech && f.techLock <= 1e-8) {
           result.shield = true;
@@ -8970,6 +8998,8 @@
         result.x = 0;
         const landing = this.floorAhead(f, 7 / 60);
         if (landing >= 0 && f.tumble.willTech && f.techLock <= 1e-8) {
+          if (this.cpuLevel === 'rival' && f.tumble.downLaunch >= maxTechSpeed &&
+              this.projectLaunch(f, f.vx, f.vy).hardImpact) return result;
           const p = this.terrain[landing];
           const away = -Math.sign(dx);
           result.x = far < 140 && f.x + 95 * away > p.x1 && f.x + 95 * away < p.x2 ? away : 0;

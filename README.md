@@ -286,6 +286,12 @@ In **Training → Combo escape**, tap Attack to cue Clover’s Rim Rattle. **At 
 
 **Wall tech.** When you tumble into a solid stage wall, tap Shield in the last 11 frames before impact to brace against it. Hold Jump at contact to spring up and away. Both recoveries preserve the air jump and Up Special you have left. A missed tech bounces you back into open air, still tumbling. Wall and landing techs share the same 28-frame lockout.
 
+A red split flash marks an impact too hard to tech. While you are still stunned, a launch that drives you straight into a wall or floor at 900 px/s or more forces a rebound. Speed along the surface is safe. So is the speed you pick up from gravity on the way back down. Steer during the hit freeze to change how steeply you strike the surface.
+
+In **Wall tech practice → Heavy impact**, Noodle takes Pip’s Back Heel at 185%. Tap Shield with the stick centered, then choose **Retry kick**. This time hold Up when the kick connects and tap Shield again. Compare the impact speeds and try a wall-tech jump on the other roof. [Play Heavy impact](https://caleb-guyer.github.io/dog-fight-3/#training/impact-tech)
+
+Try the same timing against Pogo Paw in **Spike landing**. At 185%, a centered Shield tap sends Pip bouncing off the platform. Hold Right through the hit freeze and tap Shield to roll across it. **Switch sides** mirrors the direction. [Play the spike landing](https://caleb-guyer.github.io/dog-fight-3/#training/spike-impact)
+
 **Wall jump.** Pip and Noodle can flick away from a solid wall while brushing it in open air. If already holding away, tap Jump there. Pip springs higher and can steer or attack after five frames. Noodle pushes farther sideways and can act after seven. The kick leaves both dogs vulnerable and preserves their remaining air jump and Up Special. Landing or catching a ledge restores the wall jump.
 
 In **Training → Wall tech practice**, choose **Pip wall jump** or **Noodle wall jump**. Start next to the brickwork with one air jump. Flick away, then steer back to the near roof or keep moving toward the far roof. Retry with an ordinary air jump and compare the result. **Switch wall** mirrors the gap. [Play the roof recovery](https://caleb-guyer.github.io/dog-fight-3/#training/wall-jumps)
