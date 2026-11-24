@@ -1893,6 +1893,8 @@
       vy: 0,
       ground: -1,
       run: null,
+      teeter: 0,
+      landingAerial: '',
       stickTicks: 0,
       sprintDir: 0,
       strideDistance: 0,
@@ -2565,6 +2567,7 @@
       this.airPractice = null;
       this.dogs.forEach((f) => this.spawn(f, false));
       this.comboPractice = null;
+      this.edgePractice = null;
       this.projectiles = [];
       this.ball = null;
       this.nextBall = 4;
@@ -2591,6 +2594,62 @@
         dummy.ground = player.ground = 0;
         dummy.y = player.y = surface.y;
       }
+    }
+    resetEdgePractice(pattern = 'lip', dir = 1, slow = true) {
+      this.resetTraining();
+      const [f, rival] = this.dogs;
+      const deck = this.stage === 'laundry' && (pattern !== 'lip' || dir > 0) ? 1 : 0;
+      const ground = pattern === 'lip' ? deck : this.stage === 'laundry' ? 3 : dir > 0 ? 1 : 2;
+      const surface = this.terrain[ground], lip = dir > 0 ? surface.x2 : surface.x1;
+      this.edgePractice = { pattern, dir, slow, ground, lip, phase: 'ready', ticks: 0, landed: false, frames: 0, outcome: '' };
+      if (pattern === 'lip') {
+        Object.assign(f, { x: lip - dir * 40, y: surface.y, ground, face: dir });
+        this.hangLedge(rival, { index: ground, x: lip, y: surface.y, left: dir < 0 });
+      } else {
+        const distance = pattern === 'deep' ? 63 : 31;
+        Object.assign(f, { x: lip - dir * distance, y: surface.y - 30, ground: -1, vx: dir * 260, vy: 150, jumps: 1, face: dir });
+        Object.assign(rival, { x: lip + dir * 58, y: this.terrain[deck].y, ground: deck, face: -dir });
+      }
+    }
+    edgeRivalInput() {
+      const d = this.edgePractice, [f, rival] = this.dogs;
+      if (d.phase === 'done') return idleInput;
+      d.ticks++;
+      if (d.pattern !== 'lip') return idleInput;
+      if (d.phase === 'approach' && (f.x - d.lip) * d.dir >= -4) {
+        d.phase = 'atLip';
+        d.ticks = 0;
+      }
+      if (d.phase !== 'atLip') return idleInput;
+      if (d.ticks === 16) {
+        this.emit('edgeCue', { f: rival });
+        return { ...idleInput, y: 1 };
+      }
+      if (d.ticks === 17) return { ...idleInput, jump: true };
+      if (d.ticks === 26) return { ...idleInput, attack: true };
+      return idleInput;
+    }
+    finishEdgePractice(outcome, moveId) {
+      const d = this.edgePractice;
+      if (!d || d.phase === 'done') return;
+      d.phase = 'done';
+      d.outcome = outcome;
+      this.emit('edgeResult', { f: this.dogs[0], outcome, moveId, frames: d.frames });
+    }
+    checkEdgePractice() {
+      const d = this.edgePractice, [f,rival] = this.dogs;
+      if (d.phase === 'done') return;
+      if (d.pattern === 'lip') {
+        if (f.ledge && !rival.ledge) this.finishEdgePractice('claimed');
+        else if (d.phase === 'approach' && !rival.ledge) this.finishEdgePractice('waited');
+        else if (d.phase === 'atLip' && d.ticks > 70) this.finishEdgePractice('missed');
+        return;
+      }
+      if (f.ground === d.ground) {
+        if (!d.landed) { d.landed = true; this.emit('edgeLand', { f }); }
+        if (f.landingLag <= 1e-8) this.finishEdgePractice('settled');
+      } else if ((d.landed && (f.ground >= 0 || f.ledge)) || d.ticks > 100) this.finishEdgePractice('missed');
+      else if (!d.landed && f.y > this.terrain[d.ground].y + 5) this.finishEdgePractice('overshot');
     }
     resetComboPractice(source = 'record', reply = 'stand', slow = true) {
       const previous = this.comboPractice;
@@ -3785,6 +3844,11 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      const edge = this.edgePractice;
+      if (edge?.phase === 'ready') {
+        if (edge.pattern === 'lip' ? !input1.x && !input1.jump : !input1.attack && !input1.tapped?.attack) return;
+        edge.phase = 'approach';
+      }
       const combo = this.comboPractice;
       if (combo) {
         input1 = this.comboPlayerInput(input1);
@@ -4072,6 +4136,7 @@
       for (const f of this.dogs) if (f.attack?.landed) f.attack = null;
       this.updateDiscs(dt);
       if (this.platformPractice) this.checkPlatformPractice();
+      if (edge) this.checkEdgePractice();
       if (this.climbPractice) this.checkClimbPractice();
       if (this.spacingPractice) this.checkSpacingPractice(dt);
       if (wave) this.checkWavePractice();
@@ -4082,6 +4147,7 @@
       if (
         this.fetch &&
         !combo &&
+        !edge &&
         !this.platformPractice &&
         !this.spacingPractice &&
         !this.chasePractice &&
@@ -4105,6 +4171,7 @@
       if (out.length) this.knockouts(out);
     }
     trainingRivalInput(dt, player) {
+      if (this.edgePractice) return this.edgeRivalInput();
       if (this.survivalPractice) return this.survivalInput();
       if (this.stockPractice) return this.stockPracticeInput();
       if (this.meteorPractice) return this.meteorPracticeInput();
@@ -4768,6 +4835,8 @@
       }
     }
     move(f, input, dt) {
+      const lastTeeter = f.teeter;
+      f.teeter = 0;
       if (f.stockLift && !this.advanceStockReturn(f, input, dt)) return;
       const prep = f.dropPrep;
       f.dropPrep = null;
@@ -4805,7 +4874,10 @@
         'regrabLock',
       ])
         f[key] = Math.max(0, f[key] - dt);
-      if (f.landingLag <= 1e-8 || f.ground < 0) f.waveSlide = 0;
+      if (f.landingLag <= 1e-8 || f.ground < 0) {
+        f.waveSlide = 0;
+        f.landingAerial = '';
+      }
       if (f.reaction?.planted && !f.stun) f.reaction = null;
       if (f.respawning > 0) return;
       if (f.ledgeTrump) {
@@ -5163,13 +5235,42 @@
       f.x += f.vx * dt;
       if (f.ground >= 0) {
         const p = this.terrain[f.ground];
+        // Walking plants the lead paw at the lip. Committed motion and knockback keep their travel.
+        if (onFoot && !f.run && !f.crouch && !f.waveSlide && !f.tumble && !f.reaction &&
+            !f.skidTime && !f.landingLag && !f.jumpSquat && !f.clashRecoil && Math.abs(f.vx) <= f.kit.footwork.walk + 1e-8) {
+          const side = Math.sign(input.x) || lastTeeter;
+          const lip = side > 0 ? p.x2 : p.x1;
+          if (side && side === f.face && (f.x - lip) * side >= -1e-8 && (oldX - lip) * side <= 7 &&
+              !this.terrain.some(other => other !== p && Math.abs(other.y - p.y) <= 2 &&
+                lip + side * 2 >= other.x1 && lip + side * 2 <= other.x2)) {
+            const plantedX = side > 0 ? Math.max(oldX, lip) : Math.min(oldX, lip);
+            f.strideDistance -= Math.abs(f.x - plantedX);
+            f.x = plantedX;
+            f.vx = 0;
+            f.teeter = side;
+            if (lastTeeter !== side) this.emit('teeter', { f, dir: side, point: { x: lip, y: p.y } });
+          }
+        }
         if (f.x < p.x1 - 7 || f.x > p.x2 + 7) {
+          const cancel = f.landingAerial && f.landingLag > 1e-8 && !f.stun && !f.grip;
           f.ground = -1;
           f.waveSlide = 0;
           f.dropPrep = null;
           f.crouch = false;
           f.jumps = 1;
-          f.coyote = 0.085;
+          f.coyote = cancel ? 0 : 0.085;
+          if (cancel) {
+            const frames = Math.round(f.landingLag * 60);
+            const moveId = f.landingAerial;
+            f.landingLag = f.landTime = 0;
+            f.landingAerial = '';
+            if (f.command?.button === 'aimStick' && f.command.type === 'smash') {
+              f.command.type = 'attack';
+              f.command.airOnly = true;
+            }
+            if (f.index === 0 && this.edgePractice && this.edgePractice.phase !== 'done') this.edgePractice.frames = frames;
+            this.emit('edgeCancel', { f, moveId, frames, dir: Math.sign(f.vx), point: { x: f.vx < 0 ? p.x1 : p.x2, y: p.y } });
+          }
         } else {
           f.y = p.y;
           f.vy = 0;
@@ -5266,6 +5367,7 @@
               const canceled = committed && lead !== null && lead <= landingCancelWindow + 1e-8;
               const frames = canceled ? Math.ceil(a.land / 2) : committed ? a.land : 2;
               f.landingLag = frames / 60;
+              f.landingAerial = committed ? a.moveId : '';
               if (canceled) {
                 f.guardBuffer = 0;
                 this.emit('landingCancel', { f, moveId: a.moveId, frames, full: a.land, point: { x: f.x, y: f.y } });
@@ -6431,6 +6533,12 @@
       const timing = aerialHitTiming(use, move);
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic, power, damage: applied, timing,
         meteor: !!target.tumble?.meteor });
+      const edge = this.edgePractice;
+      if (edge && edge.phase !== 'done') {
+        if (target.index === 0) this.finishEdgePractice('caught', moveId);
+        else if (edge.pattern === 'lip') this.finishEdgePractice(owner.ground === edge.ground ? 'covered' : 'offstage', moveId);
+        else this.finishEdgePractice(edge.frames && owner.ground < 0 && use?.airSide ? 'followup' : 'other', moveId);
+      }
       if (this.survivalPractice && this.survivalPractice.moveId === moveId && target.index === 0)
         this.survivalPractice.released = true;
       if (target.tumble?.pending && (!target.encounter || target.encounter.kind === target.kind) &&
@@ -7123,6 +7231,23 @@
       brain.platformRoute = null;
       return { ...idleInput, y: 1, attack: true, tapped: { attack: true } };
     }
+    cpuCoverLip(f, foe) {
+      const floor = this.terrain[f.ground];
+      if (!floor || floor.thin || f.stun || f.grip || f.shield || f.shieldDrop || f.attack || f.charge >= 0 ||
+          f.landingLag || f.ledge || f.dodge || f.floorAction || f.jumpSquat || foe.floorAction || foe.attack?.edge ||
+          foe.ground >= 0 || (!foe.ledge && !foe.ledgeLock)) return null;
+      const dir = foe.x < floor.x1 ? -1 : foe.x > floor.x2 ? 1 : 0;
+      const lip = dir < 0 ? floor.x1 : floor.x2;
+      if (!dir || Math.abs(foe.x - lip) > 55 || Math.abs(f.x - lip) > 95 ||
+          Math.abs(foe.y - floor.y) > 85) return null;
+      const move = moves[f.kit.tilts.down], [x,y,rx,ry] = move.box, height = bodyHeight(foe);
+      const t = move.start, rise = foe.ledge ? 0 : foe.vy*t + 770*foe.kit.gravity*t*t;
+      if (f.face === dir && !f.run && protectionTime(foe) <= t &&
+          Math.abs(foe.x + foe.vx*t - f.x - dir*x) <= rx + foe.stats.width &&
+          Math.abs(foe.y + rise - height*.52 - f.y - y) <= ry + height*.4)
+        return { ...idleInput, y: 1, tapped: { attack: true } };
+      return { ...idleInput, x: dir * .5 };
+    }
     cpuPlatformGuard(f, foe, floor) {
       const incoming = foe.attack;
       if (!this.terrain[f.ground]?.thin || f.attack || f.stun || f.grip || f.floorAction ||
@@ -7302,6 +7427,8 @@
         far = Math.abs(dx);
       const platformGuard = this.cpuPlatformGuard(f, foe, under);
       if (platformGuard) return platformGuard;
+      const lipGuard = this.cpuCoverLip(f, foe);
+      if (lipGuard) return lipGuard;
       const canChallenge = foe.ground >= 0 && far < 150 && !foe.stun && !foe.grip &&
         !foe.attack?.grabAttempt && !foe.attack?.commandGrab;
       if (brain.landingGuardUntil > this.time) {
