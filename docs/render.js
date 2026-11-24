@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const { clamp, platforms, attackWindow, topBlastY } = window.DogFight;
+  const { clamp, platforms, attackWindow, topBlastY, shieldBubble } = window.DogFight;
   const team = ['#ef926e', '#98d0d1'];
   const teamColor = (fighter) => team[fighter.index === 0 ? 0 : 1];
   const ink = '#252337';
@@ -1357,14 +1357,27 @@
   }
   function fallingShield(ctx, f) {
     const left = clamp(f.shieldDrop / shieldDropDuration, 0, 1);
-    const radius = (34 + f.shieldHP * 15) * (reduced.matches ? 0.76 : 0.57 + 0.36 * left);
+    const b = shieldBubble(f), radius = b.r;
     ctx.save();
-    ctx.translate(snap(f.x, 2), snap(f.y - 36, 2));
+    ctx.translate(snap(b.x, 2), snap(b.y, 2));
     ctx.scale(f.face, 1);
     ctx.globalAlpha *= left * 0.55;
     arc(ctx, 0, 0, radius, radius, 0.22, 0.83, teamColor(f), 2);
     if (!reduced.matches) arc(ctx, 0, 0, radius, radius, 2.3, 2.66, teamColor(f), 2);
     ctx.restore();
+  }
+  function raisedShield(ctx, f) {
+    const b = shieldBubble(f), color = teamColor(f);
+    oval(ctx, b.x, b.y, b.r, b.r, color + '36');
+    arc(ctx, b.x, b.y, b.r, b.r, 0, Math.PI * 2, color, 4);
+    const shine = Math.hypot(f.shieldLeanX, f.shieldLeanY) > 0.12 ? Math.atan2(f.shieldLeanY, f.shieldLeanX) : -2.2;
+    arc(ctx, b.x, b.y, b.r - 3, b.r - 3, shine - 0.34, shine + 0.34, cream);
+    if (f.shieldStun > 1e-8) {
+      const contact = f.shieldImpact;
+      const dent = Math.min(7, (f.impactLag + f.shieldStun) * 38);
+      arc(ctx, b.x, b.y, b.r, b.r, contact - 0.6, contact + 0.6, cream, 3);
+      arc(ctx, b.x, b.y, b.r - dent, b.r - dent, contact - 0.4, contact + 0.4, cream, 2);
+    }
   }
   function swing(ctx, f, floor) {
     const a = f.attack;
@@ -1496,18 +1509,8 @@
     ctx.restore();
     if (state === 'ledgeTrump') slippingPaw(ctx, f, face, phase, world.dogs[1 - f.index]?.ledge);
     swing(ctx, f, world.terrain[f.ground]);
-    if (f.shield) {
-      const r = 34 + f.shieldHP * 15;
-      const dent = f.shieldStun > 1e-8 ? Math.min(8, (f.impactLag + f.shieldStun) * 38) : 0;
-      const rx = r - dent, ry = r + dent * 0.4;
-      oval(ctx, f.x, f.y - 36, rx, ry, teamColor(f) + '36');
-      arc(ctx, f.x, f.y - 36, rx, ry, 0, Math.PI * 2, teamColor(f), 4);
-      arc(ctx, f.x, f.y - 36, rx - 5, ry - 5, 3.75, 4.42, cream);
-      if (dent > 1) {
-        const contact = f.vx > 0 ? Math.PI : 0;
-        arc(ctx, f.x, f.y - 36, rx, ry, contact - 0.6, contact + 0.6, cream, 3);
-      }
-    } else if (
+    if (f.shield) raisedShield(ctx, f);
+    else if (
       f.shieldDrop > 0 &&
       !(f.parryFlash > 0) &&
       !f.floorAction &&
@@ -1780,6 +1783,14 @@
   }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
+    if (e.type === 'shieldPoke') {
+      const reach = reduced.matches ? 12 : 9 + snap(p * 15, 2);
+      for (const side of [-1, 1]) {
+        pixelLine(ctx, e.x + side * reach, e.y - 5, e.x + side * (reach + 5), e.y - 11, ink, 5, 2);
+        pixelLine(ctx, e.x + side * reach, e.y - 5, e.x + side * (reach + 5), e.y - 11, '#ffae7b', 2, 2);
+      }
+      return;
+    }
     if (e.type === 'crouchCancel') {
       const spread = reduced.matches ? 2 : snap(p * 13, 2);
       for (const side of [-1, 1]) {
@@ -1924,6 +1935,7 @@
         { breakthrough: e.winner !== null, projectile: e.projectile });
       if (name === 'platformDrop') this.add(name, e.point.x, e.point.y, cream, 8 / 60, f.stats.width / 2);
       if (name === 'crouchCancel') this.add(name, e.point.x, e.point.y, mint, 0.16, f.stats.width * 0.8, e.face, { planted: e.planted });
+      if (name === 'shieldPoke') this.add(name, e.point.x, e.point.y, cream, 0.16, 12, e.face);
       if (name === 'hitShift')
         this.add('hitShift', e.point.x, e.point.y, mint, 8 / 60, f.stats.width + 4, 1, { dx: e.dx, dy: e.dy });
       if (name === 'launchDI' && f.index === 0) {
@@ -2565,11 +2577,12 @@
       face: 1,
       scale: 1,
       time,
-      pose: side,
+      pose: side === 'shieldTilt' ? 'shield' : side,
       phase,
       dodgeX: f.airDodge?.x || 0,
       dodgeY: f.airDodge?.y || 0,
     });
+    if (side === 'shieldTilt') raisedShield(ctx, { ...f, index: 0, shieldHP: 0.30, shieldLeanX: 0.5, shieldLeanY: 0.85 });
     if (f.attack) floorSweep(ctx, f, f.attack);
     if (wallMark) wallContactMark(ctx, wallMark, 0.25);
     if (side === 'parry') {

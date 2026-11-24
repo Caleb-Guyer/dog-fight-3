@@ -1894,6 +1894,9 @@
       crouch: false,
       shield: false,
       shieldHP: 1,
+      shieldLeanX: 0,
+      shieldLeanY: 0,
+      shieldImpact: 0,
       shieldAxis: '',
       guardIntent: '',
       shieldDrop: 0,
@@ -2199,6 +2202,39 @@
     const left = Math.max(a.x - a.rx, b.x - b.rx), right = Math.min(a.x + a.rx, b.x + b.rx);
     const top = Math.max(a.y - a.ry, b.y - b.ry), bottom = Math.min(a.y + a.ry, b.y + b.ry);
     return left <= right && top <= bottom ? { x: (left + right) / 2, y: (top + bottom) / 2 } : null;
+  }
+  function shieldBubble(f) {
+    const full = Math.hypot(f.stats.width, f.stats.height * 0.43) + 5;
+    return {
+      x: f.x + f.shieldLeanX * f.stats.width * 0.65,
+      y: f.y - f.stats.height * (0.52 - f.shieldLeanY * 0.25),
+      r: full * (0.29 + 0.71 * clamp(f.shieldHP, 0, 1)),
+    };
+  }
+  function shieldRim(b, x, y) {
+    const dx = x - b.x, dy = y - b.y, length = Math.hypot(dx, dy);
+    return length ? { x: b.x + dx / length * b.r, y: b.y + dy / length * b.r } : { x: b.x, y: b.y - b.r };
+  }
+  function canParry(f) {
+    return f.parryEligible && f.ground >= 0 && f.shieldDrop > shieldDropTime - parryWindow + 1e-8;
+  }
+  function shieldContact(f, area) {
+    if (!f.shield && !canParry(f)) return null;
+    const b = shieldBubble(f);
+    const x = clamp(b.x, area.x - area.rx, area.x + area.rx);
+    const y = clamp(b.y, area.y - area.ry, area.y + area.ry);
+    if ((x - b.x) ** 2 + (y - b.y) ** 2 > b.r ** 2) return null;
+    const rim = x === b.x && y === b.y ? shieldRim(b, area.x, area.y) : shieldRim(b, x, y);
+    return { x: clamp(rim.x, area.x - area.rx, area.x + area.rx), y: clamp(rim.y, area.y - area.ry, area.y + area.ry) };
+  }
+  // Earliest contact of a moving projectile and the circular shield during this tick.
+  function shieldEntry(b, x, y, dx, dy, radius) {
+    const ox = x - b.x, oy = y - b.y, c = ox * ox + oy * oy - (b.r + radius) ** 2;
+    if (c <= 0) return 0;
+    const speed2 = dx * dx + dy * dy, dot = ox * dx + oy * dy, disc = dot * dot - speed2 * c;
+    if (!speed2 || dot >= 0 || disc < 0) return Infinity;
+    const t = (-dot - Math.sqrt(disc)) / speed2;
+    return t <= 1 ? t : Infinity;
   }
   // Time of first contact along the disc's path, including discs starting inside a box.
   function segmentEntry(x, y, dx, dy, box) {
@@ -2917,10 +2953,24 @@
       });
       this.wallPractice = { phase: 'ready', time: 0, side, inward, swung: false, outcome: '', original };
     }
-    resetShieldPractice(pattern = 'strike') {
+    resetShieldPractice(pattern = 'strike', worn = true) {
       this.resetTraining();
       this.shieldPractice = { pattern, phase: 'ready', time: 0, outcome: '', lastDodge: '' };
-      if (pattern === 'kick' || pattern === 'drop') {
+      if (pattern === 'low' || pattern === 'high' || pattern === 'poke') {
+        const drill = this.shieldPractice, attacking = pattern === 'poke';
+        drill.coverage = true;
+        drill.worn = worn;
+        drill.originalDogs = this.dogs;
+        const player = this.dogs[0], dummy = attacking ? this.dogs[1] : newFighter('noodle', 1);
+        const floor = this.terrain[0], middle = (floor.x1 + floor.x2) / 2;
+        const low = moves[player.kit.tilts.down].box;
+        const gap = attacking ? low[0] + low[2] + 18 : pattern === 'low' ? 109 : 138;
+        Object.assign(player, { x: middle - gap / 2, y: floor.y, ground: 0, face: 1 });
+        Object.assign(dummy, { x: middle + gap / 2, y: floor.y, ground: 0, face: -1, damage: this.trainingDamage });
+        (attacking ? dummy : player).shieldHP = worn ? 0.3 : 1;
+        if (attacking) { dummy.shield = true; dummy.shieldLeanY = -1; }
+        this.dogs = [player, dummy];
+      } else if (pattern === 'kick' || pattern === 'drop') {
         const drill = this.shieldPractice;
         drill.originalDogs = this.dogs;
         this.dogs = [newFighter('clover', 0), newFighter(pattern === 'kick' ? 'pip' : 'brisket', 1)];
@@ -3115,7 +3165,7 @@
     finishShieldPractice(outcome, landingFrames = 0) {
       const drill = this.shieldPractice;
       if (!drill || !['attack', 'windup', 'counter'].includes(drill.phase)) return;
-      if (outcome === 'block' && drill.originalDogs) {
+      if (outcome === 'block' && drill.originalDogs && !drill.coverage) {
         drill.phase = 'counter';
         drill.time = 0;
         this.emit('shieldCue', { f: this.dogs[0], phase: 'counter', pattern: drill.pattern });
@@ -3145,6 +3195,7 @@
         drill.phase = 'windup';
         this.emit('shieldCue', { f: this.dogs[0], phase: 'windup', pattern: drill.pattern });
       }
+      if (drill.coverage) return this.shieldCoverageInput(drill, dt);
       if (drill.originalDogs) return this.shieldAerialInput(drill, dt);
       if (drill.phase === 'windup') {
         drill.time += dt;
@@ -3165,6 +3216,30 @@
           this.finishShieldPractice('miss');
       }
       return idleInput;
+    }
+    shieldCoverageInput(drill, dt) {
+      if (drill.phase === 'done') return idleInput;
+      drill.time += dt;
+      if (drill.pattern === 'poke') {
+        const dummy = this.dogs[1];
+        if (!dummy.shield && dummy.stun > 0) this.finishShieldPractice('woreOut');
+        else if (drill.time > 3) this.finishShieldPractice('miss');
+        return { ...idleInput, shield: true, y: -0.5 };
+      }
+      if (drill.phase === 'attack') {
+        if (drill.time > 0.7) this.finishShieldPractice('miss');
+        return idleInput;
+      }
+      const high = drill.pattern === 'high';
+      if (high && !drill.jumped && drill.time + 1e-8 >= 13 / 60) {
+        drill.jumped = true;
+        return { ...idleInput, jump: true };
+      }
+      if (drill.time + 1e-8 < (high ? 28 : 30) / 60) return idleInput;
+      drill.phase = 'attack';
+      drill.time = 0;
+      this.emit('shieldCue', { f: this.dogs[0], phase: 'attack', pattern: drill.pattern });
+      return high ? { ...idleInput, aimStick: true, smashX: -1 } : { ...idleInput, y: 1, attack: true };
     }
     shieldAerialInput(drill, dt) {
       if (drill.phase === 'ready' || drill.phase === 'done') return idleInput;
@@ -3310,6 +3385,20 @@
           drill.consumeAttack = !!input1.attack;
           input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
         }
+      }
+      let guardDrill = this.shieldPractice;
+      if (guardDrill?.coverage && guardDrill.pattern !== 'poke' && guardDrill.phase === 'done') {
+        if (!input1.shield) guardDrill.released = true;
+        else if (guardDrill.released) {
+          this.resetShieldPractice(guardDrill.pattern, guardDrill.worn);
+          guardDrill = this.shieldPractice;
+        }
+      }
+      if (guardDrill?.coverage && guardDrill.phase === 'ready') {
+        if (guardDrill.pattern === 'poke') {
+          if (!input1.x && !input1.y && !['attack','smash','special','jump','grab','aimStick'].some(k => input1[k] || input1.tapped?.[k])) return;
+          guardDrill.phase = 'attack';
+        } else if (!input1.shield) return;
       }
       const guardTop = this.platformPractice;
       if (guardTop?.pattern === 'hold') {
@@ -3489,7 +3578,7 @@
       const pressed = (key) => input.tapped?.[key] || (input[key] && !was[key]);
       const grabX = input.grabX ?? input.x;
       const previousAxis = f.shieldAxis;
-      f.shieldAxis = shieldDirection(grabX, input.y, previousAxis);
+      f.shieldAxis = shieldDirection(input.x || grabX, input.y, previousAxis);
       f.prev = { ...input };
       if (f.respawning > 0) return;
       if (f.ledge) {
@@ -4198,7 +4287,15 @@
       const free = ready && !f.shieldDrop;
       const direction = aimFor(input.y);
       const waveChord = jumpTap && !f.command && f.guardBuffer > 0 && downDiagonal(f.guardAim);
+      const wasShielding = f.shield;
       f.shield = free && grounded && input.shield && f.charge < 0 && !shieldExit;
+      if (f.shield) {
+        if (!wasShielding) f.shieldLeanX = f.shieldLeanY = 0;
+        const x = input.x || 0, y = input.y || 0;
+        const length = Math.max(0.5, Math.hypot(x, y));
+        f.shieldLeanX = toward(f.shieldLeanX, x / length, 15 * dt);
+        f.shieldLeanY = toward(f.shieldLeanY, y / length, 15 * dt);
+      } else if (!f.shieldDrop) f.shieldLeanX = f.shieldLeanY = 0;
       if (!f.shield) f.shieldGrabWindow = 0;
       if (grounded && input.shield && !f.jumpSquat && !waveChord) f.guardBuffer = 0;
       f.shieldHP = clamp(f.shieldHP + (f.shield ? -0.13 : 0.24) * dt, 0, 1);
@@ -4660,7 +4757,7 @@
       });
       if (this.shieldPractice?.phase === 'counter' && owner.index === 0)
         this.finishShieldPractice(landingFrames > 0 ? 'punish' : 'lateCatch', landingFrames);
-      else this.finishShieldPractice(target.index === 0 ? 'grabbed' : 'interrupted');
+      else this.finishShieldPractice(target.index === 0 ? 'grabbed' : this.shieldPractice?.pattern === 'poke' ? 'caughtGuard' : 'interrupted');
       this.finishAirPractice(target.index === 0 ? 'hit' : 'interrupted');
       this.finishRollPractice(target.index === 0 ? 'caught' : 'counter');
     }
@@ -5213,20 +5310,14 @@
           if (attack.hitTargets?.get(rival) === beatIndex || rival.invuln > 0 || rival.respawning > 0) continue;
           if (attack.dashAttack && (rival.x - f.x) * f.face < 0) continue;
           if (attack.edge && (rival.x - attack.edge.x) * f.face < 0) continue;
-          if (!overlaps) continue;
-          (attack.hitTargets ??= new Map()).set(rival, beatIndex);
-          attack.hitBeat = beatIndex;
-          const sweet = sweetSpotAt(f, beat, rival.x, rival.y - height * 0.52);
+          if (!overlaps && (!rival.shield && !canParry(rival) || attack.commandGrab)) continue;
           hits.push({
-            f,
-            rival,
-            attack,
-            beat,
-            sweet,
+            f, rival, attack, beat, beatIndex, area,
             face: hitFacing(rival.x),
-            point: {
+            bodySweet: overlaps && sweetSpotAt(f, beat, rival.x, rival.y - height * 0.52),
+            bodyPoint: overlaps && {
               x: clamp(area.x, rival.x - rival.stats.width, rival.x + rival.stats.width),
-              y: clamp(area.y, rival.y - height, rival.y - 4),
+              y: clamp(area.y, rival.y - height * 0.92, rival.y - height * 0.12),
             },
           });
         }
@@ -5240,7 +5331,16 @@
             : first;
         this.swat(winner.f, winner.aim, winner.face);
       }
-      for (const { f, rival, attack, beat, face, point, sweet } of hits) {
+      const connectedHits = [];
+      for (const hit of hits) {
+        const { f, rival, attack, beat, face } = hit;
+        // Other attackers may have shrunk or broken this shield on the same tick.
+        const guard = !attack.commandGrab && shieldContact(rival, hit.area);
+        const point = guard || hit.bodyPoint;
+        if (!point) continue;
+        (attack.hitTargets ??= new Map()).set(rival, hit.beatIndex);
+        attack.hitBeat = hit.beatIndex;
+        const sweet = guard ? sweetSpotAt(f, beat, guard.x, guard.y) : hit.bodySweet;
         const strength = strikeStrength(attack);
         const launch = (beat.setupHit ? 1 : strength) * (sweet?.launch || 1);
         attack.connected = this.hit(
@@ -5256,7 +5356,9 @@
           attack.moveId ? beat : null,
           attack.moveId,
           attack,
+          !!guard,
         );
+        if (attack.connected) connectedHits.push(hit);
         if (sweet && attack.connected) this.emit('sweetSpot', { f, point, face, moveId: attack.moveId });
         if (attack.connected && attack.name === 'rope') {
           rival.vx = -face * Math.max(185, Math.abs(rival.vx) * 0.8);
@@ -5268,8 +5370,9 @@
           attack.reelEnd = attack.time + 0.17;
         }
       }
-      for (const { f, attack } of hits) {
-        if (!attack.connected || f.attack !== attack) continue;
+      for (const { f, attack } of connectedHits) {
+        attack.connected = true;
+        if (f.attack !== attack) continue;
         if (attack.pogo && !attack.landed && !f.usedPogo) {
           f.usedPogo = true;
           f.fastFall = false;
@@ -5368,6 +5471,8 @@
       const stunFrames = clamp(Math.round(1 + damage * scale), 2, 15);
       const impactFrames = clamp(1 + Math.floor(damage * (projectile ? 0.16 : 0.23)), 2, 7);
       const away = projectile ? face : Math.sign(target.x - owner.x) || face;
+      const bubble = shieldBubble(target);
+      target.shieldImpact = point ? Math.atan2(point.y - bubble.y, point.x - bubble.x) : away > 0 ? Math.PI : 0;
       const push = Math.min(295, 35 + damage * (projectile ? 3 : 8));
       if (!projectile && !owner.stun && !owner.grip) {
         owner.impactLag = Math.max(owner.impactLag, impactFrames / 60);
@@ -5384,7 +5489,7 @@
         target.run = null;
       }
       this.sampleFreshness(owner, use, moveId, power, 0, stunFrames, true);
-      this.emit('block', { f: target, owner, point, face: away, moveId, impactFrames, stunFrames, projectile, power });
+      this.emit('block', { f: target, owner, point, attackName: name, face: away, moveId, impactFrames, stunFrames, projectile, power });
       if (this.escapePractice?.spacing === 'counter' && target.index === 0 && moveId === 'pipStampKick')
         this.finishEscapePractice('shieldedKick');
       if (!broken && this.escapePractice?.spacing === 'break' && this.escapePractice.contact === 'plant' && target.index === 0)
@@ -5398,14 +5503,14 @@
       if (this.climbPractice?.climbed && target.index === this.climbPractice.slot && moveId === owner.kit.ground[0])
         this.finishClimbPractice(this.climbPractice.role === 'trap' ? 'late' : 'guarded');
       if (target.index === 0) this.finishShieldPractice(broken ? 'break' : 'block');
+      else if (this.shieldPractice?.pattern === 'poke') this.finishShieldPractice(broken ? 'brokeGuard' : 'sealed');
     }
-    hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId, use) {
+    hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId, use, covered = true) {
       if (target.invuln > 0 || target.respawning > 0) return false;
       if (target.grip?.target === target.index) return false;
       const grab = name === 'throw' || move?.commandGrab;
       const projectile = !!move?.projectile || name === 'ball' || name === 'disc' || name === 'snare';
-      if (!grab && target.parryEligible && target.ground >= 0 &&
-          target.shieldDrop > shieldDropTime - parryWindow + 1e-8) {
+      if (!grab && canParry(target)) {
         this.parry(target, owner, face, point, projectile);
         return false;
       }
@@ -5430,12 +5535,14 @@
         this.emit('counter', { f: target, point });
         return false;
       }
-      const guarded = target.shield && !grab;
+      const guarded = target.shield && !grab && covered;
       rememberMove(owner, moveId, use, power, guarded);
       if (guarded) {
         this.block(target, owner, damage, name, face, point, projectile, moveId, use, power);
         return false;
       }
+      const poked = target.shield && !grab && !covered;
+      if (poked) this.emit('shieldPoke', { f: target, owner, attackName: name, moveId, point, face });
       this.gradeFootwork(target);
       const downed = target.floorAction?.type === 'downed' ? target.floorAction : null;
       const previousLocks = downed?.locks || 0;
@@ -5589,7 +5696,9 @@
       }
       if (this.shieldPractice) {
         const counter = this.shieldPractice.phase === 'counter';
-        this.finishShieldPractice(target.index === 0 ? 'hit' : counter ? 'counterHit' : 'interrupted');
+        if (target.index === 0) this.finishShieldPractice(poked ? 'poked' : 'hit');
+        else if (this.shieldPractice.pattern === 'poke') this.finishShieldPractice(poked ? 'found' : 'hitOpen');
+        else this.finishShieldPractice(counter ? 'counterHit' : 'interrupted');
       }
       this.finishAirPractice(target.index === 0 ? 'hit' : 'interrupted');
       this.finishRollPractice(target.index === 0 ? 'hit' : 'counter');
@@ -5605,13 +5714,16 @@
         const body = { x: f.x, rx: f.stats.width + radius,
           y: returning ? f.y - (f.floorAction ? height * 0.52 : 39) : f.y - height / 2 - (d.type === 'skip' ? 1 : 0),
           ry: returning ? (f.floorAction ? height * 0.5 + 8 : 42) : height / 2 + (d.type === 'skip' ? 6 : 5) };
-        const bodyTime = segmentEntry(oldX, oldY, dx, dy, body);
+        let bodyTime = segmentEntry(oldX, oldY, dx, dy, body);
         // A dog finishing an intangible roll has already cleared a disc leaving its hurtbox.
         const stillInside = Math.abs(d.x - body.x) <= body.rx && Math.abs(d.y - body.y) <= body.ry;
-        if (bodyTime < Infinity && (bodyTime > 0 || stillInside)) {
-          if (this.shieldPractice && d.type === 'drive') this.recordPracticeDodge(f, true);
-          if (!f.invuln && !f.respawning) contacts.push({ time: bodyTime, f, slot });
-        }
+        if (!bodyTime && !stillInside) bodyTime = Infinity;
+        if (bodyTime < Infinity && this.shieldPractice && d.type === 'drive') this.recordPracticeDodge(f, true);
+        const bubble = (f.shield || canParry(f)) && shieldBubble(f);
+        const guardTime = bubble ? shieldEntry(bubble, oldX, oldY, dx, dy, 9) : Infinity;
+        const timeOfHit = Math.min(bodyTime, guardTime);
+        if (timeOfHit < Infinity && !f.invuln && !f.respawning)
+          contacts.push({ time: timeOfHit, f, slot, bubble: guardTime <= bodyTime && bubble });
         const swing = this.activeSwing(f);
         if (!swing || !canClash(swing)) continue;
         const { area } = swing;
@@ -5620,7 +5732,7 @@
       }
       contacts.sort((a, b) => a.time - b.time || Number(!!b.swing) - Number(!!a.swing) || a.f.index - b.f.index);
       const owner = this.dogs[d.owner];
-      for (const { time, f, swing, slot } of contacts) {
+      for (const { time, f, swing, slot, bubble } of contacts) {
         const point = { x: oldX + dx * time, y: oldY + dy * time };
         if (swing) {
           if (f.attack !== swing.attack) continue;
@@ -5635,7 +5747,7 @@
           this.clashContact(f, owner, point, winner, true);
           if (winner !== owner) return true;
         } else {
-          impact(f, Math.sign(d.vx), point);
+          impact(f, Math.sign(d.vx), bubble ? shieldRim(bubble, point.x, point.y) : point, !!bubble);
           if (!returning) return true;
           d.hit[slot] = true;
         }
@@ -5651,7 +5763,7 @@
         const oldX = d.x, oldY = d.y;
         const spec = smashes[d.moveId] || specials[d.moveId] || specials.cloverRound;
         const strength = d.type === 'drive' ? smashStrength(d.power) : 1;
-        const impact = (target, direction, point = { x: d.x, y: d.y }) => {
+        const impact = (target, direction, point, covered) => {
           this.hit(
             target,
             owner,
@@ -5665,6 +5777,7 @@
             spec,
             d.moveId,
             d,
+            covered,
           );
         };
         if (d.type === 'drive') {
@@ -5685,11 +5798,15 @@
             d.x = p.x1 + d.offset;
             d.y = p.y - 3;
             d.armedIn -= dt;
-            const target = d.armedIn <= 0 && rivals.find((f) =>
-              f.ground === d.platform && !f.invuln && Math.abs(f.x - d.x) < f.stats.width + 22);
-            if (target) {
-              impact(target, Math.sign(target.x - owner.x));
-              return false;
+            if (d.armedIn <= 0) {
+              const area = { x: d.x, y: d.y - 3, rx: 22, ry: 6 };
+              for (const f of rivals) {
+                if (f.ground !== d.platform || f.invuln || f.respawning) continue;
+                const guard = shieldContact(f, area);
+                if (!guard && Math.abs(f.x - d.x) >= f.stats.width + area.rx) continue;
+                impact(f, Math.sign(f.x - owner.x), guard || { x: d.x, y: d.y }, !!guard);
+                return false;
+              }
             }
           } else {
             d.x += d.vx * dt;
@@ -5765,8 +5882,7 @@
           };
         return;
       }
-      const b = this.ball,
-        oldY = b.y;
+      const b = this.ball, oldX = b.x, oldY = b.y;
       b.age += dt;
       b.vy += (b.hits === 3 ? 280 : 840) * dt;
       b.x += b.vx * dt;
@@ -5781,12 +5897,14 @@
       if (b.owner >= 0 && Math.abs(b.vx) > 150) {
         const target = this.dogs[1 - b.owner];
         const height = bodyHeight(target);
-        if (
-          target.invuln <= 0 &&
-          Math.abs(b.x - target.x) < target.stats.width + 11 &&
-          Math.abs(b.y - target.y + (target.floorAction ? height * 0.52 : 37)) <
-            (target.floorAction ? height * 0.5 + 10 : 43)
-        ) {
+        const dx = b.x - oldX, dy = b.y - oldY;
+        const bodyTime = segmentEntry(oldX, oldY, dx, dy, { x: target.x, rx: target.stats.width + 11,
+          y: target.y - (target.floorAction ? height * 0.52 : 37), ry: target.floorAction ? height * 0.5 + 10 : 43 });
+        const bubble = (target.shield || canParry(target)) && shieldBubble(target);
+        const guardTime = bubble ? shieldEntry(bubble, oldX, oldY, dx, dy, 11) : Infinity;
+        const time = Math.min(guardTime, bodyTime);
+        if (target.invuln <= 0 && !target.respawning && time < Infinity) {
+          const covered = guardTime <= bodyTime, x = oldX + time * dx, y = oldY + time * dy;
           this.hit(
             target,
             this.dogs[b.owner],
@@ -5796,6 +5914,8 @@
             0,
             'ball',
             Math.sign(b.vx),
+            covered ? shieldRim(bubble, x, y) : { x, y },
+            null, null, null, covered,
           );
           if (b.hits === 3) {
             this.ball = null;
@@ -5873,11 +5993,24 @@
           if (canStayPlanted(crouchLaunchScale * speed * Math.cos(angle), crouchLaunchScale * (40 + speed * Math.sin(angle))))
             choice = 'crouch';
         }
-        brain.guardRead = { attack: a, choice, used: false };
+        let aim;
+        if (f.shield && f.shieldHP < 0.55 && !grab && chance >= 0.47 && chance < 0.88) {
+          const swing = { x: contact, y: foe.y + y + foe.vy * Math.max(0, wait), rx, ry };
+          if (!shieldContact(f, swing)) {
+            const centerY = f.y - f.stats.height * 0.52;
+            const dx = clamp(f.x, swing.x - rx, swing.x + rx) - f.x;
+            const dy = clamp(centerY, swing.y - ry, swing.y + ry) - centerY;
+            const length = Math.hypot(dx, dy) || 1;
+            aim = { x: 0.5 * dx / length, y: 0.5 * dy / length };
+            choice = 'cover';
+          }
+        }
+        brain.guardRead = { attack: a, choice, used: false, aim };
       }
       const read = brain.guardRead;
       if (read.used || !read.choice) return null;
       brain.hold = brain.guard = 0;
+      if (read.choice === 'cover') return { ...idleInput, ...read.aim, shield: true };
       if (read.choice === 'crouch') return { ...idleInput, y: 0.6 };
       const dodge = read.choice === 'spot' ? f.kit.defense.spot : f.kit.defense.roll;
       if (
@@ -6175,11 +6308,11 @@
       brain.platformRoute = null;
       return { ...idleInput, y: 1, attack: true, tapped: { attack: true } };
     }
-    cpuTiltChoice(f, foe, preferred) {
+    cpuTiltChoice(f, foe, preferred, exposedOnly = false) {
       const dx = foe.x - f.x, face = Math.sign(dx) || f.face;
       const id = side => side === 'neutral' ? f.kit.ground[f.chainWindow > 0 ? f.chainNext : 0] : f.kit.tilts[side];
       const repeated = moveFreshness(f, id(preferred)) < 0.86;
-      const options = repeated ? [preferred, 'neutral', 'forward', 'down', 'up'] : [preferred];
+      const options = exposedOnly ? ['down','up','forward','neutral'] : repeated ? [preferred, 'neutral', 'forward', 'down', 'up'] : [preferred];
       let best = null, power = -1;
       for (const side of options) {
         if ((side === 'forward' && f.run) || (side === 'neutral' && face !== f.face)) continue;
@@ -6188,6 +6321,8 @@
         const gap = Math.abs(dx) + foe.vx * face * move.start;
         const height = foe.y + foe.vy * move.start - bodyHeight(foe) * 0.52 - f.y;
         if (Math.abs(gap - x) > rx + foe.stats.width || Math.abs(height - y) > ry + bodyHeight(foe) * 0.4) continue;
+        if (exposedOnly && shieldContact(foe, { x: f.x + face * x - foe.vx * move.start,
+          y: f.y + y - foe.vy * move.start, rx, ry })) continue;
         const freshness = moveFreshness(f, moveId);
         if (freshness > power) { best = side; power = freshness; }
       }
@@ -6429,6 +6564,16 @@
       }
       const defense = this.cpuGuard(f, foe);
       if (defense) return defense;
+      if (brain.timer <= 0 && foe.shield && foe.shieldHP < 0.55 && f.ground >= 0 && f.ground === foe.ground &&
+          !f.attack && !f.shield && !f.stun && !f.run && !f.landingLag && !f.command && f.charge < 0 && Math.sign(dx) === f.face) {
+        const opening = this.cpuTiltChoice(f, foe, 'down', true);
+        if (opening) {
+          brain.timer = 0.18;
+          brain.hold = brain.guard = 0;
+          return { ...idleInput, x: opening === 'forward' ? f.face : 0,
+            y: opening === 'up' ? -1 : opening === 'down' ? 1 : 0, tapped: { attack: true } };
+        }
+      }
       if (
         under &&
         f.ground >= 0 &&
@@ -6639,6 +6784,8 @@
     idleInput,
     clamp,
     attackWindow,
+    shieldBubble,
+    shieldContact,
     ledgePosition,
     ledgeRollAction,
     ledgeRollPosition,

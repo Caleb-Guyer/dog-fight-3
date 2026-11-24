@@ -14,6 +14,7 @@
     arenas,
     Battle,
     idleInput,
+    clamp,
   } = window.DogFight;
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
   const $ = (id) => document.getElementById(id);
@@ -258,6 +259,7 @@
   let walkPointer = null;
   let touchFlick = null, flickAim = null;
   const rightStickHeld = [false, false];
+  const shieldTiltLocked = [false, false];
   function clearInput() {
     held.clear();
     taps.clear();
@@ -267,6 +269,7 @@
     walkPointer = null;
     touchFlick = flickAim = null;
     rightStickHeld.fill(false);
+    shieldTiltLocked.fill(false);
     document.querySelectorAll('.touch-pad .held').forEach((el) => el.classList.remove('held'));
   }
   let audioContext;
@@ -380,6 +383,8 @@
     } else if (name === 'smashRelease') {
       const pitch = { pip: 400, brisket: 135, noodle: 325, clover: 540 }[detail.f.kind];
       tone(pitch, pitch * 0.52, 0.075, 0, 'triangle', 0.05 + detail.f.attack.power * 0.04);
+    } else if (name === 'shieldPoke') {
+      tone(1060, 580, 0.055, 0.018, 'triangle', 0.11);
     } else if (name === 'crouchCancel' && detail.planted) {
       tone(155, 83, 0.055, 0.012, 'triangle', 0.075);
     } else if (name === 'sweetSpot') {
@@ -644,6 +649,7 @@
       ['Smash / charge', 'I', 'N', 'RT / right stick'],
       ['Special', 'K', '.', 'B'],
       ['Shield / air dodge / tech', 'L', '/', 'LB / RB'],
+      ['Tilt shield', 'L + Left Shift + direction', '/ + Right Ctrl + direction', 'Gentle stick / both bumpers + stick'],
       ['Grab / throw', 'U', 'M', 'Y'],
       [networkGame ? 'Match menu' : 'Pause', 'Esc', 'Esc', 'Start'],
     ];
@@ -662,6 +668,7 @@
         '<p>On a raised platform, flick Down to drop through with an air jump in reserve. Tap Attack as you fall to swing. Press Down and Attack together to keep your grounded down tilt. For a low crouch, ease the stick down, hold Walk + Down on a keyboard, or slide from the center dot onto Down on touch. Try both heights in Training → Platform practice.</p>' +
         '<p>Hold Down before a hit to crouch cancel. You take the damage with less knockback. A light, low hit can leave your paws planted. Tap Attack at the spark to answer with a down tilt. Try a stronger launcher or a grab against a crouching rival.</p>' +
         '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
+        '<p>Holding Shield or blocking a hit shrinks the bubble. An attack can clip an exposed paw or ear. To cover it, ease the stick toward the hit, or hold both bumpers and aim freely. On keyboard, hold Walk while aiming with Shield. On touch, hold Shield and drag from the center dot toward the hit.</p>' +
         '<p>While holding Shield, press Jump, Grab, Up + Smash, or Up + Special. Tap during a blocked hit to start your response as soon as shieldstun ends. An immediate shield grab takes four extra frames to reach. A heavier blow pushes you farther away.</p>' +
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Aim diagonally down and tap Shield to slide onto a platform. Do this just after jumping to wavedash. Try Training → Air-dodge practice or Training → Wavedash.</p>' +
         '<p>Flick a direction during the hit spark to shift your dog. You can slide sideways on the ground or in eight directions in the air. Try escaping the second swing in Training → Combo escape.</p>' +
@@ -863,6 +870,9 @@
       contents =
         '<p class="recovery-note">Shield is L for P1, Slash for P2, either bumper on a gamepad, or Shield on touch.</p><h3 class="guide-section">On the ground</h3><p>Keep Shield held and press Jump, Grab, Up + Smash, or Up + Special. You can tap during impact. A grab immediately after a block needs four extra startup frames.</p><p>In <strong>Training → Shield practice</strong>, use Clover’s Disc Hook against Pip’s spaced kick and Brisket’s Belly Drop. Choose Strike or Grab to practice a parry or dodge with your own dog.</p><ul class="move-rows guide-shield">' +
         groundRows +
+        '</ul><h3 class="guide-section">Shield coverage</h3><ul class="move-rows guide-coverage">' +
+        guideMoveRow({ label: 'Tilt shield', hint: 'Shift the bubble toward a low sweep, high aerial or incoming disc. A hit that reaches an exposed part of your dog deals its normal damage. Try Guard low and Guard high in Shield practice.' },
+          'Shield + gentle direction', 'shieldTilt', 'defense') +
         '</ul><h3 class="guide-section">Crouch cancel</h3><ul class="move-rows guide-crouch">' +
         guideMoveRow({ label: 'Crouch cancel', hint: 'You take full damage and two-thirds of the usual launch speed. A light, low blow can leave your paws planted. Tap Attack at the spark for ' +
           moves[kit.tilts.down].label + '. Grabs and tethers can catch a crouch. Try both sides in Training → Combo escape.' }, 'Hold Down before contact', 'crouchHit', 'defense') +
@@ -1619,17 +1629,29 @@
     const aerial = e.pattern === 'kick' || e.pattern === 'drop';
     const dummy = world.dogs[1];
     const attackName =
+      e.pattern === 'low' ? 'Tail Broom' : e.pattern === 'high' ? 'Slip Lead' :
       aerial ? moves[dummy.kit.air[e.pattern === 'kick' ? 'forward' : 'down']].label
         : e.pattern === 'grab' ? grabs[dummy.kit.grab].label : smashes[dummy.kit.smashes.side].label;
     if (name === 'shieldCue') {
       result.dataset.result = e.phase;
       result.textContent = e.phase === 'counter' ? 'Blocked · tap Grab' : e.phase === 'windup' ? attackName + ' coming' : attackName;
+      if (e.phase === 'windup' && (e.pattern === 'low' || e.pattern === 'high'))
+        tip.textContent = e.pattern === 'low' ? 'Cover the paws. Hold Shield and gently aim down.' : 'Cover the ears. Hold Shield and aim up.';
       return;
     }
     result.dataset.result = e.outcome;
     const feedback = {
       parry: ['Parry', 'Shield released on time. After a melee parry, tap Attack to counter.'],
-      block: ['Blocked', 'You held Shield through contact. Try releasing it just before the hit.'],
+      block: e.pattern === 'low' || e.pattern === 'high'
+        ? ['Covered the ' + (e.pattern === 'low' ? 'paws' : 'ears'), 'The bubble intercepted ' + attackName + '.']
+        : ['Blocked', 'You held Shield through contact. Try releasing it just before the hit.'],
+      poked: ['Shield poked', 'The attack reached your dog outside the bubble. Hold Shield and gently aim toward the hit.'],
+      found: ['Found the opening', 'Your hit reached the dog outside the bubble. Try the same swing against a fresh shield.'],
+      sealed: ['Shield held', 'The bubble caught your attack. Aim for the exposed paws with a down tilt.'],
+      brokeGuard: ['Shield broken', 'Your attack depleted the bubble. A low poke can deal damage while the rival still has shield left.'],
+      caughtGuard: ['Guard grabbed', 'Your grab reached the rival through the shield. Tap a direction to throw.'],
+      hitOpen: ['Guard down', 'Your attack reached the rival after the shield dropped. Retry to catch their exposed paws.'],
+      woreOut: ['Shield ran out', 'Choose Poke their shield to retry and catch the paws before the bubble breaks.'],
       break: ['Shield broken', 'Choose the matchup again to start with a fresh shield.'],
       hit: ['Hit', aerial ? 'Keep Shield held until the aerial lands. Tap Grab when the shield flashes.' : 'Try holding Shield through the windup, then release as the strike reaches you.'],
       grabbed: ['Grabbed', 'Hold Shield, then tap Down just before the grab reaches you.'],
@@ -1650,6 +1672,7 @@
       ],
     };
     [result.textContent, tip.textContent] = feedback[e.outcome];
+    if (e.pattern === 'low' || e.pattern === 'high') tip.textContent += ' Release Shield and raise it again to retry.';
   }
   function wallFeedback(name) {
     const status = $('wall-status');
@@ -1936,7 +1959,7 @@
     else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true, world.escapePractice?.baseline);
     else if (platform) world.resetPlatformPractice(pattern);
     else if (wall) world.resetWallPractice(pattern);
-    else if (shield) world.resetShieldPractice(pattern);
+    else if (shield) world.resetShieldPractice(pattern, direction ?? world.shieldPractice?.worn ?? true);
     else if (air) world.resetAirPractice(pattern, practiceSide);
     else if (roll) world.resetLedgeRollPractice(pattern, practiceSide);
     else if (climb) world.resetClimbPractice(pattern, practiceSide, world.climbPractice?.slow ?? true);
@@ -2089,14 +2112,20 @@
         : 'Jump. As you fall toward the dummy, release the directions and tap Shield before its up tilt connects.';
     } else if (shield) {
       $('shield-status').dataset.result = 'ready';
-      $('shield-status').textContent = 'Hold Shield to begin';
-      for (const button of $('shield-patterns').querySelectorAll('button'))
+      const guard = world.shieldPractice;
+      $('shield-status').textContent = guard.coverage ? (pattern === 'poke' ? 'Rival shield' : 'Your shield') + (guard.worn ? ' · 30%' : ' · 100%') : 'Hold Shield to begin';
+      $('shield-strength').hidden = !guard.coverage;
+      $('shield-strength').setAttribute('aria-pressed', String(!!guard.coverage && !guard.worn));
+      for (const button of $('shield-patterns').querySelectorAll('button:not(#shield-strength)'))
         button.setAttribute('aria-pressed', String(button.id === 'shield-' + pattern));
       message = {
         kick: 'You’re Clover. Hold Shield. Tap Grab when Pip’s Flying Kick hits the far side of your shield.',
         drop: 'You’re Clover. Hold Shield. Tap Grab as Brisket’s Belly Drop hits to catch him before he recovers.',
         strike: 'Raise Shield to start. Roll through the strike, or release Shield as it lands to parry.',
         grab: 'Raise Shield to start. Tap Down just before the grab to spot-dodge, or tap a side to roll.',
+        low: 'Hold Shield. Noodle sweeps your paws. Aim Down gently with the stick, Walk + Down, or a drag from the center dot.',
+        high: 'Hold Shield. Noodle jumps for your ears. Aim Up as the lead swings over the bubble.',
+        poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + moves[player.kit.tilts.down].label + '.',
       }[pattern];
     } else if (chase) {
       result.dataset.result = 'ready';
@@ -2209,8 +2238,9 @@
     drill('wall', false, world.wallPractice?.side || 'left');
   $('wall-side').onclick = () => drill('wall', false, world.wallPractice.side === 'left' ? 'right' : 'left');
   $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'kick');
-  for (const button of $('shield-patterns').querySelectorAll('button'))
+  for (const button of $('shield-patterns').querySelectorAll('button:not(#shield-strength)'))
     button.onclick = () => drill('shield', false, button.id.slice('shield-'.length));
+  $('shield-strength').onclick = () => drill('shield', false, world.shieldPractice.pattern, !world.shieldPractice.worn);
   $('air-dodge-training').onclick = () => drill('air', false, world?.airPractice?.pattern || 'neutral');
   $('air-neutral').onclick = () => drill('air', false, 'neutral');
   $('air-edge').onclick = () => drill('air', false, 'edge');
@@ -3014,11 +3044,18 @@
     const fromCenter = !i && touchPointers.get(walkPointer)?.dataset.touch;
     const walk = key('walk') || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
     const shield = key('shield') || down(pad, 4) || down(pad, 5);
-    const gentleDown = !shield && y > 0 && (key('walk') || fromCenter === 'down');
+    const grounded = world.dogs[fighterIndex].ground >= 0;
+    const gentleGuard = shield && grounded && (key('walk') || fromCenter);
+    const gentleDown = y > 0 && !shield && (key('walk') || fromCenter === 'down');
+    const side = (walk ? x * (64 / 127) : x) || axis(0) || (!left && !right && aim?.x) || 0;
+    const vertical = ((gentleGuard || gentleDown) ? y * (64 / 127) : y) || axis(1) || (!up && !downAim && aim?.y) || 0;
+    // Keep a held direction aimed when the second bumper is released. Centering rearms the dodge.
+    if (grounded && down(pad, 4) && down(pad, 5)) shieldTiltLocked[i] = true;
+    else if (!grounded || !shield || Math.max(Math.abs(side), Math.abs(vertical)) < 0.24) shieldTiltLocked[i] = false;
     return {
-      x: (walk ? x * (64 / 127) : x) || axis(0) || (!left && !right && aim?.x) || 0,
+      x: shieldTiltLocked[i] ? clamp(side, -0.5, 0.5) : side,
       grabX,
-      y: (gentleDown ? 64 / 127 : y) || axis(1) || (!up && !downAim && aim?.y) || 0,
+      y: shieldTiltLocked[i] ? clamp(vertical, -0.5, 0.5) : vertical,
       // Apply the air dodge's radial dead zone to the whole stick, including shallow angles.
       airDodgeX: digitalAim ? (left || right ? grabX : 0) : pad?.axes?.[0] || 0,
       airDodgeY: digitalAim ? y : pad?.axes?.[1] || 0,

@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const { Battle, idleInput, clamp } = window.DogFight;
+  const { Battle, idleInput, clamp, shieldContact } = window.DogFight;
   const { rooms, chapterFighter, fightStocks } = window.DispatchScript;
   const machines = {
     clipper: { name: 'Ticket Clipper', width: 26, height: 64, weight: 1.03, speed: 157, reach: 59,
@@ -258,13 +258,15 @@
       if (e.phase !== 'strike' || e.spent || !f.stocks || f.respawning || f.stun > 0 || f.grip || f.ground < 0) return;
       const body = machines[kind], boss = kind === 'conductor', rush = e.move === 'charge';
       const dx = (hero.x - f.x) * e.face;
-      if (dx < (rush ? -36 : -12) - hero.stats.width ||
-          dx > (boss && rush ? 64 : body.reach) + hero.stats.width ||
-          hero.y - hero.stats.height > f.y + 6 || hero.y < f.y - (boss ? 73 : body.height - 10)) return;
+      const back = rush ? -36 : -12, front = boss && rush ? 64 : body.reach, high = boss ? 73 : body.height - 10;
+      const guard = shieldContact(hero, { x: f.x + e.face * (front + back) / 2, rx: (front - back) / 2,
+        y: f.y + (6 - high) / 2, ry: (high + 6) / 2 });
+      if (!guard && (dx < back - hero.stats.width || dx > front + hero.stats.width ||
+          hero.y - hero.stats.height > f.y + 6 || hero.y < f.y - high)) return;
       e.spent = true;
       this.hit(hero, f, boss && rush ? 13 : body.damage, body.base, body.growth, 0,
-        boss ? 'heavy' : 'jab', e.face, { x: hero.x, y: hero.y - hero.stats.height * 0.55 },
-        { angle: rush ? 29 : boss ? 62 : 42, hard: boss || kind === 'porter' });
+        boss ? 'heavy' : 'jab', e.face, guard || { x: hero.x, y: hero.y - hero.stats.height * 0.55 },
+        { angle: rush ? 29 : boss ? 62 : 42, hard: boss || kind === 'porter' }, null, null, !!guard);
     }
     savePoint() {
       this.checkpoint++;
