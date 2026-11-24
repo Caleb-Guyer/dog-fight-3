@@ -11,14 +11,14 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=waveland-1" />
+    <link rel="stylesheet" href="./style.css?v=bandstand-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
-    <link rel="stylesheet" href="./screen.css?v=waveland-1" />
-    <link rel="stylesheet" href="./online.css?v=online-1" />
+    <link rel="stylesheet" href="./screen.css?v=bandstand-1" />
+    <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=waveland-1"></script>
-    <script defer src="./arena-art.js?v=screen-1"></script>
-    <script defer src="./engine.js?v=waveland-1"></script>
-    <script defer src="./render.js?v=waveland-1"></script>
+    <script defer src="./arena-art.js?v=bandstand-1"></script>
+    <script defer src="./engine.js?v=bandstand-1"></script>
+    <script defer src="./render.js?v=bandstand-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./online.js?v=waveland-1"></script>
-    <script defer src="./app.js?v=waveland-1"></script>
+    <script defer src="./online.js?v=bandstand-1"></script>
+    <script defer src="./app.js?v=bandstand-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -123,7 +123,11 @@
             <p id="online-status" role="status"></p>
             <div id="online-actions">
               <button id="online-quick" class="net-action net-primary" type="button"><i data-icon="signal"></i>Quickplay</button>
-              <button id="online-create" class="net-action" type="button"><i data-icon="versus"></i>Create room</button>
+              <div class="room-setup">
+                <label for="online-stage">Opening arena</label>
+                <select id="online-stage"><option value="">Random arena</option></select>
+                <button id="online-create" class="net-action" type="button"><i data-icon="versus"></i>Create room</button>
+              </div>
               <form id="online-join-form">
                 <label for="online-code">Room code</label>
                 <div class="net-code-row">
@@ -412,6 +416,7 @@
           <span id="platform-patterns" role="group" aria-label="Platform matchup" hidden>
             <button id="platform-below" type="button" class="utility" aria-pressed="true">Rival below</button>
             <button id="platform-top" type="button" class="utility" aria-pressed="false">Rival on top</button>
+            <button id="platform-hold" type="button" class="utility" aria-pressed="false">Hold the top</button>
           </span>
           <button id="escape-training" type="button" class="utility">Combo escape</button>
           <span id="escape-patterns" role="group" aria-label="Combo escape settings" hidden>

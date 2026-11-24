@@ -1365,6 +1365,184 @@
     }
   }
 
+  // A repeating riverbank sits behind one bandstand. Only the central pavilion has a moon and a bell.
+  function riverbank() {
+    return sprite('moonbell-river', 400, 320, p => {
+      p.g.translate(0, 64);
+      const rng = random(3349);
+      const bands = [[-64,41,'#282640'],[-23,46,'#302d49'],[23,36,'#3c3552'],[59,31,'#51405b'],
+        [90,21,'#674d65'],[111,22,'#805e72'],[133,15,'#987781']];
+      for (const [y,h,c] of bands) p.r(0,y,400,h,c);
+      for (let i=0; i<105; i++) {
+        const x=Math.floor(rng()*400), y=Math.floor(rng()*149)-62;
+        const color=i%5 ? '#817592' : '#c2adac';
+        p.dot(x,y,color);
+        if (!(i%22)) { p.r(x-1,y,3,1,color); p.r(x,y-1,1,3,color); p.dot(x,y,'#f5d29d'); }
+      }
+      for (const [x,y,w] of [[8,83,36],[29,86,24],[118,68,48],[126,66,15],[263,86,31],[350,62,36]])
+        p.r(x,y,w,1,'#70566f');
+      // Houses on the other bank, loosely packed around two slender mill stacks.
+      for (let x=-6; x<400;) {
+        const w=7+Math.floor(rng()*17), y=110+Math.floor(rng()*19);
+        p.r(x,y,w,143-y,'#55455e');
+        if (rng()<0.55) p.poly([x-1,y,x+w/2,y-4,x+w+1,y],'#55455e');
+        for (let bx=x+2; bx<x+w-1; bx+=4)
+          if (rng()>0.49) p.r(bx,y+3+Math.floor(rng()*4),2,2,rng()>0.4?'#b99283':'#816d78');
+        x+=w-1;
+      }
+      for (const x of [45,336]) { p.r(x,103,3,30,'#52445e'); p.r(x-1,103,5,2,'#64516a'); }
+      p.r(0,137,400,6,'#514659'); p.r(0,143,400,27,'#715e75');
+      p.r(0,144,400,1,'#a18085'); p.r(0,159,400,9,'#65576c');
+      for (let i=0;i<93;i++) p.r(rng()*398,146+rng()*18,2+rng()*9,1,i%4?'#807080':'#a28485');
+      const tree = (x,y,w,h) => {
+        p.r(x-1,y,3,h,'#383a4e');
+        p.disk(x,y,w,Math.round(w*0.8),'#454356');
+        p.disk(x-2,y-3,w-2,Math.max(2,Math.round(w*0.55)),'#514959');
+      };
+      for (let x=0;x<=400;x+=16) tree(x,163-Math.floor(rng()*9),7+Math.floor(rng()*8),25);
+      p.r(0,174,400,82,'#383848'); p.r(0,177,400,10,'#474354');
+      for (let i=0;i<160;i++) p.r(rng()*399,188+rng()*68,1+rng()*4,1,i%3?'#404050':'#454453');
+      // Park fence and lamps stay lower and dimmer than the fighting platforms.
+      p.r(0,171,400,1,'#4b4656'); p.r(0,173,400,1,'#302f43');
+      for (let x=4;x<400;x+=12) p.r(x,169,1,8,'#363646');
+      for (const x of [54,345]) {
+        p.r(x,145,2,31,'#363448'); p.r(x-3,143,8,2,'#484051'); p.r(x-2,137,6,6,'#806674');
+        p.r(x-1,138,4,4,'#d4aa8d'); p.r(x,138,2,3,'#f2d49e'); p.r(x-3,136,8,1,'#454052');
+        p.r(x-1,134,4,2,'#514858'); p.dot(x,133,'#5b4f5c');
+      }
+    });
+  }
+  function bandstandPavilion() {
+    return sprite('moonbell-pavilion',400,225,p => {
+      const moonX=37, moonY=86;
+      p.disk(moonX,moonY,16,16,'#827187'); p.disk(moonX,moonY,14,14,'#dfbc9c');
+      p.disk(moonX,moonY-1,13,13,'#ffe2aa');
+      for (const [dx,dy,w] of [[-7,-5,3],[4,-9,2],[-9,4,2],[5,6,4],[3,8,3]]) p.r(moonX+dx,moonY+dy,w,1,'#edca9f');
+      // Patinated copper roof seen from the front, with an open bell cupola.
+      const eaves=[54,77,84,68,130,56,170,43,188,35,212,35,230,43,270,56,316,68,346,77];
+      p.poly(eaves.concat([346,80,54,80]),'#4a4c62');
+      p.poly([55,77,137,59,190,37,199,37,168,59,119,74], '#656077');
+      p.poly([121,75,167,60,199,37,201,37,200,71], '#586074');
+      p.poly([202,37,211,37,233,45,266,57,308,70,344,77,279,73,239,60], '#55536b');
+      for (const [x,y] of [[80,76],[128,74],[200,72],[272,74],[320,76]]) {
+        p.line(x,y,200+(x-200)*0.35,56,'#727084');
+        p.line(200+(x-200)*0.35,56,200+(x-200)*0.085,38,'#6a687f');
+      }
+      p.r(54,77,292,3,'#575366'); p.r(54,77,292,1,'#8b7279');
+      p.r(61,80,278,3,'#514a5f');
+      for (let x=65;x<338;x+=10) { p.r(x,83,5,2,'#64596b'); p.r(x+1,85,3,1,'#615466'); }
+      for (const x of [73,323]) {
+        const side=x<200?1:-1;
+        p.r(x,83,5,84,'#555064'); p.r(x,85,1,78,'#797081'); p.r(x+3,85,2,79,'#44475c');
+        p.line(x+2,100,x+2+22*side,82,'#666072'); p.line(x+2,103,x+2+25*side,83,'#514c60');
+        p.r(x-1,88,7,2,'#736774'); p.r(x-1,153,7,2,'#6b606e');
+      }
+      p.r(187,34,26,3,'#83727b'); p.r(188,22,3,12,'#726679'); p.r(209,22,3,12,'#726679');
+      p.r(190,21,20,2,'#4c475e'); p.r(199,22,2,4,'#988174');
+      p.poly([198,24,202,24,203,26,203,29,206,32,194,32,197,29,197,26],'#c49b79');
+      p.r(195,31,10,1,'#efd19a'); p.r(199,32,2,2,'#b48f77');
+      p.poly([184,21,190,18,196,14,200,11,204,14,210,18,216,21], '#737486');
+      p.r(184,21,32,1,'#a28a89'); p.r(199,7,2,6,'#a58a80'); p.dot(200,6,'#e4bd91');
+      // The cable sags between trusses. The tiny bulbs have warm glass and dark socket caps.
+      const cable=[[77,83],[106,90],[135,92],[166,88],[200,81],[234,88],[265,92],[294,90],[323,83]];
+      for (let i=1;i<cable.length;i++) {
+        const [x,y]=cable[i-1], [xx,yy]=cable[i]; p.line(x,y,xx,yy,'#504456');
+        for (const fraction of [0.28,0.75]) {
+          const bx=Math.round(x+(xx-x)*fraction), by=Math.round(y+(yy-y)*fraction);
+          p.r(bx,by,1,3,'#574b5c'); p.r(bx-1,by+3,3,2,'#ba8e75'); p.dot(bx,by+3,'#ffe1a3');
+        }
+      }
+      for (const [x,dir] of [[84,1],[316,-1]]) {
+        p.poly([x,174,x+9*dir,174,x+40*dir,218,x+32*dir,218],'#403a4c');
+        p.line(x+7*dir,176,x+35*dir,216,'#67545d'); p.r(x-3,174,7,48,'#4d424f');
+        p.r(x-2,174,2,47,'#71575e'); p.r(x-5,220,11,3,'#48404d');
+      }
+      // The house band is small and in the cool light behind the playable deck.
+      const bandColors={a:'#484253',b:'#645766',c:'#8b7378',d:'#af8e83',e:'#615768',f:'#827384',h:'#b09989'};
+      const hound=['.....aaa.....','...aafffa....','..affffffa...','..aaaahhaa...','...abdbdc....',
+        '...abdcddd...','...abccddda..','...abbccaa...','....beee.....','...beefec....',
+        '..beeeeffb...','..beeeefcc...','...beeeeb....','...beeeeb....'];
+      mapSprite(p,149,142,hound,bandColors);
+      mapSprite(p,236,141,hound,bandColors,true);
+      // Upright bass, including the scroll, fingerboard, bridge and the player's bow hand.
+      p.line(141,157,149,137,'#594759'); p.line(142,157,150,137,'#9c7c78');
+      p.r(149,135,3,3,'#9f807a'); p.dot(151,135,'#ccb095');
+      p.poly([140,145,144,145,145,149,143,151,144,154,146,156,145,160,134,160,133,157,135,153,137,152,137,148], '#594958');
+      p.poly([140,146,143,146,143,149,141,152,143,155,144,157,143,160,136,160,135,157,138,152,138,149], '#a17e75');
+      p.line(142,150,139,157,'#615261'); p.r(138,156,5,1,'#c09d84');
+      p.dot(136,155,'#684f60'); p.dot(143,153,'#684f60'); p.line(150,151,143,151,'#b4998b');
+      // Bell-front cornet and a folded sheet on each music stand.
+      p.line(238,147,229,151,'#ab9281'); p.line(237,149,230,152,'#705f6b');
+      p.poly([232,150,229,149,226,148,227,153,229,154],'#b29883');
+      p.line(226,148,228,154,'#d1b293'); p.r(232,150,3,3,'#9d847b');
+      for(const x of [161,229]) {
+        p.r(x,151,1,9,'#5e5362');
+        p.poly([x-5,149,x+4,148,x+3,152,x-6,153],'#6e6271');
+        p.line(x-4,149,x+3,148,'#bd9f92'); p.r(x-4,150,3,1,'#9c8790');
+      }
+      // The bass drum's painted crescent echoes the moon over the river.
+      p.disk(200,157,10,9,'#524857'); p.disk(200,157,9,8,'#a3867d'); p.disk(200,157,7,7,'#776779');
+      p.disk(199,156,4,4,'#c2a289'); p.disk(201,154,3,3,'#776779');
+      for(const x of [189,210]) { p.line(x,159,x-2,160,'#8e7680'); p.dot(x,154,'#b59486'); }
+      p.r(185,150,6,3,'#887181'); p.r(185,150,6,1,'#b09289');
+      p.r(210,148,1,9,'#7c6c7a'); p.disk(211,147,5,1,'#a38b81');
+      // Pleated fabric and its stitched edge hang below the front of the deck.
+      for (let x=106;x<290;x+=32) {
+        p.poly([x,174,x+32,174,x+30,178,x+24,182,x+17,184,x+11,183,x+5,180], '#6c4e61');
+        p.poly([x+2,174,x+9,174,x+12,181,x+6,178], '#865f6a');
+        p.line(x+5,179,x+14,183,'#99766f'); p.line(x+15,183,x+23,181,'#a98475');
+        p.line(x+24,181,x+31,176,'#85666a');
+      }
+    });
+  }
+  function bandstandDeck(w,thin) {
+    return sprite('moonbell-deck-'+w+'-'+thin,w,thin?6:15,p => {
+      // Brass edging marks the exact walkable lip. Dark cutouts keep the wings light enough to read through.
+      p.r(0,0,w,thin?3:5,'#352e40'); p.r(0,0,w,1,'#ffdfa0');
+      p.r(1,1,w-2,1,'#cb895e'); p.r(3,0,w-6,1,thin?'#efbe80':'#f0b676');
+      if (thin) {
+        p.r(2,3,w-4,1,'#95615d'); p.r(4,4,w-8,1,'#4c394d');
+        for (let x=8;x<w-4;x+=12) { p.r(x,3,2,2,'#b67e66'); p.dot(x,5,'#554155'); }
+      } else {
+        p.r(1,3,w-2,5,'#8e5554'); p.r(1,4,w-2,2,'#ad6a58'); p.r(3,8,w-6,4,'#684555');
+        for (let x=5;x<w-6;x+=16) {
+          p.r(x,3,1,4,'#754952'); p.r(x+4,6,5,1,'#9d6156');
+          p.r(x+3,8,9,2,'#443846'); p.dot(x+7,8,'#b2826b');
+        }
+        p.r(6,12,w-12,3,'#453545'); p.r(6,12,w-12,1,'#9f6c5d');
+        for (const x of [1,w-4]) { p.r(x,2,3,5,'#d5a271'); p.dot(x+1,4,'#70505a'); }
+      }
+    });
+  }
+  function drawBandstand(ctx, seconds, b) {
+    const bank=riverbank(), area=b || { left:0, top:0, right:1200, bottom:675 };
+    ctx.fillStyle='#282640'; ctx.fillRect(area.left,area.top,area.right-area.left,area.bottom-area.top);
+    for (const upper of [true,false]) {
+      const start=upper?area.top:Math.max(768,area.top), end=upper?Math.min(-192,area.bottom):area.bottom;
+      if (end<=start) continue;
+      const tile=sprite(upper?'moonbell-sky':'moonbell-lawn',152,80,p => {
+        const rng=random(upper?174:317); p.r(0,0,152,80,upper?'#282640':'#383848');
+        for (let i=0;i<(upper?20:54);i++) p.r(rng()*151,rng()*79,upper?1:3,1,upper?'#786d88':'#414151');
+      });
+      ctx.save(); ctx.beginPath(); ctx.rect(area.left,start,area.right-area.left,end-start); ctx.clip();
+      for (let y=Math.floor(start/240)*240;y<end;y+=240)
+        for (let x=Math.floor(area.left/456)*456;x<area.right;x+=456) ctx.drawImage(tile,x,y,456,240);
+      ctx.restore();
+    }
+    for (let x=Math.floor(area.left/1200)*1200;x<area.right;x+=1200) ctx.drawImage(bank,x,-192,1200,960);
+    ctx.drawImage(bandstandPavilion(),0,0,1200,675);
+    const floors=window.DogFight.platforms('bandstand',0);
+    for (const p of floors) {
+      const w=p.x2-p.x1, art=bandstandDeck(w/3,p.thin);
+      ctx.drawImage(art,p.x1,p.y,w,art.height*3);
+    }
+    // Two moths circle the outer lamps, well clear of the fighters.
+    for (const x of [54,345]) {
+      const t=seconds*1.8+x, dx=Math.round(Math.sin(t)*5), dy=Math.round(Math.cos(t*1.7)*3);
+      ctx.fillStyle='#ead3a9'; ctx.fillRect((x+dx)*3,(136+dy)*3,3,3);
+    }
+  }
+
   function surroundings(ctx, key, b) {
     const laundry = key === 'laundry',
       edge = wing * 3,
@@ -1430,6 +1608,13 @@
   }
 
   function draw(ctx, stageId, seconds = 0, bounds) {
+    if (stageId === 'bandstand') {
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      drawBandstand(ctx,seconds,bounds);
+      ctx.restore();
+      return;
+    }
     const laundry = stageId === 'laundry',
       key = laundry ? 'laundry' : 'picnic';
     if (!scenes.has(key)) scenes.set(key, laundry ? buildLaundry() : buildPicnic());

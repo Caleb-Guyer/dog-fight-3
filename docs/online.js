@@ -1,8 +1,8 @@
 (() => {
   'use strict';
 
-  const prefix = 'dogfight3-cg-versus-v13-';
-  const channel = 'dogfight3-v13';
+  const prefix = 'dogfight3-cg-versus-v14-';
+  const channel = 'dogfight3-v14';
   const quickId = prefix + 'quickplay';
   const roomAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick'];
@@ -191,13 +191,14 @@
       this.link = this.match = null;
       if (message) this.events.closed(message);
     }
-    start(action, kind, code = '') {
+    start(action, kind, code = '', openingStage = '') {
       this.close();
       if (!fighter(kind) || !['create', 'join', 'quick'].includes(action)) return;
       if (action === 'join' && !validCode(code)) return this.events.closed('Enter the six-character room code.');
       if (!window.Peer || !window.RTCPeerConnection || navigator.onLine === false)
         return this.events.closed('Online play needs an internet connection and a browser with WebRTC.');
       this.action = action;
+      this.openingStage = action === 'create' && Object.hasOwn(window.DogFight.arenas, openingStage) ? openingStage : '';
       this.kind = kind;
       this.code = action === 'create' ? roomCode() : code;
       this.attempts = 0;
@@ -329,11 +330,14 @@
     }
     validStart(msg) {
       return msg.length === 6 && msg[1] === this.round + 1 && fighter(msg[2]) && msg[3] === this.kind &&
-        ['picnic', 'laundry'].includes(msg[4]) && Number.isInteger(msg[5]) && msg[5] >= 0 && msg[5] <= 0xffffffff;
+        typeof msg[4] === 'string' && Object.hasOwn(window.DogFight.arenas, msg[4]) &&
+        Number.isInteger(msg[5]) && msg[5] >= 0 && msg[5] <= 0xffffffff;
     }
     hostRound() {
       const seed = randomInt();
-      const stage = this.round ? (this.stage === 'picnic' ? 'laundry' : 'picnic') : (seed % 2 ? 'picnic' : 'laundry');
+      const stages = Object.keys(window.DogFight.arenas);
+      const stage = this.round ? stages[(stages.indexOf(this.stage) + 1) % stages.length]
+        : this.openingStage || stages[seed % stages.length];
       const data = ['start', this.round + 1, this.kind, this.remoteKind, stage, seed];
       this.send(data);
       this.beginRound(data);

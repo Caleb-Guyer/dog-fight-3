@@ -1202,7 +1202,7 @@
       if (world?.climbPractice && (name === 'climbCue' || name === 'climbResult' ||
           (name === 'ledgeClimbPlant' && world.climbPractice.phase === 'active')))
         climbFeedback(name, e);
-      if (name === 'platformResult' || (name === 'platformDrop' && world?.platformPractice && e.f.index === 0))
+      if (name === 'platformResult' || name === 'platformClimb' || (name === 'platformDrop' && world?.platformPractice && e.f.index === 0))
         platformFeedback(name, e);
       if (name === 'airStart' || name === 'airCue' || name === 'airResult') airFeedback(name, e);
       if (world?.rollPractice && e.f?.index === 0 && (name === 'ledgeRoll' || name === 'rollResult'))
@@ -1452,6 +1452,27 @@
     const label = moves[e.moveId]?.label;
     const below = world.platformPractice.pattern === 'below';
     const status = $('platform-status'), tip = $('recovery-tip');
+    if (world.platformPractice.pattern === 'hold') {
+      if (name === 'platformDrop') return;
+      if (name === 'platformClimb') {
+        status.textContent = world.platformPractice.phase === 'wing' ? 'Rival on the right wing' : 'Watch the right wing';
+        status.dataset.result = 'approach';
+        return;
+      }
+      const feedback = {
+        intercept: [label + ' caught the jump', 'You kept the high platform.'],
+        guarded: ['Blocked ' + label, 'You shielded the rising aerial. Try meeting the next jump with an attack.'],
+        parried: ['Parried the approach', 'Your shield release caught the incoming aerial.'],
+        tagged: [label + ' got through', 'Their up air reaches through the floor. Shield or strike as they rise.'],
+        claimed: ['Rival took the top', 'Cover the right edge before the challenger lands.'],
+        vacated: ['Left the high platform', 'Meet the last jump from above the right wing.'],
+        low: ['Caught the first jump', 'Let the rival reach the wing, then catch the jump toward the top.'],
+      }[e.outcome];
+      status.dataset.result = e.outcome;
+      status.textContent = feedback[0];
+      tip.textContent = feedback[1] + ' Choose Hold the top to retry.';
+      return;
+    }
     if (name === 'platformDrop') {
       status.textContent = 'Through the platform';
       status.dataset.result = 'fall';
@@ -1927,12 +1948,12 @@
       message = trap ? 'Tap Attack to start. Watch the rival’s paws touch down, then tap Attack again to catch the climb.'
         : 'Press ' + inward + ' to climb. Release the direction and hold Shield as your dog stands up.';
     } else if (platform) {
-      const below = pattern === 'below';
-      $('platform-below').setAttribute('aria-pressed', String(below));
-      $('platform-top').setAttribute('aria-pressed', String(!below));
+      const below = pattern === 'below', hold = pattern === 'hold';
+      for (const id of ['below','top','hold']) $('platform-' + id).setAttribute('aria-pressed', String(pattern === id));
       $('platform-status').dataset.result = 'ready';
-      $('platform-status').textContent = below ? 'Rival below' : 'Rival on top';
-      message = below
+      $('platform-status').textContent = hold ? 'Defend the high platform' : below ? 'Rival below' : 'Rival on top';
+      message = hold ? 'Tap Attack to start. Watch the right wing. Shield the rising aerial or intercept the second jump.'
+        : below
         ? 'Tap Down to drop. As your paws pass the platform, aim down and tap Attack for ' + moves[player.kit.air.down].label + '.'
         : 'Press Down and Attack together for ' + moves[player.kit.tilts.down].label + '. Keep both paws on the platform.';
     } else if (escape) {
@@ -2068,6 +2089,7 @@
   $('platform-training').onclick = () => drill('platform', false, world.platformPractice?.pattern || 'below');
   $('platform-below').onclick = () => drill('platform', false, 'below');
   $('platform-top').onclick = () => drill('platform', false, 'top');
+  $('platform-hold').onclick = () => drill('platform', false, 'hold');
   $('escape-training').onclick = () => drill('escape', false, world.escapePractice?.spacing || 'tip');
   $('escape-tip').onclick = () => drill('escape', false, 'tip');
   $('escape-close').onclick = () => drill('escape', false, 'close');
@@ -2601,6 +2623,7 @@
     $('online-code').value = invite;
     const roster = $('online-roster');
     if (!roster.childElementCount) {
+      for (const [id, arena] of Object.entries(arenas)) $('online-stage').add(new Option(arena.name, id));
       for (const [kind, dog] of Object.entries(fighters)) {
         const button = document.createElement('button');
         button.type = 'button';
@@ -2658,7 +2681,7 @@
       if (request === onlineRequest) showOnline('Could not load online play. Please try again.', code);
       return;
     }
-    if (request === onlineRequest) online.start(action, onlineDog, code);
+    if (request === onlineRequest) online.start(action, onlineDog, code, $('online-stage').value);
   }
   function updateVotes() {
     const button = document.querySelector('[data-do=online-rematch]');

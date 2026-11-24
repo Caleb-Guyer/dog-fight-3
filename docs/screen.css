@@ -418,11 +418,31 @@ body:is(.playing, .cinema-active) .full-button span {
   .match-top .mode-label {
     display: none;
   }
+  .match-top {
+    right: calc(var(--right-edge) + 118px);
+    justify-content: flex-start;
+    gap: 4px;
+  }
+  .match-top > div {
+    min-width: 0;
+  }
   .match-top h1 {
-    font-size: 15px;
+    font-size: clamp(12px, 3.25vw, 15px);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
   .match-top .utility {
-    font-size: 13px;
+    flex: 0 0 35px;
+    min-height: 35px;
+    padding: 5px;
+  }
+  #pause-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
   .dispatch-orders strong {
     font-size: 13px;
@@ -435,14 +455,6 @@ body:is(.playing, .cinema-active) .full-button span {
   :root {
     --left-edge: max(5px, env(safe-area-inset-left));
     --right-edge: max(5px, env(safe-area-inset-right));
-  }
-  .match-top > div {
-    max-width: 93px;
-  }
-  .match-top h1 {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
   }
   .route-actions {
     flex-direction: column-reverse;

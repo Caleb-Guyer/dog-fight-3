@@ -1,6 +1,6 @@
 # Dog Fight 3
 
-A cartoon platform fighter for one or two players. Play **The Last Dispatch** story adventure, or choose Pip, Brisket, Noodle, or Clover and compete for the Golden Tennis Ball on Picnic Table or Laundry Line.
+A cartoon platform fighter for one or two players. Play **The Last Dispatch** story adventure, or pick Pip, Brisket, Noodle, or Clover for a three-stock fight on Picnic Table, Laundry Line, or Moonbell Bandstand.
 
 ## Play
 
@@ -12,11 +12,13 @@ Each dog starts with three stocks. Dealing damage makes the next hit launch a ri
 
 The game fills the browser window. On browsers with fullscreen support, starting your first fight or chapter also hides the browser controls. Select **Fullscreen** or press **F** to switch at any time. On a phone, rotate to landscape for a wider view with the touch controls over the arena.
 
+On **Moonbell Bandstand**, hold Jump beneath either wing. Once your paws land, jump inward to reach the high center platform with your midair jump still available. The right and left ends of the high platform overlap the wings below. Tap Down there to retreat one level. Dropping through the middle takes you back to the deck.
+
 ## Online versus
 
-Pick your dog and select **Quickplay** to fight the next available player. To play a friend, choose **Create room** and share the six-character code or invite link. Your friend picks a dog and selects **Join room**. The fight starts when both players connect. [Open Online versus](https://caleb-guyer.github.io/dog-fight-3/#online)
+Pick your dog and select **Quickplay** to fight the next available player on a random arena. To play a friend, choose an **Opening arena**, select **Create room**, and share the six-character code or invite link. Your friend picks a dog and selects **Join room**. The fight starts when both players connect. [Open Online versus](https://caleb-guyer.github.io/dog-fight-3/#online)
 
-Each device uses the P1 keyboard, controller, or touch controls. The HUD marks your fighter with **YOU**. Both dogs start with three stocks. At the results screen, both players can select **Rematch** to fight on the other arena. If the guest leaves, the host can use the same room code for the next opponent.
+Each device uses the P1 keyboard, controller, or touch controls. The HUD marks your fighter with **YOU**. Both dogs start with three stocks. When both players select **Rematch**, the arena advances through Picnic Table, Laundry Line, and Moonbell Bandstand in that order, then repeats. If the guest leaves, the next opponent can join the same code and play the host’s chosen opener.
 
 Your dog responds on the next simulation frame. Both browsers predict the opponent’s held controls for up to eight frames and replay the fight when a late input changes what happened. The damage counter, stock count, and match result use confirmed inputs. A longer interruption briefly pauses the fight until the connection catches up.
 
@@ -87,6 +89,8 @@ Choose **KO test** for a vertical launch test against Pip. From your chalk mark,
 Flick **Down** on a raised platform to slip through it. Your horizontal momentum carries into the fall, and you keep an air jump. As your paws pass through, aim your aerial and tap **Attack**. To down tilt on top, press **Down + Attack** together. For a crouch that lets high hits sail over your head, tilt the stick down gently, hold your keyboard Walk modifier with Down, or slide your thumb from the center dot onto Down. Low sweeps can still reach a crouching dog.
 
 In **Training → Platform practice**, choose **Rival below** to catch the other dog with a falling aerial. Choose **Rival on top** to catch them with your down tilt on the same platform. On Laundry Line the second setup puts you both on the moving basket. Select either setup again to retry with your fighters and stage.
+
+Choose **Hold the top** for a drill on Moonbell Bandstand with your selected dogs. Tap Attack to start the climb. The challenger jumps onto the right wing, then comes up through the high platform with their own up air. Try shielding it once. Repeat the drill and tap Down + Attack as the challenger jumps off the wing to intercept them. Returning to free practice or a different setup restores your arena.
 
 Your dog crouches for three frames before a grounded jump. Release Jump during the crouch for a short hop. Hold Jump through it for a full jump. Press Attack with Jump or during the crouch to launch a short-hop aerial in the direction you aimed. To attack on the way down, jump first and press Attack later. Jump a second time in midair, then use Up + Special to recover. Down + Jump drops through a raised platform.
 
@@ -292,4 +296,4 @@ In **Training**, choose **Left ledge** or **Right ledge**. The drill waits for J
 
 The editable game lives in `docs/`. Combat, physics, and the CPU are in `engine.js`. The match renderer is in `render.js`. The animated dogs and arenas are drawn in `fighters-art.js` and `arena-art.js`. Menus, controls, and synthesized sound are in `app.js`.
 
-Each fighter is assembled from indexed pixel sprites. The roster, damage meter, and results screen take their portraits from that fighter's in-game artwork. Both arenas are drawn on a 400 × 225 pixel grid. The contact sparks, landing dust, and launch trails share a five-frame atlas in `docs/assets/fight-fx.png`. The Dog Fight 3 wordmark and Brawl Pixel display font are bundled with the game.
+Each fighter is assembled from indexed pixel sprites. The roster, damage meter, and results screen take their portraits from that fighter's in-game artwork. All three arenas are drawn on a 400 × 225 pixel grid. The contact sparks, landing dust, and launch trails share a five-frame atlas in `docs/assets/fight-fx.png`. The Dog Fight 3 wordmark and Brawl Pixel display font are bundled with the game.

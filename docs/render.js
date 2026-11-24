@@ -137,11 +137,11 @@
     const aspect = (canvas.clientWidth || 900) / (canvas.clientHeight || 280);
     const viewportWidth = clamp(660 + (aspect - 1.7) * 190, 680, 1110);
     const viewportHeight = viewportWidth / aspect;
-    const picnic = config.stage === 'picnic';
+    const rooftops = config.stage === 'laundry';
     const t = reduced.matches ? 1.4 : Math.floor(time * 9) / 9;
-    const stageTime = picnic ? t : (1.5 * Math.PI + 0.28 * Math.sin(t * 0.75)) / 0.7;
+    const stageTime = rooftops ? (1.5 * Math.PI + 0.28 * Math.sin(t * 0.75)) / 0.7 : t;
     const ground = platforms(config.stage, stageTime);
-    const podiums = picnic ? [ground[1], ground[2]] : [ground[2], ground[3]];
+    const podiums = rooftops ? [ground[2], ground[3]] : [ground[1], ground[2]];
     const positions = podiums.map((p) => (p.x1 + p.x2) / 2);
     const center = (positions[0] + positions[1]) / 2;
     const width = Math.round(viewportWidth),
@@ -154,10 +154,10 @@
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     const left = Math.round(center - width / 2);
-    const top = Math.round(podiums[0].y - height * (picnic ? 0.69 : 0.8));
+    const top = Math.round(podiums[0].y - height * (rooftops ? 0.8 : 0.69));
     ctx.translate(-left, -top);
     window.ArenaArt.draw(ctx, config.stage, stageTime, { left, top, right: left + width, bottom: top + height });
-    const scale = clamp((viewportHeight * (picnic ? 0.56 : 0.49)) / 77, 0.8, 3.1);
+    const scale = clamp((viewportHeight * (rooftops ? 0.49 : 0.56)) / 77, 0.8, 3.1);
     [config.p1, config.p2].forEach((kind, i) => {
       const x = snap(positions[i]),
         y = podiums[i].y;
