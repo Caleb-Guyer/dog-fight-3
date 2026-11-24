@@ -17,8 +17,8 @@
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=shield-break-1"></script>
     <script defer src="./arena-art.js?v=night-mail-1"></script>
-    <script defer src="./engine.js?v=impact-tech-1"></script>
-    <script defer src="./render.js?v=impact-tech-1"></script>
+    <script defer src="./engine.js?v=aerial-spots-1"></script>
+    <script defer src="./render.js?v=aerial-spots-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=stock-return-1"></script>
     <script defer src="./dispatch-view.js?v=blast-radar-1"></script>
-    <script defer src="./online.js?v=impact-tech-1"></script>
-    <script defer src="./app.js?v=impact-tech-1"></script>
+    <script defer src="./online.js?v=aerial-spots-1"></script>
+    <script defer src="./app.js?v=aerial-spots-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -392,6 +392,8 @@
           <button id="frame-toggle" type="button" class="utility" aria-pressed="false" title="Freeze or resume with [ or the left stick click">Frame advance</button>
           <button id="frame-step" type="button" class="utility" title="Advance with ] or the right stick click" hidden>Step 1 frame</button>
           <button id="frame-landing" type="button" class="utility" aria-pressed="false">Freeze on landing</button>
+          <button id="training-boxes" type="button" class="utility" aria-pressed="false" aria-describedby="box-key">Contact boxes</button>
+          <small id="box-key" hidden>Mint body · Coral melee · Gold sweet spot</small>
           <button id="combo-training" type="button" class="utility">Combo practice</button>
           <span id="combo-controls" role="group" aria-label="Combo practice controls" hidden>
             <label for="combo-reply">Rival after contact</label>
@@ -453,6 +455,8 @@
             <button id="spacing-approach" type="button" class="utility" aria-pressed="true">Approach</button>
             <button id="spacing-retreat" type="button" class="utility" aria-pressed="false">Retreat</button>
             <button id="spacing-landing" type="button" class="utility" aria-pressed="false">Landing hits</button>
+            <button id="spacing-sweet" type="button" class="utility" aria-pressed="false">Aerial sweet spots</button>
+            <button id="spacing-aligned" type="button" class="utility" aria-pressed="false" hidden>Line up sweet spot</button>
             <button id="spacing-flick" type="button" class="utility" aria-pressed="false" hidden>Flick jump here</button>
             <button id="spacing-cancel" type="button" class="utility" aria-pressed="false">Landing cancel</button>
             <button id="spacing-footstool" type="button" class="utility" aria-pressed="false">Footstool rescue</button>
