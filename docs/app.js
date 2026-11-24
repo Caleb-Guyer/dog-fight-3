@@ -233,13 +233,14 @@
     sound: true,
     volume: 75,
     shake: true,
+    tiltStick: false,
   };
   try {
     const s = JSON.parse(localStorage.getItem('dog-fight-3.config') || '{}');
     if (Object.hasOwn(arenas, s.stage)) settings.stage = s.stage;
     if (Object.hasOwn(modes, s.mode)) settings.mode = s.mode;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
-    for (const key of ['fetch', 'sound', 'shake']) if (typeof s[key] === 'boolean') settings[key] = s[key];
+    for (const key of ['fetch', 'sound', 'shake', 'tiltStick']) if (typeof s[key] === 'boolean') settings[key] = s[key];
     if (Number.isFinite(s.volume)) settings.volume = Math.max(0, Math.min(100, s.volume));
   } catch {
     /* Settings are optional in private browsing. */
@@ -677,7 +678,7 @@
       ['Jump', 'Space', 'Right Shift', 'A'],
       ['Attack / charge', 'J', ',', 'X'],
       ['Aim strike ← / → / ↑ / ↓', 'R / Y / T / G', 'Numpad 4 / 6 / 8 / 2', 'Right stick'],
-      ['Smash / charge', 'I', 'N', 'RT / right stick'],
+      ['Smash / charge', 'I', 'N', settings.tiltStick ? 'RT' : 'RT / right stick'],
       ['Special', 'K', '.', 'B'],
       ['Shield / air dodge / tech', 'L', '/', 'LB / RB'],
       ['Tilt shield', 'L + Left Shift + direction', '/ + Right Ctrl + direction', 'Gentle stick / both bumpers + stick'],
@@ -705,7 +706,7 @@
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Aim diagonally down and tap Shield to slide onto a platform. Do this just after jumping to wavedash. Try Training → Air-dodge practice or Training → Wavedash.</p>' +
         '<p>Flick a direction during the hit spark to shift your dog. You can slide sideways on the ground or in eight directions in the air. Try escaping the second swing in Training → Combo escape.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
-        '<p>Your dog crouches for three frames. Tap Jump for a short hop, or hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Tap Down once after the top of your jump to fast-fall, then aim freely. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. On a controller, you can hold the right stick in a direction and let it return to center to swing.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
+        '<p>Your dog crouches for three frames. Tap Jump for a short hop, or hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Tap Down once after the top of your jump to fast-fall, then aim freely. Jump again in midair. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. With the default Smash stick, hold the right stick in a direction and release to swing. Choose Tilt under Options for instant grounded tilts with the aim stick, aim keys, or a swipe from Smash.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
   $('controls').onclick = showControls;
@@ -993,7 +994,7 @@
         '</p><p>When two ground swings meet, both dogs recoil. A swing worth at least 9 percentage points more carries through. You can also bat Clover’s flying discs. Try Training → Footwork practice → Clash jabs.' +
         '</p><p>If the rival misses a landing, tap neutral Attack for ' + moves[kit.ground[0]].label +
         '. You can jab lock twice before finishing with ' + smashes[kit.smashes.down].label + ' (Down + Smash). Try Training → Launch practice → Jab lock.' +
-        '</p><h3 class="guide-section">Ground tilts</h3><p>Aim and tap Attack. For a forward tilt, tap before your dog gets running.</p><ul class="move-rows guide-tilts">' +
+        '</p><h3 class="guide-section">Ground tilts</h3><p>Aim and tap Attack. Out of a run, release forward briefly, then press forward and Attack together to slide into a tilt. Reverse and tap Attack to strike behind you while your paws still skid forward. Up and down tilts work straight out of the run. You can also set your aim stick to Tilt in Options.</p><ul class="move-rows guide-tilts">' +
         Object.entries(kit.tilts)
           .map(([side, id]) => guideMoveRow(moves[id], tiltInputs[side], side, 'tilts'))
           .join('') +
@@ -1495,8 +1496,8 @@
     if (action === 'route') showRoute();
     if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.atCheckpoint);
     if (action === 'dispatch-rematch') beginRun(world.roomIndex, 0);
-    if (action === 'option-sound' || action === 'option-shake') {
-      const key = action === 'option-sound' ? 'sound' : 'shake';
+    if (['option-sound', 'option-shake', 'option-tiltStick'].includes(action)) {
+      const key = action.slice('option-'.length);
       settings[key] = !settings[key];
       save();
       updateAudio();
@@ -1859,6 +1860,21 @@
     const state = e.outcome || e.phase;
     status.dataset.result = state;
     const pattern = world.footworkPractice.pattern;
+    if (pattern === 'brake' || pattern === 'pivot') {
+      const move = world.dogs[0].lastMove;
+      status.textContent = {
+        atMark: pattern === 'brake' ? 'Brake now' : 'Turn and strike',
+        slidingHit: move + (pattern === 'brake' ? ' · sliding hit' : ' · caught the chase'),
+        dashHit: move + ' · dash attack', plantedHit: move + ' · planted hit', overshot: 'Missed the opening',
+      }[state];
+      if (e.outcome) $('recovery-tip').textContent = {
+        slidingHit: 'Your tilt connected while carrying the run into its windup. Switch sides to try it the other way.',
+        dashHit: 'That was your dash attack. Retry and let go of forward for a beat before aiming and tapping Attack.',
+        plantedHit: 'You connected after planting your paws. Tap Attack earlier in the skid to carry speed into the swing.',
+        overshot: 'Retry and start your tilt as your lead paw reaches the chalk.',
+      }[state];
+      return;
+    }
     if (pattern !== 'bait') {
       status.textContent = {
         count: 'Beat ' + e.beat, go: pattern === 'power' ? 'Release!' : 'Swing!',
@@ -2502,16 +2518,19 @@
         'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
     } else if (footwork) {
       const practice = world.footworkPractice;
-      for (const id of ['bait', 'match', 'power', 'disc'])
+      for (const id of ['bait', 'match', 'power', 'disc', 'brake', 'pivot'])
         $('footwork-' + id).setAttribute('aria-pressed', String(practice.pattern === id));
       $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
       $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
       $('footwork-status').dataset.result = 'ready';
       $('footwork-status').textContent = {
+        brake: 'Brake at the chalk', pivot: 'Catch the chase',
         bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
       }[pattern];
       const discInput = player.kind === 'noodle' ? 'aim toward Clover and tap Attack' : 'tap Attack';
       message = {
+        brake: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Release forward for a beat, then press forward and tap Attack together. Compare that with holding forward and tapping Attack.',
+        pivot: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk with the rival on your heels. Press back and tap Attack together to catch them during your skid.',
         bait: 'Dash right to the chalk, then reverse. When Brisket misses his grab, dash back in and tap Attack. Choose Footwork practice to retry.',
         match: 'Tap Attack to start the count. On the third chalk light, tap Attack again to meet the other dog’s jab.',
         power: 'You’re Pip. Tap Attack to start and immediately hold Smash. Release on the third light to kick through Brisket’s Body Check.',
@@ -2647,7 +2666,7 @@
     $('game').focus({ preventScroll: true });
   };
   $('footwork-training').onclick = () => drill('footwork', false, world.footworkPractice?.pattern || 'bait');
-  for (const pattern of ['bait', 'match', 'power', 'disc'])
+  for (const pattern of ['bait', 'match', 'power', 'disc', 'brake', 'pivot'])
     $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
   $('footwork-side').onclick = () => drill('footwork', false, world.footworkPractice.pattern, -world.footworkPractice.dir);
   $('footwork-slow').onclick = () => {
@@ -3169,7 +3188,9 @@
         settings.shake +
         '">Camera shake <b>' +
         (settings.shake ? 'On' : 'Off') +
-        '</b></button></div><div class="dialog-actions"><button class="primary" data-do="close">Done</button></div>',
+        '</b></button><button type="button" data-do="option-tiltStick" aria-pressed="' + settings.tiltStick +
+        '">Grounded aim stick <b>' + (settings.tiltStick ? 'Tilt' : 'Smash') +
+        '</b></button><p>Also applies to the aim keys and a swipe from Smash on touch.</p></div><div class="dialog-actions"><button class="primary" data-do="close">Done</button></div>',
     );
   }
   $('dialog-body').addEventListener('input', (e) => {
@@ -3424,8 +3445,10 @@
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
       if (el.dataset.touch === 'neutral') walkPointer = e.pointerId;
-      if (el.dataset.touch === 'smash') touchFlick = { id: e.pointerId, x: e.clientX, y: e.clientY, fired: false };
+      if (el.dataset.touch === 'smash') touchFlick = { id: e.pointerId, x: e.clientX, y: e.clientY,
+        fired: false, deferSmash: settings.tiltStick, started: performance.now(), committed: false };
       setTouch(e.pointerId, el);
+      if (el.dataset.touch === 'smash' && touchFlick.deferSmash) touchTaps.delete('smash');
       audioReady();
     });
     if (el.closest('.dpad'))
@@ -3436,7 +3459,7 @@
       });
     if (el.dataset.touch === 'smash')
       el.addEventListener('pointermove', (e) => {
-        if (e.pointerId !== touchFlick?.id || touchFlick.fired) return;
+        if (e.pointerId !== touchFlick?.id || touchFlick.fired || touchFlick.committed) return;
         const dx = e.clientX - touchFlick.x, dy = e.clientY - touchFlick.y;
         if (Math.max(Math.abs(dx), Math.abs(dy)) < 14) return;
         touchFlick.fired = true;
@@ -3445,7 +3468,11 @@
       });
     const release = (e) => {
       if (walkPointer === e.pointerId) walkPointer = null;
-      if (touchFlick?.id === e.pointerId) touchFlick = null;
+      if (touchFlick?.id === e.pointerId) {
+        if (touchFlick.deferSmash && !touchFlick.fired && !touchFlick.committed && e.type === 'pointerup')
+          touchTaps.add('smash');
+        touchFlick = null;
+      }
       setTouch(e.pointerId, null);
     };
     el.addEventListener('pointerup', release);
@@ -3559,6 +3586,10 @@
     const keyAimY = Number(key('aimDown')) - Number(key('aimUp'));
     const flick = !i && (touchFlick?.fired || touchTaps.has('aimStick')) ? flickAim : null;
     const aimStick = !!(rightStick || keyAimX || keyAimY || flick);
+    // Let a swipe declare its direction before a stationary thumb starts charging a smash.
+    if (!i && touchFlick?.deferSmash && !touchFlick.fired && performance.now() - touchFlick.started >= 110)
+      touchFlick.committed = true;
+    const touchSmash = !i && touches.has('smash') && (!touchFlick?.deferSmash || touchFlick.committed);
     const fromCenter = !i && touchPointers.get(walkPointer)?.dataset.touch;
     const walk = key('walk') || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
     const shield = key('shield') || down(pad, 4) || down(pad, 5);
@@ -3579,8 +3610,9 @@
       airDodgeY: digitalAim ? y : pad?.axes?.[1] || 0,
       jump: key('jump') || down(pad, 0),
       attack: key('attack') || down(pad, 2),
-      smash: key('smash') || down(pad, 7),
+      smash: held.has(map.smash) || tapped('smash') || touchSmash || down(pad, 7),
       aimStick,
+      tiltMode: settings.tiltStick && aimStick,
       smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : x || axis(0),
       smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : y || axis(1),
       special: key('special') || down(pad, 1),
@@ -3749,6 +3781,12 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
       drill('edge', false, hash === '#training/ledge-catch' ? 'shortCatch' : 'lip');
+    }
+    else if (hash === '#training/braking') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode: 'training', p2: 'pip', stage: 'picnic', fetch: false });
+      drill('footwork', false, 'brake');
     }
     else if (hash === '#training/tumble') {
       menuScreen('match');
