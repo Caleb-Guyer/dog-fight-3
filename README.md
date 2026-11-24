@@ -183,6 +183,10 @@ In **Training → Combo escape → Crouch counter**, choose Brisket and tap Atta
 
 **Directional influence (DI).** During the brief freeze of a strong hit or throw, hold across the launch path to bend it by up to 18 degrees. Against a near-vertical throw, left or right changes where you come down. Against a sideways hit, holding up can buy height for a recovery. Your final direction during the freeze sets the angle. After hitstun ends, you can jump, use an aerial, or air dodge out of tumble.
 
+**Tumble wiggle.** After hitstun ends, flick left or right to right your dog in the air. Keep holding to drift, then tap Down as you descend to fast-fall. You stay vulnerable and keep your existing jump and air dodge. If you held a direction for DI, let it go and press a side again, or flick the opposite way.
+
+**Escape the juggle** puts your dog at 80% against Brisket on Picnic. Tap Attack to take Bench Press. First stay neutral. Retry and flick toward the mint arrow to slip past Crown Lift. Choose **Chase the drift** and repeat. Brisket runs across to cover the landing, jumping for his up aerial on a high arc. You can turn back in the air and land behind him. In solo matches, Brisket can read the direction you used on the previous Bench Press. [Play Escape the juggle](https://caleb-guyer.github.io/dog-fight-3/#training/tumble).
+
 **Launch speed influence.** On a shallow launch, holding Down during the freeze can slow your initial speed to 92%. Holding Up can raise it to 109.5%. Analog inputs give intermediate values. A launch within 25 degrees of straight up or down keeps its speed. An upward and inward diagonal can buy height against Brisket’s Suplex. Down can take speed off Clover’s low Forehand Pass.
 
 On your last stock, a double chevron and a two-note cue warn when a centered stick would take you across a blast boundary before you regain control. In open air, you can tap Shield toward the stage in the final few frames of hitstun to dodge back as soon as you can act. Near an incoming floor or wall, the same Shield tap attempts a tech.

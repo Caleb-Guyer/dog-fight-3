@@ -388,6 +388,8 @@
     } else if (name === 'meteorBounce') {
       tone(143, 43, 0.12, 0, 'triangle', 0.15);
       tone(296, 130, 0.055, 0.012, 'square', 0.035);
+    } else if (name === 'tumbleWiggle') {
+      tone(460, 740, 0.065, 0, 'triangle', 0.045);
     } else if (name === 'meteorCancel') {
       tone(360, 680, 0.07, 0, 'triangle', 0.09);
       tone(690, 920, 0.045, 0.034, 'sine', 0.07);
@@ -740,7 +742,7 @@
     tumble: {
       label: 'Directional influence',
       input: 'Aim during the hit freeze',
-      hint: 'Hold across the launch path to bend it toward your stick. Try left or right against an up throw. Your angle locks in as the freeze ends.',
+      hint: 'Hold across the launch path to bend it during the freeze. Once hitstun ends, flick a fresh side to right your dog and regain air drift. You keep your jump and air dodge.',
     },
     techRoll: {
       label: 'Tech landing',
@@ -2104,7 +2106,31 @@
     const result = $('launch-status'),
       tip = $('recovery-tip');
     let label, message;
-    if (name === 'launchDI') {
+    if (world.launchPractice.pattern === 'juggle') {
+      const d = world.launchPractice, side = d.dir > 0 ? 'right' : 'left';
+      if (d.phase === 'done' && name !== 'juggleResult') return;
+      if (name === 'launchDI') {
+        label = 'Thrown · release the direction';
+        message = d.chase ? 'Brisket is running ' + side + ' to cover your drift. Watch for the opening.' :
+          'Wait for the mint arrow. Brisket is stepping under your landing.';
+      } else if (name === 'juggleCue') {
+        label = d.chase ? 'Choose your drift now' : 'Flick ' + side + ' now';
+        message = d.chase ? 'Try the same drift, then retry and cut back behind Brisket.' :
+          'Press ' + side + ' from neutral and hold to drift past Crown Lift.';
+      } else if (name === 'tumbleWiggle') {
+        label = 'Tumble broken · drift free';
+        message = 'Keep steering. You can still jump, air dodge, fast-fall or attack.';
+      } else if (name === 'juggleResult') {
+        label = { clean:'Clean landing · jump and dodge saved', juggled:(moves[d.finisher]?.label || 'Brisket') + ' caught you', downed:'Knocked down',
+          landed:'Landed on your feet', counter:'Counterhit', tech:'Teched the landing', ledge:'Caught the ledge', out:'Ring-out' }[e.outcome];
+        message = d.chase ? 'Retry and reverse your drift as Brisket runs out. He has to commit to the chase.' :
+          'Choose Chase the drift to see how Brisket can cover the same escape.';
+      } else return;
+      result.dataset.result = e.outcome || name;
+      result.textContent = label;
+      tip.textContent = message;
+      return;
+    } else if (name === 'launchDI') {
       label = 'Tap Shield before landing';
       message =
         'The dashed gold line shows the original launch. The solid aqua line shows yours. Hold a side at landing to tech roll.';
@@ -2286,6 +2312,7 @@
   function drill(ledge, fromHang = false, pattern = 'strike', direction) {
     if (!world) return;
     const launch = ledge === 'launch';
+    const juggle = launch && pattern === 'juggle';
     const chase = launch && (pattern === 'attack' || pattern === 'defend');
     const stock = launch && (pattern === 'stockReturn' || pattern === 'stockCatch');
     const survival = launch && pattern === 'survival';
@@ -2314,6 +2341,8 @@
     else if (stock) world.resetStockPractice(pattern, direction ?? world.stockPractice?.dir ?? 1, world.stockPractice?.slow ?? true);
     else if (survival) world.resetSurvivalPractice(direction ?? world.survivalPractice?.dir ?? 1, world.survivalPractice?.slow ?? true,
       world.survivalPractice?.baseline);
+    else if (juggle) world.resetLaunchPractice(pattern, direction ?? world.launchPractice?.dir ?? 1,
+      world.launchPractice?.slow ?? true, world.launchPractice?.chase ?? false);
     else if (launch) world.resetLaunchPractice();
     else if (combo) world.resetComboPractice(pattern, direction ?? world.comboPractice?.reply ?? 'stand', world.comboPractice?.slow ?? true);
     else if (wave) world.resetWavePractice(pattern, direction ?? world.wavePractice?.dir ?? 1, world.wavePractice?.slow ?? true);
@@ -2345,7 +2374,7 @@
     const counterDrill = escape && pattern === 'counter';
     showDamageControl(counterDrill || meteor || survival, freshness && world.freshnessPractice.koTest,
       meteor || survival ? 'launch-side' : world.edgePractice?.timeCatch ? 'edge-side' : undefined);
-    $('damage-control').hidden = stock;
+    $('damage-control').hidden = stock || juggle;
     $('dummy-damage').value = survival ? world.survivalPractice.baseline : meteor ? world.meteorPractice.baseline : counterDrill ? world.escapePractice.baseline : world.trainingDamage;
     $('damage-output').textContent = $('dummy-damage').value + '%';
     $('match-stage').textContent = arenas[world.stage].name;
@@ -2353,10 +2382,14 @@
     const result = $('launch-status');
     result.hidden = !launch;
     $('launch-patterns').hidden = !launch;
-    const launchOptions = world.survivalPractice || world.stockPractice || world.meteorPractice || world.chasePractice;
+    $('juggle-chase').hidden = !juggle;
+    if (juggle) $('juggle-chase').setAttribute('aria-pressed', String(world.launchPractice.chase));
+    const launchOptions = world.survivalPractice || world.stockPractice || world.meteorPractice || world.chasePractice ||
+      (juggle && world.launchPractice);
     $('launch-side').hidden = $('launch-slow').hidden = !launchOptions;
     if (launch) {
       $('launch-throw').setAttribute('aria-pressed', String(!launchOptions));
+      $('launch-juggle').setAttribute('aria-pressed', String(juggle));
       $('launch-survival').setAttribute('aria-pressed', String(survival));
       $('launch-stock-return').setAttribute('aria-pressed', String(pattern === 'stockReturn'));
       $('launch-stock-catch').setAttribute('aria-pressed', String(pattern === 'stockCatch'));
@@ -2558,6 +2591,10 @@
       result.textContent = 'Tap Attack to begin';
       message = pattern === 'attack' ? 'Tap Attack to start the fall. As the rival lands, tap neutral Attack. You can jab twice, then tap Down + Smash.'
         : 'Tap Attack to start the fall. Tap Shield just before you land. If you miss, try rolling away or sweeping as the second jab settles.';
+    } else if (juggle) {
+      result.dataset.result = 'ready';
+      result.textContent = 'Escape the juggle · tap Attack';
+      message = 'Brisket will up throw you on Picnic at 80%. Tap Attack to start. Stay neutral once, then retry and flick toward the mint arrow.';
     } else if (launch) {
       result.dataset.result = 'ready';
       result.textContent = 'Up throw incoming';
@@ -2689,6 +2726,11 @@
     drill('roll', false, world.rollPractice.pattern);
   };
   $('launch-training').onclick = $('launch-throw').onclick = () => drill('launch');
+  $('launch-juggle').onclick = () => drill('launch', false, 'juggle');
+  $('juggle-chase').onclick = () => {
+    world.launchPractice.chase = !world.launchPractice.chase;
+    drill('launch', false, 'juggle');
+  };
   $('launch-lock').onclick = () => drill('launch', false, 'attack');
   $('launch-escape').onclick = () => drill('launch', false, 'defend');
   $('launch-floor-spike').onclick = () => drill('launch', false, 'spikeFloor');
@@ -2697,11 +2739,11 @@
   $('launch-survival').onclick = () => drill('launch', false, 'survival');
   $('launch-stock-catch').onclick = () => drill('launch', false, 'stockCatch');
   $('launch-side').onclick = () => {
-    const d = world.survivalPractice || world.meteorPractice || world.stockPractice || world.chasePractice;
+    const d = world.survivalPractice || world.meteorPractice || world.stockPractice || world.chasePractice || world.launchPractice;
     drill('launch', false, d.pattern || d.role, -d.dir);
   };
   $('launch-slow').onclick = () => {
-    const d = world.survivalPractice || world.meteorPractice || world.stockPractice || world.chasePractice;
+    const d = world.survivalPractice || world.meteorPractice || world.stockPractice || world.chasePractice || world.launchPractice;
     d.slow = !d.slow;
     $('launch-slow').setAttribute('aria-pressed', String(d.slow));
     $('game').focus({ preventScroll: true });
@@ -3647,7 +3689,7 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow ? dt / 2 : dt;
+        accumulator += world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];
@@ -3707,6 +3749,12 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
       drill('edge', false, hash === '#training/ledge-catch' ? 'shortCatch' : 'lip');
+    }
+    else if (hash === '#training/tumble') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'picnic', fetch:false });
+      drill('launch', false, 'juggle');
     }
     else if (hash === '#training/combos') {
       menuScreen('match');

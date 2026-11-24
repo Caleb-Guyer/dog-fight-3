@@ -277,6 +277,7 @@
     if (f.ledge) return ['ledge', f.ledgeTime];
     if (f.reboundTime > 0) return [f.reboundPose, 0.56 + 0.4 * (1 - f.reboundTime / 0.14)];
     if (f.ground < 0) {
+      if (f.righting > 1e-8) return ['righting', reduced.matches ? .9 : clamp(1 - f.righting * 60 / 8, 0, 1)];
       if (f.vx * f.face < -85) return ['backDrift', clamp(0.5 + f.vy / (2 * f.stats.jump), 0, 1)];
       if (f.vy < 0) return ['jump', clamp(1 + f.vy / f.stats.jump, 0, 1)];
       return ['fall', clamp(f.vy / f.stats.jump, 0, 1)];
@@ -2254,7 +2255,7 @@
       const { width, height } = canvas;
       const ctx = canvas.getContext('2d'),
         [a, b] = world.dogs;
-      const practice = world.mode === 'training' && world.end === null && world.launchPractice;
+      const practice = world.mode === 'training' && world.end === null && world.launchPractice?.pattern !== 'juggle' && world.launchPractice;
       if (this.launchTrace && this.launchTrace.practice !== practice) this.launchTrace = null;
       if (practice && practice.phase !== 'ready' && !this.launchTrace && this.pendingLaunch?.fighter === a)
         this.launchTrace = { ...this.pendingLaunch, practice };
@@ -2429,6 +2430,17 @@
         pixelLine(ctx, x, y + 4, x, y + 12, ink, 5, 2);
         pixelLine(ctx, x - d.dir * 12, y + 4, x, y + 4, color, 2, 2);
         pixelLine(ctx, x, y + 4, x, y + 12, color, 2, 2);
+      }
+      const juggle = world.launchPractice;
+      if (juggle?.pattern === 'juggle' && juggle.phase === 'flight' && juggle.cue && a.tumble) {
+        const y = snap(a.y - a.stats.height / 2, 2);
+        for (const dir of juggle.chase ? [-1,1] : [juggle.dir]) {
+          const x = snap(a.x + dir * (a.stats.width + 12), 2);
+          for (const [color, weight] of [[ink,6],[mint,3]]) {
+            pixelLine(ctx,x-dir*7,y-6,x,y,color,weight,2);
+            pixelLine(ctx,x,y,x-dir*7,y+6,color,weight,2);
+          }
+        }
       }
       if (world.footworkPractice && world.footworkPractice.pattern !== 'bait') {
         const drill = world.footworkPractice, x = snap(drill.mark, 2), y = world.terrain[0].y + 9;

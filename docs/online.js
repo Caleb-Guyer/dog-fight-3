@@ -1,8 +1,8 @@
 (() => {
   'use strict';
 
-  const prefix = 'dogfight3-cg-versus-v25-';
-  const channel = 'dogfight3-v25';
+  const prefix = 'dogfight3-cg-versus-v26-';
+  const channel = 'dogfight3-v26';
   const quickId = prefix + 'quickplay';
   const roomAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick'];

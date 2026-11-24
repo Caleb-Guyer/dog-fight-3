@@ -3376,6 +3376,7 @@
     if (shieldPoses.includes(pose)) return shieldFrame(name, pose, phase, backRoll);
     if (pose === 'clashRecoil' || pose === 'crouchHit') return Math.min(3, Math.floor(phase * 4));
     if (pose === 'tumble') return tick(14) % 8;
+    if (pose === 'righting') return Math.min(3, Math.floor(phase * 4));
     if (pose === 'jabLock') {
       if (phase < 0.40) return Math.min(3, Math.floor(phase * 10));
       return phase < 0.70 ? 4 : phase < 0.86 ? 5 : 6;
@@ -4741,6 +4742,21 @@
       case 'parry':
         parryStance(s, name, frame);
         break;
+      case 'righting': {
+        const reach = { pip:6, brisket:3, noodle:8, clover:5 }[name];
+        s.roll = [-54,-27,9,0][frame];
+        s.fistX = [0,reach,reach+3,2][frame];
+        s.fistY = [-8,-12,-7,-2][frame];
+        s.rearX = [-2,-8,-10,-4][frame];
+        s.leftY = [-8,-6,-2,0][frame];
+        s.rightY = [-6,-9,-4,-2][frame];
+        s.rightX = [3,6,5,3][frame];
+        s.tailLift = [2,7,5,2][frame];
+        s.ear = [-2,4,3,0][frame];
+        s.headTurn = [-12,7,13,2][frame];
+        s.charmTurn = [24,15,-9,-2][frame];
+        break;
+      }
       case 'tumble':
       case 'techRoll':
         spinningStance(s, name, pose, frame);
@@ -5676,6 +5692,7 @@
     'jumpSquat',
     'turnJumpSquat',
     'backDrift',
+    'righting',
     'jump',
     'fall',
     'attack',

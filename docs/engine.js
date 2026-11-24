@@ -1914,6 +1914,7 @@
       reaction: null,
       hitShift: null,
       tumble: null,
+      righting: 0,
       wallAction: null,
       floorAction: null,
       techBuffer: 0,
@@ -2451,6 +2452,7 @@
       f.y = this.terrain[ground].y;
       f.ground = ground;
       if (f.index === 1) {
+        this.bot.juggleRead = this.bot.driftEscape = null;
         this.bot.jumpHold = 0;
         this.bot.hop = null;
         this.bot.platformRoute = null;
@@ -2538,6 +2540,11 @@
     }
     resetTraining(ledge = false, fromHang = false) {
       if (this.grapple) this.breakGrapple(false);
+      if (this.launchPractice?.original) {
+        this.dogs = this.launchPractice.original.dogs;
+        this.stage = this.launchPractice.original.stage;
+        this.terrain = platforms(this.stage, this.time);
+      }
       if (this.meteorPractice) this.dogs = this.meteorPractice.originalDogs;
       if (this.freshnessPractice?.original) {
         this.dogs = this.freshnessPractice.original.dogs;
@@ -2727,8 +2734,20 @@
       d.firstFree = null;
       if (kind !== 'grab' && kind !== 'block') { d.hits++; d.damage += damage; }
     }
-    resetLaunchPractice() {
+    resetLaunchPractice(pattern, dir = 1, slow = true, chase = false) {
       this.resetTraining();
+      if (pattern === 'juggle') {
+        const original = { dogs: this.dogs, stage: this.stage };
+        this.stage = 'picnic';
+        this.terrain = platforms(this.stage, this.time);
+        const player = this.dogs[0], rival = newFighter('brisket', 1), floor = this.terrain[0];
+        this.dogs = [player,rival];
+        Object.assign(rival, { x:600, y:floor.y, ground:0, face:dir });
+        Object.assign(player, { x:600 + dir*(rival.stats.width + player.stats.width + 3), y:floor.y,
+          ground:0, face:-dir, damage:80 });
+        this.launchPractice = { original, pattern, dir, chase, slow, floor:0, origin:rival.x, phase:'waiting', time:0, grabStarted:false };
+        return;
+      }
       this.dogs[0].damage = 90;
       this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
     }
@@ -3796,6 +3815,9 @@
           return { ...idleInput, grab: true };
         }
         if (this.grapple && drill.time >= 0.95) return { ...idleInput, y: -1 };
+      } else if (drill.pattern === 'juggle' && drill.phase === 'flight') {
+        const [player,rival] = this.dogs;
+        return this.juggleInput(rival, player, drill);
       } else if (drill.phase === 'flight') {
         const [player, dummy] = this.dogs;
         if (player.tumble && player.vy > 0 && dummy.ground >= 0) {
@@ -3806,6 +3828,55 @@
         }
       }
       return idleInput;
+    }
+    juggleInput(guard, foe, read) {
+      const floor = this.terrain[read.floor], dir = read.dir;
+      const room = dir > 0 ? floor.x2 - guard.x : guard.x - floor.x1;
+      const travel = read.chase && room > 25 ? dir : 0;
+      if (read.swung) return { ...idleInput, x:guard.ground < 0 ? travel : 0, jump:!!read.hop && guard.vy < 0 };
+      const projectedHeight = t => foe.y + foe.vy*t + 770*foe.kit.gravity*t*t;
+      if (read.chase) {
+        read.high ||= foe.y < floor.y - 230;
+        if (guard.ground >= 0 && read.high && foe.vy > 0 && projectedHeight(.3) >= floor.y - 145) {
+          read.hop = true;
+          return { ...idleInput, x:travel, jump:true };
+        }
+        if (guard.ground < 0 && read.hop) {
+          const up = moves[guard.kit.air.up], t = up.start;
+          if (foe.vy > 0 && projectedHeight(t) - foe.stats.height*.52 >= guard.y + guard.vy*t + up.box[1] - up.box[3] - foe.stats.height*.3) {
+            read.swung = true;
+            return { ...idleInput, x:travel, jump:true, aimStick:true, smashY:-1 };
+          }
+          return { ...idleInput, x:travel, jump:true };
+        }
+      }
+      const up = moves[guard.kit.tilts.up];
+      if ((!read.chase || !read.high) && foe.vy > 0 && projectedHeight(up.start) - foe.stats.height*.52 >= guard.y + up.box[1] - up.box[3]) {
+        read.swung = true;
+        return { ...idleInput, y:-1, tapped:{ attack:true } };
+      }
+      if (read.chase) return { ...idleInput, x:travel };
+      const stepBack = clamp(read.origin - dir * 20, floor.x1 + 6, floor.x2 - 6);
+      return !guard.attack && (guard.x - stepBack) * dir > 0 ? { ...idleInput, x:-dir*.7 } : idleInput;
+    }
+    finishJuggle(outcome) {
+      const d = this.launchPractice;
+      if (d?.pattern !== 'juggle' || d.phase === 'done') return;
+      d.phase = 'done';
+      d.outcome = outcome;
+      this.emit('juggleResult', { f:this.dogs[0], outcome });
+    }
+    checkJuggle() {
+      const d = this.launchPractice, f = this.dogs[0];
+      if (d.phase !== 'flight') return;
+      if (f.ground < 0 && (f.usedDodge || f.jumps < d.airJumps || f.usedUp)) d.spent = true;
+      if (!d.cue && f.tumble && !f.tumble.pending && !f.stun) {
+        d.cue = true;
+        this.emit('juggleCue', { f, dir:d.dir });
+      }
+      if (f.floorAction) this.finishJuggle(f.floorAction.type === 'downed' ? 'downed' : 'tech');
+      else if (f.ground >= 0) this.finishJuggle(d.wiggled && !d.spent ? 'clean' : 'landed');
+      else if (f.ledge) this.finishJuggle('ledge');
     }
     projectLaunch(f, vx, vy) {
       const dt = 1 / 60, drag = Math.pow(0.68, dt);
@@ -3872,6 +3943,11 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      const juggle = this.launchPractice?.pattern === 'juggle' && this.launchPractice;
+      if (juggle?.phase === 'waiting') {
+        if (!input1.attack && !input1.tapped?.attack) return;
+        juggle.phase = 'ready';
+      }
       const edge = this.edgePractice;
       if (edge?.phase === 'ready') {
         if (edge.pattern === 'lip' ? !input1.x && !input1.jump : !input1.attack && !input1.tapped?.attack) return;
@@ -4169,6 +4245,7 @@
       this.resolveMelee();
       for (const f of this.dogs) if (f.attack?.landed) f.attack = null;
       this.updateDiscs(dt);
+      if (juggle) this.checkJuggle();
       if (this.platformPractice) this.checkPlatformPractice();
       if (edge) this.checkEdgePractice();
       if (this.climbPractice) this.checkClimbPractice();
@@ -4283,6 +4360,13 @@
         const dir = f.ledge.left ? 1 : -1;
         if (input.y > 0.5 || input.x * dir < -0.5) f.ledge.climbQueued = false;
         else if (input.x * dir > 0.45 && was.x * dir <= 0.45) f.ledge.climbQueued = true;
+      }
+      if (f.tumble) {
+        const dir = Math.sign(input.x);
+        const quickSide = Math.abs(input.y) < .5 && Math.abs(input.x) >= .74 && was.x * dir < .74 &&
+          (f.stickTicks < 3 || was.x * dir <= .3);
+        f.tumble.wiggle = quickSide && !f.tumble.pending && !this.hitStop && f.impactLag <= 1e-8 &&
+          f.stun <= 1 / 60 + 1e-8 ? dir : 0;
       }
       readDashFlick(f, input.x, was.x);
       const horizontal = Math.abs(input.y) < 0.5 && Math.abs(input.x) >= 0.65 ? Math.sign(input.x) : 0;
@@ -4616,7 +4700,7 @@
       this.emit(type, { f, wall, dir, point: { x: wall.x, y: feet - f.stats.height * 0.52 } });
     }
     clearTumble(f, option) {
-      if (f.tumble && f.index === 0 && this.launchPractice?.phase === 'flight') {
+      if (f.tumble && f.index === 0 && this.launchPractice?.phase === 'flight' && this.launchPractice.pattern !== 'juggle') {
         this.launchPractice.phase = 'escaped';
         this.emit('tumbleEscape', { f, option });
       }
@@ -4644,7 +4728,8 @@
       if (type === 'floorAttack') beginAttack(f, 'floorAttack', 0, 0, 'getupSweep');
       const event =
         type === 'downed' ? 'knockdown' : type === 'tech' || type === 'techRoll' ? 'tech' : 'getup';
-      if (f.index === 0 && this.launchPractice?.phase === 'flight') this.launchPractice.phase = 'landed';
+      if (f.index === 0 && this.launchPractice?.phase === 'flight' && this.launchPractice.pattern !== 'juggle')
+        this.launchPractice.phase = 'landed';
       this.emit(event, { f, type, dir, point: { x: f.x, y: f.y } });
       const chase = this.chasePractice;
       if (chase && chase.phase !== 'done' && f.index === chase.slot) {
@@ -4905,6 +4990,7 @@
         'takeoffWindow',
         'skidTime',
         'reboundTime',
+        'righting',
         'coyote',
         'respawning',
         'regrabLock',
@@ -5117,6 +5203,7 @@
         if (dropNow) this.leavePlatform(f);
         else if (canJump) {
           this.clearTumble(f, 'Jump');
+          f.righting = 0;
           f.throwBounce = null;
           const groundJump = grounded && !jumpingFromLedge;
           if (groundJump) {
@@ -5192,6 +5279,17 @@
             f.chargeReleased = false;
           }
         }
+      }
+      if (dogMovement && free && f.ground < 0 && f.tumble?.wiggle && !f.attack && !f.airDodge &&
+          !f.wallAction && !f.techBuffer && !f.throwBounce && !f.grip) {
+        const dir = f.tumble.wiggle;
+        this.clearTumble(f, 'Tumble wiggle');
+        f.righting = 8 / 60;
+        f.reaction = null;
+        if (f.index === 0 && this.launchPractice?.pattern === 'juggle') this.launchPractice.wiggled = true;
+        if (f.index === 0 && this.mode === 'solo' && this.bot.juggleRead)
+          this.bot.lastDrift = dir * this.bot.juggleRead.throwFace;
+        this.emit('tumbleWiggle', { f, dir, point:{ x:f.x, y:f.y - f.stats.height * .52 } });
       }
       if (f.cutJump && (!input.jump || f.vy >= 0)) {
         if (!input.jump && f.vy < -265) f.vy *= 0.55;
@@ -5427,6 +5525,7 @@
               f.attack.landed = true;
             }
             restoreAir(f);
+            f.righting = 0;
             if (f.waveSlide || f.attack?.airSide || landingSpeed > 225) {
               f.landDuration = Math.max(0.12, f.landingLag);
               f.landTime = f.landDuration;
@@ -6535,6 +6634,7 @@
       target.skidTime = 0;
       target.run = null;
       target.reboundTime = 0;
+      target.righting = 0;
       target.ledge = null;
       target.ledgeLock = 0.28;
       target.attack = null;
@@ -6560,8 +6660,18 @@
       }
       if (this.wallPractice?.phase === 'swing' && target.index === 0 && moveId === 'pipBackKick')
         this.wallPractice.phase = 'flight';
+      if (moveId === 'brisketPress' && this.cpuControlled(owner) && target.tumble && owner.ground >= 0) {
+        const chase = !!this.bot.lastDrift;
+        this.bot.juggleRead = { floor:owner.ground, origin:owner.x, dir:(this.bot.lastDrift || 1) * owner.face,
+          throwFace:owner.face, chase, until:this.time + 2.5 };
+        this.bot.lastDrift = 0;
+      }
       if (target.index === 0 && this.launchPractice?.phase === 'ready' && name === 'throw') {
         this.launchPractice.phase = 'flight';
+        if (this.launchPractice.pattern === 'juggle') this.launchPractice.airJumps = target.jumps;
+      } else if (this.launchPractice?.pattern === 'juggle' && this.launchPractice.phase === 'flight') {
+        this.launchPractice.finisher = moveId;
+        this.finishJuggle(target.index === 0 ? 'juggled' : 'counter');
       }
       const opener = !!(move?.second || move?.setupHit);
       const hitFrames = target.tumble ? clamp(4 + Math.floor(launchSpeed / 180), 6, 9)
@@ -6912,7 +7022,10 @@
       }
       for (const f of out) {
         if (this.stockPractice) this.finishStockPractice('ko');
-        if (f.index === 0 && this.launchPractice) this.launchPractice.phase = 'out';
+        if (f.index === 0 && this.launchPractice) {
+          if (this.launchPractice.pattern === 'juggle') this.finishJuggle('out');
+          else this.launchPractice.phase = 'out';
+        }
         if (f.index === 0 && this.meteorPractice) this.finishMeteorPractice('ko');
         this.loseStock(f);
       }
@@ -7443,6 +7556,7 @@
           )
             result.attack = true;
           else if (foe.damage < 65 && (f.kind === 'clover' || f.kind === 'pip')) result.y = -1;
+          else if (!edge && f.kind === 'brisket' && foe.damage >= 40 && foe.damage < 115) result.y = -1;
           else if (foe.damage < 55) result.y = 1;
           else result.x = grip.face;
           if (!edge && !result.attack) {
@@ -7468,6 +7582,13 @@
         outerRight = solid[solid.length - 1].x2;
       const outside = f.x < outerLeft || f.x > outerRight;
       const unsafe = f.ground < 0 && (outside || f.y > closest.y + 28 || (!under && f.y > closest.y - 46));
+      const read = brain.juggleRead;
+      if (read) {
+        if (!unsafe && !f.stun && !f.tumble && !f.ledge && !f.floorAction && foe.ground < 0 && !foe.ledge &&
+            !foe.stockLift && this.time < read.until && !(read.swung && !f.attack && !f.command && f.ground >= 0))
+          return this.juggleInput(f, foe, read);
+        brain.juggleRead = null;
+      }
       const wait = this.cpuWaitForReturn(f, foe);
       if (wait) return wait;
       brain.timer -= dt;
@@ -7575,6 +7696,13 @@
         if (f.jumps) return { ...idleInput, x: inward, jump: true, tapped: { jump: true } };
         return { ...idleInput, x: inward, y: -1, special: true, tapped: { special: true } };
       }
+      if (brain.driftEscape) {
+        const d = brain.driftEscape;
+        if (!f.tumble && !f.stun && !f.grip && f.ground < 0 && !f.ledge && !f.wallAction &&
+            this.time <= d.until && (d.x - f.x) * d.dir > 3)
+          return { ...idleInput, x:d.dir };
+        brain.driftEscape = null;
+      }
       if (f.tumble && !unsafe) {
         result.jump = false;
         result.x = 0;
@@ -7587,6 +7715,15 @@
           result.tapped = { shield: true };
           f.tumble.rollDir = result.x;
         } else if (f.techBuffer > 0) result.x = f.tumble.rollDir || 0;
+        else if (!f.tumble.pending && f.stun <= dt + 1e-8 && under && foe.ground >= 0 &&
+            f.y < foe.y - 80 && far < 110 && this.floorAhead(f, .20) < 0) {
+          const away = Math.sign(f.x - foe.x) || f.face;
+          const dir = f.x + away * 85 > under.x1 && f.x + away * 85 < under.x2 ? away : -away;
+          if (f.prev.x * dir <= .3 && (dir > 0 ? under.x2 - f.x : f.x - under.x1) > 45) {
+            result.x = dir;
+            brain.driftEscape = { dir, x:clamp(f.x + dir * 110,under.x1 + 10,under.x2 - 10), until:this.time + .45 };
+          }
+        }
         return result;
       }
       const chaseInput = this.chaseJabInput(f, foe);
