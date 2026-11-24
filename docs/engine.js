@@ -1857,6 +1857,10 @@
       ledgeProtectionReady: true,
       ledgeTrump: null,
       drop: 0,
+      dropPlatform: -1,
+      dropPrep: null,
+      downTicks: 0,
+      crouch: false,
       shield: false,
       shieldHP: 1,
       shieldAxis: '',
@@ -2090,6 +2094,10 @@
     return next && attack.time + 1e-8 >= next.start ? next : attack;
   }
   function restoreAir(f) {
+    f.drop = 0;
+    f.dropPlatform = -1;
+    f.dropPrep = null;
+    f.crouch = false;
     f.jumpSquat = null;
     f.fastFall = false;
     f.jumps = 2;
@@ -2116,7 +2124,8 @@
   }
   function bodyHeight(f) {
     const action = f.floorAction;
-    if (!action || action.safeFrom !== undefined) return f.stats.height;
+    if (!action || action.safeFrom !== undefined)
+      return f.crouch && f.ground >= 0 ? f.stats.height * 0.68 : f.stats.height;
     if (action.type === 'downed') return f.stats.height * 0.42;
     const rise = clamp((action.time / action.duration - 0.55) / 0.45, 0, 1);
     return f.stats.height * (0.55 + 0.45 * rise);
@@ -2151,6 +2160,7 @@
       this.shieldPractice = null;
       this.footworkPractice = null;
       this.escapePractice = null;
+      this.platformPractice = null;
       this.airPractice = null;
       this.lastCombo = { hits: 0, damage: 0 };
       this.hitStop = 0;
@@ -2180,6 +2190,7 @@
       if (f.index === 1) {
         this.bot.jumpHold = 0;
         this.bot.hop = null;
+        this.bot.platformRoute = null;
         this.bot.guardRead = null;
         this.bot.airRead = null;
       }
@@ -2212,6 +2223,7 @@
       this.shieldPractice = null;
       this.footworkPractice = null;
       this.escapePractice = null;
+      this.platformPractice = null;
       this.airPractice = null;
       this.dogs.forEach((f) => this.spawn(f, false));
       this.projectiles = [];
@@ -2245,6 +2257,37 @@
       this.resetTraining();
       this.dogs[0].damage = 90;
       this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
+    }
+    resetPlatformPractice(pattern = 'below') {
+      this.resetTraining();
+      const onTop = pattern === 'top';
+      const platform = this.stage === 'laundry' ? (onTop ? 2 : 3) : 1;
+      const perch = this.terrain[platform], center = (perch.x1 + perch.x2) / 2;
+      const [f, rival] = this.dogs;
+      const gap = onTop ? f.stats.width + rival.stats.width + 2 : 15;
+      f.ground = platform;
+      f.x = center - gap / 2;
+      f.y = perch.y;
+      rival.x = center + gap / 2;
+      rival.ground = onTop ? platform : this.terrain.findIndex(p => !p.thin && rival.x >= p.x1 && rival.x <= p.x2);
+      rival.y = this.terrain[rival.ground].y;
+      this.platformPractice = { platform, pattern, phase: 'ready', swing: false, outcome: '' };
+    }
+    finishPlatformPractice(outcome, moveId) {
+      const drill = this.platformPractice;
+      if (!drill || drill.phase === 'done') return;
+      drill.phase = 'done';
+      drill.outcome = outcome;
+      this.emit('platformResult', { f: this.dogs[0], outcome, moveId });
+    }
+    checkPlatformPractice() {
+      const drill = this.platformPractice, f = this.dogs[0];
+      if (drill.phase === 'done') return;
+      if (drill.phase === 'fall') {
+        if (f.ground >= 0 || f.ledge) this.finishPlatformPractice('landed');
+      } else if (f.ground !== drill.platform) this.finishPlatformPractice('left');
+      else if (f.attack) drill.swing = true;
+      else if (drill.swing) this.finishPlatformPractice('stayed');
     }
     resetEscapePractice(spacing = 'tip', slow = true) {
       this.resetTraining();
@@ -2734,8 +2777,10 @@
       this.resolveMelee();
       for (const f of this.dogs) if (f.attack?.landed) f.attack = null;
       this.updateDiscs(dt);
+      if (this.platformPractice) this.checkPlatformPractice();
       if (
         this.fetch &&
+        !this.platformPractice &&
         !this.escapePractice &&
         !this.footworkPractice &&
         !this.launchPractice &&
@@ -2783,6 +2828,12 @@
       f.prev = { ...input };
       if (f.respawning > 0) return;
       readDashFlick(f, input.x, was.x);
+      const down = input.y || 0, lastDown = was.y || 0;
+      if (down < 0.28) f.downTicks = 0;
+      const downFlick = down >= 0.74 && lastDown < 0.74 && (f.downTicks < 3 || down - lastDown >= 0.45);
+      if (down >= 0.28) f.downTicks = Math.min(3, f.downTicks + 1);
+      if (downFlick && this.terrain[f.ground]?.thin && !f.grip && !this.hitStop && f.impactLag <= 1e-8)
+        f.dropPrep ??= { platform: f.ground, frames: 0 };
       if (f.ground < 0 && f.vy >= 0 && input.y >= 0.65 && !(was.y >= 0.65) && controlsFall(f))
         f.fastFall = true;
       const floor = f.floorAction;
@@ -2947,11 +2998,11 @@
         result = -1;
       for (const [i, p] of this.terrain.entries()) {
         const height = p.y - f.y;
-        if (height < -2 || (p.thin && f.drop > 0)) continue;
+        if (height < (f.drop > 0 ? -1e-8 : -2) || (p.thin && f.drop > 0 && f.dropPlatform === i)) continue;
         const t = (Math.sqrt(f.vy * f.vy + 2 * gravity * Math.max(0, height)) - f.vy) / gravity;
         if (t >= soonest) continue;
         const x = f.x + f.vx * t;
-        const atContact = p.thin && this.stage === 'laundry' ? platforms(this.stage, this.time + t)[i] : p;
+        const atContact = p.thin && !this.layout && this.stage === 'laundry' ? platforms(this.stage, this.time + t)[i] : p;
         if (x < atContact.x1 - 6 || x > atContact.x2 + 6) continue;
         soonest = t;
         result = i;
@@ -2977,8 +3028,8 @@
       if (wall) nextX = clamp(wall.x, Math.min(x, nextX), Math.max(x, nextX));
       if (nextY > y) {
         const travelY = nextY - y;
-        for (const floor of this.terrain) {
-          if ((floor.thin && f.drop > 0) || floor.y < y || floor.y > nextY) continue;
+        for (const [i, floor] of this.terrain.entries()) {
+          if ((floor.thin && f.drop > 0 && f.dropPlatform === i) || floor.y < y || floor.y > nextY) continue;
           const crossing = x + (nextX - x) * (floor.y - y) / travelY;
           if (crossing >= floor.x1 - 5 && crossing <= floor.x2 + 5) nextY = floor.y;
         }
@@ -3242,7 +3293,30 @@
       f.jumpSquat = null;
       return true;
     }
+    leavePlatform(f) {
+      const platform = f.ground;
+      const point = { x: f.x, y: this.terrain[platform].y };
+      f.ground = -1;
+      f.y = point.y;
+      f.vy = 110;
+      f.jumps = 1;
+      f.drop = 0.24;
+      f.dropPlatform = platform;
+      f.coyote = f.jumpBuffer = f.chainWindow = f.landTime = f.skidTime = f.reboundTime = 0;
+      f.fastFall = f.cutJump = f.crouch = false;
+      f.run = f.throwBounce = null;
+      cancelCharge(f);
+      this.emit('platformDrop', { f, platform, point });
+      const drill = this.platformPractice;
+      if (drill?.phase === 'ready' && f.index === 0 && platform === drill.platform) {
+        if (drill.pattern === 'top') this.finishPlatformPractice('left');
+        else drill.phase = 'fall';
+      }
+    }
     move(f, input, dt) {
+      const prep = f.dropPrep;
+      f.dropPrep = null;
+      f.crouch = false;
       if (f.ground < 0) f.shieldStun = f.shieldGrabWindow = 0;
       else if (f.shieldStun > 1e-8) {
         // The guard stays up. Keep a tapped response and its original aim until the block ends.
@@ -3403,7 +3477,23 @@
       if (free && !grounded && f.guardBuffer > 0 && !f.usedDodge) {
         this.beginAirDodge(f);
       }
-      if (grounded && free && !jumpTap && Math.abs(input.x) > 0.16 && f.charge < 0 && !f.shield)
+      const canStand = grounded && free && !f.shield && !f.jumpSquat && !jumpingFromLedge;
+      const dogMovement = !f.encounter || f.encounter.kind === f.kind;
+      const stanceFree = canStand && dogMovement && f.charge < 0;
+      const canJump = jumpTap && !f.smashCharge && (f.jumps > 0 || f.coyote > 0) &&
+        !(f.tumble && f.techBuffer > 1e-8 && this.wallAhead(f, f.techBuffer));
+      const droppingByJump = canStand && canJump && !attackTap && direction === 1 && this.terrain[f.ground].thin;
+      // Let a Down + Attack chord keep its tilt. A new aim after releasing Down can punch through on departure.
+      const earlyAerial = prep?.frames > 0 && attackTap && direction !== 1;
+      let dropNow = droppingByJump;
+      if (stanceFree && !input.shield && !jumpTap && prep?.platform === f.ground && (!f.command || earlyAerial)) {
+        prep.frames++;
+        if (prep.frames >= 3 || earlyAerial) dropNow = true;
+        else f.dropPrep = prep;
+      }
+      f.crouch = stanceFree && !jumpTap && !f.command && !dropNow &&
+        (!!f.dropPrep || (direction === 1 && Math.abs(input.x) < 0.55));
+      if (grounded && free && !jumpTap && !f.crouch && !dropNow && Math.abs(input.x) > 0.16 && f.charge < 0 && !f.shield)
         f.face = Math.sign(input.x);
       if (
         grounded &&
@@ -3419,33 +3509,22 @@
         this.emit('skid', { f, face: f.skidFace });
       }
       if (free && f.stun <= 0 && f.dodge <= 0 && !f.shield) {
-        if (
-          !f.smashCharge &&
-          jumpTap &&
-          (f.jumps > 0 || f.coyote > 0) &&
-          !(f.tumble && f.techBuffer > 1e-8 && this.wallAhead(f, f.techBuffer))
-        ) {
+        if (dropNow) this.leavePlatform(f);
+        else if (canJump) {
           this.clearTumble(f, 'Jump');
           f.throwBounce = null;
-          if (grounded && !f.jumpSquat && !attackTap && !jumpingFromLedge && direction === 1 && this.terrain[f.ground].thin) {
-            f.drop = 0.24;
-            f.y += 9;
-            f.vy = 110;
-            f.jumps = 1;
+          const groundJump = grounded && !jumpingFromLedge;
+          if (groundJump) {
+            if (!this.advanceJumpSquat(f, input, dt)) return;
           } else {
-            const groundJump = grounded && !jumpingFromLedge;
-            if (groundJump) {
-              if (!this.advanceJumpSquat(f, input, dt)) return;
-            } else {
-              if (f.coyote > 0) f.jumps = 2;
-              f.vy = -f.stats.jump * (f.jumps === 2 ? 1 : 0.91);
-              if (this.cpuControlled(f)) this.bot.jumpHold = this.bot.hop && f.kind !== 'brisket' ? 0.07 : 0.34;
-            }
-            f.jumps--;
-            f.cutJump = !groundJump;
-            f.fastFall = false;
-            this.emit('jump', { f });
+            if (f.coyote > 0) f.jumps = 2;
+            f.vy = -f.stats.jump * (f.jumps === 2 ? 1 : 0.91);
+            if (this.cpuControlled(f)) this.bot.jumpHold = this.bot.hop && f.kind !== 'brisket' ? 0.07 : 0.34;
           }
+          f.jumps--;
+          f.cutJump = !groundJump;
+          f.fastFall = false;
+          this.emit('jump', { f });
           f.ground = -1;
           f.coyote = 0;
           f.jumpBuffer = 0;
@@ -3534,7 +3613,7 @@
       }
       const sliding = f.attack?.motionLocked;
       const onFoot = grounded && f.ground >= 0 && free && !f.attack && !f.shield &&
-        f.charge < 0 && !f.dodge && (!f.encounter || f.encounter.kind === f.kind);
+        f.charge < 0 && !f.dodge && dogMovement;
       if (f.tumble) {
         f.vx *= Math.pow(0.68, dt);
         if (!f.stun) f.vx += input.x * 175 * dt;
@@ -3543,6 +3622,9 @@
         f.vx += input.x * 100 * dt;
       } else if (f.ground >= 0 && f.attack?.brake) {
         f.vx = toward(f.vx, 0, f.attack.brake * dt);
+      } else if (onFoot && f.crouch) {
+        if (!f.dropPrep) f.vx = toward(f.vx, 0, f.kit.footwork.traction * dt);
+        f.run = null;
       } else if (onFoot) {
         moveOnFoot(f, input.x, dt);
         f.strideDistance += Math.abs(f.vx) * dt;
@@ -3567,6 +3649,8 @@
         const p = this.terrain[f.ground];
         if (f.x < p.x1 - 7 || f.x > p.x2 + 7) {
           f.ground = -1;
+          f.dropPrep = null;
+          f.crouch = false;
           f.jumps = 1;
           f.coyote = 0.085;
         } else {
@@ -3594,6 +3678,11 @@
         }
         if (f.vy >= 0) {
           const landing = this.landingSurface(f, oldY);
+          const source = this.terrain[f.dropPlatform];
+          if (f.drop > 0 && (!source || f.y > source.y + 3 || landing >= 0)) {
+            f.drop = 0;
+            f.dropPlatform = -1;
+          }
           if (landing >= 0) {
             const landingSpeed = f.vy;
             if (f.throwBounce) {
@@ -3667,11 +3756,11 @@
     landingSurface(f, oldY) {
       let landing = -1;
       for (const [i, p] of this.terrain.entries()) {
-        if (p.thin && f.drop > 0) continue;
+        if (p.thin && f.drop > 0 && f.dropPlatform === i) continue;
         if (
           f.x >= p.x1 - 5 &&
           f.x <= p.x2 + 5 &&
-          oldY <= p.y + 2 &&
+          oldY <= p.y + (f.drop > 0 ? 1e-8 : 2) &&
           f.y >= p.y &&
           (landing < 0 || p.y < this.terrain[landing].y)
         )
@@ -3785,6 +3874,8 @@
       };
       this.grapple = owner.grip = target.grip = grip;
       for (const f of [owner, target]) {
+        f.dropPrep = null;
+        f.crouch = false;
         cancelCharge(f);
         f.impactLag = f.shieldStun = f.shieldGrabWindow = 0;
         f.wallAction = null;
@@ -4558,6 +4649,8 @@
       this.gradeFootwork(target);
       if (target.grip) this.breakGrapple(false);
       target.ledgeTrump = null;
+      target.crouch = false;
+      target.dropPrep = null;
       target.wallAction = null;
       target.throwBounce = null;
       target.floorAction = target.tumble = null;
@@ -4642,6 +4735,14 @@
       )
         this.trumpPractice.phase = 'intercepted';
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic });
+      if (this.platformPractice && owner.index === 0 && target.index === 1) {
+        const drill = this.platformPractice;
+        if (drill.phase === 'fall' && owner.attack?.airSide && owner.ground < 0 && owner.vy >= 0)
+          this.finishPlatformPractice('aerial', moveId);
+        else if (drill.pattern === 'top' && owner.ground === drill.platform && moveId === owner.kit.tilts.down)
+          this.finishPlatformPractice('tilt', moveId);
+        else this.finishPlatformPractice('other', moveId);
+      }
       if (this.escapePractice && owner.index === 1 && target.index === 0 && moveId === 'cloverRimRattle') {
         if (opener && this.escapePractice.phase === 'swing') {
           this.escapePractice.phase = 'follow';
@@ -4958,6 +5059,40 @@
       }
       return { ...idleInput, x: aimX, y: aimY, shield: true, tapped: { shield: true } };
     }
+    cpuPlatformInput(f, foe) {
+      const brain = this.bot;
+      const floor = this.terrain[foe.ground];
+      const strike = moves[f.kit.air.down], [x, y, rx, ry] = strike.box;
+      const targetX = foe.x + foe.vx * strike.start;
+      const reach = Math.abs(targetX - (f.x + f.vx * strike.start + f.face * x));
+      if (!floor || foe.shield || foe.invuln || f.stun || f.attack || f.grip || f.dodge ||
+          f.shield || f.shieldDrop || f.charge >= 0 || f.landingLag ||
+          f.x < floor.x1 + 10 || f.x > floor.x2 - 10 || reach > rx + foe.stats.width) {
+        brain.platformRoute = null;
+        return null;
+      }
+      let route = brain.platformRoute;
+      if (!route) {
+        const height = foe.y - f.y;
+        if (brain.timer > 0 || !this.terrain[f.ground]?.thin || height < 55 || height > 200) return null;
+        route = brain.platformRoute = { perch: f.ground, landing: foe.ground, airFrames: 0 };
+        brain.hop = null;
+        brain.jumpHold = brain.guard = brain.hold = 0;
+      }
+      if (foe.ground !== route.landing || (f.ground >= 0 && f.ground !== route.perch)) {
+        brain.platformRoute = null;
+        return null;
+      }
+      if (f.ground === route.perch)
+        return f.prev.y >= 0.74 && !f.dropPrep ? idleInput : { ...idleInput, y: 1 };
+      // Release Down before the aerial. Read the rival's height against this dog's own active window.
+      route.airFrames++;
+      const travel = strike.plunge ? 685 * Math.min(strike.active / 2, 0.09)
+        : f.kit.fastFallSpeed * (strike.start + Math.min(strike.active / 2, 0.09));
+      if (route.airFrames < 2 || f.y + y + ry + travel < foe.y - bodyHeight(foe) * 0.92) return idleInput;
+      brain.platformRoute = null;
+      return { ...idleInput, y: 1, attack: true, tapped: { attack: true } };
+    }
     cpu(dt) {
       const f = this.dogs[1],
         foe = this.dogs[0],
@@ -5099,7 +5234,12 @@
       }
       const inside = clamp(f.x, closest.x1 + 52, closest.x2 - 52);
       const airDefense = this.cpuAirEvade(f, foe, closest, unsafe);
-      if (airDefense) return airDefense;
+      if (airDefense) {
+        brain.platformRoute = null;
+        return airDefense;
+      }
+      const platformInput = !unsafe && this.cpuPlatformInput(f, foe);
+      if (platformInput) return platformInput;
       if (f.attack?.charging) {
         result.x = Math.sign(inside - f.x);
         result.special = f.attack.chargeTime < (f.y > closest.y + 60 ? 0.36 : 0.22);
@@ -5111,6 +5251,7 @@
         return result;
       }
       if (unsafe) {
+        brain.platformRoute = null;
         brain.hop = null;
         result.x = Math.sign(inside - f.x);
         if (!f.stun && !f.dodge) {
@@ -5232,10 +5373,6 @@
           }
         }
         if (foe.y < f.y - 52 && far < 240 && f.jumps > 0) brain.pulse.jump = true;
-        if (f.ground >= 0 && this.terrain[f.ground].thin && foe.y > f.y + 70 && far < 240) {
-          brain.pulse.jump = true;
-          brain.pulse.down = true;
-        }
         if (Math.abs(foe.y - f.y) < 105 && !f.attack && !f.stun) {
           const clearRun = dx >= 0 ? closest.x2 - f.x : f.x - closest.x1;
           const safeSpecial = clearRun > (f.kind === 'brisket' ? 295 : f.kind === 'pip' ? 185 : -1);
@@ -5264,7 +5401,6 @@
             brain.pulse.special = true;
         }
         result.jump ||= !!brain.pulse.jump;
-        if (brain.pulse.down) result.y = 1;
         result.special = !!brain.pulse.special;
         result.grab = !!brain.pulse.grab;
         if (result.grab && f.kind === 'brisket' && far < 61 && this.random() < 0.3) {

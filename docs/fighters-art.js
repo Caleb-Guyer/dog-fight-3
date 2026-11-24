@@ -3396,6 +3396,7 @@
     if (Object.prototype.hasOwnProperty.call(kitMoves, pose) || captiveFlinches.includes(pose))
       return actionCel(pose, phase);
     if (pose === 'walk') return tick(8) % 6;
+    if (pose === 'crouch') return tick(3) % 2;
     if (pose === 'dashStart') return Math.min(2, Math.floor(phase * 3));
     if (pose === 'run') return tick(12) % 6;
     if (pose === 'win') return tick(6) % 4;
@@ -4755,6 +4756,24 @@
         s.rearY = -s.fistY;
         break;
       }
+      case 'crouch': {
+        const depth = { pip: 9, brisket: 8, noodle: 7, clover: 10 }[name];
+        s.bodyY = depth + frame;
+        s.headY = name === 'noodle' ? 3 : 5;
+        s.headX = name === 'brisket' ? -1 : 2;
+        s.lean = name === 'pip' ? 4 : 2;
+        s.headTurn = name === 'clover' ? -5 : -2;
+        s.kneeOut = name === 'brisket' ? 6 : 4;
+        s.leftX = -3;
+        s.rightX = 4;
+        s.fistX = name === 'pip' ? 5 : 2;
+        s.fistY = -3;
+        s.rearX = -4;
+        s.tailLift = 1 + frame;
+        s.foldEars = name !== 'noodle';
+        s.guardFloor = true;
+        break;
+      }
       case 'jumpSquat': {
         const depth = [2, 3, 4][frame] + (name === 'brisket' ? 1 : 0);
         s.bodyY = depth;
@@ -5461,6 +5480,7 @@
     'walk',
     'dashStart',
     'run',
+    'crouch',
     'jumpSquat',
     'jump',
     'fall',

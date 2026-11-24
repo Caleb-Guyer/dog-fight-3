@@ -250,6 +250,7 @@
     if (f.dodge > 0) return ['dodge', 1 - f.dodge / 0.27];
     if (f.jumpSquat) return ['jumpSquat', clamp((f.jumpSquat.time * 60 - 1) / 2, 0, 1)];
     if (f.shield) return ['shield', 0];
+    if (f.crouch) return ['crouch', 0];
     if (f.attack) return [attackPose(f), attackPhase(f.attack)];
     if (f.smashCharge && f.charge >= 0) {
       const power = clamp(f.charge / window.DogFight.smashChargeTime, 0, 1);
@@ -1773,6 +1774,14 @@
   }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
+    if (e.type === 'platformDrop') {
+      const spread = reduced.matches ? 0 : Math.round(p * 7);
+      for (const side of [-1, 1]) {
+        const x = e.x + side * (e.size + spread);
+        pixelLine(ctx, x, e.y, x + 5 * side, e.y - 3, cream, 2, 2);
+      }
+      return;
+    }
     if (e.type === 'hitShift') {
       const length = Math.hypot(e.dx, e.dy), x = e.dx / length, y = e.dy / length;
       const reach = reduced.matches ? 7 : 12 - 6 * p;
@@ -1871,6 +1880,7 @@
     }
     event(name, e) {
       const f = e.f;
+      if (name === 'platformDrop') this.add(name, e.point.x, e.point.y, cream, 8 / 60, f.stats.width / 2);
       if (name === 'hitShift')
         this.add('hitShift', e.point.x, e.point.y, mint, 8 / 60, f.stats.width + 4, 1, { dx: e.dx, dy: e.dy });
       if (name === 'launchDI' && f.index === 0) {

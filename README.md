@@ -73,6 +73,10 @@ Flick a side to dash. Reverse in the first few steps to dash-dance. Once your do
 
 In **Training → Footwork practice**, dash right to the chalk and reverse to draw out Brisket’s Bear Hug. As his paws close, turn back and attack before he recovers. The drill reports how many frames he still needed when your punish landed. Choose **Footwork practice** again to retry with the same spacing.
 
+Flick **Down** on a raised platform to slip through it. Your horizontal momentum carries into the fall, and you keep an air jump. As your paws pass through, aim your aerial and tap **Attack**. To down tilt on top, press **Down + Attack** together. For a crouch that lets high hits sail over your head, tilt the stick down gently, hold your keyboard Walk modifier with Down, or slide your thumb from the center dot onto Down. Low sweeps can still reach a crouching dog.
+
+In **Training → Platform practice**, choose **Rival below** to catch the other dog with a falling aerial. Choose **Rival on top** to catch them with your down tilt on the same platform. On Laundry Line the second setup puts you both on the moving basket. Select either setup again to retry with your fighters and stage.
+
 Your dog crouches for three frames before a grounded jump. Release Jump during the crouch for a short hop. Hold Jump through it for a full jump. Press Attack with Jump or during the crouch to launch a short-hop aerial in the direction you aimed. To attack on the way down, jump first and press Attack later. Jump a second time in midair, then use Up + Special to recover. Down + Jump drops through a raised platform.
 
 Tap Attack with no direction to start your dog's jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Left or right turns your dog toward the swing. Press before you reach running speed for a forward tilt. At running speed the same input gives you a dash attack. Holding Attack from a standstill charges a smash. Grabs beat shields.

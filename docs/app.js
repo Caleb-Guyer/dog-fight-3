@@ -634,6 +634,7 @@
       'Controls',
       table +
         '<p>Flick a side to dash. Reverse in the first few steps to dash-dance. After a full run your dog plants its paws to turn. On touch, slide from the center dot onto a side arrow to walk, or tap a side arrow to dash.</p>' +
+        '<p>On a raised platform, flick Down to drop through with an air jump in reserve. Tap Attack as you fall to swing. Press Down and Attack together to keep your grounded down tilt. For a low crouch, ease the stick down, hold Walk + Down on a keyboard, or slide from the center dot onto Down on touch. Try both heights in Training → Platform practice.</p>' +
         '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
         '<p>While holding Shield, press Jump, Grab, Up + Smash, or Up + Special. Tap during a blocked hit to start your response as soon as shieldstun ends. An immediate shield grab takes four extra frames to reach. A heavier blow pushes you farther away.</p>' +
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim and tap Shield to dodge in that direction, including diagonally. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Try Training → Air-dodge practice.</p>' +
@@ -1087,6 +1088,7 @@
     practiceSide = 'left';
     $('footwork-status').hidden = true;
     $('escape-status').hidden = $('escape-patterns').hidden = true;
+    $('platform-status').hidden = $('platform-patterns').hidden = true;
     $('launch-status').hidden = true;
     $('wall-status').hidden = $('wall-patterns').hidden = true;
     $('shield-status').hidden = $('shield-patterns').hidden = true;
@@ -1108,6 +1110,8 @@
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
       if (name === 'escapeCue' || name === 'escapeResult') escapeFeedback(e);
+      if (name === 'platformResult' || (name === 'platformDrop' && world?.platformPractice && e.f.index === 0))
+        platformFeedback(name, e);
       if (name === 'airStart' || name === 'airCue' || name === 'airResult') airFeedback(name, e);
       if (world?.rollPractice && e.f?.index === 0 && (name === 'ledgeRoll' || name === 'rollResult'))
         rollFeedback(name, e);
@@ -1310,6 +1314,31 @@
   let drillSide = null,
     drillWaiting = false,
     practiceSide = 'left';
+  function platformFeedback(name, e) {
+    const label = moves[e.moveId]?.label;
+    const below = world.platformPractice.pattern === 'below';
+    const status = $('platform-status'), tip = $('recovery-tip');
+    if (name === 'platformDrop') {
+      status.textContent = 'Through the platform';
+      status.dataset.result = 'fall';
+      if (below) tip.textContent = 'Aim down and tap Attack while the other dog is still below you.';
+      return;
+    }
+    status.dataset.result = e.outcome;
+    status.textContent = {
+      aerial: label + ' hit', tilt: label + ' hit', landed: 'Landed', left: 'Left the platform',
+      stayed: 'Swing missed', other: 'Different hit',
+    }[e.outcome];
+    const result = {
+      aerial: 'You caught the rival before your paws touched down.',
+      tilt: 'You landed your low tilt and kept the platform.',
+      landed: 'You passed through cleanly. Start your aerial a little earlier.',
+      left: below ? 'Flick Down from the platform to set up the falling attack.' : 'Press Down and Attack together to stay on top.',
+      stayed: below ? 'Your swing came out on top. Drop first, then attack below the platform.' : 'Stay within paw’s reach and tap Down + Attack.',
+      other: below ? 'Try catching the rival with an aerial on the way down.' : 'Use your down tilt while both dogs are on the platform.',
+    }[e.outcome];
+    tip.textContent = result + ' Choose ' + (below ? 'Rival below' : 'Rival on top') + ' to retry.';
+  }
   function escapeFeedback(e) {
     const status = $('escape-status'), tip = $('recovery-tip');
     status.dataset.result = e.outcome || e.phase;
@@ -1572,16 +1601,18 @@
     const shield = ledge === 'shield';
     const footwork = ledge === 'footwork';
     const escape = ledge === 'escape';
+    const platform = ledge === 'platform';
     const air = ledge === 'air';
     const roll = ledge === 'roll';
     const trump = ledge === 'trump';
-    drillSide = launch || wall || shield || footwork || escape || air || roll || trump ? null : ledge || null;
+    drillSide = launch || wall || shield || footwork || escape || platform || air || roll || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
     if (launch) world.resetLaunchPractice();
     else if (footwork) world.resetFootworkPractice();
     else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true);
+    else if (platform) world.resetPlatformPractice(pattern);
     else if (wall) world.resetWallPractice(pattern);
     else if (shield) world.resetShieldPractice(pattern);
     else if (air) world.resetAirPractice(pattern, practiceSide);
@@ -1595,13 +1626,23 @@
     result.hidden = !launch;
     $('footwork-status').hidden = !footwork;
     $('escape-status').hidden = $('escape-patterns').hidden = !escape;
+    $('platform-status').hidden = $('platform-patterns').hidden = !platform;
     $('wall-status').hidden = $('wall-patterns').hidden = !wall;
     $('shield-status').hidden = $('shield-patterns').hidden = !shield;
     $('air-status').hidden = $('air-patterns').hidden = !air;
     $('roll-status').hidden = $('roll-patterns').hidden = !roll;
     $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
-    if (escape) {
+    if (platform) {
+      const below = pattern === 'below';
+      $('platform-below').setAttribute('aria-pressed', String(below));
+      $('platform-top').setAttribute('aria-pressed', String(!below));
+      $('platform-status').dataset.result = 'ready';
+      $('platform-status').textContent = below ? 'Rival below' : 'Rival on top';
+      message = below
+        ? 'Tap Down to drop. As your paws pass the platform, aim down and tap Attack for ' + moves[player.kit.air.down].label + '.'
+        : 'Press Down and Attack together for ' + moves[player.kit.tilts.down].label + '. Keep both paws on the platform.';
+    } else if (escape) {
       $('escape-tip').setAttribute('aria-pressed', String(pattern === 'tip'));
       $('escape-close').setAttribute('aria-pressed', String(pattern === 'close'));
       $('escape-slow').setAttribute('aria-pressed', String(world.escapePractice.slow));
@@ -1682,6 +1723,9 @@
   }
   $('reset-training').onclick = () => drill(false);
   $('footwork-training').onclick = () => drill('footwork');
+  $('platform-training').onclick = () => drill('platform', false, world.platformPractice?.pattern || 'below');
+  $('platform-below').onclick = () => drill('platform', false, 'below');
+  $('platform-top').onclick = () => drill('platform', false, 'top');
   $('escape-training').onclick = () => drill('escape', false, world.escapePractice?.spacing || 'tip');
   $('escape-tip').onclick = () => drill('escape', false, 'tip');
   $('escape-close').onclick = () => drill('escape', false, 'close');
@@ -2324,6 +2368,18 @@
     },
   ];
   const matchKeys = new Set(keys.flatMap((k) => Object.values(k)));
+  const attackAim = [{}, {}];
+  function rememberAttackAim(slot) {
+    const map = keys[slot];
+    const active = name => held.has(map[name]) || (slot === 0 && touches.has(name));
+    const soft = slot === 0 && touchPointers.get(walkPointer)?.dataset.touch;
+    const x = Number(active('right')) - Number(active('left'));
+    const y = Number(active('down')) - Number(active('up'));
+    attackAim[slot] = {
+      x: x * (active('walk') || (soft && (soft.endsWith('left') || soft.endsWith('right'))) ? 64 / 127 : 1),
+      rawX: x, y: y > 0 && (active('walk') || soft === 'down') ? 64 / 127 : y,
+    };
+  }
   window.addEventListener('keydown', (e) => {
     if (page !== 'match' || $('dialog').open) return;
     if (e.code === 'Escape' || e.code === 'KeyP') {
@@ -2335,7 +2391,11 @@
     if (!matchKeys.has(e.code)) return;
     e.preventDefault();
     held.add(e.code);
-    if (!e.repeat) taps.add(e.code);
+    if (!e.repeat) {
+      taps.add(e.code);
+      const slot = keys.findIndex(map => map.attack === e.code);
+      if (slot >= 0) rememberAttackAim(slot);
+    }
   });
   window.addEventListener('keyup', (e) => held.delete(e.code));
   const touchButtons = [...document.querySelectorAll('[data-touch]')];
@@ -2351,6 +2411,7 @@
       if (previous)
         for (const key of previous.dataset.touch.split('-')) if (!touches.has(key)) touchTaps.delete(key);
       for (const key of button.dataset.touch.split('-')) touchTaps.add(key);
+      if (button.dataset.touch === 'attack') rememberAttackAim(0);
     }
     for (const el of touchButtons) el.classList.toggle('held', pressed.has(el));
   }
@@ -2462,7 +2523,9 @@
     const left = key('left') || down(pad, 14),
       right = key('right') || down(pad, 15);
     const x = Number(right) - Number(left);
-    let grabX = x || axis(0);
+    // A direction released after Attack still belongs to that tap when both edges fall between game ticks.
+    const aim = tapped('attack') ? attackAim[i] : null;
+    let grabX = x || axis(0) || aim?.rawX || 0;
     if (left && right) {
       // Rolling one direction key onto the other is a turn even during their brief overlap.
       const leftTap = tapped('left'),
@@ -2478,10 +2541,12 @@
     const rightStick = Math.max(Math.abs(rightX), Math.abs(rightY)) > 0.62;
     const fromCenter = !i && touchPointers.get(walkPointer)?.dataset.touch;
     const walk = key('walk') || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
+    const shield = key('shield') || down(pad, 4) || down(pad, 5);
+    const gentleDown = !shield && y > 0 && (key('walk') || fromCenter === 'down');
     return {
-      x: (walk ? x * (64 / 127) : x) || axis(0),
+      x: (walk ? x * (64 / 127) : x) || axis(0) || (!left && !right && aim?.x) || 0,
       grabX,
-      y: y || axis(1),
+      y: (gentleDown ? 64 / 127 : y) || axis(1) || (!up && !downAim && aim?.y) || 0,
       // Apply the air dodge's radial dead zone to the whole stick, including shallow angles.
       airDodgeX: digitalAim ? (left || right ? grabX : 0) : pad?.axes?.[0] || 0,
       airDodgeY: digitalAim ? y : pad?.axes?.[1] || 0,
@@ -2491,7 +2556,7 @@
       smashX: rightStick ? rightX : x || axis(0),
       smashY: rightStick ? rightY : y || axis(1),
       special: key('special') || down(pad, 1),
-      shield: key('shield') || down(pad, 4) || down(pad, 5),
+      shield,
       grab: key('grab') || down(pad, 3),
       tapped: {
         jump: tapped('jump'),

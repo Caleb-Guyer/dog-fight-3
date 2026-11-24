@@ -656,6 +656,8 @@ body.playing .tools .utility,
 #shield-status[data-result='punish'],
 #footwork-status[data-result='punish'],
 #escape-status[data-result='escaped'],
+#platform-status[data-result='aerial'],
+#platform-status[data-result='tilt'],
 #shield-status[data-result='spaced'],
 #shield-status[data-result='counterHit'],
 #roll-status[data-result='passed'],
@@ -787,6 +789,7 @@ kbd {
   min-height: 30px;
   font-size: 13px;
 }
+#platform-patterns,
 #escape-patterns,
 #shield-patterns,
 #wall-patterns,
@@ -796,6 +799,7 @@ kbd {
   display: inline-flex;
   gap: 2px;
 }
+#platform-patterns [aria-pressed='true'],
 #escape-patterns [aria-pressed='true'],
 #shield-patterns [aria-pressed='true'],
 #roll-patterns [aria-pressed='true'],
