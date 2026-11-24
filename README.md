@@ -34,6 +34,8 @@ In that opening, let Brisket approach once to see his Yard Buster. On the rematc
 
 Choose **CPU** in Fighter select. **Rookie** pauses between grounded attacks, **Arcade** plays the original mix of combos and counters, and **Rival** also learns how you escape after blocking. All three use the selected dog's regular damage, speed, stocks and recovery.
 
+On Night Mail, hold Shield from the start against Rival Brisket. He can run in, short-hop, and land beside you for a standing grab. Try jumping out of shield as he comes down. If an empty hop misses, Rival can take the same approach with a falling neutral aerial on the next run at a held shield. [Try the three-stock fight](https://caleb-guyer.github.io/dog-fight-3/#solo/night-mail)
+
 In **Try Rival · Pip vs. Noodle**, close the distance until Noodle can reach your shield with his lead. Block and tap Down while holding Shield to spot-dodge. Repeat it after two separate blocked attacks. On another block, Noodle can wait out the dodge and sweep your paws with Tail Broom. Try jumping over the sweep or grabbing him during the wait. The pause and results screens count the delayed tilts that caught a dodge. [Play the three-stock matchup](https://caleb-guyer.github.io/dog-fight-3/#solo/shield-read)
 
 **Restart match** and **Rematch** replay the same opening. **Pause → Replay with another CPU** restarts with the same dogs, arena and random seed at the level you choose. Starting a fresh solo match from Fighter select draws a new seed.
@@ -314,6 +316,10 @@ Hold left or right to get running, then press **Attack** once. Use **J** for P1,
 | **Clover** | **Rim Rush** | Scoop low for 3%, then flick the disc upward for another 6%. Jump as the second hit connects to chase with an aerial. |
 
 ## Grabs, pummels and throws
+
+**Empty-hop grab.** Jump toward a shield and land close, keeping your paws free. Tap Grab during the last four simulation frames of the fall to start your dog's standing grab on its first actionable grounded frame. Your dog's usual startup, reach, pummels, and throws apply. Tapping earlier or away from a landing surface starts the airborne grab.
+
+In **Shield practice → Jump-in practice**, choose **You grab on landing**. Hold Hop beside the shield, then tap Grab as you land. The readout distinguishes a buffered landing grab, a grab after touchdown, and an airborne grab. Switch to **Read either option** to defend against a rising dog that can swing on the way down or reach for you after landing. Hold Shield through the swing. Against the empty hop, jump clear or spot-dodge the reach. Choose **Jump-in practice** to replay at half or full speed. [Play the jump-in drill](https://caleb-guyer.github.io/dog-fight-3/#training/jump-ins)
 
 Press **U** as P1, **M** as P2, **Y** on a gamepad, or **Grab** on touch. A catch goes through a shield. Once you catch the rival, tap **forward**, **back**, **up**, or **down** on your movement controls. Forward follows the way you faced when you caught them. Tapping Grab a second time also throws forward. If you get caught, tap action buttons to break free sooner. A more damaged rival takes longer to escape.
 

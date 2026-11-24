@@ -100,6 +100,7 @@
   const canStayPlanted = (vx, vy) => Math.hypot(vx, vy) <= 150 && Math.abs(vy) <= 96;
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
   const inputWindow = 7 / 60;
+  const landingGrabFrames = 4;
   const landingCancelWindow = 7 / 60;
   const runStick = 0.55;
   const pivotWindow = 7 / 60;
@@ -2185,6 +2186,7 @@
     beginAttack(f, 'grab', aim, 0, id);
     const attack = f.attack;
     attack.grabAttempt = true;
+    if (f.ground < 0) attack.airGrab = true;
     attack.grabStyle = style;
     attack.runFace = runFace;
     if (shieldGrab) {
@@ -2422,6 +2424,11 @@
     return !f.stun && !f.tumble && !f.grip && !f.ledge && !f.ledgeTrump && !f.wallAction && !f.clashRecoil &&
       !f.airDodge && !f.throwBounce && !f.attack?.plunge && !f.attack?.motionLocked;
   }
+  function fallVelocity(f, vy, dt, controlled) {
+    if (f.fastFall) return Math.max(vy, f.kit.fastFallSpeed);
+    const terminal = controlled ? Math.max(vy, f.kit.fallSpeed) : 970;
+    return Math.min(vy + 1540 * f.kit.gravity * dt, terminal);
+  }
   function canCancelMeteor(f) {
     const t = f.tumble;
     return !!t?.meteor && !t.pending && f.stun > 0 && f.vy > 0 && f.ground < 0 && (f.jumps > 0 || !f.usedUp) &&
@@ -2525,6 +2532,8 @@
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
       if (fromKO && this.mode === 'solo') {
         this.bot.pressure = null;
+        this.bot.jumpIn = null;
+        this.bot.shieldWatch = 0;
         this.bot.rookieNext = 0;
       }
       if (this.grapple && (this.dogs.length === 2 || f.grip)) this.breakGrapple(false);
@@ -3779,9 +3788,18 @@
       this.emit('wallReturn', { f });
     }
     resetShieldPractice(pattern = 'strike', worn = true) {
+      const slow = this.shieldPractice?.slow ?? true;
       this.resetTraining();
       this.shieldPractice = { pattern, phase: 'ready', time: 0, outcome: '', lastDodge: '' };
-      if (pattern === 'low' || pattern === 'high' || pattern === 'poke') {
+      if (['emptyHop','fallingAir','mixHop','yourHop'].includes(pattern)) {
+        const [player, rival] = this.dogs, floor = this.terrain[0];
+        const middle = (floor.x1 + floor.x2) / 2, gap = player.stats.width + rival.stats.width + (pattern === 'yourHop' ? 3 : 42);
+        Object.assign(player,{x:middle-gap/2,y:floor.y,ground:0,face:1});
+        Object.assign(rival,{x:middle+gap/2,y:floor.y,ground:0,face:-1});
+        const grab = pattern === 'mixHop' ? this.random() < .5 : pattern === 'emptyHop';
+        this.shieldPractice.jumpIn = this.planJumpIn(rival,player,grab);
+        this.shieldPractice.slow = slow;
+      } else if (pattern === 'low' || pattern === 'high' || pattern === 'poke') {
         const drill = this.shieldPractice, attacking = pattern === 'poke';
         drill.coverage = true;
         drill.worn = worn;
@@ -4017,11 +4035,37 @@
     }
     shieldPracticeInput(dt, input) {
       const drill = this.shieldPractice;
+      if (drill.pattern === 'yourHop') {
+        const player = this.dogs[0];
+        if (drill.phase === 'ready' && (input.jump || input.shortHop || input.tapped?.jump || input.tapped?.shortHop))
+          drill.phase = 'attack';
+        if (drill.phase === 'attack') {
+          drill.airborne ||= player.ground < 0;
+          if (!drill.cued && this.canBufferLandingGrab(player,input.x)) {
+            drill.cued = true;
+            this.emit('shieldCue',{f:player,phase:'touchdown',pattern:drill.pattern});
+          }
+          if (drill.airborne && player.ground >= 0 && !player.attack && !player.command) {
+            drill.time += dt;
+            if (drill.time > .40) this.finishShieldPractice('miss');
+          }
+        }
+        return {...idleInput,shield:drill.phase !== 'done'};
+      }
       if (drill.phase === 'ready' && input.shield) {
         drill.phase = 'windup';
         this.emit('shieldCue', { f: this.dogs[0], phase: 'windup', pattern: drill.pattern });
       }
       if (drill.coverage) return this.shieldCoverageInput(drill, dt);
+      if (drill.jumpIn) {
+        if (drill.phase === 'done' || drill.phase === 'ready') return idleInput;
+        drill.time += dt;
+        if (drill.time < .22) return idleInput;
+        drill.phase = 'attack';
+        const cmd = this.jumpInInput(this.dogs[1], drill.jumpIn);
+        if (!cmd) this.finishShieldPractice('miss');
+        return cmd || idleInput;
+      }
       if (drill.originalDogs) return this.shieldAerialInput(drill, dt);
       if (drill.phase === 'windup') {
         drill.time += dt;
@@ -4465,6 +4509,8 @@
         }
       }
       let guardDrill = this.shieldPractice;
+      if (guardDrill?.jumpIn && guardDrill.phase === 'ready' && (guardDrill.pattern === 'yourHop'
+          ? !(input1.jump || input1.shortHop || input1.tapped?.jump || input1.tapped?.shortHop) : !input1.shield)) return;
       if (guardDrill?.coverage && guardDrill.pattern !== 'poke' && guardDrill.phase === 'done') {
         if (!input1.shield) guardDrill.released = true;
         else if (guardDrill.released) {
@@ -4911,6 +4957,7 @@
           released: !input[button],
         };
         if (button === 'aimStick') f.command.button = button;
+        if (type === 'grab' && this.canBufferLandingGrab(f,input.x)) f.command.landGrab = true;
         if (stickTilt) f.command.released = true;
         if (stickAerial) f.command.airOnly = true;
         if (type === 'special' && side === 'neutral' && f.ground < 0) {
@@ -4978,6 +5025,22 @@
         result = i;
       }
       return result;
+    }
+    canBufferLandingGrab(f, axis) {
+      if (f.ground >= 0 || f.vy <= 0 || f.attack || !controlsFall(f)) return false;
+      const dt = 1/60, path = {x:f.x, y:f.y, drop:f.drop, dropPlatform:f.dropPlatform};
+      let vx = f.vx, vy = f.vy;
+      for (let i=0; i<landingGrabFrames; i++) {
+        const oldY = path.y;
+        vx = airVelocity(f,vx,axis,dt);
+        vy = fallVelocity(f,vy,dt,true);
+        path.x += vx*dt;
+        path.y += vy*dt;
+        path.drop = Math.max(0,path.drop-dt);
+        const terrain = i && !this.layout && this.stage === 'laundry' ? platforms(this.stage,this.time+i*dt) : this.terrain;
+        if (this.landingSurface(path,oldY,path.x,0,terrain) >= 0) return true;
+      }
+      return false;
     }
     landingCancelAhead(f) {
       const a = f.attack;
@@ -5758,7 +5821,8 @@
               this.emit('smashRelease', { f });
             } else groundStrike(f, f.chargeDirection, f.charge, f.chargeSlide, f.chargeTilt);
           }
-        } else if (command && (command.type !== 'smash' || f.ground >= 0)) {
+        } else if (command && (command.type !== 'smash' || f.ground >= 0) &&
+            !(command.landGrab && this.canBufferLandingGrab(f,input.x))) {
           f.throwBounce = null;
           f.command = null;
           const neutralInAir = command.type === 'special' && command.airSide === 'neutral' && f.ground < 0;
@@ -5766,6 +5830,7 @@
           if (command.type === 'grab') {
             const style = f.ground >= 0 && command.grabStyle ? command.grabStyle : 'standing';
             beginGrab(f, style, style === 'standing' ? 0 : command.runFace, command.aim, command.shieldGrab);
+            if (command.landGrab && f.ground >= 0) f.attack.landingGrab = true;
           } else if (command.type === 'special') this.special(f, command);
           else if (command.type === 'smash') {
             f.charge = 0;
@@ -5930,8 +5995,7 @@
         if (!dodgeGlide) {
           const controlled = controlsFall(f);
           if (!controlled || f.vy < 0) f.fastFall = false;
-          const terminal = controlled ? Math.max(f.vy, f.kit.fallSpeed) : 970;
-          f.vy = f.fastFall ? Math.max(f.vy, f.kit.fastFallSpeed) : Math.min(f.vy + 1540 * f.kit.gravity * dt, terminal);
+          f.vy = fallVelocity(f,f.vy,dt,controlled);
         }
         f.y += f.vy * dt;
         const contact = this.wallContact(f, oldX, oldY, f.x, f.y);
@@ -6225,7 +6289,9 @@
         moveId: grip.grabId,
         grabStyle: attack.grabStyle,
       });
-      if (this.shieldPractice?.phase === 'counter' && owner.index === 0)
+      if (this.shieldPractice?.pattern === 'yourHop' && owner.index === 0)
+        this.finishShieldPractice(attack.landingGrab ? 'bufferedGrab' : attack.airGrab ? 'airGrab' : 'landGrab');
+      else if (this.shieldPractice?.phase === 'counter' && owner.index === 0)
         this.finishShieldPractice(landingFrames > 0 ? 'punish' : 'lateCatch', landingFrames);
       else this.finishShieldPractice(target.index === 0 ? 'grabbed' : this.shieldPractice?.pattern === 'poke' ? 'caughtGuard' : 'interrupted');
       this.finishAirPractice(target.index === 0 ? 'hit' : 'interrupted');
@@ -7033,6 +7099,7 @@
       if (this.climbPractice?.climbed && target.index === this.climbPractice.slot && moveId === owner.kit.ground[0])
         this.finishClimbPractice(this.climbPractice.role === 'trap' ? 'late' : 'guarded');
       if (target.index === 0) this.finishShieldPractice(broken ? 'break' : 'block');
+      else if (this.shieldPractice?.pattern === 'yourHop') this.finishShieldPractice('blockedAir');
       else if (this.shieldPractice?.pattern === 'poke') this.finishShieldPractice(broken ? 'brokeGuard' : 'sealed');
     }
     hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId, use, covered = true) {
@@ -8163,6 +8230,56 @@
       brain.spotBaits = (brain.spotBaits || 0) + 1;
       return { ...idleInput, x:p.face*.5, y:1, tapped:{attack:true} };
     }
+    planJumpIn(f, foe, grab) {
+      const dir = Math.sign(foe.x - f.x) || f.face;
+      // Commit to the space in front of the shield. A defender who moves can make either option miss.
+      return {dir, mark:foe.x-dir*(f.stats.width+foe.stats.width+1), ground:f.ground, grab,
+        jumped:false, airborne:false, sent:false, frames:0};
+    }
+    jumpInInput(f, plan) {
+      if (++plan.frames > 90 || f.stun || f.tumble || f.grip || f.ledge || f.floorAction || f.airDodge ||
+          (f.ground >= 0 && f.ground !== plan.ground)) return null;
+      const x = clamp((plan.mark-f.x-f.vx*.10)/22,-1,1);
+      if (!plan.jumped) {
+        if ((plan.mark-f.x)*plan.dir > 65) return {...idleInput,x:plan.dir};
+        plan.jumped = true;
+        return {...idleInput,x:plan.dir,jump:true,shortHop:true};
+      }
+      if (f.ground < 0) plan.airborne = true;
+      const landed = plan.airborne && f.ground >= 0;
+      if (!plan.sent) {
+        const horizon = plan.grab ? 2/60 : moves[f.kit.air.neutral].start + 4/60;
+        if (landed || (f.ground < 0 && this.floorAhead(f,horizon) === plan.ground)) {
+          if (landed && !plan.grab) return null;
+          plan.sent = true;
+          if (plan.grab) return {...idleInput,grab:true,grabX:plan.dir};
+          return {...idleInput,x,aimStick:true,smashX:0,smashY:0};
+        }
+      } else if (landed && !f.attack && !f.command) return null;
+      return {...idleInput,x:landed ? 0 : x};
+    }
+    rivalJumpIn(f, foe, dt) {
+      const brain = this.bot;
+      brain.shieldWatch = foe.shield ? Math.min(.5,(brain.shieldWatch || 0)+dt) : 0;
+      if (!brain.jumpIn) {
+        if (brain.shieldWatch < .20 || this.time < (brain.nextJumpIn || 0) || !f.run || f.ground !== foe.ground ||
+            f.ground < 0 || f.attack || f.stun || f.command || f.charge >= 0 || f.shield || f.floorAction ||
+            f.landingLag || f.jumpSquat || protectionTime(foe) || f.run.turned) return null;
+        const dir = f.run.face, gap = (foe.x-f.x)*dir, floor = this.terrain[f.ground];
+        if (dir !== f.face || gap < 85 || gap > 218 || foe.x < floor.x1+50 || foe.x > floor.x2-50) return null;
+        brain.jumpIn = this.planJumpIn(f,foe,!brain.missedHopGrab);
+        brain.missedHopGrab = false;
+        brain.nextJumpIn = this.time + 1.6;
+        brain.hop = null;
+        brain.jumpHold = brain.guard = brain.hold = 0;
+      }
+      const plan = brain.jumpIn, input = this.jumpInInput(f,plan);
+      if (!input) {
+        brain.missedHopGrab = plan.grab && plan.sent && !f.grip;
+        brain.jumpIn = null;
+      }
+      return input;
+    }
     cpu(dt) {
       const f = this.dogs[1],
         foe = this.dogs[0],
@@ -8180,6 +8297,7 @@
       }
       if (this.grapple) {
         const grip = this.grapple;
+        brain.jumpIn = null;
         if (brain.pressure) {
           if (!brain.pressure.observed) brain.spotStreak = 0;
           brain.pressure = null;
@@ -8239,7 +8357,8 @@
         const basic = this.rookieNeutral(f, foe);
         if (basic) return basic;
       } else if (this.cpuLevel === 'rival') {
-        const answer = this.readShieldEscape(f, foe) || this.runningAntiAir(f, foe) || this.angledTiltInput(f, foe);
+        const answer = this.readShieldEscape(f, foe) || this.rivalJumpIn(f, foe, dt) ||
+          this.runningAntiAir(f, foe) || this.angledTiltInput(f, foe);
         if (answer) return answer;
         // Space a quick forward tilt at the shield's rim. In close the normal grab mixup still applies.
         if (foe.shield && f.ground >= 0 && f.ground === foe.ground && !f.attack && !f.stun && !f.grip &&

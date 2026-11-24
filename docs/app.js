@@ -2134,6 +2134,29 @@
   function shieldFeedback(name, e) {
     const result = $('shield-status');
     const tip = $('recovery-tip');
+    if (world.shieldPractice.jumpIn) {
+      if (name === 'shieldCue') {
+        result.dataset.result = e.phase;
+        result.textContent = e.phase === 'touchdown' ? 'Tap Grab' : 'Watch the jump';
+        return;
+      }
+      const plan = world.shieldPractice.jumpIn;
+      const answer = e.outcome === 'miss' ? (e.lastDodge === 'spotDodge' ? 'Spot-dodged' :
+        e.lastDodge === 'shieldRoll' ? 'Rolled clear' : e.pattern === 'yourHop' ? 'No catch' : 'Escaped') : {
+        block:'Blocked the aerial', parry:'Parried the aerial', grabbed:'Caught by the landing grab',
+        interrupted:'Jump-in interrupted', hit:'Hit by the aerial', break:'Shield broken', poked:'Shield poked',
+        landGrab:'Grabbed after touchdown', bufferedGrab:'Buffered landing grab', airGrab:'Grab started in the air',
+        blockedAir:'Aerial hit the shield',
+      }[e.outcome];
+      result.dataset.result = e.outcome;
+      result.textContent = answer;
+      const advice = e.pattern === 'yourHop' ? (e.outcome === 'bufferedGrab' || e.outcome === 'landGrab'
+        ? 'Tap a direction to throw.' : 'Hop beside the shield, then tap Grab as your paws reach the ground.') :
+        plan.grab ? 'That was an empty hop. Spot-dodge as the paws reach for you, or jump clear.' :
+        'That was a falling aerial. Hold Shield through the swing, or release just before impact to parry.';
+      tip.textContent = advice + ' Choose Jump-in practice to retry.';
+      return;
+    }
     const aerial = e.pattern === 'kick' || e.pattern === 'drop';
     const dummy = world.dogs[1];
     const attackName =
@@ -2845,9 +2868,19 @@
       $('shield-status').textContent = guard.coverage ? (pattern === 'poke' ? 'Rival shield' : 'Your shield') + (guard.worn ? ' · 30%' : ' · 100%') : 'Hold Shield to begin';
       $('shield-strength').hidden = !guard.coverage;
       $('shield-strength').setAttribute('aria-pressed', String(!!guard.coverage && !guard.worn));
-      for (const button of $('shield-patterns').querySelectorAll('button:not(#shield-strength)'))
-        button.setAttribute('aria-pressed', String(button.id === 'shield-' + pattern));
+      $('jump-in-options').hidden = !guard.jumpIn;
+      for (const button of $('shield-patterns').querySelectorAll(':scope > button:not(#shield-strength)'))
+        button.setAttribute('aria-pressed', String(button.id === 'shield-' + (guard.jumpIn ? 'jumpIn' : pattern)));
+      if (guard.jumpIn) {
+        $('jump-in-choice').value = pattern;
+        $('jump-in-speed').setAttribute('aria-pressed',String(guard.slow));
+        if (pattern === 'yourHop') $('shield-status').textContent = 'Hop beside the shield';
+      }
       message = {
+        yourHop: 'Hold Hop or Jump beside the rival. Tap Grab as your paws touch down, then choose a throw.',
+        emptyHop: 'Hold Shield to start. Let the empty hop grab you once. Retry and tap Down as the rival reaches for you.',
+        fallingAir: 'Hold Shield to start. Watch the falling swing, then hold your ground or release Shield to parry.',
+        mixHop: 'Hold Shield to start. Watch for a swing on the way down or a grab after touchdown.',
         kick: 'You’re Clover. Hold Shield. Tap Grab when Pip’s Flying Kick hits the far side of your shield.',
         drop: 'You’re Clover. Hold Shield. Tap Grab as Brisket’s Belly Drop hits to catch him before he recovers.',
         strike: 'Raise Shield to start. Roll through the strike, or release Shield as it lands to parry.',
@@ -3065,8 +3098,14 @@
   for (const kind of ['pip','noodle']) $('wall-'+kind).onclick = () => drill('wall', false, world.wallPractice.side, kind);
   $('wall-side').onclick = () => drill('wall', false, world.wallPractice.side === 'left' ? 'right' : 'left', world.wallPractice.runner);
   $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'kick');
-  for (const button of $('shield-patterns').querySelectorAll('button:not(#shield-strength)'))
-    button.onclick = () => drill('shield', false, button.id.slice('shield-'.length));
+  for (const button of $('shield-patterns').querySelectorAll(':scope > button:not(#shield-strength)'))
+    button.onclick = () => drill('shield', false, button.id === 'shield-jumpIn' ? $('jump-in-choice').value : button.id.slice('shield-'.length));
+  $('jump-in-choice').onchange = () => drill('shield', false, $('jump-in-choice').value);
+  $('jump-in-speed').onclick = () => {
+    const practice = world.shieldPractice;
+    practice.slow = !practice.slow;
+    $('jump-in-speed').setAttribute('aria-pressed',String(practice.slow));
+  };
   $('shield-strength').onclick = () => drill('shield', false, world.shieldPractice.pattern, !world.shieldPractice.worn);
   $('air-dodge-training').onclick = () => drill('air', false, world?.airPractice?.pattern || 'neutral');
   $('air-neutral').onclick = () => drill('air', false, 'neutral');
@@ -4054,7 +4093,7 @@
         if (frameLab.mode === 'frozen') {
           accumulator = frameLab.pending > 0 ? 1 / 60 : 0;
           if (frameLab.pending > 0) frameLab.pending--;
-        } else accumulator += world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow ? dt / 2 : dt;
+        } else accumulator += world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];
@@ -4130,6 +4169,11 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/jump-ins') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'pip', p2:'pip', stage:'nightmail', fetch:false });
+      drill('shield', false, 'yourHop');
     } else if (hash === '#training/blast-radar') {
       menuScreen('match');
       afterStory = null;

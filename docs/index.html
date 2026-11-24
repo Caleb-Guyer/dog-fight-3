@@ -11,13 +11,13 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=corner-pressure-1" />
+    <link rel="stylesheet" href="./style.css?v=jump-in-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=blast-radar-1" />
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=angled-tilts-1"></script>
     <script defer src="./arena-art.js?v=night-mail-1"></script>
-    <script defer src="./engine.js?v=night-mail-1"></script>
+    <script defer src="./engine.js?v=jump-in-1"></script>
     <script defer src="./render.js?v=night-mail-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=stock-return-1"></script>
     <script defer src="./dispatch-view.js?v=blast-radar-1"></script>
-    <script defer src="./online.js?v=night-mail-1"></script>
-    <script defer src="./app.js?v=night-mail-1"></script>
+    <script defer src="./online.js?v=jump-in-1"></script>
+    <script defer src="./app.js?v=jump-in-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -531,6 +531,17 @@
             <button id="shield-drop" type="button" class="utility" aria-pressed="false">Brisket’s Belly Drop</button>
             <button id="shield-strike" type="button" class="utility" aria-pressed="false">Strike</button>
             <button id="shield-grab" type="button" class="utility" aria-pressed="false">Grab</button>
+            <button id="shield-jumpIn" type="button" class="utility" aria-pressed="false">Jump-in practice</button>
+            <span id="jump-in-options" hidden>
+              <label for="jump-in-choice">Jump-in</label>
+              <select id="jump-in-choice">
+                <option value="yourHop">You grab on landing</option>
+                <option value="emptyHop">Face an empty hop</option>
+                <option value="fallingAir">Face a falling aerial</option>
+                <option value="mixHop">Read either option</option>
+              </select>
+              <button id="jump-in-speed" type="button" class="utility" aria-pressed="true">Half speed</button>
+            </span>
             <button id="shield-low" type="button" class="utility" aria-pressed="false">Guard low</button>
             <button id="shield-high" type="button" class="utility" aria-pressed="false">Guard high</button>
             <button id="shield-poke" type="button" class="utility" aria-pressed="false">Poke their shield</button>
