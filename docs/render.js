@@ -1899,6 +1899,17 @@
       }
       return;
     }
+    if (e.type === 'landingCancel') {
+      const slip = reduced.matches ? 0 : snap(p * 11, 2);
+      for (const side of [-1, 1]) {
+        const x = e.x + side * (e.size + slip);
+        for (const [color, width] of [[ink, 5], [mint, 3]]) {
+          pixelLine(ctx, x, e.y - 2, x + side * 8, e.y - 2, color, width, 2);
+          pixelLine(ctx, x + side * 8, e.y - 2, x + side * 13, e.y - 7, color, width, 2);
+        }
+      }
+      return;
+    }
     if (e.type === 'specialTurn') {
       const extent = reduced.matches ? 15 : 10 + 13 * p, dir = e.face;
       const at = e.x + dir * (e.size + extent), y = e.y + 5;
@@ -2044,6 +2055,7 @@
     event(name, e) {
       const f = e.f;
       if (name === 'stockLeave') this.add(name, e.point.x, e.point.y, mint, 0.18, 24);
+      if (name === 'landingCancel') this.add(name, e.point.x, e.point.y, mint, 0.18, f.stats.width * 0.7);
       if (name === 'specialTurn') this.add(name, e.point.x, e.point.y, e.turn === 'turnaround' ? gold : mint,
         0.16, f.stats.width, e.turn === 'turnaround' ? e.face : Math.sign(e.vx) || e.face, { wave: e.turn === 'wavebounce' });
       if (name === 'meteorBounce' || name === 'meteorCancel')
@@ -2353,6 +2365,15 @@
             pixelLine(ctx, x + drill.dir * 15, y + 3, x + drill.dir * 10, y - 2, color, width, 2);
           }
           if (drill.landingX !== undefined) pixelLine(ctx, x, y + 8, drill.landingX, y + 8, mint, 2, 2);
+        } else if (drill.pattern === 'cancel') {
+          const lit = drill.cue && drill.landing === null;
+          for (const side of [-1, 1]) {
+            const at = x + side * 24;
+            for (const [color, width] of [[ink, 6], [lit || drill.canceled ? mint : gold, 3]]) {
+              pixelLine(ctx, at, y, at + side * 13, y, color, width, 2);
+              pixelLine(ctx, at + side * 13, y, at + side * 13, y - (lit ? 14 : 5), color, width, 2);
+            }
+          }
         } else if (drill.pattern === 'landing') {
           // A fork and a single stripe stay distinct against all three floors.
           for (const [at, fork, tint] of [[x, true, gold], [snap(drill.cleanMark, 2), false, mint]]) {

@@ -342,6 +342,8 @@
       else tone(260, 370, 0.07, 0, 'sine', 0.07);
     } else if (name === 'waveland') {
       tone(175, 64, 0.095, 0, 'triangle', 0.055);
+    } else if (name === 'landingCancel') {
+      tone(540, 760, 0.055, 0, 'triangle', 0.055);
     } else if (name === 'wallTech' || name === 'wallTechJump') {
       tone(630, 920, 0.052, 0, 'triangle', 0.075);
       if (name === 'wallTechJump') tone(870, 1440, 0.082, 0.04, 'square', 0.024);
@@ -763,7 +765,8 @@
       (category === 'air' && move.meteor ? ' A strong spike rebounds off the floor. A falling rival can cancel from flight frame ' +
         (move.meteor + 1) + ' with a saved jump or Up Special.' : '') +
       (move.landingWindow ? ' Landing on frames ' + move.landingWindow[0] + '–' + (move.landingWindow[1] - 1) +
-        ' takes ' + move.land + ' frames to recover. Elsewhere in the move it takes 2.' : '') +
+        ' takes ' + move.land + ' frames to recover. A timed Shield press cuts it to ' + Math.ceil(move.land / 2) +
+        '. Elsewhere in the move it takes 2.' : '') +
       '</span></div></li>'
     );
   }
@@ -986,7 +989,7 @@
         guideMoveRow(moves[kit.dashAttack], 'Run + Attack', 'dash', 'dash') +
         '</ul>' +
         ledgeMove +
-        '<h3 class="guide-section">Aerial attacks</h3><p>Jump + Attack gives a rising short-hop aerial. To swing on the way down, jump first and time Attack yourself. Tap Down after the apex to fast-fall. Forward follows your facing.</p><p>Each forward air has a clean hit and a softer follow-through. Practice landing the late hit into a jab in <strong>Training → Aerial practice → Landing hits</strong>.</p><p>Steer with the left stick and flick the right stick to swing in a separate direction. On keyboard, aim left/right/up/down with R/Y/T/G for P1 or numpad 4/6/8/2 for P2. On touch, flick outward from Smash. For a running back air, reverse direction with Jump and steer back along your original path. Try <strong>Aerial practice → Approach</strong>.</p><ul class="move-rows guide-airs">' +
+        '<h3 class="guide-section">Aerial attacks</h3><p>Jump + Attack gives a rising short-hop aerial. To swing on the way down, jump first and time Attack yourself. Tap Down after the apex to fast-fall. Forward follows your facing.</p><p>Press Shield during an aerial in the last seven frames before touchdown to halve its landing recovery, rounded up. Mint streaks at the paws mark a landing cancel. Keep holding Shield to block the reply. Try <strong>Training → Aerial practice → Landing cancel</strong>.</p><p>Each forward air has a clean hit and a softer follow-through. Practice landing the late hit into a jab in <strong>Training → Aerial practice → Landing hits</strong>.</p><p>Steer with the left stick and flick the right stick to swing in a separate direction. On keyboard, aim left/right/up/down with R/Y/T/G for P1 or numpad 4/6/8/2 for P2. On touch, flick outward from Smash. For a running back air, reverse direction with Jump and steer back along your original path. Try <strong>Aerial practice → Approach</strong>.</p><ul class="move-rows guide-airs">' +
         rows +
         '</ul>';
     }
@@ -1253,6 +1256,7 @@
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
       if (name === 'waveContact' || name === 'waveResult') waveFeedback();
       if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingJab' ||
+          name === 'spacingCancelStart' || name === 'spacingCancelCue' ||
           name === 'spacingResult' || name === 'spacingRetry' || (name === 'specialTurn' && e.f.index === 0 && isReversalPractice(world.spacingPractice))))
         spacingFeedback(name, e);
       if (name === 'escapeCue' || name === 'escapeResult') escapeFeedback(e);
@@ -1500,6 +1504,38 @@
   }
   function spacingFeedback(name, e) {
     const practice = world.spacingPractice, status = $('spacing-status');
+    if (practice.pattern === 'cancel') {
+      const tip = $('recovery-tip'), counter = moves[world.dogs[1].kit.tilts.down].label;
+      status.dataset.result = e.outcome || name;
+      if (name === 'spacingRetry') {
+        status.textContent = 'Down + Attack';
+        tip.textContent = 'Press Down + Attack to fall again. Start holding Shield when the chalk turns mint.';
+      } else if (name === 'spacingCancelStart') {
+        status.textContent = moves[world.dogs[0].kit.air.down].label;
+        tip.textContent = practice.previousFrames === undefined ? 'Watch for ' + counter + ' as your paws touch down.' :
+          'Watch the chalk beneath your paws. Press and hold Shield as it rises.';
+      } else if (name === 'spacingCancelCue') {
+        status.textContent = 'Hold Shield now';
+        tip.textContent = 'Keep Shield held through ' + counter + ' to block it.';
+      }
+      else if (name === 'spacingLand' && practice.frames !== undefined) {
+        status.textContent = (practice.canceled ? 'Canceled' : 'Landed') + ' · ' + practice.frames + ' frames';
+      } else if (e.outcome) {
+        const label = { blocked: 'Blocked ' + counter, parried: 'Parried ' + counter, caught: 'Caught by ' + counter,
+          interrupt: (moves[practice.reply]?.label || 'Counter') + ' · ' + practice.damage + '%',
+          other: 'Different aerial', miss: 'Left the mark' };
+        status.textContent = label[e.outcome];
+        const recovery = practice.frames === undefined ? '' : 'Landing recovery took ' + practice.frames + ' frames. ';
+        const advice = e.outcome === 'caught' ? (practice.canceled ? 'Keep Shield held through the counter. ' :
+          practice.lead > 7 ? 'Shield came ' + practice.lead + ' frames before touchdown. Wait for the mint chalk. ' :
+          'Press Shield just before touchdown and keep it held. ') :
+          practice.previousFrames !== undefined ? 'Your previous landing took ' + practice.previousFrames + '. ' : '';
+        const counterTip = e.outcome === 'blocked' && world.dogs[0].kind === 'brisket'
+          ? 'Try releasing Shield and tapping ' + (practice.dir > 0 ? 'Right' : 'Left') + ' + Attack on landing for Gate Check. ' : '';
+        tip.textContent = recovery + advice + counterTip + 'Tap Attack to retry.';
+      }
+      return;
+    }
     if (isReversalPractice(practice)) {
       const labels = { bReverse: 'B-reverse', turnaround: 'Turnaround', wavebounce: 'Wavebounce', straight: 'Straight cast',
         miss: 'Missed the rival', short: 'Landed near the mark', other: 'Different move', away: 'Left the setup',
@@ -2231,15 +2267,17 @@
       $('spacing-approach').setAttribute('aria-pressed', String(approach));
       $('spacing-retreat').setAttribute('aria-pressed', String(pattern === 'retreat'));
       $('spacing-landing').setAttribute('aria-pressed', String(pattern === 'landing'));
+      $('spacing-cancel').setAttribute('aria-pressed', String(pattern === 'cancel'));
       $('spacing-reverse').setAttribute('aria-pressed', String(pattern === 'reverse'));
       $('spacing-wavebounce').setAttribute('aria-pressed', String(pattern === 'wavebounce'));
       $('spacing-guard').hidden = pattern !== 'wavebounce';
       $('spacing-guard').setAttribute('aria-pressed', String(!!practice.guard));
       $('spacing-slow').setAttribute('aria-pressed', String(practice.slow));
       $('spacing-status').dataset.result = 'ready';
-      $('spacing-status').textContent = isReversalPractice(practice) ? (pattern === 'reverse' ? 'Rival behind' : 'Rival ahead') :
+      $('spacing-status').textContent = pattern === 'cancel' ? 'Down + Attack' : isReversalPractice(practice) ? (pattern === 'reverse' ? 'Rival behind' : 'Rival ahead') :
         pattern === 'landing' ? 'Tap Jump and hold ' + run : approach ? 'Jump past the shield' : 'Jump away from the shield';
-      message = isReversalPractice(practice) ? reversalTip(practice) : pattern === 'landing' ? 'Short-hop ' + run + '. Tap Attack over the gold fork for a late hit or the green stripe for a clean hit. Center the direction and jab on landing.' : 'Running ' + run + '. ' + (approach
+      message = pattern === 'cancel' ? 'Press Down + Attack. Try holding Shield only after touchdown. On the retry, start holding it as the chalk turns mint.' :
+        isReversalPractice(practice) ? reversalTip(practice) : pattern === 'landing' ? 'Short-hop ' + run + '. Tap Attack over the gold fork for a late hit or the green stripe for a clean hit. Center the direction and jab on landing.' : 'Running ' + run + '. ' + (approach
         ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
         : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
     } else if (climb) {
@@ -2407,6 +2445,7 @@
   $('spacing-approach').onclick = () => drill('spacing', false, 'approach');
   $('spacing-retreat').onclick = () => drill('spacing', false, 'retreat');
   $('spacing-landing').onclick = () => drill('spacing', false, 'landing');
+  $('spacing-cancel').onclick = () => drill('spacing', false, 'cancel');
   $('spacing-reverse').onclick = () => drill('spacing', false, 'reverse');
   $('spacing-wavebounce').onclick = () => drill('spacing', false, 'wavebounce');
   $('spacing-guard').onclick = () => {
@@ -3474,6 +3513,12 @@
     if (hash === '#cutscenes') openFilmLibraryLink();
     else if (hash === '#adventure') showRoute();
     else if (hash === '#online') showOnline();
+    else if (hash === '#training/landing-cancel') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'picnic', fetch: false });
+      drill('spacing', false, 'cancel');
+    }
     else if (hash.startsWith('#room/')) {
       const code = hash.slice(6).toUpperCase();
       if (window.DogOnline.validCode(code)) showOnline('', code);

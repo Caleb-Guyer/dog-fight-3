@@ -94,6 +94,7 @@
   const canStayPlanted = (vx, vy) => Math.hypot(vx, vy) <= 150 && Math.abs(vy) <= 96;
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
   const inputWindow = 7 / 60;
+  const landingCancelWindow = 7 / 60;
   const runStick = 0.55;
   const pivotWindow = 7 / 60;
   const ledgeDriftGrace = 12 / 60;
@@ -2192,6 +2193,14 @@
   function aerialHitTiming(attack, beat) {
     return attack?.airSide === 'forward' && attack.late ? (beat === attack.late ? 'late' : 'clean') : '';
   }
+  function committedLanding(attack, time) {
+    const frame = time * 60 + 1e-6;
+    return frame >= attack.landingWindow[0] && frame < attack.landingWindow[1];
+  }
+  function timeToFloor(f, height) {
+    const gravity = 1540 * f.kit.gravity;
+    return (Math.sqrt(f.vy * f.vy + 2 * gravity * Math.max(0, height)) - f.vy) / gravity;
+  }
   // The newest connection has the most weight. A shield-only entry counts half.
   const staleWeights = [90, 82, 74, 66, 58, 50, 42, 34, 26];
   function moveFreshness(f, moveId, use) {
@@ -2399,6 +2408,7 @@
         pulse: {},
         hold: 0,
         guard: 0,
+        landingGuardUntil: 0,
         jumpHold: 0,
         hop: null,
         hopDelay: 0,
@@ -2842,6 +2852,16 @@
       const [f, guard] = this.dogs;
       const ground = this.stage === 'laundry' && dir < 0 ? 1 : 0;
       const floor = this.terrain[ground], approach = pattern === 'approach';
+      if (pattern === 'cancel') {
+        // Fall just outside the down air's reach. The challenger can still reach the landing with a low tilt.
+        const gap = f.kind === 'brisket' ? 66 + guard.stats.width : f.stats.width + guard.stats.width + 13;
+        const center = (floor.x1 + floor.x2) / 2, mark = center - dir * gap / 2;
+        Object.assign(f, { x: mark, y: floor.y - (f.kind === 'brisket' ? 72 : 30), ground: -1, face: -dir, vy: -32, jumps: 1 });
+        Object.assign(guard, { x: mark + dir * gap, y: floor.y, ground, face: -dir });
+        this.spacingPractice = { pattern, dir, slow, ground, mark, phase: 'ready', time: 0, contact: '',
+          airborne: true, landing: null, after: 0, cue: false, sent: false, outcome: '' };
+        return;
+      }
       if (pattern === 'reverse' || pattern === 'wavebounce') {
         const originX = (floor.x1 + floor.x2) / 2, behind = pattern === 'reverse';
         const guardOn = !behind && shieldGrab;
@@ -2884,6 +2904,17 @@
     spacingPracticeInput() {
       const drill = this.spacingPractice, guard = this.dogs[1];
       if (drill.phase === 'done') return idleInput;
+      if (drill.pattern === 'cancel') {
+        if (drill.landing !== null && !drill.sent) {
+          const lag = moves[this.dogs[0].kit.air.down].land, startup = moves[guard.kit.tilts.down].frames[0];
+          // The low strike always challenges the same frame, whether the player canceled or missed.
+          if (drill.after >= lag - 1 - startup) {
+            drill.sent = true;
+            return { ...idleInput, y: 1, tapped: { attack: true } };
+          }
+        }
+        return idleInput;
+      }
       if (isReversalPractice(drill)) {
         if (drill.blocked && drill.landing !== null && !drill.grabSent && guard.shieldStun < 1e-8 && guard.impactLag < 1e-8) {
           drill.grabSent = true;
@@ -2910,11 +2941,21 @@
       const drill = this.spacingPractice, [f, guard] = this.dogs;
       if (drill.phase !== 'active') return;
       drill.time += dt;
+      if (drill.pattern === 'cancel' && drill.landing !== null) drill.after++;
       if (f.ground < 0) drill.airborne = true;
       else if (drill.airborne && drill.landing === null) {
         drill.landing = (f.x - guard.x) * drill.dir;
         drill.landingX = f.x;
         this.emit('spacingLand', { f, gap: drill.landing });
+      }
+      if (drill.pattern === 'cancel') {
+        if (!drill.cue && this.landingCancelAhead(f)) {
+          drill.cue = true;
+          this.emit('spacingCancelCue', { f });
+        }
+        if (drill.landing !== null && drill.contact !== f.kit.air.down) this.finishSpacingPractice('other');
+        else if (drill.time > 1.3 || f.ledge || f.respawning) this.finishSpacingPractice('miss');
+        return;
       }
       if (isReversalPractice(drill)) {
         if (!drill.cast && f.attack) drill.cast = f.attack.moveId;
@@ -3742,6 +3783,24 @@
         input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
       }
       const spacing = this.spacingPractice;
+      if (spacing?.pattern === 'cancel' && spacing.phase !== 'active') {
+        const tap = input1.tapped?.attack || (input1.attack && !this.dogs[0].prev.attack);
+        const stick = input1.tapped?.aimStick || (input1.aimStick && !this.dogs[0].prev.aimStick);
+        this.dogs[0].prev = { ...input1 };
+        if (spacing.phase === 'done') {
+          if (tap) {
+            this.resetSpacingPractice('cancel', spacing.dir, spacing.slow);
+            this.spacingPractice.previousFrames = spacing.frames;
+            this.dogs[0].prev = { ...input1 };
+            this.emit('spacingRetry', { f: this.dogs[0] });
+          }
+          return;
+        }
+        if (!tap && !stick) return;
+        input1 = { ...input1, tapped: { ...input1.tapped, attack: !!tap, aimStick: !!stick } };
+        spacing.phase = 'active';
+        this.emit('spacingCancelStart', { f: this.dogs[0] });
+      }
       if (isReversalPractice(spacing) && spacing.phase === 'done' &&
           (input1.tapped?.attack || (input1.attack && !this.dogs[0].prev.attack))) {
         this.resetSpacingPractice(spacing.pattern, spacing.dir, spacing.slow, spacing.guard);
@@ -4129,6 +4188,8 @@
       if (f.jumpBuffer > 0 && f.run && input.x * f.run.face <= -runStick) f.run.turnJump = true;
       if (pressed('shield')) {
         f.guardBuffer = inputWindow;
+        // The swing clock pauses in hitstop. A held Shield cannot refresh the landing tap.
+        if (f.ground < 0 && f.attack?.airSide && !f.tumble) f.attack.landingPress = f.attack.time;
         // Keep the initial world-space aim when Shield is tapped during a freeze or recovery.
         f.guardAim = { x: input.airDodgeX ?? input.grabX ?? input.x, y: input.airDodgeY ?? input.y };
         if (f.tumble) {
@@ -4223,13 +4284,12 @@
     }
     floorAhead(f, horizon) {
       if (f.vy < 0) return -1;
-      const gravity = 1540 * f.kit.gravity;
       let soonest = horizon + 1e-8,
         result = -1;
       for (const [i, p] of this.terrain.entries()) {
         const height = p.y - f.y;
         if (height < (f.drop > 0 ? -1e-8 : -2) || (p.thin && f.drop > 0 && f.dropPlatform === i)) continue;
-        const t = (Math.sqrt(f.vy * f.vy + 2 * gravity * Math.max(0, height)) - f.vy) / gravity;
+        const t = timeToFloor(f, height);
         if (t >= soonest) continue;
         const x = f.x + f.vx * t;
         const atContact = p.thin && !this.layout && this.stage === 'laundry' ? platforms(this.stage, this.time + t)[i] : p;
@@ -4238,6 +4298,14 @@
         result = i;
       }
       return result;
+    }
+    landingCancelAhead(f) {
+      const a = f.attack;
+      if (f.ground >= 0 || !a?.airSide || (a.plunge && !a.fired)) return false;
+      const floor = this.floorAhead(f, 6 / 60);
+      if (floor < 0) return false;
+      const frames = Math.max(1, Math.round(timeToFloor(f, this.terrain[floor].y - f.y) * 60));
+      return committedLanding(a, a.time + frames / 60);
     }
     shiftDuringHit(f, input) {
       const shift = f.hitShift;
@@ -5070,9 +5138,22 @@
             }
             if (f.attack?.airSide) {
               const a = f.attack;
-              const frame = a.time * 60 + 1e-6;
-              const committed = frame >= a.landingWindow[0] && frame < a.landingWindow[1];
-              f.landingLag = (committed ? a.land : 2) / 60;
+              const committed = committedLanding(a, a.time);
+              const lead = a.landingPress === undefined ? null : a.time - a.landingPress;
+              const canceled = committed && lead !== null && lead <= landingCancelWindow + 1e-8;
+              const frames = canceled ? Math.ceil(a.land / 2) : committed ? a.land : 2;
+              f.landingLag = frames / 60;
+              if (canceled) {
+                f.guardBuffer = 0;
+                this.emit('landingCancel', { f, moveId: a.moveId, frames, full: a.land, point: { x: f.x, y: f.y } });
+              }
+              const drill = this.spacingPractice;
+              if (drill?.pattern === 'cancel' && drill.phase === 'active' && f.index === 0) {
+                drill.contact = a.moveId;
+                drill.frames = frames;
+                drill.canceled = canceled;
+                drill.lead = lead === null ? null : Math.round(lead * 60);
+              }
               a.landed = true;
             }
             if (f.attack?.diving) {
@@ -5965,6 +6046,8 @@
       target.parryFlash = 12 / 60;
       target.parryFace = brace || target.face;
       target.lastMove = 'Parry';
+      if (this.spacingPractice?.pattern === 'cancel' && this.spacingPractice.sent && target.index === 0)
+        this.finishSpacingPractice('parried');
       if (!projectile) {
         owner.attack = owner.floorAction = owner.run = owner.command = owner.reaction = null;
         owner.fastFall = false;
@@ -6020,6 +6103,8 @@
         this.finishEscapePractice('blockedReply');
       if (this.platformPractice?.pattern === 'hold' && target.index === 0 && !broken) this.finishPlatformPractice('guarded', moveId);
       const spacing = this.spacingPractice;
+      if (spacing?.pattern === 'cancel' && spacing.phase === 'active' && target.index === 0 && moveId === owner.kit.tilts.down)
+        this.finishSpacingPractice('blocked');
       if (!broken && spacing?.guard && spacing.phase === 'active' && owner.index === 0 && target.index === 1 &&
           moveId === owner.kit.specials.neutral) {
         spacing.blocked = true;
@@ -6223,6 +6308,14 @@
       }
       if (timing === 'late' && this.cpuControlled(owner)) owner.landingFollowUntil = this.time + 0.55;
       const spacing = this.spacingPractice;
+      if (spacing?.pattern === 'cancel' && spacing.phase === 'active') {
+        if (target.index === 0 && moveId === owner.kit.tilts.down) this.finishSpacingPractice('caught');
+        else if (owner.index === 0) {
+          spacing.reply = moveId;
+          spacing.damage = applied;
+          this.finishSpacingPractice('interrupt');
+        }
+      }
       if (spacing?.pattern === 'landing' && spacing.phase === 'active' && owner.index === 0 && target.index === 1) {
         if (!spacing.contact && timing) {
           spacing.contact = moveId;
@@ -7045,6 +7138,20 @@
       brain.guard = Math.max(0, brain.guard - dt);
       const dx = foe.x - f.x,
         far = Math.abs(dx);
+      const canChallenge = foe.ground >= 0 && far < 150 && !foe.stun && !foe.grip &&
+        !foe.attack?.grabAttempt && !foe.attack?.commandGrab;
+      if (brain.landingGuardUntil > this.time) {
+        if (canChallenge && !f.stun && !f.grip && (f.ground >= 0 || f.attack?.airSide))
+          return { ...idleInput, shield: true };
+        brain.landingGuardUntil = 0;
+      }
+      const swing = f.attack;
+      if (swing?.airSide && swing.landingPress === undefined && !f.prev.shield && foe.ground >= 0 &&
+          far < 150 && this.landingCancelAhead(f)) {
+        if (canChallenge && f.landingFollowUntil <= this.time)
+          brain.landingGuardUntil = this.time + (9 + swing.land) / 60;
+        return { ...idleInput, x: canChallenge ? 0 : f.prev.x, shield: true };
+      }
       if (brain.specialTurn) {
         const follow = this.cpuSpecialTurnInput(f, foe, closest, unsafe);
         if (follow) return follow;

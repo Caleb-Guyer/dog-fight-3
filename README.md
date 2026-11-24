@@ -104,6 +104,12 @@ In midair, press Attack alone or aim forward, back, up, or down as you press it.
 
 In local versus, a single controller plays P2 alongside the P1 keyboard. With two controllers, the first plays P1 and the second plays P2.
 
+**Landing cancel.** Press Shield during an aerial in the last seven frames before your paws touch a floor or raised platform. If the aerial would give landing lag, the press halves that recovery, rounded up. An automatic two-frame landing keeps its usual timing. Mint streaks at your paws mark a successful cancel. You can hold Shield through touchdown to block, or release it and use your earlier opening to jump or attack.
+
+In **Training → Aerial practice → Landing cancel**, press Down + Attack and let the rival challenge your landing with a low tilt. Try holding Shield after touchdown. Tap Attack to retry, then start holding Shield when the landing mark turns mint. Brisket recovers from Belly Drop in 9 frames on the timed attempt and 18 on the ordinary one. Switch sides or turn off half speed to repeat the exchange at match speed.
+
+[Play the Brisket and Pip landing drill](https://caleb-guyer.github.io/dog-fight-3/#training/landing-cancel)
+
 A running jump carries your ground speed into the air. Let go to coast, or steer opposite your travel to brake. Clover changes direction quickly. Brisket takes longer to reverse and keeps sliding when you let go. Most aerial attacks let you keep steering. Flying Kick, Air Ram and Belly Drop each commit to their own movement.
 
 During a full run, tap the opposite direction with Jump to turn around while your momentum carries you forward. Steer back along your original path and tap Attack for a backward strike toward the opponent. You can also choose an aerial with the aim keys or right stick while steering independently. On touch, swipe outward from **Smash** toward the target while your other thumb steers.
