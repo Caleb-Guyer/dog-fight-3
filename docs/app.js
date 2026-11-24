@@ -3856,14 +3856,14 @@
     },
   ];
   const matchKeys = new Set(keys.flatMap((k) => Object.values(k)));
-  const attackAim = [{}, {}];
-  function rememberAttackAim(slot) {
+  const attackAim = [{}, {}], smashAim = [{}, {}];
+  function buttonAim(slot) {
     const map = keys[slot];
     const active = name => held.has(map[name]) || (slot === 0 && touches.has(name));
     const soft = slot === 0 && touchPointers.get(walkPointer)?.dataset.touch;
     const x = Number(active('right')) - Number(active('left'));
     const y = Number(active('down')) - Number(active('up'));
-    attackAim[slot] = {
+    return {
       x: x * (active('walk') || (soft && (soft.endsWith('left') || soft.endsWith('right'))) ? 64 / 127 : 1),
       rawX: x, y: y > 0 && (active('walk') || soft === 'down') ? 64 / 127 : y,
     };
@@ -3891,7 +3891,9 @@
     if (!e.repeat) {
       taps.add(e.code);
       const slot = keys.findIndex(map => map.attack === e.code);
-      if (slot >= 0) rememberAttackAim(slot);
+      if (slot >= 0) attackAim[slot] = buttonAim(slot);
+      const smashSlot = keys.findIndex(map => map.smash === e.code);
+      if (smashSlot >= 0) smashAim[smashSlot] = buttonAim(smashSlot);
     }
   });
   window.addEventListener('keyup', (e) => held.delete(e.code));
@@ -3913,7 +3915,8 @@
         touchTaps.add('flickUp');
         if (walkPointer === pointerId) touchTaps.add('gentleUp');
       }
-      if (button.dataset.touch === 'attack') rememberAttackAim(0);
+      if (button.dataset.touch === 'attack') attackAim[0] = buttonAim(0);
+      if (button.dataset.touch === 'smash') smashAim[0] = buttonAim(0);
     }
     for (const el of touchButtons) el.classList.toggle('held', pressed.has(el));
   }
@@ -4064,6 +4067,8 @@
     const up = key('up') || down(pad, 12),
       downAim = key('down') || down(pad, 13);
     const y = Number(downAim) - Number(up);
+    // A quick Smash tap can outlive both direction keys or both thumbs in the input queue.
+    const savedSmash = tapped('smash') && !x && !y && !axis(0) && !axis(1) ? smashAim[i] : null;
     const digitalAim = left || right || up || downAim || (!i && touches.has('neutral'));
     const rightX = axis(2),
       rightY = axis(3);
@@ -4105,8 +4110,8 @@
       smash: held.has(map.smash) || tapped('smash') || touchSmash || down(pad, 7),
       aimStick,
       tiltMode: settings.tiltStick && aimStick,
-      smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : x || axis(0),
-      smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : y || axis(1),
+      smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : x || axis(0) || savedSmash?.rawX || 0,
+      smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : y || axis(1) || savedSmash?.y || 0,
       special: key('special') || down(pad, 1),
       shield,
       grab: key('grab') || down(pad, 3),
