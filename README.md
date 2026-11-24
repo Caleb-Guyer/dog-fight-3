@@ -222,6 +222,10 @@ Open **Move list → Attacks** on the select screen, in Training, or from Pause 
 | **Noodle** | Ankle Tap into Reel In pulls the rival close. Finish with Whiplash or press Special during the pull to cast Tug Rope. | Slip Lead snags from the front, Tail Flick reaches behind, and Underhook lifts a rival from below. |
 | **Clover** | Tap Attack twice for Disc Tap and Set Point. On the second hit, use Jump + Up + Attack for Sky Volley, or Jump + Attack for Orbit. | Orbit hits on two beats if the rival stays close. Skip Shot angles the disc downward for a spike. |
 
+**Combo practice** lets you test your timing against a defender. Choose **Dog’s combo** to watch the selected dog’s route. **Late jab** deliberately delays the second tap. Change **Rival after contact** to run the same inputs against a different response. Shield / air dodge guards on the ground and tries a neutral dodge as hitstun ends in the air. Flick away moves during the hit freeze and aims the launch outward. For example, Clover can land both beats of Orbit on a standing Pip. Outward hit shifts can carry Pip beyond the disc.
+
+Choose **Record your combo** and move or attack to start. It records 2½ seconds of game time, including taps during hit freeze. **Replay yours** returns both dogs to their marks and plays the recording. Try it with a different reply or starting percentage. Half speed changes how long you have to enter the commands. **Hit sequence** shows the moves and their damage. A frame opening counts from the defender’s first ordinary action frame through the next contact, excluding hit freeze. A rival can still steer a launch or shift during a hit with no free frame. Grabs, pummels and throws appear separately.
+
 ## Ground tilts
 
 Aim with the movement keys, left stick, D-pad, or touch arrows and tap **Attack**. Use **J** for P1, **Comma** for P2, **X** on a standard gamepad, or the **Attack** button on touch. In Training, try all three next to the dummy, then take a step back to test their reach.

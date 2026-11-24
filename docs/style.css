@@ -681,6 +681,11 @@ body.playing .tools .utility,
 #freshness-summary { cursor: pointer; padding-block: 3px; }
 #freshness-list { margin: 3px 0 0; padding-left: 2em; max-height: 7em; overflow-y: auto; }
 #freshness-list li { margin-block: 2px; }
+#combo-summary { color: var(--gold); }
+#combo-previous { color: #a5dace; }
+#combo-history { pointer-events: auto; }
+#combo-list { margin: 4px 0 0; padding-left: 1.7em; max-height: 6em; overflow-y: auto; }
+#combo-reply { background: var(--ink); color: var(--cream); padding: 4px; font: inherit; }
 #launch-status[data-result='tech'],
 #launch-status[data-result='techRoll'],
 #launch-status[data-result='saved'],
@@ -879,6 +884,7 @@ kbd {
   font-size: 13px;
 }
 #launch-patterns,
+#combo-controls,
 #wave-patterns,
 #freshness-controls,
 #platform-patterns,
@@ -896,6 +902,7 @@ kbd {
 }
 #launch-patterns { flex-wrap: wrap; }
 #launch-patterns [aria-pressed='true'],
+#combo-controls [aria-pressed='true'],
 #wave-patterns [aria-pressed='true'],
 #freshness-controls [aria-pressed='true'],
 #platform-patterns [aria-pressed='true'],

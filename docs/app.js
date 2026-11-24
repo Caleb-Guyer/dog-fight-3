@@ -1110,6 +1110,38 @@
       return li;
     }));
   }
+  const comboSources = { example: 'Dog’s combo', late: 'Late jab', record: 'Your take', replay: 'Your take' };
+  const comboReplies = { stand: 'Standing', guard: 'Guard', away: 'Flick away' };
+  function comboRow(contact) {
+    const { moveId, kind, gap } = contact;
+    const name = (moves[moveId] || specials[moveId] || smashes[moveId] || grabs[moveId] ||
+      throws[moveId] || pummels[moveId])?.label || moveId || 'Hit';
+    const result = kind === 'block' ? 'blocked' : kind === 'grab' ? 'caught' : tenth(contact.damage) + '%';
+    const timing = gap === null ? 'opener' : gap ? gap + 'f opening' :
+      kind === 'pummel' || kind === 'throw' ? 'held' : 'no free frame';
+    return name + ' · ' + result + ' · ' + timing;
+  }
+  function updateComboReadout(d) {
+    const title = d.phase === 'ready' ? 'Ready to record' : d.source === 'record' && d.phase === 'active' && d.tick < 150
+      ? 'Recording' : comboSources[d.source];
+    $('combo-summary').textContent = title + ' · ' + d.hits + (d.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(d.damage) + '%';
+    const last = d.contacts.at(-1);
+    const response = [d.shifts ? d.shifts + (d.shifts === 1 ? ' shift' : ' shifts') : '',
+      d.dodges ? d.dodges + (d.dodges === 1 ? ' air dodge' : ' air dodges') : ''].filter(Boolean).join(' · ');
+    $('combo-latest').textContent = last ? comboRow(last) + (response ? ' · ' + response : '') :
+      d.phase === 'done' ? 'No contact' : d.phase === 'ready' ? 'Move or attack to start.' : 'Waiting for contact';
+    const prior = d.prior;
+    $('combo-previous').hidden = !prior;
+    if (prior) $('combo-previous').textContent = 'Previous · ' + comboSources[prior.source] + ' · ' + comboReplies[prior.reply] +
+      ' at ' + prior.baseline + '% · ' + prior.hits + (prior.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(prior.damage) + '%';
+    $('combo-history').hidden = !last;
+    $('combo-list').replaceChildren(...d.contacts.map(contact => {
+      const row = document.createElement('li');
+      row.textContent = comboRow(contact);
+      return row;
+    }));
+    $('combo-replay').disabled = !(d.saved?.length || (d.source === 'record' && d.tape.length));
+  }
   function updateHUD() {
     if (world.mode === 'adventure') return updateDispatchHUD();
     const scores = online.match?.confirmedWorld.dogs || world.dogs;
@@ -1129,7 +1161,7 @@
       if (prompt.textContent !== text) prompt.textContent = text;
     }
     const player = world.dogs[0], lab = world.freshnessPractice;
-    const wave = world.wavePractice;
+    const wave = world.wavePractice, comboLab = world.comboPractice;
     if (wave?.pattern === 'platform' && wave.phase === 'active' && wave.contact !== null) {
       const bar = $('wave-recovery'), tip = $('wave-tip'), lag = Math.max(0, Math.ceil(player.landingLag * 60 - 1e-8));
       const canBuffer = player.landingLag <= window.DogFight.inputWindow + 1e-8;
@@ -1170,20 +1202,22 @@
       combo.damage +
       '/' +
       (world.mode === 'training' ? shownMove : '') +
+      (comboLab ? '/' + [comboLab.phase, comboLab.contacts.length, comboLab.shifts, comboLab.dodges, comboLab.tick >= 150].join('/') : '') +
       (world.freshnessPractice ? '/' + world.freshnessPractice.revision + '/' + player.moveHistory.length : '');
     if (key === hudKey) return;
     hudKey = key;
+    if (comboLab) updateComboReadout(comboLab);
     if (world.freshnessPractice) updateFreshnessReadout(player, world.freshnessPractice);
     const lastMove = $('training-move');
     lastMove.hidden =
       world.mode !== 'training' ||
       !!world.freshnessPractice ||
-      !!world.wavePractice ||
+      !!world.wavePractice || !!comboLab ||
       !shownMove ||
       (shownMove === 'Parry' && world.shieldPractice?.outcome === 'parry');
     if (!lastMove.hidden) lastMove.textContent = shownMove;
     const readout = $('training-combo');
-    readout.hidden = world.mode !== 'training' || !!world.freshnessPractice || !!world.wavePractice || combo.hits === 0;
+    readout.hidden = world.mode !== 'training' || !!world.freshnessPractice || !!world.wavePractice || !!comboLab || combo.hits === 0;
     if (!readout.hidden) {
       readout.textContent =
         combo.hits + (combo.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(combo.damage) + '% damage';
@@ -1228,6 +1262,7 @@
     drillWaiting = false;
     practiceSide = 'left';
     $('freshness-readout').hidden = $('freshness-controls').hidden = true;
+    $('combo-readout').hidden = $('combo-controls').hidden = true;
     $('wave-readout').hidden = $('wave-patterns').hidden = true;
     showDamageControl(false);
     $('damage-control').hidden = false;
@@ -1478,7 +1513,13 @@
   $('dummy-damage').addEventListener('input', (e) => {
     if (!world) return;
     const d = world.escapePractice;
-    if (world.survivalPractice) {
+    if (world.comboPractice) {
+      const d = world.comboPractice;
+      world.setDummyDamage(e.target.value);
+      drill('combo', false, d.source === 'record' && d.tape.length ? 'replay' : d.source, d.reply);
+      e.target.focus({ preventScroll: true });
+      return;
+    } else if (world.survivalPractice) {
       const s = world.survivalPractice;
       world.resetSurvivalPractice(s.dir, s.slow, Number(e.target.value));
       survivalFeedback('survivalReady', {});
@@ -2204,6 +2245,7 @@
     const footwork = ledge === 'footwork';
     const freshness = ledge === 'freshness';
     const wave = ledge === 'wave';
+    const combo = ledge === 'combo';
     const spacing = ledge === 'spacing';
     const escape = ledge === 'escape';
     const platform = ledge === 'platform';
@@ -2211,7 +2253,7 @@
     const roll = ledge === 'roll';
     const climb = ledge === 'climb';
     const trump = ledge === 'trump';
-    drillSide = launch || wall || shield || footwork || freshness || wave || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
+    drillSide = launch || wall || shield || footwork || freshness || wave || combo || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
@@ -2222,6 +2264,7 @@
     else if (survival) world.resetSurvivalPractice(direction ?? world.survivalPractice?.dir ?? 1, world.survivalPractice?.slow ?? true,
       world.survivalPractice?.baseline);
     else if (launch) world.resetLaunchPractice();
+    else if (combo) world.resetComboPractice(pattern, direction ?? world.comboPractice?.reply ?? 'stand', world.comboPractice?.slow ?? true);
     else if (wave) world.resetWavePractice(pattern, direction ?? world.wavePractice?.dir ?? 1, world.wavePractice?.slow ?? true);
     else if (freshness) {
       const lab = world.freshnessPractice;
@@ -2243,7 +2286,8 @@
     else if (trump) world.resetLedgeTrumpPractice(pattern, practiceSide);
     else world.resetTraining(ledge, fromHang);
     const player = world.dogs[0];
-    document.body.classList.toggle('with-drill-readout', freshness || wave);
+    document.body.classList.toggle('with-drill-readout', freshness || wave || combo);
+    $('combo-readout').hidden = $('combo-controls').hidden = !combo;
     $('freshness-readout').hidden = $('freshness-controls').hidden = !freshness;
     $('wave-readout').hidden = $('wave-patterns').hidden = !wave;
     const counterDrill = escape && pattern === 'counter';
@@ -2280,7 +2324,18 @@
     $('climb-status').hidden = $('climb-patterns').hidden = !climb;
     $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
-    if (wave) {
+    if (combo) {
+      const d = world.comboPractice;
+      $('combo-reply').value = d.reply;
+      $('combo-slow').setAttribute('aria-pressed', String(d.slow));
+      for (const source of ['example','late','record','replay'])
+        $('combo-' + source).setAttribute('aria-pressed', String(d.source === source));
+      const route = { pip: 'Attack, Attack, then Jump + Forward + Attack.', brisket: 'Attack, then Grab. Tap forward to throw.',
+        noodle: 'Attack twice, then tap neutral Special.', clover: 'Attack twice, then Jump + Attack.' }[player.kind];
+      message = d.source === 'record' ? 'Play a combo. The first input starts a 2½-second recording. ' + route :
+        d.source === 'late' ? 'The second jab is delayed. Change the rival’s reply to see who can use the opening.' :
+        d.source === 'replay' ? 'Replaying your inputs. Change the rival’s reply to compare.' : route + ' Change the rival’s reply to test the same inputs.';
+    } else if (wave) {
       const d = world.wavePractice;
       $('wave-back').setAttribute('aria-pressed', String(d.pattern === 'back'));
       $('wave-platform').setAttribute('aria-pressed', String(d.pattern === 'platform'));
@@ -2456,6 +2511,19 @@
     announce(message);
   }
   $('reset-training').onclick = () => drill(false);
+  $('combo-training').onclick = () => drill('combo', false, 'example');
+  for (const source of ['example','late','record','replay']) $('combo-' + source).onclick = () => drill('combo', false, source);
+  $('combo-reply').onchange = e => {
+    const d = world.comboPractice;
+    drill('combo', false, d.source === 'record' && d.tape.length ? 'replay' : d.source, e.target.value);
+    e.target.focus({ preventScroll: true });
+  };
+  $('combo-slow').onclick = () => {
+    const d = world.comboPractice;
+    d.slow = !d.slow;
+    $('combo-slow').setAttribute('aria-pressed', String(d.slow));
+    $('game').focus({ preventScroll: true });
+  };
   $('freshness-training').onclick = () => drill('freshness', false, 'repeat');
   $('wave-training').onclick = () => drill('wave', false, world.wavePractice?.pattern || 'back');
   for (const pattern of ['back', 'platform']) $('wave-' + pattern).onclick = () => drill('wave', false, pattern);
@@ -2824,7 +2892,7 @@
     $('match').hidden = $('dispatch-hud').hidden = $('dispatch-orders').hidden = false;
     $('countdown').textContent = '';
     document.body.classList.remove('menu-screen', 'training-active', 'cinema-active', 'with-drill-readout');
-    $('freshness-readout').hidden = $('wave-readout').hidden = true;
+    $('freshness-readout').hidden = $('wave-readout').hidden = $('combo-readout').hidden = true;
     document.body.classList.add('playing', 'adventure-active');
     saveProgress({ room: index, checkpoint, pending: '' });
     view = new window.DispatchView();
@@ -3199,6 +3267,7 @@
   }
   window.addEventListener('keydown', (e) => {
     if (page !== 'match' || $('dialog').open) return;
+    if (e.target instanceof HTMLSelectElement) return;
     if (e.code === 'Escape' || e.code === 'KeyP') {
       e.preventDefault();
       if (!e.repeat) showPause();
@@ -3502,7 +3571,7 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += world.footworkPractice?.slow || world.wavePractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow ? dt / 2 : dt;
+        accumulator += world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];
@@ -3557,6 +3626,12 @@
     if (hash === '#cutscenes') openFilmLibraryLink();
     else if (hash === '#adventure') showRoute();
     else if (hash === '#online') showOnline();
+    else if (hash === '#training/combos') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode: 'training', p1: 'clover', p2: 'pip', stage: 'picnic', fetch: false });
+      drill('combo', false, 'example');
+    }
     else if (hash === '#training/shield-drop') {
       menuScreen('match');
       afterStory = null;

@@ -11,13 +11,13 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=platform-shield-drop-1" />
+    <link rel="stylesheet" href="./style.css?v=combo-practice-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=bandstand-1" />
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=crouch-counter-1"></script>
     <script defer src="./arena-art.js?v=bandstand-1"></script>
-    <script defer src="./engine.js?v=platform-shield-drop-1"></script>
+    <script defer src="./engine.js?v=combo-practice-1"></script>
     <script defer src="./render.js?v=platform-shield-drop-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
@@ -32,7 +32,7 @@
     <script defer src="./dispatch-run.js?v=stock-return-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
     <script defer src="./online.js?v=platform-shield-drop-1"></script>
-    <script defer src="./app.js?v=platform-shield-drop-1"></script>
+    <script defer src="./app.js?v=combo-practice-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -342,6 +342,12 @@
             <ol id="freshness-list" aria-label="Recent moves, newest first"></ol>
           </details>
         </section>
+        <section id="combo-readout" class="drill-readout" aria-label="Combo practice results" hidden>
+          <strong id="combo-summary" aria-live="polite"></strong>
+          <span id="combo-latest"></span>
+          <span id="combo-previous" hidden></span>
+          <details id="combo-history" hidden><summary>Hit sequence</summary><ol id="combo-list"></ol></details>
+        </section>
         <div id="dispatch-orders" class="dispatch-orders" hidden>
           <strong id="dispatch-objective" role="status"></strong><span id="dispatch-marks"></span>
         </div>
@@ -375,6 +381,20 @@
           <button id="reset-training" type="button" class="utility">
             <i data-icon="reset"></i>Reset positions
           </button>
+          <button id="combo-training" type="button" class="utility">Combo practice</button>
+          <span id="combo-controls" role="group" aria-label="Combo practice controls" hidden>
+            <label for="combo-reply">Rival after contact</label>
+            <select id="combo-reply">
+              <option value="stand">Stand still</option>
+              <option value="guard">Shield / air dodge</option>
+              <option value="away">Flick away</option>
+            </select>
+            <button id="combo-example" type="button" class="utility">Dog’s combo</button>
+            <button id="combo-late" type="button" class="utility">Late jab</button>
+            <button id="combo-record" type="button" class="utility">Record your combo</button>
+            <button id="combo-replay" type="button" class="utility" disabled>Replay yours</button>
+            <button id="combo-slow" type="button" class="utility" aria-pressed="true">Half speed</button>
+          </span>
           <button id="wave-training" type="button" class="utility">Wavedash</button>
           <span id="wave-patterns" role="group" aria-label="Wavedash exercises" hidden>
             <button id="wave-back" type="button" class="utility" aria-pressed="true">Dodge the grab</button>
