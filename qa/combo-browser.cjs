@@ -821,6 +821,81 @@ async function testBlastRadar(page, mobile) {
   console.log((mobile?'Touch':'Keyboard')+' passed launch study, aim changes, live flight, and radar visibility.');
 }
 
+async function testNightMail(page, mobile) {
+  const press = selector => mobile ? page.locator(selector).tap() : page.locator(selector).click();
+  await page.goto(root + '?stage-test#solo');
+  await press('#choose-stage');
+  const tile = page.locator('[data-stage="nightmail"]');
+  assert.match(await tile.innerText(),/Night Mail/);
+  assert(await tile.locator('canvas').evaluate(c => c.getContext('2d').getImageData(150,114,1,1).data[3] === 255));
+  await press('[data-stage="nightmail"]');
+  await page.reload();
+  assert.equal(await page.locator('#stage-title').innerText(),'Night Mail');
+  await press('[data-mode="training"]');
+  await press('#start');
+  const stage = page.locator('#match-stage');
+  assert.equal(await stage.innerText(),'Night Mail');
+  await press('#platform-training');
+  assert.equal(await stage.innerText(),'Picnic Table');
+  await press('#reset-training');
+  assert.equal(await stage.innerText(),'Night Mail');
+  await page.goto(root + '#online');
+  await page.selectOption('#online-stage','nightmail');
+  assert.equal(await page.locator('#online-stage option:checked').innerText(),'Night Mail');
+
+  async function scenery() {
+    return page.evaluate(() => {
+      const c = document.createElement('canvas'); c.width=2000; c.height=800;
+      const ctx=c.getContext('2d',{willReadFrequently:true});
+      const bounds={left:-400,top:-60,right:1600,bottom:740};
+      function frame(time) {
+        ctx.setTransform(1,0,0,1,400,60);
+        window.ArenaArt.draw(ctx,'nightmail',time,bounds);
+        const color=(x,y)=>Array.from(ctx.getImageData(x+400,y+60,1,1).data);
+        return {roof:[color(160,455),color(1039,455)],outside:[color(159,455),color(1040,455)],
+          corners:[color(-400,-60),color(1599,739)], image:c.toDataURL()};
+      }
+      const a=frame(0), b=frame(2);
+      return {different:a.image!==b.image,roof:a.roof, outside:a.outside, corners:a.corners, fixed:JSON.stringify(a.roof)===JSON.stringify(b.roof)};
+    });
+  }
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  const art=await scenery(), gold=[255,227,166,255];
+  assert.deepEqual(art.roof,[gold,gold]); assert(art.fixed && art.different);
+  assert(art.corners.every(c=>c[3]===255)); assert(art.outside.every(c=>c.join()!==gold.join()));
+  await page.emulateMedia({reducedMotion:'reduce'});
+  assert.equal((await scenery()).different,false);
+  await page.emulateMedia({reducedMotion:'no-preference'});
+
+  const session = mobile && await page.context().newCDPSession(page);
+  for (const [route, arena, landing] of [['night-mail','Night Mail',0],['picnic-table','Picnic Table',1]]) {
+    await page.goto(root + '?landing=' + route + '#solo/' + route);
+    assert.equal(await stage.innerText(),arena);
+    assert.match(await page.locator('#match-mode').innerText(),/Rival CPU/);
+    assert.equal(await page.locator('.lives[aria-label="3 stocks"]').count(),2);
+    assert.equal(await page.locator('#match-clock').innerText(),'7:00');
+    await page.evaluate(() => {
+      const proto = window.DogFight.Battle.prototype, step = proto.step;
+      const probe = window.mailJump = {air:false, landing:null};
+      proto.step = function(...args) {
+        const result = step.apply(this,args), p=this.dogs[0];
+        probe.air ||= p.ground < 0;
+        if (probe.air && p.ground >= 0) probe.landing ??= p.ground;
+        return result;
+      };
+    });
+    await page.clock.runFor(2430);
+    if (mobile) {
+      const box=await page.locator('[data-touch="jump"]').boundingBox();
+      await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height/2,id:1}]});
+    } else await page.keyboard.down('Space');
+    await page.clock.runFor(1000);
+    if (mobile) await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    else await page.keyboard.up('Space');
+    assert.deepEqual(await page.evaluate(()=>window.mailJump),{air:true,landing});
+  }
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -891,6 +966,7 @@ async function testDevice(browser, mobile) {
     await testWallJumps(page, mobile);
     await testShortHops(page, mobile);
     await testBlastRadar(page, mobile);
+    await testNightMail(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
