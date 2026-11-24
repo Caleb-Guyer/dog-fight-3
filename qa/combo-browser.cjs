@@ -231,7 +231,14 @@ async function testBraking(page, mobile) {
   await waitFor('slidingHit');
   assert.match(await status.innerText(), /Stamp Kick · caught the chase/);
   await release();
+  await page.clock.runFor(400);
+  await page.evaluate(() => {
+    window.pressTrace = [];
+    for (const kind of ['pointerdown','pointerup','pointercancel','click'])
+      document.addEventListener(kind, e => window.pressTrace.push([kind, e.target.closest('button')?.id]), true);
+  });
   await button('reset-training');
+  await page.clock.runFor(400);
   await status.waitFor({state:'hidden', timeout:4000});
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed dash attack, brake tilt, saved tilt-stick setting and mirrored pivot punish.');
 }
@@ -300,7 +307,7 @@ async function testDevice(browser, mobile) {
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
     throw new Error((mobile ? 'Phone touch' : 'Desktop keyboard') + ' at ' + page.url() + ' ' +
-      JSON.stringify({panel, errors}) + '\n' + error.stack);
+      JSON.stringify({panel, errors, trace: await page.evaluate(() => window.pressTrace)}) + '\n' + error.stack);
   } finally {
     await context.close();
   }
