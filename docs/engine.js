@@ -1988,6 +1988,7 @@
       followPounce: 0,
       hopWindow: 0,
       jumpBuffer: 0,
+      heldRecoveryJump: false,
       footstools: 0,
       footstoolLock: 0,
       jumpSquat: null,
@@ -2029,6 +2030,7 @@
   const slideCarry = 1.25, slideFriction = 0.4;
   function beginAttack(f, name, aim, power, moveId) {
     cancelCharge(f);
+    f.heldRecoveryJump = false;
     f.run = null;
     f.lastSmashPower = null;
     f.shield = false;
@@ -4451,6 +4453,9 @@
       const was = f.prev;
       const pressed = (key) => input.tapped?.[key] || (input[key] && !was[key]);
       const grabX = input.grabX ?? input.x;
+      if (!input.jump || (f.ground < 0 && !f.attack?.airSide && !f.airDodge) ||
+          f.stockLift || f.grip || f.floorAction || f.stun || f.clashRecoil)
+        f.heldRecoveryJump = false;
       if (f.stockLift) {
         const r = f.stockLift;
         if (!r.exit && r.time + 1e-8 >= liftArrival - 4 / 60) {
@@ -4591,6 +4596,12 @@
       }
       if (pressed('jump')) {
         f.jumpBuffer = inputWindow;
+        const a = f.attack;
+        const lastHit = a?.second || a;
+        const recovering = f.ground >= 0 && (f.landingLag > 1e-8 || (a && a.time + 1e-8 >= lastHit.start + lastHit.active));
+        const landingSoon = f.ground < 0 && (a?.airSide || f.airDodge) && this.floorAhead(f, inputWindow) >= 0;
+        f.heldRecoveryJump = !!(input.jump && !f.stun && !f.grip && !f.floorAction &&
+          !f.clashRecoil && !f.jumpSquat && (recovering || landingSoon));
         if (f.run) f.run.turnJump = false;
       }
       if (f.jumpBuffer > 0 && f.run && input.x * f.run.face <= -runStick) f.run.turnJump = true;
@@ -5067,6 +5078,7 @@
     }
     advanceJumpSquat(f, input, dt) {
       if (!f.jumpSquat) {
+        f.heldRecoveryJump = false;
         const run = f.run;
         const runDir = run && (run.turned || run.age + 1e-8 >= f.kit.footwork.reverseFrames / 60) &&
           f.vx * run.face >= f.kit.footwork.walk ? run.face : 0;
@@ -5198,7 +5210,7 @@
         this.emit('meteorCancel', { f, moveId: meteor, option: jump ? 'jump' : 'special',
           point: { x: f.x, y: f.y - f.stats.height * 0.5 } });
       }
-      const jumpTap = f.jumpBuffer > 0 || !!f.jumpSquat;
+      const jumpTap = f.jumpBuffer > 0 || (f.heldRecoveryJump && f.ground >= 0) || !!f.jumpSquat;
       const jumpingFromLedge = jumpTap && !!f.ledge;
       const attackTap = f.command?.type === 'attack';
       const guardIntent = f.guardIntent;
@@ -6729,6 +6741,7 @@
         this.bot.spotPunishes = (this.bot.spotPunishes || 0) + 1;
       }
       if (poked) this.emit('shieldPoke', { f: target, owner, attackName: name, moveId, point, face });
+      target.heldRecoveryJump = false;
       this.gradeFootwork(target);
       const downed = target.floorAction?.type === 'downed' ? target.floorAction : null;
       const previousLocks = downed?.locks || 0;
