@@ -323,30 +323,70 @@ async function testSoloCpu(page, mobile) {
   assert.match(await page.locator('#match-stage').innerText(), /Picnic/i);
   assert.match((await page.locator('.hud-name').allTextContents()).join(' '), /Pip.*Noodle/i);
   assert.equal(await page.locator('.lives[aria-label="3 stocks"]').count(), 2);
+  // Observe the dogs and shield impacts so input follows the fight at either device's frame cadence.
+  await page.evaluate(() => {
+    const battle = window.DogFight.Battle.prototype;
+    const block = battle.block, step = battle.step;
+    let respond = false;
+    battle.block = function (...args) {
+      const result = block.apply(this, args);
+      if (args[0].index === 0) respond = true;
+      return result;
+    };
+    battle.step = function (...args) {
+      const result = step.apply(this, args);
+      const [p,q] = this.dogs;
+      if (p.floorAction?.type === 'spotDodge') respond = false;
+      window.soloProbe = {
+        gap:q.x-p.x, grounded:p.ground >= 0 && !p.grip && !p.floorAction, respond,
+        caught:this.bot.spotPunishes || 0, predictions:this.bot.spotReads || 0,
+        position:p.x, tick:this.time, escape:p.floorAction?.type
+      };
+      return result;
+    };
+  });
   await page.clock.runFor(2450);
   const cdp = mobile && await page.context().newCDPSession(page);
+  const keys = {left:'a', right:'d', shield:'l', down:'s'};
   const points = {};
   if (mobile) {
-    for (const [i, key] of ['shield','down'].entries()) {
+    for (const [i, key] of Object.keys(keys).entries()) {
       const box = await page.locator('[data-touch="'+key+'"]').boundingBox();
       points[key] = {id:i+1, x:box.x+box.width/2, y:box.y+box.height/2};
     }
   }
   const touch = (type, names) => cdp.send('Input.dispatchTouchEvent', {type, touchPoints:names.map(key => points[key])});
-  if (mobile) await touch('touchStart', ['shield']);
-  else await page.keyboard.down('l');
-  for (let beat = 0; beat < 22; beat++) {
-    if (mobile) await touch('touchStart', ['shield','down']);
-    else await page.keyboard.down('s');
-    await page.clock.runFor(85);
+  let held = [];
+  async function hold(next) {
+    if (next.join() === held.join()) return;
     if (mobile) {
-      await touch('touchEnd', []);
-      await touch('touchStart', ['shield']);
-    } else await page.keyboard.up('s');
-    await page.clock.runFor(515);
+      const contacts = [...held];
+      if (held.some(key => !next.includes(key))) {
+        await touch('touchEnd', []);
+        contacts.length = 0;
+      }
+      for (const key of next.filter(key => !contacts.includes(key))) {
+        contacts.push(key);
+        await touch('touchStart', contacts);
+      }
+    } else {
+      for (const key of held.filter(key => !next.includes(key))) await page.keyboard.up(keys[key]);
+      for (const key of next.filter(key => !held.includes(key))) await page.keyboard.down(keys[key]);
+    }
+    held = next;
   }
-  if (mobile) await touch('touchEnd', []);
-  else await page.keyboard.up('l');
+  for (let frame = 0; frame < 1000; frame++) {
+    const state = await page.evaluate(() => window.soloProbe);
+    if (state?.caught) break;
+    let next = [];
+    if (state?.grounded) {
+      if (Math.abs(state.gap) > 120) next = [state.gap > 0 ? 'right' : 'left'];
+      else next = state.respond ? ['shield','down'] : ['shield'];
+    }
+    await hold(next);
+    await page.clock.runFor(16);
+  }
+  await hold([]);
   await select('#pause');
   assert.match(await page.locator('#dialog-body').innerText(), /Rival expected a spot-dodge .*caught [1-9]\d* with a delayed down tilt/i);
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed CPU selection, replay and a learned shield punish.');
@@ -419,7 +459,8 @@ async function testDevice(browser, mobile) {
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
     throw new Error((mobile ? 'Phone touch' : 'Desktop keyboard') + ' at ' + page.url() + ' ' +
-      JSON.stringify({panel, errors, trace: await page.evaluate(() => window.pressTrace)}) + '\n' + error.stack);
+      JSON.stringify({panel, errors, trace: await page.evaluate(() => window.pressTrace),
+        solo:await page.evaluate(() => window.soloProbe)}) + '\n' + error.stack);
   } finally {
     await context.close();
   }
