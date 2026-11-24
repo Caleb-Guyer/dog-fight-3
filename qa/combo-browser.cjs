@@ -105,6 +105,30 @@ async function testEdges(page, mobile) {
   await waitFor('timedHit');
   assert.match(await status.innerText(), /Doorstop caught the hang · 6f catch/);
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed short and long catches, changing rival damage and punishing the worn catch.');
+  await page.goto(root + '#training/corner-pressure');
+  async function guard(held) {
+    if (mobile) {
+      if (held) await touch('touchStart',[await point(1,'shield')]);
+      else await touch('touchEnd');
+    } else if (held) await page.keyboard.down('l');
+    else await page.keyboard.up('l');
+  }
+  await guard(true);
+  await waitFor('caughtLip');
+  assert.match(await status.innerText(),/pushed off.*caught the ledge/i);
+  await guard(false);
+  await activate('edge-inside');
+  await guard(true);
+  await waitFor('heldCorner');
+  await guard(false);
+  await activate('edge-corner');
+  await activate('edge-side');
+  await guard(true);
+  await waitFor('cornerCue');
+  await guard(false);
+  await waitFor('parriedCorner');
+  assert.match(await status.innerText(),/parried.*held the corner/i);
+  console.log((mobile ? 'Touch' : 'Keyboard') + ' passed a shield push-off, a deeper block, and a parry on the opposite edge.');
 }
 async function testTumble(page, mobile) {
   await page.goto(root + '#training/tumble');
