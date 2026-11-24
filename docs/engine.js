@@ -101,6 +101,14 @@
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
   const inputWindow = 7 / 60;
   const spotCounterLead = 4 / 60;
+  // One second spent outside a dodge restores one level. Store game time so rollback and half speed agree.
+  const dodgeWear = f => Math.ceil(Math.max(0, (f.dodgeFatigue || 0) - 1e-8));
+  function spendDodge(f, frames, extra = 0) {
+    const wear = dodgeWear(f), [total, first, last] = frames;
+    f.dodgeFatigue = Math.min(3, wear + 1);
+    return { wear, duration:(total + extra + 2*wear)/60, safeFrom:(first + wear)/60,
+      safeUntil:(last + 1 - wear)/60 };
+  }
   const landingGrabFrames = 4;
   const landingCancelWindow = 7 / 60;
   const runStick = 0.55;
@@ -1941,6 +1949,7 @@
       usedUp: false,
       usedAir: false,
       usedDodge: false,
+      dodgeFatigue: 0,
       usedPogo: false,
       stun: 0,
       reaction: null,
@@ -3797,7 +3806,12 @@
       const slow = this.shieldPractice?.slow ?? true;
       this.resetTraining();
       this.shieldPractice = { pattern, phase: 'ready', time: 0, outcome: '', lastDodge: '' };
-      if (pattern === 'counterGrab') {
+      if (pattern === 'dodgeTiming' || pattern === 'counterGrab') {
+        if (pattern === 'dodgeTiming') {
+          this.shieldPractice.originalDogs = this.dogs;
+          this.dogs = [this.dogs[0], newFighter('pip', 1)];
+          this.shieldPractice.attempt = 0;
+        }
         const [player, rival] = this.dogs, floor = this.terrain[0];
         const middle = (floor.x1 + floor.x2) / 2;
         const gap = player.stats.width + rival.stats.width + 4;
@@ -4043,7 +4057,7 @@
     finishShieldPractice(outcome, landingFrames = 0) {
       const drill = this.shieldPractice;
       if (!drill || !['attack', 'windup', 'counter'].includes(drill.phase)) return;
-      if (outcome === 'block' && drill.originalDogs && !drill.coverage) {
+      if (outcome === 'block' && drill.originalDogs && !drill.coverage && drill.pattern !== 'dodgeTiming') {
         drill.phase = 'counter';
         drill.time = 0;
         this.emit('shieldCue', { f: this.dogs[0], phase: 'counter', pattern: drill.pattern });
@@ -4069,6 +4083,7 @@
     }
     shieldPracticeInput(dt, input) {
       const drill = this.shieldPractice;
+      if (drill.pattern === 'dodgeTiming') return this.dodgeTimingInput(drill, dt);
       if (drill.pattern === 'yourHop') {
         const player = this.dogs[0];
         if (drill.phase === 'ready' && (input.jump || input.shortHop || input.tapped?.jump || input.tapped?.shortHop))
@@ -4129,6 +4144,43 @@
         if (drill.time > 0.3 && !dummy.attack && !this.projectiles.some((d) => d.owner === 1))
           this.finishShieldPractice('miss');
       }
+      return idleInput;
+    }
+    dodgeTimingInput(drill, dt) {
+      const [player, trainer] = this.dogs, dodge = player.floorAction;
+      if (drill.phase === 'done') return idleInput;
+      if (drill.phase !== 'attack') {
+        if (dodge?.type !== 'spotDodge') {
+          if (drill.phase === 'again' && !drill.restored && !dodgeWear(player)) {
+            drill.restored = true;
+            this.emit('shieldCue', { f:player, pattern:drill.pattern, phase:'restored' });
+          }
+          return idleInput;
+        }
+        drill.attempt++;
+        drill.phase = 'attack';
+        drill.time = 0;
+        drill.swung = false;
+        drill.wear = dodge.wear;
+        drill.lastDodge = '';
+        this.emit('shieldCue', { f:player, pattern:drill.pattern, phase:'sweep', dodge });
+      }
+      drill.time += dt;
+      const sweep = moves[trainer.kit.tilts.down];
+      // The last active frame tests the last protected frame of the player's fresh spot-dodge.
+      const start = (player.kit.defense.spot[2] + 2)/60 - sweep.start - sweep.active;
+      if (!drill.swung && dodge?.type === 'spotDodge' && dodge.time + dt + 1e-8 >= start) {
+        drill.swung = true;
+        return { ...idleInput, y:1, tapped:{attack:true} };
+      }
+      if (drill.swung && !trainer.attack && !dodge) {
+        if (drill.lastDodge !== 'spotDodge') this.finishShieldPractice('miss');
+        else if (drill.attempt === 2) this.finishShieldPractice(drill.wear ? 'wornClear' : 'freshClear');
+        else {
+          drill.phase = 'again';
+          this.emit('shieldCue', { f:player, pattern:drill.pattern, phase:'again' });
+        }
+      } else if (drill.time > 1.2) this.finishShieldPractice('miss');
       return idleInput;
     }
     shieldCoverageInput(drill, dt) {
@@ -4685,7 +4737,12 @@
       }
       for (const f of this.dogs) {
         if (f.impactLag > 1e-8) f.impactLag = Math.max(0, f.impactLag - dt);
-        else if (!f.grip) this.move(f, inputs[f.index], dt);
+        else {
+          const wasDodging = f.airDodge || f.floorAction?.wear !== undefined;
+          if (!f.grip) this.move(f, inputs[f.index], dt);
+          if (f.dodgeFatigue && !wasDodging && !f.airDodge && f.floorAction?.wear === undefined)
+            f.dodgeFatigue = Math.max(0, f.dodgeFatigue - dt);
+        }
         f.techBuffer = Math.max(0, f.techBuffer - dt);
         f.techLock = Math.max(0, f.techLock - dt);
       }
@@ -5322,23 +5379,20 @@
       const dir = intent === 'down' ? 0 : intent === 'left' ? -1 : 1;
       const backRoll = !!dir && dir !== f.face;
       const defense = f.kit.defense;
-      const [total, firstSafe, lastSafe] = dir ? defense.roll : defense.spot;
       const type = dir ? 'shieldRoll' : 'spotDodge';
       f.floorAction = {
         type,
         dir,
         backRoll,
         time: 0,
-        duration: (total + (backRoll ? 2 : 0)) / 60,
-        safeFrom: firstSafe / 60,
-        safeUntil: (lastSafe + 1) / 60,
+        ...spendDodge(f, dir ? defense.roll : defense.spot, backRoll ? 2 : 0),
         distance: dir ? defense.rollDistance * (backRoll ? 0.9 : 1) : 0,
       };
       f.shield = false;
       f.shieldDrop = f.guardBuffer = f.landTime = f.skidTime = f.chainWindow = f.vx = f.vy = 0;
       f.command = f.run = null;
       f.lastMove = dir ? 'Shield Roll' : 'Spot-dodge';
-      this.emit(type, { f, dir, point: { x: f.x, y: f.y } });
+      this.emit(type, { f, dir, wear:f.floorAction.wear, point: { x: f.x, y: f.y } });
     }
     beginLedgeOption(f, type) {
       const edge = f.ledge;
@@ -5370,7 +5424,8 @@
       const length = Math.hypot(aim.x, aim.y);
       const directed = length >= 0.35;
       const kit = f.kit.airDodge;
-      const [duration, first, last, landing] = directed ? kit.directional : kit.neutral;
+      const frames = directed ? kit.directional : kit.neutral;
+      const timing = spendDodge(f, frames);
       const type = directed ? 'directionalAirDodge' : 'neutralAirDodge';
       const x = directed ? aim.x / length : 0;
       const y = directed ? aim.y / length : 0;
@@ -5380,10 +5435,8 @@
         x,
         y,
         time: 0,
-        duration: duration / 60,
-        safeFrom: first / 60,
-        safeUntil: (last + 1) / 60,
-        landingLag: landing / 60,
+        ...timing,
+        landingLag: (frames[3] + timing.wear) / 60,
         fromHop: f.takeoffWindow > 1e-8,
       };
       f.usedDodge = true;
@@ -5393,7 +5446,7 @@
       f.cutJump = false;
       f.run = f.throwBounce = f.guardAim = f.command = null;
       f.lastMove = directed ? 'Directional air dodge' : 'Neutral air dodge';
-      this.emit('dodge', { f, type, dirX: x, dirY: y });
+      this.emit('dodge', { f, type, dirX: x, dirY: y, wear:timing.wear });
     }
     advanceAirDodge(f, dt) {
       const a = f.airDodge;
@@ -7144,7 +7197,8 @@
         if (previous && previous.swing !== use && !previous.observed) brain.spotStreak = 0;
         if (brain.spotStreak >= 2 && previous?.swing !== use) brain.spotReads = (brain.spotReads || 0) + 1;
         brain.pressure = { swing: use, opens: this.time + (impactFrames + stunFrames) / 60, x: target.x,
-          ground: owner.ground, face: away, delay: brain.spotStreak >= 2 ? brain.spotDelay : null };
+          ground: owner.ground, face: away, delay: brain.spotStreak >= 2 ? brain.spotDelay : null,
+          expectedSafeEnd: target.kit.defense.spot[2] - dodgeWear(target) };
       }
       if (broken) this.breakShield(target);
       else {
@@ -7241,7 +7295,8 @@
       if (poked) this.emit('shieldPoke', { f: target, owner, attackName: name, moveId, point, face });
       target.heldRecoveryJump = false;
       this.gradeFootwork(target);
-      const downed = target.floorAction?.type === 'downed' ? target.floorAction : null;
+      const floorAtHit = target.floorAction;
+      const downed = floorAtHit?.type === 'downed' ? floorAtHit : null;
       const previousLocks = downed?.locks || 0;
       if (downed && target.ground >= 0 && owner.ground >= 0 && move?.lockFrames && previousLocks < 2 &&
           (!target.encounter || target.encounter.kind === target.kind) && (!owner.encounter || owner.encounter.kind === owner.kind)) {
@@ -7477,7 +7532,10 @@
       }
       if (this.shieldPractice) {
         const counter = this.shieldPractice.phase === 'counter';
-        if (target.index === 0) this.finishShieldPractice(poked ? 'poked' : 'hit');
+        if (target.index === 0 && this.shieldPractice.pattern === 'dodgeTiming' &&
+            floorAtHit?.type === 'spotDodge' && floorAtHit.wear > 0 && moveId === owner.kit.tilts.down)
+          this.finishShieldPractice('dodgeClipped');
+        else if (target.index === 0) this.finishShieldPractice(poked ? 'poked' : 'hit');
         else if (this.shieldPractice.pattern === 'counterGrab' && this.shieldPractice.lastDodge === 'spotDodge' &&
             stance?.grabAttempt && stance.time + 1e-8 >= stance.start + stance.active) {
           const frames = Math.max(0, Math.ceil((stance.end - stance.time) * 60 - 1e-8));
@@ -7779,6 +7837,11 @@
         const grab = a.grabAttempt || a.commandGrab;
         const chance = this.random();
         let choice = chance < 0.3 ? (grab ? 'spot' : 'parry') : chance < 0.47 ? 'roll' : null;
+        if (choice === 'spot' && this.cpuLevel === 'rival' && dodgeWear(f)) {
+          const [, first, last] = f.kit.defense.spot;
+          if (a.active*60 > last-first+1-2*dodgeWear(f)+1e-8 && wait >= 3/60)
+            choice = 'jump';
+        }
         if (!choice && chance < .80 && this.cpuLevel === 'rival' && f.shield && a.smashSide === 'side' &&
             !a.projectile && foe.ground === f.ground) {
           const floor = this.terrain[f.ground];
@@ -7810,11 +7873,18 @@
       const read = brain.guardRead;
       if (read.used || !read.choice) return null;
       brain.hold = brain.guard = 0;
+      if (read.choice === 'jump') {
+        read.used = true;
+        brain.jumpHold = .20;
+        const away = -Math.sign(dx), floor = this.terrain[f.ground];
+        const aim = f.x + away*55;
+        return { ...idleInput, jump:true, x:aim > floor.x1 && aim < floor.x2 ? away : 0 };
+      }
       if (read.choice === 'cover') return { ...idleInput, ...read.aim, shield: true };
       if (read.choice === 'crouch') return { ...idleInput, y: 0.6 };
       const dodge = read.choice === 'spot' ? f.kit.defense.spot : f.kit.defense.roll;
       if (
-        wait > (read.choice === 'parry' ? 3 / 60 : (dodge[1] + 2) / 60) ||
+        wait > (read.choice === 'parry' ? 3 / 60 : (dodge[1] + dodgeWear(f) + 2) / 60) ||
         (read.choice === 'parry' && !f.shield)
       )
         return { ...idleInput, shield: true };
@@ -7847,7 +7917,7 @@
       const beat = attackWindow(attack),
         wait = beat.start - attack.time;
       const kit = f.kit.airDodge;
-      if (wait < -1e-8 || wait > (kit.directional[1] + 3) / 60) return null;
+      if (wait < -1e-8 || wait > (kit.directional[1] + dodgeWear(f) + 3) / 60) return null;
       const [x, y, rx, ry] = beat.box || attack.box;
       const dx = f.x + f.vx * wait - (foe.x + foe.vx * wait + x * foe.face);
       const dy = f.y + f.vy * wait - f.stats.height * 0.52 - (foe.y + foe.vy * wait + y);
@@ -8365,7 +8435,7 @@
       const low = moves[f.kit.tilts.down], gap = (p.x - f.x) * p.face;
       const reach = low.box[0] + low.box[2] + foe.stats.width - 9;
       if (gap > reach) return { ...idleInput, x: p.face * .5 };
-      if (elapsed + low.start < p.delay + (foe.kit.defense.spot[2] + 2) / 60)
+      if (elapsed + low.start < p.delay + ((p.expectedSafeEnd ?? foe.kit.defense.spot[2]) + 2) / 60)
         return f.face === p.face ? idleInput : { ...idleInput, x:p.face*.5 };
       p.sent = true;
       brain.spotBaits = (brain.spotBaits || 0) + 1;
@@ -9056,6 +9126,7 @@
     isReversalPractice,
     isFootstoolPractice,
     shieldBubble,
+    shieldDirection,
     shieldContact,
     ledgePosition,
     ledgeRollAction,
