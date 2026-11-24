@@ -3167,7 +3167,7 @@
           vx: dir * f.stats.speed, sprintDir: dir, stickTicks: 3, prev: { ...idleInput, x: dir, grabX: dir } });
         this.spacingPractice = { pattern, dir, slow, ground, mark: f.x + dir * softMark, cleanMark: f.x + dir * cleanMark,
           phase: 'ready', time: 0, contact: '', timing: '', damage: 0, airborne: false, landing: null, outcome: '',
-          peak: null, previousPeak: previous?.pattern === 'landing' && previous.dir === dir
+          swung: false, peak: null, previousPeak: previous?.pattern === 'landing' && previous.dir === dir
             ? (previous.peak?.complete ? previous.peak : previous.previousPeak) : null };
         return;
       }
@@ -3284,8 +3284,10 @@
         return;
       }
       if (drill.pattern === 'landing') {
+        if (f.attack?.airSide) drill.swung = true;
         if (f.respawning || guard.respawning || f.ledge) this.finishSpacingPractice('away');
-        else if (drill.landing !== null && !drill.contact) this.finishSpacingPractice('miss');
+        else if (drill.landing !== null && !drill.contact)
+          this.finishSpacingPractice(drill.peak?.complete && !drill.swung ? 'jumpOnly' : 'miss');
         else if (drill.time > 1.6) this.finishSpacingPractice(drill.timing === 'clean' ? 'clean' : drill.contact ? 'escaped' : 'miss');
         else if (drill.contact && f.ground >= 0 && !drill.jabCue && f.landingLag <= 5 / 60 + 1e-8) {
           drill.jabCue = true;

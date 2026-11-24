@@ -1173,16 +1173,16 @@
   function updateHUD() {
     const landing = world.spacingPractice?.pattern === 'landing' && world.spacingPractice;
     const compare = $('hop-compare');
-    const peaks = [];
-    if (landing) {
-      for (const [peak, prefix] of [[landing.peak, ''], [landing.previousPeak, 'Previous: ']]) {
+    if (landing || !compare.hidden) {
+      const peaks = [];
+      for (const [peak, prefix] of [[landing?.peak, ''], [landing?.previousPeak, 'Previous: ']]) {
         if (peak?.complete) peaks.push(prefix + (peak.short ? 'Short hop' : 'Full jump') + ' · ' +
           Math.round(peak.floorY - peak.y) + ' px');
       }
+      const comparison = peaks.join(' / ');
+      if (compare.textContent !== comparison) compare.textContent = comparison;
+      compare.hidden = !comparison;
     }
-    const comparison = peaks.join(' / ');
-    if (compare.textContent !== comparison) compare.textContent = comparison;
-    compare.hidden = !comparison;
     if (world.mode === 'adventure') return updateDispatchHUD();
     const confirmed = online.match?.confirmedWorld || world;
     const scores = confirmed.dogs;
@@ -1814,7 +1814,7 @@
       const labels = { clean: 'Clean hit · ' + practice.damage + '%', string: 'True combo · ' + world.lastCombo.damage + '%',
         gap: 'Gap before the jab', guarded: (practice.timing === 'clean' ? 'Clean hit' : 'Late hit') + ' · jab shielded',
         escaped: 'Rival escaped', miss: 'Missed the aerial',
-        other: 'Different attack', away: 'Left the setup' };
+        jumpOnly: 'Jump measured', other: 'Different attack', away: 'Left the setup' };
       status.dataset.result = e.outcome || name;
       if (!e.outcome) {
         status.textContent = name === 'spacingJab' ? 'Tap Attack for jab' :
@@ -1823,13 +1823,14 @@
       }
       status.textContent = labels[e.outcome];
       const tips = { clean: 'The leading hit connected. To try the late hit, swing earlier at the gold fork.',
-        string: moves[practice.contact].label + ' into ' + moves[world.dogs[0].kit.ground[0]].label +
+        string: moves[world.dogs[0].kit.air.forward].label + ' into ' + moves[world.dogs[0].kit.ground[0]].label +
           ' connected before the rival could act. Try the green stripe for the clean hit.',
         guarded: practice.timing === 'clean' ? 'The clean hit gave the rival time to shield your jab. Swing at the gold fork to try the follow-through.' :
           'The rival raised Shield before your jab. Tap Attack as the landing cue appears.',
         gap: 'Both hits landed. The rival had time to act between them.',
         escaped: 'The rival recovered. Release the direction on landing and tap Attack at the jab cue.',
         miss: 'Hold toward the rival for the whole short hop. Tap Attack over either floor mark.',
+        jumpOnly: 'Try the other jump height, or hold toward the rival and swing at the gold fork.',
         other: 'Aim forward for the aerial, then center the direction for your jab.',
         away: 'Stay on this stretch of floor for the landing.' };
       $('recovery-tip').textContent = tips[e.outcome] + ' Choose Landing hits to retry.';
