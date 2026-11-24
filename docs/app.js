@@ -1268,6 +1268,60 @@
       .join('');
   }
   let matchConfig, soloSeed;
+  const frameLab = {mode:'live', count:0, pending:0, renderTime:0};
+  function frameState(f) {
+    const frames = seconds => Math.ceil(seconds * 60 - 1e-8);
+    if (world.hitStop > 0 || f.impactLag > 0) return 'Hitstop ' + frames(world.hitStop || f.impactLag) + 'f';
+    if (f.stockLift) return 'Respawn platform';
+    if (f.grip) return 'Grapple';
+    if (f.ledge) return 'Hanging';
+    if (f.stun > 0) return 'Hitstun ' + frames(f.stun) + 'f';
+    if (f.shieldStun > 0) return 'Shieldstun ' + frames(f.shieldStun) + 'f';
+    if (f.landingLag > 1e-8) return 'Landing recovery ' + frames(f.landingLag) + 'f';
+    if (f.jumpSquat) return 'Jump squat ' + Math.round(f.jumpSquat.time * 60) + '/3';
+    if (f.floorAction) return 'Floor action · ' + frames(f.floorAction.duration - f.floorAction.time) + 'f';
+    if (f.airDodge) return 'Air dodge';
+    if (f.clashRecoil) return 'Clash recoil';
+    if (f.attack) return f.lastMove + ' · frame ' + Math.round(f.attack.time * 60);
+    if (f.smashCharge) return 'Charging ' + smashes[f.smashCharge.moveId].label;
+    if (f.shield) return 'Shield up';
+    if (f.shieldDrop > 0) return 'Lowering shield';
+    return f.ground < 0 ? (f.vy < 0 ? 'Rising' : 'Falling') : 'Grounded';
+  }
+  function showFrameStatus() {
+    const status = $('frame-status');
+    if (frameLab.mode === 'live') return;
+    if (frameLab.mode === 'armed') {
+      status.textContent = world.dogs[0].kind === 'brisket' ?
+        'Jump, then tap Down + Attack for Belly Drop. Training will freeze on landing.' :
+        'Jump, then use an aerial. Training will freeze on landing.';
+      return;
+    }
+    const [player, rival] = world.dogs;
+    const queued = player.heldRecoveryJump ? ' · Jump held' : player.jumpBuffer > 1e-8 && !player.jumpSquat ? ' · Jump buffered' : '';
+    status.textContent = 'Frame +' + frameLab.count + '\n' + player.stats.name + ' · ' + frameState(player) + queued +
+      '\n' + rival.stats.name + ' · ' + frameState(rival);
+  }
+  function setFrameMode(mode) {
+    frameLab.mode = mode;
+    frameLab.count = frameLab.pending = accumulator = 0;
+    frameLab.renderTime = performance.now() / 1000;
+    $('frame-status').hidden = mode === 'live';
+    $('frame-step').hidden = mode !== 'frozen';
+    $('frame-toggle').textContent = mode === 'frozen' ? 'Resume play' : 'Frame advance';
+    $('frame-toggle').setAttribute('aria-pressed', String(mode === 'frozen'));
+    $('frame-landing').setAttribute('aria-pressed', String(mode === 'armed'));
+    $('frame-landing').textContent = mode === 'armed' ? 'Cancel landing freeze' : 'Freeze on landing';
+    showFrameStatus();
+  }
+  function toggleFrames() { setFrameMode(frameLab.mode === 'frozen' ? 'live' : 'frozen'); }
+  function stepTrainingFrame() {
+    if (frameLab.mode !== 'frozen') setFrameMode('frozen');
+    frameLab.pending++;
+  }
+  $('frame-toggle').onclick = toggleFrames;
+  $('frame-step').onclick = stepTrainingFrame;
+  $('frame-landing').onclick = () => setFrameMode(frameLab.mode === 'armed' ? 'live' : 'armed');
   function showCpuLevels() {
     const restart = page === 'match';
     backToPause = restart;
@@ -1387,6 +1441,7 @@
       if (name === 'win') resultDelay = 0.7;
     }, random);
     $('training-tools').hidden = config.mode !== 'training';
+    setFrameMode('live');
     $('dummy-damage').value = '0';
     $('damage-output').textContent = '0%';
     const matchName = online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
@@ -2401,6 +2456,7 @@
   }
   function drill(ledge, fromHang = false, pattern = 'strike', direction) {
     if (!world) return;
+    setFrameMode('live');
     const launch = ledge === 'launch';
     const juggle = launch && pattern === 'juggle';
     const chase = launch && (pattern === 'attack' || pattern === 'defend');
@@ -3510,6 +3566,11 @@
   window.addEventListener('keydown', (e) => {
     if (page !== 'match' || $('dialog').open) return;
     if (e.target instanceof HTMLSelectElement) return;
+    if (world?.mode === 'training' && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+      e.preventDefault();
+      if (!e.repeat) (e.code === 'BracketLeft' ? toggleFrames : stepTrainingFrame)();
+      return;
+    }
     if (e.code === 'Escape' || e.code === 'KeyP') {
       e.preventDefault();
       if (!e.repeat) showPause();
@@ -3592,7 +3653,8 @@
   }
   window.addEventListener('blur', onBlur);
   const redrawPausedStage = () => {
-    if (page === 'match' && paused && world && view) view.draw($('game'), world, 0, world.time);
+    if (page === 'match' && world && view && (paused || frameLab.mode === 'frozen'))
+      view.draw($('game'), world, 0, frameLab.mode === 'frozen' ? frameLab.renderTime : world.time);
   };
   if (window.ResizeObserver) new ResizeObserver(redrawPausedStage).observe($('game'));
   else window.addEventListener('resize', redrawPausedStage);
@@ -3741,6 +3803,8 @@
     const any = (i) => pads.some((p) => down(p, i));
     const now = {
       pause: any(9),
+      freeze: any(10),
+      step: any(11),
       confirm: any(0),
       back: any(1),
       horizontal:
@@ -3757,6 +3821,10 @@
       else if (page === 'match' && !dialogType) showPause();
       else if (page === 'dispatch-story' && !dialogType) toggleFilm();
       else if (page === 'lobby' && !dialogType) startMatch();
+    } else if (page === 'match' && world?.mode === 'training' && !$('dialog').open &&
+        (now.freeze && !oldPad.freeze || now.step && !oldPad.step)) {
+      if (now.freeze && !oldPad.freeze) toggleFrames();
+      else stepTrainingFrame();
     } else if (page !== 'match' || $('dialog').open) {
       const items = menuButtons();
       const n = items.indexOf(document.activeElement);
@@ -3810,6 +3878,7 @@
     } else if (!paused && world?.mode === 'adventure') {
       runAdventure(dt, pads);
     } else if (!paused && world) {
+      let steppedFrame = false;
       if (countdown > 0) {
         countdown = Math.max(0, countdown - dt);
         const number = Math.ceil(countdown / 0.8);
@@ -3827,7 +3896,10 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow ? dt / 2 : dt;
+        if (frameLab.mode === 'frozen') {
+          accumulator = frameLab.pending > 0 ? 1 / 60 : 0;
+          if (frameLab.pending > 0) frameLab.pending--;
+        } else accumulator += world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];
@@ -3846,7 +3918,17 @@
             }
           }
           if (!drillWaiting) {
+            const airborne = player.ground < 0;
             world.step(1 / 60, input, world.mode === 'local' ? playerInput(1, pads) : idleInput);
+            if (frameLab.mode === 'frozen') {
+              frameLab.count++;
+              frameLab.renderTime += 1/60;
+              steppedFrame = true;
+            } else if (frameLab.mode === 'armed' && airborne && player.ground >= 0 && player.landingLag > 0) {
+              setFrameMode('frozen');
+              steppedFrame = true;
+            }
+            if (steppedFrame) showFrameStatus();
             if (drillSide && (player.attack?.ledgeAttack || (player.ground >= 0 && !player.floorAction))) {
               $('recovery-tip').textContent = player.attack?.ledgeAttack
                 ? player.lastMove + '. Choose Practice ledge attack to try again.'
@@ -3856,17 +3938,18 @@
           }
           taps.clear();
           touchTaps.clear();
-          accumulator -= 1 / 60;
+          accumulator = Math.max(0, accumulator - 1 / 60);
         }
         updateHUD();
       } else {
         resultDelay -= dt;
         if (resultDelay <= 0 && (online.match ? dialogType !== 'online-result' : !$('dialog').open)) showResult();
       }
-      if (world) {
+      if (world && (frameLab.mode !== 'frozen' || steppedFrame)) {
         const confirmed = online.match?.confirmedWorld;
         const waitingOnKO = confirmed && world.end !== null && confirmed.end === null;
-        view.draw($('game'), waitingOnKO ? confirmed : world, dt, now);
+        view.draw($('game'), waitingOnKO ? confirmed : world, frameLab.mode === 'frozen' ? 1/60 : dt,
+          frameLab.mode === 'frozen' ? frameLab.renderTime : now);
       }
     }
     requestAnimationFrame(frame);
@@ -3879,7 +3962,12 @@
   }
   function openLink() {
     const hash = location.hash;
-    if (hash === '#solo/shield-read') startShieldReadMatch();
+    if (hash === '#training/landing-buffer') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'brisket', p2:'pip', stage:'picnic', fetch:false });
+      setFrameMode('armed');
+    } else if (hash === '#solo/shield-read') startShieldReadMatch();
     else if (hash === '#solo') {
       settings.mode = 'solo';
       editing = 0;

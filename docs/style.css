@@ -649,6 +649,13 @@ body.playing .tools .utility,
 #training-move {
   color: var(--gold);
 }
+#frame-status {
+  border-left-color: var(--aqua);
+  line-height: 1.2;
+  max-width: min(320px, 82vw);
+  white-space: pre-line;
+  font-variant-numeric: tabular-nums;
+}
 .drill-readout {
   display: grid;
   gap: 3px;
