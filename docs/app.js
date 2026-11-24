@@ -714,6 +714,7 @@
         '<p>Holding Shield or blocking a hit shrinks the bubble. An attack can clip an exposed paw or ear. To cover it, ease the stick toward the hit, or hold both bumpers and aim freely. On keyboard, hold Walk while aiming with Shield. On touch, hold Shield and drag from the center dot toward the hit.</p>' +
         '<p>While holding Shield, press Jump, Grab, Up + Smash, or Up + Special. On a raised platform, flick a lower diagonal to fall through your shield. Tap Attack with the diagonal for a down air, or aim a different aerial as you fall. Try Shield drop in Platform practice.</p>' +
         '<p>Tap during a blocked hit to start your response as soon as shieldstun ends. An immediate shield grab takes four extra frames to reach. A heavier blow pushes you farther away.</p>' +
+        '<p>During the three-frame jump crouch, Up + Smash starts a grounded up smash and Up + Special starts your recovery move. A running up smash carries your speed. On touch, hold Up and slide your other thumb from Jump onto Smash or Special. Try Footwork practice → Catch the landing.</p>' +
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Aim diagonally down and tap Shield to slide onto a platform. Do this just after jumping to wavedash. Try Training → Air-dodge practice or Training → Wavedash.</p>' +
         '<p>Flick a direction during the hit spark to shift your dog. You can slide sideways on the ground or in eight directions in the air. Try escaping the second swing in Training → Combo escape.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
@@ -1282,8 +1283,8 @@
     if (f.floorAction) return 'Floor action · ' + frames(f.floorAction.duration - f.floorAction.time) + 'f';
     if (f.airDodge) return 'Air dodge';
     if (f.clashRecoil) return 'Clash recoil';
-    if (f.attack) return f.lastMove + ' · frame ' + Math.round(f.attack.time * 60);
-    if (f.smashCharge) return 'Charging ' + smashes[f.smashCharge.moveId].label;
+    if (f.attack) return f.lastMove + (f.attack.fromJumpSquat ? ' · jump cancel' : '') + ' · frame ' + Math.round(f.attack.time * 60);
+    if (f.smashCharge) return 'Charging ' + smashes[f.smashCharge.moveId].label + (f.smashCharge.fromJumpSquat ? ' · jump cancel' : '');
     if (f.shield) return 'Shield up';
     if (f.shieldDrop > 0) return 'Lowering shield';
     return f.ground < 0 ? (f.vy < 0 ? 'Rising' : 'Falling') : 'Grounded';
@@ -1989,6 +1990,22 @@
     const state = e.outcome || e.phase;
     status.dataset.result = state;
     const pattern = world.footworkPractice.pattern;
+    if (pattern === 'antiAir') {
+      const move = world.dogs[0].lastMove;
+      status.textContent = {
+        atMark:'Jump + Up Smash', slideCatch:move + ' · caught the landing',
+        specialCatch:move + ' · jump-cancel special', otherCatch:move + ' · hit',
+        caughtShield:'The rival landed and blocked', overshot:'Missed the landing',
+      }[state];
+      if (e.outcome) $('recovery-tip').textContent = {
+        slideCatch:'Your up smash carried your run under the falling dog. Retry and hold Smash to see when their shield comes up.',
+        specialCatch:'Your up special started during jump squat and intercepted the rival.',
+        otherCatch:'You landed a hit. To slide underneath, run to the chalk and tap Jump and Up + Smash together.',
+        caughtShield:'Your swing reached the shield. Retry and release Smash sooner.',
+        overshot:'Retry. Run to the chalk, hold Up, then tap Jump and Smash together as the rival falls.',
+      }[state];
+      return;
+    }
     if (pattern === 'brake' || pattern === 'pivot') {
       const move = world.dogs[0].lastMove;
       status.textContent = {
@@ -2653,17 +2670,18 @@
         'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
     } else if (footwork) {
       const practice = world.footworkPractice;
-      for (const id of ['bait', 'match', 'power', 'disc', 'brake', 'pivot'])
+      for (const id of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir'])
         $('footwork-' + id).setAttribute('aria-pressed', String(practice.pattern === id));
       $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
       $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
       $('footwork-status').dataset.result = 'ready';
       $('footwork-status').textContent = {
-        brake: 'Brake at the chalk', pivot: 'Catch the chase',
+        brake: 'Brake at the chalk', pivot: 'Catch the chase', antiAir: 'Catch the landing',
         bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
       }[pattern];
       const discInput = player.kind === 'noodle' ? 'aim toward Clover and tap Attack' : 'tap Attack';
       message = {
+        antiAir: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk as the rival hops. Hold Up and tap Jump + Smash together. Hold Smash longer to compare.',
         brake: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Release forward for a beat, then press forward and tap Attack together. Compare that with holding forward and tapping Attack.',
         pivot: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk with the rival on your heels. Press back and tap Attack together to catch them during your skid.',
         bait: 'Dash right to the chalk, then reverse. When Brisket misses his grab, dash back in and tap Attack. Choose Footwork practice to retry.',
@@ -2827,7 +2845,7 @@
     $('game').focus({ preventScroll: true });
   };
   $('footwork-training').onclick = () => drill('footwork', false, world.footworkPractice?.pattern || 'bait');
-  for (const pattern of ['bait', 'match', 'power', 'disc', 'brake', 'pivot'])
+  for (const pattern of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir'])
     $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
   $('footwork-side').onclick = () => drill('footwork', false, world.footworkPractice.pattern, -world.footworkPractice.dir);
   $('footwork-slow').onclick = () => {
@@ -3624,6 +3642,15 @@
         const aim = document.elementFromPoint(e.clientX, e.clientY)?.closest('.dpad [data-touch]');
         if (aim) setTouch(e.pointerId, aim);
       });
+    if (el.dataset.touch === 'jump')
+      el.addEventListener('pointermove', e => {
+        if (touchPointers.get(e.pointerId) !== el || !touches.has('up')) return;
+        const next = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-touch]');
+        if (next?.dataset.touch !== 'smash' && next?.dataset.touch !== 'special') return;
+        const freshJump = touchTaps.has('jump');
+        setTouch(e.pointerId, next);
+        if (freshJump) touchTaps.add('jump');
+      });
     if (el.dataset.touch === 'smash')
       el.addEventListener('pointermove', (e) => {
         if (e.pointerId !== touchFlick?.id || touchFlick.fired || touchFlick.committed) return;
@@ -3754,9 +3781,12 @@
     const keyAimY = Number(key('aimDown')) - Number(key('aimUp'));
     const flick = !i && (touchFlick?.fired || touchTaps.has('aimStick')) ? flickAim : null;
     const aimStick = !!(rightStick || keyAimX || keyAimY || flick);
-    // Let a swipe declare its direction before a stationary thumb starts charging a smash.
-    if (!i && touchFlick?.deferSmash && !touchFlick.fired && performance.now() - touchFlick.started >= 110)
-      touchFlick.committed = true;
+    // With an explicit Up + Jump chord the smash must reach the fighter before takeoff.
+    if (!i && touchFlick?.deferSmash && !touchFlick.fired) {
+      const f = world.dogs[fighterIndex];
+      if ((y < 0 && f.ground >= 0 && (tapped('jump') || f.jumpSquat)) || performance.now() - touchFlick.started >= 110)
+        touchFlick.committed = true;
+    }
     const touchSmash = !i && touches.has('smash') && (!touchFlick?.deferSmash || touchFlick.committed);
     const fromCenter = !i && touchPointers.get(walkPointer)?.dataset.touch;
     const walk = key('walk') || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
@@ -3988,11 +4018,11 @@
       startMatch({ ...settings, mode:'training', stage:'picnic', fetch:false });
       drill('spacing', false, 'footstool');
     }
-    else if (hash === '#training/braking') {
+    else if (hash === '#training/braking' || hash === '#training/catch-the-landing') {
       menuScreen('match');
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p2: 'pip', stage: 'picnic', fetch: false });
-      drill('footwork', false, 'brake');
+      drill('footwork', false, hash === '#training/braking' ? 'brake' : 'antiAir');
     }
     else if (hash === '#training/tumble') {
       menuScreen('match');
