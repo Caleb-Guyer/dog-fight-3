@@ -608,6 +608,48 @@ async function testAngledTilts(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
 }
 
+async function testWallJumps(page, mobile) {
+  await page.goto(root+'#training/wall-jumps');
+  const status=page.locator('#wall-status');
+  const press=id=>mobile?page.locator('#'+id).tap():page.locator('#'+id).click();
+  const session=mobile && await page.context().newCDPSession(page);
+  let held=[];
+  async function hold(next) {
+    if(mobile) {
+      if(held.length) await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      const points=[];
+      for(const name of next) {
+        const box=await page.locator('[data-touch="'+name+'"]').boundingBox();
+        points.push({x:box.x+box.width/2,y:box.y+box.height/2,id:points.length+1});
+        await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points});
+      }
+    } else {
+      const keys={right:'d',left:'a',jump:'Space'};
+      for(const name of held) if(!next.includes(name)) await page.keyboard.up(keys[name]);
+      for(const name of next) if(!held.includes(name)) await page.keyboard.down(keys[name]);
+    }
+    held=next;
+  }
+  const check=async (result,detail)=>{
+    assert.equal(await status.getAttribute('data-result'),result,await status.innerText());
+    assert.match(await status.innerText(),detail);
+  };
+  await hold(['right']);await page.clock.runFor(48);
+  await check('kick',/air jump saved/i);
+  await page.clock.runFor(1100);await hold([]);
+  await check('saved',/far roof.*air jump saved/i);
+  await press('wall-noodle');await press('wall-side');
+  await hold(['left']);await page.clock.runFor(48);await hold(['right']);
+  await page.clock.runFor(1100);await hold([]);
+  await check('saved',/near roof.*air jump saved/i);
+  await press('wall-retry');await hold(['right','jump']);
+  await page.clock.runFor(180);await hold(['right']);await page.clock.runFor(1000);await hold([]);
+  await check('returned',/near roof.*air jump spent/i);
+  await press('reset-training');
+  assert(await status.isHidden());
+  console.log((mobile?'Phone touch':'Desktop keyboard')+' passed crossing the gap, turning toward the near ledge, and spending an ordinary jump on retry.');
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -675,6 +717,7 @@ async function testDevice(browser, mobile) {
     await testJumpCancel(page, mobile);
     await testStockClock(page, mobile);
     await testAngledTilts(page, mobile);
+    await testWallJumps(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
