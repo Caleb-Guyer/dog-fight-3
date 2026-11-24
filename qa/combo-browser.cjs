@@ -507,6 +507,58 @@ async function testJumpCancel(page, mobile) {
   console.log((mobile?'Phone two-thumb slide':'Desktop keyboard')+' passed a running anti-air and a late swing into shield.');
 }
 
+async function testStockClock(page, mobile) {
+  const press = selector => mobile ? page.locator(selector).tap() : page.locator(selector).click();
+  const clock = page.locator('#match-clock'), rules = page.locator('#rules-label');
+  await page.goto(root + '#solo');
+  assert.match(await rules.innerText(), /7 min/i);
+  await press('#rules-label');
+  await press('[data-minutes="1"]');
+  await page.reload();
+  assert.match(await rules.innerText(), /1 min/i);
+  await press('[data-mode="local"]');
+  if (await page.locator('#fetch-switch').getAttribute('aria-checked') === 'true') await press('#fetch-switch');
+  await press('#start');
+  assert.equal(await clock.innerText(), '1:00');
+  await page.clock.runFor(6000);
+  assert.match(await clock.innerText(), /^0:5[6-7]$/);
+  await press('#pause');
+  const paused = await clock.innerText();
+  await page.clock.runFor(2000);
+  assert.equal(await clock.innerText(), paused);
+  await press('[data-do="resume"]');
+  if (mobile) {
+    await page.goto(root + '#training/combos');
+    assert(await clock.isHidden());
+    await page.goto(root + '#solo');
+    await press('[data-mode="local"]');
+    await press('#rules-label');
+    await press('[data-do="sudden-start"]');
+    await page.clock.runFor(100);
+    assert.match(await page.locator('#match-mode').innerText(), /Local/i);
+  } else {
+    await page.clock.runFor(57000);
+    assert.equal(await page.locator('#countdown').getAttribute('data-caption'), 'Time! Stocks tied');
+  }
+  assert.equal(await clock.innerText(), 'SD');
+  assert.deepEqual(await page.locator('#hud .percentage').allTextContents(), ['300%', '300%']);
+  assert.equal(await page.locator('.lives[aria-label="1 stock"]').count(), 2);
+  await page.goto(root + '#solo/sudden-death');
+  await page.clock.runFor(5000);
+  assert.equal(await page.locator('#dialog').getAttribute('data-view'), 'result');
+  const result = await page.locator('#dialog-body').innerText();
+  assert.match(result, /Brisket wins!/i);
+  assert.match(result, /Sudden Death KO/i);
+  await press('[data-do="rematch"]');
+  await page.clock.runFor(100);
+  assert.equal(await clock.innerText(), 'SD');
+  assert.deepEqual(await page.locator('#hud .percentage').allTextContents(), ['300%', '300%']);
+  assert.equal(await page.locator('#countdown').textContent(), 'Sudden Death');
+  await page.goto(root + '#training/combos');
+  assert(await clock.isHidden());
+  console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed stock rules, saved timer, pause, tiebreak, KO and rematch.');
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -572,6 +624,7 @@ async function testDevice(browser, mobile) {
     await testSoloCpu(page, mobile);
     await testFrameAdvance(page, mobile);
     await testJumpCancel(page, mobile);
+    await testStockClock(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
