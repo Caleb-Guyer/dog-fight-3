@@ -2165,9 +2165,10 @@
         status.textContent = world.dogs[0].jumps ? 'Wall jump · air jump saved' : 'Wall jump · air jump already spent';
       } else if (name === 'wallReturn') {
         status.dataset.result = d.outcome;
-        status.textContent = d.route === 'out' ? 'Missed the roofs' :
-          (d.route === 'ledge' ? 'Caught ' : 'Landed on ') + (d.crossed ? 'far roof' : 'near roof') +
-          ' · ' + (d.jumps ? 'air jump saved' : 'air jump spent');
+        const landing = d.route === 'platform' ? 'Landed on a platform' :
+          (d.route === 'ledge' ? 'Caught ' : 'Landed on ') + (d.crossed ? 'far roof' : 'near roof');
+        status.textContent = d.route === 'out' ? 'Missed the roofs' : landing + ' · ' +
+          (d.jumps ? 'air jump saved' : 'air jump spent');
       }
       return;
     }

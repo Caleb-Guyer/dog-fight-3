@@ -3694,8 +3694,8 @@
       const d = this.wallPractice;
       if (!d?.runner || f.index !== 0 || d.phase !== 'return') return;
       d.phase = 'done';
-      d.route = route;
-      d.crossed = platform !== undefined && platform !== d.roof;
+      d.route = route === 'landed' && this.terrain[platform]?.thin ? 'platform' : route;
+      d.crossed = platform !== undefined && platform !== d.roof && d.route !== 'platform';
       d.outcome = route === 'out' ? 'missed' : f.usedWallKick && f.jumps && !f.usedUp ? 'saved' : 'returned';
       d.jumps = f.jumps;
       this.emit('wallReturn', { f });
