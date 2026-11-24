@@ -291,6 +291,67 @@ async function testFootstools(page, mobile) {
   await status.waitFor({state:'hidden',timeout:4000});
   console.log((mobile?'Phone touch':'Desktop keyboard')+' passed exhausted footstool rescue, missed tech and directional floor tech.');
 }
+async function testSoloCpu(page, mobile) {
+  const select = selector => mobile ? page.locator(selector).tap() : page.locator(selector).click();
+  const cpu = page.locator('#cpu-level'), mode = page.locator('#match-mode');
+  await page.goto(root + '#solo');
+  assert.match(await cpu.innerText(), /Arcade/i);
+  await select('#cpu-level');
+  await select('[data-cpu="rookie"]');
+  await page.reload();
+  assert.match(await cpu.innerText(), /Rookie/i);
+  for (const other of ['local','training']) {
+    await select('[data-mode="'+other+'"]');
+    assert(await cpu.isHidden());
+  }
+  await select('[data-mode="solo"]');
+  if (mobile) {
+    const box = await cpu.boundingBox();
+    assert(box && box.x >= 0 && box.x + box.width <= 391);
+  }
+  await select('#start');
+  assert.match(await mode.innerText(), /Rookie CPU/i);
+  await select('#pause');
+  await select('[data-do="cpu-level"]');
+  await select('#dialog-close');
+  assert.equal(await page.locator('#dialog').getAttribute('data-view'), 'pause');
+  await select('[data-do="cpu-level"]');
+  await select('[data-cpu="rival"]');
+  assert.match(await mode.innerText(), /Rival CPU/i);
+
+  await page.goto(root + '#solo/shield-read');
+  assert.match(await page.locator('#match-stage').innerText(), /Picnic/i);
+  assert.match((await page.locator('.hud-name').allTextContents()).join(' '), /Pip.*Noodle/i);
+  assert.equal(await page.locator('.lives[aria-label="3 stocks"]').count(), 2);
+  await page.clock.runFor(2450);
+  const cdp = mobile && await page.context().newCDPSession(page);
+  const points = {};
+  if (mobile) {
+    for (const [i, key] of ['shield','down'].entries()) {
+      const box = await page.locator('[data-touch="'+key+'"]').boundingBox();
+      points[key] = {id:i+1, x:box.x+box.width/2, y:box.y+box.height/2};
+    }
+  }
+  const touch = (type, names) => cdp.send('Input.dispatchTouchEvent', {type, touchPoints:names.map(key => points[key])});
+  if (mobile) await touch('touchStart', ['shield']);
+  else await page.keyboard.down('l');
+  for (let beat = 0; beat < 22; beat++) {
+    if (mobile) await touch('touchStart', ['shield','down']);
+    else await page.keyboard.down('s');
+    await page.clock.runFor(85);
+    if (mobile) {
+      await touch('touchEnd', []);
+      await touch('touchStart', ['shield']);
+    } else await page.keyboard.up('s');
+    await page.clock.runFor(515);
+  }
+  if (mobile) await touch('touchEnd', []);
+  else await page.keyboard.up('l');
+  await select('#pause');
+  assert.match(await page.locator('#dialog-body').innerText(), /Rival expected a spot-dodge .*caught [1-9]\d* with a delayed down tilt/i);
+  console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed CPU selection, replay and a learned shield punish.');
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -353,6 +414,7 @@ async function testDevice(browser, mobile) {
     await testTumble(page, mobile);
     await testBraking(page, mobile);
     await testFootstools(page, mobile);
+    await testSoloCpu(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
