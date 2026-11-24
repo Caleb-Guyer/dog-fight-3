@@ -1201,6 +1201,47 @@ async function testDodgeTiming(page,mobile) {
   assert(await status.isHidden());
 }
 
+async function testAerialSweetSpots(page,mobile) {
+  const cases=[
+    ['noodle',9,12,'Tail tip'],['pip',7,9,'High heel'],['brisket',12,15,'Hip smash'],['clover',8,9,'Rim scoop'],
+  ];
+  for (const [kind,body,sweet,label] of cases) {
+    await page.goto(root+'?aerial-spot#training/sweet-spots/'+kind);
+    const status=page.locator('#spacing-status');
+    const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+    assert.equal(await page.locator('#training-boxes').getAttribute('aria-pressed'),'true');
+    if(kind==='noodle'){
+      await page.evaluate(()=>{
+        const stroke=CanvasRenderingContext2D.prototype.strokeRect;
+        window.contactColors=[];
+        CanvasRenderingContext2D.prototype.strokeRect=function(...args){
+          if(this.canvas.id==='game' && this.getLineDash().length) window.contactColors.push(this.strokeStyle);
+          return stroke.apply(this,args);
+        };
+      });
+      await page.clock.runFor(40);
+      const colors=await page.evaluate(()=>window.contactColors);
+      assert(colors.includes('#ff8a78') && colors.includes('#f4c76a'));
+      await press('training-boxes');
+      await page.evaluate(()=>{window.contactColors=[];});await page.clock.runFor(40);
+      assert(!await page.evaluate(()=>window.contactColors.includes('#f4c76a')));
+      assert(await page.locator('#box-key').isHidden());
+      await press('training-boxes');
+    }
+    const side=kind==='pip'?'up':'right';
+    await hold([side,'attack']); await waitFor('body'); await hold([]);
+    assert((await status.textContent()).includes('Body hit · '+body+'%'));
+    await press('spacing-aligned');
+    await hold([side,'attack']); await waitFor('sweet'); await hold([]);
+    assert((await status.textContent()).includes(label+' · '+sweet+'%'));
+    assert((await page.locator('#recovery-tip').textContent()).includes('Previous hit · Body hit · '+body+'%'));
+    await press('spacing-side');
+    await hold([kind==='pip'?'up':'left','attack']); await waitFor('sweet'); await hold([]);
+    await press('reset-training'); assert(await status.isHidden());
+  }
+  console.log((mobile?'Touch':'Keyboard')+' played both contact zones and both facings for each dog and verified the canvas box overlay.');
+}
+
 async function testImpactTech(page,mobile) {
   await page.goto(root+'?impact#training/impact-tech');
   const wall=page.locator('#wall-status');
@@ -1364,6 +1405,7 @@ async function testDevice(browser, mobile) {
     await testRage(page, mobile);
     await testShieldBreak(page, mobile);
     await testImpactTech(page, mobile);
+    await testAerialSweetSpots(page, mobile);
     await testBlastRadar(page, mobile);
     await testNightMail(page, mobile);
     await testJumpIns(page, mobile);
