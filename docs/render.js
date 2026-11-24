@@ -2059,6 +2059,14 @@
       }
       return;
     }
+    if (e.type === 'fastFall') {
+      const y = e.y + (reduced.matches ? 0 : snap(p * 8, 2));
+      for (const [color,width] of [[ink,6],[cream,3]]) {
+        pixelLine(ctx,e.x-6,y-4,e.x,y+2,color,width,2);
+        pixelLine(ctx,e.x,y+2,e.x+6,y-4,color,width,2);
+      }
+      return;
+    }
     if (e.type === 'landingCancel') {
       const slip = reduced.matches ? 0 : snap(p * 11, 2);
       for (const side of [-1, 1]) {
@@ -2221,6 +2229,7 @@
       }
       if (name === 'stockLeave') this.add(name, e.point.x, e.point.y, mint, 0.18, 24);
       if (name === 'landingCancel') this.add(name, e.point.x, e.point.y, mint, 0.18, f.stats.width * 0.7);
+      if (name === 'fastFall') this.add(name, e.point.x-f.face*(f.stats.width+8), e.point.y, cream, .14, 7);
       if (name === 'edgeCancel') this.add(name, e.point.x, e.point.y, mint, 0.16, 12, e.dir);
       if (name === 'specialTurn') this.add(name, e.point.x, e.point.y, e.turn === 'turnaround' ? gold : mint,
         0.16, f.stats.width, e.turn === 'turnaround' ? e.face : Math.sign(e.vx) || e.face, { wave: e.turn === 'wavebounce' });
@@ -2571,6 +2580,15 @@
             pixelLine(ctx, x + drill.dir * 15, y + 3, x + drill.dir * 10, y - 2, color, width, 2);
           }
           if (drill.landingX !== undefined) pixelLine(ctx, x, y + 8, drill.landingX, y + 8, mint, 2, 2);
+        } else if (drill.pattern === 'fastfall') {
+          if (drill.apex && !drill.fast && a.ground < 0 && drill.phase === 'active') {
+            const high = a.y - a.stats.height - 10;
+            for (const side of [-1,1]) {
+              const at = a.x+side*(a.stats.width+6);
+              pixelLine(ctx,at,high-5,at-side*6,high+1,ink,6,2);
+              pixelLine(ctx,at,high-5,at-side*6,high+1,mint,3,2);
+            }
+          }
         } else if (drill.pattern === 'cancel') {
           const lit = drill.cue && drill.landing === null;
           for (const side of [-1, 1]) {

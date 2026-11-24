@@ -203,6 +203,7 @@
   const parryWindow = 5 / 60;
   const shieldGrabPenalty = 4 / 60;
   const jumpSquatTime = 3 / 60;
+  const fastFallBufferFrames = 3;
   const liftArrival = 24 / 60, liftWait = 120 / 60;
   const liftReserve = time => clamp(96 - Math.round(Math.max(0, time - liftArrival) * 36), 24, 96);
   const protectionTime = f => Math.max(f.invuln || 0, f.respawning || 0, f.stockGuard || 0,
@@ -2068,6 +2069,7 @@
       footstoolLock: 0,
       jumpSquat: null,
       fastFall: false,
+      fastFallBuffer: 0,
       cutJump: false,
       coyote: 0,
       landTime: 0,
@@ -2469,6 +2471,7 @@
     f.crouch = false;
     f.jumpSquat = null;
     f.fastFall = false;
+    f.fastFallBuffer = 0;
     f.jumps = 2;
     f.usedUp = false;
     f.usedAir = false;
@@ -2482,13 +2485,16 @@
     f.reboundTime = 0;
   }
   function controlsFall(f) {
-    return !f.stun && !f.tumble && !f.grip && !f.ledge && !f.ledgeTrump && !f.wallAction && !f.clashRecoil &&
+    return !f.stun && !f.tumble && !f.grip && !f.ledge && !f.ledgeTrump && !f.wallAction && !f.clashRecoil && !f.shieldBreak &&
       !f.airDodge && !f.throwBounce && !f.attack?.plunge && !f.attack?.motionLocked;
   }
   function fallVelocity(f, vy, dt, controlled) {
     if (f.fastFall) return Math.max(vy, f.kit.fastFallSpeed);
     const terminal = controlled ? Math.max(vy, f.kit.fallSpeed) : 970;
     return Math.min(vy + 1540 * f.kit.gravity * dt, terminal);
+  }
+  function framesToApex(f) {
+    return Math.max(0, Math.ceil(-f.vy * 60 / (1540 * f.kit.gravity) - 1e-8));
   }
   function canCancelMeteor(f) {
     const t = f.tumble;
@@ -2707,6 +2713,7 @@
         this.trainingDamage = this.freshnessPractice.original.damage;
       }
       if (this.footworkPractice) this.dogs = this.footworkPractice.originalDogs;
+      if (this.spacingPractice?.originalDogs) this.dogs = this.spacingPractice.originalDogs;
       if (this.escapePractice) this.dogs = this.escapePractice.originalDogs;
       if (this.shieldPractice?.originalDogs) this.dogs = this.shieldPractice.originalDogs;
       if (this.platformPractice?.originalStage) {
@@ -3255,6 +3262,22 @@
         }
       }
       const floor = this.terrain[ground], approach = pattern === 'approach';
+      if (pattern === 'fastfall') {
+        const originalDogs = this.dogs, pip = newFighter('pip',1);
+        this.dogs = [f,pip];
+        const middle = (floor.x1+floor.x2)/2;
+        Object.assign(pip,{x:middle+dir*27.5,y:floor.y,ground,face:-dir,shield:true,damage:this.trainingDamage});
+        Object.assign(f,{x:middle-dir*27.5,y:floor.y,ground:-1,face:dir,vy:-f.stats.jump*.6,jumps:1});
+        // Start on this dog's short-hop arc with time for its neutral aerial to come out.
+        const lead = f.kind === 'brisket' ? 7 : 5;
+        while (framesToApex(f) > lead) {
+          f.vy = fallVelocity(f,f.vy,1/60,true);
+          f.y += f.vy/60;
+        }
+        this.spacingPractice = {pattern, dir, slow, ground, originalDogs, mark:f.x, phase:'ready', time:0,
+          pauseAtApex:previous?.pauseAtApex ?? true, apex:false, fast:false, blockAt:null, landing:null};
+        return;
+      }
       if (pattern === 'sweet' || pattern === 'sweetAligned') {
         const side = sweetAerialSide[f.kind], moveId = f.kit.air[side], move = moves[moveId];
         const aligned = pattern === 'sweetAligned';
@@ -3335,6 +3358,13 @@
     spacingPracticeInput() {
       const drill = this.spacingPractice, guard = this.dogs[1];
       if (drill.phase === 'done' || isSweetPractice(drill)) return idleInput;
+      if (drill.pattern === 'fastfall') {
+        if (drill.blockAt !== null && !drill.reply) {
+          drill.reply = true;
+          return {...idleInput,shield:true,jump:true,attack:true,tapped:{jump:true,attack:true}};
+        }
+        return {...idleInput,shield:true};
+      }
       if (isFootstoolPractice(drill)) {
         if (drill.pattern === 'footstoolTech' && !drill.sent && this.footstoolTarget(guard)) {
           drill.sent = true;
@@ -3379,6 +3409,12 @@
       const drill = this.spacingPractice, [f, guard] = this.dogs;
       if (drill.phase !== 'active') return;
       drill.time += dt;
+      if (drill.pattern === 'fastfall') {
+        if (f.ground >= 0 && drill.landing === null) drill.landing = this.time;
+        if (drill.parried && guard.stun <= 0) this.finishSpacingPractice('parried');
+        else if (drill.time > 1.1) this.finishSpacingPractice(drill.blockAt === null ? 'miss' : 'clear');
+        return;
+      }
       if (isSweetPractice(drill)) {
         if (drill.time > .65 || f.ground >= 0) this.finishSpacingPractice('miss');
         return;
@@ -4669,6 +4705,18 @@
         input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
       }
       const spacing = this.spacingPractice;
+      if (spacing?.pattern === 'fastfall' && spacing.phase === 'active') {
+        const f = this.dogs[0];
+        if (!spacing.apex && f.ground < 0 && framesToApex(f) <= fastFallBufferFrames) {
+          spacing.apex = true;
+          spacing.resumed = !spacing.pauseAtApex;
+          this.emit('apexCue',{f});
+        }
+        if (spacing.apex && spacing.pauseAtApex && !spacing.resumed) {
+          if (input1.y < .65 && !input1.shield && !input1.tapped?.shield) return;
+          spacing.resumed = true;
+        }
+      }
       if (spacing?.pattern === 'cancel' && spacing.phase !== 'active') {
         const tap = input1.tapped?.attack || (input1.attack && !this.dogs[0].prev.attack);
         const stick = input1.tapped?.aimStick || (input1.aimStick && !this.dogs[0].prev.aimStick);
@@ -4694,7 +4742,7 @@
         return;
       }
       if (spacing?.phase === 'ready') {
-        const start = isSweetPractice(spacing) ? input1.attack || input1.tapped?.attack || input1.aimStick || input1.tapped?.aimStick :
+        const start = isSweetPractice(spacing) || spacing.pattern === 'fastfall' ? input1.attack || input1.tapped?.attack || input1.aimStick || input1.tapped?.aimStick :
           isFootstoolPractice(spacing) ? input1.attack || input1.tapped?.attack :
           isReversalPractice(spacing) ? Math.abs(input1.x) > 0.28 || input1.special || input1.tapped?.special
           : input1.jump || input1.tapped?.jump;
@@ -5102,8 +5150,8 @@
       if (down >= 0.28) f.downTicks = Math.min(3, f.downTicks + 1);
       if (downFlick && this.terrain[f.ground]?.thin && !f.grip && !this.hitStop && f.impactLag <= 1e-8)
         f.dropPrep ??= { platform: f.ground, frames: 0 };
-      if (f.ground < 0 && f.vy >= 0 && input.y >= 0.65 && !(was.y >= 0.65) && controlsFall(f))
-        f.fastFall = true;
+      if (f.ground < 0 && !f.fastFall && down >= .65 && lastDown < .65 && controlsFall(f) &&
+          framesToApex(f) <= fastFallBufferFrames) f.fastFallBuffer = fastFallBufferFrames;
       const floor = f.floorAction;
       if (
         f.ground >= 0 &&
@@ -6024,6 +6072,11 @@
         }
       }
       const free = ready && !f.shieldDrop;
+      const pressure = this.spacingPractice;
+      if (pressure?.pattern === 'fastfall' && pressure.phase === 'active' && pressure.blockAt !== null && grounded && free) {
+        const key = f.index === 0 ? 'attackerReady' : 'defenderReady';
+        pressure[key] ??= Math.round((this.time-pressure.blockAt)*60);
+      }
       const combo = this.comboPractice;
       if (combo?.contacts.length && f.index === 1 && free && combo.firstFree === null)
         combo.firstFree = combo.clock;
@@ -6031,6 +6084,8 @@
       const waveChord = jumpTap && !f.command && f.guardBuffer > 0 && downDiagonal(f.guardAim);
       const wasShielding = f.shield;
       f.shield = free && grounded && input.shield && f.charge < 0 && !shieldExit;
+      if (f.index === 0 && f.shield && !wasShielding && pressure?.pattern === 'fastfall' && pressure.phase === 'active')
+        this.emit('apexGuard',{f});
       if (f.shield) {
         if (!wasShielding) f.shieldLeanX = f.shieldLeanY = 0;
         const x = input.x || 0, y = input.y || 0;
@@ -6330,9 +6385,17 @@
         if (f.charge >= 0) cancelCharge(f);
         if (!dodgeGlide) {
           const controlled = controlsFall(f);
+          if (!controlled || (f.fastFallBuffer && framesToApex(f) > fastFallBufferFrames)) f.fastFallBuffer = 0;
           if (!controlled || f.vy < 0) f.fastFall = false;
           f.vy = fallVelocity(f,f.vy,dt,controlled);
-        }
+          if (f.fastFallBuffer && f.vy >= -1e-8) {
+            f.fastFall = true;
+            f.fastFallBuffer = 0;
+            f.vy = Math.max(f.vy, f.kit.fastFallSpeed);
+            if (f.index === 0 && this.spacingPractice?.pattern === 'fastfall') this.spacingPractice.fast = true;
+            this.emit('fastFall', { f, point:{x:f.x, y:f.y - f.stats.height*.65} });
+          } else if (f.fastFallBuffer) f.fastFallBuffer--;
+        } else f.fastFallBuffer = 0;
         f.y += f.vy * dt;
         const contact = this.wallContact(f, oldX, oldY, f.x, f.y);
         if (contact) {
@@ -6618,6 +6681,7 @@
         f.attack = f.command = f.reaction = f.throwBounce = f.clashRecoil = null;
         f.jumpSquat = null;
         f.fastFall = false;
+        f.fastFallBuffer = 0;
         f.chainWindow = f.jumpBuffer = f.guardBuffer = f.reboundTime = f.landingLag = f.stun = 0;
         f.hopWindow = f.followPounce = f.landTime = f.skidTime = 0;
         f.shield = f.cutJump = false;
@@ -7417,6 +7481,11 @@
       if (this.edgePractice?.corner && target.index === 0) this.finishEdgePractice('parriedCorner');
       if (this.spacingPractice?.pattern === 'cancel' && this.spacingPractice.sent && target.index === 0)
         this.finishSpacingPractice('parried');
+      if (this.spacingPractice?.pattern === 'fastfall' && this.spacingPractice.phase === 'active' &&
+          target.index === 0 && owner.attack?.moveId === 'pipSpin') {
+        this.spacingPractice.parried = true;
+        this.emit('apexParry',{f:target});
+      }
       if (!projectile) {
         if (this.climbPractice?.role === 'coverRise' && target.index === 0 && owner.attack?.airSide)
           this.finishClimbPractice('parriedRise');
@@ -7498,6 +7567,10 @@
         } else if (target.index === 1 && drill.phase === 'fall') this.finishPlatformPractice('guardedReply', moveId);
       }
       const spacing = this.spacingPractice;
+      if (spacing?.pattern === 'fastfall' && spacing.phase === 'active') {
+        if (owner.index === 0 && spacing.blockAt === null && moveId === owner.kit.air.neutral) spacing.blockAt = this.time;
+        if (target.index === 0 && moveId === 'pipSpin') this.finishSpacingPractice('blocked');
+      }
       if (spacing?.pattern === 'cancel' && spacing.phase === 'active' && target.index === 0 && moveId === owner.kit.tilts.down)
         this.finishSpacingPractice('blocked');
       if (!broken && spacing?.guard && spacing.phase === 'active' && owner.index === 0 && target.index === 1 &&
@@ -7559,6 +7632,8 @@
         return false;
       }
       const poked = target.shield && !grab && !covered;
+      const parryPunish = owner.index === 0 && target.index === 1 && owner.ground >= 0 && target.stun > 0 &&
+        this.spacingPractice?.pattern === 'fastfall' && this.spacingPractice.parried;
       const pressure = this.bot.pressure;
       if (pressure?.strike && pressure.strike === use && !pressure.scored && target.index === 0 &&
           owner.index === 1 && target.floorAction?.type === 'spotDodge') {
@@ -7653,6 +7728,7 @@
       target.jumpSquat = null;
       target.ledgeDropJump = false;
       target.fastFall = false;
+      target.fastFallBuffer = 0;
       target.cutJump = false;
       target.chainWindow = 0;
       target.hopWindow = target.followPounce = 0;
@@ -7742,6 +7818,12 @@
       }
       if (timing === 'late' && this.cpuControlled(owner)) owner.landingFollowUntil = this.time + 0.55;
       const spacing = this.spacingPractice;
+      if (spacing?.pattern === 'fastfall' && spacing.phase === 'active' && target.index === 0 && moveId === 'pipSpin')
+        this.finishSpacingPractice('clipped');
+      if (parryPunish && spacing.phase === 'active') {
+        spacing.punish = moveId;
+        this.finishSpacingPractice('punish');
+      }
       if (isSweetPractice(spacing) && spacing.phase === 'active' && owner.index === 0 && target.index === 1) {
         spacing.contact = moveId;
         spacing.point = {x:point.x, y:point.y};
@@ -8952,6 +9034,13 @@
         brain.landingGuardUntil = 0;
       }
       const swing = f.attack;
+      if (this.cpuLevel === 'rival' && !unsafe && swing?.airSide === 'neutral' && foe.shield &&
+          !f.fastFall && !f.fastFallBuffer && f.vy < 0 && framesToApex(f) <= fastFallBufferFrames &&
+          controlsFall(f) && f.prev.y < .65 && foe.ground >= 0 && far < 85) {
+        const floor = this.terrain[foe.ground], landingX = f.x + f.vx*.14;
+        if (f.y < floor.y && floor.y-f.y <= 85 && landingX > floor.x1+f.stats.width && landingX < floor.x2-f.stats.width)
+          return {...idleInput,y:1};
+      }
       if (swing?.airSide && swing.landingPress === undefined && !f.prev.shield && foe.ground >= 0 &&
           far < 150 && this.landingCancelAhead(f)) {
         if (canChallenge && f.landingFollowUntil <= this.time)
