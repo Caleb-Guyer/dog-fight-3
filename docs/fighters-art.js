@@ -3077,7 +3077,7 @@
     },
   };
   const wallPoses = ['wallTech', 'wallTechJump', 'wallBounce'];
-  const sharedPointPoses = ['floorAttack', 'parry', 'ledgeRoll', 'ledgeTrump', ...wallPoses];
+  const sharedPointPoses = ['floorAttack', 'parry', 'ledgeRoll', 'ledgeClimb', 'ledgeTrump', ...wallPoses];
   const wallStyles = {
     pip: { width: 23, height: 70, farY: -7, turn: [-26, -71, -117, -165] },
     brisket: { width: 31, height: 69, farY: 7, turn: [-19, -51, -90, -132] },
@@ -3352,6 +3352,7 @@
   function frameNumber(pose, time, phase, name = 'pip', backRoll = false) {
     const tick = (period) => Math.floor((Math.abs(time) % 1000000) * period);
     if (pose === 'ledgeRoll') return ledgeRollFrame(name, phase);
+    if (pose === 'ledgeClimb') return Math.round(phase * (window.DogFight?.kits[name].ledgeClimb.total || 26));
     if (pose === 'ledgeTrump') return Math.min(5, Math.round(phase * 5 + 1e-7));
     if (wallPoses.includes(pose)) {
       const total = pose === 'wallTech' ? 10 : pose === 'wallTechJump' ? 8 : 6;
@@ -4142,6 +4143,61 @@
     }
   }
 
+  function ledgeClimbStance(name, tick) {
+    const game = window.DogFight, kit = game?.kits[name].ledgeClimb;
+    if (!kit || !tick) return stance(name, 'ledge', 0);
+    const r = Math.round;
+    const pull = Math.min(1, tick / kit.lift);
+    const step = Math.min(1, Math.max(0, (tick - kit.lift) / (kit.plant - kit.lift)));
+    const settle = Math.min(1, Math.max(0, (kit.total - tick) / (kit.total - kit.plant)));
+    const weight = pull * settle;
+    const knee = Math.sin(Math.PI * step);
+    const s = stance(name, 'idle', 0);
+    s.bodyX = r(-7 * (1 - pull) + 2 * weight);
+    s.bodyY = r(8 * (1 - pull) + (name === 'noodle' ? 9 : 5) * weight);
+    s.torsoTurn = r((name === 'brisket' ? 26 : 17) * weight);
+    s.headTurn = r(-9 * (1 - pull) - 5 * knee);
+    s.headX = r(-2 + 2 * pull + 2 * weight);
+    s.headY = r(2 * (1 - pull) + 3 * weight);
+    s.rightX = r(-8 * (1 - pull) + (name === 'pip' ? 10 : 6) * weight);
+    s.rightY = r(5 * (1 - pull) - (name === 'pip' ? 11 : 7) * pull * (1 - step));
+    s.leftX = r(-7 * weight);
+    s.leftY = r(7 * (1 - step) - 6 * knee);
+    s.frontKneeY = -r(4 * weight);
+    s.kneeOut = r(4 * weight);
+    s.leftFootTurn = r(19 * (1 - step) - 14 * knee);
+    s.rightFootTurn = r(13 * (1 - pull) - 16 * knee);
+    s.ear = -r((name === 'noodle' ? 6 : 3) * weight);
+    s.tail = r(3 * (1 - pull) - 6 * weight);
+    s.scarf = r(6 * weight);
+    s.guardFloor = step === 1;
+    s.grip = false;
+    if (name === 'pip') {
+      s.kickFront = s.showSole = pull > 0.65 && step < 0.7;
+      s.rearX -= r(5 * weight);
+    } else if (name === 'brisket') {
+      s.shoulderLead = r(6 * weight);
+      s.extraHaunch = weight > 0.5;
+      s.rightX += r(2 * weight);
+    } else if (name === 'noodle') {
+      s.headX += r(5 * weight);
+      s.charmTurn = r(-19 * weight);
+      s.leftX -= r(3 * weight);
+    } else if (pull > 0.7 && settle > 0.25) {
+      s.hideCharm = true;
+      s.heldItem = 'disc';
+      s.heldAngle = r(-85 + 49 * step);
+      s.fistX = r(4 * weight);
+      s.fistY = r(6 * weight);
+    }
+    if (step < 0.65) {
+      const feet = game.ledgeClimbPosition(kit, tick / 60);
+      const front = name === 'clover' ? pull <= 0.7 : (name === 'brisket' || step <= 0.4);
+      const rear = name !== 'pip' || pull < 0.7 || !front;
+      setLipPaws(s, name, r(-feet.x / 2), r(-feet.y / 2), front, rear, front && rear ? 3 : 0);
+    }
+    return s;
+  }
   function ledgeRollClimb(name, tick, timing) {
     const s = stance(name, 'ledge', 0);
     if (tick === 0) return s;
@@ -4579,6 +4635,7 @@
   function stance(name, pose, frame, octant = 0) {
     if (wallPoses.includes(pose)) return wallStance(name, pose, frame);
     if (pose === 'ledgeRoll') return ledgeRollStance(name, frame);
+    if (pose === 'ledgeClimb') return ledgeClimbStance(name, frame);
     if (pose === 'ledgeTrump') return ledgeTrumpStance(name, frame);
     const s = {
       bodyX: 0,
@@ -5501,6 +5558,7 @@
     'skid',
     'ledge',
     'ledgeRoll',
+    'ledgeClimb',
     'ledgeTrump',
     ...wallPoses,
     'rise',

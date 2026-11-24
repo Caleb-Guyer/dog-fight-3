@@ -217,6 +217,12 @@ Once your dog catches a solid edge, tap **Attack** to climb and strike toward th
 
 Choose **Training → Practice ledge attack** to start hanging with the dummy in reach. Choose **Left ledge** or **Right ledge** first to set the practice side. You can also do the recovery drill, catch the lip yourself, and tap Attack from there.
 
+## Ledge climbs
+
+Press toward the stage while hanging to climb. Pip pulls up in 26 frames, Clover in 29, Noodle in 31 and Brisket in 36. Each dog stays close to the lip and finishes facing the stage. A fresh catch protects the pull and leaves a short opening as the dog stands. A regrab before landing or taking a hit leaves the whole climb vulnerable. Hold Shield during the climb to guard on the first free frame.
+
+In **Training → Ledge timing**, choose **Get up** to climb and shield the waiting dog's jab. Choose **Set the trap**, tap Attack to start, then jab as the rival plants their paws. An early swing misses and a late swing meets their shield. Both roles use your selected fighters. **Switch ledge** mirrors the setup and **Half speed** gives you more time to read the animation.
+
 ## Ledge rolls
 
 While hanging, tap **Shield** to roll past a guard and turn back toward the ledge. Use **L** for P1, **Slash (/)** for P2, either gamepad bumper, or the **Shield** touch button. If you used Shield to air-dodge to the ledge, release it and tap again after the catch.

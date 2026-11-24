@@ -661,6 +661,8 @@ body.playing .tools .utility,
 #shield-status[data-result='spaced'],
 #shield-status[data-result='counterHit'],
 #roll-status[data-result='passed'],
+#climb-status[data-result='guarded'],
+#climb-status[data-result='timed'],
 #roll-status[data-result='counter'],
 #trump-status[data-result='won'],
 #trump-status[data-result='clear'],
@@ -794,6 +796,7 @@ kbd {
 #shield-patterns,
 #wall-patterns,
 #roll-patterns,
+#climb-patterns,
 #trump-patterns,
 #air-patterns {
   display: inline-flex;
@@ -803,6 +806,7 @@ kbd {
 #escape-patterns [aria-pressed='true'],
 #shield-patterns [aria-pressed='true'],
 #roll-patterns [aria-pressed='true'],
+#climb-patterns [aria-pressed='true'],
 #trump-patterns [aria-pressed='true'],
 #air-patterns [aria-pressed='true'] {
   background: var(--gold);

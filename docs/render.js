@@ -1902,8 +1902,8 @@
           wall: e.wall,
         });
       }
-      if (name === 'ledgeRoll' || name === 'ledgeRollPlant') {
-        const plant = name === 'ledgeRollPlant';
+      if (name === 'ledgeRoll' || name === 'ledgeRollPlant' || name === 'ledgeClimb' || name === 'ledgeClimbPlant') {
+        const plant = name.endsWith('Plant');
         this.add(
           plant ? 'ledgePlant' : 'lipDust',
           e.point.x,
@@ -2343,6 +2343,14 @@
       time = 0.21;
       pixelLine(ctx, -52, -5, -35, -15, '#c6a984', 3, 2);
       pixelLine(ctx, -45, -1, -36, -7, cream, 2, 2);
+    } else if (side === 'ledgeClimb') {
+      const kit = window.DogFight.kits[kind].ledgeClimb;
+      const tick = Math.round(kit.lift * 0.85);
+      const feet = window.DogFight.ledgeClimbPosition(kit, tick / 60);
+      f.x = feet.x;
+      f.y = feet.y;
+      phase = tick / kit.total;
+      guideLedge(ctx, { x: 0, y: 0 }, 65);
     } else if (side === 'ledgeRoll') {
       const roll = window.DogFight.kits[kind].ledgeRoll;
       const tick = Math.round(roll.plant + (roll.safe[1] - roll.plant) * 0.35);

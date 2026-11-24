@@ -316,6 +316,8 @@
       tone(490, 245, 0.075, 0, 'triangle', 0.06);
     } else if (name === 'ledgeRoll') {
       tone(215, 86, 0.085, 0, 'triangle', 0.045);
+    } else if (name === 'ledgeClimbPlant') {
+      tone(142, 71, 0.046, 0, 'triangle', 0.035);
     } else if (name === 'shieldRoll' || name === 'spotDodge') {
       tone(name === 'shieldRoll' ? 195 : 315, 76, name === 'shieldRoll' ? 0.1 : 0.055, 0, 'triangle', 0.05);
     } else if (name === 'dodge') {
@@ -839,7 +841,11 @@
         groundRows +
         '</ul><h3 class="guide-section">In the air</h3><p>One dodge per airtime. Landing or catching a ledge refreshes it. Try <strong>Training → Air-dodge practice</strong>.</p><ul class="move-rows guide-air-dodge">' +
         airRows +
-        '</ul><h3 class="guide-section">At the ledge</h3><p>Release Shield after an air dodge, then tap it again once you catch the lip. Try <strong>Training → Ledge roll practice</strong>.</p><ul class="move-rows guide-ledge-roll">' +
+        '</ul><h3 class="guide-section">At the ledge</h3><p>Try <strong>Training → Ledge timing</strong> to practice the climb from either side.</p><ul class="move-rows guide-ledge-climb">' +
+        guideMoveRow({ label: 'Ledge climb', hint: 'On a fresh catch, protection ends ' +
+          (kit.ledgeClimb.total - kit.ledgeClimb.protectedThrough) + ' frames before you can act. Hold Shield during the climb to guard as soon as you stand.' },
+          'While hanging · press toward the stage', 'ledgeClimb', 'defense') +
+        '</ul><p>Release Shield after an air dodge, then tap it again once you catch the lip. Try <strong>Training → Ledge roll practice</strong>.</p><ul class="move-rows guide-ledge-roll">' +
         guideMoveRow(
           { label: kit.ledgeRoll.label, hint: kit.ledgeRoll.tip },
           'While hanging · tap Shield',
@@ -1094,6 +1100,7 @@
     $('shield-status').hidden = $('shield-patterns').hidden = true;
     $('air-status').hidden = $('air-patterns').hidden = true;
     $('roll-status').hidden = $('roll-patterns').hidden = true;
+    $('climb-status').hidden = $('climb-patterns').hidden = true;
     $('trump-status').hidden = $('trump-patterns').hidden = true;
     $('recovery-tip').hidden = true;
     document.body.classList.add('playing');
@@ -1110,6 +1117,9 @@
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
       if (name === 'escapeCue' || name === 'escapeResult') escapeFeedback(e);
+      if (world?.climbPractice && (name === 'climbCue' || name === 'climbResult' ||
+          (name === 'ledgeClimbPlant' && world.climbPractice.phase === 'active')))
+        climbFeedback(name, e);
       if (name === 'platformResult' || (name === 'platformDrop' && world?.platformPractice && e.f.index === 0))
         platformFeedback(name, e);
       if (name === 'airStart' || name === 'airCue' || name === 'airResult') airFeedback(name, e);
@@ -1128,7 +1138,7 @@
           drillSide +
           ' ledge. Tap Attack for ' +
           moves[e.f.kit.ledgeAttack].label +
-          ' or Shield to roll.';
+          ', tap Shield to roll, or press toward the stage to climb.';
       if (name === 'ko' && drillSide && e.f.index === 0) {
         drillSide = null;
         $('recovery-tip').textContent = 'Missed the ledge. Pick a side to try again.';
@@ -1314,6 +1324,26 @@
   let drillSide = null,
     drillWaiting = false,
     practiceSide = 'left';
+  function climbFeedback(name, e) {
+    const drill = world.climbPractice, status = $('climb-status'), trap = drill.role === 'trap';
+    const labels = {
+      start: trap ? 'Watch the ledge' : 'Climbing', plant: trap ? 'Paws down · jab' : 'Hold Shield',
+      guarded: 'Jab blocked', caught: 'Caught standing', timed: 'Climb caught',
+      late: 'Jab shielded', early: 'Swung early', missed: 'Swing missed', waited: 'Rival guarded', other: 'Different option',
+    };
+    const outcome = e.outcome || (name === 'ledgeClimbPlant' ? 'plant' : 'start');
+    status.dataset.result = outcome;
+    status.textContent = labels[outcome];
+    if (name !== 'climbResult') return;
+    const tips = {
+      guarded: 'Your shield was up on the first free frame.', caught: 'Hold Shield once the climb starts. The jab arrives as you can first act.',
+      timed: 'Your jab reached the rival in the opening before shield.', late: 'The rival was already shielding. Jab closer to the paw plant.',
+      early: 'Your jab ended before the opening. Wait for the feet to come over the lip.',
+      missed: 'The jab missed. Stay within reach of the spot where the rival stands.',
+      waited: 'Jab as the paws touch down.', other: 'Try the short inward climb for this setup.',
+    };
+    $('recovery-tip').textContent = tips[outcome] + ' Choose ' + (trap ? 'Set the trap' : 'Get up') + ' to retry.';
+  }
   function platformFeedback(name, e) {
     const label = moves[e.moveId]?.label;
     const below = world.platformPractice.pattern === 'below';
@@ -1604,8 +1634,9 @@
     const platform = ledge === 'platform';
     const air = ledge === 'air';
     const roll = ledge === 'roll';
+    const climb = ledge === 'climb';
     const trump = ledge === 'trump';
-    drillSide = launch || wall || shield || footwork || escape || platform || air || roll || trump ? null : ledge || null;
+    drillSide = launch || wall || shield || footwork || escape || platform || air || roll || climb || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
@@ -1617,6 +1648,7 @@
     else if (shield) world.resetShieldPractice(pattern);
     else if (air) world.resetAirPractice(pattern, practiceSide);
     else if (roll) world.resetLedgeRollPractice(pattern, practiceSide);
+    else if (climb) world.resetClimbPractice(pattern, practiceSide, world.climbPractice?.slow ?? true);
     else if (trump) world.resetLedgeTrumpPractice(pattern, practiceSide);
     else world.resetTraining(ledge, fromHang);
     const player = world.dogs[0];
@@ -1631,9 +1663,19 @@
     $('shield-status').hidden = $('shield-patterns').hidden = !shield;
     $('air-status').hidden = $('air-patterns').hidden = !air;
     $('roll-status').hidden = $('roll-patterns').hidden = !roll;
+    $('climb-status').hidden = $('climb-patterns').hidden = !climb;
     $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
-    if (platform) {
+    if (climb) {
+      const trap = pattern === 'trap', inward = practiceSide === 'left' ? 'right' : 'left';
+      $('climb-escape').setAttribute('aria-pressed', String(!trap));
+      $('climb-trap').setAttribute('aria-pressed', String(trap));
+      $('climb-slow').setAttribute('aria-pressed', String(world.climbPractice.slow));
+      $('climb-status').dataset.result = 'ready';
+      $('climb-status').textContent = practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
+      message = trap ? 'Tap Attack to start. Watch the rival’s paws touch down, then tap Attack again to catch the climb.'
+        : 'Press ' + inward + ' to climb. Release the direction and hold Shield as your dog stands up.';
+    } else if (platform) {
       const below = pattern === 'below';
       $('platform-below').setAttribute('aria-pressed', String(below));
       $('platform-top').setAttribute('aria-pressed', String(!below));
@@ -1746,6 +1788,19 @@
     drill('trump', false, world.trumpPractice.role);
   };
   $('ledge-roll-training').onclick = () => drill('roll', false, world?.rollPractice?.pattern || 'guard');
+  $('climb-training').onclick = () => drill('climb', false, world?.climbPractice?.role || 'escape');
+  $('climb-escape').onclick = () => drill('climb', false, 'escape');
+  $('climb-trap').onclick = () => drill('climb', false, 'trap');
+  $('climb-side').onclick = () => {
+    practiceSide = practiceSide === 'left' ? 'right' : 'left';
+    drill('climb', false, world.climbPractice.role);
+  };
+  $('climb-slow').onclick = () => {
+    const practice = world.climbPractice;
+    practice.slow = !practice.slow;
+    $('climb-slow').setAttribute('aria-pressed', String(practice.slow));
+    $('game').focus({ preventScroll: true });
+  };
   $('roll-guard').onclick = () => drill('roll', false, 'guard');
   $('roll-read').onclick = () => drill('roll', false, 'read');
   $('roll-side').onclick = () => {
@@ -2659,7 +2714,7 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += world.escapePractice?.slow ? dt / 2 : dt;
+        accumulator += world.escapePractice?.slow || world.climbPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];

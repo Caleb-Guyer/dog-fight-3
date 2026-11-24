@@ -11,14 +11,14 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=platforms-1" />
+    <link rel="stylesheet" href="./style.css?v=ledge-climb-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=missions-1" />
     <link rel="stylesheet" href="./online.css?v=online-1" />
-    <script defer src="./fighters-art.js?v=platforms-1"></script>
+    <script defer src="./fighters-art.js?v=ledge-climb-1"></script>
     <script defer src="./arena-art.js?v=screen-1"></script>
-    <script defer src="./engine.js?v=platforms-1"></script>
-    <script defer src="./render.js?v=platforms-1"></script>
+    <script defer src="./engine.js?v=ledge-climb-1"></script>
+    <script defer src="./render.js?v=ledge-climb-1"></script>
     <script defer src="./dispatch-script.js?v=chapter-lead-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=shield-pressure-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./online.js?v=platforms-1"></script>
-    <script defer src="./app.js?v=platforms-1"></script>
+    <script defer src="./online.js?v=ledge-climb-1"></script>
+    <script defer src="./app.js?v=ledge-climb-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -315,6 +315,7 @@
             <output id="shield-status" aria-label="Shield practice" aria-live="polite" hidden></output>
             <output id="air-status" aria-label="Air-dodge practice" aria-live="polite" hidden></output>
             <output id="roll-status" aria-label="Ledge roll practice" aria-live="polite" hidden></output>
+            <output id="climb-status" aria-label="Ledge timing" aria-live="polite" hidden></output>
             <output id="trump-status" aria-label="Contested ledge" aria-live="polite" hidden></output>
             <output id="training-move" aria-label="Last move" hidden></output>
             <span id="training-charge" hidden></span>
@@ -379,6 +380,13 @@
           </button>
           <button id="ledge-right" type="button" class="utility"><i data-icon="ledge"></i>Right ledge</button>
           <button id="ledge-attack-training" type="button" class="utility">Practice ledge attack</button>
+          <button id="climb-training" type="button" class="utility">Ledge timing</button>
+          <span id="climb-patterns" role="group" aria-label="Ledge timing drill" hidden>
+            <button id="climb-escape" type="button" class="utility" aria-pressed="true">Get up</button>
+            <button id="climb-trap" type="button" class="utility" aria-pressed="false">Set the trap</button>
+            <button id="climb-side" type="button" class="utility">Switch ledge</button>
+            <button id="climb-slow" type="button" class="utility" aria-pressed="true">Half speed</button>
+          </span>
           <button id="ledge-roll-training" type="button" class="utility">Ledge roll practice</button>
           <span id="roll-patterns" role="group" aria-label="Ledge roll drill" hidden>
             <button id="roll-guard" type="button" class="utility" aria-pressed="true">Close guard</button>
