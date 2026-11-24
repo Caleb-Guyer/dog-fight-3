@@ -458,6 +458,55 @@ async function testFrameAdvance(page, mobile) {
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard')+' passed landing freeze, exact frame counts, jump timing, resume and reset.');
 }
 
+async function testJumpCancel(page, mobile) {
+  await page.goto(root + '#training/catch-the-landing');
+  const status=page.locator('#footwork-status');
+  const activate=id=>mobile?page.locator('#'+id).tap():page.locator('#'+id).click();
+  const session=mobile && await page.context().newCDPSession(page);
+  const touch=(type,points=[])=>session.send('Input.dispatchTouchEvent',{type,touchPoints:points});
+  async function point(name,id) {
+    const box=await page.locator('[data-touch="'+name+'"]').boundingBox();
+    return {id,x:box.x+box.width/2,y:box.y+box.height/2};
+  }
+  async function waitFor(result) {
+    for(let i=0;i<125;i++) {
+      if(await status.getAttribute('data-result')===result) return;
+      await page.clock.runFor(16);
+    }
+    assert.fail('Expected '+result+', saw '+await status.innerText());
+  }
+  for(const charge of [false,true]) {
+    if(charge) {
+      await activate('footwork-antiAir');
+      await activate('footwork-side');
+    }
+    const dir=charge?'left':'right', key=charge?'a':'d';
+    if(mobile) await touch('touchStart',[await point(dir,1)]);
+    else await page.keyboard.down(key);
+    await waitFor('atMark');
+    if(mobile) {
+      await touch('touchEnd');
+      const up=await point('up',1), jump=await point('jump',2), smash=await point('smash',2);
+      await touch('touchStart',[up]);
+      await touch('touchStart',[up,jump]);
+      await page.clock.runFor(32);
+      await touch('touchMove',[up,smash]);
+    } else {
+      await page.keyboard.up(key);
+      await page.keyboard.down('w'); await page.keyboard.down('Space');
+      await page.clock.runFor(32);
+      await page.keyboard.down('i');
+    }
+    await page.clock.runFor(charge ? 920 : 32);
+    if(mobile) await touch('touchEnd');
+    else { await page.keyboard.up('i'); await page.keyboard.up('Space'); await page.keyboard.up('w'); }
+    await waitFor(charge?'caughtShield':'slideCatch');
+  }
+  await activate('reset-training');
+  assert(await status.isHidden());
+  console.log((mobile?'Phone two-thumb slide':'Desktop keyboard')+' passed a running anti-air and a late swing into shield.');
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -522,6 +571,7 @@ async function testDevice(browser, mobile) {
     await testFootstools(page, mobile);
     await testSoloCpu(page, mobile);
     await testFrameAdvance(page, mobile);
+    await testJumpCancel(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
