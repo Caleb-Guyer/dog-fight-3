@@ -682,6 +682,8 @@ body.playing .tools .utility,
 #freshness-list { margin: 3px 0 0; padding-left: 2em; max-height: 7em; overflow-y: auto; }
 #freshness-list li { margin-block: 2px; }
 #launch-status[data-result='tech'],
+#launch-status[data-result='techRoll'],
+#launch-status[data-result='saved'],
 #launch-status[data-result='clear'],
 #wall-status[data-result='wallTech'],
 #wall-status[data-result='wallTechJump'],

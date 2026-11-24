@@ -1469,6 +1469,20 @@
     if (state === 'tumble') {
       face = f.reaction?.face || f.face;
       spriteTime = reduced.matches ? 0.21 : f.tumble.time;
+      if (f.tumble.meteor && !f.tumble.pending) {
+        const open = window.DogFight.canCancelMeteor(f), y = f.y - f.stats.height * 0.52;
+        for (const side of [-1, 1]) {
+          const x = f.x + side * (f.stats.width + 5);
+          if (open) {
+            pixelLine(ctx, x + side * 7, y + 4, x, y - 4, ink, 5, 2);
+            pixelLine(ctx, x + side * 7, y + 4, x, y - 4, mint, 3, 2);
+            pixelLine(ctx, x, y - 4, x - side * 3, y + 1, cream, 2, 2);
+          } else {
+            const reach = reduced.matches ? 11 : clamp(f.vy / 33, 8, 24);
+            pixelLine(ctx, x - f.vx * 0.026, y - reach, x, y - 2, gold, 3, 2);
+          }
+        }
+      }
     } else if (state === 'ledgeTrump') {
       face = -f.ledgeTrump.dir;
       spriteTime = reduced.matches ? 0 : f.ledgeTrump.time;
@@ -1814,6 +1828,16 @@
       }
       return;
     }
+    if (e.type === 'meteorBounce' || e.type === 'meteorCancel') {
+      const bounce = e.type === 'meteorBounce', spread = reduced.matches ? 6 : 4 + p * 17;
+      for (const side of [-1, 1]) {
+        const x = e.x + side * spread, y = e.y - (reduced.matches ? 2 : 7 * Math.sin(p * Math.PI));
+        pixelLine(ctx, x, y, x + side * 9, y - (bounce ? 8 : -6), e.color, 4, 2);
+        pixelLine(ctx, x + side * 9, y - (bounce ? 8 : -6), x + side * 14, y - (bounce ? 5 : -4), cream, 2, 2);
+      }
+      if (bounce) pixelLine(ctx, e.x - spread, e.y + 2, e.x + spread, e.y + 2, gold, 3, 2);
+      return;
+    }
     if (e.type === 'hitShift') {
       const length = Math.hypot(e.dx, e.dy), x = e.dx / length, y = e.dy / length;
       const reach = reduced.matches ? 7 : 12 - 6 * p;
@@ -1937,6 +1961,8 @@
     }
     event(name, e) {
       const f = e.f;
+      if (name === 'meteorBounce' || name === 'meteorCancel')
+        this.add(name, e.point.x, e.point.y, name === 'meteorBounce' ? '#ec946a' : mint, 0.22, 20);
       if (name === 'attackClash') this.add(name, e.point.x, e.point.y, cream, 0.17, 14, e.face,
         { breakthrough: e.winner !== null, projectile: e.projectile });
       if (name === 'platformDrop') this.add(name, e.point.x, e.point.y, cream, 8 / 60, f.stats.width / 2);

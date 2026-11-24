@@ -161,6 +161,12 @@ In **Training → Combo escape → Crouch counter**, choose Brisket and tap Atta
 
 **Landing tech.** Tap Shield in the last 11 frames before your tumbling dog hits a platform. Tap it alone for a quick recovery in place. Add left or right to roll through a waiting opponent. A roll covers more ground and leaves a longer opening at the end. A mistimed press starts a 28-frame lockout, so timing beats repeated taps.
 
+**Meteor smashes.** Pip’s Pogo Paw, Brisket’s airborne Belly Drop and Clover’s Skip Shot can drive a rival straight into a platform. A strong spike rebounds once off the first surface it meets and leaves the rival open to another attack. Tap Shield before impact to tech in place or add a side to tech roll. Pip still springs off his own hit. Brisket’s landing splash pops rivals up, and Noodle’s Underhook pulls a rival up from below.
+
+Over open air, watch the gold streaks beside your tumbling dog. When they turn mint, tap a fresh **Jump** or **Up + Special** and steer back toward the stage. This spends the usual air jump or recovery. The window opens after 12 flight frames for Skip Shot, 14 for Pogo Paw, and 16 for Belly Drop. A jump held before the window opens cannot cancel the spike.
+
+In **Training → Launch practice → Spike landing**, tap Attack to take Pogo Paw at 100%. Let it bounce you once, tap Attack to retry, then tap Shield at the hit spark. Add a side on the next attempt to roll away. **Offstage spike** puts the same exchange past the ledge. Break the fall and reach the stage to earn **Saved the stock**. Switch sides, adjust your starting damage, or turn off half speed to play it at match speed.
+
 **Missed tech.** After the bounce, tap Attack for a two-sided, 7% **Get-up Sweep**, tap a side for a get-up roll, or tap Up or Jump to stand. If you wait, your dog stands automatically. A prone dog can duck a high swing, but a low hit can catch it.
 
 A missed tech carries some of the sideways launch into a skid. A hard landing near the lip can carry you offstage. A timed tech plants you or sends you into your chosen roll.

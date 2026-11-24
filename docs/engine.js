@@ -89,6 +89,7 @@
   });
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const topBlastY = -172;
+  const floorCrossing = (from, to, floor) => to === from ? 1 : clamp((floor - from) / (to - from), 0, 1);
   const crouchLaunchScale = 2 / 3;
   const canStayPlanted = (vx, vy) => Math.hypot(vx, vy) <= 150 && Math.abs(vy) <= 96;
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
@@ -773,6 +774,7 @@
       base: 160,
       growth: 4.15,
       angle: -67,
+      meteor: 14,
       pogo: true,
       land: 7,
       landingWindow: [3, 20],
@@ -863,6 +865,7 @@
       base: 238,
       growth: 5.6,
       angle: -74,
+      meteor: 16,
       plunge: true,
       hard: true,
       land: 18,
@@ -1058,6 +1061,7 @@
       base: 169,
       growth: 4.1,
       angle: -49,
+      meteor: 12,
       land: 7,
       landingWindow: [3, 18],
     },
@@ -2300,6 +2304,11 @@
     return !f.stun && !f.tumble && !f.grip && !f.ledge && !f.ledgeTrump && !f.wallAction && !f.clashRecoil &&
       !f.airDodge && !f.throwBounce && !f.attack?.plunge && !f.attack?.motionLocked;
   }
+  function canCancelMeteor(f) {
+    const t = f.tumble;
+    return !!t?.meteor && !t.pending && f.stun > 0 && f.vy > 0 && f.ground < 0 && (f.jumps > 0 || !f.usedUp) &&
+      t.time * 60 + 1e-8 >= moves[t.meteor].meteor;
+  }
   function bufferSquatInput(f, input) {
     const squat = f.jumpSquat;
     if (squat.time + 1e-8 >= jumpSquatTime) return;
@@ -2353,6 +2362,7 @@
       this.rollPractice = null;
       this.climbPractice = null;
       this.launchPractice = null;
+      this.meteorPractice = null;
       this.shieldPractice = null;
       this.footworkPractice = null;
       this.freshnessPractice = null;
@@ -2417,6 +2427,7 @@
     }
     resetTraining(ledge = false, fromHang = false) {
       if (this.grapple) this.breakGrapple(false);
+      if (this.meteorPractice) this.dogs = this.meteorPractice.originalDogs;
       if (this.freshnessPractice?.original) {
         this.dogs = this.freshnessPractice.original.dogs;
         this.trainingDamage = this.freshnessPractice.original.damage;
@@ -2439,6 +2450,7 @@
       this.rollPractice = null;
       this.climbPractice = null;
       this.launchPractice = null;
+      this.meteorPractice = null;
       this.shieldPractice = null;
       this.footworkPractice = null;
       this.freshnessPractice = null;
@@ -2480,6 +2492,56 @@
       this.resetTraining();
       this.dogs[0].damage = 90;
       this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
+    }
+    resetMeteorPractice(pattern = 'spikeFloor', dir = 1, slow = true, startingDamage = 100) {
+      this.resetTraining();
+      const originalDogs = this.dogs, player = originalDogs[0], pip = newFighter('pip', 1);
+      const offstage = pattern === 'spikeEdge';
+      const platform = offstage ? (this.stage === 'laundry' && dir > 0 ? 1 : 0) :
+        this.stage === 'laundry' || dir > 0 ? 2 : 1;
+      const floor = this.terrain[platform], lip = dir > 0 ? floor.x2 : floor.x1;
+      const x = offstage ? lip + dir * 42 : (floor.x1 + floor.x2) / 2;
+      const baseline = clamp(Number(startingDamage) || 0, 0, 200);
+      Object.assign(player, { x, y: floor.y - (offstage ? 93 : 53), ground: -1, face: -dir, damage: baseline, jumps: 1 });
+      Object.assign(pip, { x: x - dir * 12, y: player.y - 64, ground: -1, face: dir, jumps: 1 });
+      this.dogs = [player, pip];
+      this.meteorPractice = { originalDogs, pattern, dir, slow, baseline, platform, phase: 'ready', time: 0, cancel: '', outcome: '' };
+    }
+    meteorPracticeInput() {
+      const d = this.meteorPractice, pip = this.dogs[1];
+      if (!d.swung) {
+        d.swung = true;
+        return { ...idleInput, aimStick: true, smashY: 1 };
+      }
+      if (d.pattern !== 'spikeEdge' || pip.ground >= 0 || pip.attack) return idleInput;
+      const floor = this.terrain[d.platform], lip = d.dir > 0 ? floor.x2 : floor.x1;
+      const x = (pip.x - lip) * d.dir > -26 ? -d.dir : 0;
+      if (pip.ledge) return { ...idleInput, x: -d.dir };
+      if (pip.y > floor.y - 18 && pip.vy > 100 && x) {
+        if (pip.jumps) return { ...idleInput, x, jump: true, tapped: { jump: true } };
+        if (!pip.usedUp) return { ...idleInput, x, y: -1, special: true, tapped: { special: true } };
+      }
+      return { ...idleInput, x };
+    }
+    finishMeteorPractice(outcome) {
+      const d = this.meteorPractice;
+      if (d.phase === 'done') return;
+      d.phase = 'done';
+      d.outcome = outcome;
+      this.emit('meteorResult', { f: this.dogs[0], outcome, option: d.cancel });
+    }
+    checkMeteorPractice(dt) {
+      const d = this.meteorPractice, f = this.dogs[0];
+      if (d.phase === 'done') return;
+      d.time += dt;
+      if (d.phase === 'strike') {
+        if (f.tumble?.meteor) d.phase = 'flight';
+        else if (f.damage > d.baseline) this.finishMeteorPractice('weak');
+        else if (d.time > 0.6) this.finishMeteorPractice('avoided');
+      } else if (f.floorAction?.type === 'tech' || f.floorAction?.type === 'techRoll')
+        this.finishMeteorPractice(f.floorAction.type);
+      else if (f.tumble && !f.tumble.meteor && f.vy < 0 && d.pattern === 'spikeFloor') this.finishMeteorPractice('bounce');
+      else if (f.ledge || f.ground >= 0) this.finishMeteorPractice(d.cancel ? 'saved' : 'returned');
     }
     resetPlatformPractice(pattern = 'below') {
       this.resetTraining();
@@ -3342,6 +3404,23 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      let meteorDrill = this.meteorPractice;
+      if (meteorDrill?.phase === 'ready' || meteorDrill?.phase === 'done') {
+        const tap = input1.tapped?.attack || (input1.attack && !this.dogs[0].prev.attack);
+        if (tap && !meteorDrill.consumeAttack) {
+          if (meteorDrill.phase === 'done') {
+            this.resetMeteorPractice(meteorDrill.pattern, meteorDrill.dir, meteorDrill.slow, meteorDrill.baseline);
+            meteorDrill = this.meteorPractice;
+          }
+          meteorDrill.phase = 'strike';
+          meteorDrill.consumeAttack = true;
+          this.emit('meteorStart', { f: this.dogs[0] });
+        } else if (meteorDrill.phase === 'ready') return;
+      }
+      if (meteorDrill?.consumeAttack) {
+        meteorDrill.consumeAttack = !!input1.attack;
+        input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
+      }
       const wave = this.wavePractice;
       if (wave?.phase === 'ready') {
         if (!['jump', 'shield', 'grab', 'attack'].some(key => input1[key] || input1.tapped?.[key])) return;
@@ -3546,11 +3625,13 @@
       if (this.spacingPractice) this.checkSpacingPractice(dt);
       if (wave) this.checkWavePractice();
       if (this.chasePractice) this.checkChasePractice(dt);
+      if (meteorDrill) this.checkMeteorPractice(dt);
       if (
         this.fetch &&
         !this.platformPractice &&
         !this.spacingPractice &&
         !this.chasePractice &&
+        !meteorDrill &&
         !this.escapePractice &&
         !this.footworkPractice &&
         !this.freshnessPractice &&
@@ -3571,6 +3652,7 @@
       if (out.length) this.knockouts(out);
     }
     trainingRivalInput(dt, player) {
+      if (this.meteorPractice) return this.meteorPracticeInput();
       if (this.platformPractice?.pattern === 'hold') {
         const drill = this.platformPractice;
         if (drill.phase === 'done') return idleInput;
@@ -3785,6 +3867,11 @@
             f.command.runFace = f.run.face;
           }
         }
+      }
+      if (canCancelMeteor(f) && !f.tumble.cancel) {
+        if (pressed('special') && f.command?.airSide === 'up' && f.command.type === 'special' && !f.usedUp)
+          f.tumble.cancel = f.command;
+        else if (pressed('jump') && f.jumps > 0) f.tumble.cancel = 'jump';
       }
       if (f.jumpSquat) bufferSquatInput(f, input);
     }
@@ -4213,6 +4300,18 @@
         f.clashRecoil.time += dt;
         if (f.clashRecoil.time + 1e-8 >= f.clashRecoil.duration) f.clashRecoil = null;
       }
+      if (f.tumble?.cancel && f.tumble.meteor) {
+        const { cancel, meteor } = f.tumble, jump = cancel === 'jump';
+        this.clearTumble(f, jump ? 'Jump' : 'Up Special');
+        f.stun = f.vy = f.guardBuffer = 0;
+        f.reaction = null;
+        f.vx *= 0.45;
+        f.jumpBuffer = jump ? inputWindow : 0;
+        f.command = jump ? null : cancel;
+        if (this.meteorPractice && f.index === 0) this.meteorPractice.cancel = jump ? 'jump' : 'special';
+        this.emit('meteorCancel', { f, moveId: meteor, option: jump ? 'jump' : 'special',
+          point: { x: f.x, y: f.y - f.stats.height * 0.5 } });
+      }
       const jumpTap = f.jumpBuffer > 0 || !!f.jumpSquat;
       const jumpingFromLedge = jumpTap && !!f.ledge;
       const attackTap = f.command?.type === 'attack';
@@ -4227,7 +4326,10 @@
       if (f.floorAction) return this.advanceFloor(f, dt);
       if (f.tumble) {
         if (f.tumble.pending) this.releaseLaunch(f, input);
+        const wasReady = canCancelMeteor(f);
         f.tumble.time += dt;
+        if (!wasReady && canCancelMeteor(f)) this.emit('meteorWindow', { f, moveId: f.tumble.meteor,
+          point: { x: f.x, y: f.y - f.stats.height * 0.45 } });
       }
       if (f.ledge) {
         f.ledgeTime += dt;
@@ -4547,7 +4649,8 @@
           f.vx = 0;
         }
         if (f.vy >= 0) {
-          const landing = this.landingSurface(f, oldY);
+          const meteor = f.tumble?.meteor;
+          const landing = meteor ? this.landingSurface(f, oldY, oldX, dt) : this.landingSurface(f, oldY);
           const source = this.terrain[f.dropPlatform];
           if (f.drop > 0 && (!source || f.y > source.y + 3 || landing >= 0)) {
             f.drop = 0;
@@ -4555,6 +4658,21 @@
           }
           if (landing >= 0) {
             const landingSpeed = f.vy;
+            if (meteor) {
+              const floor = this.terrain[landing], t = floorCrossing(oldY, f.y, floor.y);
+              f.x = clamp(oldX + (f.x - oldX) * t, floor.x1, floor.x2);
+            }
+            if (meteor && f.techBuffer <= 1e-8) {
+              const moveId = f.tumble.meteor, floor = this.terrain[landing];
+              f.y = floor.y - 1;
+              f.vy = -Math.min(700, landingSpeed * 0.72);
+              f.vx *= 0.76;
+              f.stun = Math.max(f.stun, Math.min(20 / 60, Math.abs(f.vy) / 1700));
+              f.tumble.meteor = null;
+              f.tumble.cancel = null;
+              this.emit('meteorBounce', { f, moveId, platform: landing, speed: landingSpeed, point: { x: f.x, y: floor.y } });
+              return;
+            }
             if (f.throwBounce) {
               const { lift, scale, carry, moveId, owner } = f.throwBounce;
               f.throwBounce = null;
@@ -4630,18 +4748,17 @@
           f.invuln = Math.max(f.invuln, dt - 1e-8);
       }
     }
-    landingSurface(f, oldY) {
+    landingSurface(f, oldY, oldX = f.x, dt = 0) {
       let landing = -1;
       for (const [i, p] of this.terrain.entries()) {
         if (p.thin && f.drop > 0 && f.dropPlatform === i) continue;
-        if (
-          f.x >= p.x1 - 5 &&
-          f.x <= p.x2 + 5 &&
-          oldY <= p.y + (f.drop > 0 ? 1e-8 : 2) &&
-          f.y >= p.y &&
-          (landing < 0 || p.y < this.terrain[landing].y)
-        )
-          landing = i;
+        if (oldY > p.y + (f.drop > 0 ? 1e-8 : 2) || f.y < p.y ||
+            (landing >= 0 && p.y >= this.terrain[landing].y)) continue;
+        const t = dt ? floorCrossing(oldY, f.y, p.y) : 1;
+        const x = oldX + (f.x - oldX) * t;
+        const surface = dt && !this.layout && this.stage === 'laundry' && i === 2
+          ? platforms(this.stage, this.time - (1 - t) * dt)[i] : p;
+        if (x >= surface.x1 - 5 && x <= surface.x2 + 5) landing = i;
       }
       return landing;
     }
@@ -5615,8 +5732,10 @@
       target.techBuffer = target.dodge = 0;
       const applied = this.dealDamage(target, damage, previousLocks > 0 || move?.preserveCombo);
       const speed = (base + target.damage * growth) * (0.75 + 0.25 * power) / target.stats.weight;
+      // Brisket's landing shockwave and a weak grounded spike still pop the rival up.
+      const meteor = !!move?.meteor && !(use?.plunge && use.landed) && speed * (braced ? crouchLaunchScale : 1) >= tumbleSpeed;
       if (move) {
-        const angle = ((move.angle < 0 && target.ground >= 0 ? 46 : move.angle) * Math.PI) / 180;
+        const angle = ((move.angle < 0 && target.ground >= 0 && !meteor ? 46 : move.angle) * Math.PI) / 180;
         target.vx = face * speed * Math.cos(angle);
         target.vy = -speed * Math.sin(angle) - (angle >= 0 ? 40 : 0);
         if (move.pull) {
@@ -5679,7 +5798,14 @@
       const launchSpeed = Math.hypot(target.vx, target.vy);
       this.sampleFreshness(owner, use, moveId, power, applied, launchSpeed);
       const finish = !move?.setupHit && !move?.second && !move?.pull && !move?.bounce && name !== 'snare';
-      if (finish && launchSpeed >= tumbleSpeed) this.startTumble(target, true);
+      if (finish && launchSpeed >= tumbleSpeed) {
+        this.startTumble(target, true);
+        if (meteor && target.vy > 0) {
+          target.tumble.meteor = moveId;
+          target.stun = Math.max(target.stun, (move.meteor + (braced ? 3 : 6)) / 60);
+          target.reaction.duration = target.stun;
+        }
+      }
       if (this.wallPractice?.phase === 'swing' && target.index === 0 && moveId === 'pipBackKick')
         this.wallPractice.phase = 'flight';
       if (target.index === 0 && this.launchPractice?.phase === 'ready' && name === 'throw') {
@@ -5701,7 +5827,8 @@
       )
         this.trumpPractice.phase = 'intercepted';
       const timing = aerialHitTiming(use, move);
-      this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic, power, damage: applied, timing });
+      this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic, power, damage: applied, timing,
+        meteor: !!target.tumble?.meteor });
       if (timing === 'late' && this.cpuControlled(owner)) owner.landingFollowUntil = this.time + 0.55;
       const spacing = this.spacingPractice;
       if (spacing?.pattern === 'landing' && spacing.phase === 'active' && owner.index === 0 && target.index === 1) {
@@ -5990,6 +6117,7 @@
     knockouts(out) {
       for (const f of out) {
         if (f.index === 0 && this.launchPractice) this.launchPractice.phase = 'out';
+        if (f.index === 0 && this.meteorPractice) this.finishMeteorPractice('ko');
         this.loseStock(f);
       }
       const eliminated = this.dogs.filter((f) => f.stocks <= 0);
@@ -6377,6 +6505,26 @@
       }
       return best;
     }
+    cpuDownAir(f, foe, floor) {
+      if (f.ground >= 0 || f.attack || f.stun || f.tumble || f.airDodge || f.ledge || f.command ||
+          foe.invuln || foe.respawning || foe.shield || foe.ledge || foe.y - f.y < foe.stats.height * 0.42 ||
+          (foe.ground >= 0 && foe.damage < 45)) return null;
+      const move = moves[f.kit.air.down], t = move.start;
+      const x = f.x + f.vx * t;
+      const off = x < floor.x1 + 4 || x > floor.x2 - 4;
+      if (off && (move.plunge || (!f.jumps && f.usedUp) || f.y > floor.y + 10 ||
+          x < floor.x1 - 80 || x > floor.x2 + 80)) return null;
+      const y = move.plunge ? f.y : f.y + f.vy * t + 770 * f.kit.gravity * t * t;
+      const rivalY = foe.ground >= 0 ? foe.y : foe.y + foe.vy * t + 770 * foe.kit.gravity * t * t;
+      const [cx, cy, rx, ry] = move.box;
+      if (Math.abs((foe.x + foe.vx * t - x) * f.face - cx) > rx + foe.stats.width - 4 ||
+          Math.abs(rivalY - bodyHeight(foe) * 0.52 - (y + cy)) > ry + bodyHeight(foe) * 0.4 - 4) return null;
+      this.bot.hop = null;
+      this.bot.hold = this.bot.guard = 0;
+      this.bot.timer = 0.2;
+      return { ...idleInput, x: off ? Math.sign((floor.x1 + floor.x2) / 2 - f.x) : 0,
+        aimStick: true, smashY: 1, tapped: { aimStick: true } };
+    }
     cpu(dt) {
       const f = this.dogs[1],
         foe = this.dogs[0],
@@ -6496,6 +6644,11 @@
         }
         return result;
       }
+      if (canCancelMeteor(f) && this.floorAhead(f, 0.24) < 0) {
+        const inward = f.x < closest.x1 ? 1 : f.x > closest.x2 ? -1 : Math.sign((closest.x1 + closest.x2) / 2 - f.x);
+        if (f.jumps) return { ...idleInput, x: inward, jump: true, tapped: { jump: true } };
+        return { ...idleInput, x: inward, y: -1, special: true, tapped: { special: true } };
+      }
       if (f.tumble && !unsafe) {
         result.jump = false;
         result.x = 0;
@@ -6595,6 +6748,8 @@
       if (passInput) return passInput;
       const platformInput = !unsafe && this.cpuPlatformInput(f, foe);
       if (platformInput) return platformInput;
+      const downward = brain.timer <= 0 && this.cpuDownAir(f, foe, closest);
+      if (downward) return downward;
       if (f.attack?.charging) {
         result.x = Math.sign(inside - f.x);
         result.special = f.attack.chargeTime < (f.y > closest.y + 60 ? 0.36 : 0.22);
@@ -6851,6 +7006,7 @@
     idleInput,
     clamp,
     attackWindow,
+    canCancelMeteor,
     shieldBubble,
     shieldContact,
     ledgePosition,
