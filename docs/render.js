@@ -256,6 +256,8 @@
     if (f.ledgeTrump) return ['ledgeTrump', clamp(f.ledgeTrump.time / f.ledgeTrump.duration, 0, 1)];
     if (f.wallAction) return [f.wallAction.type === 'wallKick' ? 'wallTechJump' : f.wallAction.type,
       clamp(f.wallAction.time / f.wallAction.duration, 0, 1)];
+    if (f.shieldBreak) return f.shieldBreak.phase === 'pop'
+      ? ['launch', f.vy < 0 ? .30 : .65] : ['dizzy', 0];
     if (f.tumble) return ['tumble', 0];
     if (f.clashRecoil) return ['clashRecoil', f.clashRecoil.time / f.clashRecoil.duration];
     if (f.stun > 0) {
@@ -1558,6 +1560,7 @@
     let face = f.face,
       spriteTime = time + f.index * 0.42;
     if (state === 'teeter' && reduced.matches) spriteTime = 0;
+    if (state === 'dizzy') spriteTime = reduced.matches ? 0 : f.shieldBreak.time;
     if (state === 'tumble') {
       face = f.reaction?.face || f.face;
       spriteTime = reduced.matches ? 0.21 : f.tumble.time;
@@ -1623,6 +1626,18 @@
       dodgeY: f.airDodge?.y || 0,
     });
     ctx.restore();
+    if (state === 'dizzy') {
+      // Three little collar tags circle the ears. Their silhouettes also read with motion reduced.
+      for (let i = 0; i < 3; i++) {
+        const angle = spriteTime * 5 + i * Math.PI * 2/3;
+        const x = snap(f.x + 22 * Math.cos(angle), 2);
+        const y = snap(f.y - f.stats.height - 11 + 6 * Math.sin(angle), 2);
+        pixelLine(ctx,x-4,y,x+4,y,ink,6,2);
+        pixelLine(ctx,x,y-4,x,y+4,ink,6,2);
+        pixelLine(ctx,x-3,y,x+3,y,gold,2,2);
+        pixelLine(ctx,x,y-3,x,y+3,cream,2,2);
+      }
+    }
     if (grip?.target === f.index && grip.phase !== 'throw' && grip.struggleFlash > 0) {
       const side = grip.struggles % 2 ? 1 : -1;
       const x = snap(f.x + side*(f.stats.width+5),2), y = snap(f.y-f.stats.height*.58,2);
@@ -2238,6 +2253,7 @@
         }
       }
       if (name === 'break') this.add('ring', f.x, f.y - 38, teamColor(f), 0.3, 73);
+      if (name === 'dizzyLand') this.add('ring', e.point.x, e.point.y, gold, .16, 25);
       if (name === 'counter') this.add('block', f.x + f.face * 26, f.y - 40, gold, 0.22, 65, f.face);
       if (name === 'sweetSpot' && e.point) {
         const tint = e.moveId === 'cloverHaloLift' ? lilac : gold;

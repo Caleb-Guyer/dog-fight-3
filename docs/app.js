@@ -468,6 +468,9 @@
     } else if (name === 'break') {
       tone(910, 525, 0.044, 0, 'square', 0.025);
       tone(385, 85, 0.08, 0.022, 'triangle', 0.055);
+    } else if (name === 'dizzyLand') {
+      tone(110, 54, .07, 0, 'triangle', .05);
+      tone(700, 615, .11, .035, 'sine', .035);
     } else if (name === 'swat') tone(580, 210, 0.12, 0, 'square', 0.034);
     else if (name === 'land' && detail.speed > 420) tone(90, 45, 0.063, 0, 'triangle', 0.037);
     else if (name === 'tick') tone(390, 420, 0.11);
@@ -1326,6 +1329,7 @@
     if (f.stockLift) return 'Respawn platform';
     if (f.grip) return 'Grapple';
     if (f.ledge) return 'Hanging';
+    if (f.shieldBreak) return f.shieldBreak.phase === 'pop' ? 'Shield break · airborne' : 'Dizzy · ' + frames(f.stun) + 'f';
     if (f.stun > 0) return 'Hitstun ' + frames(f.stun) + 'f';
     if (f.shieldStun > 0) return 'Shieldstun ' + frames(f.shieldStun) + 'f';
     if (f.landingLag > 1e-8) return 'Landing recovery ' + frames(f.landingLag) + 'f';
@@ -2202,6 +2206,20 @@
   function shieldFeedback(name, e) {
     const result = $('shield-status');
     const tip = $('recovery-tip');
+    if (e.pattern === 'breakEscape' || e.pattern === 'breakPunish') {
+      const defend = e.pattern === 'breakEscape';
+      const finish = e.moveId && (smashes[e.moveId] || moves[e.moveId] || specials[e.moveId] || grabs[e.moveId])?.label;
+      const timing = e.frames + 'f · ' + e.struggles + (e.struggles === 1 ? ' escape input' : ' escape inputs');
+      result.dataset.result = e.phase;
+      result.textContent = {
+        pop:'Shield burst', dizzy:defend ? 'Dizzy · tap or flick' : 'Dizzy · release a strike',
+        awake:'Woke in ' + timing, guarded:'Awake · blocked ' + (finish || 'the swing') + ' · ' + timing,
+        clear:'Woke and escaped · ' + timing, lateHit:'Woke but got hit · ' + timing,
+        punished:(finish || 'Hit') + ' caught the dizzy dog · ' + timing,
+        grabbed:(finish || 'Grab') + ' caught the dizzy dog · ' + timing,
+      }[e.phase];
+      return;
+    }
     if (e.pattern === 'dodgeTiming' && name === 'shieldCue') {
       result.dataset.result = e.phase;
       if (e.phase === 'sweep') {
@@ -2980,6 +2998,8 @@
       const guard = world.shieldPractice;
       $('shield-status').textContent = guard.coverage ? (pattern === 'poke' ? 'Rival shield' : 'Your shield') + (guard.worn ? ' · 30%' : ' · 100%') : 'Hold Shield to begin';
       if (pattern === 'dodgeTiming') $('shield-status').textContent = 'Spot-dodge once';
+      if (pattern === 'breakEscape') $('shield-status').textContent = 'Hold your worn shield';
+      if (pattern === 'breakPunish') $('shield-status').textContent = 'Rival has a worn shield';
       $('shield-strength').hidden = !guard.coverage;
       $('shield-strength').setAttribute('aria-pressed', String(!!guard.coverage && !guard.worn));
       $('jump-in-options').hidden = !guard.jumpIn;
@@ -3001,6 +3021,8 @@
         grab: 'Raise Shield to start. Tap Down just before the grab to spot-dodge, or tap a side to roll.',
         counterGrab: 'Hold Shield. Tap Down as the grab comes out, then release Down. Tap Attack as your dog rises to punish with a jab.',
         dodgeTiming: 'Hold Shield and tap Down, then release Down. Pip sweeps at the end of your dodge. Try repeating the dodge immediately and after a rest.',
+        breakEscape: 'Hold Shield until it bursts. Try staying still after landing, then retry and tap Attack or flick the stick repeatedly. Keep Shield held to block the punish as you wake.',
+        breakPunish: 'Hold a smash as the rival’s shield wears out. Wait for the dizzy landing, then release. Choose Punish the break to retry.',
         low: 'Hold Shield. Noodle sweeps your paws. Aim Down gently with the stick, Walk + Down, or a drag from the center dot.',
         high: 'Hold Shield. Noodle jumps for your ears. Aim Up as the lead swings over the bubble.',
         poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + moves[player.kit.tilts.down].label + '.',
@@ -4322,6 +4344,11 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'nightmail', fetch:false });
       drill('escape',false,'gripEscape');
+    } else if (hash === '#training/shield-break') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'nightmail', fetch:false });
+      drill('shield', false, 'breakEscape');
     } else if (hash === '#training/dodge-timing') {
       leaveOnline();
       afterStory = null;
