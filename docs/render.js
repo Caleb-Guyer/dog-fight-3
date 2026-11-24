@@ -1564,12 +1564,10 @@
       spriteTime = f.strideDistance / (state === 'walk' ? 100 : 235);
     else if (f.stun > 0 && f.reaction) face = f.reaction.face;
     else if (f.smashCharge) face = f.smashCharge.face;
-    // A ready practice drill holds on the first ledge catch until the player's input.
-    const firstHangFrame = state === 'ledge' && f.ledgeTime === 0;
     ctx.save();
     if (
       f.invuln > 0.01 &&
-      !firstHangFrame &&
+      state !== 'ledge' &&
       !f.floorAction &&
       !f.airDodge &&
       !f.wallAction &&
@@ -1589,6 +1587,16 @@
       dodgeY: f.airDodge?.y || 0,
     });
     ctx.restore();
+    if (state === 'ledge' && f.invuln > 0 && f.ledge.guardFrames) {
+      // Chalk grip marks underneath the lip stay legible with reduced motion.
+      const remaining = Math.ceil(f.invuln * 60), marks = Math.ceil(remaining / 12);
+      const inward = f.ledge.left ? 1 : -1, y = snap(f.ledge.y + 7, 2);
+      for (let i = 0; i < marks; i++) {
+        const x = snap(f.ledge.x + inward * (5 + i * 6), 2);
+        pixelLine(ctx, x, y + 4, x + inward * 2, y, ink, 5, 2);
+        pixelLine(ctx, x, y + 4, x + inward * 2, y, remaining <= 6 ? gold : mint, 2, 2);
+      }
+    }
     if (f.stockLift || f.stockGuard > 0) drawReturnTags(ctx, f);
     if (state === 'ledgeTrump') slippingPaw(ctx, f, face, phase, world.dogs[1 - f.index]?.ledge);
     swing(ctx, f, world.terrain[f.ground]);
