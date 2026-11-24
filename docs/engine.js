@@ -4975,6 +4975,8 @@
         const state = f.shieldBreak;
         const sector = shiftSector(input, state.sector);
         const flick = sector >= 0 && sector !== state.sector;
+        // A direction used to struggle is already held when the dog wakes behind its shield.
+        f.shieldAxis = shieldDirection(input.x || input.grabX || 0, input.y, f.shieldAxis);
         if (state.phase === 'dizzy' && !this.hitStop &&
             (flick || ['jump','shortHop','attack','smash','special','shield','grab','aimStick'].some(pressed))) {
           f.stun = Math.max(0, f.stun - 5/60);
