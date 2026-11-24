@@ -1201,6 +1201,28 @@ async function testDodgeTiming(page,mobile) {
   assert(await status.isHidden());
 }
 
+async function testAttackCancel(page,mobile) {
+  await page.goto(root+'?cancel#training/attack-cancel');
+  const status=page.locator('#footwork-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for(const mode of ['ground','dash','back']){
+    if(mode==='dash') await press('footwork-cancelDash');
+    if(mode==='back'){await press('footwork-cancelTurn');await press('footwork-side');}
+    await hold(['right','attack']);
+    await waitFor('cancelNow'); await hold([]); await page.clock.runFor(350);
+    assert.equal(await status.getAttribute('data-result'),'cancelNow');
+    assert.match(await status.textContent(),/windup/);
+    await hold(mode==='ground'?['attack']:mode==='dash'?['up','jump']:['left','jump']);
+    await waitFor(mode==='ground'?'groundMiss':mode==='dash'?'risingCatch':'backCatch');
+    await hold([]);
+  }
+  await press('footwork-cancelDash'); await press('footwork-slow'); await press('footwork-pause');
+  await hold(['left','attack']); await page.clock.runFor(20);
+  await hold(['up','jump']); await waitFor('risingCatch'); await hold([]);
+  await press('reset-training'); assert(await status.isHidden());
+  console.log((mobile?'Touch':'Keyboard')+' passed dash attack to up air, turnaround back air, ground whiff and match timing.');
+}
+
 async function testFastFallPressure(page,mobile) {
   await page.goto(root+'?apex#training/fast-fall');
   const status=page.locator('#spacing-status');
@@ -1436,6 +1458,7 @@ async function testDevice(browser, mobile) {
     await testImpactTech(page, mobile);
     await testAerialSweetSpots(page, mobile);
     await testFastFallPressure(page, mobile);
+    await testAttackCancel(page, mobile);
     await testBlastRadar(page, mobile);
     await testNightMail(page, mobile);
     await testJumpIns(page, mobile);
