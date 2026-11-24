@@ -86,9 +86,9 @@
     ctx.restore();
   }
   class DispatchView extends FightView {
-    drawEdgePortrait(ctx, f, x, y, time) {
+    drawEdgePortrait(ctx, f, x, y, time, world) {
       const kind = f.encounter?.kind;
-      if (!kind || kind === 'brisket') return super.drawEdgePortrait(ctx, f, x, y, time);
+      if (!kind || kind === 'brisket') return super.drawEdgePortrait(ctx, f, x, y, time, world);
       ctx.translate(x, y + 14);
       const scale = kind === 'conductor' ? 0.33 : 0.46;
       ctx.scale(scale, scale);
