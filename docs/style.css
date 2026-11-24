@@ -835,6 +835,9 @@ body.playing .tools .utility,
 .hud-card.two img {
   background: #42545e;
 }
+.hud-portrait { position: relative; align-self: center; }
+.rage-meter { position: absolute; inset: auto 1px 0; height: 4px; background: #33273a; border-top: 1px solid #201b28; }
+.rage-meter i { display: block; height: 100%; background: var(--gold); }
 .hud-card > div {
   display: grid;
   padding: 3px 7px 3px 5px;
