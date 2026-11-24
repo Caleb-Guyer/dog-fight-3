@@ -1020,6 +1020,27 @@ async function testSpotCounter(page,mobile) {
   assert(await status.isHidden());
 }
 
+async function testDodgeTiming(page,mobile) {
+  await page.goto(root+'?dodge-rest#training/dodge-timing');
+  const status=page.locator('#shield-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for(const rest of [false,true]){
+    if(rest)await press('shield-dodgeTiming');
+    await waitFor('ready');
+    await hold(['shield','down']);await waitFor('sweep');
+    assert.match(await status.textContent(),/Fresh dodge · protected 2–11f/);
+    await hold(['shield']);await waitFor('again');
+    if(rest)await waitFor('restored');
+    await hold(['shield','down']);await waitFor('sweep');
+    assert.match(await status.textContent(),rest?/Fresh dodge · protected 2–11f/:/Repeated dodge · protected 3–10f/);
+    await hold(['shield']);await waitFor(rest?'freshClear':'dodgeClipped');
+    assert.match(await status.textContent(),rest?/Both sweeps missed/:/Pip caught the repeat/);
+    await hold([]);
+  }
+  await press('reset-training');
+  assert(await status.isHidden());
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -1094,6 +1115,7 @@ async function testDevice(browser, mobile) {
     await testJumpIns(page, mobile);
     await testLedgeReturn(page, mobile);
     await testSpotCounter(page, mobile);
+    await testDodgeTiming(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
