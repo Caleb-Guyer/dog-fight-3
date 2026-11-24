@@ -159,6 +159,7 @@
     return action.distance ?? (65 + f.stats.speed * 0.15) * (action.type === 'techRoll' ? 1 : 0.88);
   }
   const tumbleSpeed = 430;
+  const finalHitExtra = 12 / 60;
   const maxDI = (18 * Math.PI) / 180;
   const verticalLaunch = Math.sin(65 * Math.PI / 180);
   const stockMinutes = [1, 3, 7, 0];
@@ -2601,10 +2602,14 @@
       this.airPractice = null;
       this.lastCombo = { hits: 0, damage: 0 };
       this.hitStop = 0;
+      this.finalHitHold = 0;
       this.resetCpu();
       if (this.mode === 'training') this.resetTraining();
       else if (versus && config.suddenStart) this.startSuddenDeath();
-      else this.dogs.forEach((f) => this.spawn(f, false));
+      else for (const f of this.dogs) {
+        this.spawn(f, false);
+        if (versus && config.lastStockStart) { f.stocks = 1; f.damage = 125; }
+      }
     }
     resetCpu() {
       const memory = this.bot;
@@ -2776,6 +2781,7 @@
       this.ball = null;
       this.nextBall = 4;
       this.hitStop = 0;
+      this.finalHitHold = 0;
       this.lastCombo = { hits: 0, damage: 0 };
       if (ledge) {
         const [f, dummy] = this.dogs;
@@ -2964,7 +2970,8 @@
       this.dogs[0].damage = 90;
       this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
     }
-    resetSurvivalPractice(dir = 1, slow = true, damage, study = this.survivalPractice?.study ?? false) {
+    resetSurvivalPractice(dir = 1, slow = true, damage, study = this.survivalPractice?.study ?? false,
+        pattern = this.survivalPractice?.pattern ?? 'survival') {
       this.resetTraining();
       const [dog, rival] = this.dogs;
       const ground = this.terrain.reduce((best, surface, i, all) => {
@@ -2989,7 +2996,7 @@
       const baseline = clamp(Math.round(damage ?? percent), 0, 200);
       Object.assign(rival, { x: lip - dir * (forehand ? 64 : 14), y: floor.y, face, ground });
       Object.assign(dog, { x: rival.x + face * gap, y: floor.y, face: -face, ground, damage: baseline });
-      this.survivalPractice = { pattern: 'survival', dir, slow, baseline, ground, lip, phase: 'ready', ticks: 0, moveId,
+      this.survivalPractice = { pattern, dir, slow, baseline, ground, lip, phase: 'ready', ticks: 0, moveId,
         grabSent: false, released: false, free: false, angle: 0, scale: 1, zone: '', outcome: '', trace: [], previous: null,
         study, preview:null, lockedAim:null, studyPressed:false };
     }
@@ -4587,6 +4594,7 @@
       if (this.survivalPractice && f.index === 0) {
         this.survivalPractice.angle = v.angle;
         this.survivalPractice.scale = v.scale;
+        if (f.tumble.finalHit) this.survivalPractice.releaseZone = this.projectLaunch(f,v.x,v.y).zone;
         this.survivalPractice.trace.push({ x: f.x, y: f.y - f.stats.height * 0.52 });
       }
       this.emit('launchDI', {
@@ -4608,6 +4616,7 @@
       this.projectiles = [];
       this.ledgeClaims = [];
       this.hitStop = 0;
+      this.finalHitHold = 0;
       this.lastCombo = { hits:0, damage:0 };
       this.resetCpu();
       for (const f of this.dogs) {
@@ -4630,10 +4639,11 @@
         if (this.mode === 'local') this.dogs[1].prev = { ...input2 };
         return;
       }
-      if (this.mode === 'solo' || this.mode === 'local') this.matchFrames += frames;
+      const holdingFinish = this.finalHitHold > 0;
+      if (!holdingFinish && (this.mode === 'solo' || this.mode === 'local')) this.matchFrames += frames;
       if (this.suddenDeath && this.hitStop <= 0) this.suddenDeath.frames += frames;
       this.stepFighters(dt, input1, input2);
-      if (this.clockFrames === null) return;
+      if (this.clockFrames === null || holdingFinish) return;
       this.clockFrames = Math.max(0, this.clockFrames - frames);
       if (this.clockFrames > 1e-8 || this.end !== null) return;
       const [p,q] = this.dogs;
@@ -4966,7 +4976,9 @@
       if (this.hitStop > 0) {
         this.captureInput(this.dogs[0], input1);
         if (this.mode === 'local' || combo) this.captureInput(this.dogs[1], input2);
-        this.hitStop = this.hitStop <= dt + 1e-8 ? 0 : this.hitStop - dt;
+        if (this.finalHitHold > 0)
+          this.finalHitHold = this.finalHitHold <= dt + 1e-8 ? 0 : this.finalHitHold - dt;
+        else this.hitStop = this.hitStop <= dt + 1e-8 ? 0 : this.hitStop - dt;
         for (const f of this.dogs) {
           const human = f.index === 0 ? input1 : this.mode === 'local' || combo ? input2 : null;
           if (f.hitShift) {
@@ -4975,7 +4987,7 @@
             this.shiftDuringHit(f, human || cpu);
           }
           if (!this.hitStop && f.tumble?.pending)
-            this.releaseLaunch(f, human || (this.cpuControlled(f) ? this.cpuLaunchAim(f) : idleInput));
+            this.releaseLaunch(f, human || f.tumble.finalAim || (this.cpuControlled(f) ? this.cpuLaunchAim(f) : idleInput));
         }
         return;
       }
@@ -7900,7 +7912,14 @@
         if (line.zone) {
           target.tumble.threat = line.zone;
           if (this.survivalPractice) this.survivalPractice.zone = line.zone;
-          this.emit('blastThreat', { f: target, zone: line.zone, point: { x: target.x, y: target.y - target.stats.height * 0.52 } });
+          const finalHit = this.survivalPractice?.pattern === 'lastStock' ||
+            ((this.mode === 'local' || this.mode === 'solo') && owner.stocks === 1 && target.stocks === 1);
+          if (finalHit) {
+            this.finalHitHold = finalHitExtra;
+            target.tumble.finalHit = true;
+            if (this.cpuControlled(target)) target.tumble.finalAim = this.cpuLaunchAim(target);
+          }
+          this.emit('blastThreat', { f: target, zone: line.zone, finalHit, point: { x: target.x, y: target.y - target.stats.height * 0.52 } });
         }
       }
       if (timing === 'late' && this.cpuControlled(owner)) owner.landingFollowUntil = this.time + 0.55;
