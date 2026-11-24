@@ -1,8 +1,8 @@
 (() => {
   'use strict';
 
-  const prefix = 'dogfight3-cg-versus-v39-';
-  const channel = 'dogfight3-v39';
+  const prefix = 'dogfight3-cg-versus-v40-';
+  const channel = 'dogfight3-v40';
   const quickId = prefix + 'quickplay';
   const roomAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick', 'tiltMode', 'shortHop'];
@@ -32,7 +32,7 @@
     });
     return input;
   }
-  const { seededRandom } = window.DogFight;
+  const { seededRandom, shieldDirection } = window.DogFight;
 
   function heldInput(values) {
     if (!values[8]) return values;
@@ -63,6 +63,7 @@
       this.frame = this.confirmed = this.received = 0;
       this.prediction = pack({});
       this.lastHeld = 0;
+      this.lastShieldAxis = '';
       this.cues = {};
       this.lastStep = performance.now();
     }
@@ -91,6 +92,7 @@
           if (!confirmed && record.nearHead && (name === 'jump' || dodgeCues.has(name))) return;
           let cue;
           if (name === 'jump') cue = record.cues.jump;
+          else if (name === 'shieldRoll' || name === 'spotDodge') cue = record.cues.groundDodge;
           else if (dodgeCues.has(name)) cue = record.cues.shield;
           else if (name === 'special' || (name === 'recover' && detail.moveId && detail.moveId !== 'brisketCannon'))
             cue = record.cues.special;
@@ -127,12 +129,18 @@
     advance(mine, world) {
       const pressed = (mine[7] & ~this.lastHeld) | mine[8];
       this.lastHeld = mine[7];
+      const shieldBit = 1 << buttons.indexOf('shield');
+      const axis = shieldDirection((mine[0] || mine[2])/127, mine[1]/127, this.lastShieldAxis);
+      const shieldFlick = !!(mine[7] & shieldBit) && axis && axis !== this.lastShieldAxis;
+      this.lastShieldAxis = axis;
       // Buffered actions can shift frames after a correction. Attach feedback to the physical press.
-      if (pressed) {
+      if (pressed || shieldFlick) {
         this.cues = { ...this.cues };
         for (const key of ['jump', 'shield', 'special']) {
           if (pressed & (1 << buttons.indexOf(key))) this.cues[key] = { played: false };
         }
+        if (pressed & shieldBit) this.cues.groundDodge = this.cues.shield;
+        else if (shieldFlick) this.cues.groundDodge = { played:false };
       }
       const [a, b] = world.dogs;
       const nearHead = (a.ground < 0 || b.ground < 0) && Math.abs(a.x - b.x) <= a.stats.width + b.stats.width + 68 &&

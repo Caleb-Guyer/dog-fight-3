@@ -1286,6 +1286,21 @@
     }
     ctx.restore();
   }
+  function dodgeSweat(ctx, f) {
+    const dodge = f.airDodge || f.floorAction;
+    if (!dodge?.wear || dodge.time + 1e-8 < dodge.safeUntil) return;
+    const p = clamp((dodge.time - dodge.safeUntil) / (dodge.duration - dodge.safeUntil), 0, 1);
+    const lift = reduced.matches ? 2 : snap(5 * Math.sin(p * Math.PI), 2);
+    ctx.save();
+    ctx.translate(snap(f.x,2), snap(f.y - f.stats.height*.68,2));
+    ctx.scale(f.face,1);
+    for (let i = 0; i < dodge.wear; i++) {
+      const x = -f.stats.width - 5 - 5*i, y = -lift + 3*i;
+      pixelLine(ctx, x,y, x-3,y+5,ink,4,2);
+      pixelLine(ctx, x,y, x-2,y+3,'#95d7df',2,2);
+    }
+    ctx.restore();
+  }
   function shieldSlip(ctx, f) {
     const a = f.floorAction;
     if (a?.type !== 'shieldRoll' && a?.type !== 'spotDodge') return;
@@ -1520,6 +1535,7 @@
     ledgeRollTrail(ctx, f);
     shieldSlip(ctx, f);
     airDodgeSlip(ctx, f);
+    dodgeSweat(ctx, f);
     if (f.fastFall && !reduced.matches) {
       const y = f.y - f.stats.height + 8;
       for (const side of [-1, 1]) {
