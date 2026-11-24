@@ -327,7 +327,9 @@ In **Training → Ledge roll practice**, **Close guard** swings at the lip. Roll
 
 Catch the same lip as a hanging dog to take their place. A falling catch, a directional air dodge and Noodle’s Ledge Lasso can all do it. The displaced dog pops outward without taking damage and can jump, attack, or use a recovery special after the brief recoil. Rolling, jumping or dropping before the other dog arrives leaves the lip free.
 
-Your first catch protects you for 15 frames. Let go and catch any ledge again during the same recovery and opponents can hit or grab you immediately. Landing on a platform or taking a hit restores protection for your next catch. You can still trump someone with a vulnerable regrab.
+A short first catch at 0% protects you for 15 frames. A longer flight adds protected time and higher damage takes it away. A fresh catch lasts between 6 and 45 frames. Watch the grip marks beneath the lip. The final mark turns gold for the last six frames, then disappears when an opponent can hit or grab you. Jump or drop early to carry up to 14 remaining frames into your exit. Releasing and catching either ledge again gives zero protection until you land or take a hit. You can still trump someone with a vulnerable regrab.
+
+In **Edge practice**, compare **Short recovery** and **Long recovery**. Tap Attack to start the rival’s approach. Time a low tilt as the grip marks disappear, before the rival rolls. Change **Dummy damage** and repeat the same input to see which hit connects. [Play the ledge catch drill](https://caleb-guyer.github.io/dog-fight-3/#training/ledge-catch).
 
 Open **Training → Contested ledge**. **Take the ledge** starts you outside a rival’s grip. Drift inward or use your recovery. **Defend the ledge** starts you hanging while the rival approaches. Wait for the bump, tap Shield to roll clear, or drop early and try a back air. Select Noodle as the dummy to practice against Ledge Lasso. **Switch ledge** mirrors both roles.
 

@@ -928,7 +928,7 @@
           'ledgeRoll',
           'defense',
         ) +
-        '</ul><h3 class="guide-section">Ledge trumping</h3><p>Catch an occupied ledge to bump the other dog outward. A fresh catch protects you for 15 frames. Regrabs leave you open until you land or take a hit. Play either side in <strong>Training → Contested ledge</strong>.</p>' +
+        '</ul><h3 class="guide-section">Ledge trumping</h3><p>Catch an occupied ledge to bump the other dog outward. On a fresh catch, a longer flight gives you more protected time. High damage shortens it. Watch the grip marks under the lip. The last mark turns gold for the final six frames. Regrabs leave you open until you land or take a hit. Try <strong>Edge practice → Long recovery</strong> to time a punish.</p>' +
         '<h3 class="guide-section">Between hits</h3><p>Flick a fresh direction during impact freeze to move a short distance. Center the stick and flick again for a second shift if time allows. On a keyboard or touch screen, tap a direction at the spark. Try <strong>Training → Combo escape</strong> at two distances.</p>' +
         '<h3 class="guide-section">Surviving a finisher</h3><p>On your last stock, two amber chevrons point toward the blast line if a centered stick would carry you out during hitstun. Hold across the throw during the freeze to bend your flight. On shallow launches, Down also slows you and Up adds speed. A late tap of Shield toward the stage queues an air dodge in open air. Try <strong>Training → Launch practice → Survival DI</strong>.</p>' +
         '<h3 class="guide-section">After a knockout</h3><p>Watch the lamps on the airmail lift. When they turn mint, tap Down, a side, Jump, or an aerial move to leave. Leaving early gives you more protection on landing. The last gold mail tag goes dark when you can be hit again. Try both sides in <strong>Training → Launch practice → Take the lift</strong> and <strong>Catch the return</strong>.</p>' +
@@ -1300,6 +1300,7 @@
       if (world?.wallPractice && e.f?.index === 0) wallFeedback(name);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (world?.edgePractice && (name === 'edgeCue' || name === 'edgeLand' || name === 'edgeResult' ||
+          name === 'edgeOpen' || (world.edgePractice.timeCatch && name === 'ledge' && e.f.index === 1) ||
           ((name === 'teeter' || name === 'edgeCancel') && e.f.index === 0))) edgeFeedback(name, e);
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
       if (name === 'waveContact' || name === 'waveResult') waveFeedback();
@@ -1519,7 +1520,12 @@
   $('dummy-damage').addEventListener('input', (e) => {
     if (!world) return;
     const d = world.escapePractice;
-    if (world.comboPractice) {
+    if (world.edgePractice?.timeCatch) {
+      world.setDummyDamage(e.target.value);
+      drill('edge', false, world.edgePractice.pattern);
+      e.target.focus({ preventScroll: true });
+      return;
+    } else if (world.comboPractice) {
       const d = world.comboPractice;
       world.setDummyDamage(e.target.value);
       drill('combo', false, d.source === 'record' && d.tape.length ? 'replay' : d.source, d.reply);
@@ -1811,9 +1817,22 @@
   function edgeFeedback(name, e) {
     const d = world.edgePractice, status = $('edge-status');
     if (d.phase === 'done' && name !== 'edgeResult') return;
-    const move = (moves[e.moveId] || specials[e.moveId] || smashes[e.moveId] || throws[e.moveId])?.label || 'Hit';
+    const move = (moves[e.moveId] || specials[e.moveId] || smashes[e.moveId] || throws[e.moveId] || grabs[e.moveId])?.label || 'Hit';
     status.dataset.result = e.outcome || name;
-    if (name === 'edgeLand') {
+    if (name === 'ledge') {
+      status.textContent = 'Catch at ' + e.f.damage + '% · ' + e.guardFrames + 'f protected';
+    } else if (name === 'edgeOpen') {
+      status.textContent = 'Grip marks gone · punish now';
+    } else if (d.timeCatch && name === 'edgeResult') {
+      const result = {
+        timedHit: move + ' caught the hang', timedGrab: move + ' caught the hang',
+        intercepted: move + ' intercepted the approach', rolledAway: 'Rival rolled to safety',
+        tooEarly: 'Swing passed through · ' + d.earlyFrames + 'f of protection left',
+        caught: 'Rival countered with ' + move, missed: 'Missed the recovery',
+      }[e.outcome];
+      status.textContent = result + (d.guardFrames ? ' · ' + d.guardFrames + 'f catch' : '');
+      $('recovery-tip').textContent = 'Try the same swing after the other recovery, or raise Dummy damage and repeat.';
+    } else if (name === 'edgeLand') {
       status.textContent = 'Landed · ' + Math.round(e.f.landingLag * 60) + 'f landing recovery';
     } else if (name === 'edgeCancel') {
       status.textContent = move + ' · ' + e.frames + 'f saved · airborne';
@@ -2324,7 +2343,8 @@
     $('freshness-readout').hidden = $('freshness-controls').hidden = !freshness;
     $('wave-readout').hidden = $('wave-patterns').hidden = !wave;
     const counterDrill = escape && pattern === 'counter';
-    showDamageControl(counterDrill || meteor || survival, freshness && world.freshnessPractice.koTest, meteor || survival ? 'launch-side' : undefined);
+    showDamageControl(counterDrill || meteor || survival, freshness && world.freshnessPractice.koTest,
+      meteor || survival ? 'launch-side' : world.edgePractice?.timeCatch ? 'edge-side' : undefined);
     $('damage-control').hidden = stock;
     $('dummy-damage').value = survival ? world.survivalPractice.baseline : meteor ? world.meteorPractice.baseline : counterDrill ? world.escapePractice.baseline : world.trainingDamage;
     $('damage-output').textContent = $('dummy-damage').value + '%';
@@ -2439,11 +2459,13 @@
       }
     } else if (edge) {
       const d = world.edgePractice, side = d.dir > 0 ? 'right' : 'left';
-      for (const id of ['lip','tip','deep']) $('edge-' + id).setAttribute('aria-pressed', String(id === d.pattern));
+      for (const id of ['lip','shortCatch','longCatch','tip','deep']) $('edge-' + id).setAttribute('aria-pressed', String(id === d.pattern));
       $('edge-slow').setAttribute('aria-pressed', String(d.slow));
       $('edge-status').dataset.result = 'ready';
-      $('edge-status').textContent = pattern === 'lip' ? 'Guard the ' + side + ' ledge' : 'Drifting ' + side + ' · tap Attack';
-      message = pattern === 'lip' ? 'Walk ' + side + ' to the chalk (P1: Shift + direction, or slide from the center dot). When the rival lets go, tap Down + Attack.' :
+      $('edge-status').textContent = d.timeCatch ? (pattern === 'longCatch' ? 'Long recovery' : 'Short recovery') + ' · tap Attack to start' :
+        pattern === 'lip' ? 'Guard the ' + side + ' ledge' : 'Drifting ' + side + ' · tap Attack';
+      message = d.timeCatch ? 'Tap Attack to send the rival toward the ledge. Watch the last grip mark turn gold. Time Down + Attack to hit as it disappears.' :
+        pattern === 'lip' ? 'Walk ' + side + ' to the chalk (P1: Shift + direction, or slide from the center dot). When the rival lets go, tap Down + Attack.' :
         'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
     } else if (footwork) {
       const practice = world.footworkPractice;
@@ -2579,7 +2601,7 @@
   for (const action of ['repeat','clear','guard','ko'])
     $('freshness-' + action).onclick = () => drill('freshness', false, action);
   $('edge-training').onclick = () => drill('edge', false, world.edgePractice?.pattern || 'lip');
-  for (const pattern of ['lip','tip','deep']) $('edge-' + pattern).onclick = () => drill('edge', false, pattern);
+  for (const pattern of ['lip','shortCatch','longCatch','tip','deep']) $('edge-' + pattern).onclick = () => drill('edge', false, pattern);
   $('edge-side').onclick = () => drill('edge', false, world.edgePractice.pattern, -world.edgePractice.dir);
   $('edge-slow').onclick = () => {
     const d = world.edgePractice;
@@ -3324,7 +3346,10 @@
       if (!e.repeat) showPause();
       return;
     }
-    if (e.target instanceof HTMLInputElement) return;
+    if (e.target instanceof HTMLInputElement) {
+      if (e.target.id !== 'dummy-damage' || !world?.edgePractice?.timeCatch || e.code !== keys[0].attack) return;
+      $('game').focus({ preventScroll: true });
+    }
     if (!matchKeys.has(e.code)) return;
     e.preventDefault();
     held.add(e.code);
@@ -3677,11 +3702,11 @@
     if (hash === '#cutscenes') openFilmLibraryLink();
     else if (hash === '#adventure') showRoute();
     else if (hash === '#online') showOnline();
-    else if (hash === '#training/edges') {
+    else if (hash === '#training/edges' || hash === '#training/ledge-catch') {
       menuScreen('match');
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
-      drill('edge', false, 'lip');
+      drill('edge', false, hash === '#training/ledge-catch' ? 'shortCatch' : 'lip');
     }
     else if (hash === '#training/combos') {
       menuScreen('match');
