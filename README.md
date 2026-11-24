@@ -1,6 +1,6 @@
 # Dog Fight 3
 
-A cartoon platform fighter for one or two players. Play **The Last Dispatch** story adventure, or pick Pip, Brisket, Noodle, or Clover for a three-stock fight on Picnic Table, Laundry Line, or Moonbell Bandstand.
+A cartoon platform fighter for one or two players. Play **The Last Dispatch** story adventure, or pick Pip, Brisket, Noodle, or Clover for a three-stock fight on Picnic Table, Laundry Line, Moonbell Bandstand, or Night Mail.
 
 ## Play
 
@@ -17,6 +17,10 @@ In **Training → Launch practice → Take the lift**, tap Attack to start. Drop
 The game fills the browser window. On browsers with fullscreen support, starting your first fight or chapter also hides the browser controls. Select **Fullscreen** or press **F** to switch at any time. On a phone, rotate to landscape for a wider view with the touch controls over the arena.
 
 On **Moonbell Bandstand**, hold Jump beneath either wing. Once your paws land, jump inward to reach the high center platform with your midair jump still available. The right and left ends of the high platform overlap the wings below. Tap Down there to retreat one level. Dropping through the middle takes you back to the deck.
+
+On **Night Mail**, fight on the roof of a moving mail car. Both dogs share one long landing surface. Drift toward open roof when Brisket gets underneath you, or challenge him with a falling aerial. Pip and Noodle can wall-jump off the sides of the car. In Training, drills that need raised platforms take you to another arena. **Reset positions** brings you back to the train.
+
+Try the same opening on two stages. You play Pip against Rival Brisket, with three stocks, seven minutes, and the Fetch Ball off. Jump straight up from your starting spot and let Pip fall. On the train you return to the roof. On the table you can land on the left platform, then drop through or jump again. [Play Night Mail](https://caleb-guyer.github.io/dog-fight-3/#solo/night-mail) · [Play Picnic Table](https://caleb-guyer.github.io/dog-fight-3/#solo/picnic-table)
 
 ## Stock match rules
 
@@ -38,7 +42,7 @@ In **Try Rival · Pip vs. Noodle**, close the distance until Noodle can reach yo
 
 Pick your dog and select **Quickplay** to fight the next available player on a random arena. To play a friend, choose an **Opening arena**, select **Create room**, and share the six-character code or invite link. Your friend picks a dog and selects **Join room**. The fight starts when both players connect. [Open Online versus](https://caleb-guyer.github.io/dog-fight-3/#online)
 
-Each device uses the P1 keyboard, controller, or touch controls. The HUD marks your fighter with **YOU**. Both dogs start with three stocks. When both players select **Rematch**, the arena advances through Picnic Table, Laundry Line, and Moonbell Bandstand in that order, then repeats. If the guest leaves, the next opponent can join the same code and play the host’s chosen opener.
+Each device uses the P1 keyboard, controller, or touch controls. The HUD marks your fighter with **YOU**. Both dogs start with three stocks. When both players select **Rematch**, the arena advances through Picnic Table, Laundry Line, Moonbell Bandstand, and Night Mail in that order, then repeats. If the guest leaves, the next opponent can join the same code and play the host’s chosen opener.
 
 Your dog responds on the next simulation frame. Both browsers predict the opponent’s held controls for up to eight frames and replay the fight when a late input changes what happened. The damage counter, stock count, and match result use confirmed inputs. A longer interruption briefly pauses the fight until the connection catches up.
 
@@ -407,4 +411,4 @@ In **Training**, choose **Left ledge** or **Right ledge**. The drill waits for J
 
 The editable game lives in `docs/`. Combat, physics, and the CPU are in `engine.js`. The match renderer is in `render.js`. The animated dogs and arenas are drawn in `fighters-art.js` and `arena-art.js`. Menus, controls, and synthesized sound are in `app.js`.
 
-Each fighter is assembled from indexed pixel sprites. The roster, damage meter, and results screen take their portraits from that fighter's in-game artwork. All three arenas are drawn on a 400 × 225 pixel grid. The contact sparks, landing dust, and launch trails share a five-frame atlas in `docs/assets/fight-fx.png`. The Dog Fight 3 wordmark and Brawl Pixel display font are bundled with the game.
+Each fighter is assembled from indexed pixel sprites. The roster, damage meter, and results screen take their portraits from that fighter's in-game artwork. The arenas are drawn on a 400 × 225 pixel grid. The contact sparks, landing dust, and launch trails share a five-frame atlas in `docs/assets/fight-fx.png`. The Dog Fight 3 wordmark and Brawl Pixel display font are bundled with the game.

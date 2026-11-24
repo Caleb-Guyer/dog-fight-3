@@ -75,6 +75,11 @@
       description: 'Two low wings lead to a high center platform over a narrow stage.',
       spawn: [380, 820],
     },
+    nightmail: {
+      name: 'Night Mail',
+      description: 'One long mail-car roof. Land on the deck or recover along its sides.',
+      spawn: [397, 803],
+    },
   };
   const idleInput = Object.freeze({
     x: 0,
@@ -1862,6 +1867,7 @@
   const verticalAim = (side) => (side === 'up' ? -1 : side === 'down' ? 1 : 0);
   const platform = (x1, x2, y, thin = false) => ({ x1, x2, y, thin });
   function platforms(stage, time) {
+    if (stage === 'nightmail') return [platform(160, 1040, 455)];
     if (stage === 'picnic')
       return [platform(160, 1040, 455), platform(315, 508, 325, true), platform(705, 898, 325, true)];
     if (stage === 'bandstand')
@@ -1884,6 +1890,7 @@
             [3, 15, 18],
             [9, 18, 225],
           ]
+        : stage === 'nightmail' ? [[0, 0, 12], [6, 12, 96], [18, 96, 114]]
         : stage === 'bandstand' ? [[0, 0, 15], [3, 15, 24], [9, 24, 36], [18, 36, 45]] : [
             [0, 0, 14],
             [5, 14, 22],
@@ -2616,7 +2623,7 @@
       this.dogs[1].damage = this.trainingDamage;
       this.lastCombo = { hits: 0, damage: 0 };
     }
-    resetTraining(ledge = false, fromHang = false) {
+    resetTraining(ledge = false, fromHang = false, needsPlatforms = false) {
       if (this.grapple) this.breakGrapple(false);
       if (this.launchPractice?.original) {
         this.dogs = this.launchPractice.original.dogs;
@@ -2640,6 +2647,16 @@
         this.dogs = this.wallPractice.original.dogs;
         this.terrain = platforms(this.stage, this.time);
         this.wallPractice = null;
+      }
+      if (this.practiceHomeStage) {
+        this.stage = this.practiceHomeStage;
+        this.terrain = platforms(this.stage, this.time);
+        this.practiceHomeStage = null;
+      }
+      if (needsPlatforms && !this.terrain.some(p => p.thin)) {
+        this.practiceHomeStage = this.stage;
+        this.stage = 'picnic';
+        this.terrain = platforms(this.stage, this.time);
       }
       this.ledgeClaims.length = 0;
       this.trumpPractice = null;
@@ -2689,11 +2706,11 @@
       }
     }
     resetEdgePractice(pattern = 'lip', dir = 1, slow = true) {
-      this.resetTraining();
-      const [f, rival] = this.dogs;
       const timeCatch = pattern === 'shortCatch' || pattern === 'longCatch';
       const corner = pattern === 'corner' || pattern === 'inside';
       const atDeck = pattern === 'lip' || timeCatch || corner;
+      this.resetTraining(false, false, !atDeck);
+      const [f, rival] = this.dogs;
       const deck = this.stage === 'laundry' && (!atDeck || dir > 0) ? 1 : 0;
       const ground = atDeck ? deck : this.stage === 'laundry' ? 3 : dir > 0 ? 1 : 2;
       const surface = this.terrain[ground], lip = dir > 0 ? surface.x2 : surface.x1;
@@ -2872,7 +2889,9 @@
         bandstand: { pip: 854.4, brisket: 938, noodle: 792, clover: 871 },
       };
       const move = throws[moveId];
-      const percent = Math.ceil((speeds[this.stage][rival.kind] * dog.stats.weight - move.base) / move.growth - move.dmg);
+      // The mail car and picnic table have the same lip position and blast lines.
+      const launchSpeed = speeds[this.stage === 'nightmail' ? 'picnic' : this.stage][rival.kind];
+      const percent = Math.ceil((launchSpeed * dog.stats.weight - move.base) / move.growth - move.dmg);
       const baseline = clamp(Math.round(damage ?? percent), 0, 200);
       Object.assign(rival, { x: lip - dir * (forehand ? 64 : 14), y: floor.y, face, ground });
       Object.assign(dog, { x: rival.x + face * gap, y: floor.y, face: -face, ground, damage: baseline });
@@ -2972,7 +2991,7 @@
       else if (d.after > 5) this.finishStockPractice('timeout');
     }
     resetMeteorPractice(pattern = 'spikeFloor', dir = 1, slow = true, startingDamage = 100) {
-      this.resetTraining();
+      this.resetTraining(false, false, pattern !== 'spikeEdge');
       const originalDogs = this.dogs, player = originalDogs[0], pip = newFighter('pip', 1);
       const offstage = pattern === 'spikeEdge';
       const platform = offstage ? (this.stage === 'laundry' && dir > 0 ? 1 : 0) :
@@ -3022,7 +3041,7 @@
       else if (f.ledge || f.ground >= 0) this.finishMeteorPractice(d.cancel ? 'saved' : 'returned');
     }
     resetPlatformPractice(pattern = 'below', slow = true) {
-      this.resetTraining();
+      this.resetTraining(false, false, pattern !== 'hold' && pattern !== 'shield-drop');
       if (pattern === 'hold' || pattern === 'shield-drop') {
         const originalStage = this.stage;
         this.stage = 'bandstand';
@@ -3442,7 +3461,7 @@
       this.emit('escapeResult', { f: this.dogs[0], outcome, spacing: drill.spacing, outward: drill.outward });
     }
     resetWavePractice(pattern = 'back', dir = 1, slow = true) {
-      this.resetTraining();
+      this.resetTraining(false, false, pattern !== 'back');
       this.time = 0;
       this.terrain = platforms(this.stage, 0);
       const [f, rival] = this.dogs;
