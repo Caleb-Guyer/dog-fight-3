@@ -78,6 +78,10 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 
 Flick a side to dash. Reverse in the first few steps to dash-dance. Once your dog is running, its paws have to brake before it can turn. Pip can reverse a dash later than Brisket, who skids farther when stopping. To walk on touch, slide from the center dot onto a side arrow. A direct tap on the arrow starts a dash.
 
+Walk to the edge of a platform and your dog plants its paws at the lip. You can tilt, shield, jump, or turn back immediately. Dash to take the fight offstage. If you land an aerial near a platform tip with enough sideways speed, sliding off ends its remaining landing recovery. You keep an air jump and can swing on the way down.
+
+In **Training → Edge practice**, walk to the chalk and catch a rival’s ledge jump with **Down + Attack**. Then compare **Land at the tip** and **Land deeper**. Tap neutral Attack and coast in both. Watch the recovery count, then try a down air as you slide off the tip. **Switch sides** mirrors the approach. [Play Edge practice](https://caleb-guyer.github.io/dog-fight-3/#training/edges).
+
 In **Training → Footwork practice**, dash right to the chalk and reverse to draw out Brisket’s Bear Hug. As his paws close, turn back and attack before he recovers. The drill reports how many frames he still needed when your punish landed. Choose **Footwork practice** again to retry with the same spacing.
 
 Under **Footwork practice**, choose **Clash jabs** to meet a mirror opponent at the tips of your paws. Tap Attack to start the count, then tap it again on the third chalk light. When two grounded strikes meet, comparable attacks recoil. A swing worth at least 9 percentage points more at the point of contact carries through and can still reach the rival. Charge, sweet spots and the late part of a swing all count. Two airborne attacks can trade hits.

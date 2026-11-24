@@ -3402,6 +3402,7 @@
     if (Object.prototype.hasOwnProperty.call(kitMoves, pose) || captiveFlinches.includes(pose))
       return actionCel(pose, phase);
     if (pose === 'walk') return tick(8) % 6;
+    if (pose === 'teeter') return tick(5) % 6;
     if (pose === 'crouch') return tick(3) % 2;
     if (pose === 'dashStart') return Math.min(2, Math.floor(phase * 3));
     if (pose === 'run') return tick(12) % 6;
@@ -4785,6 +4786,28 @@
         s.fistY = frame === 1 ? -1 : 0;
         if (frame === 2) s.eye = shutEyes;
         break;
+      case 'teeter': {
+        const sway = [0, 1, 2, 2, 1, 0][frame];
+        const reach = { pip: 5, brisket: 3, noodle: 7, clover: 4 }[name];
+        s.bodyX = reach - 2 + sway;
+        s.headX = reach + sway;
+        s.headTurn = 11 + 3 * sway;
+        s.bodyY = 1;
+        s.lean = reach + sway;
+        s.fistX = reach + 2 + sway;
+        s.fistY = -4 - 2 * sway;
+        s.rearX = -7 - sway;
+        s.rearY = -3 - sway;
+        s.leftX = -5;
+        s.leftY = -2 - sway;
+        s.rightX = 3;
+        s.kneeOut = name === 'brisket' ? 4 : 2;
+        s.tailLift = 6 - sway;
+        s.ear = sway;
+        s.scarf = -3 - sway;
+        s.charmTurn = -14 - 7 * sway;
+        break;
+      }
       case 'walk': {
         const step = [-3, -1, 2, 3, 1, -2][frame];
         s.leftX = step;
@@ -5644,6 +5667,7 @@
   const poses = [
     'idle',
     'walk',
+    'teeter',
     'dashStart',
     'clashRecoil',
     'run',

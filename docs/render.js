@@ -281,6 +281,7 @@
       if (f.vy < 0) return ['jump', clamp(1 + f.vy / f.stats.jump, 0, 1)];
       return ['fall', clamp(f.vy / f.stats.jump, 0, 1)];
     }
+    if (f.teeter) return ['teeter', 0];
     if (f.landTime > 0) return ['land', clamp(1 - f.landTime / (f.landDuration || 0.12), 0, 1)];
     if (f.skidTime > 0) return ['skid', 1 - f.skidTime / 0.14];
     if (f.run && f.sprintDir === f.run.face && f.run.age < f.kit.footwork.reverseFrames / 60)
@@ -1526,6 +1527,7 @@
     const [state, phase] = pose(f, world.end, f.grip ? world.dogs[f.grip.owner] : null);
     let face = f.face,
       spriteTime = time + f.index * 0.42;
+    if (state === 'teeter' && reduced.matches) spriteTime = 0;
     if (state === 'tumble') {
       face = f.reaction?.face || f.face;
       spriteTime = reduced.matches ? 0.21 : f.tumble.time;
@@ -1882,6 +1884,15 @@
       }
       return;
     }
+    if (e.type === 'edgeCancel') {
+      const trail = reduced.matches ? 5 : snap(3 + 12 * p, 2);
+      for (const offset of [0, 6]) {
+        const x = e.x + (trail + offset) * e.face, y = e.y + offset;
+        pixelLine(ctx, x - 9 * e.face, y - 4, x, y, ink, 5, 2);
+        pixelLine(ctx, x - 8 * e.face, y - 4, x, y, offset ? cream : mint, 2, 2);
+      }
+      return;
+    }
     if (e.type === 'platformDrop') {
       const spread = reduced.matches ? 0 : Math.round(p * 7);
       for (const side of [-1, 1]) {
@@ -2059,6 +2070,7 @@
       const f = e.f;
       if (name === 'stockLeave') this.add(name, e.point.x, e.point.y, mint, 0.18, 24);
       if (name === 'landingCancel') this.add(name, e.point.x, e.point.y, mint, 0.18, f.stats.width * 0.7);
+      if (name === 'edgeCancel') this.add(name, e.point.x, e.point.y, mint, 0.16, 12, e.dir);
       if (name === 'specialTurn') this.add(name, e.point.x, e.point.y, e.turn === 'turnaround' ? gold : mint,
         0.16, f.stats.width, e.turn === 'turnaround' ? e.face : Math.sign(e.vx) || e.face, { wave: e.turn === 'wavebounce' });
       if (name === 'meteorBounce' || name === 'meteorCancel')
@@ -2400,6 +2412,15 @@
           pixelLine(ctx, at - 4, y + 9, at, y + 5, mint, 3, 2);
           pixelLine(ctx, at, y + 5, at + 4, y + 9, mint, 3, 2);
         }
+      }
+      if (world.edgePractice) {
+        const d = world.edgePractice, x = snap(d.lip, 2), y = snap(world.terrain[d.ground].y, 2);
+        const released = d.pattern === 'lip' && d.phase === 'atLip' && d.ticks >= 16 && d.ticks < 26;
+        const color = released || d.frames ? mint : cream;
+        pixelLine(ctx, x - d.dir * 12, y + 4, x, y + 4, ink, 5, 2);
+        pixelLine(ctx, x, y + 4, x, y + 12, ink, 5, 2);
+        pixelLine(ctx, x - d.dir * 12, y + 4, x, y + 4, color, 2, 2);
+        pixelLine(ctx, x, y + 4, x, y + 12, color, 2, 2);
       }
       if (world.footworkPractice && world.footworkPractice.pattern !== 'bait') {
         const drill = world.footworkPractice, x = snap(drill.mark, 2), y = world.terrain[0].y + 9;

@@ -399,6 +399,8 @@
       tone(pitch, pitch * 0.72, 0.055, 0, 'square', 0.035);
       tone(pitch * 1.51, pitch * 1.42, 0.09, 0.009, 'sine', 0.085);
       if (detail.winner !== null) tone(270, 105, 0.075, 0.025, 'triangle', 0.105);
+    } else if (name === 'edgeCancel') {
+      tone(620, 950, 0.055, 0, 'triangle', 0.055);
     } else if (name === 'footworkCue' && detail.beat) {
       const pitch = detail.beat === 3 ? 890 : 490;
       tone(pitch, pitch * 0.96, 0.047, 0, 'triangle', 0.085);
@@ -985,6 +987,7 @@
         kit.ground.map((id) => moves[id].label).join(' / ') +
         '</div><p>' +
         kit.combo +
+        '</p><p>Walk to a ledge to balance there. Dash to run off. Land an aerial at the tip of a platform with sideways speed to slide off and attack again. Try Training → Edge practice.' +
         '</p><p>When two ground swings meet, both dogs recoil. A swing worth at least 9 percentage points more carries through. You can also bat Clover’s flying discs. Try Training → Footwork practice → Clash jabs.' +
         '</p><p>If the rival misses a landing, tap neutral Attack for ' + moves[kit.ground[0]].label +
         '. You can jab lock twice before finishing with ' + smashes[kit.smashes.down].label + ' (Down + Smash). Try Training → Launch practice → Jab lock.' +
@@ -1266,6 +1269,7 @@
     $('wave-readout').hidden = $('wave-patterns').hidden = true;
     showDamageControl(false);
     $('damage-control').hidden = false;
+    $('edge-status').hidden = $('edge-patterns').hidden = true;
     $('footwork-status').hidden = $('footwork-patterns').hidden = true;
     $('spacing-status').hidden = $('spacing-patterns').hidden = true;
     $('escape-status').hidden = $('escape-patterns').hidden = true;
@@ -1295,6 +1299,8 @@
       if (name === 'chaseCue' || name === 'chaseResult') chaseFeedback(name, e);
       if (world?.wallPractice && e.f?.index === 0) wallFeedback(name);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
+      if (world?.edgePractice && (name === 'edgeCue' || name === 'edgeLand' || name === 'edgeResult' ||
+          ((name === 'teeter' || name === 'edgeCancel') && e.f.index === 0))) edgeFeedback(name, e);
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
       if (name === 'waveContact' || name === 'waveResult') waveFeedback();
       if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingJab' ||
@@ -1802,6 +1808,31 @@
     }[e.outcome];
     tip.textContent = result + ' Tap Attack to retry.';
   }
+  function edgeFeedback(name, e) {
+    const d = world.edgePractice, status = $('edge-status');
+    if (d.phase === 'done' && name !== 'edgeResult') return;
+    const move = (moves[e.moveId] || specials[e.moveId] || smashes[e.moveId] || throws[e.moveId])?.label || 'Hit';
+    status.dataset.result = e.outcome || name;
+    if (name === 'edgeLand') {
+      status.textContent = 'Landed · ' + Math.round(e.f.landingLag * 60) + 'f landing recovery';
+    } else if (name === 'edgeCancel') {
+      status.textContent = move + ' · ' + e.frames + 'f saved · airborne';
+      $('recovery-tip').textContent = 'Aim Down and tap Attack now to catch the dog underneath.';
+    } else if (name === 'teeter') {
+      status.textContent = 'Balanced at the lip';
+    } else if (name === 'edgeCue') {
+      status.textContent = 'Rival let go · low tilt now';
+    } else {
+      status.textContent = {
+        covered: move + ' caught the ledge jump', followup: move + ' connected · ' + d.frames + 'f saved',
+        caught: 'Rival hit you with ' + move, claimed: 'You took the ledge', offstage: move + ' hit offstage',
+        other: move + ' connected', settled: 'Landing recovery finished on the platform',
+        overshot: 'Sailed past the platform', waited: 'Rival climbed onstage', missed: 'Rival slipped away',
+      }[e.outcome];
+      $('recovery-tip').textContent = d.pattern === 'lip' ? 'Retry Guard the ledge. Time Down + Attack as the rival lets go.' :
+        'Compare Land at the tip and Land deeper with the same neutral aerial.';
+    }
+  }
   function footworkFeedback(e) {
     const status = $('footwork-status');
     const state = e.outcome || e.phase;
@@ -2243,6 +2274,7 @@
     const wall = ledge === 'wall';
     const shield = ledge === 'shield';
     const footwork = ledge === 'footwork';
+    const edge = ledge === 'edge';
     const freshness = ledge === 'freshness';
     const wave = ledge === 'wave';
     const combo = ledge === 'combo';
@@ -2253,7 +2285,7 @@
     const roll = ledge === 'roll';
     const climb = ledge === 'climb';
     const trump = ledge === 'trump';
-    drillSide = launch || wall || shield || footwork || freshness || wave || combo || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
+    drillSide = launch || wall || shield || footwork || edge || freshness || wave || combo || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
@@ -2266,6 +2298,7 @@
     else if (launch) world.resetLaunchPractice();
     else if (combo) world.resetComboPractice(pattern, direction ?? world.comboPractice?.reply ?? 'stand', world.comboPractice?.slow ?? true);
     else if (wave) world.resetWavePractice(pattern, direction ?? world.wavePractice?.dir ?? 1, world.wavePractice?.slow ?? true);
+    else if (edge) world.resetEdgePractice(pattern, direction ?? world.edgePractice?.dir ?? 1, world.edgePractice?.slow ?? true);
     else if (freshness) {
       const lab = world.freshnessPractice;
       world.resetFreshnessPractice(pattern === 'repeat' || pattern === 'guard',
@@ -2313,6 +2346,7 @@
       $('launch-escape').setAttribute('aria-pressed', String(chase && pattern === 'defend'));
       if (launchOptions) $('launch-slow').setAttribute('aria-pressed', String(launchOptions.slow));
     }
+    $('edge-status').hidden = $('edge-patterns').hidden = !edge;
     $('footwork-status').hidden = $('footwork-patterns').hidden = !footwork;
     $('spacing-status').hidden = $('spacing-patterns').hidden = !spacing;
     $('escape-status').hidden = $('escape-patterns').hidden = !escape;
@@ -2403,6 +2437,14 @@
         $('escape-status').textContent = 'Rim Rattle';
         message = 'Tap Attack to start. Watch Clover’s disc, then flick left on the first hit spark.';
       }
+    } else if (edge) {
+      const d = world.edgePractice, side = d.dir > 0 ? 'right' : 'left';
+      for (const id of ['lip','tip','deep']) $('edge-' + id).setAttribute('aria-pressed', String(id === d.pattern));
+      $('edge-slow').setAttribute('aria-pressed', String(d.slow));
+      $('edge-status').dataset.result = 'ready';
+      $('edge-status').textContent = pattern === 'lip' ? 'Guard the ' + side + ' ledge' : 'Drifting ' + side + ' · tap Attack';
+      message = pattern === 'lip' ? 'Walk ' + side + ' to the chalk (P1: Shift + direction, or slide from the center dot). When the rival lets go, tap Down + Attack.' :
+        'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
     } else if (footwork) {
       const practice = world.footworkPractice;
       for (const id of ['bait', 'match', 'power', 'disc'])
@@ -2536,6 +2578,15 @@
   };
   for (const action of ['repeat','clear','guard','ko'])
     $('freshness-' + action).onclick = () => drill('freshness', false, action);
+  $('edge-training').onclick = () => drill('edge', false, world.edgePractice?.pattern || 'lip');
+  for (const pattern of ['lip','tip','deep']) $('edge-' + pattern).onclick = () => drill('edge', false, pattern);
+  $('edge-side').onclick = () => drill('edge', false, world.edgePractice.pattern, -world.edgePractice.dir);
+  $('edge-slow').onclick = () => {
+    const d = world.edgePractice;
+    d.slow = !d.slow;
+    $('edge-slow').setAttribute('aria-pressed', String(d.slow));
+    $('game').focus({ preventScroll: true });
+  };
   $('footwork-training').onclick = () => drill('footwork', false, world.footworkPractice?.pattern || 'bait');
   for (const pattern of ['bait', 'match', 'power', 'disc'])
     $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
@@ -3571,7 +3622,7 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow ? dt / 2 : dt;
+        accumulator += world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];
@@ -3626,6 +3677,12 @@
     if (hash === '#cutscenes') openFilmLibraryLink();
     else if (hash === '#adventure') showRoute();
     else if (hash === '#online') showOnline();
+    else if (hash === '#training/edges') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
+      drill('edge', false, 'lip');
+    }
     else if (hash === '#training/combos') {
       menuScreen('match');
       afterStory = null;

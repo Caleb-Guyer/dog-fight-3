@@ -11,14 +11,14 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=combo-practice-1" />
+    <link rel="stylesheet" href="./style.css?v=edge-footing-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=bandstand-1" />
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
-    <script defer src="./fighters-art.js?v=crouch-counter-1"></script>
+    <script defer src="./fighters-art.js?v=edge-footing-1"></script>
     <script defer src="./arena-art.js?v=bandstand-1"></script>
-    <script defer src="./engine.js?v=combo-practice-1"></script>
-    <script defer src="./render.js?v=platform-shield-drop-1"></script>
+    <script defer src="./engine.js?v=edge-footing-1"></script>
+    <script defer src="./render.js?v=edge-footing-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=stock-return-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./online.js?v=platform-shield-drop-1"></script>
-    <script defer src="./app.js?v=combo-practice-1"></script>
+    <script defer src="./online.js?v=edge-footing-1"></script>
+    <script defer src="./app.js?v=edge-footing-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -311,6 +311,7 @@
           </div>
           <span id="grapple-prompt" role="status" hidden></span>
           <div class="training-readouts">
+            <output id="edge-status" aria-label="Edge practice" aria-live="polite" hidden></output>
             <output id="footwork-status" aria-label="Footwork practice" aria-live="polite" hidden></output>
             <output id="spacing-status" aria-label="Aerial practice" aria-live="polite" hidden></output>
             <output id="escape-status" aria-label="Combo escape" aria-live="polite" hidden></output>
@@ -408,6 +409,14 @@
             <button id="freshness-clear" type="button" class="utility">Fresh start</button>
             <button id="freshness-guard" type="button" class="utility" aria-pressed="false">Dummy shield</button>
             <button id="freshness-ko" type="button" class="utility" aria-pressed="false">KO test</button>
+          </span>
+          <button id="edge-training" type="button" class="utility">Edge practice</button>
+          <span id="edge-patterns" role="group" aria-label="Edge exercises" hidden>
+            <button id="edge-lip" type="button" class="utility" aria-pressed="true">Guard the ledge</button>
+            <button id="edge-tip" type="button" class="utility" aria-pressed="false">Land at the tip</button>
+            <button id="edge-deep" type="button" class="utility" aria-pressed="false">Land deeper</button>
+            <button id="edge-side" type="button" class="utility">Switch sides</button>
+            <button id="edge-slow" type="button" class="utility" aria-pressed="true">Half speed</button>
           </span>
           <button id="footwork-training" type="button" class="utility">Footwork practice</button>
           <span id="footwork-patterns" role="group" aria-label="Footwork exercises" hidden>
