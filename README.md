@@ -121,6 +121,10 @@ In **Training → Move freshness**, hit the dummy, choose **Return to marks**, a
 
 Choose **KO test** for a vertical launch test against Pip. From your chalk mark, fully charge **Up + Smash** and release. Once Pip crosses the top blast line, choose **Return to marks** and do it again. The same charge lets Pip land on the second attempt. Each playable dog has its own starting percentage for this comparison.
 
+**Rage.** Above 35% damage, your own hits and throws start launching rivals farther. The gold line under your portrait fills as your damage climbs. At 150% you get the maximum 10% knockback bonus. Losing a stock resets it. The move still deals its usual damage and shield pressure. Setup hits in a multi-hit move, rope pulls, floor bounces and the Fetch Ball keep their usual launch.
+
+In **Move freshness → Rage test**, fully charge Brisket’s Up + Smash against Pip at 95% on Night Mail. At 0% Brisket sees Pip land. Choose **Set yourself to 150%** and repeat the swing to send Pip through the top. Both attempts start with a fresh move. The readout keeps both launch speeds and the previous flight path. [Play the rage comparison](https://caleb-guyer.github.io/dog-fight-3/#training/rage)
+
 Flick **Down** on a raised platform to slip through it. Your horizontal momentum carries into the fall, and you keep an air jump. As your paws pass through, aim your aerial and tap **Attack**. To down tilt on top, press **Down + Attack** together. For a crouch that lets high hits sail over your head, tilt the stick down gently, hold your keyboard Walk modifier with Down, or slide your thumb from the center dot onto Down. Low sweeps can still reach a crouching dog.
 
 In **Training → Platform practice**, choose **Rival below** to catch the other dog with a falling aerial. Choose **Rival on top** to catch them with your down tilt on the same platform. On Laundry Line the second setup puts you both on the moving basket. Select either setup again to retry with your fighters and stage.

@@ -15,6 +15,7 @@
     Battle,
     idleInput,
     applyFlickJump,
+    rageScale,
     isReversalPractice,
     isFootstoolPractice,
     cpuLevels,
@@ -1128,13 +1129,15 @@
   function updateFreshnessReadout(player, lab) {
     const { last, previous } = lab;
     const id = last?.moveId || previous?.last.moveId;
-    $('freshness-name').textContent = last ? moveLabel(last.moveId) + ' · ' + tenth(last.power * 100) + '% power' :
+    $('freshness-name').textContent = lab.rageDamage != null ? player.stats.name + ' at ' + lab.rageDamage + '% · Rage +' +
+      tenth((rageScale(lab.rageDamage) - 1) * 100) + '%' : last ? moveLabel(last.moveId) + ' · ' + tenth(last.power * 100) + '% power' :
       lab.koTest ? smashes[player.kit.smashes.up].label + ' KO test' : 'Move freshness';
     const result = last ? freshnessResult(last) : world.dogs[1].stats.name + ' at ' + lab.baseline + '%';
     if ($('freshness-contact').textContent !== result) $('freshness-contact').textContent = result;
     $('freshness-previous').hidden = !previous;
     if (previous) {
-      const label = last?.moveId === previous.last.moveId ? 'Previous' : 'Previous ' + moveLabel(previous.last.moveId);
+      const label = previous.rageDamage != null ? 'At ' + previous.rageDamage + '%' :
+        last?.moveId === previous.last.moveId ? 'Previous' : 'Previous ' + moveLabel(previous.last.moveId);
       $('freshness-previous').textContent = label + ' · ' + freshnessResult(previous.last);
     }
     $('freshness-summary').textContent = 'Recent moves ' + player.moveHistory.length + '/9' +
@@ -1256,7 +1259,7 @@
       return human ? '↓ or Jump' : 'Lift ready';
     });
     const key =
-      scores.map((f, i) => f.kind + ':' + Math.floor(f.damage) + ':' + f.stocks + returns[i]).join('|') +
+      scores.map((f, i) => f.kind + ':' + f.damage + ':' + f.stocks + returns[i]).join('|') +
       world.mode +
       '/' +
       combo.hits +
@@ -1286,6 +1289,8 @@
     }
     $('hud').innerHTML = scores
       .map((f, i) => {
+        const rage = tenth((rageScale(f.damage) - 1) * 100);
+        const rageTitle = 'Rage +' + rage + '% knockback';
         const lives =
           world.mode === 'training'
             ? '∞'
@@ -1293,9 +1298,10 @@
         return (
           '<div class="hud-card ' +
           (i ? 'two' : '') +
-          '">' + (returns[i] ? '<span class="stock-alert' + (returns[i] === 'Last tag' ? ' last' : '') + '">' + returns[i] + '</span>' : '') + '<img alt="" src="' +
+          '">' + (returns[i] ? '<span class="stock-alert' + (returns[i] === 'Last tag' ? ' last' : '') + '">' + returns[i] + '</span>' : '') + '<span class="hud-portrait"><img alt="" src="' +
           portrait(f.kind) +
-          '"><div><span class="hud-name"><small>' +
+          '">' + (rage ? '<span class="rage-meter" role="img" aria-label="' + rageTitle + '" title="' + rageTitle +
+            '"><i style="width:' + (rage * 10) + '%"></i></span>' : '') + '</span><div><span class="hud-name"><small>' +
           labelFor(i) +
           '</small>' +
           f.stats.name +
@@ -2717,7 +2723,13 @@
     else if (edge) world.resetEdgePractice(pattern, direction ?? world.edgePractice?.dir ?? 1, world.edgePractice?.slow ?? true);
     else if (freshness) {
       const lab = world.freshnessPractice;
-      world.resetFreshnessPractice(pattern === 'repeat' || pattern === 'guard',
+      if (pattern === 'rage' || (lab?.rageDamage != null && pattern !== 'ko')) {
+        if (pattern === 'rage' && lab?.rageDamage != null) world.resetFreshnessPractice();
+        else {
+          const ownDamage = pattern === 'percent' ? (lab.rageDamage ? 0 : 150) : lab?.rageDamage ?? 0;
+          world.resetFreshnessPractice(true, false, true, undefined, ownDamage);
+        }
+      } else world.resetFreshnessPractice(pattern === 'repeat' || pattern === 'guard',
         pattern === 'guard' ? !lab.guard : pattern === 'ko' ? false : lab?.guard ?? false,
         pattern === 'ko' ? !lab?.koTest : lab?.koTest ?? false);
     }
@@ -2801,9 +2813,16 @@
       message = $('wave-tip').textContent;
     } else if (freshness) {
       const lab = world.freshnessPractice;
-      $('freshness-ko').setAttribute('aria-pressed', String(lab.koTest));
+      const rageTest = lab.rageDamage != null;
+      $('freshness-ko').hidden = $('freshness-guard').hidden = $('freshness-clear').hidden =
+        $('freshness-history').hidden = rageTest;
+      $('freshness-percent').hidden = !rageTest;
+      $('freshness-percent').textContent = 'Set yourself to ' + (lab.rageDamage ? 0 : 150) + '%';
+      $('freshness-rage').setAttribute('aria-pressed', String(rageTest));
+      $('freshness-ko').setAttribute('aria-pressed', String(lab.koTest && !rageTest));
       $('freshness-guard').setAttribute('aria-pressed', String(lab.guard));
-      message = lab.koTest ? 'Fully charge Up + Smash, release, then choose Return to marks. The mint trail shows your previous launch.' :
+      message = rageTest ? 'Fully charge Up + Smash and release. Switch your own damage and repeat. The mint trail follows the last launch.' :
+        lab.koTest ? 'Fully charge Up + Smash, release, then choose Return to marks. The mint trail shows your previous launch.' :
         'Land a hit, choose Return to marks, and repeat. Mix in other moves to restore its power.';
     } else if (spacing) {
       const practice = world.spacingPractice, approach = pattern === 'approach';
@@ -3072,7 +3091,7 @@
     $('wave-slow').setAttribute('aria-pressed', String(d.slow));
     $('game').focus({ preventScroll: true });
   };
-  for (const action of ['repeat','clear','guard','ko'])
+  for (const action of ['repeat','clear','guard','ko','rage','percent'])
     $('freshness-' + action).onclick = () => drill('freshness', false, action);
   $('edge-training').onclick = () => drill('edge', false, world.edgePractice?.pattern || 'lip');
   for (const pattern of ['lip','shortCatch','longCatch','tip','deep','corner','inside']) $('edge-' + pattern).onclick = () => drill('edge', false, pattern);
@@ -4391,6 +4410,12 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
       drill('platform', false, 'shield-drop');
+    }
+    else if (hash === '#training/rage') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'nightmail', fetch: false });
+      drill('freshness', false, 'rage');
     }
     else if (hash === '#training/short-hops' || hash === '#training/flick-jump') {
       menuScreen('match');

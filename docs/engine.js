@@ -97,6 +97,8 @@
   const topBlastY = -172;
   const floorCrossing = (from, to, floor) => to === from ? 1 : clamp((floor - from) / (to - from), 0, 1);
   const crouchLaunchScale = 2 / 3;
+  const rageScale = damage => 1 + .10 * clamp((damage - 35) / 115, 0, 1);
+  const finishingLaunch = (move, name) => !move?.setupHit && !move?.second && !move?.pull && !move?.bounce && name !== 'snare';
   const canStayPlanted = (vx, vy) => Math.hypot(vx, vy) <= 150 && Math.abs(vy) <= 96;
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
   const inputWindow = 7 / 60;
@@ -2672,7 +2674,7 @@
     setDummyDamage(value) {
       const damage = clamp(Number(value) || 0, 0, 200);
       const lab = this.freshnessPractice;
-      if (lab) return this.resetFreshnessPractice(true, lab.guard, lab.koTest, damage);
+      if (lab) return this.resetFreshnessPractice(true, lab.guard, lab.koTest, damage, lab.rageDamage);
       this.trainingDamage = damage;
       this.dogs[1].damage = this.trainingDamage;
       this.lastCombo = { hits: 0, damage: 0 };
@@ -3617,10 +3619,11 @@
         this.emit('waveResult', { f, outcome });
       }
     }
-    resetFreshnessPractice(repeat = false, guard = false, koTest = false, damage) {
+    resetFreshnessPractice(repeat = false, guard = false, koTest = false, damage, rageDamage = null) {
       const prior = this.freshnessPractice;
-      const same = prior?.koTest === koTest;
-      const histories = repeat && same ? this.dogs.map(f => f.moveHistory) : null;
+      const rageTest = rageDamage !== null;
+      const same = prior && prior.koTest === koTest && (prior.rageDamage != null) === rageTest;
+      const histories = repeat && same && !rageTest ? this.dogs.map(f => f.moveHistory) : null;
       this.resetTraining();
       const original = koTest ? { dogs: this.dogs, damage: this.trainingDamage } : null;
       if (koTest) {
@@ -3630,7 +3633,8 @@
         const threshold = this.stage === 'bandstand'
           ? { pip: 117, brisket: 109, noodle: 115, clover: 137 }
           : { pip: 115, brisket: 105, noodle: 108, clover: 132 };
-        this.trainingDamage = damage ?? (same ? prior.baseline : threshold[player.kind]);
+        this.trainingDamage = damage ?? (same ? prior.baseline : threshold[player.kind] - (rageTest ? 10 : 0));
+        if (rageTest) player.damage = rageDamage;
       } else if (damage !== undefined) this.trainingDamage = damage;
       this.time = 0;
       this.terrain = this.layout?.terrain || platforms(this.stage, 0);
@@ -3645,10 +3649,10 @@
       });
       this.dogs[1].damage = this.trainingDamage;
       this.dogs[1].shield = guard;
-      const comparable = histories && prior.guard === guard && prior.baseline === this.trainingDamage;
-      this.freshnessPractice = { waiting: true, guard, koTest, original, last: null, trace: [], revision: 0,
+      const comparable = repeat && same && prior.guard === guard && prior.baseline === this.trainingDamage;
+      this.freshnessPractice = { waiting: true, guard, koTest, rageDamage, original, last: null, trace: [], revision: 0,
         marks: this.dogs.map(f => f.x), baseline: this.trainingDamage,
-        previous: comparable ? prior.last ? { last: prior.last, trace: prior.trace } : prior.previous : null };
+        previous: comparable ? prior.last ? { last: prior.last, trace: prior.trace, rageDamage: prior.rageDamage } : prior.previous : null };
     }
     sampleFreshness(owner, use, moveId, power, damage, response, blocked = false) {
       const lab = this.freshnessPractice;
@@ -4837,6 +4841,8 @@
         f.techLock = Math.max(0, f.techLock - dt);
       }
       if (settingUpWallHit) this.dogs[0].prev = { ...input1 };
+      // All attacks that connect this frame read the same pre-contact damage, including a disc trading with a paw.
+      const damageAtContact = this.dogs.map(f => f.damage);
       if (this.grapple) this.advanceGrapple(dt);
       for (const f of this.dogs) {
         if (f.ground >= 0) {
@@ -4848,9 +4854,9 @@
       }
       if (this.ledgeClaims.length) this.resolveLedgeClaims();
       this.separateGroundedFighters();
-      this.resolveMelee();
+      this.resolveMelee(damageAtContact);
       for (const f of this.dogs) if (f.attack?.landed) f.attack = null;
-      this.updateDiscs(dt);
+      this.updateDiscs(dt, damageAtContact);
       if (juggle) this.checkJuggle();
       if (this.platformPractice) this.checkPlatformPractice();
       if (edge) this.checkEdgePractice();
@@ -7040,7 +7046,7 @@
       else if (drill.pattern === 'match' || drill.pattern === 'power')
         this.finishFootwork(winner ? winner.index === 0 ? 'brokeThrough' : 'overpowered' : 'matched');
     }
-    resolveMelee() {
+    resolveMelee(damageAtContact = this.dogs.map(f => f.damage)) {
       // Collect both active hitboxes before either hit can interrupt the other fighter.
       const hits = [],
         catches = [],
@@ -7168,6 +7174,7 @@
           attack.moveId,
           attack,
           !!guard,
+          damageAtContact[f.index],
         );
         if (attack.connected) connectedHits.push(hit);
         if (sweet && attack.connected) this.emit('sweetSpot', { f, point, face, moveId: attack.moveId });
@@ -7359,7 +7366,7 @@
       else if (this.shieldPractice?.pattern === 'yourHop') this.finishShieldPractice('blockedAir');
       else if (this.shieldPractice?.pattern === 'poke') this.finishShieldPractice(broken ? 'brokeGuard' : 'sealed');
     }
-    hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId, use, covered = true) {
+    hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId, use, covered = true, ownerDamage = owner.damage) {
       if (protectionTime(target)) return false;
       if (target.grip?.target === target.index) return false;
       const grab = name === 'throw' || move?.commandGrab;
@@ -7443,7 +7450,9 @@
       target.techBuffer = target.dodge = 0;
       const applied = this.dealDamage(target, damage, previousLocks > 0 || move?.preserveCombo);
       this.comboContact(target, name === 'throw' ? 'throw' : 'hit', moveId || name, applied);
-      const speed = (base + target.damage * growth) * (0.75 + 0.25 * power) / target.stats.weight;
+      const finish = finishingLaunch(move, name);
+      const rage = finish && growth > 0 && name !== 'ball' ? rageScale(ownerDamage) : 1;
+      const speed = (base + target.damage * growth) * (0.75 + 0.25 * power) * rage / target.stats.weight;
       // Brisket's landing shockwave and a weak grounded spike still pop the rival up.
       const meteor = !!move?.meteor && !(use?.plunge && use.landed) && speed * (braced ? crouchLaunchScale : 1) >= tumbleSpeed;
       if (move) {
@@ -7502,7 +7511,7 @@
       target.attack = null;
       cancelCharge(target);
       target.shield = false;
-      target.stun = clamp(0.115 + speed * 0.00036, 0.14, 0.58);
+      target.stun = clamp(0.115 + speed * 0.00036, 0.14, 0.58 * rage);
       if (move?.stun) target.stun = Math.max(target.stun, move.stun);
       if (planted) target.stun = (2 + Math.floor(Math.abs(target.vx) / 48)) / 60;
       else if (braced) target.stun *= crouchLaunchScale;
@@ -7511,7 +7520,6 @@
       target.reaction = { duration: target.stun, face: planted ? target.face : -face, hard: emphatic || speed > 460, planted };
       const launchSpeed = Math.hypot(target.vx, target.vy);
       this.sampleFreshness(owner, use, moveId, power, applied, launchSpeed);
-      const finish = !move?.setupHit && !move?.second && !move?.pull && !move?.bounce && name !== 'snare';
       if (finish && launchSpeed >= tumbleSpeed) {
         this.startTumble(target, true);
         if (meteor && target.vy > 0) {
@@ -7707,7 +7715,7 @@
       }
       return false;
     }
-    updateDiscs(dt) {
+    updateDiscs(dt, damageAtContact = this.dogs.map(f => f.damage)) {
       this.projectiles = this.projectiles.filter((d) => {
         const owner = this.dogs[d.owner];
         if (d.caught) return false;
@@ -7731,6 +7739,7 @@
             d.moveId,
             d,
             covered,
+            damageAtContact[owner.index],
           );
         };
         if (d.type === 'drive') {
@@ -7961,7 +7970,8 @@
         // Sometimes commit to a low stance against a visible light swing the opponent has used before.
         if (!choice && chance < 0.77 && !grab && !a.pull && !a.projectile && !f.shield && !f.dropPrep &&
             foe.moveHistory.some(entry => entry.moveId === a.moveId) && Number.isFinite(a.angle)) {
-          const speed = (a.base + (f.damage + a.dmg) * a.growth) / f.stats.weight;
+          const rage = a.growth > 0 && finishingLaunch(a, a.name) ? rageScale(foe.damage) : 1;
+          const speed = (a.base + (f.damage + a.dmg) * a.growth) * rage / f.stats.weight;
           const angle = Math.max(a.angle, 0) * Math.PI / 180;
           if (canStayPlanted(crouchLaunchScale * speed * Math.cos(angle), crouchLaunchScale * (40 + speed * Math.sin(angle))))
             choice = 'crouch';
@@ -9233,6 +9243,7 @@
     Battle,
     idleInput,
     applyFlickJump,
+    rageScale,
     clamp,
     attackWindow,
     canCancelMeteor,
