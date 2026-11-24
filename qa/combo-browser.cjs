@@ -1084,7 +1084,7 @@ async function testNightMail(page, mobile) {
   await page.emulateMedia({reducedMotion:'no-preference'});
 
   const session = mobile && await page.context().newCDPSession(page);
-  for (const [route, arena, landing] of [['night-mail','Night Mail',0],['picnic-table','Picnic Table',1]]) {
+  for (const [route, arena, landing] of [['night-mail','Night Mail',0],['picnic-table','Picnic Table',1],['canal-lock','Canal Lock',1]]) {
     await page.goto(root + '?landing=' + route + '#solo/' + route);
     assert.equal(await stage.textContent(),arena);
     assert.match(await page.locator('#match-mode').textContent(),/Rival CPU/i);
@@ -1110,6 +1110,50 @@ async function testNightMail(page, mobile) {
     else await page.keyboard.up('Space');
     assert.deepEqual(await page.evaluate(()=>window.mailJump),{air:true,landing});
   }
+}
+
+async function testCanal(page,mobile) {
+  const click=selector=>mobile?page.locator(selector).tap():page.locator(selector).click();
+  await page.goto(root+'?lock-preview#solo');
+  await click('#choose-stage');
+  await click('[data-stage="canal"]');
+  assert.equal(await page.locator('#stage-title').innerText(),'Canal Lock');
+  await page.clock.runFor(80);
+  await page.goto(root+'?lock-opener#online');
+  await page.selectOption('#online-stage','canal');
+  assert.equal(await page.locator('#online-stage option:checked').innerText(),'Canal Lock');
+  for(const preference of ['reduce','no-preference']) {
+    await page.emulateMedia({reducedMotion:preference});
+    const samples=await page.evaluate(()=>{
+      const c=document.createElement('canvas');c.width=2000;c.height=800;
+      const ctx=c.getContext('2d',{willReadFrequently:true});
+      ctx.translate(400,60);
+      const pixel=(x,y)=>Array.from(ctx.getImageData(Math.floor(x)+400,y+60,1,1).data);
+      return [0,2.4,7.2].map(time=>{
+        window.ArenaArt.draw(ctx,'canal',time,{left:-400,top:-60,right:1600,bottom:740});
+        const [gate,deck]=window.DogFight.platforms('canal',time);
+        return {deck:[pixel(deck.x1+1,365),pixel(deck.x2-2,365)],outside:pixel(deck.x1-2,365),
+          gate:pixel(gate.x1+1,455),corners:[pixel(-400,-60),pixel(1599,739)]};
+      });
+    });
+    for(const f of samples) {
+      const yellow=[255,224,154,255];
+      assert.deepEqual(f.deck,[yellow,yellow]);assert.notDeepEqual(f.outside,yellow);
+      assert.deepEqual(f.gate,[188,226,198,255]);assert(f.corners.every(p=>p[3]===255));
+    }
+  }
+  await page.goto(root+'?canal-trial#training/ferry');
+  const status=page.locator('#platform-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for(const result of ['tagged','guarded']){
+    await press('platform-ferry');
+    assert.equal(await status.innerText(),'Challenger on the gate');
+    await hold(['attack']);await waitFor('approach');
+    await hold(result==='guarded'?['shield']:[]);await waitFor(result);
+    await hold([]);
+  }
+  await press('reset-training');
+  assert.equal(await page.locator('#match-stage').innerText(),'Canal Lock');
 }
 
 async function testJumpIns(page,mobile) {
@@ -1557,6 +1601,7 @@ async function testDevice(browser, mobile) {
     await testFinalHit(page, mobile);
     await testHitstunCancel(page, mobile);
     await testNightMail(page, mobile);
+    await testCanal(page, mobile);
     await testJumpIns(page, mobile);
     await testLedgeReturn(page, mobile);
     await testSpotCounter(page, mobile);
