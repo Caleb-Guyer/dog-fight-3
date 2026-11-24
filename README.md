@@ -373,6 +373,10 @@ Choose **Training → Practice ledge attack** to start hanging with the dummy in
 
 ## Ledge climbs
 
+**Attack from below.** While hanging, tap Down or away to let go. Jump on that beat or just after to rise from below the lip. This spends your air jump. Release Down, steer inward and tap Attack for your forward aerial, then keep steering to land onstage. Jump alone springs from the top of the lip and leaves your air jump available. If you drifted into the catch holding away, center the stick before flicking away to release.
+
+In **Ledge timing → Attack from below**, the guard tries to check the lip with a low tilt. Land your rising aerial and get both paws back onstage. Choose **Cover the return** to defend against the same route. Hold Shield once, then retry and release just before the swing to parry. Rival can also attack from below when it sees you charging or recovering from a missed swing near the edge. [Play the ledge return](https://caleb-guyer.github.io/dog-fight-3/#training/ledge-return)
+
 Press toward the stage while hanging to climb. Pip pulls up in 26 frames, Clover in 29, Noodle in 31 and Brisket in 36. Each dog stays close to the lip and finishes facing the stage. A fresh catch protects the pull and leaves a short opening as the dog stands. A regrab before landing or taking a hit leaves the whole climb vulnerable. Hold Shield during the climb to guard on the first free frame.
 
 In **Training → Ledge timing**, choose **Get up** to climb and shield the waiting dog's jab. Choose **Set the trap**, tap Attack to start, then jab as the rival plants their paws. An early swing misses and a late swing meets their shield. Both roles use your selected fighters. **Switch ledge** mirrors the setup and **Half speed** gives you more time to read the animation.

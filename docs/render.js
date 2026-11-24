@@ -2132,6 +2132,8 @@
           wall: e.wall,
         });
       }
+      if (name === 'ledgeRelease')
+        this.add('lipDust',e.edge.x,e.edge.y,'#c9aa86',.13,12,e.edge.left ? 1 : -1,{behind:true});
       if (name === 'ledgeRoll' || name === 'ledgeRollPlant' || name === 'ledgeClimb' || name === 'ledgeClimbPlant') {
         const plant = name.endsWith('Plant');
         this.add(
