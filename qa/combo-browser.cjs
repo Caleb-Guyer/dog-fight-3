@@ -1217,8 +1217,29 @@ async function testAttackCancel(page,mobile) {
     await hold([]);
   }
   await press('footwork-cancelDash'); await press('footwork-slow'); await press('footwork-pause');
-  await hold(['left','attack']); await page.clock.runFor(20);
+  assert.equal(await page.locator('#footwork-pause').getAttribute('aria-pressed'),'false');
+  assert.equal(await page.locator('#footwork-slow').getAttribute('aria-pressed'),'false');
+  await page.evaluate(()=>{
+    const proto=window.DogFight.Battle.prototype, original=proto.step;
+    window.windupTrace=[];
+    proto.step=function(dt,a,b){
+      const value=original.call(this,dt,a,b), f=this.dogs[0];
+      if(this.footworkPractice?.pattern==='cancelDash' && a && window.windupTrace.length<30)
+        window.windupTrace.push({x:a.x,attack:a.attack,jump:a.jump,move:f.attack?.moveId,age:f.attack?.time,phase:this.footworkPractice.phase});
+      return value;
+    };
+    window.endWindupTrace=()=>{proto.step=original;};
+  });
+  await hold(['left','attack']);
+  // RAF can render before a fresh fixed simulation tick has accumulated.
+  for(let i=0;i<24;i++){
+    if(await page.evaluate(()=>window.windupTrace.some(frame=>frame.move==='noodleLeadSweep')))break;
+    await page.clock.runFor(4);
+  }
+  const trace=await page.evaluate(()=>window.windupTrace);
+  assert.equal(trace.at(-1)?.move,'noodleLeadSweep',JSON.stringify(trace));
   await hold(['up','jump']); await waitFor('risingCatch'); await hold([]);
+  await page.evaluate(()=>window.endWindupTrace());
   await press('reset-training'); assert(await status.isHidden());
   console.log((mobile?'Touch':'Keyboard')+' passed dash attack to up air, turnaround back air, ground whiff and match timing.');
 }
