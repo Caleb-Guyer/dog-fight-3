@@ -1606,6 +1606,12 @@
       Math.floor(time * 12) % 2
     )
       ctx.globalAlpha = 0.53;
+    const grip = f.grip;
+    if (grip?.target === f.index && grip.phase !== 'throw' && grip.struggleFlash > 0 && !reduced.matches) {
+      const pull = grip.struggleFlash * 60 / 6;
+      const side = grip.struggles % 2 ? 1 : -1;
+      ctx.translate(snap(side * 4 * pull, 2), -snap(3 * pull, 2));
+    }
     window.DogArt.draw(ctx, f.kind, snap(f.x, 2), snap(f.y, 2), {
       face,
       scale: 1,
@@ -1617,6 +1623,12 @@
       dodgeY: f.airDodge?.y || 0,
     });
     ctx.restore();
+    if (grip?.target === f.index && grip.phase !== 'throw' && grip.struggleFlash > 0) {
+      const side = grip.struggles % 2 ? 1 : -1;
+      const x = snap(f.x + side*(f.stats.width+5),2), y = snap(f.y-f.stats.height*.58,2);
+      pixelLine(ctx,x,y,x+side*5,y-4,cream,2,2);
+      pixelLine(ctx,x+side,y+4,x+side*7,y+4,gold,2,2);
+    }
     if (state === 'ledge' && f.invuln > 0 && f.ledge.guardFrames) {
       // Chalk grip marks underneath the lip stay legible with reduced motion.
       const remaining = Math.ceil(f.invuln * 60), marks = Math.ceil(remaining / 12);
@@ -2413,6 +2425,15 @@
       }
       if (world.escapePractice) {
         const drill = world.escapePractice, floor = world.terrain[0].y;
+        const grip = world.grapple;
+        if (drill.gripDrill && grip && grip.phase !== 'throw') {
+          const captive = world.dogs[grip.target], x = snap(captive.x,2)-24;
+          const y = snap(captive.y-captive.stats.height-22,2);
+          ctx.fillStyle = ink;
+          ctx.fillRect(x-2,y-2,52,8);
+          ctx.fillStyle = grip.struggleFlash > 0 ? cream : gold;
+          ctx.fillRect(x,y,Math.max(0,Math.round(48*grip.remaining/grip.capacity)),4);
+        }
         // Three chalk ticks count in the swing. The arrow draws at the defender's feet on contact.
         if (drill.phase === 'windup' || drill.phase === 'swing') {
           for (let i = 0; i < 3; i++) {

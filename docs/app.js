@@ -1726,6 +1726,11 @@
       world.resetMeteorPractice(m.pattern, m.dir, m.slow, Number(e.target.value));
       meteorFeedback('meteorReady', {});
       $('damage-output').textContent = world.meteorPractice.baseline + '%';
+    } else if (d?.gripDrill) {
+      if (d.spacing === 'gripThrow') world.setDummyDamage(e.target.value);
+      world.resetEscapePractice(d.spacing, d.slow, Number(e.target.value));
+      escapeFeedback({phase:'ready'});
+      $('damage-output').textContent = e.target.value + '%';
     } else if (d?.spacing === 'counter') {
       world.resetEscapePractice('counter', d.slow, Number(e.target.value));
       $('recovery-tip').textContent = crouchCounterPrompt();
@@ -1985,6 +1990,28 @@
     const status = $('escape-status'), tip = $('recovery-tip');
     status.dataset.result = e.outcome || e.phase;
     const drill = world.escapePractice;
+    if (drill.gripDrill) {
+      const holder = drill.spacing === 'gripThrow', captive = world.dogs[holder ? 1 : 0].stats.name;
+      const throwName = throws[drill.moveId]?.label || 'Throw';
+      const counts = (drill.pummels || 0) + ' pummel' + (drill.pummels === 1 ? '' : 's') + ' · ' +
+        (drill.struggles || 0) + ' escape input' + (drill.struggles === 1 ? '' : 's');
+      const feedback = {
+        ready: holder ? ['Tap Grab', 'Catch the rival. Try throwing immediately, then retry and add pummels while they struggle.'] :
+          ['Tap Attack to start', 'The rival will try two pummels and a throw. Once caught, rotate the stick, alternate directions, or tap buttons to escape.'],
+        approach: [holder ? 'Reach for the rival' : 'Grab coming', holder ? 'Tap Attack to pummel once the grip closes.' : 'Wait for the paws to close, then start your escape inputs.'],
+        gripped: [holder ? 'Pummel or throw' : 'Break the grip', holder ? 'Watch the hold meter. Tap a direction to throw before it empties.' :
+          'Flick between directions or tap action buttons. Each fresh input takes a bite out of the hold meter.'],
+        pummel: ['Pummel ' + e.count, holder ? 'Tap a direction now to throw, or tap Attack again and risk the escape.' :
+          'You can keep struggling while the hit is frozen. Alternate directions or tap a button.'],
+        brokeFree: [captive + ' broke free · ' + counts, holder ? 'Try committing to the throw one pummel earlier.' : 'Retry with the same inputs at a higher starting damage.'],
+        throwLanded: [throwName + ' · ' + counts, holder ? 'Retry and see how many pummels you can add before the rival escapes.' :
+          'Retry and start alternating directions as soon as the grab connects.'],
+        missedGrab: ['Grab missed', 'Choose the drill again and stay within reach for the catch.'],
+        wrongGrip: ['You caught the rival', 'Choose Escape a grab to take the defender’s side again.'],
+      };
+      [status.textContent,tip.textContent] = feedback[e.outcome || e.phase];
+      return;
+    }
     if (drill.spacing === 'counter' || drill.spacing === 'break') {
       const defend = drill.spacing === 'counter', low = moves[world.dogs[0].kit.tilts.down].label;
       const answer = moves[drill.answerMove] || specials[drill.answerMove] || smashes[drill.answerMove] || throws[drill.answerMove];
@@ -2705,7 +2732,7 @@
     $('combo-readout').hidden = $('combo-controls').hidden = !combo;
     $('freshness-readout').hidden = $('freshness-controls').hidden = !freshness;
     $('wave-readout').hidden = $('wave-patterns').hidden = !wave;
-    const counterDrill = escape && pattern === 'counter';
+    const counterDrill = escape && (pattern === 'counter' || pattern === 'gripEscape');
     showDamageControl(counterDrill || meteor || survival, freshness && world.freshnessPractice.koTest,
       meteor || survival ? 'launch-side' : world.edgePractice?.timeCatch ? 'edge-side' : undefined);
     $('damage-control').hidden = stock || juggle;
@@ -2821,10 +2848,13 @@
         ? 'Tap Down to drop. As your paws pass the platform, aim down and tap Attack for ' + moves[player.kit.air.down].label + '.'
         : 'Press Down and Attack together for ' + moves[player.kit.tilts.down].label + '. Keep both paws on the platform.';
     } else if (escape) {
-      for (const id of ['tip','close','counter','break']) $('escape-' + id).setAttribute('aria-pressed', String(id === pattern));
+      for (const id of ['tip','close','counter','break','gripEscape','gripThrow']) $('escape-' + id).setAttribute('aria-pressed', String(id === pattern));
       $('escape-slow').setAttribute('aria-pressed', String(world.escapePractice.slow));
       $('escape-status').dataset.result = 'ready';
-      if (pattern === 'counter') {
+      if (world.escapePractice.gripDrill) {
+        escapeFeedback({phase:'ready'});
+        message = $('recovery-tip').textContent;
+      } else if (pattern === 'counter') {
         message = crouchCounterPrompt();
       } else if (pattern === 'break') {
         $('escape-status').textContent = 'Rival crouching';
@@ -3085,7 +3115,7 @@
     $('game').focus({ preventScroll: true });
   };
   $('escape-training').onclick = () => drill('escape', false, world.escapePractice?.spacing || 'tip');
-  for (const pattern of ['tip','close','counter','break'])
+  for (const pattern of ['tip','close','counter','break','gripEscape','gripThrow'])
     $('escape-' + pattern).onclick = () => drill('escape', false, pattern);
   $('escape-slow').onclick = () => {
     const drill = world.escapePractice;
@@ -4226,6 +4256,11 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/grab-escape') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'nightmail', fetch:false });
+      drill('escape',false,'gripEscape');
     } else if (hash === '#training/dodge-timing') {
       leaveOnline();
       afterStory = null;

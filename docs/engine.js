@@ -3393,6 +3393,15 @@
       this.resetTraining();
       const originalDogs = this.dogs, player = originalDogs[0];
       const floor = this.terrain[0];
+      if (spacing === 'gripEscape' || spacing === 'gripThrow') {
+        const rival = originalDogs[1], middle = (floor.x1 + floor.x2)/2;
+        const gap = player.stats.width + rival.stats.width + 4;
+        const baseline = clamp(Number(startingDamage) || 0, 0, 200);
+        Object.assign(player,{x:middle-gap/2,y:floor.y,ground:0,face:1,damage:spacing==='gripEscape'?baseline:0});
+        Object.assign(rival,{x:middle+gap/2,y:floor.y,ground:0,face:-1,damage:spacing==='gripThrow'?this.trainingDamage:0});
+        this.escapePractice = {originalDogs,spacing,slow,baseline,gripDrill:true,phase:'ready',time:0};
+        return;
+      }
       if (spacing === 'counter' || spacing === 'break') {
         const defend = spacing === 'counter', rival = defend ? newFighter('pip', 1) : originalDogs[1];
         const middle = (floor.x1 + floor.x2) / 2, gap = player.stats.width + rival.stats.width + 5;
@@ -3415,6 +3424,7 @@
     }
     escapePracticeInput(dt) {
       const drill = this.escapePractice, clover = this.dogs[1];
+      if (drill.gripDrill) return this.gripPracticeInput(drill,dt);
       if (drill.spacing === 'counter' || drill.spacing === 'break') return this.crouchPracticeInput(dt);
       if (drill.phase === 'windup') {
         drill.time += dt;
@@ -3429,6 +3439,42 @@
         else if (!a && !clover.smashCharge) this.finishEscapePractice('interrupted');
       }
       return idleInput;
+    }
+    gripPracticeInput(drill, dt) {
+      if (drill.phase === 'done' || drill.phase === 'ready') return idleInput;
+      const grip = this.grapple, holder = drill.spacing === 'gripThrow';
+      if (grip) {
+        if (grip.owner !== (holder ? 0 : 1)) {
+          this.finishEscapePractice('wrongGrip');
+          return idleInput;
+        }
+        if (drill.phase !== 'gripped') {
+          drill.phase = 'gripped';
+          this.emit('escapeCue',{f:this.dogs[0],phase:'gripped'});
+        }
+        if (grip.phase === 'throw') return idleInput;
+        if (holder) {
+          const beat = Math.floor((grip.elapsed*60 + 1e-8)/6);
+          return { ...idleInput, x:beat ? (beat%2 ? 1 : -1) : 0 };
+        }
+        if (grip.phase === 'hold' && grip.pummelCount < 2) return { ...idleInput, tapped:{attack:true} };
+        return grip.pummelCount >= 2 ? { ...idleInput, x:grip.face } : idleInput;
+      }
+      drill.time += dt;
+      if (!holder && !drill.sent && drill.time >= .2) {
+        drill.sent = true;
+        return {...idleInput,grab:true};
+      }
+      if (drill.time > 1) this.finishEscapePractice('missedGrab');
+      return idleInput;
+    }
+    finishGripPractice(grip, thrown) {
+      const d = this.escapePractice;
+      if (!d?.gripDrill || d.phase === 'done') return;
+      d.struggles = grip.struggles;
+      d.pummels = grip.pummelCount;
+      d.moveId = grip.throwId;
+      this.finishEscapePractice(thrown ? 'throwLanded' : 'brokeFree');
     }
     crouchPracticeInput(dt) {
       const d = this.escapePractice, [player, rival] = this.dogs;
@@ -4584,7 +4630,20 @@
           input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
         }
       }
-      if (this.escapePractice?.spacing === 'break') {
+      if (this.escapePractice?.gripDrill) {
+        const d = this.escapePractice;
+        if (d.phase === 'ready') {
+          const key = d.spacing === 'gripThrow' ? 'grab' : 'attack';
+          if (!input1.tapped?.[key] && !(input1[key] && !this.dogs[0].prev[key])) return;
+          d.phase = 'approach';
+          d.consumeAttack = key === 'attack';
+          this.emit('escapeCue',{f:this.dogs[0],phase:'approach'});
+        }
+        if (d.consumeAttack) {
+          d.consumeAttack = !!input1.attack;
+          input1 = {...input1,attack:false,tapped:{...input1.tapped,attack:false}};
+        }
+      } else if (this.escapePractice?.spacing === 'break') {
         const drill = this.escapePractice;
         if (drill.phase === 'ready') {
           if (!input1.x && !input1.y && !['attack','grab','jump','smash','special','aimStick'].some(key=>input1[key] || input1.tapped?.[key])) return;
@@ -4975,8 +5034,16 @@
               if ((!grip.pending || grip.pending === 'pummel') && (changed || pressed('grab'))) {
                 grip.pending = changed ? direction : 'forward';
               } else if (!grip.pending && pressed('attack')) grip.pending = 'pummel';
-            } else if (['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick'].some(pressed)) {
-              grip.remaining -= 0.135;
+            } else {
+              const sector = shiftSector(input, grip.struggleSector);
+              const flick = sector >= 0 && sector !== grip.struggleSector;
+              grip.struggleSector = sector;
+              if (flick || ['jump','shortHop','attack','smash','special','shield','grab','aimStick'].some(pressed)) {
+                grip.remaining -= .135;
+                grip.struggles++;
+                grip.struggleFlash = 6 / 60;
+                this.emit('grabStruggle', {f, owner:this.dogs[grip.owner], count:grip.struggles});
+              }
             }
           }
           // A late jump or attack can be buffered into a designated aerial follow-up.
@@ -6371,6 +6438,7 @@
       const chest = target.y - target.stats.height * 0.52;
       const from = [(target.x - owner.x) * face, chest - owner.y];
       const extra = spec.reelSpeed ? Math.abs(from[0] - spec.grip[0]) / spec.reelSpeed : 0;
+      const hold = spec.hold + Math.min(0.75, target.damage * 0.005);
       const grip = {
         owner: owner.index,
         target: target.index,
@@ -6383,7 +6451,12 @@
         anchor: { x: target.x, y: chest },
         high: false,
         reelTime: spec.reel + extra,
-        remaining: spec.hold + Math.min(0.75, target.damage * 0.005),
+        capacity: hold,
+        remaining: hold,
+        struggleSector: shiftSector(target.prev),
+        struggles: 0,
+        struggleFlash: 0,
+        elapsed: 0,
         pending: attack.queuedThrow || null,
         pummelCount: 0,
         direction: null,
@@ -6457,6 +6530,7 @@
         owner.stun = 0.18;
         target.invuln = 0.2;
         this.emit('grabEscape', { f: target, owner, face: grip.face, point: { ...grip.anchor } });
+        this.finishGripPractice(grip,false);
       }
     }
     positionCaptive(grip, from, to, progress) {
@@ -6502,6 +6576,8 @@
           damage,
           power,
         });
+        if (this.escapePractice?.gripDrill && this.escapePractice.phase === 'gripped')
+          this.emit('escapeCue',{ f:this.dogs[0],phase:'pummel',count:grip.pummelCount });
       }
       // A throw can take over after contact. Start its windup from the captive's actual position.
       if (grip.pending && grip.pending !== 'pummel' && attack.time + 1e-8 >= activeEnd)
@@ -6517,6 +6593,8 @@
         target = this.dogs[grip.target];
       const grab = grabs[grip.grabId];
       grip.time += dt;
+      grip.elapsed += dt;
+      grip.struggleFlash = Math.max(0, grip.struggleFlash - dt);
       owner.invuln = Math.max(0, owner.invuln - dt);
       owner.drop = Math.max(0, owner.drop - dt);
       // An airborne catch still falls, with both dogs riding the same platform on landing.
@@ -6600,6 +6678,7 @@
       if (attack.connected && attack.bounce)
         target.throwBounce = { ...attack.bounce, owner: owner.index, moveId: grip.throwId };
       target.regrabLock = 0.35;
+      if (attack.connected) this.finishGripPractice(grip,true);
       this.emit('throwRelease', {
         f: owner,
         target,
@@ -7523,7 +7602,7 @@
           this.finishPlatformPractice('tilt', moveId);
         else this.finishPlatformPractice('other', moveId);
       }
-      if (this.escapePractice && owner.index === 1 && target.index === 0 && moveId === 'cloverRimRattle') {
+      if (['tip','close'].includes(this.escapePractice?.spacing) && owner.index === 1 && target.index === 0 && moveId === 'cloverRimRattle') {
         if (opener && this.escapePractice.phase === 'swing') {
           this.escapePractice.phase = 'follow';
           this.emit('escapeCue', { f: target, phase: 'follow' });
@@ -8517,7 +8596,10 @@
         result.jump = false;
         if (grip.phase === 'throw') return result;
         if (grip.target === f.index) {
-          result.attack = Math.floor(this.time * 6) % 2 === 0;
+          if (this.cpuLevel === 'rival') {
+            const beat = Math.floor((grip.elapsed*60 + 1e-8)/6);
+            if (beat > 0) result.x = beat%2 ? 1 : -1;
+          } else result.attack = Math.floor(this.time * 6) % 2 === 0;
         } else if (
           grip.phase === 'hold' &&
           !grip.pending &&
@@ -8528,7 +8610,9 @@
           if (edge && foe.damage >= 40) result.x = f.x - floor.x1 < floor.x2 - f.x ? -1 : 1;
           else if (
             grip.pummelCount < (foe.damage >= 35 ? 2 : 1) &&
-            grip.remaining > pummels[f.kit.pummel].end + 0.32
+            grip.remaining > pummels[f.kit.pummel].end + 0.32 &&
+            (this.cpuLevel !== 'rival' || grip.struggles < 2 ||
+              grip.remaining > pummels[f.kit.pummel].end * (1 + .135*grip.struggles/grip.elapsed) + .18)
           )
             result.attack = true;
           else if (foe.damage < 65 && (f.kind === 'clover' || f.kind === 'pip')) result.y = -1;
