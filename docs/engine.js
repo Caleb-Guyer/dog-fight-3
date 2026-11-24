@@ -2691,12 +2691,18 @@
       this.resetTraining();
       const [f, rival] = this.dogs;
       const timeCatch = pattern === 'shortCatch' || pattern === 'longCatch';
-      const atDeck = pattern === 'lip' || timeCatch;
+      const corner = pattern === 'corner' || pattern === 'inside';
+      const atDeck = pattern === 'lip' || timeCatch || corner;
       const deck = this.stage === 'laundry' && (!atDeck || dir > 0) ? 1 : 0;
       const ground = atDeck ? deck : this.stage === 'laundry' ? 3 : dir > 0 ? 1 : 2;
       const surface = this.terrain[ground], lip = dir > 0 ? surface.x2 : surface.x1;
       this.edgePractice = { pattern, dir, slow, ground, lip, timeCatch, phase: 'ready', ticks: 0, landed: false, frames: 0, outcome: '' };
-      if (timeCatch) {
+      if (corner) {
+        const mark = lip - dir * (pattern === 'corner' ? 0 : 27);
+        Object.assign(this.edgePractice, { corner, mark, blocked:false, slipped:false, cue:false });
+        Object.assign(f, { x:mark, y:surface.y, ground, face:-dir });
+        Object.assign(rival, { x:mark - dir * (f.stats.width + rival.stats.width + 8), y:surface.y, ground, face:dir });
+      } else if (timeCatch) {
         Object.assign(f, { x: lip - dir * 6, y: surface.y, ground, face: dir });
         const long = pattern === 'longCatch';
         Object.assign(rival, { x: lip + dir * 22, y: surface.y - (long ? 120 : 6),
@@ -2714,6 +2720,15 @@
       const d = this.edgePractice, [f, rival] = this.dogs;
       if (d.phase === 'done') return idleInput;
       d.ticks++;
+      if (d.corner) {
+        if (d.ticks <= 36) return { ...idleInput, smash:true, smashX:d.dir };
+        const attack = rival.attack;
+        if (!d.cue && attack?.smashSide && attack.start - attack.time <= 4 / 60 + 1e-8) {
+          d.cue = true;
+          this.emit('cornerCue', { f:rival });
+        }
+        return idleInput;
+      }
       if (d.timeCatch) {
         if (rival.ledge && rival.ledgeTime * 60 >= d.guardFrames + 10 - 1e-8)
           return { ...idleInput, shield: true, tapped: { shield: true } };
@@ -2743,6 +2758,15 @@
     checkEdgePractice() {
       const d = this.edgePractice, [f,rival] = this.dogs;
       if (d.phase === 'done') return;
+      if (d.corner) {
+        if (d.slipped) {
+          if (f.ledge) this.finishEdgePractice('caughtLip');
+          else if (f.ground >= 0) this.finishEdgePractice('backOnstage');
+          else if (d.ticks > 180 || f.y > this.terrain[d.ground].y + 150) this.finishEdgePractice('pushedOff');
+        } else if (d.blocked && f.impactLag <= 1e-8 && f.shieldStun <= 1e-8) this.finishEdgePractice('heldCorner');
+        else if (d.ticks > 100 && !d.blocked) this.finishEdgePractice('avoided');
+        return;
+      }
       if (d.timeCatch) {
         if (rival.ledge && !rival.invuln && d.phase === 'hanging') {
           d.phase = 'open';
@@ -4219,7 +4243,9 @@
       }
       const edge = this.edgePractice;
       if (edge?.phase === 'ready') {
-        if (edge.pattern === 'lip' ? !input1.x && !input1.jump : !input1.attack && !input1.tapped?.attack) return;
+        const start = edge.corner ? input1.shield : edge.pattern === 'lip' ? input1.x || input1.jump :
+          input1.attack || input1.tapped?.attack;
+        if (!start) return;
         edge.phase = 'approach';
         if (edge.timeCatch) edge.startHeld = true;
       }
@@ -5356,8 +5382,26 @@
         // The guard stays up. Keep a tapped response and its original aim until the block ends.
         f.shieldStun = Math.max(0, f.shieldStun - dt);
         const floor = this.terrain[f.ground];
-        f.x = clamp(f.x + f.vx * dt, floor.x1, floor.x2);
+        f.x += f.vx * dt;
         f.vx *= Math.pow(0.72, dt * 60);
+        if (f.x < floor.x1 - 7 || f.x > floor.x2 + 7) {
+          const dir = f.x < floor.x1 ? -1 : 1, lip = dir < 0 ? floor.x1 : floor.x2;
+          // Joined deck pieces still support a sliding fighter. A gap exposes the air below.
+          const next = this.terrain.findIndex(p => p !== floor && Math.abs(p.y - floor.y) <= 2 &&
+            p.x1 <= lip + 1 && p.x2 >= lip - 1 && f.x >= p.x1 && f.x <= p.x2);
+          f.ground = next;
+          if (next >= 0) f.y = this.terrain[next].y;
+          else {
+            f.shield = f.parryEligible = false;
+            f.guardIntent = '';
+            f.guardAim = null;
+            f.guardBuffer = f.shieldGrabWindow = f.shieldStun = f.coyote = 0;
+            f.jumps = 1;
+            f.vy = 0;
+            if (this.edgePractice?.corner && f.index === 0) this.edgePractice.slipped = true;
+            this.emit('shieldSlip', { f, dir, point:{x:lip, y:floor.y} });
+          }
+        }
         return;
       }
       f.stun = f.stun <= dt + 1e-8 ? 0 : f.stun - dt;
@@ -6843,6 +6887,7 @@
       target.parryFlash = 12 / 60;
       target.parryFace = brace || target.face;
       target.lastMove = 'Parry';
+      if (this.edgePractice?.corner && target.index === 0) this.finishEdgePractice('parriedCorner');
       if (this.spacingPractice?.pattern === 'cancel' && this.spacingPractice.sent && target.index === 0)
         this.finishSpacingPractice('parried');
       if (!projectile) {
@@ -6903,6 +6948,7 @@
         target.shieldGrabWindow = shieldGrabPenalty;
         target.vx = away * push;
         target.run = null;
+        if (this.edgePractice?.corner && target.index === 0) this.edgePractice.blocked = true;
       }
       this.sampleFreshness(owner, use, moveId, power, 0, stunFrames, true);
       const timing = use?.airSide ? aerialHitTiming(use, attackWindow(use)) : '';
@@ -7135,6 +7181,7 @@
       const edge = this.edgePractice;
       if (edge && edge.phase !== 'done') {
         if (target.index === 0) this.finishEdgePractice('caught', moveId);
+        else if (edge.corner) this.finishEdgePractice('interrupted', moveId);
         else if (edge.timeCatch) this.finishEdgePractice(edge.guardFrames ? 'timedHit' : 'intercepted', moveId);
         else if (edge.pattern === 'lip') this.finishEdgePractice(owner.ground === edge.ground ? 'covered' : 'offstage', moveId);
         else this.finishEdgePractice(edge.frames && owner.ground < 0 && use?.airSide ? 'followup' : 'other', moveId);
@@ -7509,6 +7556,12 @@
         const grab = a.grabAttempt || a.commandGrab;
         const chance = this.random();
         let choice = chance < 0.3 ? (grab ? 'spot' : 'parry') : chance < 0.47 ? 'roll' : null;
+        if (!choice && chance < .80 && this.cpuLevel === 'rival' && f.shield && a.smashSide === 'side' &&
+            !a.projectile && foe.ground === f.ground) {
+          const floor = this.terrain[f.ground];
+          const room = dx < 0 ? floor.x2 - f.x : f.x - floor.x1;
+          if (room < 5 && a.power >= .25) choice = 'roll';
+        }
         // Sometimes commit to a low stance against a visible light swing the opponent has used before.
         if (!choice && chance < 0.77 && !grab && !a.pull && !a.projectile && !f.shield && !f.dropPrep &&
             foe.moveHistory.some(entry => entry.moveId === a.moveId) && Number.isFinite(a.angle)) {

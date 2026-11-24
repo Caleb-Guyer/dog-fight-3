@@ -183,7 +183,11 @@ Hold **Shield** on the ground to block. On a touchscreen, keep one thumb on Shie
 - **Shield + Down** spot-dodges in place. Time the duck to slip a grab and stay close enough to answer. Both dodges have a brief invincible stretch between their vulnerable start and recovery. Keep holding Shield after the dodge to block again.
 - **Release Shield just before a strike** to parry. The first five frames of the release can catch the hit. A melee parry interrupts the attacker and gives you an opening to counter. A projectile parry absorbs the impact at your position. Grabs can catch a blocking dog or a dog trying to parry.
 - A blocked jab gives a short pause and a small shove. A charged smash holds the shield longer and pushes the dogs farther apart. A blocked projectile can pin the defender while its owner keeps moving.
+- A hard block can push your paws past a platform edge. Your shield drops as you slip, with one air jump available. At a solid ledge, you can let yourself fall into a catch. On a thin platform, you fall toward the floor below. Leaving room behind you or parrying the blow can keep you onstage.
+
 - **Jump**, **Grab**, **Up + Smash**, and **Up + Special** work directly from a grounded shield. Keep Shield held and tap a response during impact or shieldstun. It starts on the first actionable frame. An immediate shield grab adds four frames to the dog's usual grab startup. Holding Up + Smash charges it as usual.
+
+In **Edge practice → Block at lip**, hold Shield through Brisket’s Haymaker. Watch where Pip ends up. Choose **Block farther in** and hold Shield against the same swing. To keep the lip itself, retry at the edge and release Shield as the chalk turns mint. A Rival CPU guarding the lip can also roll inward when it sees a charged side smash. [Play the corner pressure drill](https://caleb-guyer.github.io/dog-fight-3/#training/corner-pressure)
 
 Pip finishes a forward roll fastest at 24 frames. Brisket covers the least ground and starts more slowly, but has the longest invincibility. Noodle travels farthest. Clover recovers from her spot-dodge in 20 frames and can answer with Disc Tap. All timings use 60 game frames per second.
 
