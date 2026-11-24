@@ -3390,6 +3390,7 @@
     }
     if (shieldPoses.includes(pose)) return shieldFrame(name, pose, phase, backRoll);
     if (pose === 'clashRecoil' || pose === 'crouchHit') return Math.min(3, Math.floor(phase * 4));
+    if (pose === 'dizzy') return tick(6) % 4;
     if (pose === 'tumble') return tick(14) % 8;
     if (pose === 'righting' || pose === 'footstool') return Math.min(3, Math.floor(phase * 4));
     if (pose === 'jabLock') {
@@ -5173,6 +5174,23 @@
         }
         break;
       }
+      case 'dizzy': {
+        const swing = (name === 'brisket' ? 2 : name === 'noodle' ? 5 : 3) * [-1,0,1,0][frame];
+        s.bodyX = swing;
+        s.bodyY = [3,5,3,4][frame];
+        s.headX = -swing;
+        s.headTurn = [-15,-4,12,5][frame];
+        s.lean = swing;
+        s.kneeOut = 3;
+        s.fistX = 3 - swing;
+        s.rearX = -3 - swing;
+        s.fistY = 3 + swing;
+        s.rearY = 3 - swing;
+        s.ear = -swing;
+        s.tailLift = -4;
+        s.eye = frame % 2 ? shutEyes : hitEyes;
+        break;
+      }
       case 'hurt':
       case 'launch': {
         const hard = pose === 'launch';
@@ -5717,6 +5735,7 @@
     'teeter',
     'dashStart',
     'clashRecoil',
+    'dizzy',
     'run',
     'crouch',
     'crouchHit',

@@ -200,7 +200,8 @@
   const jumpSquatTime = 3 / 60;
   const liftArrival = 24 / 60, liftWait = 120 / 60;
   const liftReserve = time => clamp(96 - Math.round(Math.max(0, time - liftArrival) * 36), 24, 96);
-  const protectionTime = f => Math.max(f.invuln || 0, f.respawning || 0, f.stockGuard || 0);
+  const protectionTime = f => Math.max(f.invuln || 0, f.respawning || 0, f.stockGuard || 0,
+    f.shieldBreak?.phase === 'pop' ? 1/60 : 0);
   const shortCatchFrames = 15;
   function ledgeGuardFrames(f) {
     if (!f.ledgeProtectionReady) return 0;
@@ -2012,6 +2013,7 @@
       crouch: false,
       shield: false,
       shieldHP: 1,
+      shieldBreak: null,
       shieldLeanX: 0,
       shieldLeanY: 0,
       shieldImpact: 0,
@@ -3887,6 +3889,14 @@
       const slow = this.shieldPractice?.slow ?? true;
       this.resetTraining();
       this.shieldPractice = { pattern, phase: 'ready', time: 0, outcome: '', lastDodge: '' };
+      if (pattern === 'breakEscape' || pattern === 'breakPunish') {
+        const d = this.shieldPractice, floor = this.terrain[0], middle = (floor.x1 + floor.x2)/2;
+        d.brokenSlot = pattern === 'breakEscape' ? 0 : 1;
+        const gap = this.dogs[0].stats.width + this.dogs[1].stats.width + 5;
+        this.dogs.forEach((f,i) => Object.assign(f,{x:middle+(i ? gap : -gap)/2, y:floor.y, ground:0, face:i ? -1 : 1}));
+        this.dogs[d.brokenSlot].shieldHP = .035;
+        return;
+      }
       if (pattern === 'dodgeTiming' || pattern === 'counterGrab') {
         if (pattern === 'dodgeTiming') {
           this.shieldPractice.originalDogs = this.dogs;
@@ -4164,6 +4174,15 @@
     }
     shieldPracticeInput(dt, input) {
       const drill = this.shieldPractice;
+      if (drill.brokenSlot !== undefined) {
+        if (drill.brokenSlot === 1) return {...idleInput,shield:true};
+        // Let the defender escape a visible charge. The release always comes on the same beat.
+        if (drill.phase !== 'dizzy' && drill.phase !== 'awake') return idleInput;
+        drill.time += dt;
+        if (drill.phase === 'awake' && drill.time > 2.5)
+          this.guardBreakCue(this.dogs[0], 'clear', drill.frames, drill.struggles);
+        return {...idleInput, smash:drill.time >= .65 && drill.time < 1.67, smashY:-1};
+      }
       if (drill.pattern === 'dodgeTiming') return this.dodgeTimingInput(drill, dt);
       if (drill.pattern === 'yourHop') {
         const player = this.dogs[0];
@@ -4702,6 +4721,11 @@
         }
       }
       let guardDrill = this.shieldPractice;
+      if (guardDrill?.brokenSlot !== undefined && guardDrill.phase === 'ready') {
+        if (guardDrill.brokenSlot === 0 ? !input1.shield :
+            !input1.x && !input1.smash && !input1.tapped?.smash && !input1.attack && !input1.aimStick) return;
+        guardDrill.phase = 'wear';
+      }
       if (guardDrill?.jumpIn && guardDrill.phase === 'ready' && (guardDrill.pattern === 'yourHop'
           ? !(input1.jump || input1.shortHop || input1.tapped?.jump || input1.tapped?.shortHop) : !input1.shield)) return;
       if (guardDrill?.coverage && guardDrill.pattern !== 'poke' && guardDrill.phase === 'done') {
@@ -4947,6 +4971,19 @@
     captureInput(f, input) {
       const was = f.prev;
       const pressed = (key) => input.tapped?.[key] || (input[key] && !was[key]);
+      if (f.shieldBreak) {
+        const state = f.shieldBreak;
+        const sector = shiftSector(input, state.sector);
+        const flick = sector >= 0 && sector !== state.sector;
+        if (state.phase === 'dizzy' && !this.hitStop &&
+            (flick || ['jump','shortHop','attack','smash','special','shield','grab','aimStick'].some(pressed))) {
+          f.stun = Math.max(0, f.stun - 5/60);
+          state.struggles++;
+        }
+        state.sector = sector;
+        f.prev = { ...input };
+        return;
+      }
       const side = Math.sign(input.x);
       f.wallKickDir = f.kit.wallKick && !f.usedWallKick && f.ground < 0 && !f.ledge && !f.tumble && !this.hitStop &&
         Math.abs(input.x) >= .72 && (was.x * side < .55 || pressed('jump')) ? side : 0;
@@ -5696,6 +5733,7 @@
       }
     }
     move(f, input, dt) {
+      if (f.shieldBreak) return this.advanceShieldBreak(f, dt);
       const lastTeeter = f.teeter;
       f.teeter = 0;
       if (f.stockLift && !this.advanceStockReturn(f, input, dt)) return;
@@ -5949,7 +5987,7 @@
       if (!f.shield) f.shieldGrabWindow = 0;
       if (grounded && input.shield && !f.jumpSquat && !waveChord) f.guardBuffer = 0;
       f.shieldHP = clamp(f.shieldHP + (f.shield ? -0.13 : 0.24) * dt, 0, 1);
-      if (f.shield && f.shieldHP <= 0) this.breakShield(f);
+      if (f.shield && f.shieldHP <= 0) return this.breakShield(f);
       if (free && !grounded && f.guardBuffer > 0 && !f.usedDodge) {
         this.beginAirDodge(f);
       }
@@ -6501,6 +6539,7 @@
         comboLink: target.stun > 0,
       };
       this.grapple = owner.grip = target.grip = grip;
+      if (target.shieldBreak) this.endShieldBreak(target, 'grabbed', attack.moveId);
       for (const f of [owner, target]) {
         f.ledgeDropJump = false;
         f.dropPrep = null;
@@ -7237,10 +7276,65 @@
       f.shieldDrop = f.parryFlash = 0;
       f.guardIntent = '';
       f.reaction = null;
-      f.shieldHP = 0.24;
-      f.stun = 0.85;
+      f.shieldAxis = '';
+      f.coyote = f.chainWindow = f.takeoffWindow = f.waveSlide = f.landingLag = 0;
+      f.heldRecoveryJump = f.queuedShortHop = f.cutJump = f.fastFall = f.crouch = f.parryEligible = false;
+      f.guardAim = f.dropPrep = f.run = f.jumpSquat = null;
+      f.shieldHP = 0;
+      f.stun = 1/60;
+      f.y -= 1;
+      f.ground = -1;
+      f.jumps = 1;
+      f.vx = 0;
+      f.vy = -485;
+      f.shieldBreak = { phase:'pop', time:0, sector:shiftSector(f.prev), struggles:0 };
       cancelCharge(f);
       this.emit('break', { f });
+      this.guardBreakCue(f, 'pop');
+    }
+    advanceShieldBreak(f, dt) {
+      const state = f.shieldBreak;
+      state.time += dt;
+      if (state.phase === 'pop') {
+        const oldY = f.y;
+        f.vy = fallVelocity(f, f.vy, dt, false);
+        f.y += f.vy * dt;
+        const ground = f.vy >= 0 ? this.landingSurface(f, oldY, f.x, dt) : -1;
+        if (ground < 0) return;
+        f.ground = ground;
+        f.y = this.terrain[ground].y;
+        f.vy = 0;
+        restoreAir(f);
+        f.shieldHP = .65;
+        f.stun = (150 - Math.min(60, Math.floor(f.damage * .4))) / 60;
+        state.phase = 'dizzy';
+        state.time = 0;
+        this.emit('dizzyLand', {f, point:{x:f.x,y:f.y}});
+        this.guardBreakCue(f, 'dizzy');
+      } else {
+        f.y = this.terrain[f.ground].y;
+        f.stun = Math.max(0, f.stun - dt);
+        if (f.stun <= 1e-8) this.endShieldBreak(f, 'awake');
+      }
+    }
+    endShieldBreak(f, outcome, moveId) {
+      const state = f.shieldBreak;
+      f.shieldBreak = null;
+      f.stun = 0;
+      this.guardBreakCue(f, outcome, Math.round(state.time * 60), state.struggles, moveId);
+    }
+    guardBreakCue(f, phase, frames = 0, struggles = 0, moveId) {
+      const d = this.shieldPractice;
+      if (!d || d.brokenSlot !== f.index || d.phase === 'done') return;
+      d.phase = phase;
+      if (!['pop','dizzy'].includes(phase)) {
+        d.outcome = phase;
+        d.frames = frames;
+        d.struggles = struggles;
+        // A defender who wakes before the swing can still see and answer the charge.
+        if (phase !== 'awake' || d.brokenSlot === 1) d.phase = 'done';
+      }
+      this.emit('shieldCue', { f, phase, pattern:d.pattern, frames, struggles, moveId });
     }
     dealDamage(target, damage, preserveCombo) {
       if (damage > 0) target.ledgeProtectionReady = true;
@@ -7307,6 +7401,8 @@
       }
       target.shieldHP -= damage * 0.027;
       const broken = target.shieldHP <= 0;
+      if (this.shieldPractice?.brokenSlot === target.index && this.shieldPractice.phase === 'awake')
+        this.guardBreakCue(target, 'guarded', this.shieldPractice.frames, this.shieldPractice.struggles, moveId);
       if (this.cpuLevel === 'rival' && owner.index === 1 && target.index === 0 && !projectile &&
           owner.ground >= 0 && owner.ground === target.ground && !broken) {
         const brain = this.bot, previous = brain.pressure;
@@ -7410,6 +7506,9 @@
         this.bot.spotPunishes = (this.bot.spotPunishes || 0) + 1;
       }
       if (poked) this.emit('shieldPoke', { f: target, owner, attackName: name, moveId, point, face });
+      if (target.shieldBreak) this.endShieldBreak(target, 'punished', moveId);
+      else if (this.shieldPractice?.brokenSlot === target.index && this.shieldPractice.phase === 'awake')
+        this.guardBreakCue(target, 'lateHit', this.shieldPractice.frames, this.shieldPractice.struggles, moveId);
       target.heldRecoveryJump = false;
       this.gradeFootwork(target);
       const floorAtHit = target.floorAction;
@@ -8616,6 +8715,23 @@
         foe = this.dogs[0],
         brain = this.bot;
       if (f.stockLift) return this.cpuLiftExit(f, foe);
+      if (f.shieldBreak) {
+        if (f.shieldBreak.phase === 'pop' || this.cpuLevel === 'rookie') return idleInput;
+        const beat = Math.floor((f.shieldBreak.time * 60 + 1e-8) / (this.cpuLevel === 'rival' ? 6 : 12));
+        return {...idleInput, x:beat % 2 ? 1 : -1};
+      }
+      if (this.cpuLevel === 'rival' && foe.shieldBreak && f.ground >= 0 &&
+          !f.stun && !f.grip && !f.attack && !f.impactLag &&
+          (f.ground === foe.ground || (foe.shieldBreak.phase === 'pop' &&
+            foe.x >= this.terrain[f.ground].x1 && foe.x <= this.terrain[f.ground].x2))) {
+        const dir = Math.sign(foe.x - f.x) || f.face;
+        if (!f.smashCharge && Math.abs(foe.x - f.x) > f.stats.width + foe.stats.width + 8)
+          return {...idleInput, x:dir * (Math.abs(foe.x - f.x) < 140 ? .5 : 1)};
+        if (foe.shieldBreak.phase === 'pop') return idleInput;
+        const move = smashes[f.kit.smashes.up];
+        return {...idleInput, smash:!f.smashCharge || (f.charge < 1 && foe.stun > move.start + .15),
+          smashX:dir*.35, smashY:-1};
+      }
       brain.jumpHold = Math.max(0, brain.jumpHold - dt);
       const result = { ...idleInput, jump: brain.jumpHold > 0 };
       if (brain.wallReturn) {

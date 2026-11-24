@@ -221,6 +221,10 @@ In **Training → Platform practice → Shield drop**, block the short-hop up ai
 
 In **Shield practice → Guard low**, your dog starts with 30% shield. Hold it centered and Noodle's Tail Broom clips your paws for 5%. Release Shield and raise it again to retry. Tilt the bubble down to block the sweep. Under **Guard high**, Noodle short-hops into Slip Lead. Holding low leaves your ears open for 6%. Tilt up to catch the lead. **Fresh shield** repeats either exchange from full strength. To try the attacker's side, select **Poke their shield**. Your chosen rival guards high, leaving the paws within reach of your dog's down tilt.
 
+**Shield breaks.** A spent shield pops your dog into the air. The dog is protected until its paws touch a platform. The circling stars mark the opening for a hit or grab. At 0% the dizzy spell lasts 150 frames. At 150% or higher it lasts 90. Each fresh action press or distinct stick flick after landing cuts five frames, up to one input per frame. Holding the same button or direction gives no extra reduction. The shield returns at 65% strength on landing and can be raised once you wake.
+
+In **Escape a break**, hold Pip’s worn shield on Night Mail. Stay still on the first landing and Brisket’s charged Roof Raiser deals 21%. Retry and tap Attack while keeping Shield held. Wake in time and the shield catches the same swing. Choose **Punish the break** to charge your own smash and release as the stars appear over the rival. [Play both sides of a shield break](https://caleb-guyer.github.io/dog-fight-3/#training/shield-break)
+
 ## Air dodges
 
 Tap **Shield** in midair with the stick centered or the direction keys released for a **neutral air dodge**. Your dog tucks in place, lets the hit pass, then starts falling. Aim as you tap Shield for a **directional air dodge**. You can burst left, right, up, down, or diagonally. On a controller the left stick sets the angle. On touch, hold an arrow and tap Shield with your other thumb. Lift your direction thumb or slide it to the center dot for neutral.
