@@ -176,7 +176,7 @@
   // Dodge frames are [total, first untouchable frame, last untouchable frame], at 60 Hz.
   const kits = {
     pip: {
-      footwork: { walk: 174, burst: 198, acceleration: 1980, traction: 3600, reverseFrames: 7 },
+      footwork: { walk: 174, burst: 198, acceleration: 1980, traction: 3600, tiltBrake: 2880, reverseFrames: 7 },
       defense: { rollDistance: 132, roll: [24, 2, 11], spot: [18, 2, 9] },
       // Air options add a fourth value for landing lag. Travel and ledge timing are in frames.
       airDodge: {
@@ -227,7 +227,7 @@
       fastFallSpeed: 855,
     },
     brisket: {
-      footwork: { walk: 121, burst: 122, acceleration: 1580, traction: 1540, reverseFrames: 4 },
+      footwork: { walk: 121, burst: 122, acceleration: 1580, traction: 1540, tiltBrake: 740, reverseFrames: 4 },
       defense: { rollDistance: 96, roll: [32, 4, 17], spot: [25, 3, 15] },
       airDodge: {
         neutral: [32, 4, 18, 8],
@@ -288,7 +288,7 @@
       fastFallSpeed: 960,
     },
     noodle: {
-      footwork: { walk: 144, burst: 151, acceleration: 1820, traction: 2180, reverseFrames: 5 },
+      footwork: { walk: 144, burst: 151, acceleration: 1820, traction: 2180, tiltBrake: 1260, reverseFrames: 5 },
       defense: { rollDistance: 150, roll: [30, 3, 15], spot: [22, 2, 12] },
       airDodge: {
         neutral: [28, 3, 14, 7],
@@ -343,7 +343,7 @@
       fastFallSpeed: 730,
     },
     clover: {
-      footwork: { walk: 160, burst: 174, acceleration: 2010, traction: 2920, reverseFrames: 6 },
+      footwork: { walk: 160, burst: 174, acceleration: 2010, traction: 2920, tiltBrake: 1930, reverseFrames: 6 },
       defense: { rollDistance: 116, roll: [26, 3, 13], spot: [20, 2, 11] },
       airDodge: {
         neutral: [26, 3, 13, 5],
@@ -1955,6 +1955,7 @@
       charge: -1,
       chargeDirection: 'neutral',
       chargeReleased: false,
+      chargeSlide: 0,
       smashCharge: null,
       grip: null,
       regrabLock: 0,
@@ -1989,6 +1990,7 @@
     f.charge = -1;
     f.chargeDirection = 'neutral';
     f.chargeReleased = false;
+    f.chargeSlide = 0;
     f.smashCharge = null;
   }
   function shieldDirection(x, y, previous) {
@@ -2154,7 +2156,7 @@
     } else if (style !== 'standing') f.vx = runFace * Math.max(0, f.vx * runFace) * attack.carry;
     else if (f.ground >= 0 && attack.step) f.vx = f.face * Math.max(attack.step, f.vx * f.face);
   }
-  function groundStrike(f, side, heldFor) {
+  function groundStrike(f, side, heldFor, slideDir = 0) {
     const step = f.chainWindow > 0 ? f.chainNext : 0;
     const chain = f.kit.ground;
     const tilt = f.kit.tilts[side];
@@ -2162,7 +2164,10 @@
     beginAttack(f, name, verticalAim(side), 0, tilt || chain[step]);
     // The windup begins on the press, including a tap released during recovery.
     f.attack.time = Math.min(heldFor, f.attack.start - 1 / 60);
-    if (tilt) f.attack.tiltSide = side;
+    if (tilt) {
+      f.attack.tiltSide = side;
+      if (slideDir && f.vx * slideDir > 0) f.attack.slideDir = slideDir;
+    }
     else if (step < chain.length - 1) {
       f.chainNext = step + 1;
       f.chainWindow = f.attack.end + 0.23;
@@ -2178,6 +2183,7 @@
     f.smashCharge = { moveId: f.kit.smashes[side], side, face: face || f.face, button };
     f.face = f.smashCharge.face;
     f.vx = 0;
+    f.chargeSlide = 0;
     f.shield = false;
     f.chainWindow = f.landTime = f.skidTime = 0;
   }
@@ -3392,20 +3398,31 @@
       this.resetTraining();
       const originalDogs = this.dogs;
       const player = pattern === 'power' ? newFighter('pip', 0) : originalDogs[0];
-      const kind = { bait: 'brisket', match: player.kind, power: 'brisket', disc: 'clover' }[pattern];
+      const kind = { bait: 'brisket', match: player.kind, power: 'brisket', disc: 'clover', brake: 'pip', pivot: player.kind }[pattern];
       const dummy = newFighter(kind, 1);
       this.dogs = [player, dummy];
       const floor = this.terrain[0], center = (floor.x1 + floor.x2) / 2;
       const box = grabs[dummy.kit.grab].box, jab = moves[player.kit.ground[0]];
       const gap = pattern === 'disc' ? 225 : pattern === 'power' ? 135 : (jab.box[0] + jab.box[2]) * 2 - 14;
       dummy.x = pattern === 'bait' ? center + 45 : center + dir * gap / 2;
-      const mark = pattern === 'bait' ? dummy.x - box[0] - box[2] - player.stats.width + 5 : center;
+      let mark = pattern === 'bait' ? dummy.x - box[0] - box[2] - player.stats.width + 5 : center;
       player.x = pattern === 'bait' ? mark - 27 : center - dir * gap / 2;
       player.face = dir;
       dummy.face = -dir;
       dummy.ground = player.ground = 0;
       dummy.y = player.y = floor.y;
       dummy.damage = this.trainingDamage;
+      if (pattern === 'brake' || pattern === 'pivot') {
+        player.x = mark - dir * 78;
+        const [x, , reach] = moves[player.kit.tilts.forward].box;
+        dummy.x = pattern === 'brake' ? mark + dir * (x + reach + dummy.stats.width + 5) :
+          player.x - dir * (x + reach + dummy.stats.width - 14);
+        dummy.face = pattern === 'pivot' ? dir : -dir;
+        const shift = clamp(0, floor.x1 + 12 - Math.min(player.x, dummy.x), floor.x2 - 12 - Math.max(player.x, dummy.x));
+        mark += shift;
+        player.x += shift;
+        dummy.x += shift;
+      }
       const discBeat = { pip: 60, brisket: 64, noodle: 65, clover: 62 };
       const sendAt = pattern === 'disc' ? discBeat[player.kind] : pattern === 'power' ? 74 : 75;
       this.footworkPractice = { phase: 'ready', pattern, dir, slow: pattern !== 'bait' && slow,
@@ -3413,6 +3430,20 @@
     }
     footworkInput(dt) {
       const drill = this.footworkPractice, [player, dummy] = this.dogs;
+      if (drill.pattern === 'brake' || drill.pattern === 'pivot') {
+        if (drill.phase === 'done') return idleInput;
+        if (drill.phase === 'ready' && player.run) drill.phase = 'approach';
+        if (drill.phase === 'approach' && (player.x - drill.mark) * drill.dir >= -1) {
+          drill.phase = 'atMark';
+          this.emit('footworkCue', { phase: 'atMark', f: player });
+        }
+        if (drill.phase !== 'ready') {
+          drill.tell += dt;
+          if (drill.tell > 1.55 || (player.x - drill.mark) * drill.dir > 100) this.finishFootwork('overshot');
+          else if (drill.pattern === 'pivot') return { ...idleInput, x: drill.dir };
+        }
+        return idleInput;
+      }
       if (drill.pattern !== 'bait') {
         if (drill.phase === 'done') return idleInput;
         drill.tell += dt;
@@ -3451,7 +3482,17 @@
       return idleInput;
     }
     gradeFootwork(target) {
-      if (!this.footworkPractice || this.footworkPractice.phase === 'done') return;
+      const drill = this.footworkPractice;
+      if (!drill || drill.phase === 'done') return;
+      if (drill.pattern === 'brake' || drill.pattern === 'pivot') {
+        if (target.index === 1) {
+          const player = this.dogs[0], move = player.attack;
+          const facing = drill.pattern === 'pivot' ? -drill.dir : drill.dir;
+          const slide = move?.slideDir === drill.dir && player.face === facing;
+          this.finishFootwork(slide ? 'slidingHit' : move?.dashAttack ? 'dashHit' : 'plantedHit');
+        }
+        return;
+      }
       if (this.footworkPractice.pattern !== 'bait') {
         this.finishFootwork(target.index === 0 ? 'hitTaken' : 'hitFirst');
         return;
@@ -4018,7 +4059,7 @@
         this.freshnessPractice.waiting = false;
       }
       const footwork = this.footworkPractice;
-      if (footwork && footwork.pattern !== 'bait') {
+      if (footwork && ['disc', 'power', 'match'].includes(footwork.pattern)) {
         if (footwork.phase === 'ready') {
           if (!input1.attack && !input1.tapped?.attack) return;
           footwork.phase = 'count';
@@ -4344,7 +4385,8 @@
           const jump = pressed('jump');
           if (side || drop || jump || action) {
             const command = { ...idleInput, x: input.x, y: input.y, grabX,
-              smashX: input.smashX, smashY: input.smashY, airDodgeX: input.airDodgeX, airDodgeY: input.airDodgeY, tapped: {} };
+              smashX: input.smashX, smashY: input.smashY, tiltMode: input.tiltMode,
+              airDodgeX: input.airDodgeX, airDodgeY: input.airDodgeY, tapped: {} };
             if (action) { command[action] = !!input[action]; command.tapped[action] = true; }
             r.exit = { option: jump ? 'jump' : action ? 'action' : drop ? 'drop' : 'step', input: command };
           }
@@ -4512,12 +4554,13 @@
       if (button) {
         const stickAerial = button === 'aimStick' && !f.ledge &&
           (f.ground < 0 || f.jumpSquat || f.jumpBuffer > 0 || f.guardIntent === 'platformDrop');
-        const type = button === 'aimStick' ? (stickAerial ? 'attack' : 'smash') : button;
+        const stickTilt = button === 'aimStick' && input.tiltMode && f.ground >= 0 && !stickAerial;
+        const type = button === 'aimStick' ? (stickAerial || stickTilt ? 'attack' : 'smash') : button;
         const independent = button === 'aimStick' || button === 'smash';
         const x = independent ? (input.smashX ?? input.x) : type === 'grab' ? grabX : input.x;
         const y = independent ? (input.smashY ?? input.y) : input.y;
         const side = airDirection(x, y, f.face);
-        const groundX = type === 'attack' && f.ground >= 0 ? grabX : x;
+        const groundX = button === 'attack' && f.ground >= 0 ? grabX : x;
         f.command = {
           type,
           aim: type === 'smash' ? verticalAim(side) : aimFor(y),
@@ -4529,6 +4572,7 @@
           released: !input[button],
         };
         if (button === 'aimStick') f.command.button = button;
+        if (stickTilt) f.command.released = true;
         if (stickAerial) f.command.airOnly = true;
         if (type === 'special' && side === 'neutral' && f.ground < 0) {
           f.command.turnFrames = bReverseWindow;
@@ -4556,14 +4600,12 @@
             if (steering === -f.run.face || (!steering && f.run.turned)) f.command.grabStyle = 'pivot';
             else if (coasting) f.command.grabStyle = 'dash';
             if (f.command.grabStyle) f.command.runFace = f.run.face;
-          } else if (
-            coasting &&
-            !f.run.turned &&
-            steering !== -f.run.face &&
-            side !== 'up' &&
-            side !== 'down'
-          ) {
-            f.command.runFace = f.run.face;
+          } else if (coasting) {
+            const aimed = f.command.groundDirection !== 'neutral';
+            const braking = f.run.grace < pivotWindow - 1e-8 || Math.abs(input.x) < runStick;
+            if (aimed && (stickTilt || braking || f.run.turned || steering === -f.run.face ||
+                f.command.groundDirection !== 'forward')) f.command.slideDir = f.run.face;
+            else if (!stickTilt && !f.run.turned && steering !== -f.run.face) f.command.runFace = f.run.face;
           }
         }
       }
@@ -5248,7 +5290,7 @@
             if (f.smashCharge) {
               releaseSmash(f);
               this.emit('smashRelease', { f });
-            } else groundStrike(f, f.chargeDirection, f.charge);
+            } else groundStrike(f, f.chargeDirection, f.charge, f.chargeSlide);
           }
         } else if (command && (command.type !== 'smash' || f.ground >= 0)) {
           f.throwBounce = null;
@@ -5272,9 +5314,10 @@
             f.face = command.runFace;
             beginAttack(f, 'dash', 0, 0, f.kit.dashAttack);
             f.vx = f.face * Math.max(0, f.vx * f.face) * f.attack.carry;
-          } else if (command.released) groundStrike(f, command.groundDirection, command.heldFor);
+          } else if (command.released) groundStrike(f, command.groundDirection, command.heldFor, command.slideDir);
           else {
             f.charge = command.heldFor;
+            f.chargeSlide = command.slideDir || 0;
             f.chargeDirection = command.groundDirection;
             f.chargeReleased = false;
           }
@@ -5343,6 +5386,8 @@
         f.vx += input.x * 100 * dt;
       } else if (f.ground >= 0 && f.attack?.brake) {
         f.vx = toward(f.vx, 0, f.attack.brake * dt);
+      } else if (f.ground >= 0 && (f.chargeSlide || f.attack?.slideDir)) {
+        f.vx = toward(f.vx, 0, f.kit.footwork.tiltBrake * dt);
       } else if (onFoot && f.crouch) {
         if (!f.dropPrep) f.vx = toward(f.vx, 0, f.kit.footwork.traction * dt);
         f.run = null;
@@ -7878,6 +7923,22 @@
       if (f.run && f.ground >= 0 && !result.jump && !protectionTime(foe)) {
         const face = Math.sign(dx);
         const pivot = face === -f.run.face;
+        // A missed grab leaves a visible opening on either side of a moving dog.
+        const missed = foe.attack;
+        if (missed?.grabAttempt && !foe.grip && missed.time >= missed.start + missed.active &&
+            f.ground === foe.ground && f.vx * f.run.face >= f.stats.speed * 0.4) {
+          const tilt = moves[f.kit.tilts.forward], brake = f.kit.footwork.tiltBrake;
+          const duration = Math.min(tilt.start, Math.abs(f.vx) / brake);
+          const strikeX = f.x + (f.vx - f.run.face * brake * duration / 2) * duration;
+          const stopX = f.x + f.vx * Math.abs(f.vx) / (2 * brake);
+          const floor = this.terrain[f.ground];
+          if (missed.end - missed.time >= tilt.start && stopX > floor.x1 && stopX < floor.x2 &&
+              Math.abs((foe.x - strikeX) * face - tilt.box[0]) <= tilt.box[2] + foe.stats.width) {
+            brain.hold = brain.guard = 0;
+            brain.hop = null;
+            return { ...idleInput, x: f.run.face, aimStick: true, tiltMode: true, smashX: face };
+          }
+        }
         const grab = grabs[pivot ? f.kit.pivotGrab : f.kit.dashGrab];
         const wantsGrab = pivot || foe.shield || foe.crouch || foe.landingLag > grab.start;
         const move = wantsGrab ? grab : moves[f.kit.dashAttack];

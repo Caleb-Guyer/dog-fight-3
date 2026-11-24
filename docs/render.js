@@ -767,6 +767,12 @@
   }
   function tiltSwing(ctx, f, a, floor) {
     const beat = attackWindow(a);
+    if (a.slideDir && f.ground >= 0 && Math.abs(f.vx) > 40) {
+      const trail = Math.round(Math.abs(f.vx) / 20), back = -a.slideDir;
+      const heel = snap(f.x + back * f.stats.width * 0.6, 2), y = snap(f.y, 2);
+      pixelLine(ctx, heel + back * 4, y - 2, heel + back * trail, y - 2, '#dbc8a2', 2, 2);
+      pixelLine(ctx, heel + back * (trail + 4), y - 3, heel + back * (trail + 8), y - 5, '#b89979', 2, 2);
+    }
     const lead = f.kind === 'noodle' && a.tiltSide !== 'down';
     if (!lead && (a.time + 1e-8 < beat.start || a.time >= beat.start + beat.active - 1e-8)) return;
     const phase = attackPhase(a),
@@ -2442,7 +2448,7 @@
           }
         }
       }
-      if (world.footworkPractice && world.footworkPractice.pattern !== 'bait') {
+      if (world.footworkPractice && ['match', 'power', 'disc'].includes(world.footworkPractice.pattern)) {
         const drill = world.footworkPractice, x = snap(drill.mark, 2), y = world.terrain[0].y + 9;
         for (let i = 0; i < 3; i++) {
           const lamp = x + (i - 1) * 16;
@@ -2454,7 +2460,7 @@
         }
       } else if (world.footworkPractice) {
         const x = snap(world.footworkPractice.mark, 2), y = world.terrain[0].y;
-        const chalk = world.footworkPractice.phase === 'opening' ? mint : cream;
+        const chalk = ['opening', 'atMark'].includes(world.footworkPractice.phase) ? mint : cream;
         for (const side of [-1, 1]) {
           pixelLine(ctx, x + side * 10, y + 11, x, y + 1, ink, 5, 2);
           pixelLine(ctx, x + side * 9, y + 10, x, y + 1, chalk, 3, 2);
