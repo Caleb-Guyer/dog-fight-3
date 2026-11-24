@@ -1938,6 +1938,24 @@
   }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
+    if (e.type === 'hardImpact') {
+      ctx.save();
+      ctx.translate(e.x, e.y);
+      if (e.wall) ctx.rotate(e.face * Math.PI / 2);
+      const spread = reduced.matches ? 4 : snap(8 * p, 2);
+      for (const side of [-1, 1]) {
+        ctx.save();
+        ctx.scale(side, 1);
+        for (const [color, width] of [[ink, 8], [e.color, 5], [cream, 2]]) {
+          pixelLine(ctx, 3 + spread, -3, 12 + spread, -13, color, width, 2);
+          pixelLine(ctx, 12 + spread, -13, 14 + spread, -7, color, width, 2);
+          pixelLine(ctx, 14 + spread, -7, 25 + spread, -18, color, width, 2);
+        }
+        ctx.restore();
+      }
+      ctx.restore();
+      return;
+    }
     if (e.type === 'shieldPoke') {
       const reach = reduced.matches ? 12 : 9 + snap(p * 15, 2);
       for (const side of [-1, 1]) {
@@ -2140,6 +2158,10 @@
     }
     event(name, e) {
       const f = e.f;
+      if (e.hard && (name === 'wallBounce' || name === 'meteorBounce' || name === 'floorBounce')) {
+        this.add('hardImpact', e.point.x, e.point.y, '#ef574b', 13 / 60, 26, e.dir, { wall: name === 'wallBounce' });
+        return;
+      }
       if (name === 'stockLeave') this.add(name, e.point.x, e.point.y, mint, 0.18, 24);
       if (name === 'landingCancel') this.add(name, e.point.x, e.point.y, mint, 0.18, f.stats.width * 0.7);
       if (name === 'edgeCancel') this.add(name, e.point.x, e.point.y, mint, 0.16, 12, e.dir);

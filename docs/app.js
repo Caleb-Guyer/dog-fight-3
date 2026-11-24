@@ -368,6 +368,9 @@
     } else if (name === 'wallTech' || name === 'wallTechJump') {
       tone(630, 920, 0.052, 0, 'triangle', 0.075);
       if (name === 'wallTechJump') tone(870, 1440, 0.082, 0.04, 'square', 0.024);
+    } else if (detail.hard && (name === 'wallBounce' || name === 'meteorBounce' || name === 'floorBounce')) {
+      tone(224, 48, 0.065, 0, 'square', 0.045);
+      tone(107, 37, 0.14, 0.025, 'triangle', 0.12);
     } else if (name === 'wallBounce') {
       tone(165, 56, 0.075, 0, 'triangle', 0.09);
     } else if (name === 'tech') {
@@ -1468,7 +1471,7 @@
       if (world?.stockPractice && e.f?.index === world.stockPractice.slot && name.startsWith('stock'))
         stockFeedback(name, e);
       if (name === 'chaseCue' || name === 'chaseResult') chaseFeedback(name, e);
-      if (world?.wallPractice && e.f?.index === 0) wallFeedback(name);
+      if (world?.wallPractice && e.f?.index === 0) wallFeedback(name, e);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (world?.edgePractice && (name === 'edgeCue' || name === 'edgeLand' || name === 'edgeResult' ||
           (world.edgePractice.corner && (name === 'cornerCue' || (name === 'shieldSlip' && e.f.index === 0))) ||
@@ -2315,7 +2318,7 @@
     [result.textContent, tip.textContent] = feedback[e.outcome];
     if (e.pattern === 'low' || e.pattern === 'high') tip.textContent += ' Release Shield and raise it again to retry.';
   }
-  function wallFeedback(name) {
+  function wallFeedback(name, event) {
     const status = $('wall-status');
     const d = world.wallPractice;
     if (d.runner) {
@@ -2332,6 +2335,12 @@
       return;
     }
     if (world.wallPractice.phase === 'done' && status.dataset.result !== 'flight') return;
+    if (name === 'wallBounce' && event.hard) {
+      status.dataset.result = 'hardImpact';
+      status.textContent = 'Too fast to tech · ' + Math.round(event.speed) + ' px/s';
+      $('recovery-tip').textContent = 'Retry kick. Hold Up as the heel hits and tap Shield. A shallower hit can be teched.';
+      return;
+    }
     const feedback = {
       wallCue: [
         'swing',
@@ -2357,6 +2366,8 @@
     };
     if (!feedback[name] || (name === 'hit' && world.wallPractice.phase !== 'flight')) return;
     [status.dataset.result, status.textContent, $('recovery-tip').textContent] = feedback[name];
+    if (d.heavy && name === 'hit') $('recovery-tip').textContent = 'Hold Up through the hit freeze to soften the impact. Tap Shield before the wall.';
+    if (d.heavy && d.phase === 'done') status.textContent += ' · ' + Math.round(event.speed) + ' px/s';
   }
   function chaseFeedback(name, e) {
     const d = world.chasePractice, status = $('launch-status'), tip = $('recovery-tip');
@@ -2480,6 +2491,8 @@
         tech: ['Teched in place', 'Your paws met the platform and you stopped the rebound.'],
         techRoll: ['Tech roll', 'You crossed the landing before the attacker could chase the bounce.'],
         bounce: ['Meteor bounce', 'The platform sent you back up. Try Shield at the hit spark, with a side to roll.'],
+        hardImpact: ['Too fast to tech · ' + Math.round(d.hardSpeed) + ' px/s', 'Hold ' +
+          (d.dir > 0 ? 'Right' : 'Left') + ' through the hit freeze and tap Shield to try a shallower landing.'],
         saved: ['Saved the stock', 'Your ' + (d.cancel === 'jump' ? 'jump' : 'Up Special') + ' broke the spike and you reached the stage.'],
         returned: ['Back onstage', 'You reached safety after the launch.'],
         ko: ['Ring-out', 'Tap a fresh Jump or Up + Special at the mint marks. Keep steering toward the ledge.'],
@@ -2729,7 +2742,7 @@
     view = new FightView($('blast-radar'));
     if (chase) world.resetChasePractice(pattern, direction ?? world.chasePractice?.dir ?? 1, world.chasePractice?.slow ?? true);
     else if (meteor) world.resetMeteorPractice(pattern, direction ?? world.meteorPractice?.dir ?? 1,
-      world.meteorPractice?.slow ?? true, world.meteorPractice?.baseline ?? 100);
+      world.meteorPractice?.slow ?? true, study === 'impact' ? 185 : world.meteorPractice?.baseline ?? 100);
     else if (stock) world.resetStockPractice(pattern, direction ?? world.stockPractice?.dir ?? 1, world.stockPractice?.slow ?? true);
     else if (survival) world.resetSurvivalPractice(direction ?? world.survivalPractice?.dir ?? 1, world.survivalPractice?.slow ?? true,
       world.survivalPractice?.baseline, study);
@@ -2757,7 +2770,7 @@
       world.spacingPractice?.slow ?? true, world.spacingPractice?.pattern === 'wavebounce' ? world.spacingPractice.guard : true);
     else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true, world.escapePractice?.baseline);
     else if (platform) world.resetPlatformPractice(pattern, world.platformPractice?.slow ?? true);
-    else if (wall) world.resetWallPractice(pattern, direction);
+    else if (wall) world.resetWallPractice(pattern, direction === 'impact' ? '' : direction, direction === 'impact');
     else if (shield) world.resetShieldPractice(pattern, direction ?? world.shieldPractice?.worn ?? true);
     else if (air) world.resetAirPractice(pattern, practiceSide);
     else if (roll) world.resetLedgeRollPractice(pattern, practiceSide);
@@ -2950,12 +2963,14 @@
       }[pattern];
     } else if (wall) {
       const d = world.wallPractice;
+      $('wall-impact').setAttribute('aria-pressed', String(!!d.heavy));
       for (const kind of ['pip','noodle']) $('wall-'+kind).setAttribute('aria-pressed', String(kind === d.runner));
       $('wall-status').dataset.result = 'ready';
       $('wall-status').textContent = d.runner ? player.stats.name + ' · one air jump left' : pattern === 'right' ? 'Right wall' : 'Left wall';
       const away = d.inward === 1 ? 'left' : 'right';
       message = d.runner ? 'Flick '+away+' off the brickwork. Steer back to the near roof, or hold '+away+
         ' to cross the gap. Retry with Jump alone to spend your air jump instead.' :
+        d.heavy ? 'Noodle starts at 185%. First tap Shield with no direction. Retry with Up + Shield when Pip’s heel hits.' :
         'You’re Noodle at 90%. Tap Shield when Pip’s Back Heel hits. Hold Jump at the wall to kick away.';
     } else if (trump) {
       const defend = pattern === 'defend';
@@ -3240,9 +3255,11 @@
     $('game').focus({ preventScroll: true });
   };
   $('wall-training').onclick = () => drill('wall', false, world.wallPractice?.side || 'left');
-  $('wall-retry').onclick = () => drill('wall', false, world.wallPractice.side, world.wallPractice.runner);
+  const wallMode = () => world.wallPractice.heavy ? 'impact' : world.wallPractice.runner;
+  $('wall-impact').onclick = () => drill('wall', false, world.wallPractice.side, world.wallPractice.heavy ? '' : 'impact');
+  $('wall-retry').onclick = () => drill('wall', false, world.wallPractice.side, wallMode());
   for (const kind of ['pip','noodle']) $('wall-'+kind).onclick = () => drill('wall', false, world.wallPractice.side, kind);
-  $('wall-side').onclick = () => drill('wall', false, world.wallPractice.side === 'left' ? 'right' : 'left', world.wallPractice.runner);
+  $('wall-side').onclick = () => drill('wall', false, world.wallPractice.side === 'left' ? 'right' : 'left', wallMode());
   $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'kick');
   for (const button of $('shield-patterns').querySelectorAll(':scope > button:not(#shield-strength)'))
     button.onclick = () => drill('shield', false, button.id === 'shield-jumpIn' ? $('jump-in-choice').value : button.id.slice('shield-'.length));
@@ -4263,7 +4280,7 @@
         if (frameLab.mode === 'frozen') {
           accumulator = frameLab.pending > 0 ? 1 / 60 : 0;
           if (frameLab.pending > 0) frameLab.pending--;
-        } else accumulator += world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow ? dt / 2 : dt;
+        } else accumulator += world.wallPractice?.heavy || world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];
@@ -4407,11 +4424,17 @@
       startMatch({ ...settings, mode:'training', stage:'picnic', fetch:false });
       drill('spacing', false, 'footstool');
     }
-    else if (hash === '#training/wall-jumps') {
+    else if (hash === '#training/wall-jumps' || hash === '#training/impact-tech') {
       menuScreen('match');
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'laundry', fetch:false });
-      drill('wall', false, 'left', 'pip');
+      drill('wall', false, 'left', hash === '#training/impact-tech' ? 'impact' : 'pip');
+    }
+    else if (hash === '#training/spike-impact') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'pip', p2:'noodle', stage:'picnic', fetch:false });
+      drill('launch', false, 'spikeFloor', 1, 'impact');
     }
     else if (hash === '#training/angled-tilts') {
       menuScreen('match');
