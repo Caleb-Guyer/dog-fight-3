@@ -113,7 +113,8 @@
   const tumbleSpeed = 430;
   const maxDI = (18 * Math.PI) / 180;
   const verticalLaunch = Math.sin(65 * Math.PI / 180);
-  const blastZone = (x, y, width) => x < -115 ? 'left' : x > width + 115 ? 'right' :
+  const stockMinutes = [1, 3, 7, 0];
+  const blastZone = (x, y, width, inset = 0) => x < -115 + inset ? 'left' : x > width + 115 - inset ? 'right' :
     y < topBlastY ? 'top' : y > 765 ? 'bottom' : '';
   function launchInfluence(vx, vy, input) {
     const speed = Math.hypot(vx, vy), stick = Math.hypot(input.x, input.y);
@@ -2435,6 +2436,12 @@
       this.fetch = config.fetch;
       this.time = 0;
       this.end = null;
+      this.endReason = '';
+      this.matchFrames = 0;
+      this.suddenDeath = null;
+      const versus = this.mode === 'solo' || this.mode === 'local';
+      const minutes = stockMinutes.includes(config.minutes) ? config.minutes : 7;
+      this.clockFrames = versus && minutes ? minutes * 3600 : null;
       this.emit = event;
       this.random = random;
       this.dogs = [newFighter(config.p1, 0), newFighter(config.p2, 1)];
@@ -2464,19 +2471,16 @@
       this.airPractice = null;
       this.lastCombo = { hits: 0, damage: 0 };
       this.hitStop = 0;
-      this.bot = {
-        timer: 0,
-        pulse: {},
-        hold: 0,
-        guard: 0,
-        landingGuardUntil: 0,
-        jumpHold: 0,
-        hop: null,
-        hopDelay: 0,
-        smashHold: 0,
-      };
+      this.resetCpu();
       if (this.mode === 'training') this.resetTraining();
+      else if (versus && config.suddenStart) this.startSuddenDeath();
       else this.dogs.forEach((f) => this.spawn(f, false));
+    }
+    resetCpu() {
+      const memory = this.bot;
+      this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
+      if (memory) for (const key of ['spotStreak','spotDelay','spotReads','spotBaits','spotPunishes'])
+        if (memory[key] !== undefined) this.bot[key] = memory[key];
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
       if (fromKO && this.mode === 'solo') {
@@ -4029,7 +4033,7 @@
         const terrain = !this.layout && this.stage === 'laundry' ? platforms(this.stage, time) : this.terrain;
         if (this.wallContact(f, x, y, path.x, path.y) ||
             (vy >= 0 && this.landingSurface(path, y, x, f.tumble?.meteor ? dt : 0, terrain, time) >= 0)) break;
-        path.zone = blastZone(path.x, path.y, this.stageWidth);
+        path.zone = blastZone(path.x, path.y, this.stageWidth, this.blastInset(path.ticks));
         if (path.zone) break;
       }
       return path;
@@ -4037,7 +4041,7 @@
     cpuLaunchAim(f) {
       const home = f.x < this.stageWidth / 2 ? 1 : -1;
       const normal = { x: home, y: Math.abs(f.vx) > Math.abs(f.vy) ? -1 : 0 };
-      const margin = p => Math.min(p.x + 115, this.stageWidth + 115 - p.x, p.y - topBlastY, 765 - p.y);
+      const margin = p => Math.min(p.x + 115 - this.blastInset(p.ticks), this.stageWidth + 115 - p.x - this.blastInset(p.ticks), p.y - topBlastY, 765 - p.y);
       const forecast = input => {
         const v = launchInfluence(f.vx, f.vy, input);
         return this.projectLaunch(f, v.x, v.y);
@@ -4075,8 +4079,49 @@
         point: { x: f.x, y: f.y - f.stats.height * 0.52 },
       });
     }
+    blastInset(aheadFrames = 0) {
+      return this.suddenDeath ? clamp((this.suddenDeath.frames + aheadFrames - 300) / 1080, 0, 1) * 480 : 0;
+    }
+    startSuddenDeath(cause = 'direct') {
+      this.suddenDeath = { round:(this.suddenDeath?.round || 0) + 1, intro:90, frames:0, cause };
+      this.clockFrames = null;
+      this.grapple = this.ball = null;
+      this.projectiles = [];
+      this.ledgeClaims = [];
+      this.hitStop = 0;
+      this.lastCombo = { hits:0, damage:0 };
+      this.resetCpu();
+      for (const f of this.dogs) {
+        this.spawn(f, false);
+        f.stocks = 1;
+        f.damage = 300;
+      }
+    }
+    finishMatch(winner, reason) {
+      this.end = winner;
+      this.endReason = reason;
+      this.emit('win', { f:this.dogs[winner] });
+    }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      const frames = dt * 60;
+      if (this.suddenDeath?.intro > 0) {
+        this.suddenDeath.intro = Math.max(0, this.suddenDeath.intro - frames);
+        this.dogs[0].prev = { ...input1 };
+        if (this.mode === 'local') this.dogs[1].prev = { ...input2 };
+        return;
+      }
+      if (this.mode === 'solo' || this.mode === 'local') this.matchFrames += frames;
+      if (this.suddenDeath && this.hitStop <= 0) this.suddenDeath.frames += frames;
+      this.stepFighters(dt, input1, input2);
+      if (this.clockFrames === null) return;
+      this.clockFrames = Math.max(0, this.clockFrames - frames);
+      if (this.clockFrames > 1e-8 || this.end !== null) return;
+      const [p,q] = this.dogs;
+      if (p.stocks === q.stocks) this.startSuddenDeath('time');
+      else this.finishMatch(p.stocks > q.stocks ? 0 : 1, 'time');
+    }
+    stepFighters(dt, input1, input2) {
       const juggle = this.launchPractice?.pattern === 'juggle' && this.launchPractice;
       if (juggle?.phase === 'waiting') {
         if (!input1.attack && !input1.tapped?.attack) return;
@@ -4405,7 +4450,7 @@
       if (this.stockPractice) this.checkStockPractice(dt);
       if (this.survivalPractice) this.checkSurvivalPractice();
       if (
-        this.fetch &&
+        this.fetch && !this.suddenDeath &&
         !combo &&
         !edge &&
         !this.platformPractice &&
@@ -4426,7 +4471,8 @@
         !wallDrill
       )
         this.updateBall(dt);
-      const out = this.dogs.filter(f => !f.absent && blastZone(f.x, f.y, this.stageWidth));
+      const inset = this.blastInset();
+      const out = this.dogs.filter(f => !f.absent && blastZone(f.x, f.y, this.stageWidth, inset));
       if (this.freshnessPractice) this.traceFreshness(out.includes(this.dogs[1]));
       if (out.length) this.knockouts(out);
     }
@@ -7278,14 +7324,10 @@
       }
       const eliminated = this.dogs.filter((f) => f.stocks <= 0);
       if (eliminated.length === 1) {
-        this.end = 1 - eliminated[0].index;
-        this.emit('win', { f: this.dogs[this.end] });
+        this.finishMatch(1 - eliminated[0].index, this.suddenDeath ? 'sudden' : 'ko');
         return;
       }
-      if (eliminated.length === 2)
-        this.dogs.forEach((f) => {
-          f.stocks = 1;
-        });
+      if (eliminated.length === 2) return this.startSuddenDeath('double');
       out.forEach((f) => this.spawn(f, true));
     }
     crouchCounterInput(f, foe) {
@@ -7914,6 +7956,12 @@
         outerRight = solid[solid.length - 1].x2;
       const outside = f.x < outerLeft || f.x > outerRight;
       const unsafe = f.ground < 0 && (outside || f.y > closest.y + 28 || (!under && f.y > closest.y - 46));
+      if (this.suddenDeath?.frames > 300 && f.ground >= 0 && !f.attack && !f.stun && !f.grip && !f.floorAction) {
+        const inset = this.blastInset(45);
+        const inward = f.x < inset - 65 ? 1 : f.x > this.stageWidth + 65 - inset ? -1 : 0;
+        const floor = this.terrain[f.ground];
+        if (inward && f.x + inward*45 > floor.x1 && f.x + inward*45 < floor.x2) return { ...idleInput, x:inward };
+      }
       if (this.cpuLevel === 'rookie') {
         if (brain.rookieGuard > this.time && !f.stun && f.ground >= 0) return { ...idleInput, shield:true };
         const basic = this.rookieNeutral(f, foe);
@@ -8039,7 +8087,7 @@
       if (f.tumble && !f.tumble.pending && !f.usedDodge && f.stun > 0 && f.stun <= inputWindow - dt + 1e-8 &&
           this.floorAhead(f, techWindow + dt) < 0) {
         const x = f.x + f.vx * (f.stun + 4 * dt), y = f.y + f.vy * (f.stun + 4 * dt);
-        const out = blastZone(x, y, this.stageWidth);
+        const out = blastZone(x, y, this.stageWidth, this.blastInset(f.stun * 60 + 4));
         if (out) {
           const inward = f.x < closest.x1 ? 1 : f.x > closest.x2 ? -1 : Math.sign(this.stageWidth / 2 - f.x);
           const duck = out === 'top' ? 1 : f.y > closest.y + 25 ? -1 : 0;
@@ -8426,6 +8474,7 @@
   }
   window.DogFight = {
     cpuLevels,
+    stockMinutes,
     seededRandom,
     fighters,
     kits,

@@ -17,6 +17,7 @@
     isReversalPractice,
     isFootstoolPractice,
     cpuLevels,
+    stockMinutes,
     seededRandom,
     clamp,
   } = window.DogFight;
@@ -231,6 +232,7 @@
     stage: 'picnic',
     mode: 'solo',
     cpuLevel: 'arcade',
+    minutes: 7,
     p1: 'pip',
     p2: 'brisket',
     fetch: true,
@@ -244,6 +246,7 @@
     if (Object.hasOwn(arenas, s.stage)) settings.stage = s.stage;
     if (Object.hasOwn(modes, s.mode)) settings.mode = s.mode;
     if (Object.hasOwn(cpuLevels, s.cpuLevel)) settings.cpuLevel = s.cpuLevel;
+    if (stockMinutes.includes(s.minutes)) settings.minutes = s.minutes;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
     for (const key of ['fetch', 'sound', 'shake', 'tiltStick']) if (typeof s[key] === 'boolean') settings[key] = s[key];
     if (Number.isFinite(s.volume)) settings.volume = Math.max(0, Math.min(100, s.volume));
@@ -523,7 +526,10 @@
       .querySelectorAll('[data-mode]')
       .forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.mode === settings.mode)));
     $('stage-title').textContent = arenas[settings.stage].name;
-    $('rules-label').innerHTML = icon('paw') + (settings.mode === 'training' ? 'Unlimited' : '3 stocks');
+    const training = settings.mode === 'training';
+    $('rules-label').disabled = training;
+    $('rules-label').innerHTML = icon('paw') + (training ? 'Unlimited' :
+      'Rules · 3 stocks · ' + (settings.minutes ? settings.minutes + ' min' : 'No clock') + ' ▾');
     $('start').innerHTML =
       icon('play') + '<span>' + (settings.mode === 'training' ? 'Start training' : 'Start fight') + '</span>';
     syncFetch();
@@ -1162,7 +1168,22 @@
   }
   function updateHUD() {
     if (world.mode === 'adventure') return updateDispatchHUD();
-    const scores = online.match?.confirmedWorld.dogs || world.dogs;
+    const confirmed = online.match?.confirmedWorld || world;
+    const scores = confirmed.dogs;
+    const clock = $('match-clock'), seconds = Math.ceil((confirmed.clockFrames || 0) / 60);
+    clock.hidden = confirmed.clockFrames === null && !confirmed.suddenDeath;
+    const clockText = confirmed.suddenDeath ? 'SD' : Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2,'0');
+    if (clock.textContent !== clockText) clock.textContent = clockText;
+    clock.classList.toggle('urgent', !!confirmed.suddenDeath || seconds <= 10);
+    const call = $('countdown'), tiebreak = confirmed.suddenDeath;
+    call.classList.toggle('sudden', !!tiebreak?.intro);
+    if (tiebreak?.intro) {
+      const caption = tiebreak.cause === 'time' ? 'Time! Stocks tied' :
+        tiebreak.cause === 'double' ? 'Double knockout' : 'One stock each';
+      if (call.dataset.caption !== caption) call.dataset.caption = caption;
+    }
+    const clockLabel = tiebreak ? 'Sudden Death · One stock at 300%' : 'Match clock';
+    if (clock.getAttribute('aria-label') !== clockLabel) clock.setAttribute('aria-label', clockLabel);
     const combo = world.lastCombo;
     const grip = world.grapple;
     const prompt = $('grapple-prompt');
@@ -1260,7 +1281,7 @@
           '">' +
           Math.floor(f.damage) +
           '%</strong><span class="lives" aria-label="' +
-          (world.mode === 'training' ? 'Unlimited stocks' : f.stocks + ' stocks') +
+          (world.mode === 'training' ? 'Unlimited stocks' : stockLabel(f.stocks)) +
           '">' +
           lives +
           '</span></div></div>'
@@ -1331,12 +1352,22 @@
       '<button type="button" data-cpu="' + id + '" aria-pressed="' + (level === id) + '">' +
       '<strong>' + cpu.name + '</strong><span>' + cpu.tip + '</span></button>').join('');
     showDialog('cpu-level', restart ? 'Replay the opening' : 'CPU opponent',
-      (restart ? '<p>Choose an opponent to restart this three-stock match from the same opening.</p>' : '') +
+      (restart ? '<p>Choose an opponent to replay this match from the same opening.</p>' : '') +
       '<div class="cpu-choices">' + choices + '</div>' + (restart ? '' :
         '<div class="dialog-actions"><button class="utility" data-do="shield-read-match">Try Rival · Pip vs. Noodle</button></div>'));
     document.querySelector('[data-cpu="' + level + '"]').focus({preventScroll:true});
   }
   $('cpu-level').onclick = showCpuLevels;
+  $('rules-label').onclick = () => {
+    const choices = stockMinutes.map(n => '<button type="button" class="utility" data-minutes="' + n +
+      '" aria-pressed="' + (settings.minutes === n) + '">' + (n ? n + ' min' : 'No clock') + '</button>').join('');
+    showDialog('stock-rules', 'Stock match rules',
+      '<p>Three stocks each. When time runs out, the dog with more stocks wins. Tied stocks or a double final knockout start Sudden Death.</p>' +
+      '<h3>Match clock</h3><div class="dialog-actions">' + choices + '</div>' +
+      '<p>Sudden Death starts both dogs at 300% on one stock. The side boundaries close in after five seconds.</p>' +
+      '<div class="dialog-actions"><button class="utility" data-do="sudden-start">Play Sudden Death</button></div>');
+    document.querySelector('[data-minutes="' + settings.minutes + '"]').focus({preventScroll:true});
+  };
   function startShieldReadMatch() {
     leaveOnline();
     afterStory = null;
@@ -1450,7 +1481,7 @@
     $('match-mode').textContent = matchName;
     $('match-stage').textContent = arenas[config.stage].name;
     $('pause-label').textContent = online.match ? 'Match menu' : 'Pause';
-    countdown = config.mode === 'training' ? 0 : 2.4;
+    countdown = config.mode === 'training' || world.suddenDeath ? 0 : 2.4;
     lastCount = 0;
     resultDelay = 0;
     hudKey = '';
@@ -1518,14 +1549,16 @@
     document.querySelector('[data-do=resume]').focus();
   }
   function showResult() {
-    const f = world.dogs[world.end],
-      elapsed = Math.floor(world.time);
+    const result = online.match?.confirmedWorld || world;
+    const f = result.dogs[result.end], elapsed = Math.floor(result.matchFrames / 60);
     const duration = Math.floor(elapsed / 60) + 'm ' + String(elapsed % 60).padStart(2, '0') + 's';
+    const finish = result.endReason === 'time' ? 'Time expired · ' + result.dogs.map(d=>d.stocks).join('–') + ' stocks (P1–P2)' :
+      result.endReason === 'sudden' ? 'Sudden Death KO' : stockLabel(f.stocks);
     if (online.match) {
-      const title = world.end === online.side ? 'You win!' : 'Opponent wins';
+      const title = result.end === online.side ? 'You win!' : 'Opponent wins';
       showDialog('online-result', title,
         '<div class="winner"><img alt="" src="' + portrait(f.kind) + '"><div><h3>' + f.stats.name +
-        ' wins!</h3><p>' + stockLabel(f.stocks) + ' · ' + duration + '</p></div></div><p id="net-rematch-status" role="status"></p>' +
+        ' wins!</h3><p>' + finish + ' · ' + duration + '</p></div></div><p id="net-rematch-status" role="status"></p>' +
         '<div class="dialog-actions"><button class="primary" data-do="online-rematch">Rematch</button><button class="utility" data-do="online-leave">Online lobby</button></div>', false);
       updateVotes();
       document.querySelector('[data-do=online-rematch]').focus();
@@ -1542,10 +1575,7 @@
         '</span><h3 style="margin-top:9px">' +
         f.stats.name +
         ' wins!</h3><p>' +
-        f.stocks +
-        ' ' +
-        (f.stocks === 1 ? 'stock' : 'stocks') +
-        ' left · ' +
+        finish + ' · ' +
         duration +
         '</p></div></div>' + cpuReadReport() + '<div class="dialog-actions"><button class="primary" data-do="rematch">' +
         icon('reset') +
@@ -1558,6 +1588,17 @@
   $('start').onclick = () => startMatch();
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
+    const rule = e.target.closest('[data-minutes]');
+    if (rule && stockMinutes.includes(Number(rule.dataset.minutes))) {
+      settings.minutes = Number(rule.dataset.minutes);
+      save(); dismiss(); syncLobby();
+      $('rules-label').focus({preventScroll:true});
+      return;
+    }
+    if (e.target.closest('[data-do="sudden-start"]')) {
+      startMatch({ ...settings, suddenStart:true });
+      return;
+    }
     const choice = e.target.closest('[data-cpu]')?.dataset.cpu;
     if (choice && Object.hasOwn(cpuLevels, choice)) {
       settings.cpuLevel = choice;
@@ -3184,7 +3225,7 @@
   function beginRun(index, checkpoint, atCheckpoint = null) {
     dismiss();
     $('pause-label').textContent = 'Pause';
-    $('countdown').classList.remove('net-lag');
+    $('countdown').classList.remove('net-lag', 'sudden');
     page = 'match';
     drillSide = null;
     drillWaiting = false;
@@ -3198,6 +3239,7 @@
       'dispatch-story',
       'lobby',
       'training-tools',
+      'match-clock',
       'recovery-tip',
       'hud',
       'grapple-prompt',
@@ -3872,6 +3914,11 @@
     }
     oldPad = now;
   }
+  function roundCall(w) {
+    if (w.endReason === 'time') return 'Time!';
+    if (w.suddenDeath) return w.suddenDeath.intro > 0 ? 'Sudden Death' : w.suddenDeath.frames < 22 ? 'GO!' : '';
+    return w.time < 0.37 && w.mode !== 'training' ? 'GO!' : '';
+  }
   function runOnline(dt, pads) {
     const match = online.match;
     accumulator += dt;
@@ -3888,7 +3935,7 @@
     const ended = match.confirmedWorld.end !== null;
     $('countdown').classList.toggle('net-lag', !ended && waiting > 850);
     if (!ended && waiting > 22000) return online.opponentLeft('The other player stopped responding.');
-    $('countdown').textContent = !ended && waiting > 850 ? 'Waiting for opponent…' : world.time < 0.37 ? 'GO!' : '';
+    $('countdown').textContent = !ended && waiting > 850 ? 'Waiting for opponent…' : roundCall(match.confirmedWorld);
     updateHUD();
     if (ended) online.finish(match.confirmedWorld.end);
   }
@@ -3925,7 +3972,7 @@
       } else if (online.match && !online.finished) {
         runOnline(dt, pads);
       } else if (world.end === null) {
-        $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
+        $('countdown').textContent = roundCall(world);
         if (frameLab.mode === 'frozen') {
           accumulator = frameLab.pending > 0 ? 1 / 60 : 0;
           if (frameLab.pending > 0) frameLab.pending--;
@@ -3970,6 +4017,7 @@
           touchTaps.clear();
           accumulator = Math.max(0, accumulator - 1 / 60);
         }
+        if (world.endReason === 'time') $('countdown').textContent = 'Time!';
         updateHUD();
       } else {
         resultDelay -= dt;
@@ -3977,7 +4025,8 @@
       }
       if (world && (frameLab.mode !== 'frozen' || steppedFrame)) {
         const confirmed = online.match?.confirmedWorld;
-        const waitingOnKO = confirmed && world.end !== null && confirmed.end === null;
+        const waitingOnKO = confirmed && (world.end !== null && confirmed.end === null ||
+          world.suddenDeath?.round !== confirmed.suddenDeath?.round);
         view.draw($('game'), waitingOnKO ? confirmed : world, frameLab.mode === 'frozen' ? 1/60 : dt,
           frameLab.mode === 'frozen' ? frameLab.renderTime : now);
       }
@@ -3992,7 +4041,11 @@
   }
   function openLink() {
     const hash = location.hash;
-    if (hash === '#training/landing-buffer') {
+    if (hash === '#solo/sudden-death') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/landing-buffer') {
       menuScreen('match');
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'brisket', p2:'pip', stage:'picnic', fetch:false });

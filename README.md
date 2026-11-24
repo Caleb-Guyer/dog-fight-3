@@ -18,6 +18,14 @@ The game fills the browser window. On browsers with fullscreen support, starting
 
 On **Moonbell Bandstand**, hold Jump beneath either wing. Once your paws land, jump inward to reach the high center platform with your midair jump still available. The right and left ends of the high platform overlap the wings below. Tap Down there to retreat one level. Dropping through the middle takes you back to the deck.
 
+## Stock match rules
+
+Solo and local versus start with three stocks and a seven-minute clock. Open **Rules** on the matchup preview to choose one, three, or seven minutes, or **No clock**. Online rooms and Quickplay use seven minutes. When time expires, the dog with more stocks wins.
+
+Tied stocks at time or a simultaneous final knockout send both dogs to **Sudden Death**. Each starts on one stock at 300%. After five seconds the striped side boundaries move toward center. Crossing either boundary costs the stock. The Fetch Ball sits out the tiebreak. A second double knockout restarts Sudden Death. Choose **Play Sudden Death** in Rules to try it with your selected matchup, or play Pip against Brisket. [Start the Pip–Brisket tiebreak](https://caleb-guyer.github.io/dog-fight-3/#solo/sudden-death)
+
+In that opening, let Brisket approach once to see his Yard Buster. On the rematch, start charging Pip’s forward smash at **GO!** and release just before Brisket reaches you. A well-timed Bolt Kick can take the stock in one hit.
+
 ## Solo opponents
 
 Choose **CPU** in Fighter select. **Rookie** pauses between grounded attacks, **Arcade** plays the original mix of combos and counters, and **Rival** also learns how you escape after blocking. All three use the selected dog's regular damage, speed, stocks and recovery.
