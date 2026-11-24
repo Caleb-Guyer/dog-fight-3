@@ -380,6 +380,8 @@
     } else if (name === 'smashRelease') {
       const pitch = { pip: 400, brisket: 135, noodle: 325, clover: 540 }[detail.f.kind];
       tone(pitch, pitch * 0.52, 0.075, 0, 'triangle', 0.05 + detail.f.attack.power * 0.04);
+    } else if (name === 'crouchCancel' && detail.planted) {
+      tone(155, 83, 0.055, 0.012, 'triangle', 0.075);
     } else if (name === 'sweetSpot') {
       tone(1090, 1420, 0.065, 0, 'triangle', 0.065);
     } else if (name === 'recover' && detail.moveId === 'brisketCannon') {
@@ -658,6 +660,7 @@
         '<p>Flick a side to dash. Reverse in the first few steps to dash-dance. After a full run your dog plants its paws to turn. On touch, slide from the center dot onto a side arrow to walk, or tap a side arrow to dash.</p>' +
         '<p>In a running jump, tap the opposite direction with Jump to turn your dog while carrying your speed. Steer back toward the rival and hit them with your back air. In the air you can aim a strike independently with the right stick, the aim keys, or a swipe out from Smash on touch.</p>' +
         '<p>On a raised platform, flick Down to drop through with an air jump in reserve. Tap Attack as you fall to swing. Press Down and Attack together to keep your grounded down tilt. For a low crouch, ease the stick down, hold Walk + Down on a keyboard, or slide from the center dot onto Down on touch. Try both heights in Training → Platform practice.</p>' +
+        '<p>Hold Down before a hit to crouch cancel. You take the damage with less knockback. A light, low hit can leave your paws planted. Tap Attack at the spark to answer with a down tilt. Try a stronger launcher or a grab against a crouching rival.</p>' +
         '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
         '<p>While holding Shield, press Jump, Grab, Up + Smash, or Up + Special. Tap during a blocked hit to start your response as soon as shieldstun ends. An immediate shield grab takes four extra frames to reach. A heavier blow pushes you farther away.</p>' +
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Aim diagonally down and tap Shield to slide onto a platform. Do this just after jumping to wavedash. Try Training → Air-dodge practice or Training → Wavedash.</p>' +
@@ -860,6 +863,9 @@
       contents =
         '<p class="recovery-note">Shield is L for P1, Slash for P2, either bumper on a gamepad, or Shield on touch.</p><h3 class="guide-section">On the ground</h3><p>Keep Shield held and press Jump, Grab, Up + Smash, or Up + Special. You can tap during impact. A grab immediately after a block needs four extra startup frames.</p><p>In <strong>Training → Shield practice</strong>, use Clover’s Disc Hook against Pip’s spaced kick and Brisket’s Belly Drop. Choose Strike or Grab to practice a parry or dodge with your own dog.</p><ul class="move-rows guide-shield">' +
         groundRows +
+        '</ul><h3 class="guide-section">Crouch cancel</h3><ul class="move-rows guide-crouch">' +
+        guideMoveRow({ label: 'Crouch cancel', hint: 'You take full damage and two-thirds of the usual launch speed. A light, low blow can leave your paws planted. Tap Attack at the spark for ' +
+          moves[kit.tilts.down].label + '. Grabs and tethers can catch a crouch. Try both sides in Training → Combo escape.' }, 'Hold Down before contact', 'crouchHit', 'defense') +
         '</ul><h3 class="guide-section">In the air</h3><p>One dodge per airtime. Landing or catching a ledge refreshes it. Try <strong>Training → Air-dodge practice</strong>.</p><p>For a wavedash, tap Jump, then aim diagonally down and tap Shield. Release the direction to slide forward or backward and keep your facing. Do the same on the way down to waveland on a platform. Try <strong>Training → Wavedash</strong>.</p><ul class="move-rows guide-air-dodge">' +
         airRows +
         '</ul><h3 class="guide-section">At the ledge</h3><p>Try <strong>Training → Ledge timing</strong> to practice the climb from either side.</p><ul class="move-rows guide-ledge-climb">' +
@@ -1168,7 +1174,7 @@
     practiceSide = 'left';
     $('freshness-readout').hidden = $('freshness-controls').hidden = true;
     $('wave-readout').hidden = $('wave-patterns').hidden = true;
-    $('dummy-damage').step = '5';
+    showDamageControl(false);
     $('footwork-status').hidden = $('footwork-patterns').hidden = true;
     $('spacing-status').hidden = $('spacing-patterns').hidden = true;
     $('escape-status').hidden = $('escape-patterns').hidden = true;
@@ -1397,10 +1403,25 @@
     if (action === 'controls') showControls();
     if (action === 'moves') showMoves(world?.dogs[0].kind || settings.p1);
   });
+  function showDamageControl(counter, fineStep = false) {
+    const control = $('damage-control'), next = $(counter ? 'escape-break' : 'reset-training');
+    if (control.nextElementSibling !== next) next.before(control);
+    const label = counter ? 'Your starting damage' : 'Dummy damage';
+    $('damage-label').textContent = label;
+    $('dummy-damage').setAttribute('aria-label', label);
+    $('dummy-damage').step = counter || fineStep ? '1' : '5';
+  }
   $('dummy-damage').addEventListener('input', (e) => {
     if (!world) return;
-    world.setDummyDamage(e.target.value);
-    $('damage-output').textContent = world.trainingDamage + '%';
+    const d = world.escapePractice;
+    if (d?.spacing === 'counter') {
+      world.resetEscapePractice('counter', d.slow, Number(e.target.value));
+      $('recovery-tip').textContent = crouchCounterPrompt();
+      $('damage-output').textContent = world.escapePractice.baseline + '%';
+    } else {
+      world.setDummyDamage(e.target.value);
+      $('damage-output').textContent = world.trainingDamage + '%';
+    }
     hudKey = '';
     updateHUD();
   });
@@ -1494,9 +1515,47 @@
     }[e.outcome];
     tip.textContent = result + ' Choose ' + (below ? 'Rival below' : 'Rival on top') + ' to retry.';
   }
+  function crouchCounterPrompt() {
+    const player = world.dogs[0];
+    $('escape-status').dataset.result = 'ready';
+    $('escape-status').textContent = 'Stamp Kick · ' + player.damage + '% start';
+    return 'Tap Attack to cue Pip. Hold Down before the kick. Tap Attack at the spark for ' + moves[player.kit.tilts.down].label + '.';
+  }
   function escapeFeedback(e) {
     const status = $('escape-status'), tip = $('recovery-tip');
     status.dataset.result = e.outcome || e.phase;
+    const drill = world.escapePractice;
+    if (drill.spacing === 'counter' || drill.spacing === 'break') {
+      const defend = drill.spacing === 'counter', low = moves[world.dogs[0].kit.tilts.down].label;
+      const answer = moves[drill.answerMove] || specials[drill.answerMove] || smashes[drill.answerMove] || throws[drill.answerMove];
+      const feedback = {
+        windup: ['Watch Pip’s kick', 'Hold Down before Stamp Kick connects. Tap Attack at the paw spark to answer.'],
+        plant: [defend ? 'Paws planted' : 'Rival held ground',
+          defend ? 'Keep Down held and tap Attack for ' + low + '.' : 'Their low tilt is coming. Shield or move clear.'],
+        stand: ['Kick launched you', 'Try crouching before the first hit connects.'],
+        gripped: ['Crouch caught', 'Tap a direction to throw.'],
+        punished: [(answer?.label || 'Counter') + ' punished the kick', 'Pip was still recovering when your counter hit.'],
+        answered: ['You hit back', 'Your counter reached Pip after his kick recovered.'],
+        first: ['You struck first', 'Let the kick reach your crouch, then answer at the spark.'],
+        afterKick: ['Hit after the launch', 'Hold Down before contact to try answering with your paws planted.'],
+        lifted: ['Crouch lifted', 'You softened the launch. At this percentage the kick can lift you off the floor.'],
+        followHit: ['Pip landed the jab', 'Crouch before the kick and tap Attack at the first hit spark.'],
+        held: ['Held your ground', 'Add a down tilt after the first impact to take your turn.'],
+        away: ['Follow-up missed', 'Try holding Down before Stamp Kick reaches you.'],
+        threw: ['Throw beat the crouch', 'The crouch gave the rival no protection against the throw.'],
+        opened: ['Rival launched', 'Your hit took the rival off the floor.'],
+        reversed: ['Rival hit back', 'Grab the crouch, use a stronger launcher, or strike from outside their low tilt.'],
+        safe: ['Outside their counter', 'The rival stayed grounded. Your spacing kept their low tilt from connecting.'],
+        blockedReply: ['Counter shielded', 'Your shield caught their low tilt.'],
+        shieldedKick: ['Kick shielded', 'To try a crouch cancel, release Shield and hold Down before the kick.'],
+        parriedKick: ['Kick parried', 'To try the low counter, hold Down before the kick and tap Attack at the spark.'],
+        slipped: ['Rival escaped the grab', 'Choose a throw while your grip holds.'],
+        noContact: ['No contact', 'Close the gap and try again.'],
+      }[status.dataset.result];
+      status.textContent = feedback[0];
+      tip.textContent = feedback[1] + (e.outcome ? ' Choose ' + (defend ? 'Crouch counter' : 'Beat crouch') + ' to retry.' : '');
+      return;
+    }
     status.textContent = {
       windup: 'Watch the disc', follow: 'Flick left!', escaped: 'Second swing missed',
       caught: 'Both swings hit', missed: 'First swing missed', clear: 'Follow-up missed', interrupted: 'Swing interrupted',
@@ -1874,7 +1933,7 @@
       world.footworkPractice?.pattern !== 'bait' ? world.footworkPractice?.slow ?? true : true);
     else if (spacing) world.resetSpacingPractice(pattern, direction ?? world.spacingPractice?.dir ?? 1,
       world.spacingPractice?.slow ?? true);
-    else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true);
+    else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true, world.escapePractice?.baseline);
     else if (platform) world.resetPlatformPractice(pattern);
     else if (wall) world.resetWallPractice(pattern);
     else if (shield) world.resetShieldPractice(pattern);
@@ -1887,9 +1946,10 @@
     document.body.classList.toggle('with-drill-readout', freshness || wave);
     $('freshness-readout').hidden = $('freshness-controls').hidden = !freshness;
     $('wave-readout').hidden = $('wave-patterns').hidden = !wave;
-    $('dummy-damage').step = freshness && world.freshnessPractice.koTest ? '1' : '5';
-    $('dummy-damage').value = world.trainingDamage;
-    $('damage-output').textContent = world.trainingDamage + '%';
+    const counterDrill = escape && pattern === 'counter';
+    showDamageControl(counterDrill, freshness && world.freshnessPractice.koTest);
+    $('dummy-damage').value = counterDrill ? world.escapePractice.baseline : world.trainingDamage;
+    $('damage-output').textContent = $('dummy-damage').value + '%';
     $('match-stage').textContent = arenas[world.stage].name;
     hudKey = '';
     const result = $('launch-status');
@@ -1957,12 +2017,18 @@
         ? 'Tap Down to drop. As your paws pass the platform, aim down and tap Attack for ' + moves[player.kit.air.down].label + '.'
         : 'Press Down and Attack together for ' + moves[player.kit.tilts.down].label + '. Keep both paws on the platform.';
     } else if (escape) {
-      $('escape-tip').setAttribute('aria-pressed', String(pattern === 'tip'));
-      $('escape-close').setAttribute('aria-pressed', String(pattern === 'close'));
+      for (const id of ['tip','close','counter','break']) $('escape-' + id).setAttribute('aria-pressed', String(id === pattern));
       $('escape-slow').setAttribute('aria-pressed', String(world.escapePractice.slow));
       $('escape-status').dataset.result = 'ready';
-      $('escape-status').textContent = 'Rim Rattle';
-      message = 'Tap Attack to start. Watch Clover’s disc, then flick left on the first hit spark.';
+      if (pattern === 'counter') {
+        message = crouchCounterPrompt();
+      } else if (pattern === 'break') {
+        $('escape-status').textContent = 'Rival crouching';
+        message = 'Try a light hit and watch for the low tilt. Retry with a grab and throw or a stronger launcher.';
+      } else {
+        $('escape-status').textContent = 'Rim Rattle';
+        message = 'Tap Attack to start. Watch Clover’s disc, then flick left on the first hit spark.';
+      }
     } else if (footwork) {
       const practice = world.footworkPractice;
       for (const id of ['bait', 'match', 'power', 'disc'])
@@ -2091,8 +2157,8 @@
   $('platform-top').onclick = () => drill('platform', false, 'top');
   $('platform-hold').onclick = () => drill('platform', false, 'hold');
   $('escape-training').onclick = () => drill('escape', false, world.escapePractice?.spacing || 'tip');
-  $('escape-tip').onclick = () => drill('escape', false, 'tip');
-  $('escape-close').onclick = () => drill('escape', false, 'close');
+  for (const pattern of ['tip','close','counter','break'])
+    $('escape-' + pattern).onclick = () => drill('escape', false, pattern);
   $('escape-slow').onclick = () => {
     const drill = world.escapePractice;
     drill.slow = !drill.slow;

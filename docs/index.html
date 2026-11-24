@@ -11,14 +11,14 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=bandstand-1" />
+    <link rel="stylesheet" href="./style.css?v=crouch-counter-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=bandstand-1" />
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
-    <script defer src="./fighters-art.js?v=waveland-1"></script>
+    <script defer src="./fighters-art.js?v=crouch-counter-1"></script>
     <script defer src="./arena-art.js?v=bandstand-1"></script>
-    <script defer src="./engine.js?v=bandstand-1"></script>
-    <script defer src="./render.js?v=bandstand-1"></script>
+    <script defer src="./engine.js?v=crouch-counter-1"></script>
+    <script defer src="./render.js?v=crouch-counter-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./online.js?v=bandstand-1"></script>
-    <script defer src="./app.js?v=bandstand-1"></script>
+    <script defer src="./online.js?v=crouch-counter-1"></script>
+    <script defer src="./app.js?v=crouch-counter-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -368,17 +368,10 @@
         </div>
         <p id="recovery-tip" hidden></p>
         <div id="training-tools" class="training-tools" hidden>
-          <label for="dummy-damage"
-            >Dummy damage <output id="damage-output" for="dummy-damage">0%</output></label
-          ><input
-            id="dummy-damage"
-            aria-label="Dummy damage"
-            type="range"
-            min="0"
-            max="200"
-            value="0"
-            step="5"
-          />
+          <span id="damage-control">
+            <label for="dummy-damage"><span id="damage-label">Dummy damage</span> <output id="damage-output" for="dummy-damage">0%</output></label>
+            <input id="dummy-damage" aria-label="Dummy damage" type="range" min="0" max="200" value="0" step="5" />
+          </span>
           <button id="reset-training" type="button" class="utility">
             <i data-icon="reset"></i>Reset positions
           </button>
@@ -422,6 +415,8 @@
           <span id="escape-patterns" role="group" aria-label="Combo escape settings" hidden>
             <button id="escape-tip" type="button" class="utility" aria-pressed="true">At the tip</button>
             <button id="escape-close" type="button" class="utility" aria-pressed="false">Up close</button>
+            <button id="escape-counter" type="button" class="utility" aria-pressed="false">Crouch counter</button>
+            <button id="escape-break" type="button" class="utility" aria-pressed="false">Beat crouch</button>
             <button id="escape-slow" type="button" class="utility" aria-pressed="true">Half speed</button>
           </span>
           <button id="ledge-training" type="button" class="utility">

@@ -694,6 +694,11 @@ body.playing .tools .utility,
 #spacing-status[data-result='crossed'],
 #spacing-status[data-result='spaced'],
 #escape-status[data-result='escaped'],
+#escape-status[data-result='plant'],
+#escape-status[data-result='punished'],
+#escape-status[data-result='answered'],
+#escape-status[data-result='opened'],
+#escape-status[data-result='threw'],
 #platform-status[data-result='aerial'],
 #platform-status[data-result='intercept'],
 #platform-status[data-result='guarded'],
@@ -820,6 +825,12 @@ kbd {
 }
 .training-tools label {
   font-weight: 700;
+}
+#damage-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-inline: 3px;
 }
 .training-tools output {
   color: var(--gold);

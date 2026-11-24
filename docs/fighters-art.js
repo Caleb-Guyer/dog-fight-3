@@ -3374,7 +3374,7 @@
       return firstCel + Math.min(10 - firstCel, Math.floor((elapsed - release) * (11 - firstCel) / (total - release)));
     }
     if (shieldPoses.includes(pose)) return shieldFrame(name, pose, phase, backRoll);
-    if (pose === 'clashRecoil') return Math.min(3, Math.floor(phase * 4));
+    if (pose === 'clashRecoil' || pose === 'crouchHit') return Math.min(3, Math.floor(phase * 4));
     if (pose === 'tumble') return tick(14) % 8;
     if (pose === 'jabLock') {
       if (phase < 0.40) return Math.min(3, Math.floor(phase * 10));
@@ -4858,9 +4858,11 @@
         s.rearY = -s.fistY;
         break;
       }
+      case 'crouchHit':
       case 'crouch': {
         const depth = { pip: 9, brisket: 8, noodle: 7, clover: 10 }[name];
-        s.bodyY = depth + frame;
+        const impact = pose === 'crouchHit' ? [3,4,2,1][frame] : 0;
+        s.bodyY = depth + (impact || frame);
         s.headY = name === 'noodle' ? 3 : 5;
         s.headX = name === 'brisket' ? -1 : 2;
         s.lean = name === 'pip' ? 4 : 2;
@@ -4871,9 +4873,19 @@
         s.fistX = name === 'pip' ? 5 : 2;
         s.fistY = -3;
         s.rearX = -4;
-        s.tailLift = 1 + frame;
+        s.tailLift = 1 + (impact || frame);
         s.foldEars = name !== 'noodle';
         s.guardFloor = true;
+        if (impact) {
+          s.bodyX = -impact;
+          s.headX -= impact;
+          s.headTurn -= 2 * impact;
+          s.leftX -= 3;
+          s.rightX += name === 'brisket' ? 4 : 2;
+          s.fistX += impact;
+          s.fistY -= impact;
+          if (frame < 2) s.eye = shutEyes;
+        }
         break;
       }
       case 'backDrift': {
@@ -5636,6 +5648,7 @@
     'clashRecoil',
     'run',
     'crouch',
+    'crouchHit',
     'jumpSquat',
     'turnJumpSquat',
     'backDrift',

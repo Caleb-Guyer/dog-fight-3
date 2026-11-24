@@ -89,6 +89,8 @@
   });
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const topBlastY = -172;
+  const crouchLaunchScale = 2 / 3;
+  const canStayPlanted = (vx, vy) => Math.hypot(vx, vy) <= 150 && Math.abs(vy) <= 96;
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
   const inputWindow = 7 / 60;
   const runStick = 0.55;
@@ -2274,7 +2276,7 @@
   function bodyHeight(f) {
     const action = f.floorAction;
     if (!action || action.safeFrom !== undefined)
-      return f.crouch && f.ground >= 0 ? f.stats.height * 0.68 : f.stats.height;
+      return f.ground >= 0 && (f.crouch || (f.stun > 0 && f.reaction?.planted)) ? f.stats.height * 0.68 : f.stats.height;
     if (action.type === 'downed') return f.stats.height * 0.42;
     const rise = clamp((action.time / action.duration - 0.55) / 0.45, 0, 1);
     return f.stats.height * (0.55 + 0.45 * rise);
@@ -2601,10 +2603,21 @@
         this.finishSpacingPractice(placed ? (approach ? 'crossed' : 'spaced') : 'close');
       } else if (f.ledge || f.respawning || drill.time > 3) this.finishSpacingPractice('away');
     }
-    resetEscapePractice(spacing = 'tip', slow = true) {
+    resetEscapePractice(spacing = 'tip', slow = true, startingDamage = 0) {
       this.resetTraining();
-      const originalDogs = this.dogs, player = originalDogs[0], clover = newFighter('clover', 1);
+      const originalDogs = this.dogs, player = originalDogs[0];
       const floor = this.terrain[0];
+      if (spacing === 'counter' || spacing === 'break') {
+        const defend = spacing === 'counter', rival = defend ? newFighter('pip', 1) : originalDogs[1];
+        const middle = (floor.x1 + floor.x2) / 2, gap = player.stats.width + rival.stats.width + 5;
+        const baseline = defend ? clamp(Number(startingDamage) || 0, 0, 200) : 0;
+        Object.assign(player, { x: middle - gap / 2, y: floor.y, ground: 0, face: 1, damage: baseline });
+        Object.assign(rival, { x: middle + gap / 2, y: floor.y, ground: 0, face: -1, damage: this.trainingDamage, crouch: !defend });
+        this.dogs = [player, rival];
+        this.escapePractice = { originalDogs, spacing, slow, baseline, phase: 'ready', time: 0, contact: '', outcome: '' };
+        return;
+      }
+      const clover = newFighter('clover', 1);
       clover.x = (floor.x1 + floor.x2) / 2 + 30;
       const reach = spacing === 'close' ? clover.stats.width + 4 : smashes.cloverRimRattle.box[2] - 1;
       player.x = clover.x - reach - player.stats.width;
@@ -2616,6 +2629,7 @@
     }
     escapePracticeInput(dt) {
       const drill = this.escapePractice, clover = this.dogs[1];
+      if (drill.spacing === 'counter' || drill.spacing === 'break') return this.crouchPracticeInput(dt);
       if (drill.phase === 'windup') {
         drill.time += dt;
         if (drill.time + 1e-8 >= 24 / 60) {
@@ -2629,6 +2643,53 @@
         else if (!a && !clover.smashCharge) this.finishEscapePractice('interrupted');
       }
       return idleInput;
+    }
+    crouchPracticeInput(dt) {
+      const d = this.escapePractice, [player, rival] = this.dogs;
+      if (d.phase === 'done') return idleInput;
+      d.time += dt;
+      if (d.spacing === 'break') {
+        if (this.grapple?.owner === 0) {
+          if (d.phase !== 'gripped') {
+            d.phase = 'gripped';
+            this.emit('escapeCue', { f: player, phase: 'gripped' });
+          }
+          return idleInput;
+        }
+        if (d.phase === 'gripped') { this.finishEscapePractice('slipped'); return idleInput; }
+        if (d.time > 3) this.finishEscapePractice(d.contact === 'plant' ? 'safe' : 'noContact');
+        return this.crouchCounterInput(rival, player) || { ...idleInput, y: 0.6 };
+      }
+      if (d.phase === 'windup' && d.time + 1e-8 >= 24 / 60) {
+        d.phase = 'swing';
+        return { ...idleInput, x: -1, attack: true, tapped: { attack: true } };
+      }
+      if (d.phase === 'answer' && !d.follow && !rival.attack && !rival.stun) {
+        d.follow = true;
+        return { ...idleInput, attack: true, tapped: { attack: true } };
+      }
+      if (d.time > 1.5) this.finishEscapePractice(d.phase === 'swing' ? 'noContact' : d.contact === 'plant' ? 'held' : 'away');
+      return idleInput;
+    }
+    gradeCrouchHit(owner, moveId, name, braced, planted, priorAttack) {
+      const d = this.escapePractice;
+      if (!d || d.phase === 'done') return;
+      if (d.spacing === 'break') {
+        if (owner.index === 1) return this.finishEscapePractice('reversed');
+        if (name === 'throw') return this.finishEscapePractice('threw');
+        if (!planted) return this.finishEscapePractice('opened');
+      } else if (d.spacing === 'counter') {
+        if (owner.index === 0) {
+          d.answerMove = moveId;
+          const punished = d.contact === 'plant' && priorAttack?.moveId === 'pipStampKick';
+          return this.finishEscapePractice(punished ? 'punished' : d.contact === 'plant' ? 'answered' : d.contact ? 'afterKick' : 'first');
+        }
+        if (d.follow) return this.finishEscapePractice('followHit');
+        if (braced && !planted) return this.finishEscapePractice('lifted');
+      } else return;
+      d.phase = 'answer';
+      d.contact = planted ? 'plant' : 'stand';
+      this.emit('escapeCue', { f: this.dogs[0], phase: d.contact, moveId });
     }
     finishEscapePractice(outcome) {
       const drill = this.escapePractice;
@@ -3227,12 +3288,18 @@
           input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
         }
       }
-      if (this.escapePractice) {
+      if (this.escapePractice?.spacing === 'break') {
+        const drill = this.escapePractice;
+        if (drill.phase === 'ready') {
+          if (!input1.x && !input1.y && !['attack','grab','jump','smash','special','aimStick'].some(key=>input1[key] || input1.tapped?.[key])) return;
+          drill.phase = 'approach';
+        }
+      } else if (this.escapePractice) {
         let drill = this.escapePractice;
         const start = input1.tapped?.attack || (input1.attack && !this.dogs[0].prev.attack);
         if (drill.phase === 'ready' || drill.phase === 'done') {
           if (start && !drill.consumeAttack) {
-            if (drill.phase === 'done') this.resetEscapePractice(drill.spacing, drill.slow);
+            if (drill.phase === 'done') this.resetEscapePractice(drill.spacing, drill.slow, drill.baseline);
             drill = this.escapePractice;
             drill.phase = 'windup';
             drill.consumeAttack = true;
@@ -4003,6 +4070,10 @@
       ])
         f[key] = Math.max(0, f[key] - dt);
       if (f.landingLag <= 1e-8 || f.ground < 0) f.waveSlide = 0;
+      if (f.reaction?.planted && f.stun < 1e-8) {
+        f.stun = 0;
+        f.reaction = null;
+      }
       if (f.respawning > 0) return;
       if (f.ledgeTrump) {
         f.ledgeTrump.time += dt;
@@ -4281,6 +4352,8 @@
       } else if (f.tumble) {
         f.vx *= Math.pow(0.68, dt);
         if (!f.stun) f.vx += input.x * 175 * dt;
+      } else if (f.ground >= 0 && f.stun > 0 && f.reaction?.planted) {
+        f.vx = toward(f.vx, 0, f.kit.footwork.traction * 0.45 * dt);
       } else if (f.stun > 0 || f.ledgeTrump || f.wallAction?.type === 'wallTechJump') {
         f.vx *= Math.pow(0.68, dt);
         f.vx += input.x * 100 * dt;
@@ -5285,6 +5358,8 @@
         },
       });
       if (target.index === 0) this.finishShieldPractice('parry');
+      if (this.escapePractice?.spacing === 'counter' && this.escapePractice.phase === 'swing' && target.index === 0)
+        this.finishEscapePractice('parriedKick');
       if (this.platformPractice?.pattern === 'hold' && target.index === 0) this.finishPlatformPractice('parried');
     }
     block(target, owner, damage, name, face, point, projectile, moveId, use, power) {
@@ -5310,6 +5385,10 @@
       }
       this.sampleFreshness(owner, use, moveId, power, 0, stunFrames, true);
       this.emit('block', { f: target, owner, point, face: away, moveId, impactFrames, stunFrames, projectile, power });
+      if (this.escapePractice?.spacing === 'counter' && target.index === 0 && moveId === 'pipStampKick')
+        this.finishEscapePractice('shieldedKick');
+      if (!broken && this.escapePractice?.spacing === 'break' && this.escapePractice.contact === 'plant' && target.index === 0)
+        this.finishEscapePractice('blockedReply');
       if (this.platformPractice?.pattern === 'hold' && target.index === 0 && !broken) this.finishPlatformPractice('guarded', moveId);
       if (this.spacingPractice?.phase === 'active' && owner.index === 0 && target.index === 1 &&
           owner.attack?.airSide && !this.spacingPractice.contact) {
@@ -5376,6 +5455,9 @@
         return true;
       }
       if (target.grip) this.breakGrapple(false);
+      // Read the stance at contact. An attack, jump, grab or committed platform drop opens the stance.
+      const braced = target.ground >= 0 && target.crouch && !stance && !target.floorAction && !target.dropPrep && !target.stun &&
+        !grab && !move?.pull && !move?.bounce && name !== 'snare' && name !== 'rope';
       target.clashRecoil = null;
       target.ledgeTrump = null;
       target.crouch = false;
@@ -5414,9 +5496,17 @@
         target.vy = downward ? speed * 0.8 : -speed * (upward ? 1.13 : 0.59) - 48;
       }
       const groundAtHit = target.ground;
-      if (groundAtHit >= 0) target.jumps = 1;
-      target.y -= 1;
-      target.ground = -1;
+      if (braced) {
+        target.vx *= crouchLaunchScale;
+        target.vy *= crouchLaunchScale;
+      }
+      const planted = braced && canStayPlanted(target.vx, target.vy);
+      if (planted) target.vy = 0;
+      else {
+        if (groundAtHit >= 0) target.jumps = 1;
+        target.y -= 1;
+        target.ground = -1;
+      }
       target.coyote = 0;
       target.jumpSquat = null;
       target.fastFall = false;
@@ -5438,9 +5528,11 @@
       target.shield = false;
       target.stun = clamp(0.115 + speed * 0.00036, 0.14, 0.58);
       if (move?.stun) target.stun = Math.max(target.stun, move.stun);
+      if (planted) target.stun = (2 + Math.floor(Math.abs(target.vx) / 48)) / 60;
+      else if (braced) target.stun *= crouchLaunchScale;
       const emphatic =
         !!move?.hard || (name === 'heavy' && !move?.setupHit) || name === 'shoulder' || speed > 630;
-      target.reaction = { duration: target.stun, face: -face, hard: emphatic || speed > 460 };
+      target.reaction = { duration: target.stun, face: planted ? target.face : -face, hard: emphatic || speed > 460, planted };
       const launchSpeed = Math.hypot(target.vx, target.vy);
       this.sampleFreshness(owner, use, moveId, power, applied, launchSpeed);
       const finish = !move?.setupHit && !move?.second && !move?.pull && !move?.bounce && name !== 'snare';
@@ -5466,6 +5558,9 @@
       )
         this.trumpPractice.phase = 'intercepted';
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic, power, damage: applied });
+      if (braced) this.emit('crouchCancel', { f: target, owner, moveId, planted, face, frames: Math.ceil(target.stun * 60 - 1e-8),
+        point: { x: target.x, y: this.terrain[groundAtHit].y } });
+      if (this.escapePractice) this.gradeCrouchHit(owner, moveId, name, braced, planted, stance);
       if (this.chasePractice) this.chaseHit(target, moveId, previousLocks, 0);
       if (this.climbPractice?.phase === 'active') {
         const drill = this.climbPractice;
@@ -5740,6 +5835,15 @@
         });
       out.forEach((f) => this.spawn(f, true));
     }
+    crouchCounterInput(f, foe) {
+      if (!f.reaction?.planted || !f.stun || f.ground < 0 || f.command || foe.invuln || foe.respawning) return null;
+      const low = moves[f.kit.tilts.down], [x, y, rx, ry] = low.box;
+      const time = f.stun + low.start;
+      const gap = (foe.x + foe.vx * time - f.x) * f.face;
+      const height = foe.y - f.y - bodyHeight(foe) * 0.5;
+      if (Math.abs(gap - x) > rx + foe.stats.width || Math.abs(height - y) > ry + bodyHeight(foe) * 0.4) return null;
+      return { ...idleInput, y: 0.6, tapped: { attack: true } };
+    }
     cpuGuard(f, foe) {
       if (f.ground < 0 || f.attack || f.stun || f.charge >= 0 || f.dodge || f.landingLag) return null;
       if (f.shieldDrop > 1e-8) return idleInput;
@@ -5760,12 +5864,21 @@
       if (brain.guardRead?.attack !== a) {
         const grab = a.grabAttempt || a.commandGrab;
         const chance = this.random();
-        const choice = chance < 0.3 ? (grab ? 'spot' : 'parry') : chance < 0.47 ? 'roll' : null;
+        let choice = chance < 0.3 ? (grab ? 'spot' : 'parry') : chance < 0.47 ? 'roll' : null;
+        // Sometimes commit to a low stance against a visible light swing the opponent has used before.
+        if (!choice && chance < 0.77 && !grab && !a.pull && !a.projectile && !f.shield && !f.dropPrep &&
+            foe.moveHistory.some(entry => entry.moveId === a.moveId) && Number.isFinite(a.angle)) {
+          const speed = (a.base + (f.damage + a.dmg) * a.growth) / f.stats.weight;
+          const angle = Math.max(a.angle, 0) * Math.PI / 180;
+          if (canStayPlanted(crouchLaunchScale * speed * Math.cos(angle), crouchLaunchScale * (40 + speed * Math.sin(angle))))
+            choice = 'crouch';
+        }
         brain.guardRead = { attack: a, choice, used: false };
       }
       const read = brain.guardRead;
       if (read.used || !read.choice) return null;
       brain.hold = brain.guard = 0;
+      if (read.choice === 'crouch') return { ...idleInput, y: 0.6 };
       const dodge = read.choice === 'spot' ? f.kit.defense.spot : f.kit.defense.roll;
       if (
         wait > (read.choice === 'parry' ? 3 / 60 : (dodge[1] + 2) / 60) ||
@@ -6136,6 +6249,9 @@
       brain.guard = Math.max(0, brain.guard - dt);
       const dx = foe.x - f.x,
         far = Math.abs(dx);
+      const counter = !unsafe && this.crouchCounterInput(f, foe);
+      if (counter) return counter;
+      if (f.reaction?.planted && f.stun && f.command) return idleInput;
       if ((f.clashRecoil && f.clashRecoil.duration - f.clashRecoil.time > 3 / 60) ||
           (foe.clashRecoil && f.command?.type === 'attack')) return idleInput;
       if (foe.clashRecoil && f.ground >= 0 && f.ground === foe.ground && !f.attack &&
@@ -6328,7 +6444,7 @@
         const face = Math.sign(dx);
         const pivot = face === -f.run.face;
         const grab = grabs[pivot ? f.kit.pivotGrab : f.kit.dashGrab];
-        const wantsGrab = pivot || foe.shield || foe.landingLag > grab.start;
+        const wantsGrab = pivot || foe.shield || foe.crouch || foe.landingLag > grab.start;
         const move = wantsGrab ? grab : moves[f.kit.dashAttack];
         const [x, y, rx, ry] = move.box;
         const speed = Math.max(0, f.vx * f.run.face) * move.carry;
@@ -6409,7 +6525,7 @@
             if (
               f.ground >= 0 &&
               Math.abs(foe.y - f.y) < 48 &&
-              ((foe.shield && this.random() < 0.8) || this.random() < (f.kind === 'noodle' ? 0.2 : 0.13))
+              (((foe.shield || foe.crouch) && this.random() < 0.8) || this.random() < (f.kind === 'noodle' ? 0.2 : 0.13))
             )
               brain.pulse.grab = true;
             else if (foe.attack && this.random() < 0.37) brain.guard = 0.24;

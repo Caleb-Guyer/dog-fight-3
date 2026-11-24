@@ -246,6 +246,7 @@
     if (f.clashRecoil) return ['clashRecoil', f.clashRecoil.time / f.clashRecoil.duration];
     if (f.stun > 0) {
       if (!f.reaction) return ['hurt', 0.3];
+      if (f.reaction.planted && f.ground >= 0) return ['crouchHit', clamp(1 - f.stun / f.reaction.duration, 0, 1)];
       return [f.reaction.hard ? 'launch' : 'hurt', clamp(1 - f.stun / f.reaction.duration, 0, 1)];
     }
     if (f.airDodge) return [f.airDodge.type, clamp(f.airDodge.time / f.airDodge.duration, 0, 1)];
@@ -1779,6 +1780,15 @@
   }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
+    if (e.type === 'crouchCancel') {
+      const spread = reduced.matches ? 2 : snap(p * 13, 2);
+      for (const side of [-1, 1]) {
+        const x = e.x + side * (e.size + spread), y = e.y - 2;
+        pixelLine(ctx, x, y, x + side * 8, y - (e.planted ? 3 : 9), ink, 5, 2);
+        pixelLine(ctx, x, y, x + side * 7, y - (e.planted ? 3 : 8), e.planted ? mint : gold, 2, 2);
+      }
+      return;
+    }
     if (e.type === 'platformDrop') {
       const spread = reduced.matches ? 0 : Math.round(p * 7);
       for (const side of [-1, 1]) {
@@ -1913,6 +1923,7 @@
       if (name === 'attackClash') this.add(name, e.point.x, e.point.y, cream, 0.17, 14, e.face,
         { breakthrough: e.winner !== null, projectile: e.projectile });
       if (name === 'platformDrop') this.add(name, e.point.x, e.point.y, cream, 8 / 60, f.stats.width / 2);
+      if (name === 'crouchCancel') this.add(name, e.point.x, e.point.y, mint, 0.16, f.stats.width * 0.8, e.face, { planted: e.planted });
       if (name === 'hitShift')
         this.add('hitShift', e.point.x, e.point.y, mint, 8 / 60, f.stats.width + 4, 1, { dx: e.dx, dy: e.dy });
       if (name === 'launchDI' && f.index === 0) {
@@ -2466,7 +2477,11 @@
     let phase = 0,
       time = 0,
       wallMark = null;
-    if (side === 'tumble') {
+    if (side === 'crouchHit') {
+      phase = 0.3;
+      pixelLine(ctx, -43, 1, 42, 1, '#94765f', 3, 2);
+      drawEffect(ctx, { type: 'crouchCancel', x: 0, y: 0, life: 0.14, max: 0.16, size: f.stats.width * 0.8, planted: true });
+    } else if (side === 'tumble') {
       time = 0.21;
       pixelLine(ctx, -52, -5, -35, -15, '#c6a984', 3, 2);
       pixelLine(ctx, -45, -1, -36, -7, cream, 2, 2);

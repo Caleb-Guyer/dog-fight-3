@@ -145,6 +145,10 @@ Choose **Training → Air-dodge practice → In place**. Jump and tap Shield as 
 
 ## Launch defense
 
+**Crouch cancel.** Hold Down before a grounded hit connects. Your dog takes the full damage with two-thirds of the usual launch speed. A light, low hit can leave all four paws on the floor. You slide back for a few vulnerable frames, then you can act. Keep Down held and tap Attack at the hit spark to buffer your dog's down tilt. Heavier dogs can stand their ground at higher percentages. A rising or powerful hit can still lift a crouching dog with reduced hitstun. Grabs, throws and lead pulls catch a crouch. On raised platforms, ease the stick down, hold Walk + Down on a keyboard, or slide from the center dot onto Down on touch to crouch.
+
+In **Training → Combo escape → Crouch counter**, choose Brisket and tap Attack to cue Pip's Stamp Kick. At 0%, standing through the kick and jab costs 9%. Crouch before the kick and tap Attack at the spark to take 5% and punish Pip with an 8% Doorstop. Set **Your starting damage** to 20% and compare Brisket with Pip, Noodle and Clover. Only Brisket can stay planted against that kick at 20%. Try 90% to see it lift him. **Beat crouch** puts your selected rival on defense. Try an opening jab, then retry and grab the crouching dog and tap Up to throw.
+
 **Directional influence (DI).** During the brief freeze of a strong hit or throw, hold across the launch path to bend it by up to 18 degrees. Against a near-vertical throw, left or right changes where you come down. Against a sideways hit, holding up can buy height for a recovery. Your final direction during the freeze sets the angle. After hitstun ends, you can jump, use an aerial, or air dodge out of tumble.
 
 **Landing tech.** Tap Shield in the last 11 frames before your tumbling dog hits a platform. Tap it alone for a quick recovery in place. Add left or right to roll through a waiting opponent. A roll covers more ground and leaves a longer opening at the end. A mistimed press starts a 28-frame lockout, so timing beats repeated taps.
