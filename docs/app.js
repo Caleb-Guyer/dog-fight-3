@@ -1341,7 +1341,12 @@
     if (f.grip) return 'Grapple';
     if (f.ledge) return 'Hanging';
     if (f.shieldBreak) return f.shieldBreak.phase === 'pop' ? 'Shield break · airborne' : 'Dizzy · ' + frames(f.stun) + 'f';
-    if (f.stun > 0) return 'Hitstun ' + frames(f.stun) + 'f';
+    if (f.stun > 0) {
+      const options=[];
+      if (world.canEscapeHitstun(f,false)) options.push('Shield');
+      if (world.canEscapeHitstun(f,true)) options.push('Attack');
+      return 'Hitstun ' + frames(f.stun) + 'f' + (options.length ? ' · ' + options.join(' or ') : '');
+    }
     if (f.shieldStun > 0) return 'Shieldstun ' + frames(f.shieldStun) + 'f';
     if (f.landingLag > 1e-8) return 'Landing recovery ' + frames(f.landingLag) + 'f';
     if (f.jumpSquat) return 'Jump squat ' + Math.round(f.jumpSquat.time * 60) + '/3' +
@@ -2593,7 +2598,26 @@
     const result = $('launch-status'),
       tip = $('recovery-tip');
     let label, message;
-    if (world.launchPractice.pattern === 'juggle') {
+    if (world.launchPractice.pattern === 'breakaway') {
+      const d=world.launchPractice;
+      if (name==='breakawayWindow') {
+        result.dataset.result='window';
+        result.textContent='Orbit or air dodge';
+        tip.textContent=(d.pauseAtWindow?'Paused. ':'')+'Tap Attack to swing, Shield to dodge' +
+          (d.pauseAtWindow?', or Jump to watch Pip’s kick.':'.');
+      } else if (name==='hitstunCancel') {
+        result.dataset.result=e.option;
+        result.textContent=(e.option==='aerial'?moves[e.moveId].label:'Air dodge')+' · '+e.frames+'f early';
+      } else if (name==='breakawayResult') {
+        result.dataset.result=e.outcome;
+        result.textContent={counter:(moves[e.moveId]?.label || 'Aerial')+' interrupted the kick',evaded:'Dodged the kick',
+          caughtDodge:'Pip caught the dodge recovery',caught:'Flying Kick connected',clear:'Pip missed',otherHit:'Counterhit'}[e.outcome] +
+          (d.saved?' · acted '+d.saved+'f early':'');
+        tip.textContent=d.late?'Pip waited before kicking. Retry and watch where each dog will land.':
+          'Choose Late kick and try the same response. Pip can catch your dodge as its protection ends.';
+      }
+      return;
+    } else if (world.launchPractice.pattern === 'juggle') {
       const d = world.launchPractice, side = d.dir > 0 ? 'right' : 'left';
       if (d.phase === 'done' && name !== 'juggleResult') return;
       if (name === 'launchDI') {
@@ -2800,6 +2824,7 @@
     if (!world) return;
     setFrameMode('live');
     const launch = ledge === 'launch';
+    const breakaway = launch && pattern === 'breakaway';
     const juggle = launch && pattern === 'juggle';
     const chase = launch && (pattern === 'attack' || pattern === 'defend');
     const stock = launch && (pattern === 'stockReturn' || pattern === 'stockCatch');
@@ -2830,8 +2855,8 @@
     else if (stock) world.resetStockPractice(pattern, direction ?? world.stockPractice?.dir ?? 1, world.stockPractice?.slow ?? true);
     else if (survival) world.resetSurvivalPractice(direction ?? world.survivalPractice?.dir ?? 1, world.survivalPractice?.slow ?? true,
       world.survivalPractice?.baseline, study, pattern);
-    else if (juggle) world.resetLaunchPractice(pattern, direction ?? world.launchPractice?.dir ?? 1,
-      world.launchPractice?.slow ?? true, world.launchPractice?.chase ?? false);
+    else if (juggle || breakaway) world.resetLaunchPractice(pattern, direction ?? world.launchPractice?.dir ?? 1,
+      world.launchPractice?.slow ?? true, breakaway ? !!world.launchPractice?.late : !!world.launchPractice?.chase);
     else if (launch) world.resetLaunchPractice();
     else if (combo) world.resetComboPractice(pattern, direction ?? world.comboPractice?.reply ?? 'stand', world.comboPractice?.slow ?? true);
     else if (wave) world.resetWavePractice(pattern, direction ?? world.wavePractice?.dir ?? 1, world.wavePractice?.slow ?? true);
@@ -2872,7 +2897,7 @@
     const counterDrill = escape && (pattern === 'counter' || pattern === 'gripEscape');
     showDamageControl(counterDrill || meteor || survival, freshness && world.freshnessPractice.koTest,
       meteor || survival ? 'launch-side' : world.edgePractice?.timeCatch ? 'edge-side' : undefined);
-    $('damage-control').hidden = stock || juggle;
+    $('damage-control').hidden = stock || juggle || breakaway;
     $('dummy-damage').value = survival ? world.survivalPractice.baseline : meteor ? world.meteorPractice.baseline : counterDrill ? world.escapePractice.baseline : world.trainingDamage;
     $('damage-output').textContent = $('dummy-damage').value + '%';
     $('match-stage').textContent = arenas[world.stage].name;
@@ -2881,15 +2906,21 @@
     result.hidden = !launch;
     $('launch-patterns').hidden = !launch;
     $('juggle-chase').hidden = !juggle;
+    $('breakaway-pause').hidden=$('breakaway-late').hidden=!breakaway;
+    if (breakaway) {
+      $('breakaway-pause').setAttribute('aria-pressed',String(world.launchPractice.pauseAtWindow));
+      $('breakaway-late').setAttribute('aria-pressed',String(world.launchPractice.late));
+    }
     if (juggle) $('juggle-chase').setAttribute('aria-pressed', String(world.launchPractice.chase));
     const launchOptions = world.survivalPractice || world.stockPractice || world.meteorPractice || world.chasePractice ||
-      (juggle && world.launchPractice);
+      ((juggle || breakaway) && world.launchPractice);
     $('launch-side').hidden = $('launch-slow').hidden = !launchOptions;
     $('launch-study').hidden = !survival;
     $('launch-study').setAttribute('aria-pressed', String(!!world.survivalPractice?.study));
     if (launch) {
       $('launch-throw').setAttribute('aria-pressed', String(!launchOptions));
       $('launch-juggle').setAttribute('aria-pressed', String(juggle));
+      $('launch-breakaway').setAttribute('aria-pressed',String(breakaway));
       $('launch-survival').setAttribute('aria-pressed', String(pattern === 'survival'));
       $('launch-last-stock').setAttribute('aria-pressed', String(pattern === 'lastStock'));
       $('launch-stock-return').setAttribute('aria-pressed', String(pattern === 'stockReturn'));
@@ -3169,6 +3200,10 @@
       result.textContent = 'Tap Attack to begin';
       message = pattern === 'attack' ? 'Tap Attack to start the fall. As the rival lands, tap neutral Attack. You can jab twice, then tap Down + Smash.'
         : 'Tap Attack to start the fall. Tap Shield just before you land. If you miss, try rolling away or sweeping as the second jab settles.';
+    } else if (breakaway) {
+      result.dataset.result='ready';
+      result.textContent=world.launchPractice.late?'Delayed Flying Kick':'Rising Flying Kick';
+      message='You’re Clover. Tap Attack to take Chin Flick. Watch for the mint dodge mark and gold aerial mark as you slow down.';
     } else if (juggle) {
       result.dataset.result = 'ready';
       result.textContent = 'Escape the juggle · tap Attack';
@@ -3356,6 +3391,18 @@
   };
   $('launch-training').onclick = $('launch-throw').onclick = () => drill('launch');
   $('launch-juggle').onclick = () => drill('launch', false, 'juggle');
+  $('launch-breakaway').onclick=()=>drill('launch',false,'breakaway');
+  $('breakaway-late').onclick=()=>{
+    world.launchPractice.late=!world.launchPractice.late;
+    drill('launch',false,'breakaway');
+  };
+  $('breakaway-pause').onclick=()=>{
+    const d=world.launchPractice;
+    d.pauseAtWindow=!d.pauseAtWindow;
+    if (!d.pauseAtWindow) d.paused=false;
+    $('breakaway-pause').setAttribute('aria-pressed',String(d.pauseAtWindow));
+    $('game').focus({preventScroll:true});
+  };
   $('juggle-chase').onclick = () => {
     world.launchPractice.chase = !world.launchPractice.chase;
     drill('launch', false, 'juggle');
@@ -4587,6 +4634,12 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p2: 'pip', stage: 'picnic', fetch: false });
       drill('footwork', false, hash === '#training/braking' ? 'brake' : 'antiAir');
+    }
+    else if (hash === '#training/breakaway') {
+      menuScreen('match');
+      afterStory=null;
+      startMatch({...settings,mode:'training',p1:'clover',p2:'pip',stage:'nightmail',fetch:false});
+      drill('launch',false,'breakaway');
     }
     else if (hash === '#training/tumble') {
       menuScreen('match');

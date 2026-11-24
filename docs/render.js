@@ -1522,6 +1522,15 @@
   }
   function drawFighter(ctx, f, world, time) {
     shadow(ctx, f, world.terrain);
+    if (f.tumble?.fromHit && f.stun>0) {
+      const aerial=world.canEscapeHitstun(f,true), dodge=world.canEscapeHitstun(f,false);
+      const y=f.y-f.stats.height*.75;
+      for (const [ready,side,color] of [[dodge,-1,mint],[aerial,1,gold]]) if (ready) {
+        const x=f.x+side*(f.stats.width+8);
+        for (const [tint,w] of [[ink,5],[color,2]])
+          pixelLine(ctx,x,y-3,x+side*6,y-9,tint,w,2);
+      }
+    }
     const danger = f.tumble?.threat;
     if (danger && f.tumble.time < 8 / 60) {
       const dx = danger === 'left' ? -1 : danger === 'right' ? 1 : 0;
@@ -2455,7 +2464,7 @@
       const { width, height } = canvas;
       const ctx = canvas.getContext('2d'),
         [a, b] = world.dogs;
-      const practice = world.mode === 'training' && world.end === null && world.launchPractice?.pattern !== 'juggle' && world.launchPractice;
+      const practice = world.mode === 'training' && world.end === null && !world.launchPractice?.pattern && world.launchPractice;
       if (this.launchTrace && this.launchTrace.practice !== practice) this.launchTrace = null;
       if (practice && practice.phase !== 'ready' && !this.launchTrace && this.pendingLaunch?.fighter === a)
         this.launchTrace = { ...this.pendingLaunch, practice };
