@@ -164,6 +164,77 @@ async function testTumble(page, mobile) {
   assert(await status.isHidden());
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard')+' passed neutral landing, tumble wiggle, aerial chase and reversed drift.');
 }
+async function testBraking(page, mobile) {
+  const activate = locator => mobile ? locator.tap() : locator.click();
+  const button = id => activate(page.locator('#' + id));
+  const status = page.locator('#footwork-status');
+  const cdp = mobile && await page.context().newCDPSession(page);
+  const touch = (type, points = []) => cdp.send('Input.dispatchTouchEvent', {type, touchPoints:points});
+  async function point(name, id) {
+    const el = page.locator('[data-touch="' + name + '"]');
+    await el.scrollIntoViewIfNeeded();
+    const box = await el.boundingBox();
+    return {id, x:box.x + box.width / 2, y:box.y + box.height / 2};
+  }
+  async function waitFor(result) {
+    for (let i = 0; i < 110; i++) {
+      if (await status.getAttribute('data-result') === result) return;
+      await page.clock.runFor(32);
+    }
+    assert.fail('Expected ' + result + ', saw ' + await status.innerText());
+  }
+  const run = async dir => {
+    if (mobile) await touch('touchStart', [await point(dir, 1)]);
+    else await page.keyboard.down(dir === 'right' ? 'd' : 'a');
+    await waitFor('atMark');
+  };
+  const release = async () => {
+    if (mobile) await touch('touchEnd');
+    else { await page.keyboard.up('d'); await page.keyboard.up('a'); }
+  };
+  const hit = async dir => {
+    if (mobile) await touch('touchStart', [await point(dir, 1), await point('attack', 2)]);
+    else { await page.keyboard.down(dir === 'right' ? 'd' : 'a'); await page.keyboard.press('j'); }
+  };
+
+  await page.goto(root + '#training/braking');
+  await run('right');
+  await hit('right');
+  await waitFor('dashHit'); await release();
+  await button('footwork-brake');
+  await run('right');
+  await release(); await page.clock.runFor(40);
+  if (mobile) await touch('touchStart', [await point('right', 1)]);
+  await hit('right'); await page.clock.runFor(40); await release();
+  await waitFor('slidingHit');
+  assert.match(await status.innerText(), /Stamp Kick · sliding hit/);
+
+  await page.goto(root);
+  await button('home-options');
+  const option = page.locator('[data-do="option-tiltStick"]');
+  assert.match(await option.innerText(), /Smash/);
+  await activate(option);
+  assert.match(await option.innerText(), /Tilt/);
+  await page.reload(); await button('home-options');
+  assert.equal(await option.getAttribute('aria-pressed'), 'true');
+  await activate(page.locator('#dialog-body [data-do="close"]'));
+  await page.goto(root + '#training/braking');
+  await button('footwork-pivot'); await button('footwork-side');
+  await run('left');
+  if (mobile) {
+    const left = await point('left', 1), thumb = await point('smash', 2);
+    await touch('touchStart', [left, thumb]);
+    await page.clock.runFor(48);
+    await touch('touchMove', [left, {...thumb, x:thumb.x + 21}]);
+    await page.clock.runFor(48);
+  } else await page.keyboard.press('y');
+  await waitFor('slidingHit');
+  assert.match(await status.innerText(), /Stamp Kick · caught the chase/);
+  await release();
+  await button('reset-training');
+  assert(await status.isHidden());
+  console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed dash attack, brake tilt, saved tilt-stick setting and mirrored pivot punish.');
+}
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -224,6 +295,7 @@ async function testDevice(browser, mobile) {
     console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed examples, recording, replay, reply changes and free-training reset.');
     await testEdges(page, mobile);
     await testTumble(page, mobile);
+    await testBraking(page, mobile);
     assert.deepEqual(errors, []);
   } finally {
     await context.close();
