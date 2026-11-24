@@ -2146,6 +2146,7 @@
       if (name === 'knockdown')
         this.add('knockDust', e.point.x, e.point.y, cream, 0.24, 17 + f.stats.width * 0.45);
       if (name === 'floorSlip') this.add('riseScuff', e.point.x, e.point.y, cream, 0.12, 18, e.dir);
+      if (name === 'shieldSlip') this.add('riseScuff', e.point.x, e.point.y, mint, 0.17, 22, e.dir);
       if (name === 'getup' && (e.type === 'floorRise' || e.type === 'getupRoll'))
         this.add('riseScuff', e.point.x, e.point.y, cream, 0.14, 23, e.dir || f.face);
       if (name === 'shieldRoll' || name === 'spotDodge') {
@@ -2475,6 +2476,12 @@
       if (world.edgePractice) {
         const d = world.edgePractice, x = snap(d.lip, 2), y = snap(world.terrain[d.ground].y, 2);
         const released = d.pattern === 'lip' && d.phase === 'atLip' && d.ticks >= 16 && d.ticks < 26;
+        if (d.corner) {
+          const at = snap(d.mark, 2), lit = d.cue && !d.blocked && d.phase !== 'done';
+          pixelLine(ctx, at - 7, y - 3, at + 7, y - 3, ink, 6, 2);
+          pixelLine(ctx, at - 7, y - 3, at + 7, y - 3, lit ? mint : gold, 3, 2);
+          if (lit) pixelLine(ctx, at, y - 5, at, y - 13, mint, 3, 2);
+        }
         const color = released || d.frames ? mint : cream;
         pixelLine(ctx, x - d.dir * 12, y + 4, x, y + 4, ink, 5, 2);
         pixelLine(ctx, x, y + 4, x, y + 12, ink, 5, 2);

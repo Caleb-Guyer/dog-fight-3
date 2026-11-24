@@ -1448,6 +1448,7 @@
       if (world?.wallPractice && e.f?.index === 0) wallFeedback(name);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (world?.edgePractice && (name === 'edgeCue' || name === 'edgeLand' || name === 'edgeResult' ||
+          (world.edgePractice.corner && (name === 'cornerCue' || (name === 'shieldSlip' && e.f.index === 0))) ||
           name === 'edgeOpen' || (world.edgePractice.timeCatch && name === 'ledge' && e.f.index === 1) ||
           ((name === 'teeter' || name === 'edgeCancel') && e.f.index === 0))) edgeFeedback(name, e);
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
@@ -2010,6 +2011,17 @@
     if (d.phase === 'done' && name !== 'edgeResult') return;
     const move = (moves[e.moveId] || specials[e.moveId] || smashes[e.moveId] || throws[e.moveId] || grabs[e.moveId])?.label || 'Hit';
     status.dataset.result = e.outcome || name;
+    if (d.corner) {
+      const result = e.outcome || name;
+      status.textContent = {
+        cornerCue:'Release Shield to parry', shieldSlip:'Pushed off · grab the lip or jump',
+        caughtLip:'Pushed off · caught the ledge', backOnstage:'Pushed off · recovered onstage',
+        pushedOff:'Lost the corner', heldCorner:'Blocked · kept your footing', parriedCorner:'Parried · held the corner',
+        caught:'Hit by ' + move, interrupted:'Interrupted the swing', avoided:'Evaded the swing',
+      }[result];
+      if (e.outcome) $('recovery-tip').textContent = 'Compare Block at lip and Block farther in. Repeat at the lip and release Shield as the chalk turns mint.';
+      return;
+    }
     if (name === 'ledge') {
       status.textContent = 'Catch at ' + e.f.damage + '% · ' + e.guardFrames + 'f protected';
     } else if (name === 'edgeOpen') {
@@ -2738,12 +2750,14 @@
       }
     } else if (edge) {
       const d = world.edgePractice, side = d.dir > 0 ? 'right' : 'left';
-      for (const id of ['lip','shortCatch','longCatch','tip','deep']) $('edge-' + id).setAttribute('aria-pressed', String(id === d.pattern));
+      for (const id of ['lip','shortCatch','longCatch','tip','deep','corner','inside']) $('edge-' + id).setAttribute('aria-pressed', String(id === d.pattern));
       $('edge-slow').setAttribute('aria-pressed', String(d.slow));
       $('edge-status').dataset.result = 'ready';
-      $('edge-status').textContent = d.timeCatch ? (pattern === 'longCatch' ? 'Long recovery' : 'Short recovery') + ' · tap Attack to start' :
+      $('edge-status').textContent = d.corner ? (pattern === 'corner' ? 'At the lip' : 'One step in') + ' · hold Shield' :
+        d.timeCatch ? (pattern === 'longCatch' ? 'Long recovery' : 'Short recovery') + ' · tap Attack to start' :
         pattern === 'lip' ? 'Guard the ' + side + ' ledge' : 'Drifting ' + side + ' · tap Attack';
-      message = d.timeCatch ? 'Tap Attack to send the rival toward the ledge. Watch the last grip mark turn gold. Time Down + Attack to hit as it disappears.' :
+      message = d.corner ? 'Hold Shield through the charged smash. Compare the two floor marks, then try releasing Shield when the chalk turns mint.' :
+        d.timeCatch ? 'Tap Attack to send the rival toward the ledge. Watch the last grip mark turn gold. Time Down + Attack to hit as it disappears.' :
         pattern === 'lip' ? 'Walk ' + side + ' to the chalk (P1: Shift + direction, or slide from the center dot). When the rival lets go, tap Down + Attack.' :
         'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
     } else if (footwork) {
@@ -2923,7 +2937,7 @@
   for (const action of ['repeat','clear','guard','ko'])
     $('freshness-' + action).onclick = () => drill('freshness', false, action);
   $('edge-training').onclick = () => drill('edge', false, world.edgePractice?.pattern || 'lip');
-  for (const pattern of ['lip','shortCatch','longCatch','tip','deep']) $('edge-' + pattern).onclick = () => drill('edge', false, pattern);
+  for (const pattern of ['lip','shortCatch','longCatch','tip','deep','corner','inside']) $('edge-' + pattern).onclick = () => drill('edge', false, pattern);
   $('edge-side').onclick = () => drill('edge', false, world.edgePractice.pattern, -world.edgePractice.dir);
   $('edge-slow').onclick = () => {
     const d = world.edgePractice;
@@ -4110,6 +4124,12 @@
     else if (hash === '#cutscenes') openFilmLibraryLink();
     else if (hash === '#adventure') showRoute();
     else if (hash === '#online') showOnline();
+    else if (hash === '#training/corner-pressure') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'picnic', fetch:false });
+      drill('edge', false, 'corner');
+    }
     else if (hash === '#training/edges' || hash === '#training/ledge-catch') {
       menuScreen('match');
       afterStory = null;
