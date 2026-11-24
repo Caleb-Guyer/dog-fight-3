@@ -160,6 +160,7 @@
   }
   const turnaroundWindow = 4, bReverseWindow = 3;
   const isReversalPractice = drill => drill?.pattern === 'reverse' || drill?.pattern === 'wavebounce';
+  const isFootstoolPractice = drill => drill?.pattern === 'footstool' || drill?.pattern === 'footstoolTech';
   // Total frames and initial invulnerability frames for each landing option.
   const floorFrames = {
     tech: [19, 13],
@@ -1974,6 +1975,8 @@
       followPounce: 0,
       hopWindow: 0,
       jumpBuffer: 0,
+      footstools: 0,
+      footstoolLock: 0,
       jumpSquat: null,
       fastFall: false,
       cutJump: false,
@@ -2334,6 +2337,7 @@
     if (attack.plunge) f.fastFall = false;
   }
   function restoreAir(f) {
+    f.footstools = 0;
     f.drop = 0;
     f.dropPlatform = -1;
     f.dropPrep = null;
@@ -3040,8 +3044,27 @@
     resetSpacingPractice(pattern = 'approach', dir = 1, slow = true, shieldGrab = true) {
       this.resetTraining();
       const [f, guard] = this.dogs;
-      const ground = this.stage === 'laundry' && dir < 0 ? 1 : 0;
+      let ground = this.stage === 'laundry' && dir < 0 ? 1 : 0;
+      if (pattern === 'footstoolTech') {
+        // Give the jumper a clear approach above the landing, including on stacked platforms.
+        for (const [i, p] of this.terrain.entries()) {
+          const best = this.terrain[ground];
+          if (p.y < best.y || (p.y === best.y && (p.x1-best.x1)*dir < 0)) ground = i;
+        }
+      }
       const floor = this.terrain[ground], approach = pattern === 'approach';
+      if (pattern === 'footstool' || pattern === 'footstoolTech') {
+        const rescue = pattern === 'footstool', lip = dir > 0 ? floor.x1 : floor.x2;
+        const x = rescue ? lip - dir * 69 : (floor.x1 + floor.x2) / 2;
+        const [jumper, target] = rescue ? [f, guard] : [guard, f];
+        Object.assign(target, { x, y: floor.y + (rescue ? target.stats.height + 14 : -113),
+          ground: -1, vy: 28, face: -dir, jumps: 1 });
+        Object.assign(jumper, { x, y: target.y - target.stats.height - 62,
+          ground: -1, vy: 285, face: dir, jumps: 0, usedUp: true });
+        this.spacingPractice = {pattern, dir, ground, slow, mark: rescue ? lip : x, phase:'ready',
+          time:0, cue:false, stepped:false, outcome:''};
+        return;
+      }
       if (pattern === 'cancel') {
         // Fall just outside the down air's reach. The challenger can still reach the landing with a low tilt.
         const gap = f.kind === 'brisket' ? 66 + guard.stats.width : f.stats.width + guard.stats.width + 13;
@@ -3094,6 +3117,13 @@
     spacingPracticeInput() {
       const drill = this.spacingPractice, guard = this.dogs[1];
       if (drill.phase === 'done') return idleInput;
+      if (isFootstoolPractice(drill)) {
+        if (drill.pattern === 'footstoolTech' && !drill.sent && this.footstoolTarget(guard)) {
+          drill.sent = true;
+          return { ...idleInput, jump: true };
+        }
+        return idleInput;
+      }
       if (drill.pattern === 'cancel') {
         if (drill.landing !== null && !drill.sent) {
           const lag = moves[this.dogs[0].kit.air.down].land, startup = moves[guard.kit.tilts.down].frames[0];
@@ -3131,6 +3161,18 @@
       const drill = this.spacingPractice, [f, guard] = this.dogs;
       if (drill.phase !== 'active') return;
       drill.time += dt;
+      if (isFootstoolPractice(drill)) {
+        if (drill.pattern === 'footstool') {
+          if (!drill.cue && this.footstoolTarget(f)) {
+            drill.cue = true;
+            this.emit('footstoolCue', {f});
+          }
+          if (f.ledge || f.ground >= 0) this.finishSpacingPractice(drill.stepped ? 'saved' : 'otherSave');
+          else if (f.y > this.terrain[drill.ground].y + 235 || drill.time > 3) this.finishSpacingPractice('fell');
+        } else if (f.floorAction) this.finishSpacingPractice(f.floorAction.type);
+        else if (f.ground >= 0 || drill.time > 2) this.finishSpacingPractice(drill.stepped ? 'landed' : 'evaded');
+        return;
+      }
       if (drill.pattern === 'cancel' && drill.landing !== null) drill.after++;
       if (f.ground < 0) drill.airborne = true;
       else if (drill.airborne && drill.landing === null) {
@@ -4107,10 +4149,16 @@
         return;
       }
       if (spacing?.phase === 'ready') {
-        const start = isReversalPractice(spacing) ? Math.abs(input1.x) > 0.28 || input1.special || input1.tapped?.special
+        const start = isFootstoolPractice(spacing) ? input1.attack || input1.tapped?.attack :
+          isReversalPractice(spacing) ? Math.abs(input1.x) > 0.28 || input1.special || input1.tapped?.special
           : input1.jump || input1.tapped?.jump;
         if (!start) return;
         spacing.phase = 'active';
+        if (isFootstoolPractice(spacing)) spacing.consumeAttack = true;
+      }
+      if (spacing?.consumeAttack) {
+        spacing.consumeAttack = !!input1.attack;
+        input1 = { ...input1, attack:false, tapped:{ ...input1.tapped, attack:false } };
       }
       if (this.climbPractice) {
         const drill = this.climbPractice;
@@ -4266,6 +4314,15 @@
           if (f.impactLag > 1e-8 || f.shieldStun > 1e-8) f.y = this.terrain[f.ground].y;
         }
         this.captureInput(f, inputs[f.index]);
+      }
+      // Read both fighters' jump and dodge intentions from the same frame before either body moves.
+      for (const f of this.dogs) {
+        if (f.jumpBuffer > dt && f.ground < 0) {
+          const target = this.footstoolTarget(f);
+          if (target) this.footstool(f, target);
+        }
+      }
+      for (const f of this.dogs) {
         if (f.impactLag > 1e-8) f.impactLag = Math.max(0, f.impactLag - dt);
         else if (!f.grip) this.move(f, inputs[f.index], dt);
         f.techBuffer = Math.max(0, f.techBuffer - dt);
@@ -4750,6 +4807,55 @@
       f.wallAction = null;
       f.techBuffer = 0;
     }
+    footstoolTarget(f) {
+      if (f.ground >= 0 || f.coyote || f.attack || f.command || f.ledge || f.stun || f.stockLift || f.respawning ||
+          f.grip || f.guardBuffer || f.impactLag || f.footstoolLock || f.airDodge || f.dodge || f.wallAction ||
+          f.clashRecoil || f.ledgeTrump || f.throwBounce || f.floorAction || (f.encounter && f.kind !== f.encounter.kind)) return null;
+      for (const r of this.opponents(f)) {
+        if (r.grip || r.ledge || r.ledgeTrump || r.floorAction || r.wallAction || r.stockLift || r.footstoolLock ||
+            r.airDodge || r.impactLag || protectionTime(r) || r.dodge || r.attack?.specialSide || this.activeSwing(r) ||
+            (r.ground < 0 && r.guardBuffer && !r.usedDodge && !r.attack && !r.stun && !r.clashRecoil) ||
+            (r.encounter && r.kind !== r.encounter.kind)) continue;
+        const head = r.y - bodyHeight(r), gap = head - f.y, closing = f.vy - r.vy;
+        if (closing < -105 || gap < -9 || gap > 14 + Math.max(0, closing) / 60 ||
+            Math.abs(f.x - r.x) > r.stats.width * .82 + f.stats.width * .32) continue;
+        if (this.terrain.some(p => f.x >= p.x1 && f.x <= p.x2 && f.y <= p.y && head >= p.y)) continue;
+        return r;
+      }
+      return null;
+    }
+    footstool(f, target) {
+      const head = target.y - bodyHeight(target), airborne = target.ground < 0;
+      this.clearTumble(f, 'Footstool');
+      f.y = Math.min(f.y, head);
+      f.vy = -f.stats.jump * [1.08, .78, .56][Math.min(f.footstools, 2)];
+      f.footstools++;
+      f.jumpBuffer = f.righting = f.guardBuffer = f.hopWindow = 0;
+      f.reboundTime = 12 / 60;
+      f.reboundPose = 'footstool';
+      f.fastFall = false;
+      f.cutJump = true;
+      f.reaction = null;
+      f.lastMove = 'Footstool';
+      target.footstoolLock = f.footstoolLock = 25 / 60;
+      const guarding = target.shield || (target.prev.shield && !target.attack && !target.stun && !target.landingLag &&
+        !target.jumpSquat && target.charge < 0 && !target.shieldDrop);
+      if (airborne || !guarding) {
+        target.attack = target.command = target.run = target.jumpSquat = target.reaction = null;
+        target.jumpBuffer = target.guardBuffer = target.coyote = target.hopWindow = target.chainWindow = 0;
+        target.cutJump = target.fastFall = false;
+        cancelCharge(target);
+        target.stun = Math.max(target.stun, (airborne ? 18 : 9) / 60);
+        target.reaction = { planted: !airborne, hard: airborne, face: target.face, duration: target.stun };
+        if (airborne) {
+          target.throwBounce = null;
+          target.vy = Math.max(300, target.vy);
+          this.startTumble(target, false);
+        }
+      }
+      this.emit('footstool', { f, target, airborne, point: { x: target.x, y: head } });
+      if (isFootstoolPractice(this.spacingPractice)) this.spacingPractice.stepped = true;
+    }
     startTumble(f, pending) {
       f.tumble = {
         time: 0,
@@ -5022,6 +5128,7 @@
         'followPounce',
         'hopWindow',
         'jumpBuffer',
+        'footstoolLock',
         'guardBuffer',
         'shieldDrop',
         'shieldGrabWindow',
@@ -7627,6 +7734,10 @@
         outerRight = solid[solid.length - 1].x2;
       const outside = f.x < outerLeft || f.x > outerRight;
       const unsafe = f.ground < 0 && (outside || f.y > closest.y + 28 || (!under && f.y > closest.y - 46));
+      if (unsafe && !f.jumps && this.footstoolTarget(f) === foe) {
+        brain.jumpHold = .22;
+        return { ...idleInput, x: Math.sign((closest.x1 + closest.x2) / 2 - f.x), jump:true, tapped:{jump:true} };
+      }
       const read = brain.juggleRead;
       if (read) {
         if (!unsafe && !f.stun && !f.tumble && !f.ledge && !f.floorAction && foe.ground < 0 && !foe.ledge &&
@@ -8140,6 +8251,7 @@
     liftReserve,
     protectionTime,
     isReversalPractice,
+    isFootstoolPractice,
     shieldBubble,
     shieldContact,
     ledgePosition,

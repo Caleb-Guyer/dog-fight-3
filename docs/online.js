@@ -1,8 +1,8 @@
 (() => {
   'use strict';
 
-  const prefix = 'dogfight3-cg-versus-v27-';
-  const channel = 'dogfight3-v27';
+  const prefix = 'dogfight3-cg-versus-v28-';
+  const channel = 'dogfight3-v28';
   const quickId = prefix + 'quickplay';
   const roomAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick', 'tiltMode'];
@@ -93,6 +93,9 @@
     events(record, present, confirmed) {
       return (name, detail) => {
         if (detail.f?.index === this.side) {
+          // An unreceived footstool can turn this air jump into a bounce or this dodge into a floor tech.
+          // Movement stays predicted. Play the contact-dependent sound and particles once the reply arrives.
+          if (!confirmed && record.nearHead && (name === 'jump' || dodgeCues.has(name))) return;
           let cue;
           if (name === 'jump') cue = record.cues.jump;
           else if (dodgeCues.has(name)) cue = record.cues.shield;
@@ -138,7 +141,10 @@
           if (pressed & (1 << buttons.indexOf(key))) this.cues[key] = { played: false };
         }
       }
-      const record = { mine, other: this.remote[0] || this.prediction, cues: this.cues };
+      const [a, b] = world.dogs;
+      const nearHead = (a.ground < 0 || b.ground < 0) && Math.abs(a.x - b.x) <= a.stats.width + b.stats.width + 68 &&
+        Math.abs(a.y - b.y) <= Math.max(a.stats.height, b.stats.height) + 95;
+      const record = { mine, other: this.remote[0] || this.prediction, cues: this.cues, nearHead };
       this.pending.push(record);
       this.send(['input', this.round, this.frame++, mine]);
       this.step(world, mine, record.other, this.events(record, world.emit, false));
