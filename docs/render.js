@@ -1886,7 +1886,10 @@
       const spread = reduced.matches ? 0 : Math.round(p * 7);
       for (const side of [-1, 1]) {
         const x = e.x + side * (e.size + spread);
-        pixelLine(ctx, x, e.y, x + 5 * side, e.y - 3, cream, 2, 2);
+        if (e.fromShield) {
+          pixelLine(ctx, x, e.y - 6, x + 5 * side, e.y - 1, mint, 3, 2);
+          pixelLine(ctx, x + 5 * side, e.y + 2, x + 2 * side, e.y + 6, cream, 2, 2);
+        } else pixelLine(ctx, x, e.y, x + 5 * side, e.y - 3, cream, 2, 2);
       }
       return;
     }
@@ -2062,7 +2065,8 @@
         this.add(name, e.point.x, e.point.y, name === 'meteorBounce' ? '#ec946a' : mint, 0.22, 20);
       if (name === 'attackClash') this.add(name, e.point.x, e.point.y, cream, 0.17, 14, e.face,
         { breakthrough: e.winner !== null, projectile: e.projectile });
-      if (name === 'platformDrop') this.add(name, e.point.x, e.point.y, cream, 8 / 60, f.stats.width / 2);
+      if (name === 'platformDrop') this.add(name, e.point.x, e.point.y, cream, e.fromShield ? 11 / 60 : 8 / 60,
+        f.stats.width / 2, f.face, { fromShield: e.fromShield });
       if (name === 'crouchCancel') this.add(name, e.point.x, e.point.y, mint, 0.16, f.stats.width * 0.8, e.face, { planted: e.planted });
       if (name === 'shieldPoke') this.add(name, e.point.x, e.point.y, cream, 0.16, 12, e.face);
       if (name === 'hitShift')
@@ -2679,7 +2683,14 @@
     let phase = 0,
       time = 0,
       wallMark = null;
-    if (side === 'crouchHit') {
+    if (side === 'platformDrop') {
+      const surface = -Math.round(f.stats.height * 0.65);
+      pixelLine(ctx, -63, surface + 2, 63, surface + 2, '#885f68', 6, 2);
+      pixelLine(ctx, -65, surface, 65, surface, '#e6b187', 3, 2);
+      drawEffect(ctx, { type: 'platformDrop', x: 0, y: surface, life: 0.09, max: 11 / 60,
+        size: f.stats.width + 6, fromShield: true });
+      phase = 0.45;
+    } else if (side === 'crouchHit') {
       phase = 0.3;
       pixelLine(ctx, -43, 1, 42, 1, '#94765f', 3, 2);
       drawEffect(ctx, { type: 'crouchCancel', x: 0, y: 0, life: 0.14, max: 0.16, size: f.stats.width * 0.8, planted: true });
@@ -2767,7 +2778,7 @@
       face: 1,
       scale: 1,
       time,
-      pose: side === 'shieldTilt' ? 'shield' : side,
+      pose: side === 'platformDrop' ? 'fall' : side === 'shieldTilt' ? 'shield' : side,
       phase,
       dodgeX: f.airDodge?.x || 0,
       dodgeY: f.airDodge?.y || 0,
