@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const { clamp, platforms, attackWindow } = window.DogFight;
+  const { clamp, platforms, attackWindow, topBlastY } = window.DogFight;
   const team = ['#ef926e', '#98d0d1'];
   const teamColor = (fighter) => team[fighter.index === 0 ? 0 : 1];
   const ink = '#252337';
@@ -1999,7 +1999,7 @@
             point.y,
             e.emphatic ? gold : cream,
             e.emphatic ? 0.19 : 0.14,
-            e.emphatic ? (e.name === 'finisher' ? 54 : 62) : 45,
+            (e.emphatic ? (e.name === 'finisher' ? 54 : 62) : 45) * (0.65 + 0.35 * (e.power ?? 1)),
             face,
           );
           if (!reduced.matches && e.emphatic) this.shake = Math.min(7, 2 + e.speed * 0.006);
@@ -2083,13 +2083,24 @@
       const vertical = Math.abs(a.y - b.y);
       const off = [a, b].some((f) => f.x < 155 || f.x > 1045 || f.y > 490 || f.y < 80);
       const wideShot = Math.min(1, width / 1200, height / 675);
-      const targetZoom = off || reduced.matches ? wideShot :
+      const koTest = world.freshnessPractice?.koTest;
+      let targetZoom = off || reduced.matches ? wideShot :
         clamp(Math.min(width / (spread + 505), height / (vertical + 345)), wideShot, 1.5);
-      const blend = resized ? 1 : 1 - Math.exp(-dt * (targetZoom < this.zoom ? 7.5 : 4));
+      let launchCenterY;
+      if (koTest) {
+        const floorY = world.terrain[0].y, scale = height / (canvas.clientHeight || height);
+        // Keep the roof and blast line clear of the score and menu on small screens.
+        const above = clamp(80 * scale, height * 0.11, height * 0.24);
+        const below = clamp(78 * scale, height * 0.13, height * 0.22);
+        targetZoom = Math.min(width / 575, (height - above - below) / (floorY - topBlastY));
+        launchCenterY = (floorY + topBlastY) / 2 + (below - above) / (2 * targetZoom);
+      }
+      const blend = resized || koTest ? 1 : 1 - Math.exp(-dt * (targetZoom < this.zoom ? 7.5 : 4));
       this.zoom += (targetZoom - this.zoom) * blend;
       const halfW = width / (2 * this.zoom), halfH = height / (2 * this.zoom);
-      const centerX = halfW >= 600 ? 600 : clamp((a.x + b.x) / 2, halfW, 1200 - halfW);
-      const centerY = halfH >= 337.5 ? 337.5 : clamp((a.y + b.y) / 2 - 67, halfH, 675 - halfH);
+      const centerX = koTest ? world.freshnessPractice.marks[0] + (a.kind === 'clover' ? 176 : 89) :
+        halfW >= 600 ? 600 : clamp((a.x + b.x) / 2, halfW, 1200 - halfW);
+      const centerY = koTest ? launchCenterY : halfH >= 337.5 ? 337.5 : clamp((a.y + b.y) / 2 - 67, halfH, 675 - halfH);
       this.cx += (centerX - this.cx) * blend;
       this.cy += (centerY - this.cy) * blend;
       const steady = reduced.matches || this.shakeEnabled === false;
@@ -2107,6 +2118,40 @@
       window.ArenaArt.draw(ctx, world.stage, world.time, {
         left, top, right: left + 2 * halfW, bottom: top + 2 * halfH,
       });
+      if (world.freshnessPractice) {
+        const lab = world.freshnessPractice, floor = world.terrain[0].y;
+        if (koTest) {
+          for (let x = Math.floor(left / 28) * 28; x < left + 2 * halfW; x += 28)
+            pixelLine(ctx, x, topBlastY, x + 14, topBlastY, '#cc807b', 3, 2);
+          ctx.save();
+          ctx.font = '15px "Brawl Pixel", monospace';
+          ctx.textBaseline = 'bottom';
+          ctx.fillStyle = ink;
+          const at = canvas.clientHeight < 500 && width > height ? left + halfW * 0.6 : left + 14;
+          ctx.fillRect(at, topBlastY - 23, 10 + ctx.measureText('Top blast line').width, 21);
+          ctx.fillStyle = cream;
+          ctx.fillText('Top blast line', at + 5, topBlastY - 5);
+          ctx.restore();
+        }
+        for (const x of lab.marks) {
+          pixelLine(ctx, x - 8, floor + 4, x + 8, floor + 4, cream, 3, 2);
+          pixelLine(ctx, x, floor + 4, x, floor + 10, cream, 2, 2);
+        }
+        for (const [trail, previous] of [[lab.previous?.trace, true], [lab.trace, false]]) {
+          if (!trail) continue;
+          for (let i = 1; i < trail.length; i++) {
+            if (previous && i % 2 === 0) continue;
+            const [x, y] = trail[i - 1], [endX, endY] = trail[i];
+            if (previous) {
+              pixelLine(ctx, x - 3, y, endX - 3, endY, ink, 7, 2);
+              pixelLine(ctx, x - 2, y, endX - 2, endY, mint, 5, 2);
+            } else {
+              pixelLine(ctx, x - 1, y, endX - 1, endY, ink, 4, 2);
+              pixelLine(ctx, x, y, endX, endY, gold, 2, 2);
+            }
+          }
+        }
+      }
       if (world.escapePractice) {
         const drill = world.escapePractice, floor = world.terrain[0].y;
         // Three chalk ticks count in the swing. The arrow draws at the defender's feet on contact.

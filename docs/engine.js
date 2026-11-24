@@ -83,6 +83,7 @@
     grab: false,
   });
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
+  const topBlastY = -172;
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
   const inputWindow = 7 / 60;
   const runStick = 0.55;
@@ -1844,6 +1845,7 @@
       kit: kits[kind],
       stocks: 3,
       damage: 0,
+      moveHistory: [],
       face: index ? -1 : 1,
       prev: idleInput,
       x: 0,
@@ -2133,6 +2135,37 @@
     const next = attack.second || attack.late;
     return next && attack.time + 1e-8 >= next.start ? next : attack;
   }
+  // The newest connection has the most weight. A shield-only entry counts half.
+  const staleWeights = [90, 82, 74, 66, 58, 50, 42, 34, 26];
+  function moveFreshness(f, moveId, use) {
+    if (use?.moveEntry) return use.moveEntry.power;
+    let deduction = 0;
+    for (let i = 0; i < f.moveHistory.length; i++) {
+      const entry = f.moveHistory[i];
+      if (entry.moveId === moveId) deduction += staleWeights[i] * (entry.shieldOnly ? 0.5 : 1);
+    }
+    return (1000 - deduction) / 1000;
+  }
+  function staleDamage(damage, power) {
+    return power === 1 ? damage : Math.round(damage * power * 10) / 10;
+  }
+  function rememberMove(f, moveId, use, power, shieldOnly) {
+    if (!moveId || (f.encounter && f.encounter.kind !== f.kind)) return;
+    if (use?.moveEntry) {
+      if (!shieldOnly) use.moveEntry.shieldOnly = false;
+      return;
+    }
+    const entry = { moveId, power, shieldOnly };
+    if (use) use.moveEntry = entry;
+    f.moveHistory.unshift(entry);
+    if (f.moveHistory.length > staleWeights.length) f.moveHistory.pop();
+  }
+  function savedMoveHistory(entries) {
+    if (!Array.isArray(entries)) return [];
+    return entries.slice(0, staleWeights.length).filter(e => e && typeof e.moveId === 'string' &&
+      [moves, specials, smashes, throws, pummels].some(table => Object.hasOwn(table, e.moveId)))
+      .map(e => ({ moveId: e.moveId, shieldOnly: e.shieldOnly === true }));
+  }
   function strikeStrength(a) {
     if (a.smashSide) return smashStrength(a.power);
     return a.moveId === 'brisketCannon' ? 1 + a.power * 0.35 : 1;
@@ -2168,7 +2201,8 @@
       (physicalSwings.has(attack.name) || physicalSpecials.has(attack.moveId));
   }
   function clashDamage({ f, attack, beat }, point) {
-    return (beat.dmg + (sweetSpotAt(f, beat, point.x, point.y)?.bonus || 0)) * strikeStrength(attack);
+    const damage = (beat.dmg + (sweetSpotAt(f, beat, point.x, point.y)?.bonus || 0)) * strikeStrength(attack);
+    return staleDamage(damage, moveFreshness(f, attack.moveId, attack));
   }
   const clashMargin = 9;
   function recoilFromClash({ f, attack }, damage, away) {
@@ -2257,6 +2291,7 @@
       this.launchPractice = null;
       this.shieldPractice = null;
       this.footworkPractice = null;
+      this.freshnessPractice = null;
       this.escapePractice = null;
       this.platformPractice = null;
       this.spacingPractice = null;
@@ -2306,12 +2341,19 @@
       if (this.mode === 'training' && f.index === 1) f.damage = this.trainingDamage;
     }
     setDummyDamage(value) {
-      this.trainingDamage = clamp(Number(value) || 0, 0, 200);
+      const damage = clamp(Number(value) || 0, 0, 200);
+      const lab = this.freshnessPractice;
+      if (lab) return this.resetFreshnessPractice(true, lab.guard, lab.koTest, damage);
+      this.trainingDamage = damage;
       this.dogs[1].damage = this.trainingDamage;
       this.lastCombo = { hits: 0, damage: 0 };
     }
     resetTraining(ledge = false, fromHang = false) {
       if (this.grapple) this.breakGrapple(false);
+      if (this.freshnessPractice?.original) {
+        this.dogs = this.freshnessPractice.original.dogs;
+        this.trainingDamage = this.freshnessPractice.original.damage;
+      }
       if (this.footworkPractice) this.dogs = this.footworkPractice.originalDogs;
       if (this.escapePractice) this.dogs = this.escapePractice.originalDogs;
       if (this.shieldPractice?.originalDogs) this.dogs = this.shieldPractice.originalDogs;
@@ -2328,6 +2370,7 @@
       this.launchPractice = null;
       this.shieldPractice = null;
       this.footworkPractice = null;
+      this.freshnessPractice = null;
       this.escapePractice = null;
       this.platformPractice = null;
       this.spacingPractice = null;
@@ -2547,6 +2590,66 @@
       drill.phase = 'done';
       drill.outcome = outcome;
       this.emit('escapeResult', { f: this.dogs[0], outcome, spacing: drill.spacing, outward: drill.outward });
+    }
+    resetFreshnessPractice(repeat = false, guard = false, koTest = false, damage) {
+      const prior = this.freshnessPractice;
+      const same = prior?.koTest === koTest;
+      const histories = repeat && same ? this.dogs.map(f => f.moveHistory) : null;
+      this.resetTraining();
+      const original = koTest ? { dogs: this.dogs, damage: this.trainingDamage } : null;
+      if (koTest) {
+        const player = this.dogs[0];
+        this.dogs = [player, newFighter('pip', 1)];
+        const threshold = { pip: 115, brisket: 105, noodle: 108, clover: 132 };
+        this.trainingDamage = damage ?? (same ? prior.baseline : threshold[player.kind]);
+      } else if (damage !== undefined) this.trainingDamage = damage;
+      this.time = 0;
+      this.terrain = this.layout?.terrain || platforms(this.stage, 0);
+      const floor = this.terrain[0];
+      // The shorter launch must have a permanent roof underneath it on Laundry Line.
+      const middle = koTest && this.stage === 'laundry' ?
+        (this.dogs[0].kind === 'clover' ? floor.x2 - 60 : floor.x1 + 46) : (floor.x1 + floor.x2) / 2;
+      const gap = koTest ? 52 : 64;
+      this.dogs.forEach((f, i) => {
+        if (histories) f.moveHistory = histories[i];
+        Object.assign(f, { ground: 0, x: middle + (i ? gap : -gap) / 2, y: floor.y, face: i ? -1 : 1 });
+      });
+      this.dogs[1].damage = this.trainingDamage;
+      this.dogs[1].shield = guard;
+      const comparable = histories && prior.guard === guard && prior.baseline === this.trainingDamage;
+      this.freshnessPractice = { waiting: true, guard, koTest, original, last: null, trace: [], revision: 0,
+        marks: this.dogs.map(f => f.x), baseline: this.trainingDamage,
+        previous: comparable ? prior.last ? { last: prior.last, trace: prior.trace } : prior.previous : null };
+    }
+    sampleFreshness(owner, use, moveId, power, damage, response, blocked = false) {
+      const lab = this.freshnessPractice;
+      if (!lab || owner.index !== 0 || !moveId) return;
+      const sample = use?.sample || { moveId, power, hits: 0, blocks: 0, damage: 0, launch: 0, shieldFrames: 0 };
+      if (sample !== lab.last || sample.outcome) lab.trace = [];
+      sample.outcome = '';
+      if (blocked) {
+        sample.blocks++;
+        sample.shieldFrames = response;
+      } else {
+        sample.hits++;
+        sample.damage += damage;
+        sample.launch = response;
+      }
+      if (use) use.sample = sample;
+      lab.last = sample;
+      lab.revision++;
+    }
+    traceFreshness(out) {
+      const lab = this.freshnessPractice, report = lab?.last;
+      if (!report?.launch || report.outcome) return;
+      const target = this.dogs[1];
+      const landed = target.ground >= 0 || target.ledge;
+      const last = lab.trace.at(-1), y = target.y;
+      if (lab.trace.length < 130 && (!last || out || landed || Math.hypot(target.x - last[0], y - last[1]) >= 16))
+        lab.trace.push([target.x, y]);
+      if (out) report.outcome = target.y < topBlastY ? 'Top KO' : 'KO';
+      else if (landed) report.outcome = target.ledge ? 'Ledge catch' : 'Landed';
+      if (report.outcome) lab.revision++;
     }
     resetFootworkPractice(pattern = 'bait', dir = 1, slow = true) {
       this.resetTraining();
@@ -2966,6 +3069,11 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      if (this.freshnessPractice?.waiting) {
+        if (!input1.x && !input1.y && !['jump', 'attack', 'smash', 'special', 'grab', 'shield', 'aimStick']
+          .some(key => input1[key] || input1.tapped?.[key])) return;
+        this.freshnessPractice.waiting = false;
+      }
       const footwork = this.footworkPractice;
       if (footwork && footwork.pattern !== 'bait') {
         if (footwork.phase === 'ready') {
@@ -3132,6 +3240,7 @@
         !this.chasePractice &&
         !this.escapePractice &&
         !this.footworkPractice &&
+        !this.freshnessPractice &&
         !this.launchPractice &&
         !this.shieldPractice &&
         !this.airPractice &&
@@ -3142,11 +3251,13 @@
       )
         this.updateBall(dt);
       const out = this.dogs.filter(
-        (f) => !f.absent && (f.x < -115 || f.x > this.stageWidth + 115 || f.y > 765 || f.y < -172),
+        (f) => !f.absent && (f.x < -115 || f.x > this.stageWidth + 115 || f.y > 765 || f.y < topBlastY),
       );
+      if (this.freshnessPractice) this.traceFreshness(out.includes(this.dogs[1]));
       if (out.length) this.knockouts(out);
     }
     trainingRivalInput(dt, player) {
+      if (this.freshnessPractice) return this.freshnessPractice.guard ? { ...idleInput, shield: true } : idleInput;
       if (this.chasePractice) return this.chasePracticeInput();
       if (this.spacingPractice) return this.spacingPracticeInput();
       if (this.escapePractice) return this.escapePracticeInput(dt);
@@ -4380,7 +4491,10 @@
       this.positionCaptive(grip, rest, attack.contact, pressure);
       if (!attack.connected && attack.time + 1e-8 >= attack.start) {
         attack.connected = true;
-        const damage = this.dealDamage(target, attack.dmg, grip.comboLink);
+        const power = moveFreshness(owner, attack.moveId, attack);
+        rememberMove(owner, attack.moveId, attack, power, false);
+        const damage = this.dealDamage(target, staleDamage(attack.dmg, power), grip.comboLink);
+        this.sampleFreshness(owner, attack, attack.moveId, power, damage, 0);
         grip.comboLink = true;
         grip.pummelCount++;
         this.hitStop = Math.max(this.hitStop, attack.hitPause / 60);
@@ -4392,6 +4506,7 @@
           point: { ...grip.anchor },
           count: grip.pummelCount,
           damage,
+          power,
         });
       }
       // A throw can take over after contact. Start its windup from the captive's actual position.
@@ -4486,6 +4601,7 @@
         point,
         attack,
         grip.throwId,
+        attack,
       );
       if (attack.connected && attack.bounce)
         target.throwBounce = { ...attack.bounce, owner: owner.index, moveId: grip.throwId };
@@ -4920,10 +5036,13 @@
           point,
           attack.moveId ? beat : null,
           attack.moveId,
+          attack,
         );
         if (sweet && attack.connected) this.emit('sweetSpot', { f, point, face, moveId: attack.moveId });
-        if (attack.connected && attack.name === 'rope')
+        if (attack.connected && attack.name === 'rope') {
           rival.vx = -face * Math.max(185, Math.abs(rival.vx) * 0.8);
+          if (attack.sample) attack.sample.launch = Math.hypot(rival.vx, rival.vy);
+        }
         if (attack.connected && attack.moveId === 'noodleSling') {
           attack.reeling = attack.motionLocked = true;
           attack.reelTarget = rival;
@@ -5021,7 +5140,7 @@
       });
       if (target.index === 0) this.finishShieldPractice('parry');
     }
-    block(target, owner, damage, name, face, point, projectile, moveId) {
+    block(target, owner, damage, name, face, point, projectile, moveId, use, power) {
       // Use the damage of this hitbox, including sweet spots, late hits and smash charge.
       const scale = projectile ? 0.24 : name === 'aerial' ? 0.29 : name === 'heavy' ? 0.48 : 0.53;
       const stunFrames = clamp(Math.round(1 + damage * scale), 2, 15);
@@ -5042,7 +5161,8 @@
         target.vx = away * push;
         target.run = null;
       }
-      this.emit('block', { f: target, owner, point, face: away, moveId, impactFrames, stunFrames, projectile });
+      this.sampleFreshness(owner, use, moveId, power, 0, stunFrames, true);
+      this.emit('block', { f: target, owner, point, face: away, moveId, impactFrames, stunFrames, projectile, power });
       if (this.spacingPractice?.phase === 'active' && owner.index === 0 && target.index === 1 &&
           owner.attack?.airSide && !this.spacingPractice.contact) {
         this.spacingPractice.contact = moveId;
@@ -5052,7 +5172,7 @@
         this.finishClimbPractice(this.climbPractice.role === 'trap' ? 'late' : 'guarded');
       if (target.index === 0) this.finishShieldPractice(broken ? 'break' : 'block');
     }
-    hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId) {
+    hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId, use) {
       if (target.invuln > 0 || target.respawning > 0) return false;
       if (target.grip?.target === target.index) return false;
       const grab = name === 'throw' || move?.commandGrab;
@@ -5062,6 +5182,8 @@
         this.parry(target, owner, face, point, projectile);
         return false;
       }
+      const power = moveId ? moveFreshness(owner, moveId, use) : 1;
+      damage = staleDamage(damage, power);
       const stance = target.attack;
       if (
         !grab &&
@@ -5081,8 +5203,10 @@
         this.emit('counter', { f: target, point });
         return false;
       }
-      if (target.shield && !grab) {
-        this.block(target, owner, damage, name, face, point, projectile, moveId);
+      const guarded = target.shield && !grab;
+      rememberMove(owner, moveId, use, power, guarded);
+      if (guarded) {
+        this.block(target, owner, damage, name, face, point, projectile, moveId, use, power);
         return false;
       }
       this.gradeFootwork(target);
@@ -5090,7 +5214,8 @@
       const previousLocks = downed?.locks || 0;
       if (downed && target.ground >= 0 && owner.ground >= 0 && move?.lockFrames && previousLocks < 2 &&
           (!target.encounter || target.encounter.kind === target.kind) && (!owner.encounter || owner.encounter.kind === owner.kind)) {
-        this.dealDamage(target, damage, previousLocks > 0);
+        const applied = this.dealDamage(target, damage, previousLocks > 0);
+        this.sampleFreshness(owner, use, moveId, power, applied, 0);
         downed.locks = previousLocks + 1;
         downed.time = 0;
         downed.duration = move.lockFrames / 60;
@@ -5098,7 +5223,7 @@
         target.vx = face * (60 + damage * 5);
         owner.chainWindow = owner.chainNext = 0;
         this.hitStop = Math.max(this.hitStop, 3 / 60);
-        this.emit('hit', { f: target, owner, speed: 0, name, moveId, face, point, lock: downed.locks });
+        this.emit('hit', { f: target, owner, speed: 0, name, moveId, face, point, lock: downed.locks, power, damage: applied });
         if (this.chasePractice) this.chaseHit(target, moveId, previousLocks, downed.locks);
         return true;
       }
@@ -5115,8 +5240,8 @@
       target.impactLag = target.shieldStun = target.shieldGrabWindow = 0;
       target.shieldDrop = target.parryFlash = 0;
       target.techBuffer = target.dodge = 0;
-      this.dealDamage(target, damage, previousLocks > 0 || move?.preserveCombo);
-      const speed = (base + target.damage * growth) / target.stats.weight;
+      const applied = this.dealDamage(target, damage, previousLocks > 0 || move?.preserveCombo);
+      const speed = (base + target.damage * growth) * (0.75 + 0.25 * power) / target.stats.weight;
       if (move) {
         const angle = ((move.angle < 0 && target.ground >= 0 ? 46 : move.angle) * Math.PI) / 180;
         target.vx = face * speed * Math.cos(angle);
@@ -5168,6 +5293,7 @@
         !!move?.hard || (name === 'heavy' && !move?.setupHit) || name === 'shoulder' || speed > 630;
       target.reaction = { duration: target.stun, face: -face, hard: emphatic || speed > 460 };
       const launchSpeed = Math.hypot(target.vx, target.vy);
+      this.sampleFreshness(owner, use, moveId, power, applied, launchSpeed);
       const finish = !move?.setupHit && !move?.second && !move?.pull && !move?.bounce && name !== 'snare';
       if (finish && launchSpeed >= tumbleSpeed) this.startTumble(target, true);
       if (this.wallPractice?.phase === 'swing' && target.index === 0 && moveId === 'pipBackKick')
@@ -5190,7 +5316,7 @@
         target.index === 1
       )
         this.trumpPractice.phase = 'intercepted';
-      this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic });
+      this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic, power, damage: applied });
       if (this.chasePractice) this.chaseHit(target, moveId, previousLocks, 0);
       if (this.climbPractice?.phase === 'active') {
         const drill = this.climbPractice;
@@ -5253,7 +5379,8 @@
           point.x = clamp(point.x, a.x - a.rx, a.x + a.rx);
           point.y = clamp(point.y, a.y - a.ry, a.y + a.ry);
           const power = clashDamage(swing, point);
-          const winner = damage >= power + clashMargin ? owner : power >= damage + clashMargin ? f : null;
+          const discDamage = staleDamage(damage, moveFreshness(owner, d.moveId, d));
+          const winner = discDamage >= power + clashMargin ? owner : power >= discDamage + clashMargin ? f : null;
           if (winner !== f && (f.ground >= 0 || winner === owner))
             recoilFromClash(swing, power, Math.sign(dx) || -f.face);
           this.clashContact(f, owner, point, winner, true);
@@ -5288,6 +5415,7 @@
             point,
             spec,
             d.moveId,
+            d,
           );
         };
         if (d.type === 'drive') {
@@ -5673,6 +5801,24 @@
       brain.platformRoute = null;
       return { ...idleInput, y: 1, attack: true, tapped: { attack: true } };
     }
+    cpuTiltChoice(f, foe, preferred) {
+      const dx = foe.x - f.x, face = Math.sign(dx) || f.face;
+      const id = side => side === 'neutral' ? f.kit.ground[f.chainWindow > 0 ? f.chainNext : 0] : f.kit.tilts[side];
+      const repeated = moveFreshness(f, id(preferred)) < 0.86;
+      const options = repeated ? [preferred, 'neutral', 'forward', 'down', 'up'] : [preferred];
+      let best = null, power = -1;
+      for (const side of options) {
+        if ((side === 'forward' && f.run) || (side === 'neutral' && face !== f.face)) continue;
+        const moveId = id(side), move = moves[moveId];
+        const [x, y, rx, ry] = move.box;
+        const gap = Math.abs(dx) + foe.vx * face * move.start;
+        const height = foe.y + foe.vy * move.start - bodyHeight(foe) * 0.52 - f.y;
+        if (Math.abs(gap - x) > rx + foe.stats.width || Math.abs(height - y) > ry + bodyHeight(foe) * 0.4) continue;
+        const freshness = moveFreshness(f, moveId);
+        if (freshness > power) { best = side; power = freshness; }
+      }
+      return best;
+    }
     cpu(dt) {
       const f = this.dogs[1],
         foe = this.dogs[0],
@@ -5701,6 +5847,17 @@
           else if (foe.damage < 65 && (f.kind === 'clover' || f.kind === 'pip')) result.y = -1;
           else if (foe.damage < 55) result.y = 1;
           else result.x = grip.face;
+          if (!edge && !result.attack) {
+            const side = result.y === -1 ? 'up' : result.y === 1 ? 'down' : 'forward';
+            const current = moveFreshness(f, f.kit.throws[side]);
+            if (current < 0.86) {
+              const options = ['up','down','forward'];
+              const fresh = options.reduce((best, s) => moveFreshness(f, f.kit.throws[s]) >
+                moveFreshness(f, f.kit.throws[best]) ? s : best, side);
+              result.x = fresh === 'forward' ? grip.face : 0;
+              result.y = verticalAim(fresh);
+            }
+          }
         }
         return result;
       }
@@ -5967,19 +6124,11 @@
           const face = Math.sign(dx) || f.face;
           const closing = foe.vx * face < -40;
           const aimLow = above < -6 || (far < 75 && (closing || foe.attack));
-          const side = above > 24 ? 'up' : aimLow ? 'down' : 'forward';
-          const tilt = moves[f.kit.tilts[side]];
-          const [x, y, rx, ry] = tilt.box;
-          const height = foe.y + foe.vy * tilt.start - foe.stats.height * 0.52 - f.y;
-          if (
-            (side !== 'forward' || !f.run) &&
-            Math.abs(far + foe.vx * face * tilt.start - x) <= rx + foe.stats.width &&
-            Math.abs(height - y) <= ry + foe.stats.height * 0.4 &&
-            this.random() < 0.36
-          ) {
+          const side = this.cpuTiltChoice(f, foe, above > 24 ? 'up' : aimLow ? 'down' : 'forward');
+          if (side && this.random() < 0.36) {
             brain.hold = brain.guard = 0;
             brain.hop = null;
-            result.x = face;
+            result.x = side === 'neutral' ? 0 : face;
             result.y = verticalAim(side);
             result.attack = true;
             result.tapped = { attack: true };
@@ -6098,8 +6247,11 @@
     throws,
     smashChargeTime,
     smashPower,
+    moveFreshness,
+    savedMoveHistory,
     arenas,
     platforms,
+    topBlastY,
     Battle,
     idleInput,
     clamp,

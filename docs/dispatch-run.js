@@ -28,6 +28,7 @@
       const runner = this.dogs[0];
       runner.stocks = this.atCheckpoint?.stocks ?? fightStocks;
       runner.damage = this.atCheckpoint?.damage ?? 0;
+      runner.moveHistory = window.DogFight.savedMoveHistory(this.atCheckpoint?.moveHistory);
       this.clearDelay = 0;
       this.stamps = stamps;
       this.checkpoint = saved ? checkpoint : 0;
@@ -269,6 +270,8 @@
       this.checkpoint++;
       const f = this.dogs[0];
       this.atCheckpoint = this.bridge ? null : { stocks: f.stocks, damage: f.damage };
+      if (this.atCheckpoint && f.moveHistory.length)
+        this.atCheckpoint.moveHistory = window.DogFight.savedMoveHistory(f.moveHistory);
       this.emit('dispatchCheckpoint', { f, checkpoint: this.checkpoint, atCheckpoint: this.atCheckpoint });
     }
     awardMark() {

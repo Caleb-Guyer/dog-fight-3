@@ -135,7 +135,10 @@
   function checkpointFighter(value) {
     if (!Number.isInteger(value?.stocks) || value.stocks < 1 || value.stocks > fightStocks ||
         !Number.isFinite(value.damage) || value.damage < 0 || value.damage > 999) return null;
-    return { stocks: value.stocks, damage: value.damage };
+    const snapshot = { stocks: value.stocks, damage: value.damage };
+    const history = window.DogFight.savedMoveHistory(value.moveHistory);
+    if (history.length) snapshot.moveHistory = history;
+    return snapshot;
   }
   function readSave(storage) {
     let raw;

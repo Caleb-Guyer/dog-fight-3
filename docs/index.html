@@ -11,15 +11,15 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=attack-clashes-1" />
+    <link rel="stylesheet" href="./style.css?v=move-freshness-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
-    <link rel="stylesheet" href="./screen.css?v=missions-1" />
+    <link rel="stylesheet" href="./screen.css?v=move-freshness-1" />
     <link rel="stylesheet" href="./online.css?v=online-1" />
-    <script defer src="./fighters-art.js?v=attack-clashes-1"></script>
+    <script defer src="./fighters-art.js?v=move-freshness-1"></script>
     <script defer src="./arena-art.js?v=screen-1"></script>
-    <script defer src="./engine.js?v=attack-clashes-1"></script>
-    <script defer src="./render.js?v=attack-clashes-1"></script>
-    <script defer src="./dispatch-script.js?v=chapter-lead-1"></script>
+    <script defer src="./engine.js?v=move-freshness-1"></script>
+    <script defer src="./render.js?v=move-freshness-1"></script>
+    <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
     <script defer src="./dispatch-covers.js?v=missions-1"></script>
@@ -29,10 +29,10 @@
     <script defer src="./film-ending.js?v=widefilm-1"></script>
     <script defer src="./dispatch-film.js?v=widefilm-1"></script>
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
-    <script defer src="./dispatch-run.js?v=shield-pressure-1"></script>
+    <script defer src="./dispatch-run.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-view.js?v=stocks-1"></script>
-    <script defer src="./online.js?v=attack-clashes-1"></script>
-    <script defer src="./app.js?v=attack-clashes-1"></script>
+    <script defer src="./online.js?v=move-freshness-1"></script>
+    <script defer src="./app.js?v=move-freshness-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -324,6 +324,15 @@
           </div>
           <div id="countdown" class="countdown" aria-hidden="true"></div>
         </div>
+        <section id="freshness-readout" aria-label="Move freshness measurements" hidden>
+          <div class="freshness-heading"><strong id="freshness-name"></strong><span id="freshness-charge" hidden></span></div>
+          <output id="freshness-contact" aria-live="polite"></output>
+          <span id="freshness-previous" hidden></span>
+          <details id="freshness-history">
+            <summary id="freshness-summary">Recent moves</summary>
+            <ol id="freshness-list" aria-label="Recent moves, newest first"></ol>
+          </details>
+        </section>
         <div id="dispatch-orders" class="dispatch-orders" hidden>
           <strong id="dispatch-objective" role="status"></strong><span id="dispatch-marks"></span>
         </div>
@@ -364,6 +373,13 @@
           <button id="reset-training" type="button" class="utility">
             <i data-icon="reset"></i>Reset positions
           </button>
+          <button id="freshness-training" type="button" class="utility">Move freshness</button>
+          <span id="freshness-controls" role="group" aria-label="Move freshness controls" hidden>
+            <button id="freshness-repeat" type="button" class="utility">Return to marks</button>
+            <button id="freshness-clear" type="button" class="utility">Fresh start</button>
+            <button id="freshness-guard" type="button" class="utility" aria-pressed="false">Dummy shield</button>
+            <button id="freshness-ko" type="button" class="utility" aria-pressed="false">KO test</button>
+          </span>
           <button id="footwork-training" type="button" class="utility">Footwork practice</button>
           <span id="footwork-patterns" role="group" aria-label="Footwork exercises" hidden>
             <button id="footwork-bait" type="button" class="utility" aria-pressed="true">Bait a grab</button>

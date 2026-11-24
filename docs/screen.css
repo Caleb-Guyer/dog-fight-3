@@ -214,6 +214,12 @@ body:is(.playing, .cinema-active) .full-button span {
   top: calc(var(--top-edge) + 43px);
   right: var(--right-edge);
 }
+#freshness-readout {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--top-edge) + 43px);
+  right: var(--right-edge);
+}
 #grapple-prompt {
   top: calc(var(--top-edge) + 43px);
   left: var(--left-edge);
@@ -504,6 +510,21 @@ body:is(.playing, .cinema-active) .full-button span {
   #match {
     grid-template-rows: minmax(0, 1fr) auto auto;
   }
+  body.freshness-lab #match {
+    grid-template-rows: minmax(0, 1fr) auto auto auto;
+  }
+  #freshness-readout {
+    position: static;
+    grid-row: 2;
+    width: 100%;
+    max-width: none;
+    padding: 5px var(--right-edge) 4px var(--left-edge);
+    box-sizing: border-box;
+    border-width: 2px 0 0;
+    border-color: #827a80;
+  }
+  body.freshness-lab #match .touch-pad { grid-row: 3; }
+  body.freshness-lab #training-tools { grid-row: 4; }
   #match .touch-pad {
     position: static;
     grid-row: 2;

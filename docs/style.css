@@ -649,6 +649,28 @@ body.playing .tools .utility,
 #training-move {
   color: var(--gold);
 }
+#freshness-readout {
+  display: grid;
+  gap: 3px;
+  width: max-content;
+  max-width: min(320px, 87vw);
+  padding: 7px 9px;
+  background: #262536f5;
+  border: 2px solid var(--ink);
+  border-left: 4px solid var(--gold);
+  color: var(--cream);
+  font: 400 clamp(11px, 1.2vw, 15px) / 1.15 var(--pixel);
+  pointer-events: none;
+}
+.freshness-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; }
+#freshness-name { color: var(--gold); }
+#freshness-charge { color: var(--aqua); }
+#freshness-contact { padding: 0; border: 0; background: none; font: inherit; }
+#freshness-previous { color: #a5dace; }
+#freshness-history { pointer-events: auto; font-size: .92em; }
+#freshness-summary { cursor: pointer; padding-block: 3px; }
+#freshness-list { margin: 3px 0 0; padding-left: 2em; max-height: 7em; overflow-y: auto; }
+#freshness-list li { margin-block: 2px; }
 #launch-status[data-result='tech'],
 #launch-status[data-result='clear'],
 #wall-status[data-result='wallTech'],
@@ -798,6 +820,7 @@ kbd {
   font-size: 13px;
 }
 #launch-patterns,
+#freshness-controls,
 #platform-patterns,
 #footwork-patterns,
 #spacing-patterns,
@@ -813,6 +836,7 @@ kbd {
 }
 #launch-patterns { flex-wrap: wrap; }
 #launch-patterns [aria-pressed='true'],
+#freshness-controls [aria-pressed='true'],
 #platform-patterns [aria-pressed='true'],
 #footwork-patterns [aria-pressed='true'],
 #spacing-patterns [aria-pressed='true'],

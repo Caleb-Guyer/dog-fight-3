@@ -10,6 +10,7 @@
     pummels,
     throws,
     smashPower,
+    moveFreshness,
     arenas,
     Battle,
     idleInput,
@@ -910,7 +911,7 @@
         '</ul>';
     } else if (section === 'smashes') {
       contents =
-        '<p class="recovery-note"><strong>Charge</strong> Aim and hold Smash (P1 I, P2 N, gamepad RT), then release. A tap swings immediately. Full power takes one second. You can hold for one more second before the move fires.</p><ul class="move-rows guide-smashes">' +
+        '<p class="recovery-note"><strong>Charge</strong> Aim and hold Smash (P1 I, P2 N, gamepad RT), then release. A tap swings immediately. Full charge takes one second. You can hold it for one more second before the move fires. Repeating a move lowers its damage and launch power. Try Training → Move freshness → KO test to see when this changes a stock.</p><ul class="move-rows guide-smashes">' +
         rows +
         '</ul>';
     } else if (section === 'specials') {
@@ -1020,6 +1021,38 @@
     return Array.from({ length: 3 }, (_, i) =>
       '<i class="' + (i >= count ? 'lost' : '') + '" data-icon="paw">' + svg('paw') + '</i>').join('');
   }
+  const tenth = n => Number(n.toFixed(1));
+  const moveLabel = id => (moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id]).label;
+  function freshnessResult(sample) {
+    const parts = [];
+    if (sample.hits) {
+      parts.push(tenth(sample.damage) + '% damage');
+      if (sample.launch) parts.push(Math.round(sample.launch) + ' px/s');
+    }
+    if (sample.blocks) parts.push(sample.shieldFrames + 'f shieldstun');
+    if (sample.outcome) parts.push(sample.outcome);
+    return parts.join(' · ');
+  }
+  function updateFreshnessReadout(player, lab) {
+    const { last, previous } = lab;
+    const id = last?.moveId || previous?.last.moveId;
+    $('freshness-name').textContent = last ? moveLabel(last.moveId) + ' · ' + tenth(last.power * 100) + '% power' :
+      lab.koTest ? smashes[player.kit.smashes.up].label + ' KO test' : 'Move freshness';
+    const result = last ? freshnessResult(last) : world.dogs[1].stats.name + ' at ' + lab.baseline + '%';
+    if ($('freshness-contact').textContent !== result) $('freshness-contact').textContent = result;
+    $('freshness-previous').hidden = !previous;
+    if (previous) {
+      const label = last?.moveId === previous.last.moveId ? 'Previous' : 'Previous ' + moveLabel(previous.last.moveId);
+      $('freshness-previous').textContent = label + ' · ' + freshnessResult(previous.last);
+    }
+    $('freshness-summary').textContent = 'Recent moves ' + player.moveHistory.length + '/9' +
+      (id ? ' · Next ' + tenth(moveFreshness(player, id) * 100) + '%' : '');
+    $('freshness-list').replaceChildren(...player.moveHistory.map(entry => {
+      const li = document.createElement('li');
+      li.textContent = moveLabel(entry.moveId) + (entry.shieldOnly ? ' · shield' : '');
+      return li;
+    }));
+  }
   function updateHUD() {
     if (world.mode === 'adventure') return updateDispatchHUD();
     const scores = online.match?.confirmedWorld.dogs || world.dogs;
@@ -1038,10 +1071,14 @@
             : 'Grabbed · Tap action buttons to escape';
       if (prompt.textContent !== text) prompt.textContent = text;
     }
-    const player = world.dogs[0],
-      chargeReadout = $('training-charge');
+    const player = world.dogs[0], lab = world.freshnessPractice;
+    const chargeReadout = $(lab ? 'freshness-charge' : 'training-charge');
+    if (lab) {
+      $('training-charge').hidden = true;
+      $('recovery-tip').hidden = !lab.waiting;
+    }
     const power = player.smashCharge ? smashPower(player.charge) : player.lastSmashPower;
-    chargeReadout.hidden = world.mode !== 'training' || power === null;
+    chargeReadout.hidden = world.mode !== 'training' || power === null || (!!lab && !player.smashCharge);
     if (!chargeReadout.hidden) {
       const value = player.smashCharge
         ? power >= 1
@@ -1059,20 +1096,23 @@
       '/' +
       combo.damage +
       '/' +
-      (world.mode === 'training' ? shownMove : '');
+      (world.mode === 'training' ? shownMove : '') +
+      (world.freshnessPractice ? '/' + world.freshnessPractice.revision + '/' + player.moveHistory.length : '');
     if (key === hudKey) return;
     hudKey = key;
+    if (world.freshnessPractice) updateFreshnessReadout(player, world.freshnessPractice);
     const lastMove = $('training-move');
     lastMove.hidden =
       world.mode !== 'training' ||
+      !!world.freshnessPractice ||
       !shownMove ||
       (shownMove === 'Parry' && world.shieldPractice?.outcome === 'parry');
     if (!lastMove.hidden) lastMove.textContent = shownMove;
     const readout = $('training-combo');
-    readout.hidden = world.mode !== 'training' || combo.hits === 0;
+    readout.hidden = world.mode !== 'training' || !!world.freshnessPractice || combo.hits === 0;
     if (!readout.hidden) {
       readout.textContent =
-        combo.hits + (combo.hits === 1 ? ' hit' : ' hits') + ' · ' + Math.floor(combo.damage) + '% damage';
+        combo.hits + (combo.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(combo.damage) + '% damage';
     }
     $('hud').innerHTML = scores
       .map((f, i) => {
@@ -1109,10 +1149,12 @@
     for (const id of ['home', 'online-lobby', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
       $(id).hidden = true;
     $('hud').hidden = false;
-    document.body.classList.remove('menu-screen', 'adventure-active');
+    document.body.classList.remove('menu-screen', 'adventure-active', 'freshness-lab');
     drillSide = null;
     drillWaiting = false;
     practiceSide = 'left';
+    $('freshness-readout').hidden = $('freshness-controls').hidden = true;
+    $('dummy-damage').step = '5';
     $('footwork-status').hidden = $('footwork-patterns').hidden = true;
     $('spacing-status').hidden = $('spacing-patterns').hidden = true;
     $('escape-status').hidden = $('escape-patterns').hidden = true;
@@ -1344,6 +1386,7 @@
     if (!world) return;
     world.setDummyDamage(e.target.value);
     $('damage-output').textContent = world.trainingDamage + '%';
+    hudKey = '';
     updateHUD();
   });
   let drillSide = null,
@@ -1736,6 +1779,7 @@
     const wall = ledge === 'wall';
     const shield = ledge === 'shield';
     const footwork = ledge === 'footwork';
+    const freshness = ledge === 'freshness';
     const spacing = ledge === 'spacing';
     const escape = ledge === 'escape';
     const platform = ledge === 'platform';
@@ -1743,12 +1787,18 @@
     const roll = ledge === 'roll';
     const climb = ledge === 'climb';
     const trump = ledge === 'trump';
-    drillSide = launch || wall || shield || footwork || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
+    drillSide = launch || wall || shield || footwork || freshness || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
     if (chase) world.resetChasePractice(pattern, direction ?? world.chasePractice?.dir ?? 1, world.chasePractice?.slow ?? true);
     else if (launch) world.resetLaunchPractice();
+    else if (freshness) {
+      const lab = world.freshnessPractice;
+      world.resetFreshnessPractice(pattern === 'repeat' || pattern === 'guard',
+        pattern === 'guard' ? !lab.guard : pattern === 'ko' ? false : lab?.guard ?? false,
+        pattern === 'ko' ? !lab?.koTest : lab?.koTest ?? false);
+    }
     else if (footwork) world.resetFootworkPractice(pattern, pattern === 'bait' ? 1 : direction ?? world.footworkPractice?.dir ?? 1,
       world.footworkPractice?.pattern !== 'bait' ? world.footworkPractice?.slow ?? true : true);
     else if (spacing) world.resetSpacingPractice(pattern, direction ?? world.spacingPractice?.dir ?? 1,
@@ -1763,6 +1813,11 @@
     else if (trump) world.resetLedgeTrumpPractice(pattern, practiceSide);
     else world.resetTraining(ledge, fromHang);
     const player = world.dogs[0];
+    document.body.classList.toggle('freshness-lab', freshness);
+    $('freshness-readout').hidden = $('freshness-controls').hidden = !freshness;
+    $('dummy-damage').step = freshness && world.freshnessPractice.koTest ? '1' : '5';
+    $('dummy-damage').value = world.trainingDamage;
+    $('damage-output').textContent = world.trainingDamage + '%';
     $('match-stage').textContent = arenas[world.stage].name;
     hudKey = '';
     const result = $('launch-status');
@@ -1786,7 +1841,13 @@
     $('climb-status').hidden = $('climb-patterns').hidden = !climb;
     $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
-    if (spacing) {
+    if (freshness) {
+      const lab = world.freshnessPractice;
+      $('freshness-ko').setAttribute('aria-pressed', String(lab.koTest));
+      $('freshness-guard').setAttribute('aria-pressed', String(lab.guard));
+      message = lab.koTest ? 'Fully charge Up + Smash, release, then choose Return to marks. The mint trail shows your previous launch.' :
+        'Land a hit, choose Return to marks, and repeat. Mix in other moves to restore its power.';
+    } else if (spacing) {
       const practice = world.spacingPractice, approach = pattern === 'approach';
       const run = practice.dir > 0 ? 'right' : 'left', back = practice.dir > 0 ? 'left' : 'right';
       const key = practice.dir > 0 ? 'R' : 'Y';
@@ -1914,6 +1975,9 @@
     announce(message);
   }
   $('reset-training').onclick = () => drill(false);
+  $('freshness-training').onclick = () => drill('freshness', false, 'repeat');
+  for (const action of ['repeat','clear','guard','ko'])
+    $('freshness-' + action).onclick = () => drill('freshness', false, action);
   $('footwork-training').onclick = () => drill('footwork', false, world.footworkPractice?.pattern || 'bait');
   for (const pattern of ['bait', 'match', 'power', 'disc'])
     $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
@@ -2042,7 +2106,7 @@
     page = id;
     drillSide = null;
     drillWaiting = false;
-    document.body.classList.remove('playing', 'training-active', 'adventure-active');
+    document.body.classList.remove('playing', 'training-active', 'adventure-active', 'freshness-lab');
     document.body.classList.add('menu-screen');
     document.body.classList.toggle('cinema-active', id === 'dispatch-story');
     for (const screen of ['home', 'online-lobby', 'dispatch-route', 'dispatch-story', 'lobby', 'match'])
@@ -2243,7 +2307,8 @@
       $(id).hidden = true;
     $('match').hidden = $('dispatch-hud').hidden = $('dispatch-orders').hidden = false;
     $('countdown').textContent = '';
-    document.body.classList.remove('menu-screen', 'training-active', 'cinema-active');
+    document.body.classList.remove('menu-screen', 'training-active', 'cinema-active', 'freshness-lab');
+    $('freshness-readout').hidden = true;
     document.body.classList.add('playing', 'adventure-active');
     saveProgress({ room: index, checkpoint, pending: '' });
     view = new window.DispatchView();
