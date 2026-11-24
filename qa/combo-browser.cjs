@@ -720,6 +720,82 @@ async function testShortHops(page, mobile) {
   console.log((mobile ? 'Touch' : 'Keyboard and controller mapping') + ' passed held short-hop and full-jump comparison.');
 }
 
+async function testFlickJumps(page, mobile) {
+  const saved = () => page.evaluate(() => {
+    const options = JSON.parse(localStorage.getItem('dog-fight-3.config') || '{}');
+    return [!!options.flickJump1, !!options.flickJump2];
+  });
+  const activate = locator => mobile ? locator.tap() : locator.click();
+  const launch = () => page.goto(root + '?flick-practice#training/flick-jump');
+  await launch();
+  const compare = page.locator('#hop-compare'), toggle = page.locator('#spacing-flick');
+  const {hold,press} = await trainingControls(page,mobile,page.locator('#spacing-status'));
+  assert.deepEqual(await saved(),[false,false]);
+  assert.equal(await toggle.getAttribute('aria-pressed'),'true');
+  if (await page.locator('#spacing-slow').getAttribute('aria-pressed') === 'true') await press('spacing-slow');
+  await hold(['up']);
+  await hold([]);
+  await page.clock.runFor(1450);
+  const short = await compare.innerText();
+  assert.match(short,/^Short hop · \d+ px$/);
+  await press('spacing-landing');
+  await hold(['up']);
+  await page.clock.runFor(1450);
+  await hold([]);
+  const both = await compare.innerText(), full = both.split(' / ')[0];
+  assert.match(full,/^Full jump · \d+ px$/);
+  assert.equal(both,full+' / Previous: '+short);
+  assert(Number(full.match(/\d+/)[0])>Number(short.match(/\d+/)[0])*2);
+  await press('spacing-landing');
+  if (mobile) {
+    const cdp = await page.context().newCDPSession(page);
+    const point = async name => {
+      const b = await page.locator('[data-touch="'+name+'"]').boundingBox();
+      return [{id:1,x:b.x+b.width/2,y:b.y+b.height/2}];
+    };
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:await point('neutral')});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:await point('up')});
+    await page.clock.runFor(1100);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    assert.equal(await compare.innerText(),'Previous: '+full);
+  } else {
+    await page.evaluate(() => {
+      const pad = {index:0,id:'Hosted analog controller', axes:[0,0,0,0],buttons:[]};
+      Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[pad]});
+    });
+    for (const y of [0,-.38,-.45,-.55,-.64,-.78,-1]) {
+      await page.evaluate(y=>navigator.getGamepads()[0].axes[1]=y,y);
+      await page.clock.runFor(56);
+    }
+    await page.clock.runFor(1000);
+    assert.equal(await compare.innerText(),'Previous: '+full);
+    for (const [y,ms] of [[0,66],[-1,1300]]) {
+      await page.evaluate(y=>navigator.getGamepads()[0].axes[1]=y,y);
+      await page.clock.runFor(ms);
+    }
+    assert.equal(await compare.innerText(),full+' / Previous: '+full);
+    await page.evaluate(()=>{delete navigator.getGamepads;});
+  }
+  await press('spacing-flick');
+  assert.equal(await toggle.getAttribute('aria-pressed'),'false');
+  assert.deepEqual(await saved(),[false,false]);
+  await page.goto(root+'?flick-options');
+  await press('home-options');
+  const p1 = page.locator('[data-do="option-flickJump1"]'), p2 = page.locator('[data-do="option-flickJump2"]');
+  await activate(p2);
+  assert.deepEqual(await saved(),[false,true]);
+  await page.reload();
+  await press('home-options');
+  assert.equal(await p2.getAttribute('aria-pressed'),'true');
+  assert.equal(await p1.getAttribute('aria-pressed'),'false');
+  await activate(p1);
+  assert.deepEqual(await saved(),[true,true]);
+  await activate(p2);
+  await activate(p1);
+  assert.deepEqual(await saved(),[false,false]);
+  console.log((mobile?'Touch':'Keyboard and analog controller')+' passed flick height, gentle aim, trial override and per-player preferences.');
+}
+
 async function testBlastRadar(page, mobile) {
   await page.goto(root + '#training/blast-radar');
   const radar = page.locator('#blast-radar'), status = page.locator('#launch-status');
@@ -1127,6 +1203,7 @@ async function testDevice(browser, mobile) {
     await testAngledTilts(page, mobile);
     await testWallJumps(page, mobile);
     await testShortHops(page, mobile);
+    await testFlickJumps(page, mobile);
     await testBlastRadar(page, mobile);
     await testNightMail(page, mobile);
     await testJumpIns(page, mobile);
