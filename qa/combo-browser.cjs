@@ -5,6 +5,75 @@ if (process.env.GITHUB_ACTIONS !== 'true' || process.env.RUNNER_OS !== 'Linux')
   throw new Error('Run these input playtests on the GitHub-hosted Linux runner.');
 const { chromium } = require('playwright-core');
 const root = 'http://127.0.0.1:8080/';
+async function testEdges(page, mobile) {
+  await page.goto(root + '#training/edges');
+  const status = page.locator('#edge-status');
+  const activate = id => mobile ? page.locator('#' + id).tap() : page.locator('#' + id).click();
+  const session = mobile && await page.context().newCDPSession(page);
+  const touch = (type, touchPoints = []) => session.send('Input.dispatchTouchEvent', {type, touchPoints});
+  async function point(id, name) {
+    const el = page.locator('[data-touch="' + name + '"]');
+    await el.scrollIntoViewIfNeeded();
+    const box = await el.boundingBox();
+    assert(box && box.width > 0, name);
+    return {id, x:box.x + box.width/2, y:box.y + box.height/2};
+  }
+  async function waitFor(result, limit = 100) {
+    for (let i = 0; i < limit; i++) {
+      if (await status.getAttribute('data-result') === result) return;
+      await page.clock.runFor(32);
+    }
+    assert.fail('Expected ' + result + ', saw "' + await status.innerText() + '" (' + await page.locator('#recovery-tip').innerText() + ')');
+  }
+  async function attack(down = false) {
+    if (!mobile) {
+      if (down) await page.keyboard.down('s');
+      await page.keyboard.press('j');
+      if (down) await page.keyboard.up('s');
+    } else if (down) {
+      const d = await point(1,'down'), a = await point(2,'attack');
+      await touch('touchStart',[d]);
+      await touch('touchStart',[d,a]);
+      await touch('touchEnd');
+    } else await page.locator('[data-touch="attack"]').tap();
+  }
+  if (mobile) {
+    const center = await point(1, 'neutral'), right = await point(1, 'right');
+    await touch('touchStart', [center]);
+    await touch('touchMove', [right]);
+  } else {
+    await page.keyboard.down('ShiftLeft');
+    await page.keyboard.down('d');
+  }
+  await waitFor('teeter');
+  assert.match(await status.innerText(), /Balanced/);
+  await waitFor('edgeCue');
+  if (mobile) await touch('touchEnd');
+  else { await page.keyboard.up('d'); await page.keyboard.up('ShiftLeft'); }
+  await attack(true);
+  await waitFor('covered');
+  assert.match(await status.innerText(), /caught the ledge jump/);
+  await activate('edge-tip');
+  await attack();
+  await waitFor('edgeLand');
+  assert.match(await status.innerText(), /9f landing/);
+  await waitFor('edgeCancel');
+  assert.match(await status.innerText(), /6f saved/);
+  await attack(true);
+  await waitFor('followup');
+  assert.match(await status.innerText(), /Belly Drop connected · 6f saved/);
+  await activate('edge-deep');
+  await activate('edge-side');
+  assert.match(await status.innerText(), /Drifting left/);
+  await activate('edge-slow');
+  await attack();
+  await waitFor('settled');
+  await activate('reset-training');
+  assert(await status.isHidden());
+  await activate('edge-training');
+  assert(await page.locator('#edge-tip').isVisible());
+  console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed ledge walk, timed low tilt, edge cancel, follow-up and mirrored deep landing.');
+}
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -62,8 +131,9 @@ async function testDevice(browser, mobile) {
     await activate('combo-training');
     assert(await page.locator('#combo-record').isVisible());
     assert(await page.locator('#combo-replay').isDisabled());
-    assert.deepEqual(errors, []);
     console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed examples, recording, replay, reply changes and free-training reset.');
+    await testEdges(page, mobile);
+    assert.deepEqual(errors, []);
   } finally {
     await context.close();
   }
