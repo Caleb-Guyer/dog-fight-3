@@ -69,7 +69,7 @@ async function testEdges(page, mobile) {
   await attack();
   await waitFor('settled');
   await activate('reset-training');
-  assert(await status.isHidden());
+  await status.waitFor({state:'hidden', timeout:4000});
   await activate('edge-training');
   assert(await page.locator('#edge-tip').isVisible());
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed ledge walk, timed low tilt, edge cancel, follow-up and mirrored deep landing.');
@@ -161,7 +161,7 @@ async function testTumble(page, mobile) {
   await waitFor('clean');
   await side(null);
   await activate('reset-training');
-  assert(await status.isHidden());
+  await status.waitFor({state:'hidden', timeout:4000});
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard')+' passed neutral landing, tumble wiggle, aerial chase and reversed drift.');
 }
 async function testBraking(page, mobile) {
@@ -232,7 +232,7 @@ async function testBraking(page, mobile) {
   assert.match(await status.innerText(), /Stamp Kick · caught the chase/);
   await release();
   await button('reset-training');
-  assert(await status.isHidden());
+  await status.waitFor({state:'hidden', timeout:4000});
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed dash attack, brake tilt, saved tilt-stick setting and mirrored pivot punish.');
 }
 async function testDevice(browser, mobile) {
@@ -297,6 +297,10 @@ async function testDevice(browser, mobile) {
     await testTumble(page, mobile);
     await testBraking(page, mobile);
     assert.deepEqual(errors, []);
+  } catch (error) {
+    const panel = await page.locator('.training-readouts output:visible').allTextContents();
+    throw new Error((mobile ? 'Phone touch' : 'Desktop keyboard') + ' at ' + page.url() + ' ' +
+      JSON.stringify({panel, errors}) + '\n' + error.stack);
   } finally {
     await context.close();
   }
