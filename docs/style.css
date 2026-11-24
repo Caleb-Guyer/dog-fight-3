@@ -1519,7 +1519,7 @@ dialog[data-view='moves'] {
   }
   .touch-actions {
     display: grid;
-    grid-template-columns: repeat(3, minmax(43px, 65px));
+    grid-template-columns: repeat(4, minmax(40px, 65px));
     grid-template-rows: repeat(2, 35px);
     gap: 3px;
   }
@@ -1534,6 +1534,10 @@ dialog[data-view='moves'] {
   }
   .touch-actions [data-touch='attack'] {
     background: #845543;
+  }
+  .touch-actions [data-touch='hop'] {
+    grid-column: 4;
+    grid-row: 1 / 3;
   }
   .touch-actions [data-touch='smash'] {
     background: #664b39;

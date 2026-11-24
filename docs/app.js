@@ -696,6 +696,7 @@
       ['Move / aim', 'W A S D', 'Arrow keys', 'Stick / D-pad'],
       ['Walk', 'Left Shift + A / D', 'Right Ctrl + ← / →', 'Tilt left stick gently'],
       ['Jump', 'Space', 'Right Shift', 'A'],
+      ['Short hop', 'E', 'Apostrophe', 'LT / L2'],
       ['Attack / charge', 'J', ',', 'X'],
       ['Aim strike ← / → / ↑ / ↓', 'R / Y / T / G', 'Numpad 4 / 6 / 8 / 2', 'Right stick'],
       ['Smash / charge', 'I', 'N', settings.tiltStick ? 'RT' : 'RT / right stick'],
@@ -727,7 +728,7 @@
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Aim diagonally down and tap Shield to slide onto a platform. Do this just after jumping to wavedash. Try Training → Air-dodge practice or Training → Wavedash.</p>' +
         '<p>Flick a direction during the hit spark to shift your dog. You can slide sideways on the ground or in eight directions in the air. Try escaping the second swing in Training → Combo escape.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
-        '<p>Your dog crouches for three frames. Tap Jump for a short hop, or hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Tap Down once after the top of your jump to fast-fall, then aim freely. Jump again in midair. Press Jump just above a rival’s head for a footstool, even with your air jump spent. A rival stepped on in the air can tech the fall with Shield. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. With the default Smash stick, hold the right stick in a direction and release to swing. Choose Tilt under Options for instant grounded tilts with the aim stick, aim keys, or a swipe from Smash.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
+        '<p>Your dog crouches for three frames. Hold Short hop for a low jump, or tap Jump and release during the crouch. Hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Tap Down once after the top of your jump to fast-fall, then aim freely. Jump again in midair. Press Jump just above a rival’s head for a footstool, even with your air jump spent. A rival stepped on in the air can tech the fall with Shield. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. With the default Smash stick, hold the right stick in a direction and release to swing. Choose Tilt under Options for instant grounded tilts with the aim stick, aim keys, or a swipe from Smash.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
   $('controls').onclick = showControls;
@@ -1023,7 +1024,7 @@
         guideMoveRow(moves[kit.dashAttack], 'Run + Attack', 'dash', 'dash') +
         '</ul>' +
         ledgeMove +
-        '<h3 class="guide-section">Aerial attacks</h3><p>Jump + Attack gives a rising short-hop aerial. To swing on the way down, jump first and time Attack yourself. Tap Down after the apex to fast-fall. Forward follows your facing.</p><p>Press Shield during an aerial in the last seven frames before touchdown to halve its landing recovery, rounded up. Mint streaks at the paws mark a landing cancel. Keep holding Shield to block the reply. Try <strong>Training → Aerial practice → Landing cancel</strong>.</p><p>Each forward air has a clean hit and a softer follow-through. Practice landing the late hit into a jab in <strong>Training → Aerial practice → Landing hits</strong>.</p><p>Steer with the left stick and flick the right stick to swing in a separate direction. On keyboard, aim left/right/up/down with R/Y/T/G for P1 or numpad 4/6/8/2 for P2. On touch, flick outward from Smash. For a running back air, reverse direction with Jump and steer back along your original path. Try <strong>Aerial practice → Approach</strong>.</p><ul class="move-rows guide-airs">' +
+        '<h3 class="guide-section">Aerial attacks</h3><p>Jump + Attack gives a rising short-hop aerial. For a low approach, hold Short hop and wait until you are falling to press Attack. Tap Down after the apex to fast-fall. Forward follows your facing.</p><p>Press Shield during an aerial in the last seven frames before touchdown to halve its landing recovery, rounded up. Mint streaks at the paws mark a landing cancel. Keep holding Shield to block the reply. Try <strong>Training → Aerial practice → Landing cancel</strong>.</p><p>Each forward air has a clean hit and a softer follow-through. Practice landing the late hit into a jab in <strong>Training → Aerial practice → Landing hits</strong>.</p><p>Steer with the left stick and flick the right stick to swing in a separate direction. On keyboard, aim left/right/up/down with R/Y/T/G for P1 or numpad 4/6/8/2 for P2. On touch, flick outward from Smash. For a running back air, reverse direction with Jump and steer back along your original path. Try <strong>Aerial practice → Approach</strong>.</p><ul class="move-rows guide-airs">' +
         rows +
         '</ul>';
     }
@@ -1170,6 +1171,18 @@
     $('combo-replay').disabled = !(d.saved?.length || (d.source === 'record' && d.tape.length));
   }
   function updateHUD() {
+    const landing = world.spacingPractice?.pattern === 'landing' && world.spacingPractice;
+    const compare = $('hop-compare');
+    const peaks = [];
+    if (landing) {
+      for (const [peak, prefix] of [[landing.peak, ''], [landing.previousPeak, 'Previous: ']]) {
+        if (peak?.complete) peaks.push(prefix + (peak.short ? 'Short hop' : 'Full jump') + ' · ' +
+          Math.round(peak.floorY - peak.y) + ' px');
+      }
+    }
+    const comparison = peaks.join(' / ');
+    if (compare.textContent !== comparison) compare.textContent = comparison;
+    compare.hidden = !comparison;
     if (world.mode === 'adventure') return updateDispatchHUD();
     const confirmed = online.match?.confirmedWorld || world;
     const scores = confirmed.dogs;
@@ -2679,12 +2692,12 @@
       $('spacing-status').dataset.result = 'ready';
       $('spacing-status').textContent = isFootstoolPractice(practice) ? (pattern === 'footstool' ? 'Footstool rescue' : 'Tech a footstool') :
         pattern === 'cancel' ? 'Down + Attack' : isReversalPractice(practice) ? (pattern === 'reverse' ? 'Rival behind' : 'Rival ahead') :
-        pattern === 'landing' ? 'Tap Jump and hold ' + run : approach ? 'Jump past the shield' : 'Jump away from the shield';
+        pattern === 'landing' ? 'Hop or Jump · hold ' + run : approach ? 'Jump past the shield' : 'Jump away from the shield';
       message = isFootstoolPractice(practice) ? (pattern === 'footstool' ?
         'Your jumps are spent. Tap Attack to fall, then press Jump at the mint marks over the rival’s head. Hold Jump and steer ' + run + ' to the ledge.' :
         'Tap Attack to start. The rival will jump off your head. Tap Shield before you hit the floor to tech, or add a direction for a tech roll.') :
         pattern === 'cancel' ? 'Press Down + Attack. Try holding Shield only after touchdown. On the retry, start holding it as the chalk turns mint.' :
-        isReversalPractice(practice) ? reversalTip(practice) : pattern === 'landing' ? 'Short-hop ' + run + '. Tap Attack over the gold fork for a late hit or the green stripe for a clean hit. Center the direction and jab on landing.' : 'Running ' + run + '. ' + (approach
+        isReversalPractice(practice) ? reversalTip(practice) : pattern === 'landing' ? 'Hold Hop (E, LT/L2, or Hop on touch) and move ' + run + '. Attack at the gold fork for a late hit or the green stripe for a clean hit. Center and jab on landing. Retry with Jump to compare heights.' : 'Running ' + run + '. ' + (approach
         ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
         : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
     } else if (climb) {
@@ -3620,6 +3633,7 @@
       up: 'KeyW',
       down: 'KeyS',
       jump: 'Space',
+      hop: 'KeyE',
       walk: 'ShiftLeft',
       attack: 'KeyJ',
       smash: 'KeyI',
@@ -3634,6 +3648,7 @@
       up: 'ArrowUp',
       down: 'ArrowDown',
       jump: 'ShiftRight',
+      hop: 'Quote',
       walk: 'ControlRight',
       attack: 'Comma',
       smash: 'KeyN',
@@ -3866,6 +3881,7 @@
     const fromCenter = !i && touchPointers.get(walkPointer)?.dataset.touch;
     const walk = key('walk') || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
     const shield = key('shield') || down(pad, 4) || down(pad, 5);
+    const shortHop = key('hop') || down(pad, 6);
     const grounded = world.dogs[fighterIndex].ground >= 0;
     const gentleGuard = shield && grounded && (key('walk') || fromCenter);
     const gentleDown = y > 0 && !shield && (key('walk') || fromCenter === 'down');
@@ -3881,7 +3897,8 @@
       // Apply the air dodge's radial dead zone to the whole stick, including shallow angles.
       airDodgeX: digitalAim ? (left || right ? grabX : 0) : pad?.axes?.[0] || 0,
       airDodgeY: digitalAim ? y : pad?.axes?.[1] || 0,
-      jump: key('jump') || down(pad, 0),
+      jump: key('jump') || down(pad, 0) || shortHop,
+      shortHop,
       attack: key('attack') || down(pad, 2),
       smash: held.has(map.smash) || tapped('smash') || touchSmash || down(pad, 7),
       aimStick,
@@ -3892,7 +3909,7 @@
       shield,
       grab: key('grab') || down(pad, 3),
       tapped: {
-        jump: tapped('jump'),
+        jump: tapped('jump') || tapped('hop'),
         attack: tapped('attack'),
         smash: tapped('smash'),
         aimStick: !!(flick && touchTaps.has('aimStick')) ||
@@ -4139,6 +4156,12 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
       drill('platform', false, 'shield-drop');
+    }
+    else if (hash === '#training/short-hops') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode: 'training', p1: 'pip', p2: 'brisket', stage: 'picnic', fetch: false });
+      drill('spacing', false, 'landing');
     }
     else if (hash === '#training/landing-cancel') {
       menuScreen('match');

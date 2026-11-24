@@ -80,6 +80,7 @@
     x: 0,
     y: 0,
     jump: false,
+    shortHop: false,
     attack: false,
     smash: false,
     aimStick: false,
@@ -1999,6 +2000,7 @@
       hopWindow: 0,
       jumpBuffer: 0,
       heldRecoveryJump: false,
+      queuedShortHop: false,
       footstools: 0,
       footstoolLock: 0,
       jumpSquat: null,
@@ -2437,7 +2439,7 @@
       else if (aerial.airSide === 'back') aerial.airSide = 'forward';
       aerial.facing = f.face;
     }
-    if (!input.jump || squat.aerial) squat.short = true;
+    if (!input.jump || input.shortHop || squat.aerial) squat.short = true;
   }
   function bodyHeight(f) {
     const action = f.floorAction;
@@ -3107,6 +3109,7 @@
         this.finishChase('away');
     }
     resetSpacingPractice(pattern = 'approach', dir = 1, slow = true, shieldGrab = true) {
+      const previous = this.spacingPractice;
       this.resetTraining();
       const [f, guard] = this.dogs;
       let ground = this.stage === 'laundry' && dir < 0 ? 1 : 0;
@@ -3163,7 +3166,9 @@
         Object.assign(f, { x: middle - dir * gap / 2, y: floor.y, ground, face: dir,
           vx: dir * f.stats.speed, sprintDir: dir, stickTicks: 3, prev: { ...idleInput, x: dir, grabX: dir } });
         this.spacingPractice = { pattern, dir, slow, ground, mark: f.x + dir * softMark, cleanMark: f.x + dir * cleanMark,
-          phase: 'ready', time: 0, contact: '', timing: '', damage: 0, airborne: false, landing: null, outcome: '' };
+          phase: 'ready', time: 0, contact: '', timing: '', damage: 0, airborne: false, landing: null, outcome: '',
+          peak: null, previousPeak: previous?.pattern === 'landing' && previous.dir === dir
+            ? (previous.peak?.complete ? previous.peak : previous.previousPeak) : null };
         return;
       }
       const gap = approach ? 66 + f.stats.speed * 0.045 : f.stats.width + guard.stats.width + 1;
@@ -3239,6 +3244,15 @@
         return;
       }
       if (drill.pattern === 'cancel' && drill.landing !== null) drill.after++;
+      const peak = drill.peak;
+      if (peak && !peak.complete) {
+        // Compare the first jump only. A second jump or recovery can change its apex.
+        if (f.jumps === 0 || f.usedUp || f.stun || f.airDodge) drill.peak = null;
+        else {
+          if (f.y < peak.y) { peak.y = f.y; peak.x = f.x; }
+          if (f.vy >= 0 || f.ground >= 0) peak.complete = true;
+        }
+      }
       if (f.ground < 0) drill.airborne = true;
       else if (drill.airborne && drill.landing === null) {
         drill.landing = (f.x - guard.x) * drill.dir;
@@ -4755,7 +4769,8 @@
             a.queuedThrow = direction;
         }
       }
-      if (pressed('jump')) {
+      if (pressed('jump') || pressed('shortHop')) {
+        f.queuedShortHop = !!input.shortHop;
         f.jumpBuffer = inputWindow;
         const a = f.attack;
         const lastHit = a?.second || a;
@@ -5267,10 +5282,12 @@
     }
     advanceJumpSquat(f, input, dt) {
       if (!f.jumpSquat) {
+        const short = f.queuedShortHop && (f.jumpBuffer > 0 || f.heldRecoveryJump);
+        f.queuedShortHop = false;
         f.heldRecoveryJump = false;
         const run = f.run;
         const runDir = jumpRunDirection(f);
-        f.jumpSquat = { time: 0, short: false, aerial: null, runDir,
+        f.jumpSquat = { time: 0, short, aerial: null, runDir,
           turned: !!runDir && (f.face === -runDir || !!run.turnJump) };
         bufferSquatInput(f, input);
         f.run = null;
@@ -5287,6 +5304,10 @@
         return false;
       }
       f.vy = -f.stats.jump * (squat.short ? 0.60 : 1);
+      const drill = this.spacingPractice;
+      if (f.index === 0 && drill?.pattern === 'landing' && !drill.airborne) {
+        drill.peak = { short: squat.short, floorY: f.y, x: f.x, y: f.y, complete: false };
+      }
       if (squat.turned) {
         if (this.spacingPractice && f.index === 0) this.spacingPractice.turned = true;
         this.emit('turnJump', { f, dir: squat.runDir, point: { x: f.x, y: f.y } });
