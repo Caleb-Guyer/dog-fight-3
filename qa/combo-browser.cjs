@@ -392,6 +392,72 @@ async function testSoloCpu(page, mobile) {
   console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed CPU selection, replay and a learned shield punish.');
 }
 
+async function testFrameAdvance(page, mobile) {
+  await page.goto(root + '#training/landing-buffer');
+  const status = page.locator('#frame-status');
+  const button = id => mobile ? page.locator('#'+id).tap() : page.locator('#'+id).click();
+  const session = mobile && await page.context().newCDPSession(page);
+  const controls = {jump:'Space', down:'s', attack:'j'};
+  async function input(names) {
+    if (!mobile) {
+      for (const name of names) await page.keyboard.down(controls[name]);
+      return;
+    }
+    const points = [];
+    for (const name of names) {
+      const box = await page.locator('[data-touch="'+name+'"]').boundingBox();
+      points.push({id:points.length+1,x:box.x+box.width/2,y:box.y+box.height/2});
+      await session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points});
+    }
+  }
+  async function release() {
+    if (mobile) await session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    else for (const key of Object.values(controls)) await page.keyboard.up(key);
+  }
+  assert.match(await status.innerText(), /freeze on landing/i);
+  await input(['down','jump','attack']);
+  await page.clock.runFor(45);
+  await release();
+  await page.clock.runFor(1300);
+  const start = await status.innerText();
+  assert.match(start, /Frame \+0\s+Brisket · Landing recovery 18f/);
+  await page.clock.runFor(600);
+  assert.equal(await status.innerText(), start);
+  await input(['jump']);
+  if (mobile) await release(); // A quick touchscreen tap, queued until the first manual tick.
+  async function advance() {
+    if (mobile) await button('frame-step');
+    else await page.keyboard.press('BracketRight');
+    await page.clock.runFor(32);
+  }
+  for (let i=1;i<=18;i++) {
+    await advance();
+    const text = await status.innerText();
+    assert(text.includes('Frame +'+i+'\n'), text);
+    if (i === 10) {
+      assert.match(text, /Landing recovery 8f/);
+      assert.equal(text.includes('Jump held'), !mobile);
+    }
+  }
+  if (mobile) {
+    assert.match(await status.innerText(), /Brisket · Grounded/);
+    await button('frame-toggle');
+  } else {
+    assert.match(await status.innerText(), /Jump squat 1\/3/);
+    await release();
+    for (let i=0;i<3;i++) await advance();
+    assert.match(await status.innerText(), /Brisket · Rising/);
+    await page.keyboard.press('BracketLeft');
+  }
+  assert(await status.isHidden());
+  await button('frame-toggle');
+  assert.match(await status.innerText(), /Frame \+0/);
+  await button('reset-training');
+  assert(await status.isHidden());
+  assert(await page.locator('#frame-step').isHidden());
+  console.log((mobile ? 'Phone touch' : 'Desktop keyboard')+' passed landing freeze, exact frame counts, jump timing, resume and reset.');
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -455,6 +521,7 @@ async function testDevice(browser, mobile) {
     await testBraking(page, mobile);
     await testFootstools(page, mobile);
     await testSoloCpu(page, mobile);
+    await testFrameAdvance(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
