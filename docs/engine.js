@@ -237,6 +237,7 @@
         'Tap Attack three times for Heel Kick. For an aerial finish, press Jump, Forward and Attack together as Cross connects.',
       airAccel: 1060,
       airDrift: { speed: 314, brake: 1600, friction: 112 },
+      wallKick: { rise:715, push:224, frames:5 },
       gravity: 1.0,
       fallSpeed: 630,
       fastFallSpeed: 855,
@@ -353,6 +354,7 @@
         'Tap Attack for Ankle Tap, then again for Reel In. After the pull connects, tap Attack for Whiplash or press Special for Tug Rope.',
       airAccel: 715,
       airDrift: { speed: 258, brake: 1160, friction: 83 },
+      wallKick: { rise:624, push:334, frames:7 },
       gravity: 0.93,
       fallSpeed: 545,
       fastFallSpeed: 730,
@@ -1935,6 +1937,8 @@
       tumble: null,
       righting: 0,
       wallAction: null,
+      usedWallKick: false,
+      wallKickDir: 0,
       floorAction: null,
       techBuffer: 0,
       techLock: 0,
@@ -2383,6 +2387,8 @@
     if (attack.plunge) f.fastFall = false;
   }
   function restoreAir(f) {
+    f.usedWallKick = false;
+    f.wallKickDir = 0;
     f.footstools = 0;
     f.drop = 0;
     f.dropPlatform = -1;
@@ -3653,7 +3659,7 @@
       drill.outcome = outcome;
       this.emit('footworkResult', { f: this.dogs[0], outcome, remaining });
     }
-    resetWallPractice(side = 'left') {
+    resetWallPractice(side = 'left', runner = '') {
       this.resetTraining();
       const original = { stage: this.stage, dogs: this.dogs };
       this.stage = 'laundry';
@@ -3661,6 +3667,17 @@
       const inward = side === 'right' ? 1 : -1;
       const roof = this.terrain[inward === 1 ? 1 : 0];
       const lip = inward === 1 ? roof.x1 : roof.x2;
+      if (runner === 'pip' || runner === 'noodle') {
+        const hero = newFighter(runner,0), rival = newFighter(original.dogs[1].kind,1);
+        const wall = solidWalls.laundry.find(w => w.index === (inward === 1 ? 1 : 0) &&
+          w.left === (inward === 1) && w.top <= roof.y + 65 && w.bottom >= roof.y + 65);
+        Object.assign(hero, { x:wall.x - inward*hero.stats.width, y:roof.y+65+hero.stats.height*.52,
+          ground:-1, face:inward, jumps:1, vy:85 });
+        Object.assign(rival, { x:lip+inward*155, y:roof.y, ground:wall.index, face:-inward });
+        this.dogs = [hero,rival];
+        this.wallPractice = { phase:'ready', runner, side, inward, original, roof:wall.index, outcome:'' };
+        return;
+      }
       this.dogs = [newFighter('noodle', 0), newFighter('pip', 1)];
       const [noodle, pip] = this.dogs;
       Object.assign(noodle, { x: lip - inward * 58, y: roof.y + 121, face: inward, damage: 90, jumps: 1 });
@@ -3672,6 +3689,16 @@
         damage: this.trainingDamage,
       });
       this.wallPractice = { phase: 'ready', time: 0, side, inward, swung: false, outcome: '', original };
+    }
+    finishWallReturn(f, route, platform) {
+      const d = this.wallPractice;
+      if (!d?.runner || f.index !== 0 || d.phase !== 'return') return;
+      d.phase = 'done';
+      d.route = route;
+      d.crossed = platform !== undefined && platform !== d.roof;
+      d.outcome = route === 'out' ? 'missed' : f.usedWallKick && f.jumps && !f.usedUp ? 'saved' : 'returned';
+      d.jumps = f.jumps;
+      this.emit('wallReturn', { f });
     }
     resetShieldPractice(pattern = 'strike', worn = true) {
       this.resetTraining();
@@ -4378,7 +4405,10 @@
         }
       }
       const wallDrill = this.wallPractice;
-      if (wallDrill?.phase === 'ready') {
+      if (wallDrill?.runner && wallDrill.phase === 'ready') {
+        if (Math.abs(input1.x) < .28 && !input1.jump && !input1.tapped?.jump && !input1.special && !input1.tapped?.special) return;
+        wallDrill.phase = 'return';
+      } else if (wallDrill?.phase === 'ready') {
         wallDrill.time += dt;
         this.dogs[0].prev = { ...input1 };
         if (wallDrill.time + 1e-8 < 0.75) return;
@@ -4580,6 +4610,9 @@
     captureInput(f, input) {
       const was = f.prev;
       const pressed = (key) => input.tapped?.[key] || (input[key] && !was[key]);
+      const side = Math.sign(input.x);
+      f.wallKickDir = f.kit.wallKick && !f.usedWallKick && f.ground < 0 && !f.ledge && !f.tumble && !this.hitStop &&
+        Math.abs(input.x) >= .72 && (was.x * side < .55 || pressed('jump')) ? side : 0;
       const grabX = input.grabX ?? input.x;
       if (!input.jump || (f.ground < 0 && !f.attack?.airSide && !f.airDodge) ||
           f.stockLift || f.grip || f.floorAction || f.stun || f.clashRecoil)
@@ -4917,6 +4950,27 @@
         first = { wall, dir, x: contactX, feet: y + dy * enter, t: enter };
       }
       return first;
+    }
+    wallForKick(f, dir) {
+      const chest = f.y - f.stats.height * .52;
+      return (this.layout?.walls || solidWalls[this.stage]).find(wall =>
+        (wall.left ? -1 : 1) === dir && chest >= wall.top && chest <= wall.bottom &&
+        Math.abs((f.x - wall.x) * dir - f.stats.width) <= 7);
+    }
+    kickOffWall(f, wall, dir) {
+      const kick = f.kit.wallKick;
+      f.wallAction = { type:'wallKick', time:0, duration:kick.frames/60, wall, dir };
+      f.usedWallKick = true;
+      f.x = wall.x + dir * f.stats.width;
+      f.face = dir;
+      f.vx = dir * kick.push;
+      f.vy = -kick.rise;
+      f.fastFall = f.cutJump = f.heldRecoveryJump = false;
+      f.jumpBuffer = f.coyote = f.takeoffWindow = 0;
+      f.ledgeLock = Math.max(f.ledgeLock, f.wallAction.duration);
+      if (this.mode === 'solo' && f.index === 1 && this.cpuLevel === 'rival')
+        this.bot.wallReturn = { platform:wall.index, inward:-dir, until:this.time + .95 };
+      this.emit('wallKick', { f, dir, wall, point:{x:wall.x, y:f.y - f.stats.height*.52} });
     }
     wallAhead(f, horizon) {
       let { x, y, vx, vy } = f;
@@ -5429,12 +5483,18 @@
         const throwFollow = f.command?.type === 'grab' && current.grabCancel;
         if (chainTap || jumpFollow || ropeFollow || throwFollow) f.attack = null;
       }
+      if (f.wallKickDir && !grounded && !f.attack && !f.command && !f.grip && !f.tumble && !f.stun &&
+          !f.reboundTime && !f.wallAction && !f.airDodge && !f.dodge && !f.guardBuffer && !f.ledgeTrump &&
+          !f.impactLag && !f.clashRecoil && (!f.encounter || f.encounter.kind === f.kind)) {
+        const wall = this.wallForKick(f, f.wallKickDir);
+        if (wall) this.kickOffWall(f, wall, f.wallKickDir);
+      }
       const ready =
         !f.attack &&
         !f.clashRecoil &&
         !f.airDodge &&
         !f.ledgeTrump &&
-        f.wallAction?.type !== 'wallTechJump' &&
+        f.wallAction?.type !== 'wallTechJump' && f.wallAction?.type !== 'wallKick' &&
         f.stun <= 0 &&
         f.dodge <= 0 &&
         f.landingLag <= 1e-8;
@@ -5673,7 +5733,7 @@
         if (!f.stun) f.vx += input.x * 175 * dt;
       } else if (f.ground >= 0 && f.stun > 0 && f.reaction?.planted) {
         f.vx = toward(f.vx, 0, f.kit.footwork.traction * 0.45 * dt);
-      } else if (f.stun > 0 || f.ledgeTrump || f.wallAction?.type === 'wallTechJump') {
+      } else if (f.stun > 0 || f.ledgeTrump || f.wallAction?.type === 'wallTechJump' || f.wallAction?.type === 'wallKick') {
         f.vx *= Math.pow(0.68, dt);
         f.vx += input.x * 100 * dt;
       } else if (f.ground >= 0 && f.attack?.brake) {
@@ -5809,6 +5869,7 @@
               return;
             }
             f.ground = landing;
+            if (this.wallPractice?.runner) this.finishWallReturn(f, 'landed', landing);
             if (f.attack?.airNeutral) f.attack.airNeutral = false;
             if (f.command?.airOnly) f.command = null;
             f.y = this.terrain[landing].y;
@@ -5958,6 +6019,7 @@
       cancelCharge(f);
       f.invuln = Math.max(0, guardFrames / 60 - 1e-8);
       f.jumpBuffer = f.guardBuffer = f.chainWindow = 0;
+      if (this.wallPractice?.runner) this.finishWallReturn(f, 'ledge', edge.index);
       restoreAir(f);
       const drill = this.trumpPractice;
       if (
@@ -7369,6 +7431,7 @@
       this.emit('ko', { f, x: f.x, y: f.y, stageWidth: this.stageWidth, remaining: f.stocks });
     }
     knockouts(out) {
+      if (this.wallPractice?.runner && out.includes(this.dogs[0])) this.finishWallReturn(this.dogs[0], 'out');
       if (this.edgePractice?.timeCatch) this.finishEdgePractice('missed');
       if (this.comboPractice) this.comboPractice.phase = 'done';
       if (this.survivalPractice && out.includes(this.dogs[0])) {
@@ -7982,6 +8045,14 @@
       if (f.stockLift) return this.cpuLiftExit(f, foe);
       brain.jumpHold = Math.max(0, brain.jumpHold - dt);
       const result = { ...idleInput, jump: brain.jumpHold > 0 };
+      if (brain.wallReturn) {
+        const route = brain.wallReturn, floor = this.terrain[route.platform];
+        const lip = route.inward > 0 ? floor.x1 : floor.x2;
+        if (f.usedWallKick && !f.grip && !f.tumble && !f.stun && !f.ledgeTrump && !f.attack &&
+            this.time < route.until && (f.vy < 0 || f.y < floor.y+45 ||
+              (Math.abs(f.x + f.vx*4/60 - lip) < 33 && f.y < floor.y+78))) return { ...idleInput, x:route.inward };
+        brain.wallReturn = null;
+      }
       if (this.grapple) {
         const grip = this.grapple;
         if (brain.pressure) {
@@ -8308,6 +8379,11 @@
         return result;
       }
       if (unsafe) {
+        if (this.cpuLevel === 'rival' && f.kit.wallKick && !f.usedWallKick && !f.jumps && !f.attack &&
+            !f.tumble && !f.stun && !f.wallAction && !f.airDodge && f.y > closest.y + 78) {
+          const away = f.x < (closest.x1 + closest.x2)/2 ? -1 : 1;
+          if (this.wallForKick(f, away)) return { ...idleInput, x:away, tapped:{jump:true} };
+        }
         brain.platformRoute = null;
         brain.hop = null;
         result.x = Math.sign(inside - f.x);

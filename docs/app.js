@@ -355,6 +355,9 @@
       tone(175, 64, 0.095, 0, 'triangle', 0.055);
     } else if (name === 'landingCancel') {
       tone(540, 760, 0.055, 0, 'triangle', 0.055);
+    } else if (name === 'wallKick') {
+      tone(135, 64, .05, 0, 'triangle', .05);
+      tone(detail.f.kind === 'pip' ? 590 : 405, 790, .075, .029, 'square', .023);
     } else if (name === 'wallTech' || name === 'wallTechJump') {
       tone(630, 920, 0.052, 0, 'triangle', 0.075);
       if (name === 'wallTechJump') tone(870, 1440, 0.082, 0.04, 'square', 0.024);
@@ -955,7 +958,7 @@
         '<h3 class="guide-section">After a knockout</h3><p>Watch the lamps on the airmail lift. When they turn mint, tap Down, a side, Jump, or an aerial move to leave. Leaving early gives you more protection on landing. The last gold mail tag goes dark when you can be hit again. Try both sides in <strong>Training → Launch practice → Take the lift</strong> and <strong>Catch the return</strong>.</p>' +
         '<h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><p>On a strong meteor, tap Shield just before the platform to stop the bounce. Over open air, tap a fresh Jump or Up + Special when the gold streaks turn mint, then steer home. Try <strong>Spike landing</strong> and <strong>Offstage spike</strong>.</p><ul class="move-rows guide-defense">' +
         rows +
-        '</ul><h3 class="guide-section">At a wall</h3><p>Try <strong>Training → Wall tech practice</strong> to take Pip’s Back Heel into either wall of Laundry Line.</p><ul class="move-rows guide-wall">' +
+        '</ul><h3 class="guide-section">At a wall</h3><p>Pip and Noodle can flick away from a solid wall once per airtime. Pip kicks higher, and Noodle travels farther sideways. The kick keeps your remaining air jump and Up Special. In <strong>Training → Wall tech practice</strong>, choose a dog’s wall jump to try both roofs, or take Pip’s Back Heel to practice a wall tech.</p><ul class="move-rows guide-wall">' +
         guideMoveRow(
           {
             label: 'Wall tech',
@@ -2155,6 +2158,19 @@
   }
   function wallFeedback(name) {
     const status = $('wall-status');
+    const d = world.wallPractice;
+    if (d.runner) {
+      if (name === 'wallKick') {
+        status.dataset.result = 'kick';
+        status.textContent = world.dogs[0].jumps ? 'Wall jump · air jump saved' : 'Wall jump · air jump already spent';
+      } else if (name === 'wallReturn') {
+        status.dataset.result = d.outcome;
+        status.textContent = d.route === 'out' ? 'Missed the roofs' :
+          (d.route === 'ledge' ? 'Caught ' : 'Landed on ') + (d.crossed ? 'far roof' : 'near roof') +
+          ' · ' + (d.jumps ? 'air jump saved' : 'air jump spent');
+      }
+      return;
+    }
     if (world.wallPractice.phase === 'done' && status.dataset.result !== 'flight') return;
     const feedback = {
       wallCue: [
@@ -2569,7 +2585,7 @@
       world.spacingPractice?.slow ?? true, world.spacingPractice?.pattern === 'wavebounce' ? world.spacingPractice.guard : true);
     else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true, world.escapePractice?.baseline);
     else if (platform) world.resetPlatformPractice(pattern, world.platformPractice?.slow ?? true);
-    else if (wall) world.resetWallPractice(pattern);
+    else if (wall) world.resetWallPractice(pattern, direction);
     else if (shield) world.resetShieldPractice(pattern, direction ?? world.shieldPractice?.worn ?? true);
     else if (air) world.resetAirPractice(pattern, practiceSide);
     else if (roll) world.resetLedgeRollPractice(pattern, practiceSide);
@@ -2742,9 +2758,13 @@
         disc: 'Tap Attack to start. Clover throws Round Trip. On the third light, ' + discInput + ' to bat the disc away.',
       }[pattern];
     } else if (wall) {
+      const d = world.wallPractice;
+      for (const kind of ['pip','noodle']) $('wall-'+kind).setAttribute('aria-pressed', String(kind === d.runner));
       $('wall-status').dataset.result = 'ready';
-      $('wall-status').textContent = pattern === 'right' ? 'Right wall' : 'Left wall';
-      message =
+      $('wall-status').textContent = d.runner ? player.stats.name + ' · one air jump left' : pattern === 'right' ? 'Right wall' : 'Left wall';
+      const away = d.inward === 1 ? 'left' : 'right';
+      message = d.runner ? 'Flick '+away+' off the brickwork. Steer back to the near roof, or hold '+away+
+        ' to cross the gap. Retry with Jump alone to spend your air jump instead.' :
         'You’re Noodle at 90%. Tap Shield when Pip’s Back Heel hits. Hold Jump at the wall to kick away.';
     } else if (trump) {
       const defend = pattern === 'defend';
@@ -2999,9 +3019,10 @@
     $('launch-slow').setAttribute('aria-pressed', String(d.slow));
     $('game').focus({ preventScroll: true });
   };
-  $('wall-training').onclick = $('wall-retry').onclick = () =>
-    drill('wall', false, world.wallPractice?.side || 'left');
-  $('wall-side').onclick = () => drill('wall', false, world.wallPractice.side === 'left' ? 'right' : 'left');
+  $('wall-training').onclick = () => drill('wall', false, world.wallPractice?.side || 'left');
+  $('wall-retry').onclick = () => drill('wall', false, world.wallPractice.side, world.wallPractice.runner);
+  for (const kind of ['pip','noodle']) $('wall-'+kind).onclick = () => drill('wall', false, world.wallPractice.side, kind);
+  $('wall-side').onclick = () => drill('wall', false, world.wallPractice.side === 'left' ? 'right' : 'left', world.wallPractice.runner);
   $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'kick');
   for (const button of $('shield-patterns').querySelectorAll('button:not(#shield-strength)'))
     button.onclick = () => drill('shield', false, button.id.slice('shield-'.length));
@@ -4081,6 +4102,12 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', stage:'picnic', fetch:false });
       drill('spacing', false, 'footstool');
+    }
+    else if (hash === '#training/wall-jumps') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'laundry', fetch:false });
+      drill('wall', false, 'left', 'pip');
     }
     else if (hash === '#training/angled-tilts') {
       menuScreen('match');

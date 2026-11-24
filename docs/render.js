@@ -11,7 +11,7 @@
   const mint = '#9fe4d7';
   const parryDuration = 12 / 60;
   const shieldDropDuration = 10 / 60;
-  const wallOptions = new Set(['wallTech', 'wallTechJump', 'wallBounce']);
+  const wallOptions = new Set(['wallTech', 'wallTechJump', 'wallBounce', 'wallKick']);
   const chargeColors = { pip: '#ee9775', brisket: gold, noodle: '#e5b47b', clover: lilac };
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const snap = (value, cell = 3) => Math.round(value / cell) * cell;
@@ -253,7 +253,8 @@
       ];
     }
     if (f.ledgeTrump) return ['ledgeTrump', clamp(f.ledgeTrump.time / f.ledgeTrump.duration, 0, 1)];
-    if (f.wallAction) return [f.wallAction.type, clamp(f.wallAction.time / f.wallAction.duration, 0, 1)];
+    if (f.wallAction) return [f.wallAction.type === 'wallKick' ? 'wallTechJump' : f.wallAction.type,
+      clamp(f.wallAction.time / f.wallAction.duration, 0, 1)];
     if (f.tumble) return ['tumble', 0];
     if (f.clashRecoil) return ['clashRecoil', f.clashRecoil.time / f.clashRecoil.duration];
     if (f.stun > 0) {
@@ -1560,7 +1561,7 @@
     } else if (state === 'ledgeTrump') {
       face = -f.ledgeTrump.dir;
       spriteTime = reduced.matches ? 0 : f.ledgeTrump.time;
-    } else if (f.wallAction?.type === state) {
+    } else if (f.wallAction && (f.wallAction.type === state || state === 'wallTechJump')) {
       // The paws face the surface even when the fighter's velocity already points away.
       face = -f.wallAction.dir;
       spriteTime = f.wallAction.time;
@@ -1749,7 +1750,13 @@
     ctx.translate(Math.round(e.x), Math.round(e.y));
     ctx.scale(e.face, 1);
     ctx.globalAlpha *= Math.min(1, (1 - p) * 2);
-    if (e.type === 'wallBounce') {
+    if (e.type === 'wallKick') {
+      for (const y of [-3,2,7]) {
+        const offset = (7-y)*.4;
+        pixelLine(ctx, 1+drift+offset, y, 8+drift+offset, y-4, '#91683f', 3, 2);
+        pixelLine(ctx, 3+drift+offset, y-2, 8+drift+offset, y-5, gold, 2, 2);
+      }
+    } else if (e.type === 'wallBounce') {
       // A stubby impact notch and a loose flake follow the missed shoulder check.
       pixelLine(ctx, -2, -Math.min(4, lift), -2, Math.min(4, drop), '#70525b', 4, 2);
       pixelLine(ctx, -2, 0, 3, -2, '#eaa57a', 3, 2);
