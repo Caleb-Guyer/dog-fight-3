@@ -1434,7 +1434,7 @@
     document.body.classList.toggle('training-active', config.mode === 'training');
     $('lobby').hidden = true;
     $('match').hidden = false;
-    view = new FightView();
+    view = new FightView($('blast-radar'));
     view.shakeEnabled = settings.shake;
     world = new Battle(config, (name, e) => {
       view.event(name, e);
@@ -2269,8 +2269,14 @@
     let label, message;
     if (name === 'survivalReady' || name === 'survivalStart') {
       label = name === 'survivalReady' ? 'Tap Attack to start' : move;
-      message = name === 'survivalReady' ? 'Take ' + move + ' with the stick centered. Tap Attack to retry from the same mark.' :
+      message = name === 'survivalReady' && d.study ? 'Tap Attack to take the throw. At impact, change your aim to compare the paths, then tap Attack to launch.' :
+        name === 'survivalReady' ? 'Take ' + move + ' with the stick centered. Tap Attack to retry from the same mark.' :
         aim + ' at the hit spark. Then steer ' + inward + ' toward the ledge.';
+    } else if (name === 'survivalAim') {
+      const path = d.preview.path;
+      label = path.zone ? 'Crosses ' + path.zone + ' boundary in ' + path.ticks + 'f' :
+        path.contact ? 'Reaches the ' + path.contact + ' in ' + path.ticks + 'f' : 'Control returns inside the boundary';
+      message = 'Change your stick direction to redraw the path. Tap Attack to commit that angle, then steer back toward the stage.';
     } else if (name === 'blastThreat') {
       label = 'Blast line · aim now';
     } else if (name === 'launchDI') {
@@ -2561,7 +2567,7 @@
       tip.textContent = result[1];
     }
   }
-  function drill(ledge, fromHang = false, pattern = 'strike', direction) {
+  function drill(ledge, fromHang = false, pattern = 'strike', direction, study) {
     if (!world) return;
     setFrameMode('live');
     const launch = ledge === 'launch';
@@ -2587,13 +2593,13 @@
     drillSide = launch || wall || shield || footwork || edge || freshness || wave || combo || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
-    view = new FightView();
+    view = new FightView($('blast-radar'));
     if (chase) world.resetChasePractice(pattern, direction ?? world.chasePractice?.dir ?? 1, world.chasePractice?.slow ?? true);
     else if (meteor) world.resetMeteorPractice(pattern, direction ?? world.meteorPractice?.dir ?? 1,
       world.meteorPractice?.slow ?? true, world.meteorPractice?.baseline ?? 100);
     else if (stock) world.resetStockPractice(pattern, direction ?? world.stockPractice?.dir ?? 1, world.stockPractice?.slow ?? true);
     else if (survival) world.resetSurvivalPractice(direction ?? world.survivalPractice?.dir ?? 1, world.survivalPractice?.slow ?? true,
-      world.survivalPractice?.baseline);
+      world.survivalPractice?.baseline, study);
     else if (juggle) world.resetLaunchPractice(pattern, direction ?? world.launchPractice?.dir ?? 1,
       world.launchPractice?.slow ?? true, world.launchPractice?.chase ?? false);
     else if (launch) world.resetLaunchPractice();
@@ -2640,6 +2646,8 @@
     const launchOptions = world.survivalPractice || world.stockPractice || world.meteorPractice || world.chasePractice ||
       (juggle && world.launchPractice);
     $('launch-side').hidden = $('launch-slow').hidden = !launchOptions;
+    $('launch-study').hidden = !survival;
+    $('launch-study').setAttribute('aria-pressed', String(!!world.survivalPractice?.study));
     if (launch) {
       $('launch-throw').setAttribute('aria-pressed', String(!launchOptions));
       $('launch-juggle').setAttribute('aria-pressed', String(juggle));
@@ -3037,6 +3045,10 @@
   $('launch-edge-spike').onclick = () => drill('launch', false, 'spikeEdge');
   $('launch-stock-return').onclick = () => drill('launch', false, 'stockReturn');
   $('launch-survival').onclick = () => drill('launch', false, 'survival');
+  $('launch-study').onclick = () => {
+    const d = world.survivalPractice;
+    drill('launch', false, 'survival', d.dir, !d.study);
+  };
   $('launch-stock-catch').onclick = () => drill('launch', false, 'stockCatch');
   $('launch-side').onclick = () => {
     const d = world.survivalPractice || world.meteorPractice || world.stockPractice || world.chasePractice || world.launchPractice;
@@ -3312,6 +3324,7 @@
     $('freshness-readout').hidden = $('wave-readout').hidden = $('combo-readout').hidden = true;
     document.body.classList.add('playing', 'adventure-active');
     saveProgress({ room: index, checkpoint, pending: '' });
+    $('blast-radar').hidden = true;
     view = new window.DispatchView();
     view.shakeEnabled = settings.shake;
     noticeUntil = 0;
@@ -4092,8 +4105,9 @@
         const confirmed = online.match?.confirmedWorld;
         const waitingOnKO = confirmed && (world.end !== null && confirmed.end === null ||
           world.suddenDeath?.round !== confirmed.suddenDeath?.round);
-        view.draw($('game'), waitingOnKO ? confirmed : world, frameLab.mode === 'frozen' ? 1/60 : dt,
-          frameLab.mode === 'frozen' ? frameLab.renderTime : now);
+        const studying = !!world.survivalPractice?.preview;
+        view.draw($('game'), waitingOnKO ? confirmed : world, studying ? 0 : frameLab.mode === 'frozen' ? 1/60 : dt,
+          studying ? world.time : frameLab.mode === 'frozen' ? frameLab.renderTime : now);
       }
     }
     requestAnimationFrame(frame);
@@ -4110,6 +4124,11 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/blast-radar') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'pip', p2:'clover', stage:'picnic', fetch:false });
+      drill('launch', false, 'survival', 1, true);
     } else if (hash === '#training/landing-buffer') {
       menuScreen('match');
       afterStory = null;

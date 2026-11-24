@@ -13,12 +13,12 @@
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="./style.css?v=corner-pressure-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
-    <link rel="stylesheet" href="./screen.css?v=short-hops-1" />
+    <link rel="stylesheet" href="./screen.css?v=blast-radar-1" />
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=angled-tilts-1"></script>
     <script defer src="./arena-art.js?v=bandstand-1"></script>
-    <script defer src="./engine.js?v=corner-pressure-1"></script>
-    <script defer src="./render.js?v=corner-pressure-1"></script>
+    <script defer src="./engine.js?v=blast-radar-1"></script>
+    <script defer src="./render.js?v=blast-radar-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -30,9 +30,9 @@
     <script defer src="./dispatch-film.js?v=widefilm-1"></script>
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=stock-return-1"></script>
-    <script defer src="./dispatch-view.js?v=stocks-1"></script>
+    <script defer src="./dispatch-view.js?v=blast-radar-1"></script>
     <script defer src="./online.js?v=corner-pressure-1"></script>
-    <script defer src="./app.js?v=corner-pressure-1"></script>
+    <script defer src="./app.js?v=blast-radar-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -289,6 +289,8 @@
             tabindex="-1"
             aria-label="Dog Fight 3 arena. Keyboard controls are available from the Controls button."
           ></canvas>
+          <canvas id="blast-radar" width="160" height="108" role="img"
+            aria-label="Blast radar. Square marks player one, diamond marks player two. The border is the knockout boundary." hidden></canvas>
           <div id="hud" class="hud"></div>
           <div id="dispatch-hud" class="dispatch-hud" hidden>
             <div class="runner-meter">
@@ -506,6 +508,7 @@
             <button id="launch-juggle" type="button" class="utility" aria-pressed="false">Escape the juggle</button>
             <button id="juggle-chase" type="button" class="utility" aria-pressed="false" hidden>Chase the drift</button>
             <button id="launch-survival" type="button" class="utility" aria-pressed="false">Survival DI</button>
+            <button id="launch-study" type="button" class="utility" aria-pressed="false" hidden>Study launch</button>
             <button id="launch-lock" type="button" class="utility" aria-pressed="false">Jab lock</button>
             <button id="launch-escape" type="button" class="utility" aria-pressed="false">Escape the lock</button>
             <button id="launch-floor-spike" type="button" class="utility" aria-pressed="false">Spike landing</button>

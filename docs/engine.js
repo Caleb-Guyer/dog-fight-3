@@ -115,8 +115,9 @@
   const maxDI = (18 * Math.PI) / 180;
   const verticalLaunch = Math.sin(65 * Math.PI / 180);
   const stockMinutes = [1, 3, 7, 0];
-  const blastZone = (x, y, width, inset = 0) => x < -115 + inset ? 'left' : x > width + 115 - inset ? 'right' :
-    y < topBlastY ? 'top' : y > 765 ? 'bottom' : '';
+  const blastSideMargin = 115, bottomBlastY = 765;
+  const blastZone = (x, y, width, inset = 0) => x < -blastSideMargin + inset ? 'left' : x > width + blastSideMargin - inset ? 'right' :
+    y < topBlastY ? 'top' : y > bottomBlastY ? 'bottom' : '';
   function launchInfluence(vx, vy, input) {
     const speed = Math.hypot(vx, vy), stick = Math.hypot(input.x, input.y);
     if (!speed || stick <= 0.2) return { x: vx, y: vy, angle: 0, scale: 1 };
@@ -2852,7 +2853,7 @@
       this.dogs[0].damage = 90;
       this.launchPractice = { phase: 'ready', time: 0, grabStarted: false };
     }
-    resetSurvivalPractice(dir = 1, slow = true, damage) {
+    resetSurvivalPractice(dir = 1, slow = true, damage, study = this.survivalPractice?.study ?? false) {
       this.resetTraining();
       const [dog, rival] = this.dogs;
       const ground = this.terrain.reduce((best, surface, i, all) => {
@@ -2876,7 +2877,25 @@
       Object.assign(rival, { x: lip - dir * (forehand ? 64 : 14), y: floor.y, face, ground });
       Object.assign(dog, { x: rival.x + face * gap, y: floor.y, face: -face, ground, damage: baseline });
       this.survivalPractice = { pattern: 'survival', dir, slow, baseline, ground, lip, phase: 'ready', ticks: 0, moveId,
-        grabSent: false, released: false, free: false, angle: 0, scale: 1, zone: '', outcome: '', trace: [], previous: null };
+        grabSent: false, released: false, free: false, angle: 0, scale: 1, zone: '', outcome: '', trace: [], previous: null,
+        study, preview:null, lockedAim:null, studyPressed:false };
+    }
+    studySurvivalLaunch(d, input) {
+      const f = this.dogs[0], prior = d.preview;
+      if (!prior || input.x !== prior.aim.x || input.y !== prior.aim.y) {
+        const aim = { x:input.x, y:input.y };
+        const velocity = launchInfluence(f.vx, f.vy, aim);
+        const points = [{x:f.x, y:f.y}];
+        const path = this.projectLaunch(f, velocity.x, velocity.y, points);
+        d.preview = { aim, points, path };
+        this.emit('survivalAim', {f});
+      }
+      const launch = prior && (input.tapped?.attack || (input.attack && !d.studyPressed));
+      d.studyPressed = !!input.attack;
+      if (!launch) return true;
+      d.lockedAim = d.preview.aim;
+      d.preview = null;
+      return false;
     }
     survivalInput() {
       const d = this.survivalPractice;
@@ -4130,11 +4149,11 @@
       else if (f.ground >= 0) this.finishJuggle(d.wiggled && !d.spent ? 'clean' : 'landed');
       else if (f.ledge) this.finishJuggle('ledge');
     }
-    projectLaunch(f, vx, vy) {
+    projectLaunch(f, vx, vy, points) {
       const dt = 1 / 60, drag = Math.pow(0.68, dt);
       const stop = f.tumble?.meteor && (f.jumps || !f.usedUp)
         ? Math.min(f.stun, moves[f.tumble.meteor].meteor * dt) : f.stun;
-      const path = { x: f.x, y: f.y, ticks: 0, zone: '', drop: f.drop, dropPlatform: f.dropPlatform };
+      const path = { x: f.x, y: f.y, ticks: 0, zone: '', contact:'', drop: f.drop, dropPlatform: f.dropPlatform };
       // A wall, landing or first actionable frame ends the forecast. Each can change the flight.
       for (let n = 1; n * dt < stop - 1e-8; n++) {
         const x = path.x, y = path.y, time = this.time + n * dt;
@@ -4143,10 +4162,14 @@
         path.x += vx * dt;
         path.y += vy * dt;
         path.ticks = n;
+        if (points) points.push({x:path.x, y:path.y});
         path.drop = Math.max(0, path.drop - dt);
         const terrain = !this.layout && this.stage === 'laundry' ? platforms(this.stage, time) : this.terrain;
-        if (this.wallContact(f, x, y, path.x, path.y) ||
-            (vy >= 0 && this.landingSurface(path, y, x, f.tumble?.meteor ? dt : 0, terrain, time) >= 0)) break;
+        if (this.wallContact(f, x, y, path.x, path.y)) { path.contact = 'wall'; break; }
+        if (vy >= 0 && this.landingSurface(path, y, x, f.tumble?.meteor ? dt : 0, terrain, time) >= 0) {
+          path.contact = 'floor';
+          break;
+        }
         path.zone = blastZone(path.x, path.y, this.stageWidth, this.blastInset(path.ticks));
         if (path.zone) break;
       }
@@ -4175,7 +4198,8 @@
     }
     releaseLaunch(f, input) {
       const raw = { x: f.vx, y: f.vy };
-      const v = launchInfluence(f.vx, f.vy, input);
+      const aim = f.index === 0 && this.survivalPractice?.lockedAim;
+      const v = launchInfluence(f.vx, f.vy, aim || input);
       f.vx = v.x;
       f.vy = v.y;
       f.tumble.pending = false;
@@ -4284,6 +4308,12 @@
       if (exercise?.consumeAttack) {
         exercise.consumeAttack = !!input1.attack;
         input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
+      }
+      if (exercise?.study && exercise.phase === 'active' && exercise.released &&
+          !exercise.lockedAim && this.dogs[0].tumble?.pending) {
+        if (this.studySurvivalLaunch(exercise, input1)) return;
+        exercise.consumeAttack = !!input1.attack;
+        input1 = { ...input1, attack:false, tapped:{ ...input1.tapped, attack:false } };
       }
       let meteorDrill = this.meteorPractice;
       if (meteorDrill?.phase === 'ready' || meteorDrill?.phase === 'done') {
@@ -8720,6 +8750,8 @@
     arenas,
     platforms,
     topBlastY,
+    bottomBlastY,
+    blastSideMargin,
     Battle,
     idleInput,
     clamp,

@@ -232,6 +232,10 @@ In **Training → Combo escape → Crouch counter**, choose Brisket and tap Atta
 
 On your last stock, a double chevron and a two-note cue warn when a centered stick would take you across a blast boundary before you regain control. In open air, you can tap Shield toward the stage in the final few frames of hitstun to dodge back as soon as you can act. Near an incoming floor or wall, the same Shield tap attempts a tech.
 
+The **blast radar** appears near a knockout boundary, when a dog leaves the camera, or during Sudden Death. The square marks P1, the diamond marks P2, and a short trail shows each dog's direction of travel. The coral border shows where a stock is lost. Moving platforms and the narrowing Sudden Death boundaries update live.
+
+Choose **Study launch** in Survival DI to stop at the hit. Change your aim to preview the flight until you regain control, touch a surface, or cross a blast line. Tap Attack to commit the displayed angle. In the Picnic setup, compare a centered stick with Down against Clover’s Forehand Pass, then use your air dodge and jump to make it back to the ledge. [Study the launch on Picnic](https://caleb-guyer.github.io/dog-fight-3/#training/blast-radar)
+
 In **Training → Launch practice → Survival DI**, take your chosen rival’s throw at the outside lip. Tap Attack to start with the stick centered. After the ring-out, tap Attack to retry at the same damage. Steer during the freeze. At the mint arrow, point diagonally up toward the stage and tap Shield, then use your jump and recovery to reach the ledge. The dashed gold trail shows your previous flight and the mint trail shows this one. Switch sides, change your starting damage, or turn off half speed to rehearse the matchup at match speed.
 
 **Landing tech.** Tap Shield in the last 11 frames before your tumbling dog hits a platform. Tap it alone for a quick recovery in place. Add left or right to roll through a waiting opponent. A roll covers more ground and leaves a longer opening at the end. A mistimed press starts a 28-frame lockout, so timing beats repeated taps.

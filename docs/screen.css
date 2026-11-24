@@ -173,6 +173,16 @@ body:is(.playing, .cinema-active) .full-button span {
   border: 0;
   outline: 0;
 }
+#blast-radar {
+  position: absolute;
+  z-index: 1;
+  top: 27%;
+  left: var(--left-edge);
+  width: clamp(80px, 9vw, 140px);
+  height: auto;
+  pointer-events: none;
+  image-rendering: pixelated;
+}
 .match-top {
   position: absolute;
   z-index: 2;

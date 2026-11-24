@@ -2067,7 +2067,8 @@
       spark(ctx, e.x, e.y, row === undefined ? radius : radius * 0.38, e.color, p, e.type === 'burst');
   }
   class FightView {
-    constructor() {
+    constructor(radar = null) {
+      this.radar = radar;
       this.effects = [];
       this.pendingLaunch = null;
       this.launchTrace = null;
@@ -2529,6 +2530,21 @@
           pixelLine(ctx, boundary, y, boundary, y + 11, ink, 5, 2);
           pixelLine(ctx, boundary, y + 2, boundary, y + 9, '#ec977b', 3, 2);
         }
+        const preview = survival.preview;
+        if (preview) {
+          const color = preview.path.zone ? '#ff987d' : mint;
+          const chest = a.stats.height * .52;
+          for (let i = 1; i < preview.points.length; i += 2) {
+            const p = preview.points[i - 1], q = preview.points[i];
+            pixelLine(ctx, p.x, p.y - chest, q.x, q.y - chest, ink, 5, 2);
+            pixelLine(ctx, p.x, p.y - chest, q.x, q.y - chest, color, 3, 2);
+          }
+          const x = preview.path.x, y = preview.path.y - chest;
+          for (const [tint, size] of [[ink,6],[color,3]]) {
+            pixelLine(ctx, x-5, y-5, x+5, y+5, tint, size, 2);
+            pixelLine(ctx, x-5, y+5, x+5, y-5, tint, size, 2);
+          }
+        }
         for (const [trail, previous] of [[survival.previous, true], [survival.trace, false]]) {
           if (!trail?.length) continue;
           for (let i = 1; i < trail.length; i++) {
@@ -2590,16 +2606,97 @@
       this.effects = this.effects.filter((e) => e.life > 0);
       ctx.restore();
       this.drawOffscreen(ctx, world, left, top, width, height, this.zoom, time);
+      if (this.radar) this.drawRadar(world, left, top, halfW * 2, halfH * 2);
       if (this.launchTrace) launchKey(ctx, this.launchTrace, canvas.clientWidth);
     }
-    drawEdgePortrait(ctx, f, x, y, time) {
-      window.DogArt.draw(ctx, f.kind, x, y + 25, { face: f.face, scale: 0.53, time, pose: 'fall' });
+    drawRadar(world, left, top, width, height) {
+      const radar = this.radar;
+      const {blastSideMargin, bottomBlastY} = window.DogFight;
+      const inset = world.blastInset(), start = -blastSideMargin + inset, end = world.stageWidth + blastSideMargin - inset;
+      const margin = radar.hidden ? 120 : 156;
+      const visible = world.end === null && (world.survivalPractice || world.suddenDeath || world.dogs.some(f => {
+        if (f.absent || f.stocks <= 0 || f.stockLift) return false;
+        const chest = f.y - f.stats.height * .52;
+        return chest < top || chest > top + height || f.x < left || f.x > left + width ||
+          (f.ground < 0 && !f.ledge && (f.tumble?.threat ||
+            Math.min(f.x-start, end-f.x, f.y-topBlastY, bottomBlastY-f.y) < margin));
+      }));
+      if (!visible) { if (!radar.hidden) radar.hidden = true; return; }
+      if (radar.hidden) radar.hidden = false;
+      const ctx = radar.getContext('2d'), w = radar.width, h = radar.height;
+      const scale = Math.min((w - 12) / (world.stageWidth + 2 * blastSideMargin), (h - 12) / (bottomBlastY - topBlastY));
+      const X = x => Math.round(w/2 + (x - world.stageWidth/2) * scale);
+      const Y = y => Math.round(h/2 + (y - (topBlastY + bottomBlastY)/2) * scale);
+      ctx.clearRect(0, 0, w, h);
+      const x1 = X(start), x2 = X(end), y1 = Y(topBlastY), y2 = Y(bottomBlastY);
+      ctx.fillStyle = '#262937';
+      ctx.fillRect(x1, y1, x2-x1+1, y2-y1+1);
+      ctx.strokeStyle = '#ed9679';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x1+.5, y1+.5, x2-x1, y2-y1);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x1, y1, x2-x1+1, y2-y1+1); ctx.clip();
+      for (const p of world.terrain) {
+        ctx.fillStyle = p.thin ? '#b3c6b4' : '#d5c3a0';
+        ctx.fillRect(X(p.x1), Y(p.y), Math.max(1, X(p.x2)-X(p.x1)), p.thin ? 1 : 3);
+      }
+      const preview = world.survivalPractice?.preview;
+      if (preview) {
+        ctx.fillStyle = preview.path.zone ? '#ff987d' : mint;
+        for (const p of preview.points) ctx.fillRect(X(p.x)-1, Y(p.y)-1, 2, 2);
+      }
+      // Draw the moving fighter last if both markers meet at this scale.
+      const active = world.dogs.filter(f => !f.absent && f.stocks > 0 && !f.stockLift);
+      const positions = active.map(f => {
+        const nearest = Math.min(f.x-start, end-f.x, f.y-topBlastY, bottomBlastY-f.y);
+        const side = nearest === f.x-start ? 'left' : nearest === end-f.x ? 'right' : nearest === f.y-topBlastY ? 'top' : 'bottom';
+        const where = nearest < margin ? 'near the ' + side + ' boundary' : f.ledge ? 'at the ledge' : f.ground >= 0 ? 'onstage' : 'airborne';
+        return 'P' + (f.index+1) + ' ' + f.stats.name + ' ' + where;
+      });
+      const description = 'Blast radar. ' + positions.join('. ') + '. Square marks P1, diamond marks P2.';
+      if (radar.getAttribute('aria-label') !== description) radar.setAttribute('aria-label', description);
+      const tracked = active.find(f => f.tumble) || active[0];
+      for (const f of [...active.filter(f => f !== tracked), tracked]) {
+        if (!f) continue;
+        const x = X(f.x), y = Y(f.y)-2;
+        ctx.strokeStyle = teamColor(f);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x,y); ctx.lineTo(X(f.x - f.vx * .085), Y(f.y - f.vy * .085)-2); ctx.stroke();
+        ctx.fillStyle = ink; ctx.fillRect(x-4,y-4,9,9);
+        ctx.fillStyle = teamColor(f);
+        if (f.index === 0) ctx.fillRect(x-2,y-2,5,5);
+        else {
+          ctx.beginPath(); ctx.moveTo(x,y-3); ctx.lineTo(x+3,y); ctx.lineTo(x,y+3); ctx.lineTo(x-3,y); ctx.fill();
+        }
+      }
+      ctx.restore();
+    }
+    drawEdgePortrait(ctx, f, x, y, time, world) {
+      const [state, phase] = pose(f, world?.end ?? null, f.grip && world?.dogs[f.grip.owner]);
+      const moving = f.tumble || f.wallAction || f.airDodge;
+      window.DogArt.draw(ctx, f.kind, x, y + 20, {
+        face:f.wallAction ? -f.wallAction.dir : f.reaction?.face || f.face, scale:.53,
+        time:moving ? reduced.matches ? .2 : moving.time : time, pose:state, phase,
+      });
     }
     drawOffscreen(ctx, world, left, top, width, height, zoom, time) {
+      const markers = [];
       for (const f of world.dogs) {
-        const x = (f.x - left) * zoom, y = (f.y - 35 - top) * zoom;
+        const x = (f.x - left) * zoom, y = (f.y - f.stats.height * .52 - top) * zoom;
         if (f.absent || f.stocks <= 0 || (x >= 10 && x <= width - 10 && y >= 0 && y <= height + 4)) continue;
-        const px = clamp(x, 27, width - 27), py = clamp(y, 26, height - 29);
+        markers.push({ f, x, y, px:clamp(x, 27, width-27), py:clamp(y, 26, height-29) });
+      }
+      const [a,b] = markers;
+      if (b && Math.abs(a.px-b.px) < 48 && Math.abs(a.py-b.py) < 48) {
+        const vertical = a.x < 10 && b.x < 10 || a.x > width-10 && b.x > width-10;
+        const axis = vertical ? 'py' : 'px', raw = vertical ? 'y' : 'x';
+        const first = a[raw] <= b[raw] ? a : b, second = first === a ? b : a;
+        const center = clamp((a[axis]+b[axis])/2, 53, (vertical ? height : width)-53);
+        first[axis] = center-25;
+        second[axis] = center+25;
+      }
+      for (const {f,px,py} of markers) {
         ctx.fillStyle = ink;
         ctx.fillRect(px - 23, py - 23, 46, 46);
         ctx.fillStyle = teamColor(f);
@@ -2608,7 +2705,7 @@
         ctx.beginPath();
         ctx.rect(px - 19, py - 19, 38, 38);
         ctx.clip();
-        this.drawEdgePortrait(ctx, f, px, py, time);
+        this.drawEdgePortrait(ctx, f, px, py, time, world);
         ctx.restore();
       }
     }
