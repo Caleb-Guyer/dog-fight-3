@@ -1201,6 +1201,64 @@ async function testDodgeTiming(page,mobile) {
   assert(await status.isHidden());
 }
 
+async function testShieldBreak(page,mobile) {
+  await page.goto(root+'?break-practice#training/shield-break');
+  const status=page.locator('#shield-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  await hold(['shield']);
+  await waitFor('pop');
+  await waitFor('dizzy');
+  await waitFor('punished');
+  assert.match(await status.innerText(),/Roof Raiser.*0 escape inputs/);
+  await hold([]);
+  await press('shield-breakEscape');
+  const cdp=mobile && await page.context().newCDPSession(page);
+  const point=async (name,id)=>{
+    const b=await page.locator('[data-touch="'+name+'"]').boundingBox();
+    return {id,x:b.x+b.width/2,y:b.y+b.height/2};
+  };
+  const shield=mobile && await point('shield',1);
+  if(mobile) await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[shield]});
+  else await hold(['shield']);
+  await waitFor('dizzy');
+  const left=mobile && await point('left',2), right=mobile && await point('right',2);
+  for(let i=0;i<26 && await status.getAttribute('data-result')==='dizzy';i++){
+    if(mobile) {
+      await cdp.send('Input.dispatchTouchEvent',{type:i?'touchMove':'touchStart',touchPoints:[shield,i%2?right:left]});
+      await page.clock.runFor(64);
+    } else {
+      await page.keyboard.down('j');await page.clock.runFor(34);
+      await page.keyboard.up('j');await page.clock.runFor(34);
+    }
+  }
+  if(mobile) await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[shield,await point('neutral',2)]});
+  await waitFor('guarded');
+  assert.match(await status.innerText(),/blocked Roof Raiser.*[1-9]\d* escape inputs/);
+  if(mobile) await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  else await hold([]);
+  await press('shield-breakPunish');
+  await hold(['up','smash']);
+  await waitFor('dizzy');
+  await page.clock.runFor(520);
+  await hold([]);
+  await waitFor('punished');
+  assert.match(await status.innerText(),/Scissor.*caught the dizzy dog/);
+  assert(await page.evaluate(()=>{
+    const canvas=document.createElement('canvas'); canvas.width=canvas.height=180;
+    const ctx=canvas.getContext('2d');
+    return ['brisket','pip','clover','noodle'].every(kind=>{
+      const images=new Set();
+      for(const time of [0,.18,.35,.52]){
+        ctx.clearRect(0,0,180,180);
+        window.DogArt.draw(ctx,kind,90,140,{face:1,scale:1,time,pose:'dizzy',phase:0});
+        images.add(canvas.toDataURL());
+      }
+      return images.size===4;
+    });
+  }));
+  await press('reset-training'); assert(await status.isHidden());
+  console.log((mobile?'Two-thumb touch':'Keyboard')+' passed the shield-break punish, wakeup guard, attacker role and four dizzy animation frames per dog.');
+}
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -1272,6 +1330,7 @@ async function testDevice(browser, mobile) {
     await testShortHops(page, mobile);
     await testFlickJumps(page, mobile);
     await testRage(page, mobile);
+    await testShieldBreak(page, mobile);
     await testBlastRadar(page, mobile);
     await testNightMail(page, mobile);
     await testJumpIns(page, mobile);
