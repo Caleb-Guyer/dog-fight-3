@@ -858,13 +858,14 @@
     },
     pipFlip: {
       label: 'Flip Kick',
-      hint: 'Catch an opponent overhead with a rising heel.',
+      hint: 'Catch the rival high over your forehead with the heel to launch almost straight up.',
       frames: [3, 6, 8],
       box: [12, -82, 36, 34],
       dmg: 7,
       base: 160,
       growth: 3.55,
       angle: 80,
+      sweetSpot: { label: 'High heel', box: [12, -104, 16, 12], bonus: 2, launch: 1.10, angle: 88 },
       land: 4,
       landingWindow: [3, 11],
     },
@@ -936,13 +937,14 @@
     },
     brisketHip: {
       label: 'Hip Check',
-      hint: 'Bump backward with the strongest horizontal launch in this kit.',
+      hint: 'Back into them at close range for a heavy hip check. Grazing them at full reach gives a softer bump.',
       frames: [6, 6, 15],
       box: [-39, -33, 37, 27],
       dmg: 12,
       base: 238,
       growth: 5.2,
       angle: 18,
+      sweetSpot: { label: 'Hip smash', box: [-31, -33, 14, 17], bonus: 3, launch: 1.13, angle: 12 },
       hard: true,
       land: 10,
       landingWindow: [4, 20],
@@ -1041,13 +1043,14 @@
     },
     noodleTail: {
       label: 'Tail Flick',
-      hint: 'A long tailswipe directly behind you. Its low angle can send a rival offstage.',
+      hint: 'Catch them at the very tip of the tail to send them skimming offstage.',
       frames: [4, 6, 12],
       box: [-57, -29, 51, 18],
       dmg: 9,
       base: 169,
       growth: 3.85,
       angle: 17,
+      sweetSpot: { label: 'Tail tip', box: [-97, -29, 11, 16], bonus: 3, launch: 1.14, angle: 9 },
       land: 5,
       landingWindow: [2, 13],
     },
@@ -1133,13 +1136,14 @@
     },
     cloverBack: {
       label: 'Backhand',
-      hint: 'A fast backward disc swipe with a flatter launch.',
+      hint: 'The broad face of the disc sends the rival out. Scoop them on its upper rim to loft them for a chase.',
       frames: [4, 5, 11],
       box: [-44, -39, 39, 22],
       dmg: 8,
       base: 173,
       growth: 4.1,
       angle: 23,
+      sweetSpot: { label: 'Rim scoop', box: [-65, -54, 15, 10], bonus: 1, launch: 1.04, angle: 60 },
       land: 4,
       landingWindow: [2, 12],
     },
@@ -2379,6 +2383,10 @@
     const [sx, sy, rx, ry] = beat.sweetSpot.box;
     return Math.abs((x - f.x) * f.face - sx) <= rx && Math.abs(y - f.y - sy) <= ry ? beat.sweetSpot : null;
   }
+  function isSweetPractice(d) {
+    return d?.pattern === 'sweet' || d?.pattern === 'sweetAligned';
+  }
+  const sweetAerialSide = {pip:'up', brisket:'back', noodle:'back', clover:'back'};
   function overlapPoint(a, b) {
     const left = Math.max(a.x - a.rx, b.x - b.rx), right = Math.min(a.x + a.rx, b.x + b.rx);
     const top = Math.max(a.y - a.ry, b.y - b.ry), bottom = Math.min(a.y + a.ry, b.y + b.ry);
@@ -3247,6 +3255,19 @@
         }
       }
       const floor = this.terrain[ground], approach = pattern === 'approach';
+      if (pattern === 'sweet' || pattern === 'sweetAligned') {
+        const side = sweetAerialSide[f.kind], moveId = f.kit.air[side], move = moves[moveId];
+        const aligned = pattern === 'sweetAligned';
+        const [dx, dy] = aligned ? move.sweetSpot.box :
+          { pip: [12,-64], brisket: [-72,-33], noodle: [-52,-29], clover: [-62,-30] }[f.kind];
+        const face = side === 'back' ? -dir : dir;
+        const x = (floor.x1 + floor.x2 - face * dx) / 2, y = Math.min(...this.terrain.map(p => p.y)) - 40;
+        Object.assign(f, {x, y, face, ground:-1, vy:-45, jumps:1});
+        Object.assign(guard, {x:x+face*dx, y:y+dy+guard.stats.height*.52, face:-dir, ground:-1, vy:-45, jumps:1});
+        this.spacingPractice = {pattern, slow, dir, moveId, side, ground, phase:'ready', time:0,
+          previous:isSweetPractice(previous) && previous.moveId === moveId ? previous.result || previous.previous : null};
+        return;
+      }
       if (pattern === 'footstool' || pattern === 'footstoolTech') {
         const rescue = pattern === 'footstool', lip = dir > 0 ? floor.x1 : floor.x2;
         const x = rescue ? lip - dir * 69 : (floor.x1 + floor.x2) / 2;
@@ -3313,7 +3334,7 @@
     }
     spacingPracticeInput() {
       const drill = this.spacingPractice, guard = this.dogs[1];
-      if (drill.phase === 'done') return idleInput;
+      if (drill.phase === 'done' || isSweetPractice(drill)) return idleInput;
       if (isFootstoolPractice(drill)) {
         if (drill.pattern === 'footstoolTech' && !drill.sent && this.footstoolTarget(guard)) {
           drill.sent = true;
@@ -3358,6 +3379,10 @@
       const drill = this.spacingPractice, [f, guard] = this.dogs;
       if (drill.phase !== 'active') return;
       drill.time += dt;
+      if (isSweetPractice(drill)) {
+        if (drill.time > .65 || f.ground >= 0) this.finishSpacingPractice('miss');
+        return;
+      }
       if (isFootstoolPractice(drill)) {
         if (drill.pattern === 'footstool') {
           if (!drill.cue && this.footstoolTarget(f)) {
@@ -4669,7 +4694,8 @@
         return;
       }
       if (spacing?.phase === 'ready') {
-        const start = isFootstoolPractice(spacing) ? input1.attack || input1.tapped?.attack :
+        const start = isSweetPractice(spacing) ? input1.attack || input1.tapped?.attack || input1.aimStick || input1.tapped?.aimStick :
+          isFootstoolPractice(spacing) ? input1.attack || input1.tapped?.attack :
           isReversalPractice(spacing) ? Math.abs(input1.x) > 0.28 || input1.special || input1.tapped?.special
           : input1.jump || input1.tapped?.jump;
         if (!start) return;
@@ -4679,6 +4705,10 @@
       if (spacing?.consumeAttack) {
         spacing.consumeAttack = !!input1.attack;
         input1 = { ...input1, attack:false, tapped:{ ...input1.tapped, attack:false } };
+      }
+      if (isSweetPractice(spacing) && spacing.phase === 'done' && !this.hitStop) {
+        if (spacing.flightFrames >= 24) return;
+        spacing.flightFrames = (spacing.flightFrames || 0) + 1;
       }
       if (this.climbPractice) {
         const drill = this.climbPractice;
@@ -7243,6 +7273,7 @@
           attack,
           !!guard,
           damageAtContact[f.index],
+          sweet,
         );
         if (attack.connected) connectedHits.push(hit);
         if (sweet && attack.connected) this.emit('sweetSpot', { f, point, face, moveId: attack.moveId });
@@ -7491,7 +7522,7 @@
       else if (this.shieldPractice?.pattern === 'yourHop') this.finishShieldPractice('blockedAir');
       else if (this.shieldPractice?.pattern === 'poke') this.finishShieldPractice(broken ? 'brokeGuard' : 'sealed');
     }
-    hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId, use, covered = true, ownerDamage = owner.damage) {
+    hit(target, owner, damage, base, growth, aim, name, face, point, move, moveId, use, covered = true, ownerDamage = owner.damage, sweet = null) {
       if (protectionTime(target)) return false;
       if (target.grip?.target === target.index) return false;
       const grab = name === 'throw' || move?.commandGrab;
@@ -7584,7 +7615,8 @@
       // Brisket's landing shockwave and a weak grounded spike still pop the rival up.
       const meteor = !!move?.meteor && !(use?.plunge && use.landed) && speed * (braced ? crouchLaunchScale : 1) >= tumbleSpeed;
       if (move) {
-        const angle = ((move.angle < 0 && target.ground >= 0 && !meteor ? 46 : move.angle) * Math.PI) / 180;
+        const degrees = sweet?.angle ?? move.angle;
+        const angle = ((degrees < 0 && target.ground >= 0 && !meteor ? 46 : degrees) * Math.PI) / 180;
         target.vx = face * speed * Math.cos(angle);
         target.vy = -speed * Math.sin(angle) - (angle >= 0 ? 40 : 0);
         if (move.pull) {
@@ -7710,6 +7742,13 @@
       }
       if (timing === 'late' && this.cpuControlled(owner)) owner.landingFollowUntil = this.time + 0.55;
       const spacing = this.spacingPractice;
+      if (isSweetPractice(spacing) && spacing.phase === 'active' && owner.index === 0 && target.index === 1) {
+        spacing.contact = moveId;
+        spacing.point = {x:point.x, y:point.y};
+        spacing.result = { label: sweet?.label || 'Body hit', damage: applied, speed: Math.round(Math.hypot(target.vx, target.vy)),
+          dx:target.vx*spacing.dir, dy:target.vy, angle:Math.round(Math.atan2(-target.vy, Math.abs(target.vx))*180/Math.PI) };
+        this.finishSpacingPractice(moveId !== spacing.moveId ? 'other' : sweet ? 'sweet' : 'body');
+      }
       if (spacing?.pattern === 'cancel' && spacing.phase === 'active') {
         if (target.index === 0 && moveId === owner.kit.tilts.down) this.finishSpacingPractice('caught');
         else if (owner.index === 0) {
@@ -8515,6 +8554,22 @@
       brain.specialTurn = { turn, step: turn === 'bReverse' ? 'flick' : 'cast' };
       return turn === 'bReverse' ? { ...idleInput, special: true, tapped: { special: true } } : { ...idleInput, x: -f.face };
     }
+    cpuSweetAerial(f, foe) {
+      if (f.ground >= 0 || f.attack || f.command || f.stun || f.tumble || f.airDodge || f.ledge ||
+          foe.shield || foe.ledge || protectionTime(foe)) return null;
+      const side = sweetAerialSide[f.kind], move = moves[f.kit.air[side]], t = move.start;
+      if (this.floorAhead(f, t) >= 0) return null;
+      const y = f.y + f.vy*t + 770*f.kit.gravity*t*t;
+      const landing = foe.ground < 0 ? this.floorAhead(foe,t) : foe.ground;
+      const feet = landing >= 0 ? this.terrain[landing].y : foe.y + foe.vy*t + 770*foe.kit.gravity*t*t;
+      const centerX = foe.x + (foe.vx - f.vx)*t;
+      if (!sweetSpotAt(f, move, centerX, feet - bodyHeight(foe)*.52 - (y-f.y))) return null;
+      this.bot.hop = null;
+      this.bot.hold = this.bot.guard = 0;
+      this.bot.timer = .2;
+      return { ...idleInput, aimStick:true, smashX:side === 'back' ? -f.face : 0,
+        smashY:side === 'up' ? -1 : 0, tapped:{aimStick:true} };
+    }
     cpuDownAir(f, foe, floor) {
       if (f.ground >= 0 || f.attack || f.stun || f.tumble || f.airDodge || f.ledge || f.command ||
           protectionTime(foe) || foe.shield || foe.ledge || foe.y - f.y < foe.stats.height * 0.42 ||
@@ -9106,6 +9161,10 @@
       if (passInput) return passInput;
       const platformInput = !unsafe && this.cpuPlatformInput(f, foe);
       if (platformInput) return platformInput;
+      if (this.cpuLevel === 'rival' && !unsafe && brain.timer <= 0) {
+        const sweet = this.cpuSweetAerial(f, foe);
+        if (sweet) return sweet;
+      }
       const specialTurn = this.cpuSpecialTurnInput(f, foe, closest, unsafe);
       if (specialTurn) return specialTurn;
       const downward = brain.timer <= 0 && this.cpuDownAir(f, foe, closest);
@@ -9400,6 +9459,8 @@
     protectionTime,
     isReversalPractice,
     isFootstoolPractice,
+    isSweetPractice,
+    bodyHeight,
     shieldBubble,
     shieldDirection,
     shieldContact,

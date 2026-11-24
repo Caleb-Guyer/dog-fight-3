@@ -1936,6 +1936,63 @@
     ctx.fillText(second, 39, 33);
     ctx.restore();
   }
+  function drawContactBoxes(ctx, world) {
+    const d = world.spacingPractice, preview = window.DogFight.isSweetPractice(d) && d.phase === 'ready';
+    ctx.save();
+    function box(x, y, rx, ry, tint, dashed = false) {
+      ctx.setLineDash(dashed ? [6, 4] : []);
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 4;
+      ctx.strokeRect(x-rx, y-ry, 2*rx, 2*ry);
+      ctx.strokeStyle = tint;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x-rx, y-ry, 2*rx, 2*ry);
+    }
+    for (const f of world.dogs) {
+      if (!f.stocks || f.respawning) continue;
+      const h = window.DogFight.bodyHeight(f), cy = f.y - h*.52;
+      box(f.x, cy, f.stats.width, h*.4, mint, window.DogFight.protectionTime(f) > 0);
+      ctx.fillStyle = ink;
+      ctx.fillRect(f.x-4, cy-4, 8, 8);
+      ctx.fillStyle = mint;
+      ctx.fillRect(f.x-2, cy-2, 4, 4);
+      const active = world.activeSwing(f);
+      const planned = preview && f.index === 0 ? window.DogFight.moves[d.moveId] : null;
+      if (!active && !planned) continue;
+      if (active) {
+        const {x,y,rx,ry} = active.area;
+        box(x,y,rx,ry,'#ff8a78');
+      } else {
+        const [dx,dy,rx,ry] = planned.box;
+        box(f.x+f.face*dx, f.y+dy, rx, ry, '#ff8a78', true);
+      }
+      const sweet = (active?.beat || planned).sweetSpot;
+      if (sweet) {
+        const [dx,dy,rx,ry] = sweet.box;
+        box(f.x+f.face*dx, f.y+dy, rx, ry, gold, !!planned);
+      }
+    }
+    if (window.DogFight.isSweetPractice(d) && d.result) {
+      const {x,y} = d.point;
+      for (const [r,previous] of [[d.previous,true],[d.result,false]]) {
+        if (!r || !r.speed) continue;
+        const scale = Math.min(.34, 150 / r.speed), dx = r.dx * d.dir * scale, dy = r.dy * scale;
+        ctx.setLineDash(previous ? [4,5] : []);
+        for (const [color,width] of [[ink,5],[previous ? cream : gold,2]]) {
+          ctx.beginPath();
+          ctx.strokeStyle = color;
+          ctx.lineWidth = width;
+          ctx.moveTo(x,y); ctx.lineTo(x+dx,y+dy);
+          ctx.stroke();
+        }
+        if (!previous) {
+          const len = Math.hypot(dx,dy), ux = dx/len, uy = dy/len;
+          for (const sign of [-1,1]) pixelLine(ctx,x+dx,y+dy,x+dx-ux*10+sign*uy*5,y+dy-uy*10-sign*ux*5,gold,3,2);
+        }
+      }
+    }
+    ctx.restore();
+  }
   function drawEffect(ctx, e) {
     const p = 1 - clamp(e.life / e.max, 0, 1);
     if (e.type === 'hardImpact') {
@@ -2495,7 +2552,7 @@
         pixelLine(ctx, x + 8, y, x + 15, y + 4, cream, 2, 2);
         for (let i = 0; i < d.locks; i++) pixelLine(ctx, x - 3 + i * 5, y + 5, x + i * 5, y, gold, 3, 2);
       }
-      if (world.spacingPractice) {
+      if (world.spacingPractice && !window.DogFight.isSweetPractice(world.spacingPractice)) {
         const drill = world.spacingPractice, floor = world.terrain[drill.ground];
         const x = snap(drill.mark, 2), y = floor.y + 5;
         if (window.DogFight.isFootstoolPractice(drill)) {
@@ -2682,6 +2739,7 @@
         if (e.type !== 'parry' || !(world.hitStop > 0)) e.life -= dt;
       }
       this.effects = this.effects.filter((e) => e.life > 0);
+      if (world.mode === 'training' && this.contactBoxes) drawContactBoxes(ctx, world);
       ctx.restore();
       this.drawOffscreen(ctx, world, left, top, width, height, this.zoom, time);
       if (this.radar) this.drawRadar(world, left, top, halfW * 2, halfH * 2);

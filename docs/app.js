@@ -18,6 +18,7 @@
     rageScale,
     isReversalPractice,
     isFootstoolPractice,
+    isSweetPractice,
     cpuLevels,
     stockMinutes,
     seededRandom,
@@ -1386,6 +1387,15 @@
   $('frame-toggle').onclick = toggleFrames;
   $('frame-step').onclick = stepTrainingFrame;
   $('frame-landing').onclick = () => setFrameMode(frameLab.mode === 'armed' ? 'live' : 'armed');
+  function showContactBoxes(enabled) {
+    view.contactBoxes = enabled;
+    $('training-boxes').setAttribute('aria-pressed', String(enabled));
+    $('box-key').hidden = !enabled;
+  }
+  $('training-boxes').onclick = () => {
+    showContactBoxes(!view.contactBoxes);
+    $('game').focus({ preventScroll:true });
+  };
   function showCpuLevels() {
     const restart = page === 'match';
     backToPause = restart;
@@ -1461,6 +1471,7 @@
     $('lobby').hidden = true;
     $('match').hidden = false;
     view = new FightView($('blast-radar'));
+    showContactBoxes(false);
     view.shakeEnabled = settings.shake;
     world = new Battle(config, (name, e) => {
       view.event(name, e);
@@ -1775,6 +1786,17 @@
   }
   function spacingFeedback(name, e) {
     const practice = world.spacingPractice, status = $('spacing-status');
+    if (isSweetPractice(practice)) {
+      if (!e.outcome) return;
+      status.dataset.result = e.outcome;
+      const show = r => r.label + ' · ' + r.damage + '% · ' + r.angle + '° · ' + r.speed + ' px/s';
+      status.textContent = e.outcome === 'miss' ? 'Missed the rival' : e.outcome === 'other' ?
+        'Different move · ' + (moves[practice.contact]?.label || 'hit') : show(practice.result);
+      const tip = e.outcome === 'miss' || e.outcome === 'other' ? 'Choose Aerial sweet spots to retry the same spacing.' :
+        'Choose Line up sweet spot to compare the same swing at the other spacing.';
+      $('recovery-tip').textContent = (practice.previous ? 'Previous hit · ' + show(practice.previous) + '. ' : '') + tip;
+      return;
+    }
     if (isFootstoolPractice(practice)) {
       const rescue = practice.pattern === 'footstool';
       status.dataset.result = e.outcome || name;
@@ -2766,8 +2788,11 @@
     }
     else if (footwork) world.resetFootworkPractice(pattern, pattern === 'bait' ? 1 : direction ?? world.footworkPractice?.dir ?? 1,
       world.footworkPractice?.pattern !== 'bait' ? world.footworkPractice?.slow ?? true : true);
-    else if (spacing) world.resetSpacingPractice(pattern, direction ?? world.spacingPractice?.dir ?? 1,
-      world.spacingPractice?.slow ?? true, world.spacingPractice?.pattern === 'wavebounce' ? world.spacingPractice.guard : true);
+    else if (spacing) {
+      if ((pattern === 'sweet' || pattern === 'sweetAligned') && !isSweetPractice(world.spacingPractice)) showContactBoxes(true);
+      world.resetSpacingPractice(pattern, direction ?? world.spacingPractice?.dir ?? 1,
+        world.spacingPractice?.slow ?? true, world.spacingPractice?.pattern === 'wavebounce' ? world.spacingPractice.guard : true);
+    }
     else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true, world.escapePractice?.baseline);
     else if (platform) world.resetPlatformPractice(pattern, world.platformPractice?.slow ?? true);
     else if (wall) world.resetWallPractice(pattern, direction === 'impact' ? '' : direction, direction === 'impact');
@@ -2862,6 +2887,9 @@
       $('spacing-approach').setAttribute('aria-pressed', String(approach));
       $('spacing-retreat').setAttribute('aria-pressed', String(pattern === 'retreat'));
       $('spacing-landing').setAttribute('aria-pressed', String(pattern === 'landing'));
+      $('spacing-sweet').setAttribute('aria-pressed', String(isSweetPractice(practice)));
+      $('spacing-aligned').hidden = !isSweetPractice(practice);
+      $('spacing-aligned').setAttribute('aria-pressed', String(pattern === 'sweetAligned'));
       $('spacing-flick').hidden = pattern !== 'landing';
       $('spacing-flick').setAttribute('aria-pressed', String(practice.flickJump ?? settings.flickJump1));
       $('spacing-cancel').setAttribute('aria-pressed', String(pattern === 'cancel'));
@@ -2883,6 +2911,12 @@
         ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
         : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
       if (pattern === 'landing' && (practice.flickJump ?? settings.flickJump1)) message = flickJumpTip;
+      if (isSweetPractice(practice)) {
+        const move = moves[practice.moveId], aim = practice.side === 'up' ? 'Up' : run;
+        $('spacing-status').textContent = move.label + ' · ' + aim + ' + Attack';
+        message = 'Aim ' + aim + ' and tap Attack. The gold box marks ' + move.sweetSpot.label.toLowerCase() +
+          '. Catch the rival’s mint center in it for the sweet spot.';
+      }
     } else if (climb) {
       const trap = pattern === 'trap', inward = practiceSide === 'left' ? 'right' : 'left';
       for (const role of ['escape','trap','rise','coverRise'])
@@ -3153,6 +3187,8 @@
   $('spacing-approach').onclick = () => drill('spacing', false, 'approach');
   $('spacing-retreat').onclick = () => drill('spacing', false, 'retreat');
   $('spacing-landing').onclick = () => drill('spacing', false, 'landing');
+  $('spacing-sweet').onclick = () => drill('spacing', false, world.spacingPractice?.pattern === 'sweetAligned' ? 'sweetAligned' : 'sweet');
+  $('spacing-aligned').onclick = () => drill('spacing', false, world.spacingPractice.pattern === 'sweet' ? 'sweetAligned' : 'sweet');
   const flickJumpTip = 'Tap Up and release for a short hop. Choose Landing hits to reset, then hold Up through takeoff for a full jump. Compare the two heights at the apex.';
   function setFlickTrial(enabled) {
     world.spacingPractice.flickJump = enabled;
@@ -4471,6 +4507,12 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'nightmail', fetch: false });
       drill('freshness', false, 'rage');
+    }
+    else if (/^#training\/sweet-spots(?:\/(pip|brisket|noodle|clover))?$/.test(hash)) {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:hash.split('/')[2] || 'noodle', p2:'brisket', stage:'nightmail', fetch:false });
+      drill('spacing', false, 'sweet');
     }
     else if (hash === '#training/short-hops' || hash === '#training/flick-jump') {
       menuScreen('match');

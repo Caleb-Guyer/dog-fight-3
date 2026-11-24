@@ -141,6 +141,8 @@ Hold Jump just before an aerial or air dodge lands, during landing recovery, or 
 
 **Frame advance** in Training freezes the current exchange. Hold the controls you want and choose **Step 1 frame** to advance both dogs by one simulation tick. The readout shows each dog's state, including landing recovery and jump squat. On keyboard, use **[** to freeze or resume and **]** to step. On a standard gamepad, click the left stick to freeze or resume and the right stick to step.
 
+Turn on **Contact boxes** to see each dog's body in mint, an active melee attack in coral and its sweet spot in gold. A dashed mint outline means the dog is protected. Crouching or falling down changes the body box. Use frame advance to see exactly when a swing becomes active.
+
 **Try it with Brisket.** Choose **Freeze on landing**, jump, then tap Down + Attack for Belly Drop. At touchdown, hold Jump and step through the 18 frames of landing recovery. At frame +18 Brisket starts jump squat. Keep holding for a full jump, or release during the crouch for a short hop. Repeat with an early tap and watch Brisket stay grounded. [Play the landing comparison](https://caleb-guyer.github.io/dog-fight-3/#training/landing-buffer)
 
 **Jump-cancel an up smash or up special.** Hold Up and tap Jump + Smash together, or press Smash during the three-frame crouch. Your dog starts its grounded up smash. From a run, it slides into range. Hold Smash to charge while your dog slows under its own traction. Use Up + Special during the same crouch to start your dog's up special immediately. Up + Attack and an upward aim-stick flick during the crouch give you a rising up aerial.
@@ -308,6 +310,15 @@ Open **Move list → Attacks** on the select screen, in Training, or from Pause 
 | **Brisket** | Tap Attack for Body Check, then tap again on contact for Bell Ringer. Press Grab after the check, then tap back to suplex the rival over the ledge behind you. | Hip Check launches backward. Belly Drop stalls before plunging and can hit beside Brisket on landing. |
 | **Noodle** | Ankle Tap into Reel In pulls the rival close. Finish with Whiplash or press Special during the pull to cast Tug Rope. | Slip Lead snags from the front, Tail Flick reaches behind, and Underhook lifts a rival from below. |
 | **Clover** | Tap Attack twice for Disc Tap and Set Point. On the second hit, use Jump + Up + Attack for Sky Volley, or Jump + Attack for Orbit. | Orbit hits on two beats if the rival stays close. Skip Shot angles the disc downward for a spike. |
+
+In **Training → Aerial practice → Aerial sweet spots**, try the indicated aerial, choose **Line up sweet spot**, then use the same input. The dashed coral and gold boxes preview the swing before you start. Catch the rival’s mint center inside the gold box. After contact, the gold arrow shows the initial launch direction and speed. The dashed cream line shows your previous hit from the same point, so you can compare the two angles.
+
+| Dog | Placement to try | Fresh hit at the two marks |
+| --- | --- | --- |
+| [Pip](https://caleb-guyer.github.io/dog-fight-3/#training/sweet-spots/pip) | Hit high above his forehead with Flip Kick to send the rival almost straight up. | 7% → 9% |
+| [Brisket](https://caleb-guyer.github.io/dog-fight-3/#training/sweet-spots/brisket) | Back into the rival with Hip Check to launch them low at close range. | 12% → 15% |
+| [Noodle](https://caleb-guyer.github.io/dog-fight-3/#training/sweet-spots/noodle) | Catch the rival with the tip of Tail Flick to skim them toward the side boundary. | 9% → 12% |
+| [Clover](https://caleb-guyer.github.io/dog-fight-3/#training/sweet-spots/clover) | Scoop the rival on Backhand’s upper rim to send them above you for a chase. | 8% → 9% |
 
 **Combo practice** lets you test your timing against a defender. Choose **Dog’s combo** to watch the selected dog’s route. **Late jab** deliberately delays the second tap. Change **Rival after contact** to run the same inputs against a different response. Shield / air dodge guards on the ground and tries a neutral dodge as hitstun ends in the air. Flick away moves during the hit freeze and aims the launch outward. For example, Clover can land both beats of Orbit on a standing Pip. Outward hit shifts can carry Pip beyond the disc.
 
