@@ -896,6 +896,47 @@ async function testNightMail(page, mobile) {
   }
 }
 
+async function testJumpIns(page,mobile) {
+  await page.goto(root+'?jump-in#training/jump-ins');
+  const result=page.locator('#shield-status'), choice=page.locator('#jump-in-choice');
+  const press=loc=>mobile?loc.tap():loc.click();
+  const session=mobile && await page.context().newCDPSession(page);
+  const keys={hop:'e',grab:'u',shield:'l'};
+  async function hold(name) {
+    if (!mobile) return page.keyboard.down(keys[name]);
+    const box=await page.locator('[data-touch="'+name+'"]').boundingBox();
+    assert(box && box.x>=0 && box.y>=0 && box.y+box.height<=844);
+    return session.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:box.x+box.width/2,y:box.y+box.height/2}]});
+  }
+  async function release(name) {
+    if (!mobile) return page.keyboard.up(keys[name]);
+    return session.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  }
+  assert.equal(await choice.inputValue(),'yourHop');
+  assert.equal(await result.textContent(),'Hop beside the shield');
+  await hold('hop'); await page.clock.runFor(190); await release('hop');
+  for(let i=0;i<70 && await result.getAttribute('data-result')!=='touchdown';i++) await page.clock.runFor(22);
+  assert.equal(await result.textContent(),'Tap Grab');
+  await hold('grab'); await page.clock.runFor(65); await release('grab');
+  await page.clock.runFor(500);
+  assert.equal(await result.getAttribute('data-result'),'bufferedGrab');
+  await press(page.locator('#shield-jumpIn'));
+  assert.equal(await result.textContent(),'Hop beside the shield');
+  await press(page.locator('#jump-in-speed'));
+  for(const [value,outcome] of [['emptyHop','grabbed'],['fallingAir','block'],['mixHop','either']]){
+    await choice.selectOption(value);
+    assert.equal(await page.locator('#jump-in-speed').getAttribute('aria-pressed'),'false');
+    await hold('shield'); await page.clock.runFor(1160); await release('shield');
+    const actual=await result.getAttribute('data-result');
+    if(outcome==='either') assert(['block','grabbed'].includes(actual));
+    else assert.equal(actual,outcome);
+  }
+  await press(page.locator('#shield-strike'));
+  assert(await choice.isHidden());
+  await press(page.locator('#reset-training'));
+  assert(await result.isHidden());
+}
+
 async function testDevice(browser, mobile) {
   const context = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }
@@ -967,6 +1008,7 @@ async function testDevice(browser, mobile) {
     await testShortHops(page, mobile);
     await testBlastRadar(page, mobile);
     await testNightMail(page, mobile);
+    await testJumpIns(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
