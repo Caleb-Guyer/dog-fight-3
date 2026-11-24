@@ -942,7 +942,8 @@
           moves[kit.tilts.down].label + '. Grabs and tethers can catch a crouch. Try both sides in Training → Combo escape.' }, 'Hold Down before contact', 'crouchHit', 'defense') +
         '</ul><h3 class="guide-section">In the air</h3><p>One dodge per airtime. Landing or catching a ledge refreshes it. Try <strong>Training → Air-dodge practice</strong>.</p><p>For a wavedash, tap Jump, then aim diagonally down and tap Shield. Release the direction to slide forward or backward and keep your facing. Do the same on the way down to waveland on a platform. Try <strong>Training → Wavedash</strong>.</p><ul class="move-rows guide-air-dodge">' +
         airRows +
-        '</ul><h3 class="guide-section">At the ledge</h3><p>Try <strong>Training → Ledge timing</strong> to practice the climb from either side.</p><ul class="move-rows guide-ledge-climb">' +
+        '</ul><h3 class="guide-section">At the ledge</h3><p>Tap Down or away to let go. Down + Jump spends your air jump below the lip. Aim inward and tap Attack for ' +
+          moves[kit.air.forward].label + ' as you rise. Try both sides in <strong>Training → Ledge timing</strong>.</p><ul class="move-rows guide-ledge-climb">' +
         guideMoveRow({ label: 'Ledge climb', hint: 'On a fresh catch, protection ends ' +
           (kit.ledgeClimb.total - kit.ledgeClimb.protectedThrough) + ' frames before you can act. Hold Shield during the climb to guard as soon as you stand.' },
           'While hanging · press toward the stage', 'ledgeClimb', 'defense') +
@@ -1858,6 +1859,27 @@
   }
   function climbFeedback(name, e) {
     const drill = world.climbPractice, status = $('climb-status'), trap = drill.role === 'trap';
+    if (drill.route) {
+      const cover = drill.role === 'coverRise', inward = drill.route.dir > 0 ? 'right' : 'left';
+      const outcome = e.outcome || e.phase;
+      const label = {
+        start:cover ? 'Watch the lip' : 'At the ledge', release:cover ? 'Paws released' : 'Jump back in',
+        rise:cover ? 'Rival rising' : 'Aim ' + inward + ' + Attack',
+        strike:(moves[e.moveId]?.label || 'Aerial') + ' connected',
+        landedHit:(moves[drill.contact]?.label || 'Aerial') + ' · back onstage',
+        landedClear:'Back onstage', regrab:'Caught the ledge again', fell:'Below the ledge',
+        otherExit:'Used a get-up option', intercepted:cover ? 'Return intercepted' : 'Guard caught the return',
+        blockedRise:'Rising aerial blocked', parriedRise:'Rising aerial parried', hitByRise:'Caught by the rising aerial',
+      };
+      status.dataset.result = outcome;
+      status.textContent = label[outcome];
+      const tip = $('recovery-tip');
+      if (outcome === 'strike') tip.textContent = 'Keep drifting ' + inward + ' and land onstage.';
+      else if (e.outcome) tip.textContent = cover ? 'Choose Cover the return to retry. Hold Shield through the swing, or release just before it hits.' :
+        outcome === 'landedHit' ? 'Choose Cover the return to defend against the same route.' :
+        'Choose Attack from below to retry. Tap Down + Jump, release Down, then hold ' + inward + ' and tap Attack.';
+      return;
+    }
     const labels = {
       start: trap ? 'Watch the ledge' : 'Climbing', plant: trap ? 'Paws down · jab' : 'Hold Shield',
       guarded: 'Jab blocked', caught: 'Caught standing', timed: 'Climb caught',
@@ -2746,12 +2768,14 @@
         : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
     } else if (climb) {
       const trap = pattern === 'trap', inward = practiceSide === 'left' ? 'right' : 'left';
-      $('climb-escape').setAttribute('aria-pressed', String(!trap));
-      $('climb-trap').setAttribute('aria-pressed', String(trap));
+      for (const role of ['escape','trap','rise','coverRise'])
+        $('climb-' + role).setAttribute('aria-pressed', String(pattern === role));
       $('climb-slow').setAttribute('aria-pressed', String(world.climbPractice.slow));
       $('climb-status').dataset.result = 'ready';
       $('climb-status').textContent = practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
-      message = trap ? 'Tap Attack to start. Watch the rival’s paws touch down, then tap Attack again to catch the climb.'
+      message = pattern === 'rise' ? 'Tap Down + Jump to spring from below the lip. Release Down, hold ' + inward + ' and tap Attack. Land onstage after the hit.' :
+        pattern === 'coverRise' ? 'Hold Shield or tap Attack to start. Watch the rival spring from below and swing. Block, parry, or intercept the return.' :
+        trap ? 'Tap Attack to start. Watch the rival’s paws touch down, then tap Attack again to catch the climb.'
         : 'Press ' + inward + ' to climb. Release the direction and hold Shield as your dog stands up.';
     } else if (platform) {
       const below = pattern === 'below', hold = pattern === 'hold';
@@ -3048,8 +3072,8 @@
   };
   $('ledge-roll-training').onclick = () => drill('roll', false, world?.rollPractice?.pattern || 'guard');
   $('climb-training').onclick = () => drill('climb', false, world?.climbPractice?.role || 'escape');
-  $('climb-escape').onclick = () => drill('climb', false, 'escape');
-  $('climb-trap').onclick = () => drill('climb', false, 'trap');
+  for (const role of ['escape','trap','rise','coverRise'])
+    $('climb-' + role).onclick = () => drill('climb', false, role);
   $('climb-side').onclick = () => {
     practiceSide = practiceSide === 'left' ? 'right' : 'left';
     drill('climb', false, world.climbPractice.role);
@@ -4169,6 +4193,12 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/ledge-return') {
+      leaveOnline();
+      afterStory = null;
+      practiceSide = 'left';
+      startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'nightmail', fetch:false });
+      drill('climb',false,'rise');
     } else if (hash === '#training/jump-ins') {
       leaveOnline();
       afterStory = null;

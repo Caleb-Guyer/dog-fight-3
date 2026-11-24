@@ -2532,6 +2532,7 @@
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
       if (fromKO && this.mode === 'solo') {
         this.bot.pressure = null;
+        this.bot.ledgeReturn = null;
         this.bot.jumpIn = null;
         this.bot.shieldWatch = 0;
         this.bot.rookieNext = 0;
@@ -3829,19 +3830,30 @@
     }
     resetClimbPractice(role = 'escape', side = 'left', slow = true) {
       const edge = this.resetTraining(side);
-      const slot = role === 'trap' ? 1 : 0;
+      const rise = role === 'rise' || role === 'coverRise';
+      const slot = role === 'trap' || role === 'coverRise' ? 1 : 0;
       const climber = this.dogs[slot], guard = this.dogs[1 - slot];
       this.hangLedge(climber, edge);
-      const spacing = climber.kit.ledgeClimb.distance + guard.stats.width + climber.stats.width + 1;
+      const spacing = rise ? 68 : climber.kit.ledgeClimb.distance + guard.stats.width + climber.stats.width + 1;
       Object.assign(guard, { x: edge.x + climber.face * spacing, y: edge.y, ground: edge.index, face: -climber.face });
       this.climbPractice = { role, side, slow, slot, phase: 'ready', time: 0,
         climbAt: Math.min(14, climber.ledge.guardFrames), climbed: false, jabbed: false, outcome: '' };
+      if (rise) this.climbPractice.route = {edge, dir:climber.face};
     }
     climbPracticeInput(dt) {
       const drill = this.climbPractice;
       if (drill.phase === 'done') return idleInput;
       drill.time += dt;
       const climber = this.dogs[drill.slot], guard = this.dogs[1 - drill.slot];
+      if (drill.route) {
+        if (drill.role === 'coverRise')
+          return drill.time >= .20 ? this.ledgeReturnInput(climber,drill.route) || idleInput : idleInput;
+        if (!drill.jabbed && drill.time >= .30) {
+          drill.jabbed = true;
+          if (!drill.contact && !guard.stun && !guard.attack) return {...idleInput,y:1,tapped:{attack:true}};
+        }
+        return idleInput;
+      }
       if (drill.role === 'trap') {
         if (climber.ledge && drill.time + 1e-8 >= drill.climbAt / 60) return { ...idleInput, x: climber.face };
         return drill.climbed ? { ...idleInput, shield: true } : idleInput;
@@ -3865,6 +3877,16 @@
       const drill = this.climbPractice;
       if (drill.phase !== 'active') return;
       const climber = this.dogs[drill.slot], guard = this.dogs[1 - drill.slot];
+      if (drill.route) {
+        if (climber.grip?.target === drill.slot) return this.finishClimbPractice('intercepted');
+        if (climber.ledge && drill.released) return this.finishClimbPractice('regrab');
+        if (!climber.ledge && !drill.released) return this.finishClimbPractice('otherExit');
+        if (drill.released && climber.ground >= 0)
+          return this.finishClimbPractice(drill.contact ? 'landedHit' : 'landedClear');
+        if (climber.y > drill.route.edge.y+210 || drill.time > 3)
+          return this.finishClimbPractice('fell');
+        return;
+      }
       if (!climber.ledge && !drill.climbed) return this.finishClimbPractice('other');
       const attack = guard.attack;
       if (drill.role === 'trap' && attack?.moveId === guard.kit.ground[0]) {
@@ -4472,7 +4494,10 @@
       if (this.climbPractice) {
         const drill = this.climbPractice;
         if (drill.phase === 'ready') {
-          if (drill.role === 'trap') {
+          if (drill.role === 'coverRise') {
+            if (!input1.shield && !input1.attack && !input1.tapped?.attack) return;
+            drill.consumeAttack = !!(input1.attack || input1.tapped?.attack);
+          } else if (drill.role === 'trap') {
             if (!input1.attack && !input1.tapped?.attack) return;
             drill.consumeAttack = true;
           } else if (!(Math.abs(input1.x) > 0.45 || input1.y > 0.5 || input1.attack || input1.jump ||
@@ -4778,8 +4803,12 @@
       if (f.respawning > 0) return;
       if (f.ledge) {
         const dir = f.ledge.left ? 1 : -1;
-        if (input.y > 0.5 || input.x * dir < -0.5) f.ledge.climbQueued = false;
-        else if (input.x * dir > 0.45 && was.x * dir <= 0.45) f.ledge.climbQueued = true;
+        const release = (input.y > .5 && was.y <= .5) || (input.x*dir < -.5 && was.x*dir >= -.5);
+        // Preserve the order of taps through hitstop. Attack and Shield on the release frame still choose their get-ups.
+        if (release && f.command?.type !== 'attack' && !f.jumpBuffer && !f.guardBuffer && !pressed('attack') && !pressed('shield')) {
+          f.ledge.dropQueued = true;
+          f.ledge.climbQueued = false;
+        } else if (!f.ledge.dropQueued && input.x*dir > .45 && was.x*dir <= .45) f.ledge.climbQueued = true;
       }
       if (f.tumble) {
         const dir = Math.sign(input.x);
@@ -4937,7 +4966,7 @@
           ? 'special'
           : pressed('aimStick') ? 'aimStick' : pressed('smash') ? 'smash' : pressed('attack') ? 'attack' : null;
       if (button) {
-        const stickAerial = button === 'aimStick' && !f.ledge &&
+        const stickAerial = button === 'aimStick' && (!f.ledge || f.ledge.dropQueued) &&
           (f.ground < 0 || f.jumpSquat || f.jumpBuffer > 0 || f.guardIntent === 'platformDrop');
         const stickTilt = button === 'aimStick' && input.tiltMode && f.ground >= 0 && !stickAerial;
         const type = button === 'aimStick' ? (stickAerial || stickTilt ? 'attack' : 'smash') : button;
@@ -5578,6 +5607,20 @@
           point: { x: f.x, y: f.y - f.stats.height * 0.5 } });
       }
       const jumpTap = f.jumpBuffer > 0 || (f.heldRecoveryJump && f.ground >= 0) || !!f.jumpSquat;
+      if (f.ledge?.dropQueued) {
+        const edge = f.ledge;
+        f.ledge = null;
+        f.invuln = Math.min(f.invuln,(shortCatchFrames-1)/60-1e-8);
+        f.ledgeLock = .45;
+        f.coyote = 0;
+        f.vy = 65;
+        f.jumps = 1;
+        this.emit('ledgeRelease',{f,edge});
+        if (this.climbPractice?.route && this.climbPractice.slot === f.index) {
+          this.climbPractice.released = true;
+          this.emit('climbCue',{f:this.dogs[0],phase:'release'});
+        }
+      }
       const jumpingFromLedge = jumpTap && !!f.ledge;
       const attackTap = f.command?.type === 'attack';
       const guardIntent = f.guardIntent;
@@ -5617,14 +5660,6 @@
         } else if (f.ledge.climbQueued || (steerIn && (!f.ledge.carriedIn || f.ledgeTime + 1e-8 >= ledgeDriftGrace)) || f.ledgeTime > 2) {
           this.beginLedgeOption(f, 'ledgeClimb');
           return this.advanceFloor(f, dt);
-        } else if (input.y > 0.5 || input.x * inward < -0.5) {
-          f.ledge = null;
-          f.invuln = Math.min(f.invuln, (shortCatchFrames - 1) / 60 - 1e-8);
-          f.ledgeLock = 0.45;
-          f.guardBuffer = 0;
-          f.guardAim = null;
-          f.vy = 65;
-          f.jumps = 1;
         } else return;
       }
       const getup = f.attack;
@@ -5785,6 +5820,11 @@
           f.cutJump = !groundJump;
           f.fastFall = false;
           this.emit('jump', { f });
+          const drill = this.climbPractice;
+          if (drill?.route && drill.released && drill.phase === 'active' && f.index === drill.slot && !grounded) {
+            drill.airJump = true;
+            this.emit('climbCue',{f:this.dogs[0],phase:'rise'});
+          }
           f.ground = -1;
           f.coyote = 0;
           f.jumpBuffer = 0;
@@ -7006,6 +7046,8 @@
       if (this.spacingPractice?.pattern === 'cancel' && this.spacingPractice.sent && target.index === 0)
         this.finishSpacingPractice('parried');
       if (!projectile) {
+        if (this.climbPractice?.role === 'coverRise' && target.index === 0 && owner.attack?.airSide)
+          this.finishClimbPractice('parriedRise');
         owner.attack = owner.floorAction = owner.run = owner.command = owner.reaction = null;
         owner.fastFall = false;
         owner.jumpBuffer = owner.guardBuffer = owner.chainWindow = owner.hopWindow = owner.reboundTime = 0;
@@ -7098,6 +7140,8 @@
       }
       if (this.climbPractice?.climbed && target.index === this.climbPractice.slot && moveId === owner.kit.ground[0])
         this.finishClimbPractice(this.climbPractice.role === 'trap' ? 'late' : 'guarded');
+      if (this.climbPractice?.role === 'coverRise' && target.index === 0 && use?.airSide)
+        this.finishClimbPractice('blockedRise');
       if (target.index === 0) this.finishShieldPractice(broken ? 'break' : 'block');
       else if (this.shieldPractice?.pattern === 'yourHop') this.finishShieldPractice('blockedAir');
       else if (this.shieldPractice?.pattern === 'poke') this.finishShieldPractice(broken ? 'brokeGuard' : 'sealed');
@@ -7345,8 +7389,17 @@
       if (this.chasePractice) this.chaseHit(target, moveId, previousLocks, 0);
       if (this.climbPractice?.phase === 'active') {
         const drill = this.climbPractice;
-        const jab = drill.climbed && target.index === drill.slot && moveId === owner.kit.ground[0];
-        this.finishClimbPractice(jab ? (drill.role === 'trap' ? 'timed' : 'caught') : 'other');
+        if (drill.route) {
+          if (target.index === drill.slot) this.finishClimbPractice('intercepted');
+          else if (drill.role === 'coverRise') this.finishClimbPractice('hitByRise');
+          else if (drill.airJump && use?.airSide && !drill.contact) {
+            drill.contact = moveId;
+            this.emit('climbCue',{f:owner,phase:'strike',moveId});
+          }
+        } else {
+          const jab = drill.climbed && target.index === drill.slot && moveId === owner.kit.ground[0];
+          this.finishClimbPractice(jab ? (drill.role === 'trap' ? 'timed' : 'caught') : 'other');
+        }
       }
       if (this.platformPractice?.pattern === 'hold') {
         const drill = this.platformPractice;
@@ -8197,6 +8250,40 @@
           Math.abs(height - foe.stats.height/2 - (f.y+y)) > ry + foe.stats.height/2 - 6) return null;
       return { ...idleInput, smashY:-1, tapped:{jump:true, smash:true} };
     }
+    ledgeReturnInput(f, route) {
+      if (f.grip || f.stun || f.tumble || f.ledgeTrump || f.ground >= 0 || f.stockLift) return null;
+      if (f.ledge) {
+        if (route.started || !sameLedge(f.ledge,route.edge)) return null;
+        if (f.prev.y > .5) return idleInput;
+        route.started = true;
+        return {...idleInput,y:1,jump:true,tapped:{jump:true}};
+      }
+      if (!route.started || f.y > route.edge.y+80) return null;
+      const x = route.dir;
+      if (!route.swung && f.vy < 0) {
+        route.swung = true;
+        return {...idleInput,x,jump:true,aimStick:true,smashX:x};
+      }
+      const floor = this.terrain[route.edge.index];
+      const mark = Math.min(115,(floor.x2-floor.x1)/2);
+      return {...idleInput,x:clamp((mark-(f.x-route.edge.x)*x-f.vx*x*.1)/25,-1,1)*x,jump:f.vy<0};
+    }
+    rivalLedgeReturn(f, foe) {
+      if (!this.bot.ledgeReturn) {
+        const edge = f.ledge, attack = foe.attack;
+        if (!edge || foe.ground !== edge.index || protectionTime(foe) || foe.shield) return null;
+        const swing = moves[f.kit.air.forward];
+        const whiff = attack && !attack.connected && attack.time >= attack.start+attack.active &&
+          attack.end-attack.time >= swing.start+2/60;
+        if (!whiff && !foe.smashCharge) return null;
+        const dir = edge.left ? 1 : -1, gap = (foe.x-edge.x)*dir;
+        if (gap < 32 || gap > swing.box[0]+swing.box[2]+foe.stats.width-18) return null;
+        this.bot.ledgeReturn = {edge,dir};
+      }
+      const input = this.ledgeReturnInput(f,this.bot.ledgeReturn);
+      if (!input) this.bot.ledgeReturn = null;
+      return input;
+    }
     readShieldEscape(f, foe) {
       const brain = this.bot, p = brain.pressure;
       if (!p) return null;
@@ -8298,6 +8385,7 @@
       if (this.grapple) {
         const grip = this.grapple;
         brain.jumpIn = null;
+        brain.ledgeReturn = null;
         if (brain.pressure) {
           if (!brain.pressure.observed) brain.spotStreak = 0;
           brain.pressure = null;
@@ -8357,7 +8445,7 @@
         const basic = this.rookieNeutral(f, foe);
         if (basic) return basic;
       } else if (this.cpuLevel === 'rival') {
-        const answer = this.readShieldEscape(f, foe) || this.rivalJumpIn(f, foe, dt) ||
+        const answer = this.rivalLedgeReturn(f, foe) || this.readShieldEscape(f, foe) || this.rivalJumpIn(f, foe, dt) ||
           this.runningAntiAir(f, foe) || this.angledTiltInput(f, foe);
         if (answer) return answer;
         // Space a quick forward tilt at the shield's rim. In close the normal grab mixup still applies.
