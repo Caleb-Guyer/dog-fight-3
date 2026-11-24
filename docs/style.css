@@ -650,6 +650,7 @@ body.playing .tools .utility,
   color: var(--gold);
 }
 #launch-status[data-result='tech'],
+#launch-status[data-result='clear'],
 #wall-status[data-result='wallTech'],
 #wall-status[data-result='wallTechJump'],
 #shield-status[data-result='parry'],
@@ -793,6 +794,7 @@ kbd {
   min-height: 30px;
   font-size: 13px;
 }
+#launch-patterns,
 #platform-patterns,
 #spacing-patterns,
 #escape-patterns,
@@ -805,6 +807,8 @@ kbd {
   display: inline-flex;
   gap: 2px;
 }
+#launch-patterns { flex-wrap: wrap; }
+#launch-patterns [aria-pressed='true'],
 #platform-patterns [aria-pressed='true'],
 #spacing-patterns [aria-pressed='true'],
 #escape-patterns [aria-pressed='true'],

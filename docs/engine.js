@@ -94,6 +94,12 @@
     const t = clamp(value, 0, 1);
     return t * t * (3 - 2 * t);
   }
+  function rollProgress(action, time) {
+    return smoothStep((time - 2 / 60) / (action.duration - 8 / 60));
+  }
+  function rollDistance(f, action) {
+    return action.distance ?? (65 + f.stats.speed * 0.15) * (action.type === 'techRoll' ? 1 : 0.88);
+  }
   const tumbleSpeed = 430;
   const maxDI = (18 * Math.PI) / 180;
   const octant = Math.PI / 4;
@@ -665,6 +671,7 @@
       },
     },
     pipJab: {
+      lockFrames: 23,
       label: 'Quick Paw',
       frames: [3, 4, 6],
       box: [35, -39, 35, 25],
@@ -762,6 +769,7 @@
       landingWindow: [3, 20],
     },
     brisketCheck: {
+      lockFrames: 35,
       label: 'Body Check',
       frames: [5, 7, 12],
       box: [35, -36, 37, 29],
@@ -851,6 +859,7 @@
       landingWindow: [1, 46],
     },
     noodleTrip: {
+      lockFrames: 29,
       label: 'Ankle Tap',
       frames: [4, 6, 9],
       box: [42, -18, 46, 19],
@@ -954,6 +963,7 @@
       rope: 'down',
     },
     cloverTap: {
+      lockFrames: 26,
       label: 'Disc Tap',
       frames: [4, 5, 8],
       box: [36, -37, 37, 25],
@@ -2203,6 +2213,7 @@
       this.escapePractice = null;
       this.platformPractice = null;
       this.spacingPractice = null;
+      this.chasePractice = null;
       this.airPractice = null;
       this.lastCombo = { hits: 0, damage: 0 };
       this.hitStop = 0;
@@ -2235,6 +2246,8 @@
         this.bot.platformRoute = null;
         this.bot.backAir = null;
         this.bot.passRead = null;
+        this.bot.rollChase = null;
+        this.bot.lastRoll = 0;
         this.bot.climbRead = null;
         this.bot.guardRead = null;
         this.bot.airRead = null;
@@ -2271,6 +2284,7 @@
       this.escapePractice = null;
       this.platformPractice = null;
       this.spacingPractice = null;
+      this.chasePractice = null;
       this.airPractice = null;
       this.dogs.forEach((f) => this.spawn(f, false));
       this.projectiles = [];
@@ -2335,6 +2349,69 @@
       } else if (f.ground !== drill.platform) this.finishPlatformPractice('left');
       else if (f.attack) drill.swing = true;
       else if (drill.swing) this.finishPlatformPractice('stayed');
+    }
+    resetChasePractice(role = 'attack', dir = 1, slow = true) {
+      this.resetTraining();
+      const slot = role === 'attack' ? 1 : 0;
+      const target = this.dogs[slot], striker = this.dogs[1 - slot];
+      const ground = this.stage === 'laundry' && dir < 0 ? 1 : 0;
+      const floor = this.terrain[ground], mark = (floor.x1 + floor.x2) / 2;
+      Object.assign(striker, { x: mark - dir * (striker.stats.width + target.stats.width + 4),
+        y: floor.y, ground, face: dir });
+      // Start in the final part of a fall. The normal tumble, terrain and input decide the landing.
+      Object.assign(target, { x: mark - dir * 8, y: floor.y - 78, ground: -1, face: -dir,
+        vx: dir * 38, vy: 185, jumps: 1, stun: 0.65 });
+      this.startTumble(target, false);
+      this.chasePractice = { role, slot, dir, ground, mark, slow, phase: 'ready', time: 0, locks: 0, outcome: '' };
+    }
+    finishChase(outcome) {
+      const drill = this.chasePractice;
+      if (drill.phase === 'done') return;
+      drill.phase = 'done';
+      drill.outcome = outcome;
+      this.emit('chaseResult', { f: this.dogs[drill.slot], outcome });
+    }
+    chaseHit(target, moveId, previousLocks, locks) {
+      const drill = this.chasePractice;
+      if (drill.phase === 'done') return;
+      if (target.index !== drill.slot) {
+        if (moveId === 'getupSweep') this.finishChase('sweep');
+        return;
+      }
+      if (locks) {
+        drill.phase = 'locked';
+        drill.locks = locks;
+        this.emit('chaseCue', { f: target, phase: 'locked', locks });
+      } else if (previousLocks) {
+        const starter = this.dogs[1 - drill.slot].kit.ground[0];
+        this.finishChase(moveId === starter ? 'third' : 'finish');
+      } else this.finishChase(drill.phase === 'fall' ? 'early' : drill.phase === 'getup' ? 'caught' : 'launched');
+    }
+    chasePracticeInput() {
+      const d = this.chasePractice, target = this.dogs[d.slot], striker = this.dogs[1 - d.slot];
+      if (d.phase === 'done') return idleInput;
+      const floor = target.floorAction;
+      if (d.role === 'attack') {
+        if (floor?.type !== 'downed') return idleInput;
+        const rollAt = floor.locks ? floor.duration - 4 / 60 : 8 / 60;
+        return floor.time + 1e-8 >= rollAt ? { ...idleInput, x: d.dir } : idleInput;
+      }
+      if (floor?.type === 'downed' && d.locks < 2) return this.chaseJabInput(striker, target) || idleInput;
+      if (d.phase === 'getup' && !d.punish && floor &&
+          floor.time * 60 >= 18 - moves[striker.kit.ground[0]].frames[0]) {
+        d.punish = true;
+        return { ...idleInput, tapped: { attack: true } };
+      }
+      return idleInput;
+    }
+    checkChasePractice(dt) {
+      const d = this.chasePractice, target = this.dogs[d.slot];
+      if (d.phase === 'done') return;
+      d.time += dt;
+      if (d.phase === 'getup' && !target.floorAction && (d.role === 'attack' || d.punish))
+        this.finishChase('escaped');
+      else if (d.time > 4 || target.ledge || target.respawning || this.dogs[1 - d.slot].respawning)
+        this.finishChase('away');
     }
     resetSpacingPractice(pattern = 'approach', dir = 1, slow = true) {
       this.resetTraining();
@@ -2811,6 +2888,17 @@
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
+      const chase = this.chasePractice;
+      if (chase?.phase === 'ready') {
+        if (!input1.attack && !input1.tapped?.attack) return;
+        chase.phase = 'fall';
+        chase.consumeAttack = true;
+        this.emit('chaseCue', { f: this.dogs[chase.slot], phase: 'fall' });
+      }
+      if (chase?.consumeAttack) {
+        chase.consumeAttack = !!input1.attack;
+        input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
+      }
       if (this.spacingPractice?.phase === 'ready') {
         if (!input1.jump && !input1.tapped?.jump) return;
         this.spacingPractice.phase = 'active';
@@ -2946,10 +3034,12 @@
       if (this.platformPractice) this.checkPlatformPractice();
       if (this.climbPractice) this.checkClimbPractice();
       if (this.spacingPractice) this.checkSpacingPractice(dt);
+      if (this.chasePractice) this.checkChasePractice(dt);
       if (
         this.fetch &&
         !this.platformPractice &&
         !this.spacingPractice &&
+        !this.chasePractice &&
         !this.escapePractice &&
         !this.footworkPractice &&
         !this.launchPractice &&
@@ -2967,6 +3057,7 @@
       if (out.length) this.knockouts(out);
     }
     trainingRivalInput(dt, player) {
+      if (this.chasePractice) return this.chasePracticeInput();
       if (this.spacingPractice) return this.spacingPracticeInput();
       if (this.escapePractice) return this.escapePracticeInput(dt);
       if (this.footworkPractice) return this.footworkInput(dt);
@@ -3035,7 +3126,8 @@
         }
       }
       if (floor?.type === 'downed') {
-        if (floor.time + inputWindow >= 12 / 60) {
+        const firstChoice = floor.locks ? floor.duration : 12 / 60;
+        if (floor.time + inputWindow + 1e-8 >= firstChoice) {
           if (pressed('attack')) floor.choice = { type: 'floorAttack', dir: 0 };
           else if (pressed('jump') || (input.y < -0.5 && was.y >= -0.5))
             floor.choice = { type: 'floorRise', dir: 0 };
@@ -3310,9 +3402,12 @@
     }
     beginFloorAction(f, type, dir = 0) {
       const [total, safe] = floorFrames[type];
+      const skid = type === 'downed' && (!f.encounter || f.encounter.kind === f.kind)
+        ? clamp(f.vx * 0.57, -265, 265) : 0;
       f.tumble = f.reaction = f.attack = f.command = f.run = null;
       f.shield = f.cutJump = false;
-      f.vx = f.vy = f.stun = f.techBuffer = f.guardBuffer = f.jumpBuffer = f.landingLag = 0;
+      f.vx = skid;
+      f.vy = f.stun = f.techBuffer = f.guardBuffer = f.jumpBuffer = f.landingLag = 0;
       f.invuln = safe / 60;
       f.floorAction = { type, time: 0, duration: total / 60, dir };
       if (type === 'floorAttack') beginAttack(f, 'floorAttack', 0, 0, 'getupSweep');
@@ -3320,6 +3415,14 @@
         type === 'downed' ? 'knockdown' : type === 'tech' || type === 'techRoll' ? 'tech' : 'getup';
       if (f.index === 0 && this.launchPractice?.phase === 'flight') this.launchPractice.phase = 'landed';
       this.emit(event, { f, type, dir, point: { x: f.x, y: f.y } });
+      const chase = this.chasePractice;
+      if (chase && chase.phase !== 'done' && f.index === chase.slot) {
+        if (event === 'tech') this.finishChase(type);
+        else {
+          chase.phase = type === 'downed' ? 'down' : 'getup';
+          this.emit('chaseCue', { f, phase: chase.phase, type });
+        }
+      }
     }
     beginGroundDodge(f, intent) {
       const dir = intent === 'down' ? 0 : intent === 'left' ? -1 : 1;
@@ -3424,7 +3527,25 @@
           f.invuln = Math.max(f.invuln, a.safeUntil - a.time - 1e-8);
       } else if (a.time + 1e-8 >= floorFrames[a.type][1] / 60) f.invuln = 0;
       if (a.type === 'downed') {
-        if (a.time + 1e-8 >= 12 / 60 && a.choice) this.beginFloorAction(f, a.choice.type, a.choice.dir);
+        const floor = this.terrain[f.ground];
+        f.y = floor.y;
+        if (f.vx) {
+          f.x += f.vx * dt;
+          if (f.x < floor.x1 - 7 || f.x > floor.x2 + 7) {
+            f.floorAction = null;
+            f.ground = -1;
+            f.y = floor.y + 1;
+            f.vy = 45;
+            f.coyote = 0;
+            f.jumps = 1;
+            this.startTumble(f, false);
+            this.emit('floorSlip', { f, point: { x: f.x, y: floor.y }, dir: Math.sign(f.vx) });
+            return;
+          }
+          f.vx = toward(f.vx, 0, (850 + 0.2 * f.kit.footwork.traction) * dt);
+        }
+        const firstChoice = a.locks ? a.duration : 12 / 60;
+        if (a.time + 1e-8 >= firstChoice && a.choice) this.beginFloorAction(f, a.choice.type, a.choice.dir);
         else if (a.time + 1e-8 >= a.duration) this.beginFloorAction(f, 'floorRise');
         return;
       }
@@ -3444,11 +3565,9 @@
           this.emit(a.type + 'Plant', { f, dir: a.dir, edge: a.edge, point: { x, y } });
         }
       } else if (a.dir) {
-        const progress = (t) => smoothStep((t - 2 / 60) / (a.duration - 8 / 60));
         const stage = this.terrain[f.ground];
-        const distance = a.distance ?? (65 + f.stats.speed * 0.15) * (a.type === 'techRoll' ? 1 : 0.88);
         f.x = clamp(
-          f.x + a.dir * distance * (progress(a.time) - progress(before)),
+          f.x + a.dir * rollDistance(f, a) * (rollProgress(a, a.time) - rollProgress(a, before)),
           stage.x1 + 2,
           stage.x2 - 2,
         );
@@ -4857,6 +4976,22 @@
         return false;
       }
       this.gradeFootwork(target);
+      const downed = target.floorAction?.type === 'downed' ? target.floorAction : null;
+      const previousLocks = downed?.locks || 0;
+      if (downed && target.ground >= 0 && owner.ground >= 0 && move?.lockFrames && previousLocks < 2 &&
+          (!target.encounter || target.encounter.kind === target.kind) && (!owner.encounter || owner.encounter.kind === owner.kind)) {
+        this.dealDamage(target, damage, previousLocks > 0);
+        downed.locks = previousLocks + 1;
+        downed.time = 0;
+        downed.duration = move.lockFrames / 60;
+        downed.choice = null;
+        target.vx = face * (60 + damage * 5);
+        owner.chainWindow = owner.chainNext = 0;
+        this.hitStop = Math.max(this.hitStop, 3 / 60);
+        this.emit('hit', { f: target, owner, speed: 0, name, moveId, face, point, lock: downed.locks });
+        if (this.chasePractice) this.chaseHit(target, moveId, previousLocks, downed.locks);
+        return true;
+      }
       if (target.grip) this.breakGrapple(false);
       target.ledgeTrump = null;
       target.crouch = false;
@@ -4869,7 +5004,7 @@
       target.impactLag = target.shieldStun = target.shieldGrabWindow = 0;
       target.shieldDrop = target.parryFlash = 0;
       target.techBuffer = target.dodge = 0;
-      this.dealDamage(target, damage, move?.preserveCombo);
+      this.dealDamage(target, damage, previousLocks > 0 || move?.preserveCombo);
       const speed = (base + target.damage * growth) / target.stats.weight;
       if (move) {
         const angle = ((move.angle < 0 && target.ground >= 0 ? 46 : move.angle) * Math.PI) / 180;
@@ -4945,6 +5080,7 @@
       )
         this.trumpPractice.phase = 'intercepted';
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic });
+      if (this.chasePractice) this.chaseHit(target, moveId, previousLocks, 0);
       if (this.climbPractice?.phase === 'active') {
         const drill = this.climbPractice;
         const jab = drill.climbed && target.index === drill.slot && moveId === owner.kit.ground[0];
@@ -5274,6 +5410,60 @@
       }
       return { ...idleInput, x: aimX, y: aimY, shield: true, tapped: { shield: true } };
     }
+    chaseJabInput(f, foe) {
+      const down = foe.floorAction;
+      if (f.ground < 0 || f.ground !== foe.ground || down?.type !== 'downed' || f.floorAction || f.stun)
+        return null;
+      if (f.attack || f.landingLag || f.command || f.charge >= 0 || down.time < 3 / 60) return idleInput;
+      const dx = foe.x - f.x, dir = Math.sign(dx) || f.face, move = moves[f.kit.ground[0]];
+      const reach = move.box[0] + move.box[2] + foe.stats.width;
+      if (Math.abs(dx) > reach + 35) return null;
+      if (Math.abs(dx) > reach - 6 || f.face !== dir) return { ...idleInput, x: dir * 0.5 };
+      if (down.locks >= 2) return { ...idleInput, smashY: 1, tapped: { smash: true } };
+      return { ...idleInput, tapped: { attack: true } };
+    }
+    cpuRollChaseInput(f, foe) {
+      const roll = foe.floorAction, brain = this.bot;
+      if (roll?.type !== 'techRoll' && roll?.type !== 'getupRoll') {
+        brain.rollChase = null;
+        return null;
+      }
+      if (roll.time + 1e-8 < 6 / 60 || f.ground < 0 || foe.ground !== f.ground || Math.abs(foe.x - f.x) > 230)
+        return null;
+      let chase = brain.rollChase;
+      if (chase?.roll !== roll) {
+        // Read the visible roll. Remember in or away relative to the rival, including on a mirrored stage.
+        const side = roll.dir * (Math.sign(foe.x - f.x) || f.face);
+        const follow = this.random() < (brain.lastRoll === side ? 0.78 : 0.30);
+        brain.lastRoll = side;
+        chase = brain.rollChase = { roll, follow, swung: false };
+      }
+      if (!chase.follow || chase.swung || f.stun || f.grip || f.dodge || f.shield || f.charge >= 0) return null;
+      if (f.attack || f.landingLag || f.command) return idleInput;
+      const floor = this.terrain[f.ground], low = moves[f.kit.tilts.down], travel = rollDistance(foe, roll) * roll.dir;
+      const now = rollProgress(roll, roll.time);
+      const position = time => clamp(foe.x + travel * (rollProgress(roll, time) - now), floor.x1 + 2, floor.x2 - 2);
+      const ahead = position(roll.time + low.start);
+      const reach = low.box[0] + low.box[2] + foe.stats.width - 4;
+      if (foe.invuln < low.start && Math.abs(ahead - f.x) <= reach) {
+        chase.swung = true;
+        return { ...idleInput, x: (Math.sign(ahead - f.x) || f.face) * 0.5, y: 1, tapped: { attack: true } };
+      }
+      const end = position(roll.duration), dir = Math.sign(end - f.x);
+      if (f.run?.face === dir && f.vx * dir > 0) {
+        const dash = moves[f.kit.dashAttack], speed = Math.abs(f.vx) * dash.carry;
+        const travelTime = Math.min(dash.start, speed / dash.brake);
+        const carry = speed * travelTime - 0.5 * dash.brake * travelTime * travelTime;
+        const gap = (position(roll.time + dash.start) - f.x) * dir;
+        const room = dir > 0 ? floor.x2 - f.x : f.x - floor.x1;
+        if (foe.invuln < dash.start && gap > 0 && gap <= carry + dash.box[0] + dash.box[2] + foe.stats.width - 4 &&
+            room > speed * speed / (2 * dash.brake) + f.stats.width) {
+          chase.swung = true;
+          return { ...idleInput, x: dir, tapped: { attack: true } };
+        }
+      }
+      return { ...idleInput, x: Math.abs(end - f.x) > reach - 8 ? Math.sign(end - f.x) : 0 };
+    }
     cpuBackAirInput(f, foe) {
       const brain = this.bot;
       let pass = brain.backAir;
@@ -5402,13 +5592,14 @@
       if (f.floorAction) {
         result.x = 0;
         result.jump = false;
-        if (f.floorAction.type === 'downed' && f.floorAction.time >= 15 / 60) {
-          if (far < 70 && !foe.shield) {
+        const down = f.floorAction;
+        if (down.type === 'downed' && !down.choice && down.time >= (down.locks ? down.duration - 5 / 60 : 15 / 60)) {
+          if (far < 70 && !foe.shield && foe.charge < 0 && !foe.attack?.smashSide && !down.locks) {
             result.attack = true;
             result.tapped = { attack: true };
           } else if (far < 140) {
-            const away = -Math.sign(dx);
-            result.x = f.x + 90 * away > closest.x1 && f.x + 90 * away < closest.x2 ? away : -away;
+            const away = -Math.sign(dx) || -f.face, floor = this.terrain[f.ground];
+            result.x = f.x + 90 * away > floor.x1 && f.x + 90 * away < floor.x2 ? away : -away;
           } else result.jump = true;
         }
         return result;
@@ -5437,13 +5628,10 @@
         } else if (f.techBuffer > 0) result.x = f.tumble.rollDir || 0;
         return result;
       }
-      if (foe.floorAction?.type === 'downed' && f.ground >= 0 && far < f.stats.reach + 15 && !f.attack) {
-        result.x = Math.sign(dx);
-        result.y = 1;
-        result.attack = true;
-        result.tapped = { attack: true };
-        return result;
-      }
+      const chaseInput = this.chaseJabInput(f, foe);
+      if (chaseInput) return chaseInput;
+      const readRoll = this.cpuRollChaseInput(f, foe);
+      if (readRoll) return readRoll;
       if (f.ledge) {
         const edge = f.ledge;
         const face = edge.left ? 1 : -1;

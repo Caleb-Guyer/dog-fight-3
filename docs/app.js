@@ -296,7 +296,11 @@
   }
   function sound(name, detail = {}) {
     if (name === 'hit') {
-      if (detail.emphatic) {
+      if (detail.lock) {
+        const note = detail.lock === 2 ? 285 : 206;
+        tone(note, 78, 0.061, 0, 'triangle', 0.09);
+        tone(note * 2, note, 0.032, 0.018, 'square', 0.031);
+      } else if (detail.emphatic) {
         tone(218, 56, 0.09, 0, 'sawtooth', 0.059);
         tone(105, 32, 0.19, 0.006, 'triangle', 0.17);
         tone(63, 32, 0.07, 0.05, 'sine', 0.09);
@@ -695,7 +699,7 @@
     floorAttack: {
       label: 'Get-up Sweep',
       input: 'After a knockdown · tap Attack',
-      hint: 'Sweep both sides for 7% as you get up. You can also tap a side to roll away, or tap Up or Jump to stand.',
+      hint: 'Sweep both sides for 7% as you get up. You can also tap a side to roll or tap Up or Jump to stand. A rival can lock a missed landing with two opening jabs. Choose your get-up as the bounce settles.',
     },
   };
   function guideMoveRow(move, input, direction, category) {
@@ -915,6 +919,8 @@
         kit.ground.map((id) => moves[id].label).join(' / ') +
         '</div><p>' +
         kit.combo +
+        '</p><p>If the rival misses a landing, tap neutral Attack for ' + moves[kit.ground[0]].label +
+        '. You can jab lock twice before finishing with ' + smashes[kit.smashes.down].label + ' (Down + Smash). Try Training → Launch practice → Jab lock.' +
         '</p><h3 class="guide-section">Ground tilts</h3><p>Aim and tap Attack. For a forward tilt, tap before your dog gets running.</p><ul class="move-rows guide-tilts">' +
         Object.entries(kit.tilts)
           .map(([side, id]) => guideMoveRow(moves[id], tiltInputs[side], side, 'tilts'))
@@ -1102,7 +1108,7 @@
     $('spacing-status').hidden = $('spacing-patterns').hidden = true;
     $('escape-status').hidden = $('escape-patterns').hidden = true;
     $('platform-status').hidden = $('platform-patterns').hidden = true;
-    $('launch-status').hidden = true;
+    $('launch-status').hidden = $('launch-patterns').hidden = true;
     $('wall-status').hidden = $('wall-patterns').hidden = true;
     $('shield-status').hidden = $('shield-patterns').hidden = true;
     $('air-status').hidden = $('air-patterns').hidden = true;
@@ -1120,6 +1126,7 @@
       view.event(name, e);
       sound(name, e);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
+      if (name === 'chaseCue' || name === 'chaseResult') chaseFeedback(name, e);
       if (world?.wallPractice && e.f?.index === 0) wallFeedback(name);
       if (name === 'shieldCue' || name === 'shieldResult') shieldFeedback(name, e);
       if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
@@ -1504,6 +1511,43 @@
     if (!feedback[name] || (name === 'hit' && world.wallPractice.phase !== 'flight')) return;
     [status.dataset.result, status.textContent, $('recovery-tip').textContent] = feedback[name];
   }
+  function chaseFeedback(name, e) {
+    const d = world.chasePractice, status = $('launch-status'), tip = $('recovery-tip');
+    const attack = d.role === 'attack';
+    if (name === 'chaseCue') {
+      status.dataset.result = e.phase;
+      if (e.phase === 'fall') status.textContent = attack ? 'Watch the landing' : 'Tap Shield before landing';
+      if (e.phase === 'down') status.textContent = attack ? 'Down · tap Attack' : 'Missed tech';
+      if (e.phase === 'locked') {
+        status.textContent = e.locks === 1 ? 'First jab lock' : 'Second jab lock';
+        tip.textContent = attack
+          ? e.locks === 1 ? 'Tap Attack again after the paw retracts, or start your finisher.' : 'Tap Down + Smash now to finish.'
+          : 'As the bounce settles, tap a side to roll or tap Attack to sweep.';
+      }
+      if (e.phase === 'getup') {
+        status.textContent = e.type === 'getupRoll' ? 'Rolling away' : 'Getting up';
+        if (attack && e.type === 'getupRoll') tip.textContent = 'Follow the roll and catch the rival as their paws come down.';
+      }
+      return;
+    }
+    const messages = {
+      finish: ['Finisher landed', d.locks + (d.locks === 1 ? ' lock' : ' locks') + ' into the finisher.'],
+      third: ['Third jab launched', 'A third jab sends the rival airborne. Try a stronger hit after the second.'],
+      early: ['Hit before landing', 'Watch for the dust from the landing before you jab.'],
+      launched: ['Launched off the floor', 'A quick tap of neutral Attack starts the lock.'],
+      escaped: [attack ? 'Rival got away' : 'Escaped', attack ? 'The rival finished getting up. Jab as they touch down.' : 'The jab missed your get-up.'],
+      caught: [attack ? 'Caught the get-up' : 'Caught getting up', attack ? 'Your hit landed before the rival could act again.' : 'Try a roll away or sweep as your dog settles.'],
+      sweep: [attack ? 'Hit by a sweep' : 'Get-up sweep landed', 'The get-up attack reached the waiting chaser.'],
+      tech: ['Tech in place', 'Your Shield press recovered the landing before the jab.'],
+      techRoll: ['Tech roll', 'You rolled out as you touched the floor.'],
+      away: ['Left the setup', 'Choose the drill again to return to the landing.'],
+    };
+    const [label, message] = messages[e.outcome];
+    const success = attack ? ['finish','caught'].includes(e.outcome) : ['tech','techRoll','escaped','sweep'].includes(e.outcome);
+    status.dataset.result = success ? 'clear' : e.outcome;
+    status.textContent = label;
+    tip.textContent = message + ' Choose ' + (attack ? 'Jab lock' : 'Escape the lock') + ' to retry.';
+  }
   function launchFeedback(name, e) {
     const result = $('launch-status'),
       tip = $('recovery-tip');
@@ -1657,6 +1701,7 @@
   function drill(ledge, fromHang = false, pattern = 'strike', direction) {
     if (!world) return;
     const launch = ledge === 'launch';
+    const chase = launch && (pattern === 'attack' || pattern === 'defend');
     const wall = ledge === 'wall';
     const shield = ledge === 'shield';
     const footwork = ledge === 'footwork';
@@ -1671,7 +1716,8 @@
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView();
-    if (launch) world.resetLaunchPractice();
+    if (chase) world.resetChasePractice(pattern, direction ?? world.chasePractice?.dir ?? 1, world.chasePractice?.slow ?? true);
+    else if (launch) world.resetLaunchPractice();
     else if (footwork) world.resetFootworkPractice();
     else if (spacing) world.resetSpacingPractice(pattern, direction ?? world.spacingPractice?.dir ?? 1,
       world.spacingPractice?.slow ?? true);
@@ -1689,6 +1735,14 @@
     hudKey = '';
     const result = $('launch-status');
     result.hidden = !launch;
+    $('launch-patterns').hidden = !launch;
+    $('launch-side').hidden = $('launch-slow').hidden = !chase;
+    if (launch) {
+      $('launch-throw').setAttribute('aria-pressed', String(!chase));
+      $('launch-lock').setAttribute('aria-pressed', String(chase && pattern === 'attack'));
+      $('launch-escape').setAttribute('aria-pressed', String(chase && pattern === 'defend'));
+      if (chase) $('launch-slow').setAttribute('aria-pressed', String(world.chasePractice.slow));
+    }
     $('footwork-status').hidden = !footwork;
     $('spacing-status').hidden = $('spacing-patterns').hidden = !spacing;
     $('escape-status').hidden = $('escape-patterns').hidden = !escape;
@@ -1793,6 +1847,11 @@
         strike: 'Raise Shield to start. Roll through the strike, or release Shield as it lands to parry.',
         grab: 'Raise Shield to start. Tap Down just before the grab to spot-dodge, or tap a side to roll.',
       }[pattern];
+    } else if (chase) {
+      result.dataset.result = 'ready';
+      result.textContent = 'Tap Attack to begin';
+      message = pattern === 'attack' ? 'Tap Attack to start the fall. As the rival lands, tap neutral Attack. You can jab twice, then tap Down + Smash.'
+        : 'Tap Attack to start the fall. Tap Shield just before you land. If you miss, try rolling away or sweeping as the second jab settles.';
     } else if (launch) {
       result.dataset.result = 'ready';
       result.textContent = 'Up throw incoming';
@@ -1863,7 +1922,16 @@
     practiceSide = practiceSide === 'left' ? 'right' : 'left';
     drill('roll', false, world.rollPractice.pattern);
   };
-  $('launch-training').onclick = () => drill('launch');
+  $('launch-training').onclick = $('launch-throw').onclick = () => drill('launch');
+  $('launch-lock').onclick = () => drill('launch', false, 'attack');
+  $('launch-escape').onclick = () => drill('launch', false, 'defend');
+  $('launch-side').onclick = () => drill('launch', false, world.chasePractice.role, -world.chasePractice.dir);
+  $('launch-slow').onclick = () => {
+    const d = world.chasePractice;
+    d.slow = !d.slow;
+    $('launch-slow').setAttribute('aria-pressed', String(d.slow));
+    $('game').focus({ preventScroll: true });
+  };
   $('wall-training').onclick = $('wall-retry').onclick = () =>
     drill('wall', false, world.wallPractice?.side || 'left');
   $('wall-side').onclick = () => drill('wall', false, world.wallPractice.side === 'left' ? 'right' : 'left');
@@ -2791,7 +2859,7 @@
         runOnline(dt, pads);
       } else if (world.end === null) {
         $('countdown').textContent = world.time < 0.37 && world.mode !== 'training' ? 'GO!' : '';
-        accumulator += world.escapePractice?.slow || world.climbPractice?.slow || world.spacingPractice?.slow ? dt / 2 : dt;
+        accumulator += world.escapePractice?.slow || world.climbPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const input = playerInput(0, pads);
           const player = world.dogs[0];

@@ -3050,7 +3050,7 @@
   const captiveLoops = ['grappled', 'grappledHigh'];
   const captiveFlinches = ['grappledFlinch', 'grappledHighFlinch'];
   const captivePoses = [...captiveLoops, ...captiveFlinches];
-  const landingPoses = ['tumble', 'tech', 'techRoll', 'downed', 'floorRise', 'floorAttack'];
+  const landingPoses = ['tumble', 'tech', 'techRoll', 'downed', 'jabLock', 'floorRise', 'floorAttack'];
   const shieldPoses = ['shieldRoll', 'spotDodge', 'parry'];
   const airDodgePoses = ['neutralAirDodge', 'directionalAirDodge'];
   const diagonal = Math.SQRT1_2;
@@ -3375,6 +3375,10 @@
     }
     if (shieldPoses.includes(pose)) return shieldFrame(name, pose, phase, backRoll);
     if (pose === 'tumble') return tick(14) % 8;
+    if (pose === 'jabLock') {
+      if (phase < 0.40) return Math.min(3, Math.floor(phase * 10));
+      return phase < 0.70 ? 4 : phase < 0.86 ? 5 : 6;
+    }
     if (pose === 'downed') {
       if (phase < 0.13) return 0;
       if (phase < 0.33) return 1;
@@ -4746,6 +4750,23 @@
       case 'downed':
         downedStance(s, name, frame);
         break;
+      case 'jabLock': {
+        restingStance(s, name);
+        const spring = landingStyles[name].spring;
+        s.floorRoll = true;
+        s.floorLift = [0, spring + 2, spring, 1, 0, 0, 0][frame];
+        s.roll = [7, -13, -10, -3, 2, 0, -3][frame];
+        s.bodyX += [-3,-2,0,1,2,1,0][frame];
+        s.headTurn += [-7,-16,-9,2,5,1,-7][frame];
+        s.leftY -= [2,7,6,3,0,1,2][frame];
+        s.rightX -= [1,6,5,3,1,0,-2][frame];
+        s.rearX -= [3,5,4,2,0,-3,-6][frame];
+        s.fistY -= [2,6,3,0,0,2,5][frame];
+        s.tailLift = [2,5,6,1,0,1,3][frame];
+        s.ear += name === 'noodle' && frame < 3 ? 6 : 1;
+        s.eye = frame < 3 ? shutEyes : null;
+        break;
+      }
       case 'floorAttack':
         floorSweepStance(s, name, frame);
         break;

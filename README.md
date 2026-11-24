@@ -129,6 +129,12 @@ Choose **Training → Air-dodge practice → In place**. Jump and tap Shield as 
 
 **Missed tech.** After the bounce, tap Attack for a two-sided, 7% **Get-up Sweep**, tap a side for a get-up roll, or tap Up or Jump to stand. If you wait, your dog stands automatically. A prone dog can duck a high swing, but a low hit can catch it.
 
+A missed tech carries some of the sideways launch into a skid. A hard landing near the lip can carry you offstage. A timed tech plants you or sends you into your chosen roll.
+
+**Jab lock.** Face a fallen rival, release the directions and tap Attack. Your opening jab bounces them against the floor. You can land two locks during one knockdown. Tap again as your first jab recovers to repeat it, or tap Down + Smash to finish. Pip’s Quick Paw recovers fastest, Noodle’s Ankle Tap reaches farthest, and Brisket’s Body Check gives the longest opening. If the chaser waits, tap a side, Attack or Jump as the bounce settles to choose your get-up.
+
+In **Training → Launch practice**, choose **Jab lock** to catch a rival who will roll away. You can also let the roll start, follow it and hit the recovery. A nearby solo opponent is more likely to chase if you repeat the same roll toward or away from them. Choose **Escape the lock** to play the falling dog. Tap Attack to start each fall. Time Shield for a tech, or let the two jabs connect, then roll away or sweep before the chaser's next jab. **Switch sides** mirrors the landing and **Half speed** lets you rehearse the timing.
+
 Choose **Training → Launch practice**. Your selected opponent grabs you at 90% and uses its own up throw. Compare the dashed gold line showing the original direction with your solid aqua launch line, then try a tech where you land. Choose Launch practice again to repeat the same throw. The **Defense** tab in the Move list illustrates the controls for every dog.
 
 During impact freeze, flick a fresh direction to shift your dog’s position. A ground hit allows a sideways shift. An airborne dog can shift in eight directions. A held direction counts once when you first flick during the freeze. Center and flick again if the impact lasts long enough. Holding an angle as a strong hit releases still steers your launch.

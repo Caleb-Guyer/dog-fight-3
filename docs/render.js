@@ -231,6 +231,7 @@
     }
     if (f.floorAction) {
       const action = f.floorAction;
+      if (action.type === 'downed' && action.locks) return ['jabLock', clamp(action.time / action.duration, 0, 1)];
       if (action.type === 'downed') return ['downed', clamp(action.time / 0.2, 0, 1)];
       if (action.type === 'floorAttack' && f.attack?.floorAttack)
         return ['floorAttack', attackPhase(f.attack)];
@@ -1792,6 +1793,16 @@
       }
       return;
     }
+    if (e.type === 'jabLock') {
+      const out = e.size + (reduced.matches ? 0 : snap(9 * p, 2));
+      for (const side of [-1,1]) {
+        const x = e.x + side * out;
+        pixelLine(ctx, x - side * 7, e.y - 1, x, e.y - 2, '#e8bd85', 3, 2);
+        pixelLine(ctx, x, e.y - 2, x + side * 4, e.y - 7, cream, 2, 2);
+        if (e.count === 2) pixelLine(ctx, x + side * 7, e.y - 3, x + side * 10, e.y - 6, gold, 3, 2);
+      }
+      return;
+    }
     if (wallOptions.has(e.type)) return wallContactMark(ctx, e, p);
     if (e.type === 'airGather' || e.type === 'airWake') return airDodgeStart(ctx, e, p);
     if (e.type === 'lipDust' || e.type === 'ledgePlant') return ledgeRollDust(ctx, e, p);
@@ -1918,6 +1929,7 @@
       }
       if (name === 'knockdown')
         this.add('knockDust', e.point.x, e.point.y, cream, 0.24, 17 + f.stats.width * 0.45);
+      if (name === 'floorSlip') this.add('riseScuff', e.point.x, e.point.y, cream, 0.12, 18, e.dir);
       if (name === 'getup' && (e.type === 'floorRise' || e.type === 'getupRoll'))
         this.add('riseScuff', e.point.x, e.point.y, cream, 0.14, 23, e.dir || f.face);
       if (name === 'shieldRoll' || name === 'spotDodge') {
@@ -1959,7 +1971,10 @@
           const frames = e.impactFrames || 2;
           this.add('block', point.x - face * 7, point.y, teamColor(f), (7 + frames) / 60, 34 + frames * 5, face);
         }
-        else {
+        else if (e.lock) {
+          this.add('jabLock', f.x, f.y, cream, 0.16, f.stats.width * 0.8, face, { count: e.lock });
+          this.add('light', point.x, point.y, gold, 0.09, 22, face);
+        } else {
           this.add(
             e.emphatic ? 'impact' : 'light',
             point.x,
@@ -2092,6 +2107,12 @@
             pixelLine(ctx, x, y, x + 6, y + 6, color, width, 2);
           }
         }
+      }
+      if (world.chasePractice) {
+        const d = world.chasePractice, floor = world.terrain[d.ground], x = snap(d.mark, 2), y = floor.y + 5;
+        pixelLine(ctx, x - 15, y + 4, x - 8, y, cream, 2, 2);
+        pixelLine(ctx, x + 8, y, x + 15, y + 4, cream, 2, 2);
+        for (let i = 0; i < d.locks; i++) pixelLine(ctx, x - 3 + i * 5, y + 5, x + i * 5, y, gold, 3, 2);
       }
       if (world.spacingPractice) {
         const drill = world.spacingPractice, floor = world.terrain[drill.ground];
