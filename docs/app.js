@@ -398,6 +398,10 @@
       tone(start, end, 0.053, 0, wave, wave === 'square' ? 0.033 : 0.085);
       tone(end * 0.7, end * 0.45, 0.055, 0.009, 'triangle', 0.068);
     } else if (name === 'blastThreat') {
+      if (detail.finalHit) {
+        tone(106, 44, .18, 0, 'triangle', .14);
+        tone(58, 36, .13, .13, 'triangle', .09);
+      }
       tone(180, 290, 0.075, 0, 'triangle', 0.11);
       tone(310, 160, 0.1, 0.065, 'square', 0.035);
     } else if (name === 'stockReady') {
@@ -1332,7 +1336,7 @@
   const frameLab = {mode:'live', count:0, pending:0, renderTime:0};
   function frameState(f) {
     const frames = seconds => Math.ceil(seconds * 60 - 1e-8);
-    if (world.hitStop > 0 || f.impactLag > 0) return 'Hitstop ' + frames(world.hitStop || f.impactLag) + 'f';
+    if (world.hitStop > 0 || f.impactLag > 0) return 'Hitstop ' + frames((world.hitStop + world.finalHitHold) || f.impactLag) + 'f';
     if (f.stockLift) return 'Respawn platform';
     if (f.grip) return 'Grapple';
     if (f.ledge) return 'Hanging';
@@ -1421,6 +1425,8 @@
     showDialog('stock-rules', 'Stock match rules',
       '<p>Three stocks each. When time runs out, the dog with more stocks wins. Tied stocks or a double final knockout start Sudden Death.</p>' +
       '<h3>Match clock</h3><div class="dialog-actions">' + choices + '</div>' +
+      '<p>Play the last stock with both dogs at 125%. When a hit threatens the match, steer during the close-up to change your launch.</p>' +
+      '<div class="dialog-actions"><button class="utility" data-do="last-stock-start">Play last stock</button></div>' +
       '<p>Sudden Death starts both dogs at 300% on one stock. The side boundaries close in after five seconds.</p>' +
       '<div class="dialog-actions"><button class="utility" data-do="sudden-start">Play Sudden Death</button></div>');
     document.querySelector('[data-minutes="' + settings.minutes + '"]').focus({preventScroll:true});
@@ -1539,7 +1545,7 @@
     $('damage-output').textContent = '0%';
     const matchName = online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
       'Solo · ' + cpuLevels[world.cpuLevel].name + ' CPU' : modes[config.mode];
-    $('match-mode').textContent = matchName;
+    $('match-mode').textContent = matchName + (config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = arenas[config.stage].name;
     $('pause-label').textContent = online.match ? 'Match menu' : 'Pause';
     countdown = config.mode === 'training' || world.suddenDeath ? 0 : 2.4;
@@ -1658,6 +1664,10 @@
     }
     if (e.target.closest('[data-do="sudden-start"]')) {
       startMatch({ ...settings, suddenStart:true });
+      return;
+    }
+    if (e.target.closest('[data-do="last-stock-start"]')) {
+      startMatch({ ...settings, lastStockStart:true });
       return;
     }
     const choice = e.target.closest('[data-cpu]')?.dataset.cpu;
@@ -2484,6 +2494,7 @@
     if (name === 'survivalReady' || name === 'survivalStart') {
       label = name === 'survivalReady' ? 'Tap Attack to start' : move;
       message = name === 'survivalReady' && d.study ? 'Tap Attack to take the throw. At impact, change your aim to compare the paths, then tap Attack to launch.' :
+        name === 'survivalReady' && d.pattern === 'lastStock' ? 'Take the throw once with the stick centered. Retry and change direction during the last-stock impact.' :
         name === 'survivalReady' ? 'Take ' + move + ' with the stick centered. Tap Attack to retry from the same mark.' :
         aim + ' at the hit spark. Then steer ' + inward + ' toward the ledge.';
     } else if (name === 'survivalAim') {
@@ -2492,10 +2503,12 @@
         path.contact ? 'Reaches the ' + path.contact + ' in ' + path.ticks + 'f' : 'Control returns inside the boundary';
       message = 'Change your stick direction to redraw the path. Tap Attack to commit that angle, then steer back toward the stage.';
     } else if (name === 'blastThreat') {
-      label = 'Blast line · aim now';
+      label = e.finalHit ? 'Last stock · steer now' : 'Blast line · aim now';
+      if (e.finalHit) message = aim + ' before the hit releases. The mint arrow shows your launch.';
     } else if (name === 'launchDI') {
       label = Math.round(e.scale * 100) + '% speed · ' + Math.round(Math.abs(e.angle) * 180 / Math.PI) + '° turn';
       message = 'At the mint arrow, aim up-' + inward + ' and tap Shield. Jump toward the ledge and use Up + Special if you need more height.';
+      if (d.releaseZone !== undefined) label += d.releaseZone ? ' · on course for the ' + d.releaseZone + ' line' : ' · room to recover';
     } else if (name === 'survivalBuffer') {
       label = 'Shield + up-' + inward;
     } else if (name === 'survivalFree') {
@@ -2790,7 +2803,7 @@
     const juggle = launch && pattern === 'juggle';
     const chase = launch && (pattern === 'attack' || pattern === 'defend');
     const stock = launch && (pattern === 'stockReturn' || pattern === 'stockCatch');
-    const survival = launch && pattern === 'survival';
+    const survival = launch && (pattern === 'survival' || pattern === 'lastStock');
     const meteor = launch && (pattern === 'spikeFloor' || pattern === 'spikeEdge');
     const wall = ledge === 'wall';
     const shield = ledge === 'shield';
@@ -2810,12 +2823,13 @@
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView($('blast-radar'));
+    view.shakeEnabled = settings.shake;
     if (chase) world.resetChasePractice(pattern, direction ?? world.chasePractice?.dir ?? 1, world.chasePractice?.slow ?? true);
     else if (meteor) world.resetMeteorPractice(pattern, direction ?? world.meteorPractice?.dir ?? 1,
       world.meteorPractice?.slow ?? true, study === 'impact' ? 185 : world.meteorPractice?.baseline ?? 100);
     else if (stock) world.resetStockPractice(pattern, direction ?? world.stockPractice?.dir ?? 1, world.stockPractice?.slow ?? true);
     else if (survival) world.resetSurvivalPractice(direction ?? world.survivalPractice?.dir ?? 1, world.survivalPractice?.slow ?? true,
-      world.survivalPractice?.baseline, study);
+      world.survivalPractice?.baseline, study, pattern);
     else if (juggle) world.resetLaunchPractice(pattern, direction ?? world.launchPractice?.dir ?? 1,
       world.launchPractice?.slow ?? true, world.launchPractice?.chase ?? false);
     else if (launch) world.resetLaunchPractice();
@@ -2876,7 +2890,8 @@
     if (launch) {
       $('launch-throw').setAttribute('aria-pressed', String(!launchOptions));
       $('launch-juggle').setAttribute('aria-pressed', String(juggle));
-      $('launch-survival').setAttribute('aria-pressed', String(survival));
+      $('launch-survival').setAttribute('aria-pressed', String(pattern === 'survival'));
+      $('launch-last-stock').setAttribute('aria-pressed', String(pattern === 'lastStock'));
       $('launch-stock-return').setAttribute('aria-pressed', String(pattern === 'stockReturn'));
       $('launch-stock-catch').setAttribute('aria-pressed', String(pattern === 'stockCatch'));
       $('launch-floor-spike').setAttribute('aria-pressed', String(pattern === 'spikeFloor'));
@@ -3351,9 +3366,10 @@
   $('launch-edge-spike').onclick = () => drill('launch', false, 'spikeEdge');
   $('launch-stock-return').onclick = () => drill('launch', false, 'stockReturn');
   $('launch-survival').onclick = () => drill('launch', false, 'survival');
+  $('launch-last-stock').onclick = () => drill('launch', false, 'lastStock');
   $('launch-study').onclick = () => {
     const d = world.survivalPractice;
-    drill('launch', false, 'survival', d.dir, !d.study);
+    drill('launch', false, d.pattern, d.dir, !d.study);
   };
   $('launch-stock-catch').onclick = () => drill('launch', false, 'stockCatch');
   $('launch-side').onclick = () => {
@@ -4127,7 +4143,7 @@
   window.addEventListener('blur', onBlur);
   const redrawPausedStage = () => {
     if (page === 'match' && world && view && (paused || frameLab.mode === 'frozen'))
-      view.draw($('game'), world, 0, frameLab.mode === 'frozen' ? frameLab.renderTime : world.time);
+      view.draw($('game'), world, 0, frameLab.mode === 'frozen' ? frameLab.renderTime : world.time, online.match?.confirmedWorld || world);
   };
   if (window.ResizeObserver) new ResizeObserver(redrawPausedStage).observe($('game'));
   else window.addEventListener('resize', redrawPausedStage);
@@ -4445,7 +4461,7 @@
           world.suddenDeath?.round !== confirmed.suddenDeath?.round);
         const studying = !!world.survivalPractice?.preview;
         view.draw($('game'), waitingOnKO ? confirmed : world, studying ? 0 : frameLab.mode === 'frozen' ? 1/60 : dt,
-          studying ? world.time : frameLab.mode === 'frozen' ? frameLab.renderTime : now);
+          studying ? world.time : frameLab.mode === 'frozen' ? frameLab.renderTime : now, confirmed || world);
       }
     }
     requestAnimationFrame(frame);
@@ -4464,6 +4480,11 @@
       const stage = hash === '#solo/night-mail' ? 'nightmail' : 'picnic';
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage,
         cpuLevel:'rival', minutes:7, fetch:false }, undefined, 42);
+    } else if (hash === '#solo/last-stock') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'nightmail', cpuLevel:'rival',
+        minutes:7, fetch:false, lastStockStart:true}, undefined, 42);
     } else if (hash === '#solo/sudden-death') {
       leaveOnline();
       afterStory = null;
@@ -4499,11 +4520,12 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'pip', stage:'nightmail', fetch:false });
       drill('shield', false, 'yourHop');
-    } else if (hash === '#training/blast-radar') {
+    } else if (hash === '#training/blast-radar' || hash === '#training/last-stock') {
       menuScreen('match');
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'clover', stage:'picnic', fetch:false });
-      drill('launch', false, 'survival', 1, true);
+      const finish = hash === '#training/last-stock';
+      drill('launch', false, finish ? 'lastStock' : 'survival', 1, !finish);
     } else if (hash === '#training/landing-buffer') {
       menuScreen('match');
       afterStory = null;

@@ -264,6 +264,10 @@ In **Training → Combo escape → Crouch counter**, choose Brisket and tap Atta
 
 On your last stock, a double chevron and a two-note cue warn when a centered stick would take you across a blast boundary before you regain control. In open air, you can tap Shield toward the stage in the final few frames of hitstun to dodge back as soon as you can act. Near an incoming floor or wall, the same Shield tap attempts a tech.
 
+When both dogs are on their last stock, a hit that threatens a ring-out holds the impact for 12 extra frames. Steer until the dogs separate. The gold notch marks the neutral launch and the mint arrow shows your current launch direction and speed. The match clock holds during those extra frames. To play the end of a match with your selected fighters, choose **Rules → Play last stock**. Both dogs start at 125%. [Play Pip against Rival Brisket](https://caleb-guyer.github.io/dog-fight-3/#solo/last-stock)
+
+In **Launch practice → Last-stock save**, take Clover’s Forehand Pass with the stick centered. Retry and hold Down during the impact to slow the throw, then dodge up and inward when the cue appears. Compare the ring-out with your return to the ledge. **Switch sides** mirrors the setup. **Half speed** and **Study launch** let you rehearse the input. [Play the last-stock save](https://caleb-guyer.github.io/dog-fight-3/#training/last-stock)
+
 The **blast radar** appears near a knockout boundary, when a dog leaves the camera, or during Sudden Death. The square marks P1, the diamond marks P2, and a short trail shows each dog's direction of travel. The coral border shows where a stock is lost. Moving platforms and the narrowing Sudden Death boundaries update live.
 
 Choose **Study launch** in Survival DI to stop at the hit. Change your aim to preview the flight until you regain control, touch a surface, or cross a blast line. Tap Attack to commit the displayed angle. In the Picnic setup, compare a centered stick with Down against Clover’s Forehand Pass, then use your air dodge and jump to make it back to the ledge. [Study the launch on Picnic](https://caleb-guyer.github.io/dog-fight-3/#training/blast-radar)

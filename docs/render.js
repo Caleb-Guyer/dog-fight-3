@@ -2193,6 +2193,45 @@
     else if (!e.behind)
       spark(ctx, e.x, e.y, row === undefined ? radius : radius * 0.38, e.color, p, e.type === 'burst');
   }
+  function finalHitArrow(ctx, f, input) {
+    const raw = Math.hypot(f.vx,f.vy);
+    if (!raw) return;
+    const v = window.DogFight.launchInfluence(f.vx,f.vy,input);
+    const ux = f.vx/raw, uy = f.vy/raw;
+    const x = f.x + ux*(f.stats.width+10), y = f.y - f.stats.height*.52 + uy*f.stats.height*.52;
+    // The outlined notch marks neutral. The solid arrow follows the defender's actual aim.
+    const length = 62, bx = x+ux*length, by = y+uy*length;
+    for (let i=0;i<length;i+=10) pixelLine(ctx,x+ux*i,y+uy*i,x+ux*(i+5),y+uy*(i+5),cream,3,2);
+    for (const color of [ink,gold]) {
+      const w = color===ink ? 6 : 3;
+      pixelLine(ctx,bx+uy*7,by-ux*7,bx-uy*7,by+ux*7,color,w,2);
+    }
+    const ax=v.x/raw, ay=v.y/raw, ex=x+ax*length, ey=y+ay*length;
+    for (const [color,w] of [[ink,6],[mint,3]]) {
+      pixelLine(ctx,x,y,ex,ey,color,w,2);
+      for (const side of [-1,1])
+        pixelLine(ctx,ex-ax*10+ay*side*6,ey-ay*10-ax*side*6,ex,ey,color,w,2);
+    }
+  }
+  function finalHitBackdrop(ctx, left, top, width, height, f, steady, opacity) {
+    ctx.save();
+    ctx.globalAlpha = .38*opacity;
+    ctx.fillStyle = '#302034';
+    ctx.fillRect(left,top,width,height);
+    if (f && !steady) {
+      // Broken diagonal ink strokes point in from the edges and leave the silhouettes clear.
+      const cx=f.x, cy=f.y-f.stats.height*.52;
+      for (const [sx,sy,reach] of [[0,.18,.28],[0,.28,.15],[.12,0,.25],[.32,0,.15],
+        [.78,0,.21],[1,.22,.24],[1,.31,.32],[1,.75,.22],[.83,1,.26],[.34,1,.19],[0,.8,.29]]) {
+        const x=left+width*sx,y=top+height*sy,dx=(cx-x)*reach,dy=(cy-y)*reach;
+        ctx.globalAlpha=.72*opacity;
+        pixelLine(ctx,x,y,x+dx,y+dy,ink,7,4);
+        pixelLine(ctx,x+dx*.22,y+dy*.22,x+dx*.72,y+dy*.72,'#ed9276',3,3);
+        pixelLine(ctx,x+dx*1.08,y+dy*1.08,x+dx*1.2,y+dy*1.2,gold,3,3);
+      }
+    }
+    ctx.restore();
+  }
   class FightView {
     constructor(radar = null) {
       this.radar = radar;
@@ -2203,6 +2242,7 @@
       this.leftFighter = 0;
       this.shake = 0;
       this.zoom = 1;
+      this.finishReturn = 0;
       this.cx = 600;
       this.cy = 337.5;
     }
@@ -2410,7 +2450,7 @@
         );
       }
     }
-    draw(canvas, world, dt, time) {
+    draw(canvas, world, dt, time, confirmed = world) {
       const resized = this.fitCanvas(canvas);
       const { width, height } = canvas;
       const ctx = canvas.getContext('2d'),
@@ -2427,6 +2467,13 @@
       const wideShot = Math.min(1, width / 1200, height / 675);
       const koTest = world.freshnessPractice?.koTest;
       const survival = world.survivalPractice;
+      const steady = reduced.matches || this.shakeEnabled === false;
+      const finishers = confirmed.end === null && !survival?.preview ? world.dogs.filter(f =>
+        f.tumble?.pending && f.tumble.finalHit && confirmed.dogs[f.index]?.tumble?.pending &&
+        confirmed.dogs[f.index].tumble.finalHit) : [];
+      const focus = finishers[0];
+      if (focus) this.finishReturn = .24;
+      else this.finishReturn = Math.max(0,this.finishReturn-dt);
       let targetZoom = off || reduced.matches ? wideShot :
         clamp(Math.min(width / (spread + 505), height / (vertical + 345)), wideShot, 1.5);
       let launchCenterY, survivalX;
@@ -2446,15 +2493,28 @@
         survivalX = (inner + outer) / 2;
         launchCenterY = (low + high) / 2 - 18;
       }
-      const blend = resized || koTest || survival ? 1 : 1 - Math.exp(-dt * (targetZoom < this.zoom ? 7.5 : 4));
+      let focusX,focusY;
+      if (focus && !steady) {
+        const left = Math.min(a.x-a.stats.width,b.x-b.stats.width), right = Math.max(a.x+a.stats.width,b.x+b.stats.width);
+        const top = Math.min(a.y-a.stats.height,b.y-b.stats.height), bottom = Math.max(a.y,b.y);
+        focusX = (right+left)/2;
+        focusY = (top+bottom)/2;
+        targetZoom = Math.min(2.55,width/(right-left+248),height/(bottom-top+232));
+      }
+      const blend = resized ? 1 : this.finishReturn && !steady ? 1-Math.exp(-dt*(focus ? 18 : 12)) :
+        koTest || survival ? 1 : 1 - Math.exp(-dt * (targetZoom < this.zoom ? 7.5 : 4));
       this.zoom += (targetZoom - this.zoom) * blend;
       const halfW = width / (2 * this.zoom), halfH = height / (2 * this.zoom);
       const centerX = survival ? survivalX : koTest ? world.freshnessPractice.marks[0] + (a.kind === 'clover' ? 176 : 89) :
         halfW >= 600 ? 600 : clamp((a.x + b.x) / 2, halfW, 1200 - halfW);
       const centerY = koTest || survival ? launchCenterY : halfH >= 337.5 ? 337.5 : clamp((a.y + b.y) / 2 - 67, halfH, 675 - halfH);
-      this.cx += (centerX - this.cx) * blend;
-      this.cy += (centerY - this.cy) * blend;
-      const steady = reduced.matches || this.shakeEnabled === false;
+      this.cx += ((focusX ?? centerX) - this.cx) * blend;
+      this.cy += ((focusY ?? centerY) - this.cy) * blend;
+      if (focus && !steady) {
+        this.cx = clamp(this.cx, Math.max(a.x+a.stats.width,b.x+b.stats.width)-halfW+34,
+          Math.min(a.x-a.stats.width,b.x-b.stats.width)+halfW-34);
+        this.cy = clamp(this.cy, Math.max(a.y,b.y)-halfH+32, Math.min(a.y-a.stats.height,b.y-b.stats.height)+halfH-48);
+      }
       const sx = steady ? 0 : snap(Math.sin(time * 97) * this.shake, 2),
         sy = steady ? 0 : snap(Math.cos(time * 81) * this.shake * 0.55, 2);
       this.shake = Math.max(0, this.shake - 62 * dt);
@@ -2469,6 +2529,7 @@
       window.ArenaArt.draw(ctx, world.stage, world.time, {
         left, top, right: left + 2 * halfW, bottom: top + 2 * halfH,
       });
+      if (this.finishReturn) finalHitBackdrop(ctx,left,top,2*halfW,2*halfH,focus,steady,this.finishReturn/.24);
       if (world.suddenDeath) {
         const inset = world.blastInset();
         for (const dir of [1,-1]) {
@@ -2762,6 +2823,7 @@
       }
       this.effects = this.effects.filter((e) => e.life > 0);
       if (world.mode === 'training' && this.contactBoxes) drawContactBoxes(ctx, world);
+      for (const f of finishers) finalHitArrow(ctx,f,survival?.lockedAim || f.tumble.finalAim || f.prev);
       ctx.restore();
       this.drawOffscreen(ctx, world, left, top, width, height, this.zoom, time);
       if (this.radar) this.drawRadar(world, left, top, halfW * 2, halfH * 2);
