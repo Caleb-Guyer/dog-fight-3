@@ -14,6 +14,7 @@
     arenas,
     Battle,
     idleInput,
+    applyFlickJump,
     isReversalPractice,
     isFootstoolPractice,
     cpuLevels,
@@ -240,6 +241,8 @@
     volume: 75,
     shake: true,
     tiltStick: false,
+    flickJump1: false,
+    flickJump2: false,
   };
   try {
     const s = JSON.parse(localStorage.getItem('dog-fight-3.config') || '{}');
@@ -248,7 +251,7 @@
     if (Object.hasOwn(cpuLevels, s.cpuLevel)) settings.cpuLevel = s.cpuLevel;
     if (stockMinutes.includes(s.minutes)) settings.minutes = s.minutes;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
-    for (const key of ['fetch', 'sound', 'shake', 'tiltStick']) if (typeof s[key] === 'boolean') settings[key] = s[key];
+    for (const key of ['fetch', 'sound', 'shake', 'tiltStick','flickJump1','flickJump2']) if (typeof s[key] === 'boolean') settings[key] = s[key];
     if (Number.isFinite(s.volume)) settings.volume = Math.max(0, Math.min(100, s.volume));
   } catch {
     /* Settings are optional in private browsing. */
@@ -270,6 +273,7 @@
   let touchFlick = null, flickAim = null;
   const rightStickHeld = [false, false];
   const shieldTiltLocked = [false, false];
+  const flickJumpStates = [{},{}];
   function clearInput() {
     held.clear();
     taps.clear();
@@ -280,6 +284,8 @@
     touchFlick = flickAim = null;
     rightStickHeld.fill(false);
     shieldTiltLocked.fill(false);
+    flickJumpStates[0] = {};
+    flickJumpStates[1] = {};
     document.querySelectorAll('.touch-pad .held').forEach((el) => el.classList.remove('held'));
   }
   let audioContext;
@@ -695,7 +701,7 @@
     const rows = [
       ['Move / aim', 'W A S D', 'Arrow keys', 'Stick / D-pad'],
       ['Walk', 'Left Shift + A / D', 'Right Ctrl + ← / →', 'Tilt left stick gently'],
-      ['Jump', 'Space', 'Right Shift', 'A'],
+      ['Jump', settings.flickJump1 ? 'Space / W' : 'Space', settings.flickJump2 ? 'Right Shift / ↑' : 'Right Shift', 'A / flick Up if enabled'],
       ['Short hop', 'E', 'Apostrophe', 'LT / L2'],
       ['Attack / charge', 'J', ',', 'X'],
       ['Aim strike ← / → / ↑ / ↓', 'R / Y / T / G', 'Numpad 4 / 6 / 8 / 2', 'Right stick'],
@@ -1676,9 +1682,10 @@
     if (action === 'route') showRoute();
     if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.atCheckpoint);
     if (action === 'dispatch-rematch') beginRun(world.roomIndex, 0);
-    if (['option-sound', 'option-shake', 'option-tiltStick'].includes(action)) {
+    if (['option-sound', 'option-shake', 'option-tiltStick','option-flickJump1','option-flickJump2'].includes(action)) {
       const key = action.slice('option-'.length);
       settings[key] = !settings[key];
+      if (key === 'flickJump1' || key === 'flickJump2') flickJumpStates[key === 'flickJump1' ? 0 : 1] = {};
       save();
       updateAudio();
       audioReady();
@@ -2805,6 +2812,8 @@
       $('spacing-approach').setAttribute('aria-pressed', String(approach));
       $('spacing-retreat').setAttribute('aria-pressed', String(pattern === 'retreat'));
       $('spacing-landing').setAttribute('aria-pressed', String(pattern === 'landing'));
+      $('spacing-flick').hidden = pattern !== 'landing';
+      $('spacing-flick').setAttribute('aria-pressed', String(practice.flickJump ?? settings.flickJump1));
       $('spacing-cancel').setAttribute('aria-pressed', String(pattern === 'cancel'));
       for (const id of ['footstool','footstoolTech']) $('spacing-' + id).setAttribute('aria-pressed', String(pattern === id));
       $('spacing-reverse').setAttribute('aria-pressed', String(pattern === 'reverse'));
@@ -2823,6 +2832,7 @@
         isReversalPractice(practice) ? reversalTip(practice) : pattern === 'landing' ? 'Hold Hop (E, LT/L2, or Hop on touch) and move ' + run + '. Attack at the gold fork for a late hit or the green stripe for a clean hit. Center and jab on landing. Retry with Jump to compare heights.' : 'Running ' + run + '. ' + (approach
         ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
         : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
+      if (pattern === 'landing' && (practice.flickJump ?? settings.flickJump1)) message = flickJumpTip;
     } else if (climb) {
       const trap = pattern === 'trap', inward = practiceSide === 'left' ? 'right' : 'left';
       for (const role of ['escape','trap','rise','coverRise'])
@@ -3087,6 +3097,14 @@
   $('spacing-approach').onclick = () => drill('spacing', false, 'approach');
   $('spacing-retreat').onclick = () => drill('spacing', false, 'retreat');
   $('spacing-landing').onclick = () => drill('spacing', false, 'landing');
+  const flickJumpTip = 'Tap Up and release for a short hop. Choose Landing hits to reset, then hold Up through takeoff for a full jump. Compare the two heights at the apex.';
+  function setFlickTrial(enabled) {
+    world.spacingPractice.flickJump = enabled;
+    flickJumpStates[0] = {};
+    $('spacing-flick').setAttribute('aria-pressed', String(enabled));
+    $('recovery-tip').textContent = enabled ? flickJumpTip : 'Use Jump or Hop to compare takeoff heights. Choose Landing hits to return to the mark.';
+  }
+  $('spacing-flick').onclick = () => setFlickTrial(!(world.spacingPractice.flickJump ?? settings.flickJump1));
   $('spacing-cancel').onclick = () => drill('spacing', false, 'cancel');
   for (const id of ['footstool','footstoolTech']) $('spacing-' + id).onclick = () => drill('spacing', false, id);
   $('spacing-reverse').onclick = () => drill('spacing', false, 'reverse');
@@ -3612,7 +3630,13 @@
         (settings.shake ? 'On' : 'Off') +
         '</b></button><button type="button" data-do="option-tiltStick" aria-pressed="' + settings.tiltStick +
         '">Grounded aim stick <b>' + (settings.tiltStick ? 'Tilt' : 'Smash') +
-        '</b></button><p>Also applies to the aim keys and a swipe from Smash on touch.</p></div><div class="dialog-actions"><button class="primary" data-do="close">Done</button></div>',
+        '</b></button><p>Also applies to the aim keys and a swipe from Smash on touch.</p>' +
+        [1,2].map(slot => {
+          const enabled = settings['flickJump'+slot];
+          return '<button type="button" data-do="option-flickJump'+slot+'" aria-pressed="'+enabled+'">P'+slot+
+            ' flick jump <b>'+(enabled?'On':'Off')+'</b></button>';
+        }).join('') +
+        '<p>Flick the left stick up or tap Up to jump. For an up tilt, aim gently, hold Walk, or slide from the center dot on touch. Online uses your P1 controls.</p></div><div class="dialog-actions"><button class="primary" data-do="close">Done</button></div>',
     );
   }
   $('dialog-body').addEventListener('input', (e) => {
@@ -3856,6 +3880,7 @@
   function setTouch(pointerId, button) {
     const previous = touchPointers.get(pointerId);
     if (previous === button) return;
+    const wasUp = touches.has('up');
     if (button) touchPointers.set(pointerId, button);
     else touchPointers.delete(pointerId);
     touches.clear();
@@ -3865,6 +3890,10 @@
       if (previous)
         for (const key of previous.dataset.touch.split('-')) if (!touches.has(key)) touchTaps.delete(key);
       for (const key of button.dataset.touch.split('-')) touchTaps.add(key);
+      if (!wasUp && touches.has('up')) {
+        touchTaps.add('flickUp');
+        if (walkPointer === pointerId) touchTaps.add('gentleUp');
+      }
       if (button.dataset.touch === 'attack') rememberAttackAim(0);
     }
     for (const el of touchButtons) el.classList.toggle('held', pressed.has(el));
@@ -4044,7 +4073,7 @@
     // Keep a held direction aimed when the second bumper is released. Centering rearms the dodge.
     if (grounded && down(pad, 4) && down(pad, 5)) shieldTiltLocked[i] = true;
     else if (!grounded || !shield || Math.max(Math.abs(side), Math.abs(vertical)) < 0.24) shieldTiltLocked[i] = false;
-    return {
+    const input = {
       x: shieldTiltLocked[i] ? clamp(side, -0.5, 0.5) : side,
       grabX,
       y: shieldTiltLocked[i] ? clamp(vertical, -0.5, 0.5) : vertical,
@@ -4073,6 +4102,14 @@
         grab: tapped('grab'),
       },
     };
+    const trial = !i && world.spacingPractice?.pattern === 'landing' ? world.spacingPractice.flickJump : undefined;
+    if (trial ?? settings[i === 0 ? 'flickJump1' : 'flickJump2']) {
+      const device = pad ? pad.index + ':' + pad.id : '';
+      if (flickJumpStates[i].device !== device) flickJumpStates[i] = {device};
+      const gentle = key('walk') || !!fromCenter || (!i && touchTaps.has('gentleUp')) || shieldTiltLocked[i];
+      applyFlickJump(flickJumpStates[i],input,y || axis(1),gentle,taps.has(map.up) || (!i && touchTaps.has('flickUp')));
+    }
+    return input;
   }
   let oldPad = {};
   function padMenu(pads) {
@@ -4355,11 +4392,12 @@
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
       drill('platform', false, 'shield-drop');
     }
-    else if (hash === '#training/short-hops') {
+    else if (hash === '#training/short-hops' || hash === '#training/flick-jump') {
       menuScreen('match');
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'pip', p2: 'brisket', stage: 'picnic', fetch: false });
       drill('spacing', false, 'landing');
+      if (hash === '#training/flick-jump') setFlickTrial(true);
     }
     else if (hash === '#training/landing-cancel') {
       menuScreen('match');

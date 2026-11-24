@@ -100,6 +100,36 @@
   const canStayPlanted = (vx, vy) => Math.hypot(vx, vy) <= 150 && Math.abs(vy) <= 96;
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
   const inputWindow = 7 / 60;
+  // Convert the local control preference before recording or sending the regular Jump button.
+  function applyFlickJump(state, input, vertical, gentle, freshUp = false) {
+    const up = -vertical;
+    const button = !!input.jump;
+    const pressedButton = button && state.button === false;
+    const shieldPress = input.shield && (!state.shield || input.tapped.shield);
+    state.button = button;
+    state.shield = input.shield;
+    let flick = false;
+    if (freshUp || up <= .32) {
+      state.armed = true;
+      state.travel = 0;
+      state.held = false;
+    }
+    if (up < .5) state.held = false;
+    if (up > .32 && state.armed) {
+      if (gentle || shieldPress || input.attack || input.special || input.grab || input.smash || input.aimStick) {
+        state.armed = false;
+      } else if (up >= .68) {
+        // A full diagonal on a circular stick has only .707 vertical travel.
+        state.armed = false;
+        state.held = flick = true;
+      } else {
+        state.travel++;
+        if (state.travel >= 3) state.armed = false;
+      }
+    }
+    input.jump = button || !!state.held;
+    if (flick || (pressedButton && state.held)) input.tapped.jump = true;
+  }
   const spotCounterLead = 4 / 60;
   // One second spent outside a dodge restores one level. Store game time so rollback and half speed agree.
   const dodgeWear = f => Math.ceil(Math.max(0, (f.dodgeFatigue || 0) - 1e-8));
@@ -3253,7 +3283,8 @@
           vx: dir * f.stats.speed, sprintDir: dir, stickTicks: 3, prev: { ...idleInput, x: dir, grabX: dir } });
         this.spacingPractice = { pattern, dir, slow, ground, mark: f.x + dir * softMark, cleanMark: f.x + dir * cleanMark,
           phase: 'ready', time: 0, contact: '', timing: '', damage: 0, airborne: false, landing: null, outcome: '',
-          swung: false, peak: null, previousPeak: previous?.pattern === 'landing' && previous.dir === dir
+          swung: false, peak: null, flickJump: previous?.pattern === 'landing' ? previous.flickJump : undefined,
+          previousPeak: previous?.pattern === 'landing' && previous.dir === dir
             ? (previous.peak?.complete ? previous.peak : previous.previousPeak) : null };
         return;
       }
@@ -9201,6 +9232,7 @@
     blastSideMargin,
     Battle,
     idleInput,
+    applyFlickJump,
     clamp,
     attackWindow,
     canCancelMeteor,
