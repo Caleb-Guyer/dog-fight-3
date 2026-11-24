@@ -2184,9 +2184,15 @@
     const attackName =
       e.pattern === 'low' ? 'Tail Broom' : e.pattern === 'high' ? 'Slip Lead' :
       aerial ? moves[dummy.kit.air[e.pattern === 'kick' ? 'forward' : 'down']].label
-        : e.pattern === 'grab' ? grabs[dummy.kit.grab].label : smashes[dummy.kit.smashes.side].label;
+        : (e.pattern === 'grab' || e.pattern === 'counterGrab') ? grabs[dummy.kit.grab].label : smashes[dummy.kit.smashes.side].label;
     if (name === 'shieldCue') {
       result.dataset.result = e.phase;
+      if (e.pattern === 'counterGrab') {
+        result.textContent = e.phase === 'counterTap' ? 'Rise · tap Attack' :
+          e.phase === 'windup' ? attackName + ' coming' : attackName + ' · dodge';
+        if (e.phase === 'counterTap') tip.textContent = 'Center the stick and tap Attack for a jab, or aim a tilt. You can keep Shield held.';
+        return;
+      }
       result.textContent = e.phase === 'counter' ? 'Blocked · tap Grab' : e.phase === 'windup' ? attackName + ' coming' : attackName;
       if (e.phase === 'windup' && (e.pattern === 'low' || e.pattern === 'high'))
         tip.textContent = e.pattern === 'low' ? 'Cover the paws. Hold Shield and gently aim down.' : 'Cover the ears. Hold Shield and aim up.';
@@ -2194,6 +2200,9 @@
     }
     result.dataset.result = e.outcome;
     const feedback = {
+      spotPunish: ['Dodge counter · ' + e.landingFrames + 'f left', 'Your strike caught the missed grab. The frame count shows how long the rival still needed to recover.'],
+      ordinaryPunish: ['Grab punished', 'Your strike landed after your dodge finished. Tap Attack while your dog is still rising to counter sooner.'],
+      counterBlocked: ['Rival shielded', 'The grab recovered before your hit reached them. Try a quicker strike or start the dodge earlier.'],
       parry: ['Parry', 'Shield released on time. After a melee parry, tap Attack to counter.'],
       block: e.pattern === 'low' || e.pattern === 'high'
         ? ['Covered the ' + (e.pattern === 'low' ? 'paws' : 'ears'), 'The bubble intercepted ' + attackName + '.']
@@ -2909,6 +2918,7 @@
         drop: 'You’re Clover. Hold Shield. Tap Grab as Brisket’s Belly Drop hits to catch him before he recovers.',
         strike: 'Raise Shield to start. Roll through the strike, or release Shield as it lands to parry.',
         grab: 'Raise Shield to start. Tap Down just before the grab to spot-dodge, or tap a side to roll.',
+        counterGrab: 'Hold Shield. Tap Down as the grab comes out, then release Down. Tap Attack as your dog rises to punish with a jab.',
         low: 'Hold Shield. Noodle sweeps your paws. Aim Down gently with the stick, Walk + Down, or a drag from the center dot.',
         high: 'Hold Shield. Noodle jumps for your ears. Aim Up as the lead swings over the bubble.',
         poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + moves[player.kit.tilts.down].label + '.',
@@ -4193,6 +4203,11 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/spot-counter') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'clover', p2:'brisket', stage:'nightmail', fetch:false });
+      drill('shield', false, 'counterGrab');
     } else if (hash === '#training/ledge-return') {
       leaveOnline();
       afterStory = null;
