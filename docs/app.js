@@ -882,6 +882,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='pack-relay')return backFromRelay();
     if(dialogType==='finish-picker')return $('finish-picker-back').click();
     if(dialogType==='finish-comparison')return leaveFinishTrial(true);
     if(dialogType==='finish-pause')return dismiss();
@@ -1431,20 +1432,22 @@
     return fraction ? whole + '<small>.' + fraction + '</small>' : whole;
   }
   const hudCards=[];
-  function updateFighterCard(f,slot,coat,alert,recovery,label=labelFor(slot),points=null){
+  function updateFighterCard(f,slot,coat,alert,recovery,label=labelFor(slot),points=null,battle=world){
     const training=world.mode==='training';
     const scored=points!==null;
+    const team=battle.relayTeams?.[slot], sudden=!!battle.suddenDeath;
     let card=hudCards[slot];
-    if(!card || card.kind!==f.kind || card.coat!==coat || card.label!==label || card.training!==training || card.scored!==scored){
+    if(!card || card.kind!==f.kind || card.coat!==coat || card.label!==label || card.training!==training || card.scored!==scored || card.team!==team || (team && card.sudden!==sudden)){
       const root=document.createElement('div');
       root.className='hud-card'+(slot?' two':'');
       root.innerHTML='<span class="hud-portrait"><img alt=""></span><div><span class="hud-name"><small></small></span>'+
-        '<strong class="percentage"></strong><span class="lives">'+(scored?'':training?'∞':stockPaws(3))+'</span></div>';
+        '<strong class="percentage"></strong><span class="lives">'+(team?team.map((kind,i)=>'<img alt="" title="'+fighters[kind].name+
+          '" src="'+portrait(kind,battle.relayCoats[slot][i])+'">').join(''):scored?'':training?'∞':stockPaws(3))+'</span></div>';
       const picture=root.querySelector('.hud-portrait'), name=root.querySelector('.hud-name');
       picture.firstChild.src=portrait(f.kind,coat);
       name.firstChild.textContent=label;name.append(f.stats.name);
       if(card)card.root.replaceWith(root);else $('hud').append(root);
-      card=hudCards[slot]={root,picture,kind:f.kind,coat,label,training,scored,lives:root.querySelector('.lives'),
+      card=hudCards[slot]={root,picture,kind:f.kind,coat,label,training,scored,team,sudden,lives:root.querySelector('.lives'),
         percent:root.querySelector('.percentage'),alert:'',recovery:null,rage:0};
     }
     if(card.damage!==f.damage){
@@ -1469,8 +1472,11 @@
       card.lives.setAttribute('aria-label',pointLabel(points));
     }else if(!scored && card.stocks!==f.stocks){
       card.stocks=f.stocks;
-      Array.from(card.lives.children).forEach((paw,i)=>paw.classList.toggle('lost',i>=f.stocks));
-      card.lives.setAttribute('aria-label',training?'Unlimited stocks':stockLabel(f.stocks));
+      const active=team?.indexOf(f.kind);
+      Array.from(card.lives.children).forEach((paw,i)=>paw.classList.toggle('lost',team?
+        !f.stocks || i<active || (sudden && i!==active):i>=f.stocks));
+      const next=team && !sudden && f.stocks>1 && team[active+1];
+      card.lives.setAttribute('aria-label',training?'Unlimited stocks':stockLabel(f.stocks)+(next?' · Next '+fighters[next].name:''));
     }
     if(card.alert!==alert){
       card.alert=alert;
@@ -1680,7 +1686,7 @@
         if (f.ledgeCatches >= window.DogFight.maxLedgeCatches) return f.ledge ? 'Last grip' : 'Land to regrab';
         return '';
       }
-      if (!f.stockLift.ready) return 'Returning';
+      if (!f.stockLift.ready) return confirmed.relayTeams?'Entering':'Returning';
       const human = online.match ? online.side === i : world.mode === 'local' || i === 0;
       return human ? '↓ or Jump' : 'Lift ready';
     });
@@ -1715,7 +1721,7 @@
         (world.trainingPartner || combo.target === 0 ? 'P' + ((combo.target ?? 1)+1) + ' took ' : '') +
         combo.hits + (combo.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(combo.damage) + '% damage';
     }
-    scores.forEach((f,i)=>updateFighterCard(f,i,confirmed.coatFor(i),returns[i],recovery[i],labelFor(i),confirmed.matchCard?.points?.[i]??null));
+    scores.forEach((f,i)=>updateFighterCard(f,i,confirmed.coatFor(i),returns[i],recovery[i],labelFor(i),confirmed.matchCard?.points?.[i]??null,confirmed));
   }
   let matchConfig, soloSeed, localSet = null, practiceFight = null;
   let finishTape=null, clipScreen=null, victoryShot=null, finishTrial=null;
@@ -2052,12 +2058,23 @@
     document.querySelector('[data-cpu="' + level + '"]').focus({preventScroll:true});
   }
   $('cpu-level').onclick = showCpuLevels;
+  function backFromRelay(){
+    if(page==='match' && world?.end!=null)return showResult();
+    $('rules-label').onclick();
+  }
+  function openRelay(){
+    if(!window.PackRelay)return waitForDispatch('Pack Relay',()=>loadDispatch('PackRelay'),openRelay,backFromRelay);
+    const config=world?.relayTeams && page==='match'?matchConfig:{...settings,form:lobbyForm()};
+    window.PackRelay.sheet(config,{storage,portrait,showDialog,root:$('dialog-body'),back:backFromRelay,
+      start:cfg=>startMatch({...cfg,bestOfThree:false,timeBattle:false},undefined,undefined,null)});
+  }
   $('rules-label').onclick = () => {
     const choices = stockMinutes.filter(n=>n || !settings.timed).map(n => '<button type="button" class="utility" data-minutes="' + n +
       '" aria-pressed="' + (settings.minutes === n) + '">' + (n ? n + ' min' : 'No clock') + '</button>').join('');
     showDialog('stock-rules', settings.timed?'Time Battle rules':'Stock match rules',
       '<h3>Battle rules</h3><div class="dialog-actions"><button class="utility" data-scoring="stock" aria-pressed="'+!settings.timed+'">Stock</button>'+
-      '<button class="utility" data-scoring="time" aria-pressed="'+settings.timed+'">Time Battle</button></div>'+
+      '<button class="utility" data-scoring="time" aria-pressed="'+settings.timed+'">Time Battle</button>'+
+      '<button class="utility" data-do="pack-relay">Pack Relay · Choose teams</button></div>'+
       (settings.timed?'<p>Respawn until time expires. Earn one point if a rival falls within ten seconds of your hit. Lose one point whenever you fall. A tie starts Sudden Death.</p>':
       '<p>Three stocks each. When time runs out, the dog with more stocks wins. Tied stocks or a double final knockout start Sudden Death.</p>') +
       '<h3>Match format</h3><div class="dialog-actions"><button class="utility" data-format="single" aria-pressed="' + !settings.bestOfThree +
@@ -2116,7 +2133,7 @@
     $('partner-training').setAttribute('aria-pressed','false');
     localSet = series;
     matchConfig = { ...config };
-    if(series && config.mode==='local' && !online.match && config.lesson===undefined && !matchConfig.couchSeats)
+    if((series || config.relayTeams) && config.mode==='local' && !online.match && config.lesson===undefined && !matchConfig.couchSeats)
       matchConfig.couchSeats=new window.FightControls.Seats(getPads());
     $('school-coach').hidden = config.lesson === undefined;
     if (config.mode === 'solo') {
@@ -2209,6 +2226,7 @@
       }
       if (name === 'blastThreat' && !world.survivalPractice) announce(e.f.stats.name + ' near the ' + e.zone + ' blast line');
       if (name === 'ko') announce(e.f.stats.name + ' knocked out');
+      if(name==='relayEntry')announce(labelFor(e.f.index)+' sends in '+e.f.stats.name);
       if (name === 'ledge' && drillSide && e.f.index === 0)
         $('recovery-tip').textContent =
           'Caught the ' +
@@ -2250,7 +2268,7 @@
       (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : world.bells ? 'Bell Break' : modes[config.mode];
     $('match-mode').textContent = cupAttempt ? 'Arcade Cup · Round '+(cupAttempt.round+1)+'/4' :
       config.rotationRound?'Bout '+config.rotationRound+' · P1 '+config.rotationTags[0]+' / P2 '+config.rotationTags[1]:
-      world.lesson ? 'Fight School' : matchName + (world.matchCard?.points?' · Time Battle':config.lastStockStart ? ' · Last stock' : '');
+      world.lesson ? 'Fight School' : matchName + (world.relayTeams?' · Pack Relay':world.matchCard?.points?' · Time Battle':config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = stageName(config.stage,world.form);
     const set = online.series || localSet;
     $('match-set').hidden = !set;
@@ -2396,7 +2414,7 @@
     victoryShot={canvas,kind:dog.kind,coat:result.coatFor(slot),elapsed:0,cel:-1};
     drawVictory(0);
     const stats=document.querySelector('#dialog-body [data-do=match-card]');
-    if(stats && result.mode==='local' && !online.match && (!localSet || localSet.champion!==null)){
+    if(stats && result.mode==='local' && !result.relayTeams && !online.match && (!localSet || localSet.champion!==null)){
       if(matchConfig.rotationRound){
         const winner=localSet?.champion ?? result.end, challenger=1-winner;
         const handoff=document.createElement('p');handoff.id='rotation-handoff';
@@ -2533,8 +2551,9 @@
     if(!finishTape?.length)return;
     const result=online.match?.confirmedWorld || world;
     const start=cursor===null || cursor>=finishTape.length ? Math.max(0,finishTape.length-120) : cursor;
-    const choices=result.dogs.map((f,i)=>'<button type="button" class="coat-option" data-finish-slot="'+i+'">'+
-      '<img alt="" src="'+portrait(f.kind,result.coatFor(i))+'"><strong>P'+(i+1)+' · '+f.stats.name+'</strong><small>'+
+    const opening=result.relayTeams?finishTape.playback(start).battle:result;
+    const choices=opening.dogs.map((f,i)=>'<button type="button" class="coat-option" data-finish-slot="'+i+'">'+
+      '<img alt="" src="'+portrait(f.kind,opening.coatFor(i))+'"><strong>P'+(i+1)+' · '+f.stats.name+'</strong><small>'+
       (result.mode==='solo' && i===0?'Against '+cpuLevels[result.cpuLevel].name+' CPU':'Against recorded inputs')+'</small></button>').join('');
     showDialog('finish-picker','Practice the finish','<p>Take over a fighter with your P1 controls. Play from frame '+start+
       ' to '+finishTape.length+', then compare the ending.</p><div class="coat-grid finish-picks">'+choices+
@@ -2566,7 +2585,7 @@
   function drawFinishTrial(dt){
     const {player,camera,slot}=finishTrial,battle=player.battle;
     camera.draw($('game'),battle,dt,battle.time);
-    for(const [i,f] of battle.dogs.entries())updateFighterCard(f,i,battle.coatFor(i),'',offstageOptions(f,battle.terrain),i===slot?'YOU':'RIVAL',battle.matchCard?.points?.[i]??null);
+    for(const [i,f] of battle.dogs.entries())updateFighterCard(f,i,battle.coatFor(i),'',offstageOptions(f,battle.terrain),i===slot?'YOU':'RIVAL',battle.matchCard?.points?.[i]??null,battle);
     const clock=$('match-clock'),text=((player.length-player.frame)/60).toFixed(1)+'s';
     if(clock.textContent!==text)clock.textContent=text;
     const grip=battle.grapple, prompt=$('grapple-prompt');
@@ -2649,9 +2668,9 @@
       const dogs=entry.card.players, winner=dogs[entry.winner];
       const date=new Date(entry.time).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
       return '<button data-record-id="'+id+'"><img alt="" src="'+portrait(winner.kind,winner.coat)+'"><span><strong>'+
-        fighters[dogs[0].kind].name+' vs. '+fighters[dogs[1].kind].name+'</strong><small>'+recordModes[entry.mode]+
+        (entry.card.relayTeams?'Pack Relay':fighters[dogs[0].kind].name+' vs. '+fighters[dogs[1].kind].name)+'</strong><small>'+recordModes[entry.mode]+
         (entry.card.points?' · Time Battle':'')+(entry.round?' · Game '+entry.round:'')+' · '+arenas[entry.stage].name+' · '+date+'</small></span><b>'+
-        fighters[winner.kind].name+' wins</b></button>';
+        (entry.card.relayTeams?(entry.winner===0?'P1':entry.mode==='solo'?'CPU':'P2')+'’s pack':fighters[winner.kind].name)+' wins</b></button>';
     }).join('');
     showDialog('records','Fight Records',rows.length?
       '<p>Last '+window.FightRecords.limit+' completed fights on this device.</p><div class="saved-games">'+buttons+'</div>'+
@@ -2675,7 +2694,7 @@
     const slot = i => i===1 && ['solo','school','cup'].includes(mode) ? 'CPU' : 'P'+(i+1);
     const heading=i=>slot(i)+(mode==='online' && i===side?' · YOU':'');
     reviewCard={id,archived,index,game,mode,side};
-    const name = i => fighters[players[i].kind].name;
+    const name = i => card.relayTeams?card.relayTeams[i].map(kind=>fighters[kind].name).join(' / '):fighters[players[i].kind].name;
     const headings = players.map((p,i) => '<th scope="col"><img alt="" src="' + portrait(p.kind,p.coat) +
       '"><small>' + heading(i) + '</small>' + name(i) + '</th>').join('');
     const row = (label, value) => '<tr><th scope="row">' + label + '</th>' +
@@ -2690,7 +2709,7 @@
       const move = (moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id])?.label;
       const last = hit ? 'Last hit at ' + cardTime(hit.frame) + ' · ' + (move || (id === 'ball' ? 'Tennis ball' : 'Hit')) :
         (loss.points?'No hits since respawn':'No hits taken this stock');
-      return '<li><time>' + cardTime(loss.frame) + '</time><div><strong>' + slot(loss.slot) + ' ' + name(loss.slot) +
+      return '<li><time>' + cardTime(loss.frame) + '</time><div><strong>' + slot(loss.slot) + ' ' + (card.relayTeams?fighters[loss.kind].name:name(loss.slot)) +
         ' out at ' + tenth(loss.damage) + '%</strong><span>' +
         (loss.suddenRound ? 'Sudden Death ' + loss.suddenRound + ' · ' : '') +
         (loss.zone ? loss.zone + ' blast line · ' : '') + (loss.points?(loss.credited?'KO for '+name(1-loss.slot):'Self-destruct')+
@@ -2708,7 +2727,7 @@
     }).join('');
     showDialog(archived?'record-card':'match-card', 'Match stats', tabs + '<h3 class="card-stage">' +
       (set ? 'Game ' + (index+1) + ' · ' : archived ? recordModes[mode]+' · ' : '') + stageName(game.stage,form) + '</h3><p class="card-finish">' +
-      slot(game.winner) + ' ' + name(game.winner) + ' wins · ' +
+      slot(game.winner) + (card.relayTeams?'’s pack':' '+name(game.winner)) + ' wins · ' +
       (reason === 'time' ? 'Time expired' : reason === 'sudden' ? 'Sudden Death' : 'Knockout') + ' · ' + cardTime(frames) + '</p>' +
       '<table class="card-stats" aria-label="Fighter stats"><thead><tr><td></td>' + headings +
       '</tr></thead><tbody>' + stats + '</tbody></table>'+
@@ -2808,19 +2827,20 @@
     }
     showDialog(
       'result',
-      'Match result',
+      result.relayTeams?'Pack Relay result':'Match result',
       '<div class="winner"><img alt="" src="' +
         portrait(f.kind,result.coatFor(f.index)) +
         '"><div><span class="mode-label">' +
         labelFor(f.index) +
         '</span><h3 style="margin-top:9px">' +
-        f.stats.name +
+        (result.relayTeams?labelFor(f.index)+'’s pack':f.stats.name) +
         ' wins!</h3><p>' +
         finish + ' · ' +
         duration +
         '</p></div></div>' + cpuReadReport() + '<div class="dialog-actions"><button class="primary" data-do="'+
         (matchConfig.rotationRound?'rotation':'rematch')+'">'+(matchConfig.rotationRound?'Next challenger':icon('reset')+'Rematch')+
-        '</button><button class="utility" data-do="lobby">Fighter select</button>' + cardButton + '<button class="utility" data-do="home">Main menu</button></div>',
+        '</button>'+(result.relayTeams?'<button class="utility" data-do="pack-relay">Change teams</button>':'')+
+        '<button class="utility" data-do="lobby">Fighter select</button>' + cardButton + '<button class="utility" data-do="home">Main menu</button></div>',
       false,
     );
     announce(f.stats.name + ' wins the Golden Tennis Ball');
@@ -2930,6 +2950,7 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if(action==='pack-relay')return openRelay();
     if(action==='trial-retry')return startFinishTrial(finishTrial.start,finishTrial.slot);
     if(action==='trial-replay' || action==='trial-results')return leaveFinishTrial(action==='trial-replay');
     if (action==='record-solo') {
@@ -4872,7 +4893,10 @@
     const review=reviewCard, {card,stage}=review.game;
     const tip=window.FightRecords.coaching(card,slot);
     if(!tip)return;
-    const [fighter,rival]=[card.players[slot],card.players[1-slot]];
+    const [fighter,rival]=[0,1].map(n=>{
+      const seat=n?1-slot:slot;
+      return (card.relayTeams && card.losses.findLast(l=>l.slot===seat)) || card.players[seat];
+    });
     const visit={review,returnResult:review.archived?null:pausedFight()};
     startMatch({mode:'training',p1:fighter.kind,p2:rival.kind,stage,fetch:false,coats:[fighter.coat,rival.coat]},
       undefined,undefined,null,{visit});
@@ -5293,6 +5317,7 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
+    PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=rotation-1', CouchSelect:'couch-select.js?v=time-battle-1',
     FinishTools:'finish-tools.js?v=time-battle-1',
     FighterSchool:'fighter-lessons.js?v=school-examples-1',
@@ -7195,7 +7220,10 @@
     const hash = location.hash;
     const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
     const [,arena,form] = hash.split('/');
-    if(hash==='#local/winner-stays'){
+    if(hash==='#local/pack-relay' || hash==='#solo/pack-relay'){
+      settings.mode=hash.startsWith('#local')?'local':'solo';
+      editing=0;toLobby();openRelay();
+    }else if(hash==='#local/winner-stays'){
       settings.mode='local';editing=0;toLobby();rotationBoard();
     }else if (hash==='#local/pick-together' || hash==='#local/best-of-three') {
       if(hash==='#local/best-of-three')settings.bestOfThree=true;

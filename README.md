@@ -54,6 +54,8 @@ Try the same opening on two stages. You play Pip against Rival Brisket, with thr
 
 ## Stock and Time Battle rules
 
+**Pack Relay** gives each side three dogs with one stock apiece. Open **Rules → Pack Relay** in Solo or Local versus. Select a spot in either lineup and pick its fighter. Picking a teammate already in the lineup swaps their positions. The two packs may share a breed. After a ring-out, the next dog enters at 0% while the survivor keeps their damage. The three portraits under each damage meter show who is left. A timeout counts remaining dogs, with the active pair fighting Sudden Death on a tie. Choose **Rematch** to keep both teams or **Change teams** to try a different order. [Play a solo Pack Relay](https://caleb-guyer.github.io/dog-fight-3/#solo/pack-relay) · [Set up a local Pack Relay](https://caleb-guyer.github.io/dog-fight-3/#local/pack-relay)
+
 Solo and local versus start with three stocks and a seven-minute clock. Open **Rules** on the matchup preview to choose one, three, or seven minutes, or **No clock**. Quickplay uses three stocks and seven minutes. When a stock match runs out of time, the dog with more stocks wins.
 
 Choose **Time Battle** to keep both fighters in play for one, three, or seven minutes. Every fall costs one point. Knocking an opponent out within ten seconds of your last hit earns one point. The higher score wins at the bell, and tied points trigger Sudden Death. The host can choose the same rules under **Room rules** for private online matches. In **Match stats**, the scoring timeline shows credited KOs, self-destructs, and the score after each fall. [Play a one-minute Time Battle as Pip against Brisket](https://caleb-guyer.github.io/dog-fight-3/#solo/time-battle)

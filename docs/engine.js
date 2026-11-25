@@ -95,6 +95,16 @@
   };
   const stageGeometry = (stage, form) => stageForms[form]?.geometry || stage;
   const validCoat = value => Number.isInteger(value) && value >= 0 && value < 4;
+  const validRelayTeams=teams=>Array.isArray(teams) && teams.length===2 && teams.every(team=>
+    Array.isArray(team) && team.length===3 && new Set(team).size===3 && team.every(kind=>typeof kind==='string' && Object.hasOwn(fighters,kind)));
+  function relayCoats(teams,book){
+    const coats=teams.map((team,i)=>team.map(kind=>validCoat(book?.[i]?.[kind])?book[i][kind]:0));
+    teams[1].forEach((kind,k)=>{
+      const other=teams[0].indexOf(kind);
+      if(other>=0)coats[1][k]=coatFor(1,kind,kind,[coats[0][other],coats[1][k]]);
+    });
+    return coats;
+  }
   function coatFor(slot, first, second, choices) {
     const one = validCoat(choices?.[0]) ? choices[0] : 0;
     const two = validCoat(choices?.[1]) ? choices[1] : 0;
@@ -2746,13 +2756,18 @@
       this.matchFrames = 0;
       this.suddenDeath = null;
       const versus = this.mode === 'solo' || this.mode === 'local';
-      const timed=versus && config.timeBattle===true && config.lesson===undefined && !config.lastStockStart && !config.suddenStart;
+      if(versus && config.lesson===undefined && !config.suddenStart && !config.lastStockStart && validRelayTeams(config.relayTeams)){
+        this.relayTeams=config.relayTeams.map(team=>team.slice());
+        this.relayCoats=relayCoats(this.relayTeams,config.coatBook);
+        this.coats=this.relayCoats.map(team=>team[0]);
+      }
+      const timed=versus && !this.relayTeams && config.timeBattle===true && config.lesson===undefined && !config.lastStockStart && !config.suddenStart;
       const minutes = timed && !config.minutes ? 3 : stockMinutes.includes(config.minutes) ? config.minutes : 7;
       this.clockFrames = versus && minutes ? minutes * 3600 : null;
       this.emit = event;
       this.random = this.mode === 'training' && random === Math.random
         ? seededRandom(Math.floor(random() * 0x100000000)) : random;
-      this.dogs = [newFighter(config.p1, 0), newFighter(config.p2, 1)];
+      this.dogs = [newFighter(this.relayTeams?.[0][0] || config.p1,0),newFighter(this.relayTeams?.[1][0] || config.p2,1)];
       this.terrain = this.layout?.terrain || platforms(this.geometryStage, 0);
       this.ledgeClaims = [];
       this.grapple = null;
@@ -2826,6 +2841,7 @@
         players:this.dogs.map(f => ({kind:f.kind, coat:this.coatFor(f.index), damage:0, hits:0, blocks:0, parries:0,
           techs:0, knockdowns:0, shieldBreaks:0, lastHit:null})),
         losses:[],
+        ...(this.relayTeams ? {relayTeams:this.relayTeams} : {}),
         ...(timed ? {points:[0,0],minutes} : {}),
       } : null;
     }
@@ -9518,6 +9534,7 @@
       }else if (this.mode !== 'training') f.stocks--;
       if (this.matchCard) this.matchCard.losses.push({
         slot:f.index, frame:this.matchFrames, damage:f.damage,
+        ...(this.relayTeams ? {kind:f.kind,coat:this.coatFor(f.index)} : {}),
         ...(points ? {credited,points:points.slice()} : {remaining:f.stocks}),
         zone:blastZone(f.x, f.y, this.stageWidth, this.blastInset()),
         suddenRound:this.suddenDeath?.round || 0, lastHit:this.matchCard.players[f.index].lastHit,
@@ -9544,12 +9561,23 @@
         this.loseStock(f);
       }
       const eliminated = this.dogs.filter((f) => f.stocks <= 0);
+      if(this.relayTeams && !this.suddenDeath){
+        for(const f of out){
+          if(f.stocks<=0)continue;
+          const seat=f.index, next=3-f.stocks;
+          f.kind=this.relayTeams[seat][next];
+          this.coats[seat]=this.relayCoats[seat][next];
+          this.spawn(f,true);
+          Object.assign(this.matchCard.players[seat],{kind:f.kind,coat:this.coats[seat]});
+          this.emit('relayEntry',{f});
+        }
+      }
       if (eliminated.length === 1) {
         this.finishMatch(1 - eliminated[0].index, this.suddenDeath ? 'sudden' : 'ko');
         return;
       }
       if (eliminated.length === 2) return this.startSuddenDeath('double');
-      out.forEach((f) => this.spawn(f, true));
+      if(!this.relayTeams || this.suddenDeath)out.forEach((f) => this.spawn(f, true));
     }
     crouchCounterInput(f, foe) {
       if (!f.reaction?.planted || !f.stun || f.ground < 0 || f.command || protectionTime(foe)) return null;
@@ -11258,6 +11286,7 @@
   window.DogFight = {
     cpuLevels,
     stockMinutes,
+    validRelayTeams,relayCoats,
     warmupPartners,
     seededRandom,
     fighters,
