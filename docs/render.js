@@ -280,6 +280,7 @@
     if (f.stun > 0) {
       if (!f.reaction) return ['hurt', 0.3];
       if (f.reaction.planted && f.ground >= 0) return ['crouchHit', clamp(1 - f.stun / f.reaction.duration, 0, 1)];
+      if (f.reaction.groundSlide && f.ground >= 0) return ['hurt', clamp(1 - f.stun / f.reaction.duration, 0, 1)];
       return [f.reaction.hard ? 'launch' : 'hurt', clamp(1 - f.stun / f.reaction.duration, 0, 1)];
     }
     if (f.airDodge) return [f.airDodge.type, clamp(f.airDodge.time / f.airDodge.duration, 0, 1)];
@@ -1543,6 +1544,12 @@
   }
   function drawFighter(ctx, f, world, time) {
     shadow(ctx, f, world.terrain);
+    if (f.ground >= 0 && f.stun > 0 && f.reaction?.groundSlide && Math.abs(f.vx) > 30) {
+      const back = -Math.sign(f.vx), heel = f.x + back * f.stats.width;
+      const length = reduced.matches ? 7 : Math.min(16, Math.abs(f.vx) / 16);
+      pixelLine(ctx, heel, f.y - 1, heel + back * length, f.y - 1, cream, 2, 2);
+      pixelLine(ctx, heel + back * 5, f.y - 4, heel + back * (length + 4), f.y - 6, gold, 2, 2);
+    }
     if (f.tumble?.fromHit && f.stun>0) {
       const aerial=world.canEscapeHitstun(f,true), dodge=world.canEscapeHitstun(f,false);
       const y=f.y-f.stats.height*.75;
@@ -2667,7 +2674,7 @@
           pixelLine(ctx, x, floor + 4, x, floor + 10, cream, 2, 2);
         }
         for (const [trail, previous] of [[lab.previous?.trace, true], [lab.trace, false]]) {
-          if (!trail) continue;
+          if (!trail || (previous && lab.drive && lab.previous.edge !== lab.drive.edge)) continue;
           for (let i = 1; i < trail.length; i++) {
             if (previous && i % 2 === 0) continue;
             const [x, y] = trail[i - 1], [endX, endY] = trail[i];

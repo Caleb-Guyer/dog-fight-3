@@ -1172,6 +1172,7 @@
     if (sample.hits) {
       parts.push(tenth(sample.damage) + '% damage');
       if (sample.launch) parts.push(Math.round(sample.launch) + ' px/s');
+      if (Number.isFinite(sample.angle)) parts.push(sample.angle + '° at contact');
     }
     if (sample.blocks) parts.push(sample.shieldFrames + 'f shieldstun');
     if (sample.outcome) parts.push(sample.outcome);
@@ -1180,17 +1181,21 @@
   function updateFreshnessReadout(player, lab) {
     const { last, previous } = lab;
     const id = last?.moveId || previous?.last.moveId;
-    $('freshness-name').textContent = lab.rageDamage != null ? player.stats.name + ' at ' + lab.rageDamage + '% · Rage +' +
+    $('freshness-name').textContent = lab.drive ? (last ? moveLabel(last.moveId) : 'Launch height') + ' · ' +
+      (lab.drive.edge ? 'Ledge' : 'Center') + ' · ' + world.dogs[1].stats.name + ' at ' + lab.baseline + '%' :
+      lab.rageDamage != null ? player.stats.name + ' at ' + lab.rageDamage + '% · Rage +' +
       tenth((rageScale(lab.rageDamage) - 1) * 100) + '%' : last ? moveLabel(last.moveId) + ' · ' + tenth(last.power * 100) + '% power' :
       lab.koTest ? smashes[player.kit.smashes.up].label + ' KO test' : 'Move freshness';
     const result = last ? freshnessResult(last) : world.dogs[1].stats.name + ' at ' + lab.baseline + '%';
     if ($('freshness-contact').textContent !== result) $('freshness-contact').textContent = result;
     $('freshness-previous').hidden = !previous;
     if (previous) {
-      const label = previous.rageDamage != null ? 'At ' + previous.rageDamage + '%' :
+      const label = lab.drive ? moveLabel(previous.last.moveId) + ' at ' + previous.baseline + '% · ' + (previous.edge ? 'Ledge' : 'Center') :
+        previous.rageDamage != null ? 'At ' + previous.rageDamage + '%' :
         last?.moveId === previous.last.moveId ? 'Previous' : 'Previous ' + moveLabel(previous.last.moveId);
       $('freshness-previous').textContent = label + ' · ' + freshnessResult(previous.last);
     }
+    if (lab.drive) $('freshness-percent').textContent = 'Set rival to ' + (lab.baseline ? 0 : 60) + '%';
     $('freshness-summary').textContent = 'Recent moves ' + player.moveHistory.length + '/9' +
       (id ? ' · Next ' + tenth(moveFreshness(player, id) * 100) + '%' : '');
     $('freshness-list').replaceChildren(...player.moveHistory.map(entry => {
@@ -3335,7 +3340,12 @@
     else if (edge) world.resetEdgePractice(pattern, direction ?? world.edgePractice?.dir ?? 1, world.edgePractice?.slow ?? true);
     else if (freshness) {
       const lab = world.freshnessPractice;
-      if (pattern === 'rage' || (lab?.rageDamage != null && pattern !== 'ko')) {
+      if (pattern === 'drive' && lab?.drive) world.resetFreshnessPractice();
+      else if (pattern === 'drive' || (lab?.drive && ['repeat','edge','percent'].includes(pattern))) {
+        const edge = lab?.drive?.edge ?? false;
+        const damage = lab?.drive ? lab.baseline : 0;
+        world.resetDrivePractice(pattern === 'edge' ? !edge : edge, pattern === 'percent' ? (damage ? 0 : 60) : damage);
+      } else if (pattern === 'rage' || (lab?.rageDamage != null && pattern !== 'ko')) {
         if (pattern === 'rage' && lab?.rageDamage != null) world.resetFreshnessPractice();
         else {
           const ownDamage = pattern === 'percent' ? (lab.rageDamage ? 0 : 150) : lab?.rageDamage ?? 0;
@@ -3457,13 +3467,19 @@
       const lab = world.freshnessPractice;
       const rageTest = lab.rageDamage != null;
       $('freshness-ko').hidden = $('freshness-guard').hidden = $('freshness-clear').hidden =
-        $('freshness-history').hidden = rageTest;
-      $('freshness-percent').hidden = !rageTest;
+        $('freshness-history').hidden = rageTest || !!lab.drive;
+      $('freshness-rage').hidden = !!lab.drive;
+      $('freshness-drive').setAttribute('aria-pressed', String(!!lab.drive));
+      $('freshness-edge').hidden = $('freshness-fight').hidden = !lab.drive;
+      $('freshness-edge').textContent = lab.drive?.edge ? 'Move to center' : 'Move to ledge';
+      $('freshness-percent').hidden = !rageTest && !lab.drive;
       $('freshness-percent').textContent = 'Set yourself to ' + (lab.rageDamage ? 0 : 150) + '%';
       $('freshness-rage').setAttribute('aria-pressed', String(rageTest));
       $('freshness-ko').setAttribute('aria-pressed', String(lab.koTest && !rageTest));
       $('freshness-guard').setAttribute('aria-pressed', String(lab.guard));
-      message = rageTest ? 'Fully charge Up + Smash and release. Switch your own damage and repeat. The mint trail follows the last launch.' :
+      message = lab.drive ? 'Tap Smash for ' + smashes[world.dogs[0].kit.smashes.side].label +
+        '. Hold and release to charge. Try the same swing from the ledge or against a hurt rival.' :
+        rageTest ? 'Fully charge Up + Smash and release. Switch your own damage and repeat. The mint trail follows the last launch.' :
         lab.koTest ? 'Fully charge Up + Smash, release, then choose Return to marks. The mint trail shows your previous launch.' :
         'Land a hit, choose Return to marks, and repeat. Mix in other moves to restore its power.';
     } else if (spacing) {
@@ -3763,7 +3779,7 @@
     ['Attack','Combo practice','combo',['example','late','record','defend','mix','flurry','escapeFlurry']],
     ['Attack','Aerial spacing','spacing',['approach','retreat','landing','airPower','fastfall','sweet','cancel','footstool','footstoolTech','reverse','wavebounce']],
     ['Attack','Knockdowns','launch',['lock','bait','floor-spike','edge-spike']],
-    ['Attack','Move freshness','freshness',['training','ko','rage']],
+    ['Attack','Move freshness','freshness',['training','ko','rage','drive']],
     ['Defense','Combo escape','escape',['tip','close','counter','break','gripEscape','gripThrow','carry']],
     ['Defense','Shield pressure','shield',['kick','drop','strike','grab','counterGrab','dodgeTiming','breakEscape','breakPunish','jumpIn','low','high','poke']],
     ['Defense','Launch & survival','launch',['throw','juggle','breakaway','survival','last-stock','escape','stock-return','stock-catch']],
@@ -3791,6 +3807,7 @@
     'shield-kick':'Clover Disc Hook out of shield counter', 'shield-drop':'Clover Disc Hook out of shield counter',
     'shield-grab':'spot dodge roll', 'shield-strike':'perfect shield release',
     'shield-jumpIn':'empty hop falling aerial grab', 'freshness-training':'stale moves staling',
+    'freshness-drive':'launch height angle ground slide ledge side smash back air',
     'partner-training':'local two players sparring', 'reset-training':'free training dummy',
     'wall-ceiling':'ceiling tech under stage recovery Noodle Pip',
   };
@@ -3937,8 +3954,16 @@
     $('wave-slow').setAttribute('aria-pressed', String(d.slow));
     $('game').focus({ preventScroll: true });
   };
-  for (const action of ['repeat','clear','guard','ko','rage','percent'])
+  for (const action of ['repeat','clear','guard','ko','rage','percent','drive','edge'])
     $('freshness-' + action).onclick = () => drill('freshness', false, action);
+  $('freshness-fight').onclick = () => {
+    const lab = world.freshnessPractice;
+    if (!lab?.drive) return;
+    leaveOnline();
+    afterStory = null;
+    startMatch({...settings, mode:'solo', p1:world.dogs[0].kind, p2:world.dogs[1].kind, stage:world.stage,
+      cpuLevel:'rival', fetch:false, minutes:7, driveOpening:{edge:lab.drive.edge, damage:lab.baseline}}, undefined, 42);
+  };
   $('edge-training').onclick = () => drill('edge', false, world.edgePractice?.pattern || 'lip');
   for (const pattern of ['lip','shortCatch','longCatch','tip','deep','corner','inside']) $('edge-' + pattern).onclick = () => drill('edge', false, pattern);
   $('edge-side').onclick = () => drill('edge', false, world.edgePractice.pattern, -world.edgePractice.dir);
@@ -5492,6 +5517,12 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
       drill('platform', false, 'shield-drop');
+    }
+    else if (hash === '#training/launch-height') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({...settings, mode:'training', p1:'pip', p2:'brisket', stage:'nightmail', fetch:false});
+      drill('freshness', false, 'drive');
     }
     else if (hash === '#training/rage') {
       menuScreen('match');
