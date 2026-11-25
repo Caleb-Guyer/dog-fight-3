@@ -1,8 +1,54 @@
 const assert=require('node:assert/strict');
 const {execFileSync}=require('node:child_process');
+const {readFile}=require('node:fs/promises');
 if(process.env.GITHUB_ACTIONS!=='true' || process.env.RUNNER_OS!=='Linux') throw Error('Use hosted Linux for browser input.');
 const {chromium}=require('playwright-core');
 const root='http://127.0.0.1:8080/';
+async function exportFinish(page,press,mobile){
+  if(!mobile)await press('button:has-text("Retry replay tools")');
+  const marker=page.getByRole('button',{name:'Pip · KO',exact:true});
+  if(mobile)await marker.tap();else await marker.click();
+  const n=await marker.getAttribute('data-clip-moment');
+  const selected=await page.locator('#clip-frame').textContent();
+  assert(selected.startsWith('Frame '+n+' / '));
+  assert.match(await page.locator('#clip-scores').textContent(),/Pip 125% · 0 stocks/);
+  assert.equal(await page.evaluate(()=>performance.getEntriesByType('resource').some(r=>r.name.includes('finish-gif.js'))),false);
+  if(!mobile){
+    await page.route('**/finish-gif.js*',route=>route.abort(),{times:1});
+    await press('#clip-export');
+    await page.getByText('Could not make the GIF. Try again.',{exact:true}).waitFor();
+  }
+  await press('#clip-export');
+  const ready=page.getByRole('button',{name:'Download GIF',exact:true});
+  await ready.waitFor({timeout:35000});
+  const download=page.waitForEvent('download');
+  if(mobile)await ready.tap();else await ready.click();
+  const file=await download;assert.match(file.suggestedFilename(),/pip-vs-brisket.*\.gif$/);
+  const bytes=await readFile(await file.path());assert.equal(bytes.subarray(0,6).toString(),'GIF89a');
+  assert(bytes.length<6_000_000);
+  const decoded=await page.evaluate(async base64=>{
+    const bytes=Uint8Array.from(atob(base64),c=>c.charCodeAt(0));
+    const decoder=new ImageDecoder({type:'image/gif',data:bytes});
+    await decoder.tracks.ready;const count=decoder.tracks.selectedTrack.frameCount;
+    const digests=[],durations=[],dimension=[];
+    const canvas=document.createElement('canvas');canvas.width=480;canvas.height=300;
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});
+    for(const frameIndex of [0,Math.floor(count/2),count-1]){
+      const {image}=await decoder.decode({frameIndex});ctx.drawImage(image,0,0);
+      dimension.push([image.displayWidth,image.displayHeight]);durations.push(image.duration);image.close();
+      const pixels=ctx.getImageData(0,0,480,270).data;
+      digests.push(Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',pixels))).join(','));
+    }
+    decoder.close();return {count,digests,durations,dimension};
+  },bytes.toString('base64'));
+  const length=Number(selected.split('/')[1]);
+  assert.equal(decoded.count,1+Math.ceil(length/3));assert(new Set(decoded.digests).size>=2);
+  assert.deepEqual(decoded.dimension,[[480,300],[480,300],[480,300]]);
+  assert.equal(decoded.durations.at(-1),750000);
+  assert.equal(await page.locator('#clip-frame').textContent(),selected);
+  assert.equal(await page.locator('#clip-toggle').textContent(),Number(n)===length?'Watch again':'Play');
+  console.log((mobile?'Touch':'Desktop')+' downloaded '+decoded.count+' GIF frames, '+bytes.length+' bytes.');
+}
 async function play(browser,mobile) {
   const page=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:1250,height:760},
     isMobile:mobile,hasTouch:mobile,reducedMotion:mobile?'reduce':'no-preference'});
@@ -44,6 +90,8 @@ async function play(browser,mobile) {
       return out;
     });
     assert.deepEqual(Object.values(poses),[4,4,4,4]);
+    assert.equal(await page.evaluate(()=>!!window.FinishTools),false);
+    if(!mobile)await page.route('**/finish-tools.js*',route=>route.abort(),{times:1});
     await press('[data-do=watch-finish]');
     if(!mobile)await press('#clip-toggle');
     assert.equal(await page.locator('#clip-toggle').textContent(),'Play');
@@ -56,6 +104,7 @@ async function play(browser,mobile) {
     assert.equal(await page.locator('#clip-toggle').textContent(),'Watch again');
     assert(await page.locator('#clip-practice').isDisabled());
     assert.match(await page.locator('#clip-scores').textContent(),/Pip 125% · 0 stocks/);
+    await exportFinish(page,press,mobile);
     await page.locator('#clip-seek').press('Home');await press('#clip-practice');
     assert.match(await page.locator('#match-mode').textContent(),/Practice/);
     await page.keyboard.down('d');await page.clock.runFor(130);await page.keyboard.up('d');
