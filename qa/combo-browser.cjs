@@ -644,6 +644,57 @@ async function testAngledTilts(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
 }
 
+async function testLedgePatience(page, mobile) {
+  await page.goto(root+'?grip#training/ledge-patience');
+  const status=page.locator('#climb-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  async function watch() {
+    await page.evaluate(()=>{
+      const proto=window.DogFightView.FightView.prototype, draw=proto.draw;
+      proto.draw=function(canvas,w,...args) {
+        const [p,b]=w.dogs;
+        window.gripProbe={swing:b.attack?.moveId==='brisketHaymaker'?Math.round(b.attack.time*60):-1,
+          rolling:p.floorAction?.type==='ledgeRoll', standing:p.ground>=0 && !p.floorAction,
+          dealt:b.damage, taken:p.damage, stocks:p.stocks};
+        return draw.call(this,canvas,w,...args);
+      };
+    });
+  }
+  async function until(read) {
+    for(let n=0;n<100;n++){
+      const state=await page.evaluate(()=>window.gripProbe);
+      if(state && read(state))return state;
+      await page.clock.runFor(16);
+    }
+    assert.fail('Ledge position did not arrive: '+JSON.stringify(await page.evaluate(()=>window.gripProbe)));
+  }
+  async function counter(inward) {
+    await until(s=>s.swing>=5 && s.swing<=9);
+    await hold(['shield']); await until(s=>s.rolling); await hold([]);
+    await until(s=>s.standing); await hold([inward,'attack']);
+    const result=await until(s=>s.dealt>0); await hold([]);
+    assert.equal(result.dealt,5); assert.equal(result.taken,120);
+  }
+  await watch();
+  await press('climb-slow');
+  await hold(['attack']); await waitFor('start'); await hold(['right']);
+  await waitFor('punched'); await hold([]);
+  await press('climb-patience');
+  await hold(['attack']); await waitFor('start'); await hold([]);
+  await waitFor('opening'); await page.clock.runFor(130);
+  assert.match(await page.locator('#hud').innerText(),/grip slipping/i);
+  await waitFor('slipped');
+  await press('climb-side');
+  assert.match(await status.innerText(),/right ledge/i);
+  await hold(['attack']); await waitFor('start'); await hold([]);
+  await counter('left'); await waitFor('punished');
+  await page.goto(root+'?grip-stock#solo/ledge-trap');
+  await watch(); await page.clock.runFor(2600);
+  await counter('right');
+  assert.equal(await page.locator('.lives').first().getAttribute('aria-label'),'3 stocks');
+  console.log((mobile?'Touch':'Keyboard')+' baited and punished a charged Haymaker in the drill and the three-stock fight.');
+}
+
 async function testCeilingTech(page, mobile) {
   await page.goto(root+'?undertable#training/ceiling-tech');
   const status=page.locator('#wall-status');
@@ -2134,6 +2185,7 @@ async function testDevice(browser, mobile) {
     await testAngledTilts(page, mobile);
     await testWallJumps(page, mobile);
     await testCeilingTech(page, mobile);
+    await testLedgePatience(page, mobile);
     await testShortHops(page, mobile);
     await testFlickJumps(page, mobile);
     await testRage(page, mobile);
