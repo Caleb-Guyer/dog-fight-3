@@ -64,7 +64,7 @@ async function recovery(browser,url){
     await page.goto(url);await page.locator('#home-adventure').click();await page.locator('#dispatch-load-back').click();
     release();await page.waitForFunction(()=>!!window.DispatchCovers);
     assert(await page.locator('#home').isVisible());
-    assert.equal(await page.evaluate(()=>document.activeElement.id),'welcome-play');
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'home-adventure');
     await page.locator('#home-adventure').click();await page.locator('#route-films').click();
     await page.locator('[data-reel=opening]').click();await page.locator('#story-next:enabled').waitFor();
     assert(await page.evaluate(()=>!!window.DispatchFilm && !window.DispatchRun));
