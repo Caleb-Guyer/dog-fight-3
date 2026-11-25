@@ -400,7 +400,7 @@
       this.myResult = winner;
       if (this.theirResult !== null && this.theirResult !== winner)
         return this.close('The match results did not agree. Find another match.');
-      this.series?.finish(winner);
+      this.series?.finish(winner, null, this.match?.confirmedWorld.matchCard);
       this.send(['result', this.round, winner]);
       if (this.earlyVote) {
         const msg = this.earlyVote;
