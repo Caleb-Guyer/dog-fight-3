@@ -334,6 +334,13 @@
       } else if (detail.timing === 'late' && !detail.emphatic) {
         const pitch = { pip: 410, brisket: 155, noodle: 325, clover: 510 }[detail.owner.kind];
         tone(pitch, pitch * 0.63, 0.045, 0, 'triangle', 0.09);
+      } else if (detail.moveId === 'pipSpeedBag') {
+        const pitch = detail.owner.attack?.flurryBeat % 2 ? 215 : 270;
+        tone(pitch, 70, .044, 0, 'triangle', .09);
+        tone(pitch * 2, pitch, .022, .003, 'square', .025);
+      } else if (detail.moveId === 'pipBellKick') {
+        tone(205, 56, .10, 0, 'triangle', .15);
+        tone(880, 640, .09, .008, 'sine', .055);
       } else if (detail.emphatic) {
         tone(218, 56, 0.09, 0, 'sawtooth', 0.059);
         tone(105, 32, 0.19, 0.006, 'triangle', 0.17);
@@ -1193,6 +1200,7 @@
     }));
   }
   const comboSources = { example:'Dog’s combo', late:'Late jab', record:'Your take', replay:'Your take',
+    flurry:'Pip’s rapid jab', escapeFlurry:'Escape the flurry',
     defend:'Defend this take', mix:'Mix A and B' };
   const comboReplies = { stand: 'Standing', guard: 'Guard', away: 'Flick away', punish:'Block and punish', p2:'Player 2' };
   const takeLetter = slot => slot ? 'B' : 'A';
@@ -1212,7 +1220,7 @@
     return name + ' · ' + result + ' · ' + timing;
   }
   function updateComboReadout(d) {
-    const title = d.defending ? (d.phase === 'done' ? 'Take ' + takeName(d.playSlot) :
+    const title = d.source === 'flurry' || d.source === 'escapeFlurry' ? comboSources[d.source] : d.defending ? (d.phase === 'done' ? 'Take ' + takeName(d.playSlot) :
       d.source === 'mix' ? 'Mix A and B' : 'Defend ' + takeName(d.slot)) :
       d.phase === 'ready' ? 'Ready to record' : d.source === 'record' && d.phase === 'active' && d.tick < 150
       ? 'Recording' : comboSources[d.source];
@@ -1223,6 +1231,11 @@
       d.dodges ? d.dodges + (d.dodges === 1 ? ' air dodge' : ' air dodges') : ''].filter(Boolean).join(' · ');
     let latest = last ? comboRow(last) + (response ? ' · ' + response : '') :
       d.phase === 'done' ? 'No contact' : d.phase === 'ready' ? 'Move or attack to start.' : 'Waiting for contact';
+    if (d.source === 'flurry' && d.phase !== 'done') {
+      if (!last) latest = 'Tap Attack for Quick Paw.';
+      else if (last.moveId === 'pipJab') latest += ' · Hold Attack now';
+      else if (last.moveId === 'pipSpeedBag') latest += ' · Release for Bell Kick';
+    }
     if (d.defending) {
       if (d.phase === 'ready') latest = 'You are ' + world.dogs[1].stats.name + ' · Tap Attack to start';
       else if (d.phase === 'countdown') latest = 'Get ready';
@@ -1558,6 +1571,12 @@
     afterStory = null;
     startMatch({...settings, mode:'solo', p1:'pip', p2:'clover', cpuLevel:'rival', stage:'picnic',
       fetch:false, minutes:7, openingFrames:49}, undefined, 7);
+  }
+  function fightRivalPip() {
+    leaveOnline();
+    afterStory = null;
+    startMatch({...settings, mode:'solo',p1:'brisket',p2:'pip',cpuLevel:'rival',stage:'nightmail',
+      fetch:false,minutes:7},undefined,30);
   }
   function cpuReadReport() {
     if (world.mode !== 'solo' || world.cpuLevel !== 'rival') return '';
@@ -3407,6 +3426,7 @@
     if (combo) {
       const d = world.comboPractice;
       $('combo-reply').value = d.reply;
+      $('combo-fight-pip').hidden = d.source !== 'flurry' && d.source !== 'escapeFlurry';
       $('combo-slot').value = String(d.slot);
       $('combo-reply-label').hidden = $('combo-reply').hidden = d.defending;
       $('combo-slow').setAttribute('aria-pressed', String(d.slow));
@@ -3414,7 +3434,9 @@
         $('combo-' + source).setAttribute('aria-pressed', String(d.source === source));
       const route = { pip: 'Attack, Attack, then Jump + Forward + Attack.', brisket: 'Attack, then Grab. Tap forward to throw.',
         noodle: 'Attack twice, then tap neutral Special.', clover: 'Attack twice, then Jump + Attack.' }[player.kind];
-      message = d.defending ? 'You control ' + world.dogs[1].stats.name + '. Tap Attack to start. ' +
+      message = d.source === 'flurry' ? 'Tap Attack once. When Quick Paw hits, press Attack again and hold through Cross. Release during Speed Bag for Bell Kick. Try Flick away as the rival’s response.'
+        : d.source === 'escapeFlurry' ? 'You control ' + world.dogs[1].stats.name + '. Tap Attack to start. Let Pip hit you once, then flick away during the spark. Re-center between hits to shift again.'
+        : d.defending ? 'You control ' + world.dogs[1].stats.name + '. Tap Attack to start. ' +
         (d.source === 'mix' ? 'Each try picks either take. Watch the rival and choose your response.' :
           world.comboTakes[d.slot]?.length ? 'Try shielding, escaping or hitting back against your recording.' :
           d.slot ? 'Hold Shield once. On the next try, spot-dodge just before the rival lands and punish the missed grab.' :
@@ -3738,7 +3760,7 @@
     ['Movement','Footwork','footwork', footworkPatterns],
     ['Movement','Wavedash','wave',['back','platform']],
     ['Movement','Platforms','platform',['below','top','hold','ferry','shield-drop','layers']],
-    ['Attack','Combo practice','combo',['example','late','record','defend','mix']],
+    ['Attack','Combo practice','combo',['example','late','record','defend','mix','flurry','escapeFlurry']],
     ['Attack','Aerial spacing','spacing',['approach','retreat','landing','airPower','fastfall','sweet','cancel','footstool','footstoolTech','reverse','wavebounce']],
     ['Attack','Knockdowns','launch',['lock','bait','floor-spike','edge-spike']],
     ['Attack','Move freshness','freshness',['training','ko','rage']],
@@ -3882,6 +3904,7 @@
     }
   }, true);
   $('combo-training').onclick = () => drill('combo', false, 'example');
+  $('combo-fight-pip').onclick = fightRivalPip;
   for (const source of Object.keys(comboSources)) $('combo-' + source).onclick = () => drill('combo', false, source);
   $('combo-slot').onchange = e => {
     const d = world.comboPractice, slot = Number(e.target.value);
@@ -5219,6 +5242,8 @@
         cpuLevel:'rival', minutes:7, fetch:false }, undefined, 42);
     } else if (hash === '#solo/intercept-clover') {
       startCloverApproach();
+    } else if (hash === '#solo/box-with-pip') {
+      fightRivalPip();
     } else if (hash === '#solo/shoulder-charge') {
       leaveOnline();
       afterStory = null;
@@ -5437,6 +5462,12 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'picnic', fetch:false });
       drill('launch', false, 'juggle');
+    }
+    else if (hash === '#training/rapid-jab' || hash === '#training/escape-flurry') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training',p1:'pip',p2:'brisket',stage:'nightmail',fetch:false });
+      drill('combo',false,hash === '#training/rapid-jab' ? 'flurry' : 'escapeFlurry');
     }
     else if (hash === '#training/combos') {
       menuScreen('match');
