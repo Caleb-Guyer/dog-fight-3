@@ -4526,6 +4526,7 @@
       'lobby',
       'training-tools',
       'match-clock',
+      'school-coach',
       'recovery-tip',
       'hud',
       'grapple-prompt',
