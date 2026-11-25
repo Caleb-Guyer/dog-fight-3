@@ -4600,7 +4600,9 @@
         }
         $('countdown').textContent = number || 'GO!';
         if (!number) {
-          clearInput();
+          // Discard released countdown taps. Held keyboard and touch controls start with the stick on GO.
+          taps.clear();
+          touchTaps.clear();
           if (online.match) online.match.lastStep = performance.now();
           announce('Fight!');
         }
