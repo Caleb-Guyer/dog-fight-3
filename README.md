@@ -147,6 +147,12 @@ In **Move freshness → Rage test**, fully charge Brisket’s Up + Smash against
 
 Flick **Down** on a raised platform to slip through it. Your horizontal momentum carries into the fall, and you keep an air jump. As your paws pass through, aim your aerial and tap **Attack**. To down tilt on top, press **Down + Attack** together. For a crouch that lets high hits sail over your head, tilt the stick down gently, hold your keyboard Walk modifier with Down, or slide your thumb from the center dot onto Down. Low sweeps can still reach a crouching dog.
 
+**Noodle’s belly crawl.** Hold Down and a side to slide onto your belly and creep forward or backward while keeping your facing. Release the side and keep Down held to stay flat. On raised platforms, use a gentle lower diagonal on the stick, Walk + Down + a side on the keyboard, or slide from the touch pad’s center dot to a lower corner. A hard Down flick still drops through. Noodle can get under Clover’s Round Trip on both passes. A bouncing Skip Serve or a low grab can catch him.
+
+In Footwork practice, tap Attack to cue Clover. Crawl toward her under both passes, cross the chalk, then shield Skip Serve or tap forward + Attack to reach her with Knot Poke. Try standing up after the first pass to see where the disc comes back. [Practice the crawl](https://caleb-guyer.github.io/dog-fight-3/#training/crawl)
+
+In a three-stock match against Rival Clover, hold Down + forward from the opening bell. Watch for her running grab after the disc passes. Let go of forward and tap Attack as she closes in to meet the grab with Tail Broom. [Play Noodle against Rival Clover](https://caleb-guyer.github.io/dog-fight-3/#solo/crawl)
+
 In **Training → Platform practice**, choose **Rival below** to catch the other dog with a falling aerial. Choose **Rival on top** to catch them with your down tilt on the same platform. On Laundry Line the second setup puts you both on the moving basket. Select either setup again to retry with your fighters and stage.
 
 Choose **Hold the top** for a drill on Moonbell Bandstand with your selected dogs. Tap Attack to start the climb. The challenger jumps onto the right wing, then comes up through the high platform with their own up air. Try shielding it once. Repeat the drill and tap Down + Attack as the challenger jumps off the wing to intercept them. Returning to free practice or a different setup restores your arena.

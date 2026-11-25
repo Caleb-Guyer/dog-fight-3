@@ -27,7 +27,7 @@
   } = window.DogFight;
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
   const $ = (id) => document.getElementById(id);
-  const footworkPatterns = ['bait','match','power','armor','armorGrab','disc','reflect','returnFire',
+  const footworkPatterns = ['bait','match','power','armor','armorGrab','disc','reflect','returnFire','crawl',
     'brake','dashShield','pivot','antiAir','angleHigh','angleLow','cancelDash','cancelTurn','boostGrab','boostPivot'];
   const glyphs = {
     paw: [
@@ -976,7 +976,10 @@
         '</ul><h3 class="guide-section">Shield coverage</h3><ul class="move-rows guide-coverage">' +
         guideMoveRow({ label: 'Tilt shield', hint: 'Shift the bubble toward a low sweep, high aerial or incoming disc. A hit that reaches an exposed part of your dog deals its normal damage. Try Guard low and Guard high in Shield practice.' },
           'Shield + gentle direction', 'shieldTilt', 'defense') +
-        '</ul><h3 class="guide-section">Crouch cancel</h3><ul class="move-rows guide-crouch">' +
+        '</ul>' + (kit.crawl ? '<h3 class="guide-section">Crawl</h3><ul class="move-rows">' +
+          guideMoveRow({label:'Belly crawl', hint:'Hold Down and a side to move low. Noodle can back up without turning. Hold Down alone after moving to stay flat. Try Crawl under the disc in Footwork practice.'},
+            'Down + Left or Right', 'crawl', 'defense') + '</ul>' : '') +
+        '<h3 class="guide-section">Crouch cancel</h3><ul class="move-rows guide-crouch">' +
         guideMoveRow({ label: 'Crouch cancel', hint: 'You take full damage and two-thirds of the usual launch speed. A light, low blow can leave your paws planted. Tap Attack at the spark for ' +
           moves[kit.tilts.down].label + '. Grabs and tethers can catch a crouch. Try both sides in Training → Combo escape.' }, 'Hold Down before contact', 'crouchHit', 'defense') +
         '</ul><h3 class="guide-section">In the air</h3><p>One dodge per airtime. Landing or catching a ledge refreshes it. Try <strong>Training → Air-dodge practice</strong>.</p><p>For a wavedash, tap Jump, then aim diagonally down and tap Shield. Release the direction to slide forward or backward and keep your facing. Do the same on the way down to waveland on a platform. Try <strong>Training → Wavedash</strong>.</p><ul class="move-rows guide-air-dodge">' +
@@ -2408,6 +2411,25 @@
     const state = e.outcome || e.phase;
     status.dataset.result = state;
     const pattern = world.footworkPractice.pattern;
+    if (pattern === 'crawl') {
+      const feedback = {
+        castHigh:['Round Trip away', 'Get low and crawl toward Clover.'],
+        under:['First pass clear', 'Keep low and move past the chalk as the disc comes back.'],
+        inside:['Inside the chalk', 'Clover is lining up Skip Serve. Shield, or reach her with a tilt.'],
+        castLow:['Skip Serve away', 'This shot bounces low. Hold Shield.'],
+        shortCrawl:['Both passes clear · short of the chalk', 'Add a side while holding Down to gain ground under the disc.'],
+        castHit:['Hit on the way out', 'Hold Down and move toward Clover.'],
+        returnHit:['Clipped on the return', 'Stay low until the disc passes your ears a second time.'],
+        highGuard:['Blocked the high disc', 'Try holding Down and crawling forward while the disc passes overhead.'],
+        lowHit:['Skip Serve hit low', 'The bouncing serve reaches the floor. Shield it or interrupt Clover.'],
+        lowGuard:['Blocked Skip Serve', 'You took ground under Round Trip and blocked the low follow-up.'],
+        caughtServe:['Caught Clover', 'You reached Clover before Skip Serve could stop you.'],
+        earlyHit:['Hit before the return', 'Let Round Trip pass overhead twice to practice the full approach.'],
+        avoided:['Disc avoided', 'Try crawling under both passes and reaching the chalk.'],
+      }[state];
+      if (feedback) [status.textContent,$('recovery-tip').textContent] = feedback;
+      return;
+    }
     if (pattern === 'armor' || pattern === 'armorGrab') {
       const punch = pattern === 'armor';
       status.textContent = {count:'Beat ' + e.beat, go:punch ? 'Release Smash!' : 'Grab now!',
@@ -3390,6 +3412,7 @@
         boostGrab:'Shield just beyond dash-grab range', boostPivot:'Rival behind your run',
         bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
         reflect:'Pip · tap Attack to start', returnFire:'Clover · tap neutral Special',
+        crawl:'Noodle · get under Round Trip',
         armor:'Brisket · punch through a jab', armorGrab:'Pip · catch the shoulder',
       }[pattern];
       const discInput = player.kind === 'noodle' ? 'aim toward Clover and tap Attack' : 'tap Attack';
@@ -3416,6 +3439,7 @@
         disc: 'Tap Attack to start. Clover throws Round Trip. On the third light, ' + discInput + ' to bat the disc away.',
         reflect:'Tap Attack to call for the throw. When Clover releases Round Trip, tap Special with the directions released. Catch the disc on the second bark.',
         returnFire:'Tap Special with the directions released. Pip is watching your throw. Hold Shield when you hear the second bark send the disc back.',
+        crawl:'Tap Attack to cue Clover. Hold Down and move toward her under both passes. Cross the chalk, then shield her low serve or reach her with a tilt.',
       }[pattern];
     } else if (wall) {
       const d = world.wallPractice;
@@ -4654,7 +4678,8 @@
     const shortHop = key('hop') || down(pad, 6);
     const grounded = world.dogs[fighterIndex].ground >= 0;
     const gentleGuard = shield && grounded && (key('walk') || fromCenter);
-    const gentleDown = y > 0 && !shield && (key('walk') || fromCenter === 'down' || aim?.y === 64 / 127);
+    const softCrawl = world.dogs[fighterIndex].kit.crawl && fromCenter && fromCenter.startsWith('down-');
+    const gentleDown = y > 0 && !shield && (key('walk') || fromCenter === 'down' || softCrawl || aim?.y === 64 / 127);
     const side = (walk ? x * (64 / 127) : x) || axis(0) || (!left && !right && aim?.x) || 0;
     const vertical = ((gentleGuard || gentleDown) ? y * (64 / 127) : y) || axis(1) || (!up && !downAim && aim?.y) || 0;
     // Keep a held direction aimed when the second bumper is released. Centering rearms the dodge.
@@ -4885,6 +4910,11 @@
       const stage = openingStages[hash];
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage,
         cpuLevel:'rival', minutes:7, fetch:false }, undefined, 42);
+    } else if (hash === '#solo/crawl') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, p1:'noodle', p2:'clover', mode:'solo', stage:'picnic',
+        cpuLevel:'rival', minutes:7, fetch:false}, undefined, 4);
     } else if (hash === '#solo/get-up') {
       leaveOnline();
       afterStory = null;
@@ -5020,6 +5050,12 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'noodle', stage:'picnic', fetch:false });
       drill('launch', false, 'spikeFloor', 1, 'impact');
+    }
+    else if (hash === '#training/crawl') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, p1:'noodle', p2:'clover', stage:'picnic', mode:'training', fetch:false});
+      drill('footwork',false,'crawl');
     }
     else if (hash === '#training/get-up') {
       leaveOnline();
