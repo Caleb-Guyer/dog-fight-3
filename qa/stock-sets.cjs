@@ -241,6 +241,7 @@ async function onlineSet(browser,phoneBrowser) {
   for(const [d,key] of [[host,'q'],[guest,'v']]){
     await d.press('[data-key="jump"]');await d.page.keyboard.press(key);
     await d.page.goto(root+'?custom-key#online');await observe(d.page);
+    await d.press('#online-coat');await d.press('[data-coat="2"]');
   }
   await host.press('#online-format');await a.selectOption('#online-stage','laundry');await a.selectOption('#online-form','flat');
   await host.press('#online-create');
@@ -249,6 +250,7 @@ async function onlineSet(browser,phoneBrowser) {
   for(const d of [host,guest])await fresh(d,1,'0–0');
   for(const d of [host,guest]){
     await d.page.waitForFunction(()=>window.observedBattle?.matchFrames>12);
+    assert.deepEqual(await d.page.evaluate(()=>[0,1].map(i=>observedBattle.coatFor(i))),[2,3]);
     assert.deepEqual(await d.page.evaluate(()=>[window.observedBattle.stage,window.observedBattle.form,window.observedBattle.terrain.length]),['laundry','flat',1]);
     await d.page.evaluate(()=>{window.watchJumps=[false,false];});
   }
@@ -260,6 +262,7 @@ async function onlineSet(browser,phoneBrowser) {
     await leaveThreeStocks(loser,slot);
     for(const d of [loser,winner]){
       await d.page.locator('#set-score').waitFor();
+      assert(await d.page.locator('.winner img').evaluate((el,coat)=>el.src===DogArt.portrait('pip',coat),slot===0?3:2));
       await d.page.waitForFunction(winningSlot=>window.observedScore?.track==='win-'+window.observedBattle?.dogs[winningSlot].kind,1-slot);
     }
     assert.equal(await a.locator('#set-score').textContent(),await b.locator('#set-score').textContent());
@@ -273,6 +276,8 @@ async function onlineSet(browser,phoneBrowser) {
         assert.match(await d.page.locator('.card-stage').textContent(),/Game 1 · Laundry Line · Flat/);
       }
       const rows=await d.page.locator('.card-timeline li').allTextContents();
+      assert(await d.page.locator('.card-stats thead img').evaluateAll(els=>els.length===2 &&
+        els.every((el,i)=>el.src===DogArt.portrait('pip',i+2))));
       assert.equal(rows.length,3);
       assert(rows.every(s=>s.includes('blast line') && s.includes('No hits taken')));
       const stats=await d.page.locator('.card-stats tbody').innerText();
@@ -292,7 +297,18 @@ async function onlineSet(browser,phoneBrowser) {
       for(const d of [host,guest]){await fresh(d,1,'0–0');assert.equal(await d.page.locator('#match-stage').textContent(),'Laundry Line · Flat');}
     }
   }
-  await b.close();await a.close();console.log('Desktop host and phone guest completed a 2–1 WebRTC set and started another.');
+  for(const d of [host,guest]){
+    await d.page.goto(root+'?quick-coats#online');await observe(d.page);
+    await d.press('#online-coat');await d.press(d===host?'[data-coat="3"]':'[data-coat="1"]');
+  }
+  await host.press('#online-quick');await guest.press('#online-quick');
+  for(const d of [host,guest]){
+    await d.page.waitForFunction(()=>window.observedBattle?.matchFrames>2);
+    const side=(await d.page.locator('#match-mode').textContent()).includes('P1')?0:1;
+    const own=d===host?3:1;
+    assert.deepEqual(await d.page.evaluate(i=>[observedBattle.coatFor(i),observedBattle.coatFor(1-i)],side),[own,4-own]);
+  }
+  await b.close();await a.close();console.log('Two peers kept their coats through a room set, rematch and Quickplay.');
 }
 async function main(){
   const options={executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim(),
