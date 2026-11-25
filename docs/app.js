@@ -525,6 +525,10 @@
   const labelFor = (i) => {
     if (online.match) return 'P' + (i + 1) + (i === online.side ? ' · YOU' : '');
     if (page === 'match' && world?.comboPractice?.defending) return i === 0 ? 'REPLAY' : 'YOU';
+    if (page === 'match' && world?.hasSecondPlayer && world.mode === 'training') {
+      if (i === 1) return 'P2';
+      return world.comboPractice && world.comboPractice.source !== 'record' ? 'REPLAY' : 'P1';
+    }
     const mode = page === 'match' && world ? world.mode : settings.mode;
     return i === 0 ? 'P1' : mode === 'local' ? 'P2' : mode === 'training' ? 'DUMMY' : 'CPU';
   };
@@ -1180,7 +1184,7 @@
   }
   const comboSources = { example:'Dog’s combo', late:'Late jab', record:'Your take', replay:'Your take',
     defend:'Defend this take', mix:'Mix A and B' };
-  const comboReplies = { stand: 'Standing', guard: 'Guard', away: 'Flick away', punish:'Block and punish' };
+  const comboReplies = { stand: 'Standing', guard: 'Guard', away: 'Flick away', punish:'Block and punish', p2:'Player 2' };
   const takeLetter = slot => slot ? 'B' : 'A';
   function takeName(slot) {
     return takeLetter(slot) + ' · ' + (world.comboTakes[slot]?.length ? 'Your recording' : slot ? 'Landing grab' : 'Falling aerial');
@@ -1217,6 +1221,9 @@
     } else if (d.reply === 'punish') {
       if (d.counter) latest += ' · ' + world.dogs[1].stats.name + ' punished with ' + comboMoveName(d.counter.moveId);
       else if (d.phase === 'done' && d.contacts.some(c => c.kind === 'block')) latest += ' · No punish landed';
+    } else if (d.reply === 'p2') {
+      if (d.phase === 'ready') latest = 'P1 moves to start recording. P2 controls ' + world.dogs[1].stats.name + '.';
+      if (d.counter) latest += ' · P2 answered with ' + comboMoveName(d.counter.moveId);
     }
     $('combo-latest').textContent = latest;
     const prior = d.prior;
@@ -1273,7 +1280,7 @@
       const captive = world.dogs[grip.target].stats.name;
       const holdTip = grappleControls(world,grip);
       const text =
-        world.mode === 'local'
+        world.hasSecondPlayer
           ? holder + ' · ' + holdTip + ' / ' + captive + ' · Tap buttons to escape'
           : grip.owner === world.trainingPlayerSlot
             ? holdTip
@@ -1340,6 +1347,7 @@
     readout.hidden = world.mode !== 'training' || !!world.freshnessPractice || !!world.wavePractice || !!comboLab || combo.hits === 0;
     if (!readout.hidden) {
       readout.textContent =
+        (world.trainingPartner || combo.target === 0 ? 'P' + ((combo.target ?? 1)+1) + ' took ' : '') +
         combo.hits + (combo.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(combo.damage) + '% damage';
     }
     $('hud').innerHTML = scores
@@ -1375,6 +1383,7 @@
   }
   let matchConfig, soloSeed, localSet = null;
   const frameLab = {mode:'live', count:0, pending:0, renderTime:0};
+  let trainingMoment = null;
   function frameState(f) {
     const frames = seconds => Math.ceil(seconds * 60 - 1e-8);
     if (world.hitStop > 0 || f.impactLag > 0) return 'Hitstop ' + frames((world.hitStop + world.finalHitHold) || f.impactLag) + 'f';
@@ -1442,6 +1451,46 @@
   $('frame-toggle').onclick = toggleFrames;
   $('frame-step').onclick = stepTrainingFrame;
   $('frame-landing').onclick = () => setFrameMode(frameLab.mode === 'armed' ? 'live' : 'armed');
+  function momentNotice(action) {
+    const text = action + ' · ' + world.dogs.map(f => f.stats.name + ' ' + tenth(f.damage) + '%').join(' / ');
+    $('recovery-tip').textContent = text;
+    $('recovery-tip').hidden = false;
+    announce(text);
+    $('game').focus({preventScroll:true});
+  }
+  $('moment-save').onclick = () => {
+    const {cx,cy,zoom,leftFighter,effects,lastTrail,shake} = view;
+    trainingMoment = {battle:world.saveTrainingMoment(), mode:frameLab.mode,
+      picture:structuredClone({cx,cy,zoom,leftFighter,effects,lastTrail,shake}), renderTime:frameLab.renderTime,
+      sticks:rightStickHeld.slice(), tilt:shieldTiltLocked.slice(), flick:structuredClone(flickJumpStates)};
+    $('moment-retry').disabled = false;
+    momentNotice('Moment saved');
+  };
+  $('moment-retry').onclick = () => {
+    if (!trainingMoment) return;
+    world.restoreTrainingMoment(trainingMoment.battle);
+    for (const i of [0,1]) {
+      rightStickHeld[i] = trainingMoment.sticks[i];
+      shieldTiltLocked[i] = trainingMoment.tilt[i];
+      flickJumpStates[i] = {...trainingMoment.flick[i]};
+    }
+    taps.clear();
+    touchTaps.clear();
+    flickAim = null;
+    const boxes = view.contactBoxes;
+    view = new FightView($('blast-radar'));
+    Object.assign(view,structuredClone(trainingMoment.picture));
+    view.shakeEnabled = settings.shake;
+    showContactBoxes(boxes);
+    setFrameMode(trainingMoment.mode);
+    if (frameLab.mode === 'frozen') frameLab.renderTime = trainingMoment.renderTime;
+    $('dummy-damage').value = world.trainingDamage;
+    $('damage-output').textContent = world.trainingDamage + '%';
+    hudKey = '';
+    updateHUD();
+    view.draw($('game'),world,0,frameLab.renderTime);
+    momentNotice('Moment restored');
+  };
   function showContactBoxes(enabled) {
     view.contactBoxes = enabled;
     $('training-boxes').setAttribute('aria-pressed', String(enabled));
@@ -1504,6 +1553,10 @@
     return report;
   }
   function startMatch(config = settings, random = Math.random, opening, series = null) {
+    trainingMoment = null;
+    $('moment-retry').disabled = true;
+    $('moment-save').hidden = $('moment-retry').hidden = false;
+    $('partner-training').setAttribute('aria-pressed','false');
     localSet = series;
     matchConfig = { ...config };
     if (config.mode === 'solo') {
@@ -1874,10 +1927,10 @@
     if (action === 'controls') showControls();
     if (action === 'moves') showMoves(world?.dogs[world.trainingPlayerSlot].kind || settings.p1);
   });
-  function showDamageControl(counter, fineStep = false, before) {
+  function showDamageControl(counter, fineStep = false, before, partner = false) {
     const control = $('damage-control'), next = $(before || (counter ? 'escape-break' : 'reset-training'));
     if (control.nextElementSibling !== next) next.before(control);
-    const label = counter ? 'Your starting damage' : 'Dummy damage';
+    const label = counter ? 'Your starting damage' : partner ? 'P2 starting damage' : 'Dummy damage';
     $('damage-label').textContent = label;
     $('dummy-damage').setAttribute('aria-label', label);
     $('dummy-damage').step = counter || fineStep ? '1' : '5';
@@ -3031,6 +3084,7 @@
     const freshness = ledge === 'freshness';
     const wave = ledge === 'wave';
     const combo = ledge === 'combo';
+    const partner = ledge === 'partner';
     const spacing = ledge === 'spacing';
     const escape = ledge === 'escape';
     const platform = ledge === 'platform';
@@ -3038,7 +3092,7 @@
     const roll = ledge === 'roll';
     const climb = ledge === 'climb';
     const trump = ledge === 'trump';
-    drillSide = launch || wall || shield || footwork || edge || freshness || wave || combo || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
+    drillSide = launch || wall || shield || footwork || edge || freshness || wave || combo || partner || spacing || escape || platform || air || roll || climb || trump ? null : ledge || null;
     drillWaiting = !!drillSide;
     if (drillSide) practiceSide = drillSide;
     view = new FightView($('blast-radar'));
@@ -3083,7 +3137,12 @@
     else if (roll) world.resetLedgeRollPractice(pattern, practiceSide);
     else if (climb) world.resetClimbPractice(pattern, practiceSide, world.climbPractice?.slow ?? true);
     else if (trump) world.resetLedgeTrumpPractice(pattern, practiceSide);
-    else world.resetTraining(ledge, fromHang);
+    else {
+      world.resetTraining(partner ? false : ledge, fromHang);
+      world.trainingPartner = partner;
+    }
+    $('partner-training').setAttribute('aria-pressed',String(partner));
+    $('moment-save').hidden = $('moment-retry').hidden = !!ledge && !partner;
     const player = world.dogs[0];
     document.body.classList.toggle('with-drill-readout', freshness || wave || combo);
     $('combo-readout').hidden = $('combo-controls').hidden = !combo;
@@ -3091,7 +3150,7 @@
     $('wave-readout').hidden = $('wave-patterns').hidden = !wave;
     const counterDrill = escape && (pattern === 'counter' || pattern === 'gripEscape');
     showDamageControl(counterDrill || meteor || survival || !!world.comboPractice?.defending, freshness && world.freshnessPractice.koTest,
-      meteor || survival ? 'launch-side' : world.edgePractice?.timeCatch ? 'edge-side' : combo ? 'reset-training' : undefined);
+      meteor || survival ? 'launch-side' : world.edgePractice?.timeCatch ? 'edge-side' : combo ? 'reset-training' : undefined, world.hasSecondPlayer);
     $('damage-control').hidden = stock || juggle || breakaway || (escape && pattern === 'carry');
     $('dummy-damage').value = survival ? world.survivalPractice.baseline : meteor ? world.meteorPractice.baseline : counterDrill ? world.escapePractice.baseline : world.trainingDamage;
     $('damage-output').textContent = $('dummy-damage').value + '%';
@@ -3153,6 +3212,7 @@
           world.comboTakes[d.slot]?.length ? 'Try shielding, escaping or hitting back against your recording.' :
           d.slot ? 'Hold Shield once. On the next try, spot-dodge just before the rival lands and punish the missed grab.' :
           'Hold Shield through the falling aerial, then try punishing the landing.') :
+        d.reply === 'p2' ? 'P2 plays the defender live. Record P1’s opening, then replay it to try a different response.' :
         d.reply === 'punish' ? 'The rival holds Shield. Try a side smash up close, then try hitting at the tip. Watch for the counter after a blocked smash or landing.' :
         d.source === 'record' ? 'Take ' + takeLetter(d.slot) + ' records 2½ seconds from your first input. ' + route :
         d.source === 'late' ? 'The second jab is delayed. Change the rival’s reply to see who can use the opening.' :
@@ -3428,6 +3488,7 @@
     } else if (fromHang)
       message =
         'Hanging from the ' + ledge + ' ledge. Tap Attack for ' + moves[player.kit.ledgeAttack].label + '.';
+    else if (partner) message = 'P2 uses the arrow keys or a controller. Press 1 to save an exchange and 2 to retry.';
     else if (ledge) message = 'Jump or use Special to start. ' + player.kit.recovery;
     $('recovery-tip').textContent = message;
     $('recovery-tip').hidden = !ledge || wave;
@@ -3436,7 +3497,8 @@
     $('game').focus({ preventScroll: true });
     announce(message);
   }
-  $('reset-training').onclick = () => drill(false);
+  $('reset-training').onclick = () => drill(world.trainingPartner ? 'partner' : false);
+  $('partner-training').onclick = () => drill(world.trainingPartner ? false : 'partner');
   // Chromium can omit click on a training button after two thumbs release the fight controls.
   const trainingTools = $('training-tools');
   let trainingPress = null, handledTrainingTap = false;
@@ -3479,7 +3541,7 @@
   $('combo-reply').onchange = e => {
     const d = world.comboPractice;
     drill('combo', false, d.source === 'record' && d.tape.length ? 'replay' : d.source, e.target.value);
-    e.target.focus({ preventScroll: true });
+    if (e.target.value !== 'p2') e.target.focus({ preventScroll: true });
   };
   $('combo-slow').onclick = () => {
     const d = world.comboPractice;
@@ -4318,6 +4380,12 @@
   window.addEventListener('keydown', (e) => {
     if (page !== 'match' || $('dialog').open) return;
     if (e.target instanceof HTMLSelectElement) return;
+    if (world?.mode === 'training' && !$('moment-save').hidden && (e.code === 'Digit1' || e.code === 'Digit2')) {
+      if (e.altKey || e.ctrlKey || e.metaKey || e.target instanceof HTMLInputElement) return;
+      e.preventDefault();
+      if (!e.repeat) $(e.code === 'Digit1' ? 'moment-save' : 'moment-retry').click();
+      return;
+    }
     if (world?.mode === 'training' && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
       e.preventDefault();
       if (!e.repeat) (e.code === 'BracketLeft' ? toggleFrames : stepTrainingFrame)();
@@ -4498,7 +4566,7 @@
     const map = keys[i];
     const tapped = (action) => taps.has(map[action]) || (!i && touchTaps.has(action));
     const key = (action) => held.has(map[action]) || (!i && touches.has(action)) || tapped(action);
-    const pad = world.mode === 'local' && !online.match && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
+    const pad = world.hasSecondPlayer && !online.match && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
     const axis = (n) => (Math.abs(pad?.axes?.[n] || 0) > 0.23 ? pad.axes[n] : 0);
     const left = key('left') || down(pad, 14),
       right = key('right') || down(pad, 15);
@@ -4712,7 +4780,7 @@
           }
           if (!drillWaiting) {
             const airborne = player.ground < 0;
-            world.step(1 / 60, input, world.mode === 'local' ? playerInput(1, pads) : idleInput);
+            world.step(1 / 60, input, world.hasSecondPlayer ? playerInput(1, pads) : idleInput);
             if (frameLab.mode === 'frozen') {
               frameLab.count++;
               frameLab.renderTime += 1/60;
@@ -4784,6 +4852,11 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/sparring') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, mode:'training', p1:'pip', p2:'brisket', stage:'nightmail', fetch:false});
+      drill('partner');
     } else if (hash === '#training/shield-punish') {
       leaveOnline();
       afterStory = null;

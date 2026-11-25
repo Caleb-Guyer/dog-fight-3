@@ -2643,7 +2643,8 @@
       const minutes = stockMinutes.includes(config.minutes) ? config.minutes : 7;
       this.clockFrames = versus && minutes ? minutes * 3600 : null;
       this.emit = event;
-      this.random = random;
+      this.random = this.mode === 'training' && random === Math.random
+        ? seededRandom(Math.floor(random() * 0x100000000)) : random;
       this.dogs = [newFighter(config.p1, 0), newFighter(config.p2, 1)];
       this.terrain = this.layout?.terrain || platforms(this.stage, 0);
       this.ledgeClaims = [];
@@ -2796,6 +2797,7 @@
       this.lastCombo = { hits: 0, damage: 0 };
     }
     resetTraining(ledge = false, fromHang = false, needsPlatforms = false) {
+      this.trainingPartner = false;
       if (this.grapple) this.breakGrapple(false);
       if (this.launchPractice?.original) {
         this.dogs = this.launchPractice.original.dogs;
@@ -2980,6 +2982,21 @@
       else if (!d.landed && f.y > this.terrain[d.ground].y + 5) this.finishEdgePractice('overshot');
     }
     get trainingPlayerSlot() { return this.comboPractice?.defending ? 1 : 0; }
+    get hasSecondPlayer() {
+      return this.mode === 'local' || (this.mode === 'training' && (this.trainingPartner ||
+        (this.comboPractice?.reply === 'p2' && !this.comboPractice.defending)));
+    }
+    saveTrainingMoment() {
+      // Copy one graph. Both dogs can share a grip, and some hit ledgers refer to a fighter by identity.
+      const {dogs, terrain, ledgeClaims, grapple, projectiles, ball, nextBall, hitStop, finalHitHold,
+        time, trainingDamage, lastCombo, bot} = this;
+      return {seed:this.random.state, state:structuredClone({dogs, terrain, ledgeClaims, grapple, projectiles,
+        ball, nextBall, hitStop, finalHitHold, time, trainingDamage, lastCombo, bot})};
+    }
+    restoreTrainingMoment(moment) {
+      Object.assign(this,structuredClone(moment.state));
+      if (moment.seed !== undefined) this.random.state = moment.seed;
+    }
     resetComboPractice(source = 'record', reply = 'stand', slow = true, slot = this.comboPractice?.slot ?? 0) {
       const previous = this.comboPractice;
       this.comboTakes ??= [null,null];
@@ -3033,7 +3050,7 @@
     }
     comboContact(target, kind, moveId, damage = 0) {
       const d = this.comboPractice;
-      if ((d?.defending || d?.reply === 'punish') && d.phase === 'active' && target.index === 0 && !d.counter &&
+      if ((d?.defending || d?.reply === 'punish' || d?.reply === 'p2') && d.phase === 'active' && target.index === 0 && !d.counter &&
           (kind === 'hit' || kind === 'grab' || kind === 'throw'))
         d.counter = {kind, moveId, damage};
       if (!d || d.phase !== 'active' || target.index !== 1) return;
@@ -4963,7 +4980,7 @@
             combo.phase = 'active';
           }
           input2 = input1;
-        } else input2 = this.comboRivalInput(dt, this.hitStop > 0);
+        } else if (combo.reply !== 'p2') input2 = this.comboRivalInput(dt, this.hitStop > 0);
         input1 = this.comboPlayerInput(input1);
         if (!input1) return;
       }
@@ -5272,12 +5289,12 @@
       }
       if (this.hitStop > 0) {
         this.captureInput(this.dogs[0], input1);
-        if (this.mode === 'local' || combo) this.captureInput(this.dogs[1], input2);
+        if (this.hasSecondPlayer || combo) this.captureInput(this.dogs[1], input2);
         if (this.finalHitHold > 0)
           this.finalHitHold = this.finalHitHold <= dt + 1e-8 ? 0 : this.finalHitHold - dt;
         else this.hitStop = this.hitStop <= dt + 1e-8 ? 0 : this.hitStop - dt;
         for (const f of this.dogs) {
-          const human = f.index === 0 ? input1 : this.mode === 'local' || combo ? input2 : null;
+          const human = f.index === 0 ? input1 : this.hasSecondPlayer || combo ? input2 : null;
           if (f.hitShift) {
             // A CPU can read a second swing once. It must re-center and flick under the same rules.
             const cpu = f.hitShift.cpuDirection && f.hitShift.remaining <= 4 ? { x: f.hitShift.cpuDirection } : idleInput;
@@ -5296,7 +5313,7 @@
       this.terrain = this.layout?.terrain || platforms(this.stage, this.time);
       let second = input2;
       if (this.mode === 'solo') second = this.cpu(dt);
-      else if (this.mode === 'training' && !combo) second = this.trainingRivalInput(dt, input1);
+      else if (this.mode === 'training' && !combo && !this.trainingPartner) second = this.trainingRivalInput(dt, input1);
       const settingUpWallHit = wallDrill?.phase === 'swing';
       const inputs = [
         this.launchPractice?.phase === 'ready' || (this.survivalPractice && !this.survivalPractice.released) ||
@@ -7993,8 +8010,10 @@
     dealDamage(target, damage, preserveCombo) {
       if (damage > 0) target.ledgeProtectionReady = true;
       const applied = Math.min(damage, 999 - target.damage);
-      if (this.mode === 'training' && target.index === 1) {
-        if (target.stun <= 0 && !preserveCombo) this.lastCombo = { hits: 0, damage: 0 };
+      if (this.mode === 'training' && (target.index === 1 || this.trainingPartner)) {
+        if ((target.stun <= 0 && !preserveCombo) || (this.trainingPartner && this.lastCombo.target !== target.index))
+          this.lastCombo = { hits: 0, damage: 0 };
+        if (this.trainingPartner) this.lastCombo.target = target.index;
         this.lastCombo.hits++;
         this.lastCombo.damage += applied;
       }
