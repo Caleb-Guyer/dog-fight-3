@@ -105,6 +105,83 @@ async function soloAndLocal(browser){
   assert.equal(await page.locator('#match-stage').textContent(),'Picnic Table');
   await page.close();console.log('Couch counterpick, game-two restart and solo CPU counterpick passed.');
 }
+async function rivalSet(browser) {
+  const page = await browser.newPage();
+  page.on('pageerror', e => errors.push(e.message));
+  await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+  await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+  await page.goto(root + '#solo');
+  await page.locator('#cpu-level').click();
+  await page.locator('[data-do=shield-read-set]').click();
+  await page.evaluate(() => {
+    const proto = DogFight.Battle.prototype, step = proto.step, block = proto.block;
+    let active, respond = false;
+    window.openingHabits = [];
+    proto.block = function(...args) {
+      const result = block.apply(this,args);
+      if (args[0].index === 0) respond = true;
+      return result;
+    };
+    proto.step = function(...args) {
+      if (this !== active) {
+        active = this;
+        respond = false;
+        window.openingHabits.push(this.bot.shieldHabit ? {...this.bot.shieldHabit} : null);
+      }
+      const result = step.apply(this,args), [p,q] = this.dogs;
+      if (p.floorAction?.type === 'shieldRoll') respond = false;
+      window.rollState = {x:p.x, gap:q.x-p.x, ready:p.ground >= 0 && !p.grip && !p.floorAction,
+        respond, caught:this.bot.rollPunishes || 0, stocks:p.stocks, ended:this.end !== null};
+      return result;
+    };
+  });
+  await page.clock.runFor(2450);
+  let held = [];
+  async function hold(next) {
+    for (const key of held.filter(k => !next.includes(k))) await page.keyboard.up(key);
+    for (const key of next.filter(k => !held.includes(k))) await page.keyboard.down(key);
+    held = next;
+  }
+  for (let frame = 0; frame < 900; frame++) {
+    const state = await page.evaluate(() => window.rollState);
+    if (state?.caught) break;
+    let next = [];
+    if (state?.ready) {
+      const toward = state.gap > 0 ? 'd' : 'a', away = state.gap > 0 ? 'a' : 'd';
+      next = state.respond ? ['l',away] : Math.abs(state.gap) > 120 ? [toward] : ['l'];
+    }
+    await hold(next);
+    await page.clock.runFor(16);
+  }
+  assert.equal(await page.evaluate(() => window.rollState?.caught),1,'Noodle catches a repeated roll in game one');
+  await hold([]);
+  await page.locator('#pause').click();
+  assert.match(await page.locator('#dialog-body').textContent(),/grabbed you during roll recovery 1 time/);
+  await page.locator('[data-do=resume]').click();
+  for (let i = 0; i < 240; i++) {
+    const state = await page.evaluate(() => window.rollState);
+    if (state.ended) break;
+    await hold([state.x < 600 ? 'a' : 'd']);
+    await page.clock.runFor(160);
+  }
+  await hold([]);
+  await page.clock.runFor(1600);
+  assert.match(await page.locator('#dialog-body').textContent(),/roll away after consecutive blocks.*remember/);
+  await page.locator('[data-do=set-pick]').click();
+  await page.locator('[data-stage=canal]').click();
+  await page.clock.runFor(3200);
+  assert.equal(await page.locator('#match-set').textContent(),'Game 2 · 0–1');
+  const habits = await page.evaluate(() => window.openingHabits);
+  assert.equal(habits[0],null);
+  assert.equal(habits[1].escape,'away');
+  assert.equal(habits[1].count,2);
+  await page.locator('#pause').click();
+  await page.locator('[data-do=rematch]').click();
+  await page.clock.runFor(3200);
+  assert.deepEqual(await page.evaluate(() => window.openingHabits[2]),habits[1]);
+  await page.close();
+  console.log('Noodle caught the repeated keyboard roll and remembered it after a three-stock counterpick and restart.');
+}
 async function onlineSet(browser,phoneBrowser) {
   const host=await device(browser,false,'#online'), guest=await device(phoneBrowser,true,'#online');
   const {page:a}=host,{page:b}=guest;
@@ -136,6 +213,7 @@ async function main(){
     headless:true,args:['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']};
   const browser=await chromium.launch(options);
   try{
+    await rivalSet(browser);
     await soloAndLocal(browser);
     const phone=await chromium.launch(options);
     try{await onlineSet(browser,phone);}finally{await phone.close();}
