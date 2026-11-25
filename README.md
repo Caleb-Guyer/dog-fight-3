@@ -82,6 +82,8 @@ In **CPU → Play a Rival set**, approach Noodle as Pip. Hold Shield until his l
 
 ## Online versus
 
+To join a friend with a controller, open **Code pad** or focus the room-code field and press **A**. Choose six characters with the stick or D-pad and **A**. **X** erases the last character, **B** cancels, and **Join room** connects with the code you entered. You can also type or paste a code directly into the field.
+
 Pick your dog and select **Quickplay** to fight the next available player on a random arena. To play a friend, choose an **Opening arena**, select **Create room**, and share the six-character code or invite link. Your friend picks a dog and selects **Join room**. The fight starts when both players connect. [Open Online versus](https://caleb-guyer.github.io/dog-fight-3/#online)
 
 Each device uses the P1 keyboard, controller, or touch controls. The HUD marks your fighter with **YOU**. Both dogs start with three stocks. In Quickplay and single-game rooms, when both players select **Rematch**, the arena advances through Picnic Table, Laundry Line, Moonbell Bandstand, Night Mail, and Canal Lock in that order, then repeats. If the guest leaves, the next opponent can join the same code and play the host’s chosen opener.

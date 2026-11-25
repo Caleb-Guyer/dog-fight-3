@@ -875,6 +875,11 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='code-pad'){
+      dismiss();
+      if(!document.activeElement?.matches('#online-code,#open-code-pad'))$('open-code-pad').focus();
+      return;
+    }
     if(dialogType==='sound-test')return backFromSoundTest();
     if(dialogType==='rotation')return rotationBack();
     if(dialogType==='fighter-school')return leaveFighterSheet();
@@ -6198,6 +6203,44 @@
   $('online-home').onclick = returnToHome;
   $('online-cancel').onclick = () => showOnline(online.phase === 'room' ? 'Room closed.' : 'Matchmaking canceled.');
   $('online-quick').onclick = () => seekOpponent('quick');
+  function showCodePad(){
+    const {roomAlphabet,validCode}=window.DogOnline;
+    const field=$('online-code');
+    let draft=[...field.value.toUpperCase()].filter(c=>roomAlphabet.includes(c)).slice(0,6).join('');
+    showDialog('code-pad','Enter room code','<output id="room-digits" aria-live="polite"></output>'+
+      '<div class="code-letters" role="group" aria-label="Room code characters">'+[...roomAlphabet].map(c=>
+        '<button data-letter="'+c+'" type="button">'+c+'</button>').join('')+'</div>'+
+      '<div class="dialog-actions"><button id="code-erase" class="utility" type="button">Erase<span class="pad-legend"> · X</span></button>'+
+      '<button id="code-cancel" class="utility" type="button">Cancel</button><button id="code-join" class="primary" type="button">Join room</button></div>');
+    const grid=document.querySelector('.code-letters'), digits=$('room-digits'), erase=$('code-erase'), join=$('code-join');
+    const update=()=>{
+      digits.replaceChildren(...Array.from({length:6},(_,i)=>{
+        const cell=document.createElement('span');cell.textContent=draft[i]||'·';return cell;
+      }));
+      digits.setAttribute('aria-label',(draft.split('').join(' ')||'Empty')+' · '+draft.length+' of 6 characters');
+      erase.disabled=!draft;
+      join.disabled=!validCode(draft);
+      for(const button of grid.children)button.disabled=draft.length===6;
+    };
+    grid.onclick=e=>{
+      const button=e.target.closest('[data-letter]');
+      if(!button || button.disabled)return;
+      draft+=button.dataset.letter;update();
+      if(!join.disabled)join.focus();
+    };
+    erase.onclick=()=>{
+      const removed=draft.slice(-1);
+      draft=draft.slice(0,-1);update();
+      if(removed)grid.querySelector('[data-letter="'+removed+'"]').focus();
+    };
+    $('code-cancel').onclick=exitDialog;
+    join.onclick=()=>{
+      if(!validCode(draft))return;
+      field.value=draft;dismiss();$('online-join-form').requestSubmit();
+    };
+    update();(join.disabled?grid.firstElementChild:join).focus();
+  }
+  $('open-code-pad').onclick=showCodePad;
   $('online-create').onclick = () => seekOpponent('create');
   $('online-join-form').onsubmit = (e) => { e.preventDefault(); seekOpponent('join'); };
   $('online-code').oninput = (e) => { e.target.value = e.target.value.toUpperCase(); };
@@ -6698,8 +6741,9 @@
     // A and B also fight. Consume menu presses until that particular pad releases them.
     const menuOpen = page !== 'match' || $('dialog').open;
     for (const pad of pads) {
-      const buttons = (down(pad, 0) ? 1 : 0) | (down(pad, 1) ? 2 : 0);
-      const used = menuOpen ? buttons : (menuPadButtons.get(pad.index) || 0) & buttons;
+      const buttons = (down(pad, 0) ? 1 : 0) | (down(pad, 1) ? 2 : 0) | (down(pad, 2) ? 4 : 0);
+      const claimed=menuOpen ? (dialogType==='code-pad'?7:3) : 0;
+      const used = ((menuPadButtons.get(pad.index) || 0) | claimed) & buttons;
       if (used) menuPadButtons.set(pad.index, used);
       else menuPadButtons.delete(pad.index);
     }
@@ -6714,6 +6758,7 @@
       freeze: any(10),
       step: any(11),
       confirm: any(0),
+      erase: any(2),
       back: any(1),
       direction,padIndex,
     };
@@ -6726,7 +6771,10 @@
       oldPad=now;return;
     }
     if (!musicUnlocked && now.confirm && !oldPad.confirm) unlockMusic();
-    if (now.pause && !oldPad.pause) {
+    if(dialogType==='code-pad' && now.erase && !oldPad.erase){
+      document.body.classList.add('pad-navigation');
+      $('code-erase').click();
+    }else if (now.pause && !oldPad.pause) {
       if (dialogType === 'pause' || dialogType === 'online-menu') dismiss();
       else if (page === 'match' && !dialogType) showPause();
       else if (page === 'dispatch-story' && !dialogType) toggleFilm();
@@ -6756,7 +6804,10 @@
           active.dispatchEvent(new Event('input',{bubbles:true}));
         }else moveMenuFocus(direction,items);
       }
-      if(confirm)(items.includes(document.activeElement)?document.activeElement:items[0])?.click();
+      if(confirm){
+        const target=items.includes(document.activeElement)?document.activeElement:items[0];
+        if(target===$('online-code'))showCodePad();else target?.click();
+      }
     }
     oldPad = now;
   }

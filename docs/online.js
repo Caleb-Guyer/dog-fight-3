@@ -462,5 +462,5 @@
       if (!this.side && this.theirVote) this.hostRound();
     }
   }
-  window.DogOnline = { OnlineSession, validCode };
+  window.DogOnline = { OnlineSession, validCode, roomAlphabet };
 })();

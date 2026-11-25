@@ -111,6 +111,14 @@ dialog[data-view="room-fighters"] .coat-grid { grid-template-columns: repeat(4,m
   border: 2px solid #838390; font: 17px/1.2 var(--body); border-radius: 0;
 }
 #online-code { text-transform: uppercase; }
+.room-code-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.room-code-heading .utility { min-height:32px; }
+.code-letters { display:grid; grid-template-columns:repeat(8,minmax(0,1fr)); gap:4px; }
+.code-letters button { padding:2px 0; min-height:40px; font:400 20px var(--pixel); color:#f7e6bf; background:#354955; border:2px solid #788d8c; }
+.code-letters button:focus-visible { outline-offset:-4px; }
+#room-digits { display:flex; justify-content:center; gap:6px; margin:0 0 12px; }
+#room-digits span { display:grid; place-items:center; width:1.25em; min-height:1.5em; color:#ffe2a2; background:#292a38; border-bottom:3px solid #7fada2; font:400 23px var(--pixel); }
+@media(max-width:420px){ .code-letters button { min-height:36px; } }
 #online-code::placeholder { color: #bbb8b6; text-transform: none; }
 #online-invite { padding: 13px; border: 2px dashed #b4966f; background: #2e303b; }
 #online-room-code { font: 400 clamp(26px, 3.5vw, 48px)/1.2 var(--pixel); letter-spacing: .12em; color: #ffe09c; user-select: all; }
