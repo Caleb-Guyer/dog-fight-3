@@ -3,6 +3,8 @@ const assert=require('node:assert/strict');
 global.window={};
 require('../docs/engine.js');
 require('../docs/online.js');
+global.document={currentScript:{src:'https://example.test/finish-tools.js'}};
+require('../docs/finish-tools.js');
 const {Battle,FinishTape,seededRandom,idleInput}=window.DogFight;
 const dt=1/60;
 function state({emit,random,...fields}) { return {fields,seed:random.state}; }
@@ -30,9 +32,9 @@ test('both delayed peers can revisit the same confirmed non-final knockout after
   assert.deepEqual(a.losses,b.losses);assert.equal(a.losses[0].remaining,2);
   assert(a.tape.count<tapes[0].count-240);
   for(let n=1;n<=a.tape.length;n++){
-    for(const slot of [0,1])assert.deepEqual(a.tape.controlsAt(n,slot),b.tape.controlsAt(n,slot));
+    for(const slot of [0,1])assert.deepEqual(window.FinishTools.inputFrame(a.tape,n,slot),window.FinishTools.inputFrame(b.tape,n,slot));
   }
-  assert(Array.from({length:a.tape.length},(_,i)=>a.tape.controlsAt(i+1,0).x).includes(-1));
+  assert(Array.from({length:a.tape.length},(_,i)=>window.FinishTools.inputFrame(a.tape,i+1,0).movement).includes('Left 100%'));
   for(const offset of [0,8,a.tape.length])assert.deepEqual(state(a.tape.playback(offset).battle),state(b.tape.playback(offset).battle));
   const live=peers.map(p=>structuredClone(state(p.confirmedWorld)));
   for(const c of [a,b]){
