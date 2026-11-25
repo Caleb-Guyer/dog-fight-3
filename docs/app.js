@@ -607,7 +607,7 @@
     if (page === 'match' && world?.comboPractice?.defending) return i === 0 ? 'REPLAY' : 'YOU';
     if (page === 'match' && world?.hasSecondPlayer && world.mode === 'training') {
       if (i === 1) return 'P2';
-      return world.comboPractice && world.comboPractice.source !== 'record' ? 'REPLAY' : 'P1';
+      return world.comboPractice && !['record','throwChase'].includes(world.comboPractice.source) ? 'REPLAY' : 'P1';
     }
     const mode = page === 'match' && world ? world.mode : settings.mode;
     return i === 0 ? 'P1' : mode === 'local' ? 'P2' : mode === 'training' ? 'DUMMY' : 'CPU';
@@ -1639,71 +1639,7 @@
       return li;
     }));
   }
-  const comboSources = { example:'Dog’s combo', late:'Late jab', record:'Your take', replay:'Your take',
-    flurry:'Pip’s rapid jab', escapeFlurry:'Escape the flurry',
-    defend:'Defend this take', mix:'Mix A and B' };
-  const comboReplies = { stand: 'Standing', guard: 'Guard', away: 'Flick away', punish:'Block and punish', p2:'Player 2' };
-  const takeLetter = slot => slot ? 'B' : 'A';
-  function takeName(slot) {
-    return takeLetter(slot) + ' · ' + (world.comboTakes[slot]?.length ? 'Your recording' : slot ? 'Landing grab' : 'Falling aerial');
-  }
-  function comboMoveName(moveId) {
-    return (moves[moveId] || specials[moveId] || smashes[moveId] || grabs[moveId] ||
-      throws[moveId] || pummels[moveId])?.label || moveId || 'Hit';
-  }
-  function comboRow(contact) {
-    const { moveId, kind, gap } = contact;
-    const name = comboMoveName(moveId);
-    const result = kind === 'parry' ? 'parried' : kind === 'block' ? 'blocked' : kind === 'grab' ? 'caught' : tenth(contact.damage) + '%';
-    const timing = gap === null ? 'opener' : gap ? gap + 'f opening' :
-      kind === 'pummel' || kind === 'throw' ? 'held' : 'no free frame';
-    return name + ' · ' + result + ' · ' + timing;
-  }
-  function updateComboReadout(d) {
-    const title = d.source === 'flurry' || d.source === 'escapeFlurry' ? comboSources[d.source] : d.defending ? (d.phase === 'done' ? 'Take ' + takeName(d.playSlot) :
-      d.source === 'mix' ? 'Mix A and B' : 'Defend ' + takeName(d.slot)) :
-      d.phase === 'ready' ? 'Ready to record' : d.source === 'record' && d.phase === 'active' && d.tick < 150
-      ? 'Recording' : comboSources[d.source];
-    $('combo-summary').textContent = title + (d.defending ? ' · Took ' : ' · ') + d.hits +
-      (d.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(d.damage) + '%';
-    const last = d.contacts.at(-1);
-    const response = [d.shifts ? d.shifts + (d.shifts === 1 ? ' shift' : ' shifts') : '',
-      d.dodges ? d.dodges + (d.dodges === 1 ? ' air dodge' : ' air dodges') : ''].filter(Boolean).join(' · ');
-    let latest = last ? comboRow(last) + (response ? ' · ' + response : '') :
-      d.phase === 'done' ? 'No contact' : d.phase === 'ready' ? 'Move or attack to start.' : 'Waiting for contact';
-    if (d.source === 'flurry' && d.phase !== 'done') {
-      if (!last) latest = 'Tap Attack for Quick Paw.';
-      else if (last.moveId === 'pipJab') latest += ' · Hold Attack now';
-      else if (last.moveId === 'pipSpeedBag') latest += ' · Release for Bell Kick';
-    }
-    if (d.defending) {
-      if (d.phase === 'ready') latest = 'You are ' + world.dogs[1].stats.name + ' · Tap Attack to start';
-      else if (d.phase === 'countdown') latest = 'Get ready';
-      else if (d.counter) latest = (last ? comboRow(last) + ' · ' : '') + 'Your ' + comboMoveName(d.counter.moveId) + ' connected';
-      if (d.phase === 'done') latest += ' · Tap Attack to retry';
-    } else if (d.reply === 'punish') {
-      if (d.counter) latest += ' · ' + world.dogs[1].stats.name + ' punished with ' + comboMoveName(d.counter.moveId);
-      else if (d.phase === 'done' && d.contacts.some(c => c.kind === 'block')) latest += ' · No punish landed';
-    } else if (d.reply === 'p2') {
-      if (d.phase === 'ready') latest = 'P1 moves to start recording. P2 controls ' + world.dogs[1].stats.name + '.';
-      if (d.counter) latest += ' · P2 answered with ' + comboMoveName(d.counter.moveId);
-    }
-    $('combo-latest').textContent = latest;
-    const prior = d.prior;
-    $('combo-previous').hidden = !prior;
-    if (prior) $('combo-previous').textContent = 'Previous · ' + (['mix','defend'].includes(prior.source) ?
-      'Defended take ' + takeLetter(prior.slot) : comboSources[prior.source] + ' · ' + comboReplies[prior.reply]) +
-      ' at ' + prior.baseline + '% · ' + prior.hits + (prior.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(prior.damage) + '%';
-    $('combo-history').hidden = !last;
-    $('combo-list').replaceChildren(...d.contacts.map(contact => {
-      const row = document.createElement('li');
-      row.textContent = comboRow(contact);
-      return row;
-    }));
-    $('combo-replay').disabled = !d.saved?.length;
-    $('combo-restore').hidden = !d.saved?.length;
-    for (const [i,option] of Array.from($('combo-slot').options).entries()) option.textContent = takeName(i);
-  }
+  const comboSources=['example','late','record','replay','flurry','escapeFlurry','defend','mix','throwChase'];
   function updateHUD() {
     if (world.bells) {
       const clock=$('match-clock'), count=$('match-set');
@@ -1746,7 +1682,7 @@
     const combo = world.lastCombo;
     const grip = world.grapple;
     const prompt = $('grapple-prompt');
-    const hideGrip = !grip || grip.phase === 'throw' || !!world.launchPractice || !!world.stockPractice || !!world.survivalPractice;
+    const hideGrip = !grip || grip.phase === 'throw' || world.comboPractice?.source==='throwChase' || !!world.launchPractice || !!world.stockPractice || !!world.survivalPractice;
     if (prompt.hidden !== hideGrip) prompt.hidden = hideGrip;
     if (!prompt.hidden) {
       const holder = world.dogs[grip.owner].stats.name;
@@ -1809,11 +1745,11 @@
       combo.damage +
       '/' +
       (world.mode === 'training' ? shownMove : '') +
-      (comboLab ? '/' + [comboLab.phase, comboLab.contacts.length, comboLab.counter?.moveId, comboLab.shifts, comboLab.dodges, comboLab.tick >= 150].join('/') : '') +
+      (comboLab ? '/' + [comboLab.phase, comboLab.contacts.length, comboLab.counter?.moveId, comboLab.shifts, comboLab.dodges, comboLab.launchRead, comboLab.tick >= 150].join('/') : '') +
       (world.freshnessPractice ? '/' + world.freshnessPractice.revision + '/' + player.moveHistory.length : '');
     if (key === hudKey) return;
     hudKey = key;
-    if (comboLab) updateComboReadout(comboLab);
+    if (comboLab) window.ComboLab.readout(world);
     if (world.freshnessPractice) updateFreshnessReadout(player, world.freshnessPractice);
     const lastMove = $('training-move');
     lastMove.hidden =
@@ -4674,6 +4610,8 @@
   }
   function drill(ledge, fromHang = false, pattern = 'strike', direction, study) {
     if (!world) return;
+    if(ledge==='combo' && !window.ComboLab)return waitForDispatch('Combo practice',()=>loadDispatch('ComboLab'),
+      ()=>drill(ledge,fromHang,pattern,direction,study),()=>$('game').focus());
     setFrameMode('live');
     const launch = ledge === 'launch';
     const breakaway = launch && pattern === 'breakaway';
@@ -4818,28 +4756,7 @@
     $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
     if (combo) {
-      const d = world.comboPractice;
-      $('combo-reply').value = d.reply;
-      $('combo-fight-pip').hidden = d.source !== 'flurry' && d.source !== 'escapeFlurry';
-      $('combo-slot').value = String(d.slot);
-      $('combo-reply-label').hidden = $('combo-reply').hidden = d.defending;
-      $('combo-slow').setAttribute('aria-pressed', String(d.slow));
-      for (const source of Object.keys(comboSources))
-        $('combo-' + source).setAttribute('aria-pressed', String(d.source === source));
-      const route = { pip: 'Attack, Attack, then Jump + Forward + Attack.', brisket: 'Attack, then Grab. Tap forward to throw.',
-        noodle: 'Attack twice, then tap neutral Special.', clover: 'Attack twice, then Jump + Attack.' }[player.kind];
-      message = d.source === 'flurry' ? 'Tap Attack once. When Quick Paw hits, press Attack again and hold through Cross. Release during Speed Bag for Bell Kick. Try Flick away as the rival’s response.'
-        : d.source === 'escapeFlurry' ? 'You control ' + world.dogs[1].stats.name + '. Tap Attack to start. Let Pip hit you once, then flick away during the spark. Re-center between hits to shift again.'
-        : d.defending ? 'You control ' + world.dogs[1].stats.name + '. Tap Attack to start. ' +
-        (d.source === 'mix' ? 'Each try picks either take. Watch the rival and choose your response.' :
-          world.comboTakes[d.slot]?.length ? 'Try shielding, escaping or hitting back against your recording.' :
-          d.slot ? 'Hold Shield once. On the next try, spot-dodge just before the rival lands and punish the missed grab.' :
-          'Hold Shield through the falling aerial, then try punishing the landing.') :
-        d.reply === 'p2' ? 'P2 plays the defender live. Record P1’s opening, then replay it to try a different response.' :
-        d.reply === 'punish' ? 'The rival holds Shield. Try a side smash up close, then try hitting at the tip. Watch for the counter after a blocked smash or landing.' :
-        d.source === 'record' ? 'Take ' + takeLetter(d.slot) + ' records 2½ seconds from your first input. ' + route :
-        d.source === 'late' ? 'The second jab is delayed. Change the rival’s reply to see who can use the opening.' :
-        d.source === 'replay' ? 'Replaying your inputs. Change the rival’s reply to compare.' : route + ' Change the rival’s reply to test the same inputs.';
+      message=window.ComboLab.setup(world);
     } else if (wave) {
       const d = world.wavePractice;
       $('wave-back').setAttribute('aria-pressed', String(d.pattern === 'back'));
@@ -5211,7 +5128,7 @@
     ['Movement','Footwork','footwork', footworkPatterns],
     ['Movement','Wavedash','wave',['back','platform']],
     ['Movement','Platforms','platform',['below','top','hold','ferry','shield-drop','layers']],
-    ['Attack','Combo practice','combo',['example','late','record','defend','mix','flurry','escapeFlurry']],
+    ['Attack','Combo practice','combo',['example','throwChase','late','record','defend','mix','flurry','escapeFlurry']],
     ['Attack','Aerial spacing','spacing',['approach','retreat','landing','airPower','fastfall','sweet','cancel','footstool','footstoolTech','reverse','wavebounce']],
     ['Attack','Knockdowns','launch',['lock','bait','read','floor-spike','edge-spike']],
     ['Attack','Move freshness','freshness',['training','ko','rage','drive']],
@@ -5361,7 +5278,8 @@
   }, true);
   $('combo-training').onclick = () => drill('combo', false, 'example');
   $('combo-fight-pip').onclick = fightRivalPip;
-  for (const source of Object.keys(comboSources)) $('combo-' + source).onclick = () => drill('combo', false, source);
+  for (const source of comboSources) $('combo-' + source).onclick = () => drill('combo', false, source);
+  $('combo-throwChase').onclick=()=>drill('combo',false,'throwChase',world.comboPractice?.reply?.startsWith('di')?world.comboPractice.reply:'diMix');
   $('combo-slot').onchange = e => {
     const d = world.comboPractice, slot = Number(e.target.value);
     drill('combo', false, d.source === 'record' ? 'record' : d.source === 'replay' && world.comboTakes[slot] ? 'replay' : 'defend',
@@ -5642,7 +5560,7 @@
     VersusRulebook:'versus-rules.js?v=room-rules-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=fighter-shuffle-1',StageStrike:'stage-strike.js?v=2',
-    FinishTools:'finish-tools.js?v=replay-inputs-1',
+    ComboLab:'combo-lab.js?v=1', FinishTools:'finish-tools.js?v=replay-inputs-1',
     FighterSchool:'fighter-lessons.js?v=special-studies-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
@@ -7878,6 +7796,10 @@
       startFirstFight();
     } else if (hash === '#tutorial') {
       resumeCourse();
+    } else if(hash==='#training/throw-chase'){
+      leaveOnline();afterStory=null;
+      startMatch({...settings,mode:'training',p1:'brisket',p2:'pip',stage:'nightmail',fetch:false});
+      world.setDummyDamage(60);drill('combo',false,'throwChase','diMix');
     } else if (hash === '#training/shield-punish') {
       leaveOnline();
       afterStory = null;
