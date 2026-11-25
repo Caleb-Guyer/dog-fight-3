@@ -14,7 +14,7 @@ jobs:
           persist-credentials: false
       - name: Play Cup rounds, retry a loss, resume and clear the boss
         run: |
-          node --test qa/arcade-cup.cjs qa/finish-replay.cjs qa/bell-break.cjs
+          node --test qa/arcade-cup.cjs qa/finish-replay.cjs qa/bell-break.cjs qa/fight-records.cjs
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
           python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/cup-http.log" 2>&1 &
           server_pid=$!
@@ -23,6 +23,7 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/saved-games.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/finish-replay.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/bell-break.js
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fight-records.js
   sound-test:
     runs-on: ubuntu-24.04
     timeout-minutes: 3

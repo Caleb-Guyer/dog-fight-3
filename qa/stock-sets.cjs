@@ -128,6 +128,13 @@ async function soloAndLocal(browser){
   await page.keyboard.up('Space');
   await leaveThreeStocks(d,0);
   assert.match(await page.locator('#set-score').textContent(),/P1 0 – 1 P2/);
+  await press('[data-do=match-card]');
+  const recap=await page.locator('.card-timeline').innerText();
+  await press('[data-record-drill="0"]');
+  await press('#return-fight');
+  assert.equal(await page.locator('.card-timeline').innerText(),recap);
+  await press('[data-do=card-back]');
+  assert.match(await page.locator('#set-score').textContent(),/P1 0 – 1 P2/);
   await press('[data-do=set-pick]');await page.keyboard.press('Escape');
   assert.equal(await page.locator('.set-history li').count(),1);
   await press('[data-do=set-pick]');await press('[data-stage=canal]');await fresh(d,2,'0–1');
@@ -278,7 +285,12 @@ async function onlineSet(browser,phoneBrowser) {
     assert.equal(await b.locator('.set-history li').count(),i+1);
     const cards=[];
     for(const d of [host,guest]){
+      const archive=await d.page.evaluate(()=>new FightRecords.Book(localStorage).list().map(r=>r.entry).filter(e=>e.mode==='online'));
+      assert.equal(archive.length,i+1);
+      assert.deepEqual([archive[0].round,archive[0].winner,archive[0].side],[i+1,1-slot,d===host?0:1]);
+      assert.equal(archive[0].card.losses.length,3);
       await d.press('[data-do=match-card]');
+      assert.equal(await d.page.locator('[data-record-drill]').count(),0);
       assert.match(await d.page.locator('.card-stage').textContent(),new RegExp('Game '+(i+1)));
       if(i===2){
         await d.press('[data-card-game="0"]');
@@ -319,6 +331,15 @@ async function onlineSet(browser,phoneBrowser) {
     }
   }
   for(const d of [host,guest]){
+    await d.page.goto(root+'?finished-set#records');
+    assert.equal(await d.page.locator('[data-record-id]').count(),3);
+    await d.press('[data-record-id]:first-child');
+    const you=await d.page.locator('.card-stats thead small').allTextContents();
+    assert(you[d===host?0:1].includes('YOU'));
+    if(d===guest){
+      await d.press('[data-record-drill="1"]');await d.press('#return-fight');
+      assert.equal(await d.page.locator('#dialog').getAttribute('data-view'),'record-card');
+    }
     await d.page.goto(root+'?quick-coats#online');await observe(d.page);
     await d.press('#online-coat');await d.press(d===host?'[data-coat="3"]':'[data-coat="1"]');
   }
