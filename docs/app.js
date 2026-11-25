@@ -738,6 +738,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if (dialogType==='bindings') return leaveLayouts();
     if (dialogType === 'set-pick') return showResult();
     if (dialogType === 'result' || dialogType === 'dispatch-fall' || dialogType === 'online-result') return;
     if (['controls','moves','cpu-level','practice'].includes(dialogType) && backToPause) {
@@ -786,19 +787,22 @@
   function showControls() {
     backToPause = page === 'match';
     const networkGame = !!online.match || page === 'online-lobby';
+    const keyboard=(i,action)=>keyFor(i,action);
+    const row=(title,key,pad)=>{
+      const label=i=>typeof pad==='function'?pad(i):pad;
+      const p=label(0), q=label(1);
+      return [title,key(0),key(1),networkGame || p===q?p:'P1 '+p+' · P2 '+q];
+    };
+    const simple=(title,action)=>row(title,i=>keyboard(i,action),i=>padFor(i,action));
     const rows = [
-      ['Move / aim', 'W A S D', 'Arrow keys', 'Stick / D-pad'],
-      ['Walk', 'Left Shift + A / D', 'Right Ctrl + ← / →', 'Tilt left stick gently'],
-      ['Jump', settings.flickJump1 ? 'Space / W' : 'Space', settings.flickJump2 ? 'Right Shift / ↑' : 'Right Shift', 'A / flick Up if enabled'],
-      ['Short hop', 'E', 'Apostrophe', 'LT / L2'],
-      ['Attack', 'J', ',', 'X'],
-      ['Aim strike ← / → / ↑ / ↓', 'R / Y / T / G', 'Numpad 4 / 6 / 8 / 2', 'Right stick'],
-      ['Smash / charge', 'I', 'N', settings.tiltStick ? 'RT' : 'RT / right stick'],
-      ['Special', 'K', '.', 'B'],
-      ['Shield / air dodge / tech', 'L', '/', 'LB / RB'],
-      ['Tilt shield', 'L + Left Shift + direction', '/ + Right Ctrl + direction', 'Gentle stick / both bumpers + stick'],
-      ['Grab / throw', 'U', 'M', 'Y'],
-      [networkGame ? 'Match menu' : 'Pause', 'Esc', 'Esc', 'Start'],
+      row('Move / aim',i=>['up','left','down','right'].map(a=>keyboard(i,a)).join(' '),'Stick / D-pad'),
+      row('Walk',i=>keyboard(i,'walk')+' + '+keyboard(i,'left')+' / '+keyboard(i,'right'),'Tilt left stick gently'),
+      row('Jump',i=>keyboard(i,'jump')+(settings['flickJump'+(i+1)]?' / '+keyboard(i,'up'):''),i=>padFor(i,'jump')+' / flick Up if enabled'),
+      simple('Short hop','hop'),simple('Attack','attack'),row('Aim strike ← / → / ↑ / ↓',strikeKeys,'Right stick'),
+      row('Smash / charge',i=>keyboard(i,'smash'),i=>padFor(i,'smash')+(settings.tiltStick?'':' / right stick')),
+      simple('Special','special'),row('Shield / air dodge / tech',i=>keyboard(i,'shield'),i=>padFor(i,'shield')+' / '+padFor(i,'shieldAlt')),
+      row('Tilt shield',i=>keyboard(i,'shield')+' + '+keyboard(i,'walk')+' + direction',i=>'Gentle stick / '+padFor(i,'shield')+' + '+padFor(i,'shieldAlt')+' + stick'),
+      simple('Grab / throw','grab'),[networkGame ? 'Match menu' : 'Pause','Esc','Esc','Start'],
     ];
     if (nativeScreen) rows.push(['Fullscreen', 'F', 'F', '—']);
     const table =
@@ -809,13 +813,13 @@
     showDialog(
       'controls',
       'Controls',
-      table +
+      '<div class="dialog-actions"><button class="primary" data-do="bindings">Customize controls</button></div>' + table +
         '<p>Flick a side to dash. Reverse in the first few steps to dash-dance. After a full run your dog plants its paws to turn. On touch, slide from the center dot onto a side arrow to walk, or tap a side arrow to dash.</p>' +
         '<p>In a running jump, tap the opposite direction with Jump to turn your dog while carrying your speed. Steer back toward the rival and hit them with your back air. In the air you can aim a strike independently with the right stick, the aim keys, or a swipe out from Smash on touch.</p>' +
         '<p>On a raised platform, flick Down to drop through with an air jump in reserve. Tap Attack as you fall to swing. Press Down and Attack together for a grounded down tilt. In the air, hold Down as you fall to pass through a perch. Release Down to land on the next one, or swing once your paws clear it. Try Pick your landing in Platform practice. For a low crouch, ease the stick down, hold Walk + Down on a keyboard, or slide from the center dot onto Down on touch.</p>' +
         '<p>Hold Down before a hit to crouch cancel. You take the damage with less knockback. A light, low hit can leave your paws planted. Tap Attack at the spark to answer with a down tilt. Try a stronger launcher or a grab against a crouching rival.</p>' +
         '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
-        '<p>Holding Shield or blocking a hit shrinks the bubble. An attack can clip an exposed paw or ear. To cover it, ease the stick toward the hit, or hold both bumpers and aim freely. On keyboard, hold Walk while aiming with Shield. On touch, hold Shield and drag from the center dot toward the hit.</p>' +
+        '<p>Holding Shield or blocking a hit shrinks the bubble. An attack can clip an exposed paw or ear. To cover it, ease the stick toward the hit, or hold both Shield buttons and aim freely. On keyboard, hold Walk while aiming with Shield. On touch, hold Shield and drag from the center dot toward the hit.</p>' +
         '<p>While holding Shield, press Jump, Grab, Up + Smash, or Up + Special. On a raised platform, flick a lower diagonal to fall through your shield. Tap Attack with the diagonal for a down air, or aim a different aerial as you fall. Try Shield drop in Platform practice.</p>' +
         '<p>Tap during a blocked hit to start your response as soon as shieldstun ends. An immediate shield grab takes four extra frames to reach. A heavier blow pushes you farther away.</p>' +
         '<p>During the three-frame jump crouch, Up + Smash starts a grounded up smash and Up + Special starts your recovery move. A running up smash carries your speed. On touch, hold Up and slide your other thumb from Jump onto Smash or Special. Try Footwork practice → Catch the landing.</p>' +
@@ -1092,7 +1096,7 @@
         '</ul>';
     } else if (section === 'smashes') {
       contents =
-        '<p class="recovery-note"><strong>Charge</strong> Aim and hold Smash (P1 I, P2 N, gamepad RT), then release. A tap swings immediately. Full charge takes one second. You can hold it for one more second before the move fires. Repeating a move lowers its damage and launch power. Try Training → Move freshness → KO test to see when this changes a stock.</p><ul class="move-rows guide-smashes">' +
+        '<p class="recovery-note"><strong>Charge</strong> Aim and hold Smash (P1 '+keyFor(0,'smash')+', P2 '+keyFor(1,'smash')+', P1 controller '+padFor(0,'smash')+'), then release. A tap swings immediately. Full charge takes one second. You can hold it for one more second before the move fires. Repeating a move lowers its damage and launch power. Try Training → Move freshness → KO test to see when this changes a stock.</p><ul class="move-rows guide-smashes">' +
         rows +
         '</ul>';
     } else if (section === 'specials') {
@@ -1121,7 +1125,7 @@
         guideMoveRow(moves[kit.dashAttack], 'Run + Attack', 'dash', 'dash') +
         '</ul>' +
         ledgeMove +
-        '<h3 class="guide-section">Aerial attacks</h3><p>Jump + Attack gives a rising short-hop aerial. For a low approach, hold Short hop and wait until you are falling to press Attack. Flick Down in the last three frames before the apex or as you descend to fast-fall. Forward follows your facing.</p><p>Press Shield during an aerial in the last seven frames before touchdown to halve its landing recovery, rounded up. Mint streaks at the paws mark a landing cancel. Keep holding Shield to block the reply. Try <strong>Training → Aerial practice → Landing cancel</strong>.</p><p>Each forward air has a clean hit and a softer follow-through. Practice landing the late hit into a jab in <strong>Training → Aerial practice → Landing hits</strong>.</p><p>Steer with the left stick and flick the right stick to swing in a separate direction. On keyboard, aim left/right/up/down with R/Y/T/G for P1 or numpad 4/6/8/2 for P2. On touch, flick outward from Smash. For a running back air, reverse direction with Jump and steer back along your original path. Try <strong>Aerial practice → Approach</strong>.</p><ul class="move-rows guide-airs">' +
+        '<h3 class="guide-section">Aerial attacks</h3><p>Jump + Attack gives a rising short-hop aerial. For a low approach, hold Short hop and wait until you are falling to press Attack. Flick Down in the last three frames before the apex or as you descend to fast-fall. Forward follows your facing.</p><p>Press Shield during an aerial in the last seven frames before touchdown to halve its landing recovery, rounded up. Mint streaks at the paws mark a landing cancel. Keep holding Shield to block the reply. Try <strong>Training → Aerial practice → Landing cancel</strong>.</p><p>Each forward air has a clean hit and a softer follow-through. Practice landing the late hit into a jab in <strong>Training → Aerial practice → Landing hits</strong>.</p><p>Steer with the left stick and flick the right stick to swing in a separate direction. On keyboard, aim left/right/up/down with '+strikeKeys(0)+' for P1 or '+strikeKeys(1)+' for P2. On touch, flick outward from Smash. For a running back air, reverse direction with Jump and steer back along your original path. Try <strong>Aerial practice → Approach</strong>.</p><ul class="move-rows guide-airs">' +
         rows +
         '</ul>';
     }
@@ -2035,6 +2039,7 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if (action==='bindings') openLayouts(dialogType);
     if (action === 'practice') showPractice();
     if (action === 'rehearse') rehearsePosition();
     if (action === 'return-fight') returnToFight();
@@ -3604,7 +3609,7 @@
     } else if (spacing) {
       const practice = world.spacingPractice, approach = pattern === 'approach';
       const run = practice.dir > 0 ? 'right' : 'left', back = practice.dir > 0 ? 'left' : 'right';
-      const key = practice.dir > 0 ? 'R' : 'Y';
+      const key = keyFor(0,practice.dir > 0 ? 'aimLeft' : 'aimRight');
       $('spacing-approach').setAttribute('aria-pressed', String(approach));
       $('spacing-retreat').setAttribute('aria-pressed', String(pattern === 'retreat'));
       $('spacing-landing').setAttribute('aria-pressed', String(pattern === 'landing'));
@@ -3632,7 +3637,7 @@
         'Your jumps are spent. Tap Attack to fall, then press Jump at the mint marks over the rival’s head. Hold Jump and steer ' + run + ' to the ledge.' :
         'Tap Attack to start. The rival will jump off your head. Tap Shield before you hit the floor to tech, or add a direction for a tech roll.') :
         pattern === 'cancel' ? 'Press Down + Attack. Try holding Shield only after touchdown. On the retry, start holding it as the chalk turns mint.' :
-        isReversalPractice(practice) ? reversalTip(practice) : pattern === 'landing' ? 'Hold Hop (E, LT/L2, or Hop on touch) and move ' + run + '. Attack at the gold fork for a late hit or the green stripe for a clean hit. Center and jab on landing. Retry with Jump to compare heights.' : 'Running ' + run + '. ' + (approach
+        isReversalPractice(practice) ? reversalTip(practice) : pattern === 'landing' ? 'Hold Hop ('+keyFor(0,'hop')+', '+padFor(0,'hop')+', or Hop on touch) and move ' + run + '. Attack at the gold fork for a late hit or the green stripe for a clean hit. Center and jab on landing. Retry with Jump to compare heights.' : 'Running ' + run + '. ' + (approach
         ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
         : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
       if (pattern === 'landing' && (practice.flickJump ?? settings.flickJump1)) message = flickJumpTip;
@@ -3729,7 +3734,7 @@
       const discInput = player.kind === 'noodle' ? 'aim toward Clover and tap Attack' : 'tap Attack';
       const diagonal = (pattern === 'angleLow' ? 'down-' : 'up-') + (practice.dir > 0 ? 'right' : 'left');
       const angleTip = 'Tap Attack to start the swing. Aim ' + diagonal +
-        ' with Shift on keyboard, slide from the center dot on touch, or tilt the stick sideways with a little vertical aim. Repeat with level aim to compare.';
+        ' with '+keyFor(0,'walk')+' on keyboard, slide from the center dot on touch, or tilt the stick sideways with a little vertical aim. Repeat with level aim to compare.';
       message = {
         cancelDash:'You’re already running. Hold ' + (practice.dir > 0 ? 'Right' : 'Left') +
           ' and tap Attack for a dash attack. Immediately press Up + Jump to catch the rival above you.',
@@ -4336,7 +4341,6 @@
     afterStory = null,
     inLibrary = false,
     adventureKey = '',
-    padRelease = false,
     noticeUntil = 0;
   function saveProgress(event) {
     // Keep the furthest checkpoint and collected postmarks if two tabs are playing.
@@ -4558,7 +4562,8 @@
     page = 'match';
     drillSide = null;
     drillWaiting = false;
-    padRelease = true;
+    const pad=getPads()[0];
+    if (down(pad,0)) menuPadButtons.set(pad.index,(menuPadButtons.get(pad.index)||0)|1);
     countdown = 0;
     accumulator = 0;
     adventureKey = '';
@@ -4689,10 +4694,8 @@
   }
   function runAdventure(dt, pads) {
     accumulator += dt;
-    if (!down(pads[0], 0)) padRelease = false;
     while (accumulator >= 1 / 60 && !world.finished) {
       const input = playerInput(0, pads);
-      if (padRelease) input.jump = false;
       world.step(1 / 60, input);
       taps.clear();
       touchTaps.clear();
@@ -4783,7 +4786,7 @@
         settings.volume +
         '%</output></label><label for="option-music">Music level <input type="range" id="option-music" min="0" max="100" step="5" value="'+
         settings.musicVolume+'"><output id="option-music-value">'+settings.musicVolume+'%</output></label>'+
-        '<button type="button" id="open-sound-test">Sound Test</button><button type="button" data-do="option-shake" aria-pressed="' +
+        '<button type="button" id="open-sound-test">Sound Test</button><button type="button" data-do="bindings">Customize controls</button><button type="button" data-do="option-shake" aria-pressed="' +
         settings.shake +
         '">Camera shake <b>' +
         (settings.shake ? 'On' : 'Off') +
@@ -4850,21 +4853,32 @@
     schoolSave.seen=true;
     try { localStorage.setItem('dog-fight-3.school',JSON.stringify({seen:true,lesson:schoolLessons[schoolSave.index].id,passed:schoolSave.passed})); } catch {}
   }
-  const schoolHints={
-    move:['D','Left stick right','Right on the D-pad'],
-    platform:['Space','A','Jump'],
-    jab:['J','X','Attack'],
-    tilt:['S + J','Stick down + X','Down + Attack'],
-    air:['Space + J','A + X','Jump + Attack'],
-    guard:['L','LB','Shield'],
-    throw:['U, then D','Y, then stick right','Grab, then Right'],
-    special:['D + K','Stick right + B','Right + Special'],
-    return:['D + W + K, then D','Stick up-right + B, then right','Up + Special, then Right'],
-    stock:['D + I, release I','Stick right + RT, release RT','Right + Smash, release Smash'],
-  };
+  function schoolHint(id,device) {
+    const touch={move:'Right on the D-pad',platform:'Jump',jab:'Attack',tilt:'Down + Attack',air:'Jump + Attack',guard:'Shield',throw:'Grab, then Right',special:'Right + Special',return:'Up + Special, then Right',stock:'Right + Smash, release Smash'};
+    if(device===2)return touch[id];
+    const k=action=>device===1?padFor(0,action):keyFor(0,action);
+    const right=device===1?'Stick right':k('right'), down=device===1?'Stick down':k('down');
+    switch(id){
+      case 'move': return right;
+      case 'platform': return k('jump');
+      case 'jab': return k('attack');
+      case 'tilt': return down+' + '+k('attack');
+      case 'air': return k('jump')+' + '+k('attack');
+      case 'guard': return k('shield');
+      case 'throw': return k('grab')+', then '+right;
+      case 'special': return right+' + '+k('special');
+      case 'return': return (device===1?'Stick up-right':right+' + '+k('up'))+' + '+k('special')+', then '+right;
+      case 'stock': return right+' + '+k('smash')+', release '+k('smash');
+    }
+  }
+  let schoolDevice=null, schoolPadActive=false;
   function renderSchool(pads) {
     const lesson=world.lesson, info=schoolLessons[lesson.index];
-    const device=pads.length?1:matchMedia('(pointer:coarse)').matches?2:0;
+    const pad=pads[0], active=!!pad && (pad.buttons.some(b=>b.pressed) || pad.axes.some(a=>Math.abs(a)>.28));
+    if(active && !schoolPadActive)schoolDevice=1;
+    schoolPadActive=active;
+    if(!pad && schoolDevice===1)schoolDevice=null;
+    const device=schoolDevice ?? (pad?1:matchMedia('(pointer:coarse)').matches?2:0);
     const state=lesson.missed?'retry':lesson.done?'passed':'playing';
     const key=lesson.id+'/'+state+'/'+device;
     if ($('school-coach').dataset.key===key) return;
@@ -4874,7 +4888,7 @@
     $('school-title').textContent=info.title;
     $('school-task').textContent=lesson.missed?'The stock ended. Retry to return to the starting position.':lesson.done?info.success:info.task;
     $('school-bindings').textContent=lesson.done ? (device===1?'A to continue':device===0?'Enter to continue':'') :
-      lesson.missed?'':schoolHints[info.id][device];
+      lesson.missed?'':schoolHint(info.id,device);
     $('school-next').hidden=!lesson.done;
     $('school-next').textContent=lesson.index===schoolLessons.length-1?'Play first match':'Next lesson';
     if (lesson.done && !schoolSave.passed.includes(lesson.id)) {
@@ -5069,39 +5083,133 @@
   window.addEventListener('pageshow', (e) => {
     if (e.persisted && returnToOnline) showOnline();
   });
-  const keys = [
-    {
-      left: 'KeyA',
-      right: 'KeyD',
-      up: 'KeyW',
-      down: 'KeyS',
-      jump: 'Space',
-      hop: 'KeyE',
-      walk: 'ShiftLeft',
-      attack: 'KeyJ',
-      smash: 'KeyI',
-      special: 'KeyK',
-      shield: 'KeyL',
-      grab: 'KeyU',
-      aimLeft: 'KeyR', aimRight: 'KeyY', aimUp: 'KeyT', aimDown: 'KeyG',
-    },
-    {
-      left: 'ArrowLeft',
-      right: 'ArrowRight',
-      up: 'ArrowUp',
-      down: 'ArrowDown',
-      jump: 'ShiftRight',
-      hop: 'Quote',
-      walk: 'ControlRight',
-      attack: 'Comma',
-      smash: 'KeyN',
-      special: 'Period',
-      shield: 'Slash',
-      grab: 'KeyM',
-      aimLeft: 'Numpad4', aimRight: 'Numpad6', aimUp: 'Numpad8', aimDown: 'Numpad2',
-    },
-  ];
-  const matchKeys = new Set(keys.flatMap((k) => Object.values(k)));
+  const controls=window.FightControls;
+  const layoutStore='dog-fight-3.controls';
+  let layout=controls.load();
+  try { layout=controls.load(JSON.parse(localStorage.getItem(layoutStore))); } catch {}
+  let keys=layout.keyboard;
+  let matchKeys=new Set(keys.flatMap(map=>Object.values(map)));
+  const keyFor=(i,action)=>controls.keyName(keys[i][action]);
+  const padFor=(i,action)=>controls.buttons[layout.pad[i][action]];
+  const strikeKeys=i=>['aimLeft','aimRight','aimUp','aimDown'].map(a=>keyFor(i,a)).join(' / ');
+  const edit={slot:0,device:'keyboard',mode:'idle',source:'home',action:'',value:null,down:new Set(),last:''};
+  function applyLayouts(persist) {
+    keys=layout.keyboard;
+    matchKeys=new Set(keys.flatMap(map=>Object.values(map)));
+    clearInput();
+    delete $('school-coach').dataset.key;
+    if(persist)try {localStorage.setItem(layoutStore,JSON.stringify(layout));} catch {}
+  }
+  function openLayouts(source) {
+    edit.source=source;edit.mode='idle';edit.down.clear();
+    drawLayouts();
+  }
+  function leaveLayouts() {
+    if(edit.mode!=='idle'){
+      edit.mode='idle';edit.down.clear();drawLayouts();return;
+    }
+    if(edit.source==='controls') showControls();
+    else if(edit.source==='options') showOptions();
+    else dismiss();
+  }
+  function assignControl() {
+    controls.assign(layout,edit.device,edit.slot,edit.action,edit.value);
+    applyLayouts(true);edit.mode='idle';
+    drawLayouts(controls.names[edit.action]+' saved.');
+  }
+  function chooseBinding(action,value) {
+    const map=layout[edit.device][edit.slot];
+    edit.action=action;edit.value=value;
+    if(map[action]===value){edit.mode='idle';drawLayouts();return;}
+    const other=controls.occupant(layout,edit.device,edit.slot,value);
+    if(!other){assignControl();return;}
+    edit.mode='swap';
+    const old=edit.device==='keyboard'?controls.keyName(map[action]):controls.buttons[map[action]];
+    const name=edit.device==='keyboard'?controls.keyName(value):controls.buttons[value];
+    drawLayouts('Swap '+name+' and '+old+'? P'+(other.slot+1)+' '+controls.names[other.action]+' will move to '+old+'.');
+  }
+  function showTestInputs(pads) {
+    const map=layout[edit.device][edit.slot], pad=pads.length===1?pads[0]:pads[edit.slot];
+    const pressed=Object.keys(map).filter(a=>edit.device==='keyboard'?edit.down.has(map[a]):down(pad,map[a]));
+    const key=pressed.join(' ');
+    if(key===edit.last)return;
+    edit.last=key;
+    for(const el of $('layout-grid').querySelectorAll('[data-action]'))
+      el.classList.toggle('pressed',pressed.includes(el.dataset.action));
+    $('layout-status').textContent=pressed.length?pressed.map(a=>controls.names[a]).join(' + '):
+      edit.device==='pad' && !pad?'Connect a controller and press a button.':'Press or hold controls together.';
+  }
+  function drawLayouts(message='') {
+    const {device,slot,mode}=edit,keyboard=device==='keyboard',testing=mode==='test',pending=mode==='swap'||mode==='reset';
+    const map=layout[device][slot],actions=Object.keys(map);
+    const title=keyboard?'Keyboard':'Controller';
+    const value=a=>keyboard?controls.keyName(map[a]):controls.buttons[map[a]];
+    const rows=actions.map(a=>{
+      const label=controls.names[a];
+      const binding=testing?'<kbd>'+value(a)+'</kbd>':keyboard?
+        '<button type="button" class="utility" data-key="'+a+'" aria-label="Change '+label+' key">'+(mode==='capture' && edit.action===a?'Press a key…':value(a))+'</button>':
+        '<select data-pad="'+a+'" aria-label="'+label+' button">'+controls.buttons.map((text,n)=>'<option value="'+n+'"'+(n===map[a]?' selected':'')+'>'+text+'</option>').join('')+'</select>';
+      return '<div data-action="'+a+'"><span>'+label+'</span>'+binding+'</div>';
+    }).join('');
+    showDialog('bindings','Customize controls',
+      '<div class="layout-switch"><label>Player <select id="layout-slot"><option value="0">P1</option><option value="1">P2</option></select></label>'+
+      '<label>Device <select id="layout-device"><option value="keyboard">Keyboard</option><option value="pad">Controller</option></select></label></div>'+
+      '<p>'+(testing?(keyboard?'Press your keys to see which actions register.':'Press controller buttons to test them. Start leaves the test.') : keyboard?'Choose an action, then press its new key. Both players share this keyboard.':
+        'Choose a button for each action. A and B still select and go back in menus.')+'</p>'+
+      '<p id="layout-status" role="status">'+(message || (mode==='capture'?'Press a key for '+controls.names[edit.action]+'. Escape cancels.':
+        mode==='reset'?keyboard?'Restore both keyboard layouts to their defaults?':'Restore the P'+(slot+1)+' controller defaults?':'Online uses your P1 layout.'))+'</p>'+
+      '<div id="layout-grid"'+(pending?' hidden':'')+'>'+rows+'</div>'+
+      '<div class="dialog-actions">'+(pending?'<button type="button" class="primary" id="layout-confirm">'+(mode==='swap'?'Swap assignments':'Restore defaults')+'</button>':'')+
+      (mode==='idle'?'<button type="button" class="primary" id="layout-test">Test layout</button><button type="button" class="utility" id="layout-reset">'+(keyboard?'Restore keyboards':'Restore controller')+'</button>':'')+
+      '<button type="button" class="utility" id="layout-back">'+(pending||mode==='capture'?'Cancel':testing?'Done testing':'Done')+'</button></div>');
+    $('layout-slot').value=String(slot);$('layout-device').value=device;
+    $('layout-slot').onchange=e=>{edit.slot=Number(e.target.value);edit.mode='idle';drawLayouts();$('layout-slot').focus();};
+    $('layout-device').onchange=e=>{edit.device=e.target.value;edit.mode='idle';drawLayouts();$('layout-device').focus();};
+    $('layout-grid').onclick=e=>{
+      const b=e.target.closest('[data-key]');
+      if(b){edit.mode='capture';edit.action=b.dataset.key;drawLayouts();}
+    };
+    $('layout-grid').onchange=e=>{if(e.target.dataset.pad)chooseBinding(e.target.dataset.pad,Number(e.target.value));};
+    $('layout-back').onclick=leaveLayouts;
+    if(mode==='idle'){
+      $('layout-test').onclick=()=>{edit.mode='test';edit.down.clear();edit.last=null;drawLayouts();showTestInputs(getPads());};
+      $('layout-reset').onclick=()=>{edit.mode='reset';drawLayouts();};
+    }
+    if(pending) $('layout-confirm').onclick=()=>{
+      if(mode==='swap')return assignControl();
+      if(keyboard) layout.keyboard=controls.defaults('keyboard');
+      else layout.pad[slot]=controls.defaults('pad')[slot];
+      applyLayouts(true);edit.mode='idle';drawLayouts('Default assignments restored.');
+    };
+    const row=$('layout-grid').querySelector('[data-action="'+edit.action+'"] button, [data-action="'+edit.action+'"] select');
+    (pending || testing ? $('layout-back') : row || $('layout-slot')).focus({preventScroll:true});
+  }
+  window.addEventListener('keydown',e=>{
+    if(dialogType!=='bindings')return;
+    if(edit.mode==='test' && edit.device==='keyboard' && controls.allowed(e.code)){
+      e.preventDefault();e.stopImmediatePropagation();edit.down.add(e.code);showTestInputs([]);return;
+    }
+    if(edit.mode!=='capture')return;
+    if(e.code==='Tab'){edit.mode='idle';drawLayouts();return;}
+    e.preventDefault();e.stopImmediatePropagation();
+    if(e.repeat)return;
+    if(e.code==='Escape'){leaveLayouts();return;}
+    if(!controls.allowed(e.code) || e.altKey || e.metaKey || (e.ctrlKey && !e.code.startsWith('Control'))){
+      $('layout-status').textContent='That key is reserved. Try a letter, number, arrow, modifier or punctuation key.';return;
+    }
+    chooseBinding(edit.action,e.code);
+  },true);
+  window.addEventListener('keyup',e=>{
+    if(dialogType==='bindings' && edit.mode==='test' && edit.device==='keyboard'){
+      edit.down.delete(e.code);showTestInputs([]);
+    }
+  });
+  window.addEventListener('storage',e=>{
+    if(e.key!==layoutStore && e.key!==null)return;
+    try{layout=controls.load(JSON.parse(localStorage.getItem(layoutStore)));}catch{return;}
+    applyLayouts(false);
+    if(dialogType==='bindings'){edit.mode='idle';drawLayouts('Layout updated from another tab.');}
+  });
   const attackAim = [{}, {}], smashAim = [{}, {}];
   function buttonAim(slot) {
     const map = keys[slot];
@@ -5120,13 +5228,13 @@
       e.preventDefault(); nextLesson(); return;
     }
     if (e.target instanceof HTMLSelectElement) return;
-    if (world?.mode === 'training' && !$('moment-save').hidden && (e.code === 'Digit1' || e.code === 'Digit2')) {
+    if (!matchKeys.has(e.code) && world?.mode === 'training' && !$('moment-save').hidden && (e.code === 'Digit1' || e.code === 'Digit2')) {
       if (e.altKey || e.ctrlKey || e.metaKey || e.target instanceof HTMLInputElement) return;
       e.preventDefault();
       if (!e.repeat) $(e.code === 'Digit1' ? 'moment-save' : 'moment-retry').click();
       return;
     }
-    if (world?.mode === 'training' && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+    if (!matchKeys.has(e.code) && world?.mode === 'training' && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
       e.preventDefault();
       if (!e.repeat) (e.code === 'BracketLeft' ? toggleFrames : stepTrainingFrame)();
       return;
@@ -5142,6 +5250,7 @@
       $('game').focus({ preventScroll: true });
     }
     if (!matchKeys.has(e.code)) return;
+    if(world?.lesson)schoolDevice=0;
     e.preventDefault();
     held.add(e.code);
     if (!e.repeat) {
@@ -5178,6 +5287,7 @@
   }
   touchButtons.forEach((el) => {
     el.addEventListener('pointerdown', (e) => {
+      if(world?.lesson)schoolDevice=2;
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
       if (el.dataset.touch === 'neutral') walkPointer = e.pointerId;
@@ -5227,6 +5337,7 @@
     el.addEventListener('lostpointercapture', release);
   });
   function onBlur() {
+    if(dialogType==='bindings' && edit.mode==='test'){edit.down.clear();showTestInputs([]);}
     musicFocused=false;music?.stop();
     clearInput();
     if (page === 'dispatch-story') setFilmPaused(true);
@@ -5311,7 +5422,11 @@
     const map = keys[i];
     const tapped = (action) => taps.has(map[action]) || (!i && touchTaps.has(action));
     const key = (action) => held.has(map[action]) || (!i && touches.has(action)) || tapped(action);
-    const pad = world.hasSecondPlayer && !online.match && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
+    const pad = world.hasSecondPlayer && !world.lesson && !online.match && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
+    const mapped=action=>{
+      const n=layout.pad[i][action];
+      return down(pad,n) && !(menuPadButtons.get(pad.index) & (1<<n));
+    };
     const axis = (n) => (Math.abs(pad?.axes?.[n] || 0) > 0.23 ? pad.axes[n] : 0);
     const left = key('left') || down(pad, 14),
       right = key('right') || down(pad, 15);
@@ -5350,8 +5465,8 @@
     // A quick thumb release can leave queued direction taps after the center-slide gesture ends.
     const tappedWalk = aim?.x === x * (64 / 127) && x !== 0;
     const walk = key('walk') || tappedWalk || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
-    const shield = key('shield') || down(pad, 4) || down(pad, 5);
-    const shortHop = key('hop') || down(pad, 6);
+    const shield = key('shield') || mapped('shield') || mapped('shieldAlt');
+    const shortHop = key('hop') || mapped('hop');
     const grounded = world.dogs[fighterIndex].ground >= 0;
     const gentleGuard = shield && grounded && (key('walk') || fromCenter);
     const softCrawl = world.dogs[fighterIndex].kit.crawl && fromCenter && fromCenter.startsWith('down-');
@@ -5359,7 +5474,7 @@
     const side = (walk ? x * (64 / 127) : x) || axis(0) || (!left && !right && aim?.x) || 0;
     const vertical = ((gentleGuard || gentleDown) ? y * (64 / 127) : y) || axis(1) || (!up && !downAim && aim?.y) || 0;
     // Keep a held direction aimed when the second bumper is released. Centering rearms the dodge.
-    if (grounded && down(pad, 4) && down(pad, 5)) shieldTiltLocked[i] = true;
+    if (grounded && mapped('shield') && mapped('shieldAlt')) shieldTiltLocked[i] = true;
     else if (!grounded || !shield || Math.max(Math.abs(side), Math.abs(vertical)) < 0.24) shieldTiltLocked[i] = false;
     const input = {
       x: shieldTiltLocked[i] ? clamp(side, -0.5, 0.5) : side,
@@ -5368,18 +5483,18 @@
       // Apply the air dodge's radial dead zone to the whole stick, including shallow angles.
       airDodgeX: digitalAim ? (left || right ? grabX : 0) : pad?.axes?.[0] || 0,
       airDodgeY: digitalAim ? y : pad?.axes?.[1] || 0,
-      jump: key('jump') || (down(pad, 0) && !(menuPadButtons.get(pad.index) & 1)) || shortHop,
+      jump: key('jump') || mapped('jump') || shortHop,
       shortHop,
-      attack: key('attack') || down(pad, 2),
+      attack: key('attack') || mapped('attack'),
       quickAttack: settings[i === 0 ? 'quickAttack1' : 'quickAttack2'],
-      smash: held.has(map.smash) || tapped('smash') || touchSmash || down(pad, 7),
+      smash: held.has(map.smash) || tapped('smash') || touchSmash || mapped('smash'),
       aimStick,
       tiltMode: settings.tiltStick && aimStick,
       smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : x || axis(0) || savedSmash?.rawX || 0,
       smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : y || axis(1) || savedSmash?.y || 0,
-      special: key('special') || (down(pad, 1) && !(menuPadButtons.get(pad.index) & 2)),
+      special: key('special') || mapped('special'),
       shield,
-      grab: key('grab') || down(pad, 3),
+      grab: key('grab') || mapped('grab'),
       tapped: {
         jump: tapped('jump') || tapped('hop'),
         attack: tapped('attack'),
@@ -5404,6 +5519,7 @@
   let oldPad = idlePad;
   const menuPadButtons = new Map();
   function padMenu(pads) {
+    if(dialogType==='bindings' && edit.mode==='test' && edit.device==='pad')showTestInputs(pads);
     if (!pads.length) {
       if (oldPad!==idlePad) { oldPad=idlePad; menuPadButtons.clear(); }
       return;
@@ -5432,6 +5548,10 @@
       next: any(13) || any(15) || pads.some((p) => (p.axes[0] || 0) > 0.65 || (p.axes[1] || 0) > 0.65),
       prev: any(12) || any(14) || pads.some((p) => (p.axes[0] || 0) < -0.65 || (p.axes[1] || 0) < -0.65),
     };
+    if(dialogType==='bindings' && edit.mode==='test' && edit.device==='pad'){
+      if(now.pause && !oldPad.pause)leaveLayouts();
+      oldPad=now;return;
+    }
     if (!musicUnlocked && now.confirm && !oldPad.confirm) unlockMusic();
     if (now.pause && !oldPad.pause) {
       if (dialogType === 'pause' || dialogType === 'online-menu') dismiss();
@@ -5679,6 +5799,8 @@
       drill('shield',false,'crossup',undefined,{choice:'front',dir:1});
     } else if (hash === '#sound-test') {
       showHome(false);showSoundTest();
+    } else if (hash === '#controls') {
+      showHome(false);openLayouts('home');
     } else if (hash === '#tutorial') {
       resumeCourse();
     } else if (hash === '#training/shield-punish') {
