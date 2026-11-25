@@ -4968,7 +4968,8 @@
         restingStance(s, name);
         const stride = [-4,-2,2,4,2,-2][frame];
         s.headX += 5;
-        s.headY -= 2;
+        s.headY = 16;
+        s.foldEars = true;
         s.headTurn = -5;
         s.fistX += 5 + stride;
         s.fistY += frame < 3 ? -1 : 1;
