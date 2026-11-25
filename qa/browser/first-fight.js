@@ -36,10 +36,15 @@ async function playCourse(browser,mobile) {
   try {
     await page.goto(current);
     assert(await page.locator('#school-welcome').isVisible());
-    await press('welcome-dismiss'); assert(await page.locator('#school-welcome').isHidden());
-    await page.reload(); assert(await page.locator('#school-welcome').isHidden());
-    await press('home-school'); assert.equal(await page.locator('#school-syllabus button').count(),10);
-    await press('school-resume');
+    if (mobile) {
+      await press('welcome-play'); await press('school-list');
+      assert.equal(await page.locator('#school-syllabus button').count(),10); await press('school-resume');
+    } else {
+      await press('welcome-dismiss'); assert(await page.locator('#school-welcome').isHidden());
+      await page.reload(); assert(await page.locator('#school-welcome').isHidden());
+      await press('home-school'); assert.equal(await page.locator('#school-syllabus button').count(),10);
+      await press('school-resume');
+    }
     for (let n=0;n<10;n++) {
       assert.match(await page.locator('#school-count').textContent(),new RegExp(' '+(n+1)+' / 10$'));
       const title=await page.locator('#school-title').textContent();
@@ -70,9 +75,14 @@ async function playCourse(browser,mobile) {
   } finally {await context.close();}
 }
 
-async function benchmark(browser,url) {
-  const context=await browser.newContext({viewport:{width:1366,height:768}});
+async function benchmark(browser,url,phone=false) {
+  const context=await browser.newContext(phone?{viewport:{width:390,height:844},hasTouch:true,isMobile:true}:
+    {viewport:{width:1366,height:768}});
   const page=await context.newPage();
+  if (phone) {
+    const cdp=await context.newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});
+  }
   await page.addInitScript(()=>{
     window.samples=[];
     const schedule=window.requestAnimationFrame.bind(window);
@@ -122,6 +132,12 @@ async function main() {
     console.log('::notice title=Fight School timings::'+JSON.stringify(rows));
     assert.equal(median(rows.candidate,'hiddenRoster'),0); assert.equal(median(rows.candidate,'idleReads'),0);
     assert(median(rows.baseline,'idleReads')>0 && median(rows.baseline,'hiddenRoster')>0);
+    const phone=[];
+    for (let n=0;n<3;n++) phone.push(await benchmark(browser,current,true));
+    const note='Emulated phone, 390×844 with 4× CPU throttling. Median menu DOM ready '+median(phone,'ready').toFixed(1)+
+      ' ms, fight callback p95 '+median(phone,'work').toFixed(1)+' ms, frame interval p95 '+median(phone,'interval').toFixed(1)+' ms.';
+    console.log('::notice title=Phone timing::'+note);
+    fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,'\n'+note+'\n');
   } finally {await browser.close();}
 }
 main().catch(e=>{console.error(e);console.log('::error::'+e.message.replaceAll('\n','%0A'));process.exitCode=1;});
