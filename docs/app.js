@@ -2046,6 +2046,12 @@
   function spacingFeedback(name, e) {
     const practice = world.spacingPractice, status = $('spacing-status');
     if (practice.pattern === 'airPower') {
+      if (name === 'spacingRetry') {
+        status.dataset.result = 'ready';
+        status.textContent = 'Watch the chalk';
+        $('recovery-tip').textContent = 'Tap Attack as your paws reach the chalk on the way down.';
+        return;
+      }
       if (name === 'airPowerCue') {
         status.dataset.result = 'swing';
         status.textContent = 'Tap Attack';
@@ -2057,8 +2063,8 @@
       status.dataset.result = e.outcome;
       status.textContent = practice.result ? summarize(practice.result) : e.outcome === 'other' ? 'Different move' : 'Missed';
       $('recovery-tip').textContent = (practice.previous ? 'Last time you got ' + summarize(practice.previous) + '. ' : '') +
-        (practice.result ? 'Choose Jump-in damage to compare the other jump.' :
-          'Choose Jump-in damage to retry. Keep the stick centered and tap Attack as your paws reach the chalk on the way down.');
+        (practice.result ? 'Press Hop or Jump again to compare.' :
+          'Press Hop or Jump to retry. Keep the stick centered and tap Attack as your paws reach the chalk on the way down.');
       return;
     }
     if (practice.pattern === 'fastfall') {
