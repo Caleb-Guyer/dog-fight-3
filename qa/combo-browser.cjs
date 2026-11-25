@@ -1683,6 +1683,16 @@ async function testPracticeRoom(page,mobile) {
   await action('return-fight');
   assert.equal(await damage(),'0%');
   assert.equal(await page.locator('.lives[aria-label="3 stocks"]').count(),2);
+  await page.goto(root + '?finish-practice#solo/last-stock');
+  // Pause in the countdown, then let Rival Brisket win the rehearsal naturally.
+  await press('#pause');
+  await action('rehearse');
+  await page.clock.runFor(5500);
+  assert.match(await page.locator('#dialog-title').innerText(), /practice finished/i);
+  await action('return-fight');
+  assert.equal(await damage(),'125%');
+  assert.equal(await page.locator('.lives[aria-label="1 stock"]').count(),2);
+  assert.match(await page.locator('#countdown').innerText(), /[123]/);
   console.log((mobile ? 'Touch' : 'Keyboard') + ' launched searched drills, replayed a live Rival position and resumed the unchanged set.');
 }
 
