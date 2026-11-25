@@ -437,6 +437,7 @@ async function timedBattles(browser,phone){
   await host.press('#online-create');await host.page.locator('#online-invite').waitFor();
   assert.match(await host.page.locator('#online-rules-summary').textContent(),/Time Battle · 1 min/);
   const code=await host.page.locator('#online-room-code').textContent();
+  await host.page.evaluate(()=>{window.observedBattle=null;});
   await host.press('#online-warmup');
   const p=host.page;
   await p.waitForFunction(()=>window.observedBattle?.warmupPartner==='stand');
