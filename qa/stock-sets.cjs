@@ -21,6 +21,11 @@ async function device(browser,mobile,hash) {
 }
 async function observe(page) {
   await page.evaluate(()=>{
+    const art=DogArt;
+    window.DogArt={...art,draw(ctx,kind,x,y,options){
+      if(ctx.canvas.classList?.contains('victory-shot')) window.lastPodium={kind,coat:options.coat};
+      return art.draw(ctx,kind,x,y,options);
+    }};
     const update=YardScore.Player.prototype.update;
     YardScore.Player.prototype.update=function(...args){
       window.observedScore=this;
@@ -133,6 +138,10 @@ async function soloAndLocal(browser){
   await page.evaluate(()=>window.runCpuOff=true);
   await page.locator('[data-do=cpu-counterpick]').waitFor({timeout:35000});
   assert.match(await page.locator('#dialog-body').textContent(),/Brisket picks Night Mail/);
+  await press('[data-do=watch-finish]');await press('#clip-practice');
+  await press('#pause');await press('[data-do=return-fight]');
+  assert.match(await page.locator('#set-score').textContent(),/P1 1 – 0 CPU/);
+  assert.equal(await page.locator('.set-history li').count(),1);
   await press('[data-do=cpu-counterpick]');await fresh(d,2,'1–0');
   await page.locator('[data-do=new-set]').waitFor({timeout:35000});
   assert.match(await page.locator('#set-score').textContent(),/P1 2 – 0 CPU/);
@@ -262,7 +271,7 @@ async function onlineSet(browser,phoneBrowser) {
     await leaveThreeStocks(loser,slot);
     for(const d of [loser,winner]){
       await d.page.locator('#set-score').waitFor();
-      assert(await d.page.locator('.winner img').evaluate((el,coat)=>el.src===DogArt.portrait('pip',coat),slot===0?3:2));
+      assert.deepEqual(await d.page.evaluate(()=>window.lastPodium),{kind:'pip',coat:slot===0?3:2});
       await d.page.waitForFunction(winningSlot=>window.observedScore?.track==='win-'+window.observedBattle?.dogs[winningSlot].kind,1-slot);
     }
     assert.equal(await a.locator('#set-score').textContent(),await b.locator('#set-score').textContent());
@@ -286,6 +295,18 @@ async function onlineSet(browser,phoneBrowser) {
       await d.press('[data-do=card-back]');
     }
     assert.deepEqual(cards[0],cards[1]);
+    if(i===0){
+      const scores=[];
+      for(const d of [host,guest]){
+        await d.press('[data-do=watch-finish]');
+        assert.equal(await d.page.locator('#clip-practice').count(),0);
+        await d.page.locator('#clip-seek').press('End');
+        assert.match(await d.page.locator('#clip-frame').textContent(),/Frame 240 \/ 240/);
+        scores.push(await d.page.locator('#clip-scores').textContent());
+        await d.press('[data-do=clip-back]');
+      }
+      assert.equal(scores[0],scores[1]);
+    }
     if(i<2){
       if(i===0)await winner.press('[data-do=online-rematch]');
       await loser.press('[data-do=set-pick]');await loser.press(i===0?'[data-stage=bandstand]':'[data-stage=nightmail]');
