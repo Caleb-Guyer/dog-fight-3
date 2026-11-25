@@ -6175,7 +6175,7 @@
         const stickAerial = button === 'aimStick' && (!f.ledge || f.ledge.dropQueued) &&
           (f.ground < 0 || f.jumpSquat || f.jumpBuffer > 0 || f.guardIntent === 'platformDrop');
         const stickTilt = button === 'aimStick' && input.tiltMode && f.ground >= 0 && !stickAerial;
-        const guardGrab = button === 'attack' && input.shield && (f.shield || pressed('shield')) && f.ground >= 0 &&
+        const guardGrab = button === 'attack' && input.shield && (f.shield || (pressed('shield') && !f.parryFlash)) && f.ground >= 0 &&
           Math.abs(input.y) < .45 && f.guardIntent !== 'platformDrop' &&
           !f.jumpBuffer && !f.jumpSquat && !f.floorAction && !f.attack && !f.stun && !f.grip && f.charge < 0;
         const type = guardGrab ? 'grab' : button === 'aimStick' ? (stickAerial || stickTilt ? 'attack' : 'smash') : button;
