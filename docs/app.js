@@ -5195,7 +5195,7 @@
     if(e.repeat)return;
     if(e.code==='Escape'){leaveLayouts();return;}
     if(!controls.allowed(e.code) || e.altKey || e.metaKey || (e.ctrlKey && !e.code.startsWith('Control'))){
-      $('layout-status').textContent='That key is reserved. Try a letter, number, arrow, modifier or punctuation key.';return;
+      $('layout-status').textContent='That key is reserved. Try a letter, number, arrow, punctuation key, Shift or Ctrl.';return;
     }
     chooseBinding(edit.action,e.code);
   },true);

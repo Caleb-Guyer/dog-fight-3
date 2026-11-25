@@ -22,21 +22,20 @@
   function defaults(device) {
     return (device==='keyboard'?keyboardDefaults:[padDefaults,padDefaults]).map(m=>({...m}));
   }
-  function load(raw={}) {
-    const result={};
-    for(const device of ['keyboard','pad']){
-      const maps=defaults(device), used=new Set();
-      const valid=maps.every((map,i)=>{
-        if(device==='pad')used.clear();
-        return Object.keys(map).every(action=>{
-          const value=raw?.[device]?.[i]?.[action] ?? map[action];
-          if(!(device==='keyboard'?allowed(value):Number.isInteger(value)&&value>=0&&value<buttons.length) || used.has(value))return false;
-          used.add(value);map[action]=value;return true;
-        });
-      });
-      result[device]=valid?maps:defaults(device);
+  function readMap(base,saved,used,valid) {
+    const map={...base};
+    for(const action of Object.keys(map)){
+      const value=saved?.[action] ?? base[action];
+      if(!valid(value) || used.has(value))return null;
+      used.add(value);map[action]=value;
     }
-    return result;
+    return map;
+  }
+  function load(raw={}) {
+    const used=new Set(), keyboard=keyboardDefaults.map((base,i)=>readMap(base,raw?.keyboard?.[i],used,allowed));
+    const validPad=n=>Number.isInteger(n) && n>=0 && n<buttons.length;
+    const pad=[0,1].map(i=>readMap(padDefaults,raw?.pad?.[i],new Set(),validPad) || {...padDefaults});
+    return {keyboard:keyboard.every(Boolean)?keyboard:defaults('keyboard'),pad};
   }
   function occupant(layout,device,slot,value) {
     for(const i of device==='keyboard'?[0,1]:[slot]){
