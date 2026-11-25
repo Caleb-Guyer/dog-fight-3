@@ -17,8 +17,8 @@
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=shoulder-carry-1"></script>
     <script defer src="./arena-art.js?v=canal-lock-1"></script>
-    <script defer src="./engine.js?v=shield-punish-1"></script>
-    <script defer src="./render.js?v=combo-takes-1"></script>
+    <script defer src="./engine.js?v=partner-training-1"></script>
+    <script defer src="./render.js?v=partner-training-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -32,7 +32,7 @@
     <script defer src="./dispatch-run.js?v=stock-return-1"></script>
     <script defer src="./dispatch-view.js?v=blast-radar-1"></script>
     <script defer src="./online.js?v=haymaker-1"></script>
-    <script defer src="./app.js?v=shield-punish-1"></script>
+    <script defer src="./app.js?v=partner-training-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -391,6 +391,9 @@
           <button id="reset-training" type="button" class="utility">
             <i data-icon="reset"></i>Reset positions
           </button>
+          <button id="partner-training" type="button" class="utility" aria-pressed="false">Spar with P2</button>
+          <button id="moment-save" type="button" class="utility" title="Save this fight moment (1)">Save moment</button>
+          <button id="moment-retry" type="button" class="utility" title="Retry the saved fight moment (2)" disabled>Retry moment</button>
           <button id="frame-toggle" type="button" class="utility" aria-pressed="false" title="Freeze or resume with [ or the left stick click">Frame advance</button>
           <button id="frame-step" type="button" class="utility" title="Advance with ] or the right stick click" hidden>Step 1 frame</button>
           <button id="frame-landing" type="button" class="utility" aria-pressed="false">Freeze on landing</button>
@@ -404,6 +407,7 @@
               <option value="guard">Shield / air dodge</option>
               <option value="away">Flick away</option>
               <option value="punish">Block and punish</option>
+              <option value="p2">Player 2 controls</option>
             </select>
             <button id="combo-example" type="button" class="utility">Dog’s combo</button>
             <button id="combo-late" type="button" class="utility">Late jab</button>
