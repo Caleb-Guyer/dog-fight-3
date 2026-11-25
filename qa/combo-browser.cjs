@@ -1623,7 +1623,7 @@ async function testPracticeRoom(page,mobile) {
   });
   assert(mark.frames > 0);
   await action('rehearse');
-  assert.match(await page.locator('#match-mode').innerText(), /Practice.*Rival/);
+  assert.match(await page.locator('#match-mode').innerText(), /Practice.*Rival/i);
   assert(await page.locator('#match-set').isHidden());
   const stamp = () => page.evaluate(() => window.fightStamp(window.lastDrawnBattle));
   assert.deepEqual(await stamp(), mark);
@@ -1646,12 +1646,43 @@ async function testPracticeRoom(page,mobile) {
   await press('#return-fight');
   assert.deepEqual(await stamp(), mark);
   assert(await page.evaluate(() => window.lastDrawnBattle === window.originalFight));
-  assert.match(await page.locator('#match-set').innerText(), /Game 1.*0–0/);
-  assert.match(await page.locator('#match-mode').innerText(), /Solo.*Rival/);
+  assert.match(await page.locator('#match-set').innerText(), /Game 1.*0–0/i);
+  assert.match(await page.locator('#match-mode').innerText(), /Solo.*Rival/i);
   await page.clock.runFor(200);
   assert((await stamp()).frames > mark.frames);
   await press('#pause');
   assert.equal(await page.locator('[data-do="return-fight"]').count(), 0);
+
+  await page.goto(root + '?three-answers#solo/shoulder-charge');
+  const {hold} = await trainingControls(page,mobile);
+  if (!mobile) {
+    await page.evaluate(() => {
+      const pad = {index:0, id:'Practice pad', axes:[0,0,0,0],
+        buttons:Array.from({length:17}, () => ({pressed:false}))};
+      Object.defineProperty(navigator,'getGamepads',{configurable:true,value:() => [pad]});
+      pad.buttons[0].pressed = true;
+    });
+    // Keep confirm held. It must select practice without also jumping the charge.
+    await page.clock.runFor(500);
+    await page.evaluate(() => { delete navigator.getGamepads; });
+  } else {
+    await action('rehearse');
+    await page.clock.runFor(500);
+  }
+  const damage = () => page.locator('.percentage').first().innerText();
+  assert.equal(await damage(),'15%');
+  for (const answer of ['shield','jump']) {
+    await press('#pause');
+    await action('rehearse');
+    await hold([answer]);
+    await page.clock.runFor(500);
+    await hold([]);
+    assert.equal(await damage(),'0%', answer);
+  }
+  await press('#pause');
+  await action('return-fight');
+  assert.equal(await damage(),'0%');
+  assert.equal(await page.locator('.lives[aria-label="3 stocks"]').count(),2);
   console.log((mobile ? 'Touch' : 'Keyboard') + ' launched searched drills, replayed a live Rival position and resumed the unchanged set.');
 }
 
