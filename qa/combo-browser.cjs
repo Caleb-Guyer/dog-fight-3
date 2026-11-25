@@ -1582,7 +1582,7 @@ async function testPracticeRoom(page,mobile) {
   assert(await page.locator('#return-fight').isHidden());
   await press('[data-lane="Defense"]');
   await query.fill('parry');
-  assert.equal(await page.locator('[data-exercise]').count(), 2);
+  assert.deepEqual(await page.locator('[data-exercise]').evaluateAll(items => items.map(el => el.dataset.exercise)), ['shield-strike']);
   await query.fill('xyzzy');
   assert.match(await page.locator('#practice-count').innerText(), /No drills/);
   await press('#practice-results button');
