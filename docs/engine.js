@@ -2291,7 +2291,23 @@
     const acceleration = (vx * axis < 0 ? drift.brake : f.kit.airAccel) * strength;
     return toward(vx, target, acceleration * dt);
   }
-  function beginGrab(f, style, runFace, aim, shieldGrab = false) {
+  const boostBrake = .65, boostCarry = 1.15;
+  function dashGrabReach(f, boost) {
+    const grab = grabs[f.kit.dashGrab], strike = moves[f.kit.dashAttack];
+    let speed = Math.abs(f.vx), travel = 0;
+    if (boost) {
+      speed = Math.max(0, speed * strike.carry - strike.brake / 60);
+      travel = speed / 60;
+    }
+    speed *= boost ? Math.max(boostCarry,grab.carry) : grab.carry;
+    const frames = Math.round((grab.start + grab.active) * 60);
+    for (let tick = 1; tick < frames; tick++) {
+      speed = Math.max(0, speed - grab.brake * (boost ? boostBrake : 1) / 60);
+      travel += speed / 60;
+    }
+    return travel + grab.box[0] + grab.box[2];
+  }
+  function beginGrab(f, style, runFace, aim, shieldGrab = false, boostGrab = false) {
     const id = style === 'pivot' ? f.kit.pivotGrab : style === 'dash' ? f.kit.dashGrab : f.kit.grab;
     if (style !== 'standing') f.face = style === 'pivot' ? -runFace : runFace;
     beginAttack(f, 'grab', aim, 0, id);
@@ -2300,6 +2316,11 @@
     if (f.ground < 0) attack.airGrab = true;
     attack.grabStyle = style;
     attack.runFace = runFace;
+    if (boostGrab) {
+      attack.boostGrab = true;
+      attack.brake *= boostBrake;
+      if (style === 'dash') attack.carry = Math.max(boostCarry,attack.carry);
+    }
     if (shieldGrab) {
       attack.shieldGrab = true;
       attack.start += shieldGrabPenalty;
@@ -3942,13 +3963,14 @@
       this.resetTraining();
       const originalDogs = this.dogs;
       const discRole = pattern === 'reflect' ? 'bark' : pattern === 'returnFire' ? 'cast' : '';
+      const boost = pattern === 'boostGrab' || pattern === 'boostPivot';
       const playerKind = {returnFire:'clover', reflect:'pip', power:'pip', armor:'brisket', armorGrab:'pip'}[pattern];
       const player = playerKind ? newFighter(playerKind, 0) : originalDogs[0];
       const kind = { bait: 'brisket', match: player.kind, power: 'brisket', disc: 'clover', brake: 'pip',
         pivot: player.kind, antiAir: originalDogs[1].kind, angleHigh: originalDogs[1].kind,
         angleLow: originalDogs[1].kind, cancelDash: originalDogs[1].kind, cancelTurn: originalDogs[1].kind,
         reflect:'clover', returnFire:'pip', dashShield:'brisket', armor:'pip', armorGrab:'brisket' }[pattern];
-      const dummy = newFighter(kind, 1);
+      const dummy = newFighter(boost ? originalDogs[1].kind : kind, 1);
       this.dogs = [player, dummy];
       const floor = this.terrain[0], center = (floor.x1 + floor.x2) / 2;
       const box = grabs[dummy.kit.grab].box, jab = moves[player.kit.ground[0]];
@@ -3966,18 +3988,25 @@
         dummy.x = center + dir * 72;
         mark = center - dir * 15;
       }
-      if (pattern === 'cancelDash' || pattern === 'cancelTurn') {
-        const running = pattern === 'cancelDash';
+      if (pattern === 'cancelDash' || pattern === 'cancelTurn' || boost) {
+        const running = pattern === 'cancelDash' || boost;
         player.x = mark = center - dir * 55;
-        dummy.x = player.x + dir * (running ? 55 : 58);
-        dummy.y = floor.y - (running ? 100 : 45);
-        dummy.vy = running ? -70 : -95;
-        dummy.ground = -1;
         if (running) {
           Object.assign(player, {vx:dir * player.stats.speed, sprintDir:dir, stickTicks:3,
             prev:{...idleInput, x:dir, grabX:dir}});
           moveOnFoot(player, dir, 1/60);
           player.run.age = .4;
+        }
+        if (boost) {
+          const gap = pattern === 'boostPivot' ? -(player.stats.width + dummy.stats.width + 3) :
+            dummy.stats.width + (dashGrabReach(player,false) + dashGrabReach(player,true)) / 2;
+          dummy.x = player.x + dir * gap;
+          dummy.face = pattern === 'boostPivot' ? dir : -dir;
+        } else {
+          dummy.x = player.x + dir * (running ? 55 : 58);
+          dummy.y = floor.y - (running ? 100 : 45);
+          dummy.vy = running ? -70 : -95;
+          dummy.ground = -1;
         }
       }
       if (pattern === 'angleHigh' || pattern === 'angleLow') {
@@ -4012,7 +4041,8 @@
       this.footworkPractice = { phase: 'ready', pattern, dir, slow: pattern !== 'bait' && slow,
         mark, originalDogs, tell: 0, beat: 0, sent: false, sendAt, outcome: '' };
       if (discRole) this.footworkPractice.discRole = discRole;
-      if (pattern === 'cancelDash' || pattern === 'cancelTurn') this.footworkPractice.pauseOnWindup = pauseOnWindup;
+      if (boost) this.footworkPractice.boost = true;
+      if (boost || pattern === 'cancelDash' || pattern === 'cancelTurn') this.footworkPractice.pauseOnWindup = pauseOnWindup;
     }
     footworkInput(dt) {
       const drill = this.footworkPractice, [player, dummy] = this.dogs;
@@ -4053,6 +4083,10 @@
         return idleInput;
       }
       if (drill.pauseOnWindup !== undefined) {
+        if (drill.boost) {
+          if (drill.phase !== 'done' && (drill.tell += dt) >= .8) this.finishFootwork('shortReach');
+          return {...idleInput,shield:true};
+        }
         if (player.attack?.fromWindup) drill.aerial = true;
         if (drill.phase !== 'done' && (drill.tell += dt) >= .75)
           this.finishFootwork(drill.aerial ? 'airMiss' : 'groundMiss');
@@ -4147,6 +4181,12 @@
       }
       if (drill.pauseOnWindup !== undefined) {
         if (target.index !== 1) return;
+        if (drill.boost) {
+          const a = this.dogs[0].attack;
+          this.finishFootwork(a?.boostGrab ? (a.grabStyle === 'pivot' ? 'boostPivotCatch' : 'boostCatch') :
+            a?.grabAttempt ? 'regularCatch' : 'groundHit');
+          return;
+        }
         const player = this.dogs[0], a = player.attack, dash = drill.pattern === 'cancelDash';
         const route = a?.fromWindup === (dash ? player.kit.dashAttack : player.kit.tilts.forward) &&
           a.airSide === (dash ? 'up' : 'back');
@@ -5046,8 +5086,9 @@
       const footwork = this.footworkPractice;
       if (footwork && footwork.pauseOnWindup !== undefined) {
         const attack = input1.attack || input1.tapped?.attack || input1.aimStick || input1.tapped?.aimStick;
+        const grab = input1.grab || input1.tapped?.grab;
         if (footwork.phase === 'ready') {
-          if (!attack) return;
+          if (!attack && !(footwork.boost && grab)) return;
           footwork.phase = 'starting';
           footwork.attackHeld = !!input1.attack;
         } else if (footwork.phase === 'starting' || footwork.phase === 'cancelNow') {
@@ -5056,7 +5097,7 @@
             this.emit('footworkCue', {f:this.dogs[0], phase:'cancelNow', moveId:cancelableWindup(this.dogs[0])});
           }
           if (footwork.phase === 'cancelNow' && footwork.pauseOnWindup &&
-              !(input1.jump || input1.shortHop || input1.tapped?.jump || input1.tapped?.shortHop)) {
+              !(footwork.boost ? grab : input1.jump || input1.shortHop || input1.tapped?.jump || input1.tapped?.shortHop)) {
             const continueSwing = input1.tapped?.attack || (input1.attack && !footwork.attackHeld);
             footwork.attackHeld = !!input1.attack;
             if (!continueSwing) return;
@@ -5651,7 +5692,7 @@
             grabX * a.runFace <= -runStick
           ) {
             // Accept a reversal just after Grab as part of the same button chord.
-            beginGrab(f, 'pivot', a.runFace, a.aim);
+            beginGrab(f, 'pivot', a.runFace, a.aim, false, a.boostGrab);
             f.attack.time = a.time;
           } else if (a.grabStyle === 'standing' && changed && a.time < a.start + a.active)
             a.queuedThrow = direction;
@@ -5743,7 +5784,12 @@
           f.command.tiltAngle = angle;
           f.command.groundDirection = angle ? 'forward' : direction;
         }
-        if (
+        if (type === 'grab' && f.attack?.dashAttack && !input.shield && !f.jumpBuffer && cancelableWindup(f)) {
+          f.command.runFace = f.face;
+          f.command.grabStyle = grabX * f.face <= -runStick ? 'pivot' : 'dash';
+          f.command.boostGrab = true;
+          f.attack = null;
+        } else if (
           (type === 'grab' || type === 'attack') &&
           f.run &&
           f.ground >= 0 &&
@@ -6694,7 +6740,9 @@
           if (command.face && !neutralInAir && (f.ground >= 0 || command.type !== 'attack')) f.face = command.face;
           if (command.type === 'grab') {
             const style = f.ground >= 0 && command.grabStyle ? command.grabStyle : 'standing';
-            beginGrab(f, style, style === 'standing' ? 0 : command.runFace, command.aim, command.shieldGrab);
+            beginGrab(f, style, style === 'standing' ? 0 : command.runFace, command.aim, command.shieldGrab, command.boostGrab);
+            if (command.boostGrab)
+              this.emit('boostGrab', {f, dir:command.runFace, moveId:f.attack.moveId});
             if (command.landGrab && f.ground >= 0) f.attack.landingGrab = true;
           } else if (command.type === 'special') this.special(f, command);
           else if (command.type === 'smash') {
@@ -7796,6 +7844,11 @@
               if (overlaps && (rival.stockLift || rival.stockGuard)) stock.covered = true;
             }
             const drill = this.shieldPractice;
+            const approach = this.footworkPractice;
+            if (f.index === 0 && approach?.boost && approach.phase !== 'done') {
+              const remaining = Math.max(0,Math.abs(rival.x-area.x)-area.rx-rival.stats.width);
+              approach.closestGap = Math.min(approach.closestGap ?? Infinity,remaining);
+            }
             if (f.index === 0 && drill?.phase === 'counter') {
               const gap = Math.max(0, Math.abs(rival.x - area.x) - area.rx - rival.stats.width);
               drill.closestGap = Math.min(drill.closestGap ?? Infinity, gap);
@@ -8068,6 +8121,8 @@
     block(target, owner, damage, name, face, point, projectile, moveId, use, power) {
       target.brakingShield = false;
       const approach = this.footworkPractice;
+      if (approach?.boost && approach.phase !== 'done' && target.index === 1 && use?.dashAttack)
+        this.finishFootwork('guardedDash');
       if (target.index === 0 && approach?.pattern === 'dashShield' && approach.phase === 'atMark') {
         approach.phase = 'guarded';
         this.emit('footworkCue', {f:target, phase:approach.braced ? 'dashBlocked' : 'standingBlock'});
@@ -9672,6 +9727,11 @@
       const f = this.dogs[1],
         foe = this.dogs[0],
         brain = this.bot;
+      if (brain.boostApproach) {
+        const dir = brain.boostApproach;
+        brain.boostApproach = 0;
+        if (f.attack?.dashAttack && cancelableWindup(f)) return {...idleInput,x:dir,grab:true};
+      }
       if (f.stockLift) return this.cpuLiftExit(f, foe);
       if (f.shieldBreak) {
         if (f.shieldBreak.phase === 'pop' || this.cpuLevel === 'rookie') return idleInput;
@@ -9801,6 +9861,16 @@
           this.rivalLedgeReturn(f, foe) || this.readShieldEscape(f, foe) || this.rivalJumpIn(f, foe, dt) ||
           this.attackCancelInput(f, foe) || this.runningAntiAir(f, foe) || this.angledTiltInput(f, foe);
         if (answer) return answer;
+        if (f.run && !f.run.turned && f.ground >= 0 && f.ground === foe.ground && foe.shield &&
+            brain.shieldWatch >= 3/60 && brain.shieldWatch <= .18 && !brain.missedHopGrab &&
+            !f.stun && !f.attack && !f.shield && !f.command && f.charge < 0 && !f.jumpSquat && !f.floorAction &&
+            !foe.shieldStun && !protectionTime(foe) && f.vx*f.run.face > f.stats.speed*.75) {
+          const dir = f.run.face, gap = (foe.x-f.x)*dir - foe.stats.width;
+          if (gap > dashGrabReach(f,false)+2 && gap < dashGrabReach(f,true)-2) {
+            brain.boostApproach = dir;
+            return {...idleInput,x:dir,tapped:{attack:true}};
+          }
+        }
         // Space a quick forward tilt at the shield's rim. In close the normal grab mixup still applies.
         if (foe.shield && f.ground >= 0 && f.ground === foe.ground && !f.attack && !f.stun && !f.grip &&
             !f.floorAction && !f.shield && !f.command && !f.landingLag && f.charge < 0 &&

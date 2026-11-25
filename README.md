@@ -412,6 +412,12 @@ In **Combo escape → Shoulder carry**, grab Pip at 85% on Night Mail. Throw rig
 
 For a **dash grab**, hold a direction until your dog is running, then press Grab while moving toward the rival. For a **pivot grab**, run in one direction and press the opposite direction together with Grab, or press Grab just as you turn. If you're running right, **D + U** catches ahead and **A + U** catches behind. On touch, slide your movement thumb onto the opposite arrow as you tap Grab with your other thumb.
 
+For a **boost grab**, tap Attack while running, then tap Grab during the first two frames of the dash attack. Your dog slides into its own running grab. Hold back with Grab to face behind you while your paws keep sliding along the original path. The grab retains its usual startup and recovery. You can spot-dodge it and punish the miss.
+
+In **Footwork practice → Boost grab**, Brisket starts at running speed just outside Freight Hug’s reach. Try Grab alone and read the miss distance. Retry with Attack followed by Grab to catch Pip’s shield, then choose a throw. **Boost pivot grab** puts the rival behind you. Turn off **Pause on windup** to practice at match speed with **Half speed** off. [Play the boost-grab drill](https://caleb-guyer.github.io/dog-fight-3/#training/boost-grab)
+
+To try the other side, play Pip against Rival Brisket on Picnic Table. Run toward him for about a quarter of a second, then shield. When he skids into Freight Hug, tap Down while shielding to spot-dodge, then release Shield and jab as his paws pass you. [Play the three-stock match](https://caleb-guyer.github.io/dog-fight-3/#solo/picnic-table)
+
 | Dog | Dash grab | Pivot grab |
 | --- | --- | --- |
 | **Pip** | **Tag Dash** reaches out quickly with one paw. | **Heel Hook** plants a heel and catches low with very little skid. |
