@@ -5278,8 +5278,11 @@
   }, true);
   $('combo-training').onclick = () => drill('combo', false, 'example');
   $('combo-fight-pip').onclick = fightRivalPip;
-  for (const source of comboSources) $('combo-' + source).onclick = () => drill('combo', false, source);
-  $('combo-throwChase').onclick=()=>drill('combo',false,'throwChase',world.comboPractice?.reply?.startsWith('di')?world.comboPractice.reply:'diMix');
+  for (const source of comboSources) $('combo-' + source).onclick = () => {
+    if(source!=='throwChase')return drill('combo',false,source);
+    if(world.comboPractice?.source!==source && !world.trainingDamage)world.setDummyDamage(95);
+    drill('combo',false,source,world.comboPractice?.reply?.startsWith('di')?world.comboPractice.reply:'diMix');
+  };
   $('combo-slot').onchange = e => {
     const d = world.comboPractice, slot = Number(e.target.value);
     drill('combo', false, d.source === 'record' ? 'record' : d.source === 'replay' && world.comboTakes[slot] ? 'replay' : 'defend',
