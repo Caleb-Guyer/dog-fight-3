@@ -3446,6 +3446,7 @@
     if (pose === 'walk') return tick(8) % 6;
     if (pose === 'teeter') return tick(5) % 6;
     if (pose === 'crouch') return tick(3) % 2;
+    if (pose === 'crawl') return Math.min(5, Math.floor(phase * 6 + 1e-6));
     if (pose === 'dashStart') return Math.min(2, Math.floor(phase * 3));
     if (pose === 'run') return tick(12) % 6;
     if (pose === 'win') return tick(6) % 4;
@@ -4963,6 +4964,25 @@
         s.rearY = -s.fistY;
         break;
       }
+      case 'crawl': {
+        restingStance(s, name);
+        const stride = [-4,-2,2,4,2,-2][frame];
+        s.headX += 5;
+        s.headY -= 2;
+        s.headTurn = -5;
+        s.fistX += 5 + stride;
+        s.fistY += frame < 3 ? -1 : 1;
+        s.rearX -= stride;
+        s.leftX += stride;
+        s.rightX -= stride;
+        s.leftY -= frame === 1 ? 2 : 0;
+        s.rightY -= frame === 4 ? 2 : 0;
+        s.torsoTurn = stride / 2;
+        s.tailLift = 2;
+        s.ear += stride / 2;
+        s.hideCharm = true;
+        break;
+      }
       case 'crouchHit':
       case 'crouch': {
         const depth = { pip: 9, brisket: 8, noodle: 7, clover: 10 }[name];
@@ -5772,6 +5792,7 @@
     'dizzy',
     'run',
     'crouch',
+    'crawl',
     'crouchHit',
     'jumpSquat',
     'turnJumpSquat',
