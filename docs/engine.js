@@ -5697,7 +5697,7 @@
           const jump = pressed('jump');
           if (side || drop || jump || action) {
             const command = { ...idleInput, x: input.x, y: input.y, grabX,
-              smashX: input.smashX, smashY: input.smashY, tiltMode: input.tiltMode,
+              smashX: input.smashX, smashY: input.smashY, tiltMode: input.tiltMode, quickAttack: input.quickAttack,
               airDodgeX: input.airDodgeX, airDodgeY: input.airDodgeY, tapped: {} };
             if (action) { command[action] = !!input[action]; command.tapped[action] = true; }
             r.exit = { option: jump ? 'jump' : action ? 'action' : drop ? 'drop' : 'step', input: command };
@@ -5918,7 +5918,9 @@
         };
         if (button === 'aimStick') f.command.button = button;
         if (type === 'grab' && this.canBufferLandingGrab(f,input.x)) f.command.landGrab = true;
-        if (stickTilt) f.command.released = true;
+        // These controls commit to a normal on the press, including when buffered during recovery.
+        // Skip the hold-to-smash timer so the move starts with its full windup on the first free frame.
+        if (stickTilt || (button === 'attack' && input.quickAttack)) f.command.released = true;
         if (stickAerial) f.command.airOnly = true;
         if (type === 'special' && side === 'neutral' && f.ground < 0) {
           f.command.turnFrames = bReverseWindow;

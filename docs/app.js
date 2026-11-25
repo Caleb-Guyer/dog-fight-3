@@ -247,6 +247,8 @@
     volume: 75,
     shake: true,
     tiltStick: false,
+    quickAttack1: true,
+    quickAttack2: true,
     flickJump1: false,
     flickJump2: false,
   };
@@ -257,7 +259,7 @@
     if (Object.hasOwn(cpuLevels, s.cpuLevel)) settings.cpuLevel = s.cpuLevel;
     if (stockMinutes.includes(s.minutes)) settings.minutes = s.minutes;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
-    for (const key of ['fetch', 'sound', 'shake', 'tiltStick','flickJump1','flickJump2','bestOfThree']) if (typeof s[key] === 'boolean') settings[key] = s[key];
+    for (const key of ['fetch', 'sound', 'shake', 'tiltStick','flickJump1','flickJump2','quickAttack1','quickAttack2','bestOfThree']) if (typeof s[key] === 'boolean') settings[key] = s[key];
     if (Number.isFinite(s.volume)) settings.volume = Math.max(0, Math.min(100, s.volume));
   } catch {
     /* Settings are optional in private browsing. */
@@ -740,7 +742,7 @@
       ['Walk', 'Left Shift + A / D', 'Right Ctrl + ← / →', 'Tilt left stick gently'],
       ['Jump', settings.flickJump1 ? 'Space / W' : 'Space', settings.flickJump2 ? 'Right Shift / ↑' : 'Right Shift', 'A / flick Up if enabled'],
       ['Short hop', 'E', 'Apostrophe', 'LT / L2'],
-      ['Attack / charge', 'J', ',', 'X'],
+      ['Attack', 'J', ',', 'X'],
       ['Aim strike ← / → / ↑ / ↓', 'R / Y / T / G', 'Numpad 4 / 6 / 8 / 2', 'Right stick'],
       ['Smash / charge', 'I', 'N', settings.tiltStick ? 'RT' : 'RT / right stick'],
       ['Special', 'K', '.', 'B'],
@@ -772,7 +774,7 @@
         '<p>In midair, tap Shield with the stick centered to dodge in place. Aim up and toward the stage to slip past an edgeguard and catch the lip. You get one air dodge until you land or grab a ledge. Aim diagonally down and tap Shield to slide onto a platform. Do this just after jumping to wavedash. Try Training → Air-dodge practice or Training → Wavedash.</p>' +
         '<p>Flick a direction during the hit spark to shift your dog. You can slide sideways on the ground or in eight directions in the air. Try escaping the second swing in Training → Combo escape.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
-        '<p>Your dog crouches for three frames. Hold Short hop for a low jump, or tap Jump and release during the crouch. Hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Flick Down in the last three rising frames or during descent to fast-fall. Release Down to aim freely. Jump again in midair. Press Jump just above a rival’s head for a footstool, even with your air jump spent. A rival stepped on in the air can tech the fall with Shield. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. From a standstill, holding Attack also charges a smash. With the default Smash stick, hold the right stick in a direction and release to swing. Choose Tilt under Options for instant grounded tilts with the aim stick, aim keys, or a swipe from Smash.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
+        '<p>Your dog crouches for three frames. Hold Short hop for a low jump, or tap Jump and release during the crouch. Hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Flick Down in the last three rising frames or during descent to fast-fall. Release Down to aim freely. Jump again in midair. Press Jump just above a rival’s head for a footstool, even with your air jump spent. A rival stepped on in the air can tech the fall with Shield. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. Ground Attack starts on the press by default. Each player can choose Hold to smash in Options to charge with Attack from a standstill. With the default Smash stick, hold the right stick in a direction and release to swing. Choose Tilt under Options for instant grounded tilts with the aim stick, aim keys, or a swipe from Smash.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
   }
   $('controls').onclick = showControls;
@@ -1521,7 +1523,8 @@
       '<div class="cpu-choices">' + choices + '</div>' + (restart ? '' :
         '<p>Rival watches how you leave shield. In a set, it remembers between games.</p>' +
         '<div class="dialog-actions"><button class="utility" data-do="shield-read-match">Try Rival · Pip vs. Noodle</button>' +
-        '<button class="utility" data-do="shield-read-set">Play a Rival set · Pip vs. Noodle</button></div>'));
+        '<button class="utility" data-do="shield-read-set">Play a Rival set · Pip vs. Noodle</button>' +
+        '<button class="utility" data-do="cut-off-clover">Intercept Clover · Pip vs. Clover</button></div>'));
     document.querySelector('[data-cpu="' + level + '"]').focus({preventScroll:true});
   }
   $('cpu-level').onclick = showCpuLevels;
@@ -1545,6 +1548,12 @@
     afterStory = null;
     startMatch({ ...settings, p1:'pip', p2:'noodle', mode:'solo', cpuLevel:'rival', stage:'picnic', fetch:false },
       undefined, 42, series ? new StockSet('picnic') : null);
+  }
+  function startCloverApproach() {
+    leaveOnline();
+    afterStory = null;
+    startMatch({...settings, mode:'solo', p1:'pip', p2:'clover', cpuLevel:'rival', stage:'picnic',
+      fetch:false, minutes:7, openingFrames:49}, undefined, 7);
   }
   function cpuReadReport() {
     if (world.mode !== 'solo' || world.cpuLevel !== 'rival') return '';
@@ -1664,9 +1673,14 @@
       }
       if (name === 'win') resultDelay = 0.7;
     }, random);
-    if (leadInFrames) {
+    const openingFrames = leadInFrames || (config.mode === 'solo' && config.openingFrames);
+    if (openingFrames && !resume && !rehearsal) {
       const opener = new Battle(config, undefined, seededRandom(soloSeed));
-      for (let frame = 0; frame < leadInFrames; frame++) opener.step(1 / 60, idleInput, idleInput);
+      for (let frame = 0; frame < openingFrames; frame++) opener.step(1 / 60, idleInput, idleInput);
+      if (config.openingFrames) {
+        opener.matchFrames = 0;
+        opener.clockFrames = world.clockFrames;
+      }
       world.copyFightFrom(opener);
     }
     if (rehearsal) {
@@ -1945,7 +1959,7 @@
     if (action === 'route') showRoute();
     if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.atCheckpoint);
     if (action === 'dispatch-rematch') beginRun(world.roomIndex, 0);
-    if (['option-sound', 'option-shake', 'option-tiltStick','option-flickJump1','option-flickJump2'].includes(action)) {
+    if (['option-sound', 'option-shake', 'option-tiltStick','option-flickJump1','option-flickJump2','option-quickAttack1','option-quickAttack2'].includes(action)) {
       const key = action.slice('option-'.length);
       settings[key] = !settings[key];
       if (key === 'flickJump1' || key === 'flickJump2') flickJumpStates[key === 'flickJump1' ? 0 : 1] = {};
@@ -1960,6 +1974,7 @@
     if (action === 'lobby') toLobby();
     if (action === 'cpu-level') showCpuLevels();
     if (action === 'shield-read-match') startShieldReadMatch();
+    if (action === 'cut-off-clover') startCloverApproach();
     if (action === 'shield-read-set') startShieldReadMatch(true);
     if (action === 'rematch') startMatch(matchConfig, undefined, soloSeed, localSet);
     if (action === 'controls') showControls();
@@ -4440,6 +4455,12 @@
         '">Grounded aim stick <b>' + (settings.tiltStick ? 'Tilt' : 'Smash') +
         '</b></button><p>Also applies to the aim keys and a swipe from Smash on touch.</p>' +
         [1,2].map(slot => {
+          const quick = settings['quickAttack'+slot];
+          return '<button type="button" data-do="option-quickAttack'+slot+'" aria-pressed="'+quick+'">P'+slot+
+            ' ground Attack <b>'+(quick?'On press':'Hold to smash')+'</b></button>';
+        }).join('') +
+        '<p>On press starts a jab or tilt immediately. Hold Smash to charge. Hold to smash also lets you charge with Attack.</p>' +
+        [1,2].map(slot => {
           const enabled = settings['flickJump'+slot];
           return '<button type="button" data-do="option-flickJump'+slot+'" aria-pressed="'+enabled+'">P'+slot+
             ' flick jump <b>'+(enabled?'On':'Off')+'</b></button>';
@@ -4913,6 +4934,7 @@
       jump: key('jump') || (down(pad, 0) && !(menuPadButtons.get(pad.index) & 1)) || shortHop,
       shortHop,
       attack: key('attack') || down(pad, 2),
+      quickAttack: settings[i === 0 ? 'quickAttack1' : 'quickAttack2'],
       smash: held.has(map.smash) || tapped('smash') || touchSmash || down(pad, 7),
       aimStick,
       tiltMode: settings.tiltStick && aimStick,
@@ -5137,6 +5159,8 @@
       const stage = openingStages[hash];
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage,
         cpuLevel:'rival', minutes:7, fetch:false }, undefined, 42);
+    } else if (hash === '#solo/intercept-clover') {
+      startCloverApproach();
     } else if (hash === '#solo/shoulder-charge') {
       leaveOnline();
       afterStory = null;
