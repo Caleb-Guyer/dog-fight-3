@@ -3638,12 +3638,13 @@
     'launch-survival':'directional influence DI knockout', 'launch-breakaway':'hitstun cancel tumble combo escape',
     'launch-escape':'jab lock tech', 'launch-bait':'getup attack tech chase',
     'launch-stock-return':'respawn invincibility angel platform', 'launch-stock-catch':'respawn invincibility angel platform',
-    'shield-kick':'parry out of shield counter', 'shield-drop':'parry out of shield counter',
+    'shield-kick':'Clover Disc Hook out of shield counter', 'shield-drop':'Clover Disc Hook out of shield counter',
+    'shield-grab':'spot dodge roll', 'shield-strike':'perfect shield release',
     'shield-jumpIn':'empty hop falling aerial grab', 'freshness-training':'stale moves staling',
     'partner-training':'local two players sparring', 'reset-training':'free training dummy',
   };
-  const practiceTitles = {'reset-training':'Free training', 'shield-drop':'Block Brisket’s Belly Drop',
-    'shield-strike':'Block a strike', 'shield-grab':'Catch a shield grab', 'wall-impact':'Tech a heavy impact'};
+  const practiceTitles = {'reset-training':'Free training', 'shield-drop':'Punish Brisket’s Belly Drop',
+    'shield-strike':'Parry or roll through a strike', 'shield-grab':'Dodge an incoming grab', 'wall-impact':'Tech a heavy impact'};
   function searchWords(value) {
     return value.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
   }
