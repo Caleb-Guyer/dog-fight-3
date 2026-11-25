@@ -270,7 +270,7 @@
       ];
     }
     if (f.ledgeTrump) return ['ledgeTrump', clamp(f.ledgeTrump.time / f.ledgeTrump.duration, 0, 1)];
-    if (f.wallAction) return [f.wallAction.type === 'wallKick' ? 'wallTechJump' : f.wallAction.type,
+    if (f.wallAction) return [f.wallAction.type === 'ceilingTech' ? 'tech' : f.wallAction.type === 'wallKick' ? 'wallTechJump' : f.wallAction.type,
       clamp(f.wallAction.time / f.wallAction.duration, 0, 1)];
     if (f.shieldBreak) return f.shieldBreak.phase === 'pop'
       ? ['launch', f.vy < 0 ? .30 : .65] : ['dizzy', 0];
@@ -1644,6 +1644,12 @@
       const side = grip.struggles % 2 ? 1 : -1;
       ctx.translate(snap(side * 4 * pull, 2), -snap(3 * pull, 2));
     }
+    if (f.wallAction?.type === 'ceilingTech') {
+      // Plant the four paws against the underside for the brace, then fall away.
+      ctx.translate(0, 2 * f.y - f.stats.height);
+      ctx.scale(1,-1);
+      spriteTime = f.wallAction.time;
+    }
     window.DogArt.draw(ctx, f.kind, snap(f.x, 2), snap(f.y, 2), {
       face,
       scale: 1,
@@ -1798,6 +1804,7 @@
   function landingEffect(ctx, e, p) {
     ctx.save();
     ctx.translate(snap(e.x, 2), snap(e.y, 2));
+    if (e.ceiling) ctx.scale(1,-1);
     ctx.globalAlpha *= Math.min(1, (1 - p) * 2);
     const spread = e.size + (reduced.matches ? 0 : snap(12 * p, 2));
     if (e.type === 'techLand') {
@@ -2038,6 +2045,7 @@
       ctx.save();
       ctx.translate(e.x, e.y);
       if (e.wall) ctx.rotate(e.face * Math.PI / 2);
+      if (e.ceiling) ctx.scale(1,-1);
       const spread = reduced.matches ? 4 : snap(8 * p, 2);
       for (const side of [-1, 1]) {
         ctx.save();
@@ -2321,9 +2329,13 @@
     }
     event(name, e) {
       const f = e.f;
-      if (e.hard && (name === 'wallBounce' || name === 'meteorBounce' || name === 'floorBounce')) {
-        this.add('hardImpact', e.point.x, e.point.y, '#ef574b', 13 / 60, 26, e.dir, { wall: name === 'wallBounce' });
+      if (e.hard && (name === 'wallBounce' || name === 'meteorBounce' || name === 'floorBounce' || name === 'ceilingBounce')) {
+        this.add('hardImpact', e.point.x, e.point.y, '#ef574b', 13 / 60, 26, e.dir, { wall: name === 'wallBounce', ceiling:name === 'ceilingBounce' });
         return;
+      }
+      if (name === 'ceilingTech' || name === 'ceilingBounce' || name === 'ceilingBump') {
+        const brace = name === 'ceilingTech';
+        this.add(brace ? 'techLand' : 'knockDust', e.point.x, e.point.y, brace ? mint : gold, .16, brace ? 16 : 8, 1, {ceiling:true});
       }
       if (name === 'stockLeave') this.add(name, e.point.x, e.point.y, mint, 0.18, 24);
       if (name === 'landingCancel') this.add(name, e.point.x, e.point.y, mint, 0.18, f.stats.width * 0.7);

@@ -375,13 +375,13 @@
     } else if (name === 'wallKick') {
       tone(135, 64, .05, 0, 'triangle', .05);
       tone(detail.f.kind === 'pip' ? 590 : 405, 790, .075, .029, 'square', .023);
-    } else if (name === 'wallTech' || name === 'wallTechJump') {
+    } else if (name === 'wallTech' || name === 'wallTechJump' || name === 'ceilingTech') {
       tone(630, 920, 0.052, 0, 'triangle', 0.075);
       if (name === 'wallTechJump') tone(870, 1440, 0.082, 0.04, 'square', 0.024);
-    } else if (detail.hard && (name === 'wallBounce' || name === 'meteorBounce' || name === 'floorBounce')) {
+    } else if (detail.hard && (name === 'wallBounce' || name === 'meteorBounce' || name === 'floorBounce' || name === 'ceilingBounce')) {
       tone(224, 48, 0.065, 0, 'square', 0.045);
       tone(107, 37, 0.14, 0.025, 'triangle', 0.12);
-    } else if (name === 'wallBounce') {
+    } else if (name === 'wallBounce' || name === 'ceilingBounce' || name === 'ceilingBump') {
       tone(165, 56, 0.075, 0, 'triangle', 0.09);
     } else if (name === 'tech') {
       tone(560, 890, 0.055, 0, 'triangle', 0.075);
@@ -1002,7 +1002,7 @@
         '<h3 class="guide-section">After a knockout</h3><p>Watch the lamps on the airmail lift. When they turn mint, tap Down, a side, Jump, or an aerial move to leave. Leaving early gives you more protection on landing. The last gold mail tag goes dark when you can be hit again. Try both sides in <strong>Training → Launch practice → Take the lift</strong> and <strong>Catch the return</strong>.</p>' +
         '<h3 class="guide-section">After a launch</h3><p>Choose <strong>Training → Launch practice</strong> to take an up throw and try the landing again.</p><p>On a strong meteor, tap Shield just before the platform to stop the bounce. Over open air, tap a fresh Jump or Up + Special when the gold streaks turn mint, then steer home. Try <strong>Spike landing</strong> and <strong>Offstage spike</strong>.</p><ul class="move-rows guide-defense">' +
         rows +
-        '</ul><h3 class="guide-section">At a wall</h3><p>Pip and Noodle can flick away from a solid wall once per airtime. Pip kicks higher, and Noodle travels farther sideways. The kick keeps your remaining air jump and Up Special. In <strong>Training → Wall tech practice</strong>, choose a dog’s wall jump to try both roofs, or take Pip’s Back Heel to practice a wall tech.</p><ul class="move-rows guide-wall">' +
+        '</ul><h3 class="guide-section">Stage walls and undersides</h3><p>Jump around a solid deck to reach the lip. If a hit sends you tumbling up into its underside, tap Shield just before contact to stop the bounce. Try <strong>Tech the underside</strong> in Wall tech practice.</p><p>Pip and Noodle can flick away from a solid wall once per airtime. Pip kicks higher, and Noodle travels farther sideways. The kick keeps your remaining air jump and Up Special. In <strong>Training → Wall tech practice</strong>, choose a dog’s wall jump to try both roofs, or take Pip’s Back Heel to practice a wall tech.</p><ul class="move-rows guide-wall">' +
         guideMoveRow(
           {
             label: 'Wall tech',
@@ -2715,6 +2715,24 @@
   function wallFeedback(name, event) {
     const status = $('wall-status');
     const d = world.wallPractice;
+    if (d.ceiling) {
+      const away = d.side === 'left' ? 'left' : 'right';
+      const feedback = {
+        wallCue:['swing','Watch Pip’s Flip Kick'],
+        hit:['flight','Flip Kick · tap Shield'],
+        ceilingBounce:['ceilingBounce','Missed tech · bounced down'],
+        ceilingTech:['ceilingTech','Ceiling tech · air jump saved'],
+        ledge:['returned','Caught the ledge'],
+      }[name];
+      if (feedback) {
+        status.dataset.result = feedback[0];
+        status.textContent = feedback[1];
+        if (name === 'ceilingTech') $('recovery-tip').textContent = 'Steer ' + away + ' past the lip, then use Up + Special to hook it.';
+        if (name === 'ceilingBounce') $('recovery-tip').textContent = 'Choose Retry kick. Tap Shield at the hit spark before your head reaches the table.';
+        if (name === 'ledge') $('recovery-tip').textContent = 'You made it back. Choose Switch wall to try the other edge.';
+      }
+      return;
+    }
     if (d.runner) {
       if (name === 'wallKick') {
         status.dataset.result = 'kick';
@@ -3472,12 +3490,14 @@
       }[pattern];
     } else if (wall) {
       const d = world.wallPractice;
+      $('wall-ceiling').setAttribute('aria-pressed', String(!!d.ceiling));
       $('wall-impact').setAttribute('aria-pressed', String(!!d.heavy));
       for (const kind of ['pip','noodle']) $('wall-'+kind).setAttribute('aria-pressed', String(kind === d.runner));
       $('wall-status').dataset.result = 'ready';
-      $('wall-status').textContent = d.runner ? player.stats.name + ' · one air jump left' : pattern === 'right' ? 'Right wall' : 'Left wall';
+      $('wall-status').textContent = d.ceiling ? 'Below the tabletop' : d.runner ? player.stats.name + ' · one air jump left' : pattern === 'right' ? 'Right wall' : 'Left wall';
       const away = d.inward === 1 ? 'left' : 'right';
-      message = d.runner ? 'Flick '+away+' off the brickwork. Steer back to the near roof, or hold '+away+
+      message = d.ceiling ? 'Tap Attack to cue Pip’s Flip Kick. Tap Shield at the hit spark to brace against the underside.' :
+        d.runner ? 'Flick '+away+' off the brickwork. Steer back to the near roof, or hold '+away+
         ' to cross the gap. Retry with Jump alone to spend your air jump instead.' :
         d.heavy ? 'Noodle starts at 185%. First tap Shield with no direction. Retry with Up + Shield when Pip’s heel hits.' :
         'You’re Noodle at 90%. Tap Shield when Pip’s Back Heel hits. Hold Jump at the wall to kick away.';
@@ -3624,7 +3644,7 @@
     ['Recovery','Ledge timing','climb',['escape','trap','rise','coverRise']],
     ['Recovery','Ledge roll','roll',['guard','read']],
     ['Recovery','Contested ledge','trump',['take','defend']],
-    ['Recovery','Wall tech & wall jump','wall',['training','impact','pip','noodle']],
+    ['Recovery','Stage techs & wall jumps','wall',['training','impact','ceiling','pip','noodle']],
     ['Movement','Free practice','',['reset-training','partner-training']],
   ];
   const practiceAliases = {
@@ -3642,6 +3662,7 @@
     'shield-grab':'spot dodge roll', 'shield-strike':'perfect shield release',
     'shield-jumpIn':'empty hop falling aerial grab', 'freshness-training':'stale moves staling',
     'partner-training':'local two players sparring', 'reset-training':'free training dummy',
+    'wall-ceiling':'ceiling tech under stage recovery Noodle Pip',
   };
   const practiceTitles = {'reset-training':'Free training', 'shield-drop':'Punish Brisket’s Belly Drop',
     'shield-strike':'Parry or roll through a strike', 'shield-grab':'Dodge an incoming grab', 'wall-impact':'Tech a heavy impact'};
@@ -3654,7 +3675,7 @@
       startMatch({...visit.config, mode:'training', lastStockStart:false, suddenStart:false, fetch:false}, undefined, undefined, null, {visit});
     } else dismiss();
     if (id === 'reset-training' || id === 'partner-training') drill(id === 'partner-training' ? 'partner' : false);
-    else if (['wall-impact','wall-pip','wall-noodle'].includes(id)) drill('wall', false, world.wallPractice?.side || 'left', id.slice(5));
+    else if (['wall-impact','wall-ceiling','wall-pip','wall-noodle'].includes(id)) drill('wall', false, world.wallPractice?.side || 'left', id.slice(5));
     else {
       // Freshness toolbar buttons toggle comparisons. A directory selection always starts the named test.
       if (id.startsWith('freshness-') && world.freshnessPractice) world.resetTraining();
@@ -3944,10 +3965,10 @@
     $('game').focus({ preventScroll: true });
   };
   $('wall-training').onclick = () => drill('wall', false, world.wallPractice?.side || 'left');
-  const wallMode = () => world.wallPractice.heavy ? 'impact' : world.wallPractice.runner;
+  const wallMode = () => world.wallPractice.ceiling ? 'ceiling' : world.wallPractice.heavy ? 'impact' : world.wallPractice.runner;
   $('wall-impact').onclick = () => drill('wall', false, world.wallPractice.side, world.wallPractice.heavy ? '' : 'impact');
   $('wall-retry').onclick = () => drill('wall', false, world.wallPractice.side, wallMode());
-  for (const kind of ['pip','noodle']) $('wall-'+kind).onclick = () => drill('wall', false, world.wallPractice.side, kind);
+  for (const kind of ['pip','noodle','ceiling']) $('wall-'+kind).onclick = () => drill('wall', false, world.wallPractice.side, kind);
   $('wall-side').onclick = () => drill('wall', false, world.wallPractice.side === 'left' ? 'right' : 'left', wallMode());
   $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'kick');
   for (const button of $('shield-patterns').querySelectorAll(':scope > button:not(#shield-strength)'))
@@ -5088,6 +5109,11 @@
         '<div class="dialog-actions"><button class="primary" data-do="rehearse">Practice this position</button>' +
         '<button class="utility" data-do="resume">Play the stock</button></div>');
       document.querySelector('[data-do=rehearse]').focus();
+    } else if (hash === '#solo/under-the-table') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, p1:'noodle', p2:'pip', mode:'solo', stage:'picnic', cpuLevel:'rival',
+        minutes:7, fetch:false, underTableStart:true}, undefined, 42);
     } else if (hash === '#solo/crawl') {
       leaveOnline();
       afterStory = null;
@@ -5222,11 +5248,11 @@
       startMatch({ ...settings, mode:'training', stage:'picnic', fetch:false });
       drill('spacing', false, 'footstool');
     }
-    else if (hash === '#training/wall-jumps' || hash === '#training/impact-tech') {
+    else if (hash === '#training/wall-jumps' || hash === '#training/impact-tech' || hash === '#training/ceiling-tech') {
       menuScreen('match');
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'laundry', fetch:false });
-      drill('wall', false, 'left', hash === '#training/impact-tech' ? 'impact' : 'pip');
+      drill('wall', false, 'left', hash === '#training/ceiling-tech' ? 'ceiling' : hash === '#training/impact-tech' ? 'impact' : 'pip');
     }
     else if (hash === '#training/spike-impact') {
       menuScreen('match');
