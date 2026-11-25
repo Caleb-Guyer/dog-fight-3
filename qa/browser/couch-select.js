@@ -125,6 +125,16 @@ async function handheld(browser){
     assert.equal(await page.locator('#match-stage').textContent(),'Laundry Line');
     const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.config')));
     assert.deepEqual([saved.p1,saved.p2],['clover','noodle']);
+    await page.keyboard.down('ArrowRight');
+    for(let i=0;i<24 && !await page.locator('#set-score').isVisible();i++)await page.clock.runFor(2000);
+    await page.keyboard.up('ArrowRight');await press('[data-do=set-pick]');
+    await press(btn(0,'lock'));await press(btn(1,'prev'));await press(btn(1,'coat'));
+    assert.equal(await page.locator('[data-seat="1"] [data-name]').textContent(),'Brisket');
+    await press(btn(1,'lock'));await press(btn(1,'next'));
+    assert(await page.locator('#dialog').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
+    await press(btn(1,'lock'));
+    assert.equal(await page.locator('#match-set').textContent(),'Game 2 · 1–0');
+    assert.equal(await page.locator('#match-stage').textContent(),'Moonbell Bandstand');
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
