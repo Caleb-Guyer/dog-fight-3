@@ -433,6 +433,10 @@ Use **I** for Player 1, **N** for Player 2, or the **Smash** button on a touchsc
 
 Open **Move list → Smash attacks** for the illustrated moves.
 
+**Haymaker armor.** Five frames after Brisket releases his side smash, two gold marks appear on his shoulder. Until the punch becomes active on frame 12, he can take one hit worth up to 8% and keep swinging. His damage still goes up. A stronger hit, a second hit, a grab or a trapping move can interrupt him. Holding the charge leaves him open.
+
+In **Footwork practice → Punch through a jab**, tap Attack to start the count, then hold Smash. Release on the third light. Pip’s Quick Paw deals 4%, and Brisket lands Haymaker. Retry and keep holding Smash to feel the interruption. Choose **Catch Haymaker** to play Pip. Try Attack on the third light, then retry with Grab to catch Brisket by the collar and choose a throw. [Play as Brisket](https://caleb-guyer.github.io/dog-fight-3/#training/haymaker) · [Play as Pip](https://caleb-guyer.github.io/dog-fight-3/#training/catch-haymaker)
+
 ## Ledge attacks
 
 Once your dog catches a solid edge, tap **Attack** to climb and strike toward the stage. Use **J** for P1, **Comma** for P2, **X** on a standard gamepad, or **Attack** on touch. The direction comes from the ledge you caught.

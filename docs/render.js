@@ -1645,6 +1645,16 @@
       dodgeY: f.airDodge?.y || 0,
     });
     ctx.restore();
+    if (window.DogFight.activeArmor(f)) {
+      const x = snap(f.x + f.face * f.stats.width * .85, 2), y = snap(f.y - f.stats.height * .58, 2);
+      for (const offset of [0, 7]) {
+        const at = x + offset * f.face;
+        pixelLine(ctx, at - 4*f.face, y - 7, at, y - 3, ink, 6, 2);
+        pixelLine(ctx, at, y - 3, at, y + 5, ink, 6, 2);
+        pixelLine(ctx, at - 4*f.face, y - 7, at, y - 3, gold, 3, 2);
+        pixelLine(ctx, at, y - 3, at, y + 5, cream, 3, 2);
+      }
+    }
     if (state === 'dizzy') {
       // Three little collar tags circle the ears. Their silhouettes also read with motion reduced.
       for (let i = 0; i < 3; i++) {
@@ -2136,6 +2146,16 @@
       }
       return;
     }
+    if (e.type === 'armorHit') {
+      const spread = reduced.matches ? 5 : snap(p * 13, 2);
+      for (const rise of [-1, 1]) {
+        const x = e.x - e.face * spread, y = e.y + rise * spread;
+        pixelLine(ctx, x, y, x - e.face*9, y + rise*6, ink, 6, 2);
+        pixelLine(ctx, x, y, x - e.face*9, y + rise*6, gold, 3, 2);
+      }
+      if (p < .6) pixelLine(ctx, e.x, e.y-5, e.x, e.y+5, cream, 4, 2);
+      return;
+    }
     if (e.type === 'attackClash') {
       const spread = reduced.matches ? 3 : snap(p * 13, 2);
       const reach = p > 0.65 ? 5 : 10;
@@ -2393,7 +2413,9 @@
           const frames = e.impactFrames || 2;
           this.add('block', point.x - face * 7, point.y, teamColor(f), (7 + frames) / 60, 34 + frames * 5, face);
         }
-        else if (e.lock) {
+        else if (e.armored) {
+          this.add('armorHit', point.x, point.y, gold, .16, 10, face);
+        } else if (e.lock) {
           this.add('jabLock', f.x, f.y, cream, 0.16, f.stats.width * 0.8, face, { count: e.lock });
           this.add('light', point.x, point.y, gold, 0.09, 22, face);
         } else {
@@ -2746,7 +2768,7 @@
           }
         }
       }
-      if (world.footworkPractice && ['match', 'power', 'disc'].includes(world.footworkPractice.pattern)) {
+      if (world.footworkPractice && ['match','power','disc','armor','armorGrab'].includes(world.footworkPractice.pattern)) {
         const drill = world.footworkPractice, x = snap(drill.mark, 2), y = world.terrain[0].y + 9;
         for (let i = 0; i < 3; i++) {
           const lamp = x + (i - 1) * 16;
