@@ -141,6 +141,7 @@
   class Corner {
     constructor(id){this.seen=new Set();this.stock=0;this.cue='';this.lesson='jab';this.until=0;
       this.target=Object.hasOwn(targets,id)?new RematchTarget(id):null;}
+    get practice(){return this.target?.doneAt===null?this.target.id:this.lesson;}
     read(world){
       const stock=world.dogs[0].stocks, frame=world.matchFrames;
       if(stock!==this.stock){this.stock=stock;this.seen.clear();this.cue='';}
