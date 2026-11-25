@@ -107,6 +107,69 @@
       }
     }
   }
+  const directions={pip:['side','up','neutral','down'],brisket:['down','up','neutral','side'],
+    noodle:['neutral','up','side','down'],clover:['side','up','neutral','down']};
+  // The signature and recovery studies share the course's original setups and saved clears.
+  const extraStudies={
+    pip:[
+      [58,'Land both beats of Snap Bark on Brisket.','Both barks connected.',['special']],
+      [115,'Start above the floor. Aim down and use Dirt Slide to dive, slide and hit Brisket.','The slide popped Brisket off the floor.',['down','special']]
+    ],
+    brisket:[
+      [57,'Use Collar Toss while Pip is shielding beside you.','Collar Toss lifted Pip through his shield.',['special']],
+      [150,'Aim right and use Shoulder Charge to cross the gap and hit Pip.','The shoulder connected from outside jab range.',['right','special']]
+    ],
+    noodle:[
+      [139,'Aim right and hook Brisket with Slingshot. Let the rope pull Noodle forward.','Noodle reeled in toward the rival.',['right','special']],
+      [170,'Plant Trip Line on the floor. Brisket will walk into the armed snare.','The grounded snare caught Brisket.',['down','special']]
+    ],
+    clover:[
+      [144,'Throw Round Trip past Pip. Let the disc hit on its way out and again on its return.','The same disc hit on both passes.',['special']],
+      [240,'Aim down and fire Skip Serve. Let the disc skip along the floor to reach Pip.','The skipping disc reached Pip.',['down','special']]
+    ]
+  };
+  function study(kind,side){
+    const index=directions[kind].indexOf(side),id=window.DogFight.kits[kind].specials[side];
+    return {index,id,stage:index<2?courses[kind].stage:'picnic',rival:courses[kind].rival,title:window.DogFight.specials[id].label};
+  }
+  class SpecialTrial {
+    constructor(index,world){
+      this.course=world.dogs[0].kind;this.index=index;this.id=this.course+'-'+index;
+      const spec=study(this.course,directions[this.course][index]);
+      const [gap,task,success,keys]=extraStudies[this.course][index-2];
+      this.info={title:spec.title,task,success,keys:[keys]};this.move=spec.id;
+      this.ticks=0;this.hits=0;this.done=false;this.missed=false;this.started=false;
+      const floor=world.terrain[0],x=floor.x1+(floor.x2-floor.x1)*.33;
+      for(const [i,d] of world.dogs.entries())Object.assign(d,{x:i?x+gap:x,y:floor.y,ground:0,face:i?-1:1,vx:0,vy:0,invuln:0,stockGuard:0});
+      if(this.move==='pipSlide')Object.assign(world.dogs[0],{ground:-1,y:floor.y-60});
+      if(this.move==='brisketClinch')world.dogs[1].shield=true;
+    }
+    canStep(input){
+      if(this.done || this.missed || !this.started && !input.special && !input.tapped?.special)return false;
+      this.started=true;this.ticks++;return true;
+    }
+    partner(){
+      if(this.move==='noodleTripLine' && this.ticks>=32)return {...idleInput,x:-.58};
+      if(this.move==='brisketClinch')return {...idleInput,shield:true};
+      return idleInput;
+    }
+    contact(name,e){
+      if(this.done || this.missed)return;
+      if(name==='ko'){this.missed=true;return;}
+      if(name==='special' && e.f?.index===0 && e.moveId===this.move)this.hits=0;
+      if(name!=='hit' || e.owner?.index!==0 || e.f?.index!==1 || e.moveId!==this.move)return;
+      this.hits++;
+      if(this.move==='noodleSling'){this.hookX=e.owner.x;return;}
+      const double=this.move==='pipBark' || this.move==='cloverRound';
+      if(!double || this.hits>=2)this.done=true;
+      else this.note=this.move==='pipBark'?'First bark landed. Let the second beat play.':'First pass landed. Watch the return.';
+    }
+    afterStep(world){
+      if(this.hookX!==undefined && world.dogs[0].x>this.hookX+22)this.done=true;
+      if(!this.done && this.ticks>=180)this.missed=true;
+    }
+  }
+  const makeTrial=(index,world)=>index<2?new Trial(index,world):new SpecialTrial(index,world);
   // Durations are in fight frames. A short hold before each new input lets the
   // viewer read the cue without changing the timing between real inputs.
   const examples={
@@ -140,7 +203,10 @@
   };
   class Example {
     constructor(id){
-      this.cues=examples[id].map(([frames,chord,caption])=>{
+      const [kind,index]=id.split('-');
+      const extra=extraStudies[kind]?.[Number(index)-2];
+      const sequence=extra?[[1,extra[3].join(' '),extra[1]],[180,'','Release the controls and watch the exchange.']]:examples[id];
+      this.cues=sequence.map(([frames,chord,caption])=>{
         const keys=chord?chord.split(' '):[];
         const input={...idleInput,quickAttack:true};
         for(const key of keys){
@@ -197,5 +263,63 @@
     root.querySelector('[data-class-back]').onclick=back;
     root.querySelector('[data-class-dog][aria-pressed=true]').focus({preventScroll:true});
   }
-  window.FighterSchool={courses,Trial,Example,hint,sheet,mark,cleared};
+  class Demonstration{
+    constructor(kind,side,coat,event){
+      const spec=study(kind,side);
+      this.battle=new window.DogFight.Battle({mode:'local',stage:spec.stage,p1:kind,p2:spec.rival,fetch:false,
+        form:'original',minutes:0,lesson:spec.index,coats:[coat,0]},(name,e)=>{this.trial?.contact(name,e);event?.(name,e);},window.DogFight.seededRandom(11));
+      this.trial=makeTrial(spec.index,this.battle);this.example=new Example(this.trial.id);
+      this.frame=0;this.tail=0;this.ended=false;
+    }
+    step(){
+      if(this.ended)return;
+      if(this.trial.done || this.trial.missed){
+        this.battle.step(1/60,idleInput,idleInput);this.tail++;
+      }else{
+        let input=this.example.input();
+        while(!input)input=this.example.input();
+        if(this.trial.canStep(input)){
+          this.battle.step(1/60,input,this.trial.partner(input));this.trial.afterStep(this.battle);
+        }
+      }
+      this.frame++;
+      this.ended=this.tail>=45 || this.frame>=300;
+    }
+  }
+  function preview({kind,side,coat,root,shake,reduced,device,keyFor,padFor}){
+    const el=id=>root.querySelector('#move-'+id);
+    const canvas=el('arena'),toggle=el('play'),speed=el('speed'),output=el('frame'),cue=el('cue'),caption=el('caption');
+    let demo,view,playing=!reduced,rate=.5,carry=0;
+    const write=(node,value)=>{if(node.textContent!==value)node.textContent=value;};
+    function paint(dt){
+      view.draw(canvas,demo.battle,dt,demo.battle.time);
+      const phase=demo.example.cue, finished=demo.trial.done;
+      write(output,'Frame '+demo.frame+' · '+demo.battle.dogs[1].stats.name+' '+Math.round(demo.battle.dogs[1].damage)+'%');
+      write(cue,demo.tail?'Release':phase.keys.length?hint({keys:[phase.keys]},device(),keyFor,padFor):'Release');
+      write(caption,finished?demo.trial.info.success:phase.caption);
+      write(toggle,demo.ended?'Replay':playing?'Pause':'Play');
+      el('step').disabled=demo.ended;
+    }
+    function restart(){
+      carry=0;view=new window.DogFightView.FightView();view.shakeEnabled=shake && !reduced;
+      demo=new Demonstration(kind,side,coat,(name,e)=>view.event(name,e));paint(0);
+    }
+    toggle.onclick=()=>{
+      if(demo.ended){playing=true;restart();}else{playing=!playing;carry=0;paint(0);}
+    };
+    el('step').onclick=()=>{playing=false;carry=0;demo.step();paint(1/60);};
+    el('restart').onclick=()=>{playing=!reduced;restart();};
+    speed.onclick=()=>{rate=rate===1?.5:1;write(speed,rate===1?'Speed · 1×':'Speed · ½×');};
+    restart();
+    return {tick(dt){
+      if(!playing || demo.ended)return;
+      carry+=dt*60*rate;
+      const frames=Math.floor(carry);
+      if(!frames)return;
+      carry-=frames;
+      for(let i=0;i<frames && !demo.ended;i++)demo.step();
+      paint(frames/60);
+    }};
+  }
+  window.FighterSchool={courses,Trial,Example,hint,sheet,mark,cleared,study,makeTrial,Demonstration,preview};
 })();
