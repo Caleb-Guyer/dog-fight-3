@@ -2101,6 +2101,30 @@ async function testGetUpAttacks(page,mobile) {
   console.log((mobile?'Touch':'Keyboard')+' played both sides of Reverse Rim, held shield, and grabbed the recovery into an up throw.');
 }
 
+async function testReadTech(page,mobile){
+  await page.goto(root+'?landing-reads#training/read-the-tech');
+  const status=page.locator('#launch-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for(const label of ['In place','Roll away','Roll through','Rival mix']){
+    await press('launch-response');
+    assert.match(await page.locator('#launch-response').textContent(),new RegExp(label));
+    if(label==='Roll through')await press('launch-side');
+    await hold(['attack']);await waitFor('fall');await hold([]);
+    await waitFor('getup');
+    if(label!=='Rival mix')assert.equal(await status.textContent(),label);
+    await waitFor('opening');
+    if(label==='In place'){
+      await hold(['grab']);await waitFor('grabPunish');await hold([]);
+      await page.clock.runFor(350);await hold(['up']);await page.clock.runFor(1450);await hold([]);
+      assert(parseInt(await page.locator('#hud .percentage').nth(1).textContent(),10)>0);
+    }else await waitFor('escaped');
+  }
+  assert.match(await status.textContent(),/0\/1 reads/);
+  await press('launch-read');await hold(['attack']);await waitFor('fall');await hold([]);await waitFor('escaped');
+  assert.match(await status.textContent(),/0\/2 reads/);
+  await press('reset-training');assert(await status.isHidden());
+}
+
 async function testBoostGrabs(page,mobile) {
   await page.goto(root+'?running-catches#training/boost-grab');
   const status=page.locator('#footwork-status');
@@ -2410,6 +2434,7 @@ async function testDevice(browser, mobile) {
     await testCrawl(page, mobile);
     await testPracticeRoom(page, mobile);
     await testGetUpAttacks(page, mobile);
+    await testReadTech(page,mobile);
     await testBoostGrabs(page, mobile);
     await testPartnerTraining(page, mobile);
     await testEdges(page, mobile);
