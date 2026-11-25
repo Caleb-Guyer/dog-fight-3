@@ -325,6 +325,20 @@ body:is(.playing, .cinema-active) .full-button span {
 #training-tools button {
   white-space: nowrap;
 }
+.coat-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.coat-option {
+  display: grid; justify-items: center; align-content: start; gap: 4px;
+  padding: 6px; border: 2px solid var(--ink); background: #494355; color: var(--cream);
+}
+.coat-option img { width: clamp(48px,12vh,82px); height: clamp(48px,12vh,82px); object-fit: contain; image-rendering: pixelated; }
+.coat-option strong { font: 18px/1.15 var(--pixel); }
+.coat-option small { font: 13px var(--body); }
+.coat-option[aria-pressed='true'] { color: var(--ink); background: var(--gold); }
+#online-coat { align-self: flex-start; margin-top: 10px; }
+@media (max-width: 480px) {
+  .pick-title { gap: 5px; flex-wrap: wrap; }
+  .pick-title .move-link { padding-inline: 5px; }
+}
 dialog[data-view='match-card'] { width: min(540px, calc(100% - 20px)); }
 .card-games, .form-choices { display: flex; gap: 6px; margin-bottom: 12px; }
 .card-games button, .form-choices button { flex: 1; min-width: 0; }

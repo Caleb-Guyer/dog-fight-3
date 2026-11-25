@@ -30,11 +30,37 @@
   };
   const colors = ['.', ...Object.keys(palette)];
   const index = Object.fromEntries(colors.map((color, i) => [color, i]));
-  const rgba = colors.map((color) => {
+  function makeTable(overrides = {}) {
+    return colors.map(color => {
     if (color === '.') return [0, 0, 0, 0];
-    const number = Number.parseInt(palette[color].slice(1), 16);
+    const number = Number.parseInt((overrides[color] || palette[color]).slice(1), 16);
     return [number >>> 16, (number >>> 8) & 255, number & 255, 255];
-  });
+    });
+  }
+  const coats = {
+    pip: [
+      ['Honey patch'], ['Tuxedo',{L:'#555565',l:'#41404c',H:'#84808a',C:'#302c36',c:'#38323f',R:'#67b4ac',r:'#3c7f81'}],
+      ['Copper',{L:'#c4613f',l:'#a34e38',H:'#e79358',C:'#643a35',c:'#814034',W:'#f3d0a0',w:'#d5a279',R:'#5e88a9',r:'#455877'}],
+      ['Bluebell',{L:'#91a5bd',l:'#697894',H:'#c5d7dc',C:'#4d4861',c:'#555974',R:'#e3af52',r:'#9c703a'}],
+    ],
+    brisket: [
+      ['Blue steel'], ['Biscuit',{B:'#d6ac71',b:'#9b7755',i:'#e6c698',I:'#f8dcb0',L:'#559a92',l:'#3e686e',H:'#94c7ac'}],
+      ['Brick red',{B:'#b16350',b:'#834842',i:'#c78360',I:'#dfa984',L:'#81b2c4',l:'#4c7990',H:'#bed5d7'}],
+      ['Night shift',{B:'#4a4559',b:'#383646',i:'#635b70',I:'#887c8f',W:'#d7c6b9',w:'#afa0a1',L:'#ec895a',l:'#a6534a'}],
+    ],
+    noodle: [
+      ['Cinnamon'], ['Shortbread',{C:'#8b7359',c:'#c4a17a',O:'#e5c28f',l:'#ddbd95',L:'#f1d7aa',H:'#ffe6be',T:'#73759e',t:'#505477',J:'#b0a6c6'}],
+      ['Black and tan',{C:'#35303e',c:'#494459',O:'#686572',l:'#a9734e',L:'#d39a62',T:'#be6758',t:'#85474e',J:'#e9a980'}],
+      ['Chestnut',{C:'#5b3943',c:'#874753',O:'#aa5c58',l:'#c4826a',L:'#e0ac83',T:'#7098b2',t:'#4b657e',J:'#a8c9d0'}],
+    ],
+    clover: [
+      ['Blackberry'], ['Red collie',{k:'#925642',p:'#b17150',P:'#775044',F:'#d29668',f:'#f2c999',w:'#dfbfa3'}],
+      ['Silver',{k:'#7a8699',p:'#909eae',P:'#606b85',F:'#4a7a91',f:'#a2cbd1',W:'#f2edf0',w:'#c9ced7'}],
+      ['Sandpiper',{k:'#bf9c69',p:'#a78057',P:'#715744',F:'#708e78',f:'#b3c7a3',W:'#fae5af',w:'#dcc08c'}],
+    ],
+  };
+  const coatNames = Object.fromEntries(Object.entries(coats).map(([kind,styles])=>[kind,styles.map(s=>s[0])]));
+  const colorTables = Object.fromEntries(Object.entries(coats).map(([kind,styles])=>[kind,styles.map(s=>makeTable(s[1]))]));
 
   // A dot is transparent. Leading dots position clusters within the drawn tile.
   const tile = (drawing) => drawing.trim().split(/\s+/);
@@ -5770,21 +5796,16 @@
         bottom = Math.max(bottom, y);
       }
     }
-    const canvas = document.createElement('canvas');
-    canvas.width = right - left + 1;
-    canvas.height = bottom - top + 1;
-    const ctx = canvas.getContext('2d');
-    const image = ctx.createImageData(canvas.width, canvas.height);
-    for (let sy = 0; sy < canvas.height; sy++) {
-      for (let sx = 0; sx < canvas.width; sx++) {
+    const width = right - left + 1, height = bottom - top + 1;
+    const indices = new Uint8Array(width*height);
+    for (let sy = 0; sy < height; sy++) {
+      for (let sx = 0; sx < width; sx++) {
         const sourceX = s.faceEdge ? right - sx : left + sx;
-        const inkIndex = pixels[(top + sy) * W + sourceX];
-        if (inkIndex) image.data.set(rgba[inkIndex], (sy * canvas.width + sx) * 4);
+        indices[sy*width + sx] = pixels[(top + sy) * W + sourceX];
       }
     }
-    ctx.putImageData(image, 0, 0);
     const result = {
-      canvas,
+      indices, width, height, canvases:[],
       x: s.faceEdge ? originX - right - 1 : left - originX,
       y: top - originY,
       item: itemAnchor(fighters[name], s, pixels),
@@ -5799,6 +5820,21 @@
     }
     frames.set(key, result);
     return result;
+  }
+  function frameCanvas(frame, name, coat) {
+    if (frame.canvases[coat]) return frame.canvases[coat];
+    const canvas = document.createElement('canvas');
+    canvas.width = frame.width;
+    canvas.height = frame.height;
+    const ctx = canvas.getContext('2d'), image = ctx.createImageData(frame.width,frame.height);
+    const table = colorTables[name][coat];
+    for (let i=0;i<frame.indices.length;i++) {
+      const ink = frame.indices[i];
+      if (ink) image.data.set(table[ink],4*i);
+    }
+    ctx.putImageData(image,0,0);
+    frame.canvases[coat] = canvas;
+    return canvas;
   }
 
   const names = Object.keys(fighters);
@@ -5895,23 +5931,26 @@
       if (dx || dy) octant = (8 + Math.round(Math.atan2(dy, dx) * 4 / Math.PI)) % 8;
     }
     const frame = getFrame(name, pose, frameNumber(pose, time, phase, name, options.backRoll), octant);
+    const canvas = frameCanvas(frame,name,Number.isInteger(options.coat) && colorTables[name][options.coat] ? options.coat : 0);
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.translate(Math.round(x), Math.round(y));
     if (options.face < 0) ctx.scale(-1, 1);
     ctx.drawImage(
-      frame.canvas,
+      canvas,
       frame.x * scale,
       frame.y * scale,
-      frame.canvas.width * scale,
-      frame.canvas.height * scale,
+      frame.width * scale,
+      frame.height * scale,
     );
     ctx.restore();
   }
 
-  function portrait(kind) {
+  function portrait(kind, coat = 0) {
     const name = fighterName(kind);
-    if (portraits.has(name)) return portraits.get(name);
+    if (!Number.isInteger(coat) || !colorTables[name][coat]) coat = 0;
+    const key = name + '/' + coat;
+    if (portraits.has(key)) return portraits.get(key);
     const frame = getFrame(name, 'idle', 0);
     const [left, top, width, height] = fighters[name].portrait;
     const zoom = 4;
@@ -5921,16 +5960,16 @@
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
-      frame.canvas,
+      frameCanvas(frame,name,coat),
       (frame.x - left) * zoom,
       (frame.y - top) * zoom,
-      frame.canvas.width * zoom,
-      frame.canvas.height * zoom,
+      frame.width * zoom,
+      frame.height * zoom,
     );
     const url = canvas.toDataURL('image/png');
-    portraits.set(name, url);
+    portraits.set(key, url);
     return url;
   }
 
-  window.DogArt = Object.freeze({ draw, portrait, itemPoint, pawPoint });
+  window.DogArt = Object.freeze({ draw, portrait, coatNames, itemPoint, pawPoint });
 })();

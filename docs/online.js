@@ -191,7 +191,7 @@
       this.link = this.match = this.series = null;
       if (message) this.events.closed(message);
     }
-    start(action, kind, code = '', openingStage = '', bestOfThree = false, form = 'original') {
+    start(action, kind, code = '', openingStage = '', bestOfThree = false, form = 'original', coat = 0) {
       this.close();
       if (!fighter(kind) || !['create', 'join', 'quick'].includes(action)) return;
       if (action === 'join' && !validCode(code)) return this.events.closed('Enter the six-character room code.');
@@ -202,6 +202,8 @@
       this.roomForm = action === 'create' && Object.hasOwn(window.DogFight.stageForms,form) ? form : 'original';
       this.openingStage = action === 'create' && Object.hasOwn(window.DogFight.arenas, openingStage) ? openingStage : '';
       this.kind = kind;
+      this.coat = window.DogFight.validCoat(coat) ? coat : 0;
+      this.remoteCoat = 0;
       this.code = action === 'create' ? roomCode() : code;
       this.attempts = 0;
       this.round = 0;
@@ -275,7 +277,7 @@
       };
       conn.on('open', () => {
         if (!current()) return conn.close();
-        if (!host) conn.send(['join', this.kind]);
+        if (!host) conn.send(['join', this.kind, this.coat]);
       });
       conn.on('data', (data) => {
         if (!current() || !Array.isArray(data)) return;
@@ -283,9 +285,14 @@
         if (host && data[0] === 'join' && fighter(data[1])) {
           if (this.link) return reject('full');
           this.remoteKind = data[1];
+          this.remoteCoat = window.DogFight.validCoat(data[2]) ? data[2] : 0;
+          // Ordered delivery puts both players' colors in the opening match configuration.
+          if (window.DogFight.validCoat(data[2])) conn.send(['coat',this.coat]);
           this.attach(conn);
           this.hostRound();
           if (this.action === 'quick') peer.disconnect();
+        } else if (!host && !this.round && data[0] === 'coat' && window.DogFight.validCoat(data[1])) {
+          this.remoteCoat = data[1];
         } else if (!host && data[0] === 'start' && this.validStart(data)) {
           this.remoteKind = data[2];
           this.attach(conn);
@@ -368,7 +375,8 @@
       this.myResult = this.theirResult = null;
       this.nextStage = this.earlyVote = undefined;
       this.phase = 'playing';
-      const config = { mode: 'local', p1, p2, stage, form, fetch: true };
+      const coats = this.side === 1 ? [this.remoteCoat,this.coat] : [this.coat,this.remoteCoat];
+      const config = { mode: 'local', p1, p2, stage, form, coats, fetch: true };
       this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed);
       this.events.start(config, seededRandom(seed));
     }
