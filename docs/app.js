@@ -1535,26 +1535,33 @@
       .join('');
   }
   let matchConfig, soloSeed, localSet = null, practiceFight = null;
-  const cup = window.YardCup, cupMemory = new Map();
-  let cupAttempt = null, cupChoice = settings.p1;
+  const cup = window.YardCup, unsavedCup = new Map();
+  let cupAttempt = null, cupChoice = settings.p1, cupShown;
   function cupEntry(kind) {
+    if (unsavedCup.has(kind)) return cup.read(unsavedCup.get(kind));
     try {
       const data = localStorage.getItem('dog-fight-3.cup.'+kind);
       if (data) return cup.read(JSON.parse(data));
     } catch {}
-    return cup.read(cupMemory.get(kind));
+    return cup.read(null);
   }
   function updateCup(kind,change) {
     const key = 'dog-fight-3.cup.' + kind;
     const commit = () => {
       const entry = cupEntry(kind), next = change(entry);
       if (next && next !== entry) {
-        cupMemory.set(kind,next);
-        try { localStorage.setItem(key,JSON.stringify(next)); } catch {}
+        try {
+          localStorage.setItem(key,JSON.stringify(next));
+          unsavedCup.delete(kind);
+        } catch { unsavedCup.set(kind,next); }
       }
       return next;
     };
-    return navigator.locks ? navigator.locks.request(key,commit) : Promise.resolve(commit());
+    if (!navigator.locks) return Promise.resolve(commit());
+    return navigator.locks.request(key,commit).catch(error=>{
+      if (error.name==='SecurityError') return commit();
+      throw error;
+    });
   }
   function cupRecord(run) {
     return run.retries + (run.retries === 1 ? ' retry' : ' retries') + ' · ' +
@@ -1565,6 +1572,7 @@
     if (page !== 'home') showHome(false);
     cupChoice = kind;
     const entry = cupEntry(kind), run = entry.active, course = cup.courses[kind], round = run?.wins.length || 0;
+    cupShown = entry;
     const selectors = Object.keys(cup.courses).map(id=>'<button class="cup-dog" data-cup-dog="'+id+'" aria-pressed="'+(id===kind)+
       '"><img alt="" src="'+portrait(id,id===kind && run ? run.coat : savedCoat(0,id))+'"><strong>'+fighters[id].name+'</strong></button>');
     const stops = [...course.bouts,[null]].map(([dog,stage,form],i)=>{
@@ -1576,6 +1584,7 @@
     const tip = course.bouts[round]?.[3] || campaign.rooms[campaign.lastRoom].objective;
     showDialog('cup','Arcade Cup','<div class="cup-dogs" role="group" aria-label="Choose a route">'+selectors.join('')+
       '</div><h3 class="card-stage">'+course.name+'</h3><ol class="cup-stops">'+stops+'</ol><p>'+tip+'</p>'+
+      (unsavedCup.has(kind)?'<p>Progress lasts for this tab while storage is unavailable.</p>':'')+
       (entry.best ? '<p><strong>Personal best</strong> · '+cupRecord(entry.best)+' · '+entry.clears+
         (entry.clears===1?' clear':' clears')+'</p>' : '')+
       '<div class="dialog-actions"><button class="primary" data-do="cup-start">'+
@@ -1588,8 +1597,17 @@
     if (!button || button.disabled) return;
     button.disabled = true;
     audioReady();
-    const entry = await updateCup(kind,e=>cup.begin(e,crypto.randomUUID(),savedCoat(0,kind)));
-    if (!button.isConnected) return;
+    const current = () => button.isConnected && $('dialog').open;
+    const expected = cupShown;
+    const entry = await updateCup(kind,latest=>{
+      const run = latest.active, shown = expected.active;
+      if (!current() || latest.clears!==expected.clears || run?.id!==shown?.id ||
+          run?.retries!==shown?.retries || run?.wins.length!==shown?.wins.length || run?.started!==shown?.started) return null;
+      const id = run?.id || Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+      return cup.begin(latest,id,savedCoat(0,kind));
+    });
+    if (!current()) return;
+    if (!entry) return cupSheet(kind);
     const run = entry.active, round = run.wins.length;
     const attempt = {kind,id:run.id,retries:run.retries,round,coat:run.coat};
     const bout = cup.courses[kind].bouts[round];
@@ -1611,6 +1629,7 @@
       attempt.settled = entry;
     }
     const entry = attempt.settled, kind = attempt.kind, next = attempt.round+1;
+    cupShown = entry;
     const clear = won && next === cup.rounds;
     const title = clear ? 'Arcade Cup clear!' : won ? 'Round '+next+' clear' : 'Round '+next+' lost';
     const nextDog = cup.courses[kind].bouts[next]?.[0];
@@ -2122,7 +2141,7 @@
   }
   function showResult() {
     const result = online.match?.confirmedWorld || world;
-    if (cupAttempt) return cupResult(result.end === 0);
+    if (cupAttempt) return cupResult(result.mode==='adventure' ? result.finished==='exit' : result.end===0);
     const f = result.dogs[result.end], elapsed = Math.floor(result.matchFrames / 60);
     const duration = Math.floor(elapsed / 60) + 'm ' + String(elapsed % 60).padStart(2, '0') + 's';
     const finish = result.endReason === 'time' ? 'Time expired · ' + result.dogs.map(d=>d.stocks).join('–') + ' stocks (P1–P2)' :
@@ -4669,6 +4688,21 @@
             : 'Begin chapter';
     $('dispatch-start').focus({ preventScroll: true });
   }
+  const filmLoads = new Map();
+  function loadFilm(key) {
+    if (window.DispatchFilms[key]) return Promise.resolve();
+    if (!filmLoads.has(key)) {
+      const task = new Promise((resolve,reject)=>{
+        const script = document.createElement('script');
+        script.src = './film-'+key+'.js?v=widefilm-1';
+        script.onload = () => window.DispatchFilms[key] ? resolve() : reject(new Error('Missing animation'));
+        script.onerror = () => reject(new Error('Animation unavailable'));
+        document.head.append(script);
+      });
+      filmLoads.set(key,task.finally(()=>filmLoads.delete(key)));
+    }
+    return filmLoads.get(key);
+  }
   function showReels(selected = 'opening') {
     const locks = {
       opening: '',
@@ -4685,7 +4719,9 @@
     });
     showDialog('cutscenes', 'Cutscenes', '<div class="film-library">' + rows.join('') + '</div>');
     for (const button of document.querySelectorAll('[data-reel]:enabled')) {
-      window.DispatchFilm.poster(button.querySelector('canvas'), button.dataset.reel);
+      const canvas = button.querySelector('canvas'), key = button.dataset.reel;
+      if (window.DispatchFilms[key]) window.DispatchFilm.poster(canvas,key);
+      else window.DispatchCovers.draw(canvas,key);
     }
     document.querySelector('[data-reel="' + selected + '"]').focus();
   }
@@ -4701,7 +4737,7 @@
       below: screen.bottom - footer.top + 3,
     };
   }
-  function story(key, then, fromLibrary = false) {
+  async function story(key, then, fromLibrary = false) {
     menuScreen('dispatch-story');
     afterStory = then;
     inLibrary = fromLibrary;
@@ -4710,6 +4746,28 @@
     $('story-title').textContent = scene.title;
     $('story-map').textContent = fromLibrary ? 'Cutscenes' : 'Route map';
     $('story-skip').hidden = fromLibrary;
+    $('story-next').onclick = () => film?.next();
+    if (!window.DispatchFilms[key]) {
+      window.DispatchCovers.draw($('story-cover'),key);
+      $('film-time').textContent = '';
+      $('film-progress').style.transform = 'scaleX(0)';
+      $('story-speaker').textContent = '';
+      $('story-text').textContent = 'Loading cutscene…';
+      $('story-next').textContent = 'Next';
+      $('film-pause').disabled = $('story-next').disabled = true;
+      $(fromLibrary ? 'story-map' : 'story-skip').focus({preventScroll:true});
+      try { await loadFilm(key); }
+      catch {
+        if (page!=='dispatch-story' || afterStory!==then) return;
+        $('story-text').textContent = 'The cutscene could not load.';
+        $('story-next').disabled = false;
+        $('story-next').textContent = 'Retry cutscene';
+        $('story-next').onclick = () => story(key,then,fromLibrary);
+        return;
+      }
+      if (page!=='dispatch-story' || afterStory!==then) return;
+    }
+    $('film-pause').disabled = $('story-next').disabled = false;
     film = new window.DispatchFilm(
       $('story-cover'), key, scene.pages.length,
       () => ({ context: audioContext, volume: settings.sound ? settings.volume / 100 : 0 }),
@@ -4832,7 +4890,8 @@
         tone(735, 980, 0.13, 0.12);
         dispatchNotice(stored ? 'Checkpoint saved' : 'Checkpoint reached');
       } else if (name === 'dispatchStamp') {
-        if (!cupRound) saveProgress({ room: index, stamp: index });
+        if (cupRound) return;
+        saveProgress({ room: index, stamp: index });
         tone(760, 1150, 0.09);
         dispatchNotice('Postmark collected');
       } else if (name === 'dispatchSignal') {
@@ -4846,7 +4905,7 @@
         dispatchNotice(e.f.stats.name + (e.remaining ? ' · ' + stockLabel(e.remaining) + ' left' : ' out'));
       } else if (name === 'stockTie') dispatchNotice('Tiebreak · One stock each');
       else if (name === 'hoist') dispatchNotice('Gantry catch · Armor damaged');
-      else if (name === 'dispatchVictory') dispatchNotice('Mission clear');
+      else if (name === 'dispatchVictory') dispatchNotice(cupRound ? 'Copper Hound defeated' : 'Mission clear');
       else if (name === 'machineWindup') {
         tone(e.move === 'charge' ? 240 : 160, e.move === 'charge' ? 390 : 210, 0.18, 0, 'triangle', 0.07);
       } else if (name === 'machineDown') {
@@ -4911,7 +4970,8 @@
         else $('rival-score').removeAttribute('aria-label');
       }
     }
-    $('dispatch-marks').textContent = 'Postmarks ' + countMarks(world.stamps) + ' / ' + campaign.rooms.length;
+    $('dispatch-marks').textContent = cupAttempt ? 'Arcade Cup · Round 4 / 4' :
+      'Postmarks ' + countMarks(world.stamps) + ' / ' + campaign.rooms.length;
     if ($('dispatch-objective').textContent !== order) $('dispatch-objective').textContent = order;
   }
   function showPercent(element, damage) {
@@ -5179,7 +5239,6 @@
   $('lobby-home').onclick = $('route-home').onclick = () => showHome();
   $('route-films').onclick = () => showReels();
   $('story-map').onclick = () => (inLibrary ? finishStory() : showRoute());
-  $('story-next').onclick = () => film?.next();
   $('film-pause').onclick = toggleFilm;
   $('story-skip').onclick = finishStory;
   $('route-stops').onclick = (e) => {
