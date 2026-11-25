@@ -14,13 +14,14 @@ const previous=process.env.DF3_LEGACY_ONLINE ? fs.readFileSync(process.env.DF3_L
 
 // Deliver the released clients' real handshake and round messages in order. Timeouts
 // are idle in this transport, which never registers a browser or a public room.
-function room(sources,timeMinutes=0,rules=null) {
+function room(sources,timeMinutes=0,rules=null,format='set') {
   const queue=[], links=[new EventEmitter(),new EventEmitter()];
   const peers=sources.map((source,side)=>{
     const context={window:{DogFight:window.DogFight},crypto,performance,setInterval:()=>0,setTimeout:()=>0,clearInterval(){},clearTimeout(){}};
     vm.runInNewContext(source,context);
     const s=new context.window.DogOnline.OnlineSession({start(){},status(){},votes(){},closed:message=>assert.fail(message)});
-    Object.assign(s,{side,round:0,kind:'pip',coat:2,roomSet:side===0,action:side?'join':'create',openingStage:'picnic',roomForm:'flat',peer:{}});
+    Object.assign(s,{side,round:0,kind:'pip',coat:2,roomSet:side===0 && format==='set',
+      action:format==='quick'?'quick':side?'join':'create',openingStage:'picnic',roomForm:format==='quick'?'original':'flat',peer:{disconnect(){}}});
     if(!side){
       s.timeMinutes=timeMinutes;
       if(rules)Object.assign(s,{roomRules:rules,roomForm:rules.stageForm,roomSet:rules.bestOfThree,timeMinutes:rules.timed?rules.minutes:0});
@@ -41,6 +42,48 @@ function lineup(s) {
   const w=s.match.confirmedWorld;
   return w.dogs.map((dog,i)=>[dog.kind,w.coatFor(i)]);
 }
+for(const format of ['single','quick'])test(format+' rematches accept both picks in either order and keep the resolved mirror coats',()=>{
+  const {peers,deliver}=room([current,current],0,null,format), [host,guest]=peers;
+  for(const peer of peers)assert.equal(peer.rematchPicks,true);
+  guest.finish(0);deliver();guest.rematch(undefined,'noodle',3);deliver();
+  assert(!host.theirVote);host.finish(0);deliver();assert(host.theirVote);assert(!host.myVote);
+  host.rematch(undefined,'noodle',8);assert(!host.myVote);
+  host.rematch(undefined,'noodle',3);deliver();
+  for(const peer of peers){assert.equal(peer.round,2);assert.deepEqual(lineup(peer),[['noodle',3],['noodle',0]]);peer.finish(1);}
+  deliver();host.rematch();deliver();guest.rematch(undefined,'clover',1);guest.rematch(undefined,'pip',2);deliver();
+  for(const peer of peers){assert.equal(peer.round,3);assert.deepEqual(lineup(peer),[['noodle',3],['clover',1]]);peer.finish(0);}
+  deliver();for(const peer of peers)peer.rematch();deliver();
+  for(const peer of peers)assert.deepEqual(lineup(peer),[['noodle',3],['clover',1]]);
+});
+test('only a completed set opens both fighter picks and the new set resets its score',()=>{
+  const {peers,deliver}=room([current,current]), [host,guest]=peers;
+  for(const peer of peers)peer.finish(1);
+  deliver();assert(!host.canRepick);guest.rematch(undefined,'pip',3);assert(!guest.myVote);
+  host.rematch('laundry','brisket',1);guest.rematch();deliver();
+  for(const peer of peers)peer.finish(1);
+  deliver();assert(host.canRepick && guest.canRepick);
+  host.rematch(undefined,'clover',0);guest.rematch(undefined,'noodle',2);deliver();
+  for(const peer of peers){assert.deepEqual(lineup(peer),[['clover',0],['noodle',2]]);
+    assert.deepEqual(peer.series.score,[0,0]);assert.equal(peer.stage,'picnic');}
+});
+test('both seats retain the plain rematch when the other client lacks fighter selection',()=>{
+  for(const old of [0,1])for(const format of ['single','quick']){
+    const sources=[current,current];sources[old]=previous;
+    const {peers,deliver}=room(sources,0,null,format);
+    const modern=peers[1-old];for(const peer of peers)peer.finish(0);deliver();
+    assert(!modern.canRepick);modern.rematch(undefined,'clover',1);assert(!modern.myVote);
+    for(const peer of peers)peer.rematch();deliver();for(const peer of peers)assert.equal(peer.round,2);
+  }
+});
+test('changed-fighter votes bind only their own round and seat, with both ready before the next start',()=>{
+  const {peers:[host,guest],deliver}=room([current,current],0,null,'quick');
+  host.finish(0);guest.finish(0);deliver();guest.rematch(undefined,'brisket',1);
+  guest.receive(['start',2,'pip','brisket','laundry',53]);assert.equal(guest.round,1);
+  host.receive(['rematch',0,'clover',3]);host.receive(['rematch',1,'missing',1]);host.receive(['rematch',1,'noodle',4]);
+  assert.equal(host.theirVote,false);deliver();
+  host.receive(['rematch',1,'clover',3]);assert.equal(host.readyPicks[1].kind,'brisket');
+  host.rematch();deliver();assert.deepEqual(lineup(guest),[['pip',2],['brisket',1]]);
+});
 test('a friend previews the exact opening rules before both rollback worlds start and keep them through a set',()=>{
   const rules={lives:2,minutes:0,fetch:false,timed:false,bestOfThree:true,stageForm:'flat'};
   const {peers:[host,guest],deliver}=room([current,current],0,rules);

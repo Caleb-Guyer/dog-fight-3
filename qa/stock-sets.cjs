@@ -54,8 +54,8 @@ async function fresh(device,game,score){
   assert(await page.locator('#match-set').isVisible());
   assert.deepEqual(await page.locator('#hud .lives').evaluateAll(es=>es.map(e=>e.getAttribute('aria-label'))),['3 stocks','3 stocks']);
 }
-async function leaveThreeStocks(device,slot) {
-  const {page,mobile}=device, result=page.locator('#set-score');
+async function leaveThreeStocks(device,slot,resultSelector='#set-score') {
+  const {page,mobile}=device, result=page.locator(resultSelector);
   const touch=mobile && await page.context().newCDPSession(page);
   let held='';
   async function direction(next) {
@@ -407,6 +407,16 @@ async function onlineSet(browser,phoneBrowser) {
     const own=d===host?3:1;
     assert.deepEqual(await d.page.evaluate(i=>[observedBattle.coatFor(i),observedBattle.coatFor(1-i)],side),[own,4-own]);
   }
+  const desktopSlot=(await a.locator('#match-mode').textContent()).includes('P1')?0:1;
+  await leaveThreeStocks(host,desktopSlot,'[data-do=online-rematch]');
+  await guest.press('[data-do=rematch-fighters]');await guest.press('[data-room-dog=brisket]');
+  await guest.press('[data-do=ready-fighter]');
+  await a.waitForFunction(()=>document.querySelector('#net-rematch-status')?.textContent.includes('wants a rematch'));
+  await host.press('[data-do=online-rematch]');
+  for(const d of [host,guest]){
+    await d.page.waitForFunction(i=>observedBattle.dogs[i].kind==='brisket' && observedBattle.matchFrames>1,1-desktopSlot);
+    assert.deepEqual(await d.page.evaluate(i=>[observedBattle.dogs[i].kind,observedBattle.coatFor(i),observedBattle.stockCount],desktopSlot),['pip',3,3]);
+  }
   await b.close();await a.close();console.log('Desktop and mobile peers agreed on fighter counterpicks, coats, records, set rematch and Quickplay.');
 }
 async function timedBattles(browser,phone){
@@ -663,11 +673,27 @@ async function friendRules(browser,phone){
     await d.press('[data-do=match-card]');assert.equal(await d.page.locator('.card-timeline li').count(),2);
     assert.match(await d.page.locator('.card-stats').textContent(),/Starting stocks22/);await d.press('[data-do=card-back]');
   }
-  for(const d of [guest,host])await d.press('[data-do=online-rematch]');
+  await host.press('[data-do=rematch-fighters]');await host.press('[data-room-dog=noodle]');
+  await a.keyboard.press('Escape');
+  assert.equal(await a.evaluate(()=>document.activeElement.dataset.do),'rematch-fighters');
+  await host.press('[data-do=rematch-fighters]');
+  assert.equal(await a.locator('[data-room-dog][aria-pressed=true]').getAttribute('data-room-dog'),'pip');
+  for(const d of [host,guest]){
+    if(d===guest)await d.press('[data-do=rematch-fighters]');
+    await d.press('[data-room-dog=clover]');await d.press('[data-room-coat="2"]');
+    assert(await d.page.locator('#dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+  }
+  await guest.press('[data-do=ready-fighter]');
+  await a.getByText('Your opponent is ready.',{exact:true}).waitFor();
+  assert(await b.locator('[data-do=rematch-fighters]').isDisabled());
+  assert.match(await b.locator('#net-rematch-status').textContent(),/Clover/);
+  assert.doesNotMatch(await a.locator('#net-pick-ready').textContent(),/Clover/);
+  await host.press('[data-do=ready-fighter]');
   for(const p of [a,b]){
     await p.waitForFunction(()=>observedBattle?.stage!=='picnic' && observedBattle?.matchFrames>1);
     assert.deepEqual(await p.evaluate(()=>[observedBattle.form,observedBattle.fetch,observedBattle.clockFrames,...observedBattle.dogs.map(f=>f.stocks)]),
       ['flat',false,null,2,2]);
+    assert.deepEqual(await p.evaluate(()=>observedBattle.dogs.map((f,i)=>[f.kind,observedBattle.coatFor(i)])),[['clover',2],['clover',3]]);
   }
   await b.close();await a.close();console.log('Private WebRTC rules, guest review and cancellation, an unchanged room code, warm-up, two KOs and a fresh rematch passed.');
 }
