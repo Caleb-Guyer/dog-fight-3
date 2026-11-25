@@ -24,6 +24,8 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/ledge-scout.js
           node --test qa/special-studies.cjs
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/special-studies.js
+          node --test qa/high-return.cjs
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/high-return.js
   night-mail:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
