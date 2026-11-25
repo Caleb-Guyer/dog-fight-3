@@ -2620,6 +2620,12 @@
       default: return { ...idleInput, attack: [0,9,17].includes(tick), jump: tick === 17, x: tick === 17 ? 1 : 0 };
     }
   }
+  function comboHopInput(kind, tick, slot) {
+    const landing = kind === 'brisket' ? 27 : 34;
+    return {...idleInput, jump:tick === 0, shortHop:tick === 0,
+      attack:slot === 0 && tick === landing - 8,
+      grab:slot === 1 && tick === landing - 2, x:slot === 1 && tick === landing + 26 ? 1 : 0};
+  }
   class Battle {
     constructor(config, event = () => {}, random = Math.random) {
       this.stage = config.stage;
@@ -2972,17 +2978,20 @@
       } else if ((d.landed && (f.ground >= 0 || f.ledge)) || d.ticks > 100) this.finishEdgePractice('missed');
       else if (!d.landed && f.y > this.terrain[d.ground].y + 5) this.finishEdgePractice('overshot');
     }
-    resetComboPractice(source = 'record', reply = 'stand', slow = true) {
+    get trainingPlayerSlot() { return this.comboPractice?.defending ? 1 : 0; }
+    resetComboPractice(source = 'record', reply = 'stand', slow = true, slot = this.comboPractice?.slot ?? 0) {
       const previous = this.comboPractice;
-      const tape = previous?.source === 'record' && previous.tape.length ? previous.tape : previous?.saved;
-      const markTime = previous?.markTime ?? this.time;
+      this.comboTakes ??= [null,null];
+      const tape = this.comboTakes[slot];
+      const defending = source === 'defend' || source === 'mix';
+      const markTime = this.comboMarkTime ??= this.time;
       this.resetTraining();
       this.time = markTime;
       this.terrain = this.layout?.terrain || platforms(this.stage, markTime);
       if (source === 'replay' && !tape?.length) source = 'record';
       const prior = previous && (previous.phase === 'done' || previous.contacts.length) ? { source: previous.source, reply: previous.reply,
-        hits: previous.hits, damage: previous.damage, baseline: previous.baseline } : previous?.prior;
-      this.comboPractice = { source, reply, slow, markTime, phase: source === 'record' ? 'ready' : 'active',
+        slot:previous.playSlot ?? previous.slot, hits: previous.hits, damage: previous.damage, baseline: previous.baseline } : previous?.prior;
+      this.comboPractice = { source, reply, slow, markTime, slot, defending, phase: source === 'record' || defending ? 'ready' : 'active',
         tape: source === 'replay' ? tape : [], saved: tape, baseline: this.trainingDamage, prior,
         tick: 0, clock: 0, contacts: [], hits: 0, damage: 0, firstFree: null, shifts: 0, dodges: 0 };
     }
@@ -2990,17 +2999,19 @@
       const d = this.comboPractice;
       if (d.phase === 'done') return null;
       if (d.phase === 'ready') {
-        if (!input.x && !input.y && !['attack','special','grab','jump','shield','smash','aimStick']
+        if (!input.x && !input.y && !['attack','special','grab','jump','shortHop','shield','smash','aimStick']
             .some(key => input[key] || input.tapped?.[key])) return null;
         d.phase = 'active';
       }
       const tick = d.tick++;
-      const length = d.source === 'record' ? 150 : d.source === 'replay' ? d.tape.length : 55;
+      const length = d.defending ? d.tape.length || 80 : d.source === 'record' ? 150 : d.source === 'replay' ? d.tape.length : 55;
       if (tick >= length + 60) { d.phase = 'done'; return null; }
       if (tick >= length) return idleInput;
+      if (d.defending) return d.tape[tick] || comboHopInput(this.dogs[0].kind, tick, d.playSlot);
       if (d.source === 'replay') return d.tape[tick];
       if (d.source !== 'record') return comboExample(this.dogs[0].kind, tick, d.source === 'late');
       d.tape.push({ ...input, tapped: { ...input.tapped } });
+      if (tick === 0) this.comboTakes[d.slot] = d.saved = d.tape;
       return input;
     }
     comboRivalInput(dt, frozen) {
@@ -3016,11 +3027,14 @@
     }
     comboContact(target, kind, moveId, damage = 0) {
       const d = this.comboPractice;
+      if (d?.defending && d.phase === 'active' && target.index === 0 && !d.counter &&
+          (kind === 'hit' || kind === 'grab' || kind === 'throw'))
+        d.counter = {kind, moveId, damage};
       if (!d || d.phase !== 'active' || target.index !== 1) return;
       const gap = !d.contacts.length ? null : d.firstFree === null ? 0 : d.clock - d.firstFree + 1;
       d.contacts.push({ kind, moveId, damage, gap });
       d.firstFree = null;
-      if (kind !== 'grab' && kind !== 'block') { d.hits++; d.damage += damage; }
+      if (kind !== 'grab' && kind !== 'block' && kind !== 'parry') { d.hits++; d.damage += damage; }
     }
     resetLaunchPractice(pattern, dir = 1, slow = true, chase = false) {
       const pauseAtWindow = this.launchPractice?.pauseAtWindow ?? true;
@@ -4916,11 +4930,36 @@
         edge.startHeld = !!input1.attack;
         input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
       }
-      const combo = this.comboPractice;
+      let combo = this.comboPractice;
       if (combo) {
+        if (combo.defending) {
+          const tap = input1.tapped?.attack || (input1.attack && !combo.attackHeld);
+          combo.attackHeld = !!input1.attack;
+          if (combo.phase === 'done' && tap) {
+            this.resetComboPractice(combo.source, combo.reply, combo.slow, combo.slot);
+            combo = this.comboPractice;
+            combo.attackHeld = !!input1.attack;
+          }
+          if (combo.phase === 'ready') {
+            if (!tap) return;
+            combo.playSlot = combo.source === 'mix' ? Math.min(1,Math.floor(this.random()*2)) : combo.slot;
+            combo.tape = this.comboTakes[combo.playSlot] || [];
+            combo.phase = 'countdown';
+            combo.lead = 30;
+            combo.consumeAttack = true;
+          }
+          if (combo.consumeAttack) {
+            combo.consumeAttack = !!input1.attack;
+            input1 = {...input1, attack:false, tapped:{...input1.tapped,attack:false}};
+          }
+          if (combo.phase === 'countdown') {
+            if (--combo.lead > 0) return;
+            combo.phase = 'active';
+          }
+          input2 = input1;
+        } else input2 = this.comboRivalInput(dt, this.hitStop > 0);
         input1 = this.comboPlayerInput(input1);
         if (!input1) return;
-        input2 = this.comboRivalInput(dt, this.hitStop > 0);
       }
       let exercise = this.stockPractice || this.survivalPractice;
       if (exercise && exercise.phase !== 'active') {
@@ -8109,6 +8148,7 @@
       const grab = name === 'throw' || move?.commandGrab;
       const projectile = !!move?.projectile || name === 'ball' || name === 'disc' || name === 'snare';
       if (!grab && canParry(target)) {
+        if (this.comboPractice?.defending) this.comboContact(target, 'parry', moveId || name);
         this.parry(target, owner, face, point, projectile);
         return false;
       }
