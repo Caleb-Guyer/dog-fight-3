@@ -644,6 +644,31 @@ async function testAngledTilts(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
 }
 
+async function testLaunchHeight(page,mobile) {
+  await page.goto(root+'?low-launch#training/launch-height');
+  const {hold,press} = await trainingControls(page,mobile);
+  const contact = page.locator('#freshness-contact');
+  async function kick() {
+    await hold(['smash']);
+    await page.clock.runFor(34);
+    await hold([]);
+    await page.clock.runFor(1500);
+    return contact.textContent();
+  }
+  assert.match(await page.locator('#freshness-name').textContent(),/Center · Brisket at 0%/);
+  assert.match(await kick(),/0° at contact · Ground slide/);
+  await press('freshness-edge');
+  assert.match(await kick(),/0° at contact · Slid off the edge/);
+  assert.match(await page.locator('#freshness-previous').textContent(),/Center.*Ground slide/);
+  await press('freshness-percent');
+  assert.match(await page.locator('#freshness-name').textContent(),/Ledge · Brisket at 60%/);
+  assert.match(await kick(),/36° at contact/);
+  await press('freshness-fight');
+  assert.match(await page.locator('#match-mode').innerText(),/solo.*rival/i);
+  assert.deepEqual(await page.locator('#hud .percentage').allTextContents(),['0%','60%']);
+  assert.equal(await page.locator('#hud .lives[aria-label="3 stocks"]').count(),2);
+}
+
 async function testRapidJab(page,mobile) {
   await page.goto(root+'?jab#training/rapid-jab');
   const {hold,press}=await trainingControls(page,mobile), latest=page.locator('#combo-latest');
@@ -2230,6 +2255,7 @@ async function testDevice(browser, mobile) {
     await page.clock.install({ time: new Date('2030-01-01T00:00:00Z') });
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
     await testRapidJab(page,mobile);
+    await testLaunchHeight(page,mobile);
     await testPlatformLayers(page,mobile);
     await testJumpPower(page, mobile);
     await testAttackPress(page, mobile);
