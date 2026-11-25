@@ -1180,7 +1180,7 @@
   }
   const comboSources = { example:'Dog’s combo', late:'Late jab', record:'Your take', replay:'Your take',
     defend:'Defend this take', mix:'Mix A and B' };
-  const comboReplies = { stand: 'Standing', guard: 'Guard', away: 'Flick away' };
+  const comboReplies = { stand: 'Standing', guard: 'Guard', away: 'Flick away', punish:'Block and punish' };
   const takeLetter = slot => slot ? 'B' : 'A';
   function takeName(slot) {
     return takeLetter(slot) + ' · ' + (world.comboTakes[slot]?.length ? 'Your recording' : slot ? 'Landing grab' : 'Falling aerial');
@@ -1214,6 +1214,9 @@
       else if (d.phase === 'countdown') latest = 'Get ready';
       else if (d.counter) latest = (last ? comboRow(last) + ' · ' : '') + 'Your ' + comboMoveName(d.counter.moveId) + ' connected';
       if (d.phase === 'done') latest += ' · Tap Attack to retry';
+    } else if (d.reply === 'punish') {
+      if (d.counter) latest += ' · ' + world.dogs[1].stats.name + ' punished with ' + comboMoveName(d.counter.moveId);
+      else if (d.phase === 'done' && d.contacts.some(c => c.kind === 'block')) latest += ' · No punish landed';
     }
     $('combo-latest').textContent = latest;
     const prior = d.prior;
@@ -3150,6 +3153,7 @@
           world.comboTakes[d.slot]?.length ? 'Try shielding, escaping or hitting back against your recording.' :
           d.slot ? 'Hold Shield once. On the next try, spot-dodge just before the rival lands and punish the missed grab.' :
           'Hold Shield through the falling aerial, then try punishing the landing.') :
+        d.reply === 'punish' ? 'The rival holds Shield. Try a side smash up close, then try hitting at the tip. Watch for the counter after a blocked smash or landing.' :
         d.source === 'record' ? 'Take ' + takeLetter(d.slot) + ' records 2½ seconds from your first input. ' + route :
         d.source === 'late' ? 'The second jab is delayed. Change the rival’s reply to see who can use the opening.' :
         d.source === 'replay' ? 'Replaying your inputs. Change the rival’s reply to compare.' : route + ' Change the rival’s reply to test the same inputs.';
@@ -4766,6 +4770,11 @@
       const stage = openingStages[hash];
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage,
         cpuLevel:'rival', minutes:7, fetch:false }, undefined, 42);
+    } else if (hash === '#solo/shield-punish') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, p1:'brisket', p2:'pip', mode:'solo', stage:'picnic', cpuLevel:'rival',
+        minutes:7, fetch:false}, undefined, 75);
     } else if (hash === '#solo/last-stock') {
       leaveOnline();
       afterStory = null;
@@ -4775,6 +4784,11 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/shield-punish') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, mode:'training', p1:'brisket', p2:'pip', stage:'nightmail', fetch:false});
+      drill('combo', false, 'record', 'punish');
     } else if (hash === '#training/read-the-hop') {
       leaveOnline();
       afterStory = null;
