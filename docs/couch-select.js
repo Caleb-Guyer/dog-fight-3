@@ -11,6 +11,7 @@
       this.picker=picker;
       this.coats=settings.coatBook.map(book=>({...book}));
       this.dogs=[settings.p1,settings.p2];
+      this.draws=this.dogs.map(()=>new window.FightControls.FighterShuffle(dogs,random));
       const raw=settings.coats ?? this.dogs.map((kind,i)=>this.coats[i][kind]??0);
       this.colors=this.dogs.map((_,i)=>coatFor(i,...this.dogs,raw));
       this.stages=[settings.stage,settings.stage];
@@ -21,8 +22,15 @@
     choose(i,dir) {
       if(this.locked[i] || (this.picker!==null && i!==this.picker))return;
       if(this.phase==='stages'){this.stages[i]=cycle(stages,this.stages[i],dir);return;}
+      this.pickDog(i,cycle(dogs,this.dogs[i],dir));
+    }
+    shuffle(i) {
+      if(this.phase!=='fighters' || this.locked[i] || (this.picker!==null && i!==this.picker))return;
+      this.pickDog(i,this.draws[i].draw(this.dogs[i]));
+    }
+    pickDog(i,kind) {
       this.coats[i][this.dogs[i]]=this.colors[i];
-      const kind=this.dogs[i]=cycle(dogs,this.dogs[i],dir);
+      this.dogs[i]=kind;
       const color=this.coats[i][kind]??0;
       this.colors[i]=kind===this.dogs[1-i] && color===this.colors[1-i]?(color+1)%4:color;
     }
@@ -61,13 +69,13 @@
     const axis=(n,dir,bit)=>dir*(pad.axes[n]||0)>((previous & bit) ? .38 : .65);
     return (down(14)||axis(0,-1,1)?1:0) | (down(15)||axis(0,1,2)?2:0) |
       (down(12)||axis(1,-1,4)?4:0) | (down(13)||axis(1,1,8)?8:0) |
-      (down(0)?16:0) | (down(1)?32:0) | (down(9)?64:0);
+      (down(0)?16:0) | (down(1)?32:0) | (down(9)?64:0) | (down(2)?128:0);
   }
   const card=i=>'<section class="couch-seat" data-seat="'+i+'" aria-label="Player '+(i+1)+' selection">'+
     '<header><b>P'+(i+1)+'</b><span data-device></span></header><canvas width="192" height="108" aria-hidden="true"></canvas>'+
     '<div class="couch-choice"><button type="button" data-action="prev" aria-label="Previous choice for player '+(i+1)+'">‹</button>'+
     '<strong data-name></strong><button type="button" data-action="next" aria-label="Next choice for player '+(i+1)+'">›</button></div>'+
-    '<small data-detail></small><button type="button" data-action="coat"></button>'+
+    '<small data-detail></small><button type="button" data-action="shuffle">Random dog</button><button type="button" data-action="coat"></button>'+
     '<button type="button" class="couch-lock" data-action="lock"></button><small data-keys></small></section>';
 
   function panel(root,settings,keys,pads,{start,leave,sound,announce,drawStageTile,between,lineupReady}) {
@@ -81,6 +89,7 @@
     const cards=[...root.querySelectorAll('[data-seat]')].map(el=>({
       el,canvas:el.querySelector('canvas'),name:el.querySelector('[data-name]'),detail:el.querySelector('[data-detail]'),
       coat:el.querySelector('[data-action=coat]'),lock:el.querySelector('[data-action=lock]'),keys:el.querySelector('[data-keys]'),
+      shuffle:el.querySelector('[data-action=shuffle]'),
       device:el.querySelector('[data-device]'),arrows:el.querySelectorAll('.couch-choice button'),
     }));
     const play=root.querySelector('#couch-start'), back=root.querySelector('#couch-back'), call=root.querySelector('#couch-call');
@@ -118,12 +127,13 @@
           (active?fighters[kind].style:'Won game '+(between.game-1)+' · '+colors[kind][pick.colors[i]]);
         for(const button of c.arrows)button.disabled=!active || locked;
         c.coat.hidden=!active || !choosing;
+        c.shuffle.hidden=c.coat.hidden;c.shuffle.disabled=locked;
         c.coat.disabled=locked;
         c.coat.textContent='Coat · '+colors[kind][pick.colors[i]];
         c.lock.textContent=locked?'Ready ✓ · Change':active?(lineupReady?'Lock fighter':choosing?'Choose arena':'Fight here'):'Ready for game '+between.game;
         c.lock.setAttribute('aria-pressed',String(locked));
         c.keys.textContent=(active?key(i,'left')+' / '+key(i,'right')+' choose · '+(choosing?key(i,'up')+' / '+key(i,'down')+' coat · ':''):'')+
-          key(i,'attack')+' confirm · '+key(i,'special')+' back';
+          key(i,'attack')+' confirm · '+key(i,'special')+' back'+(active && choosing?' · '+key(i,'grab')+' / pad X random':'');
         if(arena)drawStageTile(c.canvas,pick.stages[i],settings.stageForm);
       }
       call.textContent=pick.locked[picker]?(lineupReady?fighters[pick.dogs[picker]].name:arenas[pick.stages[picker]].name)+' selected. Waiting for P'+(2-picker)+' to ready up.':
@@ -142,11 +152,12 @@
         c.name.textContent=choosing?fighters[kind].name:arenas[pick.stages[i]].name;
         c.detail.textContent=choosing?fighters[kind].breed+' · '+fighters[kind].style:colors[kind][pick.colors[i]]+' '+fighters[kind].name;
         c.coat.hidden=!choosing;c.coat.disabled=locked;c.coat.textContent='Coat · '+colors[kind][pick.colors[i]];
+        c.shuffle.hidden=!choosing;c.shuffle.disabled=locked;
         c.lock.textContent=locked?(choosing?'Ready ✓ · Change':'Voted ✓ · Change'):(choosing?'Ready':'Vote');
         c.lock.setAttribute('aria-pressed',String(locked));
         for(const button of c.arrows)button.disabled=locked;
         c.keys.textContent=key(i,'left')+' / '+key(i,'right')+' choose · '+key(i,'attack')+(choosing?' ready':' vote')+
-          ' · '+key(i,'special')+' back'+(choosing?' · '+key(i,'up')+' / '+key(i,'down')+' coat':'');
+          ' · '+key(i,'special')+' back'+(choosing?' · '+key(i,'up')+' / '+key(i,'down')+' coat · '+key(i,'grab')+' / pad X random':'');
         if(!choosing)drawStageTile(c.canvas,pick.stages[i],settings.stageForm);
       });
       const who=pick.locked[0]?'P1':'P2';
@@ -173,6 +184,10 @@
       if(action==='back')pick.back(i);
       else if(action==='confirm') { if(pick.locked[i])return;pick.lock(i); }
       else if(pick.locked[i])return;
+      else if(action==='shuffle'){
+        if(pick.phase!=='fighters')return;
+        pick.shuffle(i);
+      }
       else if(action==='left'||action==='right')pick.choose(i,action==='left'?-1:1);
       else if(pick.phase==='fighters')pick.coat(i,action==='up'?-1:1);
       else return;
@@ -181,12 +196,12 @@
       if(between && pick.winner){launch();return;}
       render();
       const choice=pick.phase==='fighters'?colors[pick.dogs[i]][pick.colors[i]]+' '+fighters[pick.dogs[i]].name:arenas[pick.stages[i]].name;
-      if(['left','right','up','down'].includes(action))announce('P'+(i+1)+' · '+choice);
+      if(['left','right','up','down','shuffle'].includes(action))announce('P'+(i+1)+' · '+choice);
     }
     for(const [i,c] of cards.entries())c.el.onclick=e=>{
       const button=e.target.closest('[data-action]');if(!button)return;
       const action=button.dataset.action;
-      act(i,{prev:'left',next:'right',coat:'down',lock:pick.locked[i]?'back':'confirm'}[action]);
+      act(i,{prev:'left',next:'right',coat:'down',shuffle:'shuffle',lock:pick.locked[i]?'back':'confirm'}[action]);
     };
     play.onclick=launch;
     back.onclick=()=>{
@@ -207,6 +222,7 @@
         else {
           if(fresh & 1)act(i,'left');else if(fresh & 2)act(i,'right');
           else if(fresh & 4)act(i,'up');else if(fresh & 8)act(i,'down');
+          else if(fresh & 128)act(i,'shuffle');
           if(fresh & 16)act(i,'confirm');
           if(ready && fresh & 64)launch();
         }
@@ -215,10 +231,10 @@
     }
     function keyboard(e) {
       for(const [i,map] of keys.entries()){
-        const action=['left','right','up','down','attack','special'].find(a=>map[a]===e.code);
+        const action=['left','right','up','down','attack','special','grab'].find(a=>map[a]===e.code);
         if(!action)continue;
         e.preventDefault();
-        if(!e.repeat)act(i,action==='attack'?'confirm':action==='special'?'back':action);
+        if(!e.repeat)act(i,({attack:'confirm',special:'back',grab:'shuffle'})[action] || action);
         return true;
       }
       return false;

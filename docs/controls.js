@@ -50,6 +50,24 @@
     map[action]=value;
   }
   // Keep a player's dog assigned to their pad when the other player unplugs.
+  class FighterShuffle {
+    constructor(roster,random=Math.random) {
+      this.roster=roster;
+      this.random=random;
+      this.remaining=[];
+      this.last=null;
+    }
+    draw(current) {
+      if(this.last!==current)this.remaining=this.roster.filter(kind=>kind!==current);
+      if(!this.remaining.length)this.remaining=this.roster.slice();
+      const choices=this.remaining.filter(kind=>kind!==current);
+      if(!choices.length)return current;
+      const kind=choices[Math.floor(this.random()*choices.length)];
+      this.remaining.splice(this.remaining.indexOf(kind),1);
+      this.last=kind;
+      return kind;
+    }
+  }
   class Seats {
     constructor(pads) { this.ids=[null,null]; this.sync(pads); }
     sync(pads) {
@@ -110,5 +128,5 @@
       return true;
     }
   }
-  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,Seats,menuNeighbor,menuDirection,MenuRepeat};
+  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,Seats,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat};
 })();
