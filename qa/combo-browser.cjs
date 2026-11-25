@@ -644,6 +644,44 @@ async function testAngledTilts(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
 }
 
+async function testShieldLanding(page,mobile) {
+  await page.goto(root+'?shield-landing#training/read-the-landing/clover');
+  const status=page.locator('#shield-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  await hold(['shield']); await waitFor('front');
+  await hold(['shield','attack']); await waitFor('punish'); await hold([]);
+  assert.match(await status.textContent(),/Disc Hook · [1-9]\d*f to spare/);
+  await page.locator('#shield-landing-choice').selectOption('behind');
+  await press('shield-landing-side');
+  await hold(['shield']); await waitFor('behind');
+  assert.match(await status.textContent(),/right/);
+  if (mobile) {
+    await hold([]);
+    const cdp=await page.context().newCDPSession(page);
+    const point=async (name,id)=>{
+      const b=await page.locator('[data-touch="'+name+'"]').boundingBox();
+      return {id,x:b.x+b.width/2,y:b.y+b.height/2};
+    };
+    const right=await point('right',1);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[right]});
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[right,await point('jump',2)]});
+    await page.clock.runFor(34);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[right,await point('attack',2)]});
+    await waitFor('rearPunish');
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  } else {
+    await hold(['right','jump','attack']); await waitFor('rearPunish'); await hold([]);
+  }
+  assert.match(await status.textContent(),/[1-9]\d*f to spare/);
+  await page.locator('#shield-landing-choice').selectOption('mix');
+  await press('shield-landing-speed');
+  assert.equal(await page.locator('#shield-landing-speed').getAttribute('aria-pressed'),'false');
+  await press('shield-landing-fight');
+  assert.deepEqual(await page.locator('#hud .hud-name').allTextContents(),['P1Brisket','CPUClover']);
+  assert.equal(await page.locator('#hud .lives[aria-label="3 stocks"]').count(),2);
+  assert.equal(await page.locator('#match-clock').textContent(),'7:00');
+}
+
 async function testInterruptedReturn(page,mobile) {
   await page.goto(root+'?return-hit#training/interrupted-return');
   const status = page.locator('#air-status');
@@ -2313,6 +2351,7 @@ async function testDevice(browser, mobile) {
     await testLaunchHeight(page,mobile);
     await testLastDodge(page,mobile);
     await testInterruptedReturn(page,mobile);
+    await testShieldLanding(page,mobile);
     await testPlatformLayers(page,mobile);
     await testJumpPower(page, mobile);
     await testAttackPress(page, mobile);
