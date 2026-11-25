@@ -630,6 +630,8 @@ Open **Training → Contested ledge**. **Take the ledge** starts you outside a r
 
 Press Special alone for Neutral. Hold left or right, up, or down as you press Special for the other three moves. These inputs work on the ground and in the air. On touchscreens, ↖ and ↗ aim an Up Special toward the stage. Slide your thumb onto a side arrow to steer. In the **Move list**, choose **Specials & recovery** to see the timing and artwork for each move.
 
+Choose **Watch move** on any of the 16 specials to see it play out in the arena with its inputs and the rival’s damage on screen. Pause, advance one frame, or compare half speed with match speed. Reduced motion starts the demonstration paused. From the main menu or fighter select, **Try this move** puts you in the same setup. Land both passes of Clover’s disc, hook a ledge with Noodle, or practice the other dogs’ specials. Playing the move yourself earns its checkmark. **Back to moves** returns you to the same card. [Watch Clover’s Round Trip](https://caleb-guyer.github.io/dog-fight-3/#moves/clover/neutral)
+
 | Dog | Neutral | Side | Up | Down |
 | --- | --- | --- | --- | --- |
 | **Pip** | Snap Bark hits twice. Its second beat reflects incoming discs. | Double Pounce earns one follow-up pounce on a clean hit. | Fence Hopper gives you two separately aimed leaps. | Dirt Slide slips under a rival and pops them upward. From the air it dives into the slide. |

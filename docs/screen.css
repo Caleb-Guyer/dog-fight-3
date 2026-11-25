@@ -427,6 +427,11 @@ dialog[data-view='match-card'] { width: min(540px, calc(100% - 20px)); }
 .winner .victory-shot { width:clamp(110px,26vw,176px); height:auto; aspect-ratio:152/104; border:3px solid var(--ink); image-rendering:pixelated; flex:none; }
 dialog[data-view='finish-replay'] { width:min(760px,calc(100% - 16px)); }
 #clip-arena { display:block; width:100%; aspect-ratio:16/9; height:auto; max-height:52dvh; border:2px solid var(--ink); image-rendering:pixelated; }
+dialog[data-view='special-preview'] { width:min(760px,calc(100% - 16px)); }
+#move-arena { display:block; width:min(100%,88dvh); height:auto; margin:auto; border:2px solid var(--ink); image-rendering:pixelated; }
+#move-caption { min-height:2.4em; }
+.guide-specials [data-watch-special] { margin-top:6px; }
+@media(max-height:520px) { #move-arena { width:min(100%,64dvh); } }
 .clip-status { display:flex; flex-wrap:wrap; justify-content:space-between; gap:3px 8px; font-size:13px; margin-top:5px; }
 #clip-seek { display:block; width:100%; margin:5px 0; accent-color:#6b4569; }
 @media(max-height:520px) {
