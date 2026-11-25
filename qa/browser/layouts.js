@@ -27,6 +27,7 @@ async function run(browser){
   await page.goto(root+'#controls');
   await bind('attack','f');assert.match(await page.locator('#layout-status').textContent(),/reserved/);
   await page.keyboard.press('q');assert.equal(await page.locator('[data-key="attack"]').textContent(),'Q');
+  assert(await page.getByRole('button',{name:'Change Attack key, currently Q'}).isVisible());
   await bind('attack',',');assert.match(await page.locator('#layout-status').textContent(),/P2 Attack/);
   await click('layout-back');assert.equal(await page.locator('[data-key="attack"]').textContent(),'Q');
   await bind('attack',',');await click('layout-confirm');
