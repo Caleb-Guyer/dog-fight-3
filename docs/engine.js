@@ -346,7 +346,7 @@
       },
       style: 'Rush in, land two quick paws, then kick the rival out or jump after the second hit.',
       combo:
-        'Tap Attack three times for Heel Kick. For an aerial finish, press Jump, Forward and Attack together as Cross connects.',
+        'Tap Attack three times for Heel Kick. Tap once and hold the second Attack through Cross to start Speed Bag. Release for Bell Kick. For an aerial finish, press Jump, Forward and Attack together as Cross connects.',
       airAccel: 1060,
       airDrift: { speed: 314, brake: 1600, friction: 112 },
       wallKick: { rise:715, push:224, frames:5 },
@@ -895,6 +895,20 @@
       angle: 31,
       step: 175,
       hard: true,
+    },
+    pipSpeedBag: {
+      label: 'Speed Bag',
+      frames: [2, 2, 2],
+      box: [31, -30, 35, 25],
+      dmg: 1.4, base: 36, growth: .24, angle: 12,
+      setupHit: true, hitStopFrames: 3,
+    },
+    pipBellKick: {
+      label: 'Bell Kick',
+      frames: [4, 4, 14],
+      box: [42, -31, 42, 27],
+      dmg: 5, base: 174, growth: 3.4, angle: 42,
+      step: 90, hard: true,
     },
     pipSpin: {
       label: 'Scramble',
@@ -2130,6 +2144,7 @@
       chargeDirection: 'neutral',
       chargeTilt: 0,
       chargeReleased: false,
+      chargingCross: false,
       chargeSlide: 0,
       smashCharge: null,
       grip: null,
@@ -2168,6 +2183,7 @@
     };
   }
   function cancelCharge(f) {
+    f.chargingCross = false;
     f.charge = -1;
     f.chargeDirection = 'neutral';
     f.chargeTilt = 0;
@@ -2879,6 +2895,7 @@
         this.trainingDamage = this.freshnessPractice.original.damage;
       }
       if (this.footworkPractice) this.dogs = this.footworkPractice.originalDogs;
+      if (this.comboPractice?.originalDogs) this.dogs = this.comboPractice.originalDogs;
       if (this.climbPractice?.originalDogs) this.dogs = this.climbPractice.originalDogs;
       if (this.spacingPractice?.originalDogs) this.dogs = this.spacingPractice.originalDogs;
       if (this.escapePractice) this.dogs = this.escapePractice.originalDogs;
@@ -3077,15 +3094,23 @@
       const previous = this.comboPractice;
       this.comboTakes ??= [null,null];
       const tape = this.comboTakes[slot];
-      const defending = source === 'defend' || source === 'mix';
+      const flurry = source === 'flurry' || source === 'escapeFlurry';
+      const defending = source === 'defend' || source === 'mix' || source === 'escapeFlurry';
       const markTime = this.comboMarkTime ??= this.time;
       this.resetTraining();
       this.time = markTime;
       this.terrain = this.layout?.terrain || platforms(this.stage, markTime);
+      const originalDogs = flurry && this.dogs[0].kind !== 'pip' ? this.dogs : null;
+      if (originalDogs) {
+        const [lead, rival] = originalDogs, pip = newFighter('pip',0);
+        Object.assign(pip,{x:lead.x,y:lead.y,ground:lead.ground});
+        rival.x = pip.x + pip.stats.width + rival.stats.width + 3;
+        this.dogs = [pip,rival];
+      }
       if (source === 'replay' && !tape?.length) source = 'record';
       const prior = previous && (previous.phase === 'done' || previous.contacts.length) ? { source: previous.source, reply: previous.reply,
         slot:previous.playSlot ?? previous.slot, hits: previous.hits, damage: previous.damage, baseline: previous.baseline } : previous?.prior;
-      this.comboPractice = { source, reply, slow, markTime, slot, defending, phase: source === 'record' || defending ? 'ready' : 'active',
+      this.comboPractice = { source, reply, slow, markTime, slot, defending, originalDogs, phase: source === 'record' || flurry || defending ? 'ready' : 'active',
         tape: source === 'replay' ? tape : [], saved: tape, baseline: this.trainingDamage, prior,
         tick: 0, clock: 0, contacts: [], hits: 0, damage: 0, firstFree: null, shifts: 0, dodges: 0 };
     }
@@ -3098,9 +3123,11 @@
         d.phase = 'active';
       }
       const tick = d.tick++;
-      const length = d.defending ? d.tape.length || 80 : d.source === 'record' ? 150 : d.source === 'replay' ? d.tape.length : 55;
+      const length = d.defending ? d.tape.length || 80 : d.source === 'record' || d.source === 'flurry' ? 150 : d.source === 'replay' ? d.tape.length : 55;
       if (tick >= length + 60) { d.phase = 'done'; return null; }
       if (tick >= length) return idleInput;
+      if (d.source === 'flurry') return input;
+      if (d.source === 'escapeFlurry') return {...idleInput,quickAttack:true,attack:tick === 0 || tick >= 9};
       if (d.defending) return d.tape[tick] || comboHopInput(this.dogs[0].kind, tick, d.playSlot);
       if (d.source === 'replay') return d.tape[tick];
       if (d.source !== 'record') return comboExample(this.dogs[0].kind, tick, d.source === 'late');
@@ -5218,7 +5245,7 @@
           if (combo.phase === 'ready') {
             if (!tap) return;
             combo.playSlot = combo.source === 'mix' ? Math.min(1,Math.floor(this.random()*2)) : combo.slot;
-            combo.tape = this.comboTakes[combo.playSlot] || [];
+            combo.tape = combo.source === 'escapeFlurry' ? [] : this.comboTakes[combo.playSlot] || [];
             combo.phase = 'countdown';
             combo.lead = 30;
             combo.consumeAttack = true;
@@ -5741,6 +5768,8 @@
     }
     captureInput(f, input) {
       const was = f.prev;
+      if (!input.attack && f.attack?.holdForFlurry) f.attack.holdForFlurry = false;
+      if (!input.attack && f.attack?.flurryBeat) f.attack.finishFlurry = true;
       const pressed = (key) => input.tapped?.[key] || (input[key] && !was[key]);
       if (f.shieldBreak) {
         const state = f.shieldBreak;
@@ -6842,7 +6871,13 @@
         const ropeFollow =
           f.command?.type === 'special' && f.command.airSide === 'neutral' && current.specialCancel;
         const throwFollow = f.command?.type === 'grab' && current.grabCancel;
+        if (chainTap && current.moveId === 'pipJab') f.command.confirmedCross = true;
         if (chainTap || jumpFollow || ropeFollow || throwFollow) f.attack = null;
+        else if (current.holdForFlurry && !f.command && !input.shield && !input.jump &&
+            groundDirection(input.x,input.y) === 'neutral') {
+          beginAttack(f,'jab2',0,0,'pipSpeedBag');
+          f.attack.flurryBeat = 1;
+        }
       }
       if (f.wallKickDir && !grounded && !f.attack && !f.command && !f.grip && !f.tumble && !f.stun &&
           !f.reboundTime && !f.wallAction && !f.airDodge && !f.dodge && !f.guardBuffer && !f.ledgeTrump &&
@@ -7022,11 +7057,15 @@
           }
           if (f.smashCharge && before < smashChargeTime && f.charge >= smashChargeTime)
             this.emit('smashReady', { f });
-          if (f.chargeReleased || f.charge + 1e-8 >= smashHoldLimit || (!f.smashCharge && command)) {
+          const heldCross = f.chargingCross && input.attack && !f.chargeReleased && f.chargeDirection === 'neutral';
+          if (heldCross || f.chargeReleased || f.charge + 1e-8 >= smashHoldLimit || (!f.smashCharge && command)) {
             if (f.smashCharge) {
               releaseSmash(f);
               this.emit('smashRelease', { f });
-            } else groundStrike(f, f.chargeDirection, f.charge, f.chargeSlide, f.chargeTilt);
+            } else {
+              groundStrike(f, f.chargeDirection, f.charge, f.chargeSlide, f.chargeTilt);
+              if (heldCross && f.attack.moveId === 'pipCross') f.attack.holdForFlurry = true;
+            }
           }
         } else if (command && (command.type !== 'smash' || f.ground >= 0) &&
             !(command.landGrab && this.canBufferLandingGrab(f,input.x))) {
@@ -7059,9 +7098,12 @@
             f.face = command.runFace;
             beginAttack(f, 'dash', 0, 0, f.kit.dashAttack);
             f.vx = f.face * Math.max(0, f.vx * f.face) * f.attack.carry;
-          } else if (command.released) groundStrike(f, command.groundDirection, command.heldFor, command.slideDir, command.tiltAngle);
-          else {
+          } else if (command.released) {
+            groundStrike(f, command.groundDirection, command.heldFor, command.slideDir, command.tiltAngle);
+            if (f.attack.moveId === 'pipCross') f.attack.holdForFlurry = !command.button && !!input.attack;
+          } else {
             f.charge = command.heldFor;
+            f.chargingCross = !!command.confirmedCross;
             f.chargeSlide = command.slideDir || 0;
             f.chargeDirection = command.groundDirection;
             f.chargeTilt = command.tiltAngle || 0;
@@ -7118,7 +7160,15 @@
           if (a.plunge) f.vy = 685;
           if (a.burst) f.vx = f.face * Math.max(a.burst, f.vx * f.face + a.burst * 0.5);
         }
-        if (a.time >= a.end) f.attack = null;
+        if (a.time + 1e-8 >= a.end && a.flurryBeat && grounded) {
+          if (a.finishFlurry || a.flurryBeat >= 5) {
+            beginAttack(f,'finisher',0,0,'pipBellKick');
+            f.vx += f.face*f.attack.step;
+          } else {
+            a.flurryBeat++;
+            a.time = 0;
+          }
+        } else if (a.time >= a.end) f.attack = null;
       }
       const sliding = f.attack?.motionLocked;
       const onFoot = grounded && f.ground >= 0 && free && !f.attack && !f.shield &&
@@ -8114,7 +8164,7 @@
         return null;
       const beat = attackWindow(attack);
       if (attack.time + 1e-8 < beat.start || attack.time >= beat.start + beat.active - 1e-8) return null;
-      return { f, attack, beat, area: this.attackArea(f), beatIndex: beat === attack.second ? 1 : 0 };
+      return { f, attack, beat, area: this.attackArea(f), beatIndex: attack.flurryBeat ?? (beat === attack.second ? 1 : 0) };
     }
     clashGroundSwings(active) {
       const ground = active.filter(s => s.f.ground >= 0 && !s.attack.airSide && canClash(s));
@@ -8798,7 +8848,7 @@
       }
       const opener = !!(move?.second || move?.setupHit);
       const hitFrames = target.tumble ? clamp(4 + Math.floor(launchSpeed / 180), 6, 9)
-        : opener ? 6 : emphatic ? 4 : 2;
+        : move?.hitStopFrames ?? (opener ? 6 : emphatic ? 4 : 2);
       target.hitShift = grab || name === 'snare' ? null : {
         ground: groundAtHit, remaining: hitFrames, cooldown: 0, sector: shiftSector(target.prev),
         cpuDirection: opener && this.cpuControlled(target) && this.random() < 0.45
@@ -10272,6 +10322,17 @@
         const basic = this.rookieNeutral(f, foe);
         if (basic) return basic;
       } else if (this.cpuLevel === 'rival') {
+        const jab = f.attack;
+        if (jab && f.kind === 'pip' && f.ground >= 0 && !f.grip) {
+          const gap = (foe.x-f.x)*f.face;
+          const near = gap >= 0 && gap < 62 + foe.stats.width && foe.y > f.y - 38;
+          if (jab.moveId === 'pipJab' && jab.connected && near && foe.damage < 55 && !foe.shield) {
+            const tap = !jab.flurryPressed;
+            jab.flurryPressed = true;
+            return {...idleInput,quickAttack:true,attack:true,tapped:{attack:tap}};
+          }
+          if ((jab.holdForFlurry && foe.damage < 60) || jab.flurryBeat) return {...idleInput,attack:near && !foe.shield};
+        }
         const trap = this.ledgeSmashInput(f,foe,brain);
         if (trap) return trap;
         const punish = this.shieldPunishInput(f,foe);
