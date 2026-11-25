@@ -1200,7 +1200,7 @@ async function testJumpIns(page,mobile) {
 async function trainingControls(page,mobile,status) {
   const press=id=>mobile?page.locator('#'+id).tap():page.locator('#'+id).click();
   const cdp=mobile && await page.context().newCDPSession(page);
-  const keys={down:'s',up:'w',jump:'Space',attack:'j',grab:'u',smash:'i',left:'a',right:'d',shield:'l'};
+  const keys={down:'s',up:'w',jump:'Space',attack:'j',special:'k',grab:'u',smash:'i',left:'a',right:'d',shield:'l'};
   let held=[];
   async function hold(names) {
     if(mobile) {
@@ -1226,6 +1226,29 @@ async function trainingControls(page,mobile,status) {
     assert.equal(await status.getAttribute('data-result'),result,await status.textContent());
   }
   return {hold,press,waitFor};
+}
+
+async function testShoulderCarry(page,mobile) {
+  await page.goto(root+'?carry-playtest#training/shoulder-carry');
+  const status=page.locator('#escape-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  assert.equal(await status.textContent(),'Pip at 85%');
+  await press('escape-slow');
+  for(const result of ['returned','ringOut','brokeFree']){
+    await press('escape-carry');await hold(['grab']);await waitFor('gripped');
+    if(result==='returned')await hold(['right']);
+    else {
+      await hold(['special']);await waitFor('carrying');
+      assert.match(await page.locator('#grapple-prompt').textContent(),/Aim \+ Grab/);
+      if(result==='ringOut'){
+        await hold(['right']);await waitFor('atMark');await hold(['right','grab']);
+      }else await hold([]);
+    }
+    await waitFor(result);
+    if(result!=='brokeFree')assert.match(await status.textContent(),/Yard Heave/);
+    await hold([]);
+  }
+  await press('reset-training');assert(await status.isHidden());
 }
 
 async function testLedgeReturn(page,mobile) {
@@ -1607,6 +1630,7 @@ async function testDevice(browser, mobile) {
     await testSpotCounter(page, mobile);
     await testDodgeTiming(page, mobile);
     await testGripEscape(page, mobile);
+    await testShoulderCarry(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
