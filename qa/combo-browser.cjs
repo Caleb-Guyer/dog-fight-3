@@ -1228,6 +1228,33 @@ async function trainingControls(page,mobile,status) {
   return {hold,press,waitFor};
 }
 
+async function testDiscReflect(page,mobile) {
+  await page.goto(root+'?disc-matchup#training/disc-reflect');
+  const status=page.locator('#footwork-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for(const result of ['returnedHit','castGuard']){
+    await press('footwork-reflect');
+    assert.match(await status.textContent(),/Pip/);
+    await hold(['attack']);await waitFor('cast');
+    await hold([result==='returnedHit'?'special':'shield']);
+    if(result==='returnedHit')await waitFor('reflected');
+    await waitFor(result);
+    assert.match(await status.textContent(),result==='returnedHit'?/hit Clover/:/Pip guarded/);
+    await hold([]);
+  }
+  await page.goto(root+'?return-matchup#training/disc-return');
+  for(const result of ['returnGuard','returnedHit']){
+    await press('footwork-returnFire');
+    assert.match(await status.textContent(),/Clover/);
+    await hold(['special']);await waitFor('reflected');
+    await hold(result==='returnGuard'?['shield']:[]);
+    await waitFor(result);
+    assert.match(await status.textContent(),result==='returnGuard'?/Clover guarded/:/hit Clover/);
+    await hold([]);
+  }
+  await press('reset-training');assert(await status.isHidden());
+}
+
 async function testShoulderCarry(page,mobile) {
   await page.goto(root+'?carry-playtest#training/shoulder-carry');
   const status=page.locator('#escape-status');
@@ -1631,6 +1658,7 @@ async function testDevice(browser, mobile) {
     await testDodgeTiming(page, mobile);
     await testGripEscape(page, mobile);
     await testShoulderCarry(page, mobile);
+    await testDiscReflect(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
