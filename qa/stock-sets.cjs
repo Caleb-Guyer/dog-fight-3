@@ -576,17 +576,20 @@ async function packRelay(browser){
 }
 async function versusRules(browser){
   const {page:p,press}=await device(browser,false,'#solo');await press('[data-mode=local]');
-  await press('#rules-label');await press('[data-do=rulebook]');
+  await press('#rules-label');await press('[data-do=handicap]');
+  assert.equal(await p.evaluate(()=>document.activeElement.id),'rules-damage-0');
   await p.selectOption('#rules-choice','preset-1');
   assert.equal(await p.locator('#rules-lives').inputValue(),'1');
   await p.locator('#rules-name').fill('Sunday finals <3');await press('#rules-save');
   const id=await p.locator('#rules-choice').inputValue();assert.match(id,/^[a-f0-9-]{36}$/);
-  await p.selectOption('#rules-lives','2');await press('#rules-update');await press('#rules-share');
+  await p.selectOption('#rules-lives','2');await p.selectOption('#rules-damage-0','30');await p.selectOption('#rules-damage-1','80');
+  await press('#rules-update');await press('#rules-share');
   const link=await p.locator('#rules-link').inputValue();
-  assert.equal(new URL(link).hash,'#local/rules/stock/2/3/single/flat/off');
+  assert.equal(new URL(link).hash,'#local/rules/stock/2/3/single/flat/off/30-80');
   await press('#rules-use');
   assert.match(await p.locator('#rules-label').textContent(),/2 stocks · 3 min/);
-  await press('#pick-together');assert.match(await p.locator('#couch-rules').textContent(),/2 stocks/);
+  assert.match(await p.locator('#slots [data-index="1"]').getAttribute('aria-label'),/80%/);
+  await press('#pick-together');assert.match(await p.locator('#couch-rules').textContent(),/P1 30% \/ P2 80%/);
   for(const phase of ['Choose your fighters','Vote for the opening arena']){
     assert.equal(await p.locator('#couch-phase').textContent(),phase);
     for(const seat of [0,1])await press('[data-seat="'+seat+'"] [data-action=lock]');
@@ -594,18 +597,24 @@ async function versusRules(browser){
   await press('#couch-start');await p.waitForFunction(()=>window.observedBattle?.matchFrames>1);
   assert.deepEqual(await p.evaluate(()=>[observedBattle.form,observedBattle.fetch,observedBattle.dogs.map(f=>f.stocks)]),['flat',false,[2,2]]);
   assert.equal(await p.locator('#hud .lives i').count(),4);
+  assert.deepEqual(await p.evaluate(()=>observedBattle.dogs.map(f=>f.damage)),[30,80]);
   await p.keyboard.down('a');
   try{await p.waitForFunction(()=>observedBattle.dogs[0].stocks===1);}
   finally{await p.keyboard.up('a');}
   assert.equal(await p.locator('#hud .lives').first().locator('.lost').count(),1);
+  assert.equal(await p.evaluate(()=>observedBattle.dogs[0].damage),30);
   await p.keyboard.down('a');
   try{await p.locator('[data-do=match-card]').waitFor({timeout:22000});}
   finally{await p.keyboard.up('a');}
   await press('[data-do=match-card]');assert.match(await p.locator('.card-stats').textContent(),/Starting stocks22/);
+  assert.match(await p.locator('.card-stats').textContent(),/Starting damage30%80%/);
   assert.equal(await p.locator('.card-timeline li').count(),2);await press('[data-do=card-back]');await press('[data-do=rematch]');
   assert.equal(await p.locator('#hud .lives[aria-label="2 stocks"]').count(),2);
+  await p.waitForFunction(()=>window.observedBattle?.end===null && observedBattle.dogs[0].stocks===2);
+  assert.deepEqual(await p.evaluate(()=>observedBattle.dogs.map(f=>f.damage)),[30,80]);
   await p.goto(root+'?fresh#local/rules');await p.selectOption('#rules-choice',id);
   assert.equal(await p.locator('#rules-name').inputValue(),'Sunday finals <3');assert.equal(await p.locator('#rules-lives').inputValue(),'2');
+  assert.equal(await p.locator('#rules-damage-0').inputValue(),'30');
   await p.selectOption('#rules-clock','0');await p.selectOption('#rules-type','time');
   assert(await p.locator('#rules-lives').isHidden());assert.equal(await p.locator('#rules-clock').inputValue(),'3');
   assert.equal(await p.locator('#rules-clock option[value="0"]').count(),0);
@@ -613,9 +622,12 @@ async function versusRules(browser){
   await press('#rules-back');await p.keyboard.press('Escape');
   await p.goto(root+'?school#tutorial/first-match');
   assert.equal(await p.locator('#hud .lives[aria-label="3 stocks"]').count(),2);
+  await observe(p);await p.waitForFunction(()=>window.observedBattle?.matchFrames>0);
+  assert.equal(await p.evaluate(()=>observedBattle.spawnDamage),undefined);
   await p.close();
   const phone=await device(browser,true,new URL(link).hash),q=phone.page;
   assert.equal(await q.locator('#rules-choice').inputValue(),'shared');
+  assert.equal(await q.locator('#rules-damage-1').inputValue(),'80');
   assert.equal(await q.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.config')||'{}').lives??3),3);
   await q.selectOption('#rules-lives','4');
   await q.evaluate(()=>{
@@ -628,6 +640,12 @@ async function versusRules(browser){
   await q.selectOption('#rules-format','set');await phone.press('#rules-use');await phone.press('#start');
   await q.waitForFunction(()=>window.observedBattle?.matchFrames>1);
   assert.equal(await q.locator('#hud .lives i').count(),10);assert.match(await q.locator('#match-set').textContent(),/Game 1/);
+  await q.goto(root+'?solo#solo/rules');await observe(q);
+  await q.selectOption('#rules-choice','preset-3');
+  assert.equal(await q.getByLabel('CPU starting damage').inputValue(),'60');
+  await phone.press('#rules-use');await phone.press('#start');
+  await q.waitForFunction(()=>window.observedBattle?.matchFrames>0);
+  assert.deepEqual(await q.evaluate(()=>[observedBattle.mode,...observedBattle.spawnDamage]),['solo',0,60]);
   await q.close();console.log('Named rules survived a reload, a complete two-stock fight, rematch, and transfer to a fresh touch/controller lobby.');
 }
 async function friendRules(browser,phone){

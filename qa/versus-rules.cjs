@@ -44,3 +44,47 @@ test('a rotation remembers its opening rules across a tab reload and accepts old
   const old=JSON.parse(stored);delete old.rules;stored=JSON.stringify(old);
   assert.equal(Lineup.read(storage).players.length,3);
 });
+test('starting damage round-trips independently per seat through local links and saved rules',()=>{
+  const base=versusRules(config);
+  for(const mode of ['local','solo'])for(let a=0;a<=150;a+=10)for(let b=0;b<=150;b+=10){
+    const rules=versusRules({...base,handicap:[a,b]});
+    assert.deepEqual(decode(encode(mode,rules)),rules);
+    assert.deepEqual(rules.handicap,a || b?[a,b]:undefined);
+  }
+  const link=encode('local',{...base,handicap:[10,90]});
+  for(const tail of ['0','0-05','-1-0','160-0','2-10','0-0-0','/'])
+    assert.equal(decode(link.replace('10-90',tail)),null);
+  assert.equal(decode(link.replace('#local','#online')),null);
+  assert.deepEqual(decode(encode('online',{...base,handicap:[10,90]})),base);
+});
+test('stock and timed handicaps survive a KO and its replay without inflating damage dealt',()=>{
+  for(const mode of ['solo','local'])for(const timeBattle of [false,true]){
+    const pair=[20,80],w=create({mode,spawnDamage:pair,timeBattle});
+    pair[1]=150;
+    assert.deepEqual(w.dogs.map(f=>f.damage),[20,80]);
+    const tape=new FinishTape();
+    w.dogs[1].damage=122;w.dogs[1].x=-2000;
+    tape.record(w,idleInput,idleInput);step(w);
+    assert.deepEqual(w.dogs.map(f=>f.damage),[20,80]);
+    assert(w.dogs[1].stockLift);
+    assert.deepEqual(w.matchCard.handicap,[20,80]);
+    assert.deepEqual(w.matchCard.players.map(f=>f.damage),[0,0]);
+    assert.equal(w.matchCard.losses[0].damage,122);
+    const replay=tape.playback(0);replay.step();
+    assert.deepEqual(replay.battle.dogs,w.dogs);
+    assert.deepEqual(replay.battle.matchCard,w.matchCard);
+    w.startSuddenDeath('double');
+    assert.deepEqual(w.dogs.map(f=>f.damage),[300,300]);
+  }
+});
+test('handicap preferences only take effect in an ordinary versus match launched with them',()=>{
+  const config={spawnDamage:[90,150]};
+  for(const extra of [{handicap:[90,150]}, {...config,schoolFinal:true},{...config,lesson:0},
+    {...config,mode:'training'},{...config,relayTeams:[['pip','noodle','clover'],['brisket','noodle','clover']]},
+    ...[[10],[20,200],['20',60],[0,1]].map(spawnDamage=>({spawnDamage}))]){
+    const battle=create(extra);
+    assert.deepEqual(battle.dogs.map(f=>f.damage),[0,0]);
+    assert.equal(battle.matchCard?.handicap,undefined);
+  }
+  assert.deepEqual(create({...config,lastStockStart:true}).dogs.map(f=>f.damage),[125,125]);
+});
