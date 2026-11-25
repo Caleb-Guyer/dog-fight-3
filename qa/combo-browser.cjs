@@ -1572,6 +1572,53 @@ async function testDodgeTiming(page,mobile) {
   assert(await status.isHidden());
 }
 
+async function testCrawl(page,mobile) {
+  await page.goto(root+'?low-approach#training/crawl');
+  const status=page.locator('#footwork-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for(const route of ['stand','rise','stay','guard','tilt']){
+    await press('footwork-crawl');
+    if(route==='tilt') await press('footwork-side');
+    const dir=route==='tilt'?'left':'right';
+    const low=mobile?['down-'+dir]:['down',dir];
+    await hold(route==='stand'?['attack']:[...low,'attack']);
+    await waitFor('castHigh');
+    if(route==='stand'){
+      await hold([]);await waitFor('castHit');continue;
+    }
+    await hold(low);
+    await waitFor('under');
+    if(route==='rise'){
+      await hold([]);await waitFor('returnHit');continue;
+    }
+    await waitFor('inside');
+    if(route==='guard')await hold(['shield']);
+    if(route==='tilt'){
+      await hold([dir,'attack']);await page.clock.runFor(40);await hold([]);
+    }
+    await waitFor({stay:'lowHit',guard:'lowGuard',tilt:'caughtServe'}[route]);
+    await hold([]);
+  }
+  const art=await page.evaluate(()=>{
+    const canvas=document.createElement('canvas');canvas.width=240;canvas.height=168;
+    const ctx=canvas.getContext('2d');
+    function sprite(pose,phase){
+      ctx.clearRect(0,0,240,168);
+      window.DogArt.draw(ctx,'noodle',120,118,{pose,phase,face:1,time:0});
+      const pixels=ctx.getImageData(0,0,240,168).data;
+      let top=168;
+      for(let i=3;i<pixels.length;i+=4)if(pixels[i]){top=Math.floor(i/4/240);break;}
+      return {ink:canvas.toDataURL(),top};
+    }
+    const frames=Array.from({length:6},(_,i)=>sprite('crawl',i/6));
+    return {distinct:new Set(frames.map(f=>f.ink)).size,highest:Math.min(...frames.map(f=>f.top)),crouch:sprite('crouch',0).top};
+  });
+  assert.equal(art.distinct,6);
+  assert(art.highest>art.crouch,'Belly crawl should draw lower than an ordinary crouch: '+JSON.stringify(art));
+  await press('reset-training');
+  assert(await status.isHidden());
+}
+
 async function testGetUpAttacks(page,mobile) {
   await page.goto(root+'?wake-up#training/get-up');
   const status=page.locator('#launch-status');
@@ -1901,6 +1948,7 @@ async function testDevice(browser, mobile) {
     console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed examples, recording, replay, reply changes and free-training reset.');
     await testDefendTakes(page, mobile);
     await testShieldPunish(page, mobile);
+    await testCrawl(page, mobile);
     await testGetUpAttacks(page, mobile);
     await testBoostGrabs(page, mobile);
     await testPartnerTraining(page, mobile);
