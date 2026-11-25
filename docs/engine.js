@@ -4084,7 +4084,8 @@
       }
       if (drill.pauseOnWindup !== undefined) {
         if (drill.boost) {
-          if (drill.phase !== 'done' && (drill.tell += dt) >= .8) this.finishFootwork('shortReach');
+          if (drill.phase !== 'done' && (drill.tell += dt) >= .8)
+            this.finishFootwork(drill.closestGap === undefined ? 'swingMiss' : 'shortReach');
           return {...idleInput,shield:true};
         }
         if (player.attack?.fromWindup) drill.aerial = true;
