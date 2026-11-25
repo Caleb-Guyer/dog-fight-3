@@ -491,11 +491,75 @@ async function timedBattles(browser,phone){
   }
   console.log('Solo, saved local rules, private WebRTC scoring, two result cards and rematch passed.');
 }
+async function packRelay(browser){
+  const desktop=await device(browser,false,'#solo'),{page:p,press}=desktop;
+  const seat=(i,k)=>'[data-relay-seat="'+i+'"][data-relay-slot="'+k+'"]';
+  await press('[data-mode=local]');await press('#rules-label');await press('[data-do=pack-relay]');
+  await press(seat(0,1));await press('[data-relay-kind=noodle]');
+  assert.match(await p.locator(seat(0,2)).innerText(),/Brisket/);
+  await press(seat(0,1));await press('[data-relay-kind=clover]');
+  await p.selectOption('#relay-stage','nightmail');await p.selectOption('#relay-form','flat');await p.selectOption('#relay-clock','3');
+  await press('#relay-play');
+  await p.waitForFunction(()=>window.observedBattle?.matchFrames>1);
+  assert.match(await p.locator('#match-mode').textContent(),/Pack Relay/);
+  assert.equal(await p.locator('#hud .lives img').count(),6);
+  const team=['pip','clover','brisket'];
+  assert.deepEqual(await p.evaluate(()=>observedBattle.relayTeams[0]),team);
+  await p.keyboard.down('d');
+  try{await p.waitForFunction(()=>Math.abs(observedBattle.dogs[0].x-observedBattle.dogs[1].x)<72);}
+  finally{await p.keyboard.up('d');}
+  for(let i=0;i<10 && !await p.evaluate(()=>observedBattle.dogs[1].damage);i++){
+    await p.keyboard.press('j');await p.waitForTimeout(130);
+  }
+  const damage=await p.evaluate(()=>observedBattle.dogs[1].damage);assert(damage>0);
+  for(let stocks=3;stocks>0;stocks--){
+    await p.keyboard.down('a');
+    try{await p.waitForFunction(n=>observedBattle.dogs[0].stocks<n,stocks,{timeout:20000});}
+    finally{await p.keyboard.up('a');}
+    assert.equal(await p.evaluate(()=>observedBattle.dogs[1].damage),damage);
+    if(stocks>1){
+      assert.equal(await p.evaluate(()=>observedBattle.dogs[0].kind),team[4-stocks]);
+      assert.equal(await p.locator('#hud .lives').first().locator('.lost').count(),4-stocks);
+    }
+  }
+  await p.locator('[data-do=match-card]').waitFor();
+  assert.match(await p.locator('#dialog-body').innerText(),/P2’s pack wins/);
+  await press('[data-do=match-card]');
+  assert.deepEqual(await p.locator('.card-timeline li strong').allTextContents(),['P1 Pip out at 0%','P1 Clover out at 0%','P1 Brisket out at 0%']);
+  assert.match(await p.locator('.card-stats').innerText(),/Lead damage/);
+  await press('[data-do=card-back]');await press('[data-do=pack-relay]');
+  assert.match(await p.locator(seat(0,1)).innerText(),/Clover/);
+  assert.equal(await p.locator('#relay-clock').inputValue(),'3');
+  await p.keyboard.press('Escape');await press('[data-do=rematch]');
+  await p.waitForFunction(()=>observedBattle.end===null && observedBattle.dogs.every(f=>f.stocks===3 && f.damage===0));
+  await p.goto(root+'?archive#records');
+  await press('[data-record-id]');assert.equal(await p.locator('.card-timeline li').count(),3);
+  await p.goto(root+'?reload#local/pack-relay');
+  assert.match(await p.locator(seat(0,1)).innerText(),/Clover/);
+  await p.close();
+
+  const touch=await device(browser,true,'#solo/pack-relay'), phone=touch.page;
+  await touch.press(seat(0,0));await touch.press('[data-relay-kind=clover]');
+  await phone.selectOption('#relay-cpu','rookie');
+  await phone.evaluate(()=>{
+    window.relayPad={index:0,id:'Relay pad',axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
+    Object.defineProperty(navigator,'getGamepads',{value:()=>[relayPad]});
+    document.querySelector('#relay-play').focus();relayPad.buttons[0].pressed=true;
+  });
+  await phone.locator('#countdown').waitFor();
+  await phone.evaluate(()=>{relayPad.buttons[0].pressed=false;});
+  await phone.waitForFunction(()=>window.observedBattle?.matchFrames>2);
+  assert.deepEqual(await phone.evaluate(()=>[observedBattle.mode,observedBattle.cpuLevel,observedBattle.dogs[0].kind]),['solo','rookie','clover']);
+  await touch.press('[data-touch=jump]');await phone.waitForFunction(()=>observedBattle.dogs[0].ground<0);
+  await phone.close();
+  console.log('Both lineups, all three live handoffs, carryover damage, records, rematch and solo touch controls passed.');
+}
 async function main(){
   const options={executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim(),
     headless:true,args:['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']};
   const browser=await chromium.launch(options);
   try{
+    if(process.argv.includes('--pack-relay')){await packRelay(browser);assert.deepEqual(errors,[]);return;}
     if(process.argv.includes('--time-battle')){
       const phone=await chromium.launch(options);
       try{await timedBattles(browser,phone);assert.deepEqual(errors,[]);}finally{await phone.close();}
