@@ -268,8 +268,12 @@ async function onlineSet(browser,phoneBrowser) {
   assert.equal(await a.locator('#online-format').getAttribute('aria-pressed'),'true');
   await a.selectOption('#online-stage','laundry');await a.selectOption('#online-form','flat');
   await host.press('#online-create');
-  await a.locator('#online-invite').waitFor();await b.locator('#online-code').fill(await a.locator('#online-room-code').textContent());
-  await guest.press('#online-join');
+  await a.locator('#online-invite').waitFor();
+  const roomCode=await a.locator('#online-room-code').textContent();
+  await guest.press('#open-code-pad');
+  for(const letter of roomCode)await guest.press('[data-letter="'+letter+'"]');
+  assert.equal(await b.locator('#room-digits').textContent(),roomCode);
+  await guest.press('#code-join');
   for(const d of [host,guest])await fresh(d,1,'0–0');
   for(const d of [host,guest]){
     await d.page.waitForFunction(()=>window.observedBattle?.matchFrames>12);

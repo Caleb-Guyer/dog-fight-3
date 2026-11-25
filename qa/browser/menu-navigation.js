@@ -64,6 +64,19 @@ async function controls(browser,phone){
   await page.evaluate(()=>{window.reads=0;const get=Element.prototype.getBoundingClientRect;
     Element.prototype.getBoundingClientRect=function(){if(this.matches('#roster button,.mode-rack button'))reads++;return get.call(this);};});
   await page.clock.runFor(850);assert.equal(await page.evaluate(()=>reads),0);
+  await page.goto(root+'?codepad#online');
+  await page.locator('#online-code').fill('AB');await focus('#online-code');await tap(0);await is('[data-letter=A]');
+  assert.equal(await page.locator('#code-join').isDisabled(),true);
+  await tap(15);await tap(0);await tap(2);await is('[data-letter=B]');
+  await tap(1);await is('#online-code');assert.equal(await page.locator('#online-code').inputValue(),'AB');
+  await focus('#open-code-pad');await tap(0);
+  // A A J K fills the final four positions of the draft. A full entry takes focus to Join.
+  await tap(0);await tap(0);await tap(13);await is('[data-letter=J]');await tap(0);await tap(15);await tap(0);
+  await is('#code-join');assert.equal(await page.locator('#room-digits').textContent(),'ABAAJK');
+  await tap(2);await is('[data-letter=K]');await tap(15);await tap(0);
+  assert.equal(await page.locator('#room-digits').textContent(),'ABAAJL');
+  await tap(1);await is('#open-code-pad');
+  assert.equal(await page.locator('#online-code').inputValue(),'AB');
   assert.deepEqual(errors,[]);await page.close();
 }
 (async()=>{
