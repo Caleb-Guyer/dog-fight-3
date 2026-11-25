@@ -5,8 +5,9 @@
   function cycle(list,value,n) { return list[(list.indexOf(value)+n+list.length)%list.length]; }
 
   class Selection {
-    constructor(settings,random=Math.random,picker=null) {
+    constructor(settings,random=Math.random,picker=null,fightersOnly=false) {
       this.phase='fighters';
+      this.fightersOnly=fightersOnly;
       this.picker=picker;
       this.coats=settings.coatBook.map(book=>({...book}));
       this.dogs=[settings.p1,settings.p2];
@@ -14,7 +15,7 @@
       this.colors=this.dogs.map((_,i)=>coatFor(i,...this.dogs,raw));
       this.stages=[settings.stage,settings.stage];
       this.locked=[false,false];
-      this.tieSlot=picker ?? (random()<.5?0:1);
+      this.tieSlot=picker ?? (fightersOnly || random()<.5?0:1);
     }
     get winner() { return this.phase==='stages' && this.locked.every(Boolean) ? this.stages[this.tieSlot] : null; }
     choose(i,dir) {
@@ -32,6 +33,7 @@
       this.colors[i]=color;
     }
     lock(i) {
+      if(this.fightersOnly){this.locked[i]=true;return;}
       if(this.picker!==null && this.phase==='fighters' && i===this.picker) {
         this.phase='stages';
         return;
@@ -68,8 +70,8 @@
     '<small data-detail></small><button type="button" data-action="coat"></button>'+
     '<button type="button" class="couch-lock" data-action="lock"></button><small data-keys></small></section>';
 
-  function panel(root,settings,keys,pads,{start,leave,sound,announce,drawStageTile,between}) {
-    const pick=new Selection(settings,Math.random,between?.picker);
+  function panel(root,settings,keys,pads,{start,leave,sound,announce,drawStageTile,between,lineupReady}) {
+    const pick=new Selection(settings,Math.random,between?.picker,!!lineupReady);
     const seats=settings.couchSeats || new window.FightControls.Seats(pads), previous=[null,null];
     const reduced=matchMedia('(prefers-reduced-motion: reduce)');
     const colors=window.DogArt.coatNames;
@@ -116,14 +118,15 @@
           (active?fighters[kind].style:'Won game '+(between.game-1)+' · '+colors[kind][pick.colors[i]]);
         for(const button of c.arrows)button.disabled=!active || locked;
         c.coat.hidden=!active || !choosing;
+        c.coat.disabled=locked;
         c.coat.textContent='Coat · '+colors[kind][pick.colors[i]];
-        c.lock.textContent=locked?'Ready ✓ · Change':active?(choosing?'Choose arena':'Fight here'):'Ready for game '+between.game;
+        c.lock.textContent=locked?'Ready ✓ · Change':active?(lineupReady?'Lock fighter':choosing?'Choose arena':'Fight here'):'Ready for game '+between.game;
         c.lock.setAttribute('aria-pressed',String(locked));
         c.keys.textContent=(active?key(i,'left')+' / '+key(i,'right')+' choose · '+(choosing?key(i,'up')+' / '+key(i,'down')+' coat · ':''):'')+
           key(i,'attack')+' confirm · '+key(i,'special')+' back';
         if(arena)drawStageTile(c.canvas,pick.stages[i],settings.stageForm);
       }
-      call.textContent=pick.locked[picker]?arenas[pick.stages[picker]].name+' selected. Waiting for P'+(2-picker)+' to ready up.':
+      call.textContent=pick.locked[picker]?(lineupReady?fighters[pick.dogs[picker]].name:arenas[pick.stages[picker]].name)+' selected. Waiting for P'+(2-picker)+' to ready up.':
         (pick.locked[1-picker]?'P'+(2-picker)+' is ready. ':'')+
         (choosing?player+' can keep the same dog or change the matchup.':'Game '+between.game+' starts when both players confirm.');
       play.hidden=true;
@@ -149,7 +152,7 @@
       const who=pick.locked[0]?'P1':'P2';
       call.textContent=winner ? (pick.stages[0]===pick.stages[1]?'Both chose ':'Split vote · P'+(pick.tieSlot+1)+' gets the pick · ')+arenas[winner].name+'. Press Start to play.' :
         pick.locked.some(Boolean) ? who+(choosing?' is ready':' voted')+' · Waiting for '+(who==='P1'?'P2':'P1') :
-        choosing?'Ready both dogs to open the arena vote.':'Matching votes choose the arena. A split vote goes to a coin toss.';
+        choosing?(lineupReady?'Ready both dogs to start striking arenas.':'Ready both dogs to open the arena vote.'):'Matching votes choose the arena. A split vote goes to a coin toss.';
       play.hidden=!winner;
       play.textContent=settings.bestOfThree?'Start set':'Start fight';
       back.textContent=choosing?(settings.rotationRound?'Back to lineup':'Back to fighter select'):'Change fighters';
@@ -174,6 +177,7 @@
       else if(pick.phase==='fighters')pick.coat(i,action==='up'?-1:1);
       else return;
       sound('menu');
+      if(lineupReady && pick.locked.every(Boolean)){closed=true;lineupReady(pick,seats);return;}
       if(between && pick.winner){launch();return;}
       render();
       const choice=pick.phase==='fighters'?colors[pick.dogs[i]][pick.colors[i]]+' '+fighters[pick.dogs[i]].name:arenas[pick.stages[i]].name;
