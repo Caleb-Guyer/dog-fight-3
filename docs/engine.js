@@ -2780,6 +2780,17 @@
       }
       if (config.driveOpening && this.mode === 'solo') this.placeDriveFighters(config.driveOpening.edge, config.driveOpening.damage);
       if (config.dodgeReturn && this.mode === 'solo') this.placeLastDodge(config.dodgeReturn.side, config.dodgeReturn.wide, 1);
+      if (config.interruptedReturn && this.mode === 'solo') {
+        const {side,slot} = config.interruptedReturn;
+        const opening = new Battle({...config,mode:'local'}, undefined, this.random);
+        opening.playRecoveryOpening(side,slot);
+        opening.mode = this.mode;
+        opening.cpuLevel = this.cpuLevel;
+        opening.bot = this.bot;
+        opening.clockFrames = this.clockFrames;
+        opening.matchFrames = 0;
+        this.copyFightFrom(opening);
+      }
     }
     resetCpu() {
       const memory = this.bot;
@@ -2911,6 +2922,7 @@
         this.trainingDamage = this.freshnessPractice.original.damage;
       }
       if (this.footworkPractice) this.dogs = this.footworkPractice.originalDogs;
+      if (this.airPractice?.originalDogs) this.dogs = this.airPractice.originalDogs;
       if (this.comboPractice?.originalDogs) this.dogs = this.comboPractice.originalDogs;
       if (this.climbPractice?.originalDogs) this.dogs = this.climbPractice.originalDogs;
       if (this.spacingPractice?.originalDogs) this.dogs = this.spacingPractice.originalDogs;
@@ -4773,14 +4785,41 @@
         vx:-inward*120, vy:240, jumps:0, usedUp:true, usedDodge:false});
       Object.assign(guard, {x:lip + inward*46, y:floor.y, ground:this.terrain.indexOf(floor), face:-inward});
     }
-    resetAirPractice(pattern = 'neutral', side = 'left', wide = false) {
+    placeInterruptedReturn(side,slot) {
+      const f = this.dogs[slot], guard = this.dogs[1-slot], inward = side === 'left' ? 1 : -1;
+      const floors = this.terrain.filter(p => !p.thin), floor = inward > 0 ? floors[0] : floors.at(-1);
+      const lip = inward > 0 ? floor.x1 : floor.x2;
+      // Put each dog's first recovery in reach of an ordinary Knot Poke on its first active frame.
+      const [gap,depth] = {pip:[105,75],brisket:[65,0],noodle:[65,25],clover:[65,75]}[f.kind];
+      Object.assign(f,{x:lip-inward*gap,y:floor.y+depth,face:inward,ground:-1,jumps:0,usedDodge:true,vy:80});
+      Object.assign(guard,{x:lip+inward*10,y:floor.y,ground:this.terrain.indexOf(floor),face:-inward});
+    }
+    playRecoveryOpening(side,slot) {
+      this.placeInterruptedReturn(side,slot);
+      const f = this.dogs[slot], inward = f.face;
+      const pair = [idleInput,idleInput];
+      for (let frame=0;frame<12;frame++) {
+        pair[slot] = {...idleInput,x:inward,y:-1,special:frame===0};
+        pair[1-slot] = {...idleInput,aimStick:frame===0,tiltMode:true,smashX:-inward};
+        this.step(1/60,...pair);
+        if (f.stun && !f.usedUp) break;
+      }
+    }
+    resetAirPractice(pattern = 'neutral', side = 'left', wide = false, kind) {
+      const slow = pattern === 'interrupted' && (this.airPractice?.pattern !== pattern || this.airPractice.slow);
       this.resetTraining();
+      const originalDogs = pattern === 'interrupted' ? this.dogs : null;
+      if (originalDogs) {
+        this.dogs = [newFighter(kind || originalDogs[0].kind,0),newFighter('noodle',1)];
+        this.dogs[1].damage = this.trainingDamage;
+      }
       const [f, dummy] = this.dogs;
       const solid = this.terrain.filter((p) => !p.thin);
       const platform = side === 'left' ? solid[0] : solid[solid.length - 1];
       const inward = side === 'left' ? 1 : -1;
       const edge = inward > 0 ? platform.x1 : platform.x2;
-      if (pattern === 'lastDodge') this.placeLastDodge(side, wide, 0);
+      if (originalDogs) this.placeInterruptedReturn(side,0);
+      else if (pattern === 'lastDodge') this.placeLastDodge(side, wide, 0);
       else if (pattern === 'edge') {
         Object.assign(f, {
           x: edge - inward * 72,
@@ -4797,7 +4836,7 @@
           face: -inward,
         });
       }
-      this.airPractice = { pattern, side, wide, phase: 'ready', time: 0, evaded: '', outcome: '' };
+      this.airPractice = { pattern, side, wide, originalDogs, slow, phase: 'ready', time: 0, evaded: '', outcome: '' };
     }
     finishAirPractice(outcome) {
       const drill = this.airPractice;
@@ -4810,6 +4849,18 @@
       const drill = this.airPractice;
       if (drill.phase === 'done') return idleInput;
       const [f, dummy] = this.dogs;
+      if (drill.pattern === 'interrupted') {
+        if (drill.phase === 'approach') {
+          drill.phase = 'swing';
+          return {...idleInput,aimStick:true,tiltMode:true,smashX:dummy.face};
+        }
+        if (drill.phase === 'clipped' && !drill.readyToCast && f.stun <= inputWindow) {
+          drill.readyToCast = true;
+          this.emit('airCue',{f,pattern:drill.pattern,phase:'cast'});
+        }
+        if (f.ledge || f.ground >= 0) this.finishAirPractice(drill.recast ? 'saved' : 'returned');
+        return idleInput;
+      }
       if (drill.pattern === 'lastDodge') {
         if (f.ledge) this.finishAirPractice('ledge');
         else if (f.ground >= 0) this.finishAirPractice('land');
@@ -5640,6 +5691,7 @@
       }
       if (this.airPractice?.phase === 'ready') {
         const start =
+          this.airPractice.pattern === 'interrupted' ? input1.y < -.48 && (input1.special || input1.tapped?.special) :
           this.airPractice.pattern === 'neutral'
             ? input1.jump
             : Math.hypot(input1.x, input1.y) >= 0.35 || input1.shield || input1.jump || input1.special;
@@ -5767,6 +5819,7 @@
         this.updateBall(dt);
       const inset = this.blastInset();
       const out = this.dogs.filter(f => !f.absent && blastZone(f.x, f.y, this.stageWidth, inset));
+      if (this.airPractice?.pattern === 'interrupted' && out.includes(this.dogs[0])) this.finishAirPractice('miss');
       const carryDrill = this.escapePractice;
       if (carryDrill?.spacing === 'carry' && carryDrill.phase !== 'done') {
         const rival = this.dogs[1];
@@ -7963,6 +8016,12 @@
       );
       const a = f.attack;
       a.specialSide = side;
+      const retry = this.airPractice;
+      if (retry?.pattern === 'interrupted' && retry.phase === 'clipped' && f.index === 0 && side === 'up') {
+        retry.phase = 'return';
+        retry.recast = true;
+        this.emit('airCue',{f,pattern:retry.pattern,phase:'return',moveId:id});
+      }
       if (command.fromJumpSquat) a.fromJumpSquat = true;
       a.released = !!command.released;
       if (air && side === 'neutral') {
@@ -8847,6 +8906,10 @@
         target.vy = downward ? speed * 0.8 : -speed * (upward ? 1.13 : 0.59) - 48;
       }
       const groundAtHit = target.ground;
+      // A meteor sends the defender down with the recovery options they held before impact.
+      const recoveryRestored = target.usedUp && applied > 0 && owner !== target && !(meteor && target.vy > 0) &&
+        (groundAtHit < 0 || stance?.specialSide === 'up');
+      if (recoveryRestored) target.usedUp = false;
       if (braced) {
         target.vx *= crouchLaunchScale;
         target.vy *= crouchLaunchScale;
@@ -8931,7 +8994,7 @@
         this.trumpPractice.phase = 'intercepted';
       const timing = aerialHitTiming(use, move);
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic, power, damage: applied, timing,
-        meteor: !!target.tumble?.meteor });
+        meteor: !!target.tumble?.meteor, recoveryRestored });
       const breakaway = this.launchPractice;
       if (breakaway?.pattern==='breakaway' && breakaway.phase==='chase') {
         if (owner.index===0) this.finishBreakaway(use?.hitstunCancelFrames ? 'counter' : 'otherHit',moveId);
@@ -9059,7 +9122,13 @@
         } else if (this.shieldPractice.pattern === 'poke') this.finishShieldPractice(poked ? 'found' : 'hitOpen');
         else this.finishShieldPractice(counter ? 'counterHit' : 'interrupted');
       }
-      this.finishAirPractice(target.index === 0 ? 'hit' : 'interrupted');
+      if (this.airPractice?.pattern === 'interrupted') {
+        if (target.index === 0 && recoveryRestored && this.airPractice.phase !== 'done') {
+          this.airPractice.phase = 'clipped';
+          this.airPractice.readyToCast = false;
+          this.emit('airCue',{f:target,pattern:'interrupted',phase:'clipped',moveId});
+        }
+      } else this.finishAirPractice(target.index === 0 ? 'hit' : 'interrupted');
       this.finishRollPractice(target.index === 0 ? 'hit' : 'counter');
       return true;
     }

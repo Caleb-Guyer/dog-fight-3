@@ -3157,6 +3157,17 @@
   }
   function airFeedback(name, e) {
     const result = $('air-status');
+    if (e.pattern === 'interrupted') {
+      const phase = name === 'airStart' ? 'approach' : e.phase || e.outcome;
+      const move = specials[world.dogs[0].kit.specials.up].label;
+      result.dataset.result = phase;
+      result.textContent = {approach:'Noodle is covering the ledge',clipped:'Knot Poke · Up Special restored',
+        cast:'Cast again now',return:move + ' · second attempt',saved:'Recovered after the hit',
+        returned:'Back onstage',miss:'Stock lost',hit:'Grabbed',interrupted:'Guard caught'}[phase];
+      if (phase === 'cast') $('recovery-tip').textContent = 'Aim up toward the stage and press Special again for ' + move + '.';
+      if (phase === 'miss') $('recovery-tip').textContent = 'Choose Interrupted return to retry. Release Special after your first cast so you can press it again.';
+      return;
+    }
     if (e.pattern === 'lastDodge') {
       if (name === 'airStart') {
         result.dataset.result = 'approach';
@@ -3395,7 +3406,8 @@
     else if (wall) world.resetWallPractice(pattern, direction === 'impact' ? '' : direction, direction === 'impact');
     else if (shield) world.resetShieldPractice(pattern, direction ?? world.shieldPractice?.worn ?? true);
     else if (air) world.resetAirPractice(pattern, practiceSide,
-      pattern === 'lastDodge' && (direction ?? world.airPractice?.wide ?? false));
+      pattern === 'lastDodge' && (direction ?? world.airPractice?.wide ?? false),
+      study ?? (world.airPractice?.pattern === 'interrupted' ? world.dogs[0].kind : undefined));
     else if (roll) world.resetLedgeRollPractice(pattern, practiceSide);
     else if (climb) world.resetClimbPractice(pattern, practiceSide, world.climbPractice?.slow ?? true);
     else if (trump) world.resetLedgeTrumpPractice(pattern, practiceSide);
@@ -3697,6 +3709,7 @@
         : 'Tap Shield to roll through the guard’s swing. As your dog turns back, tap Attack.';
     } else if (air) {
       const edge = pattern === 'edge', last = pattern === 'lastDodge', wide = world.airPractice.wide;
+      const interrupted = pattern === 'interrupted';
       $('air-status').dataset.result = 'ready';
       $('air-status').textContent = edge
         ? practiceSide === 'left'
@@ -3704,13 +3717,23 @@
           : 'Right ledge'
         : 'Jump to begin';
       if (last) $('air-status').textContent = (wide ? 'Wide' : 'Low') + ' · ' + practiceSide + ' ledge';
-      $('air-neutral').setAttribute('aria-pressed', String(!edge && !last));
+      if (interrupted) $('air-status').textContent = world.dogs[0].stats.name + ' · ' + practiceSide + ' ledge';
+      $('air-neutral').setAttribute('aria-pressed', String(!edge && !last && !interrupted));
       $('air-edge').setAttribute('aria-pressed', String(edge));
       $('air-lastDodge').setAttribute('aria-pressed', String(last));
-      $('air-side').hidden = !edge && !last;
-      $('air-distance').hidden = $('air-fight').hidden = !last;
+      $('air-interrupted').setAttribute('aria-pressed', String(interrupted));
+      $('air-side').hidden = !edge && !last && !interrupted;
+      $('air-dog-label').hidden = $('air-speed').hidden = $('air-return-fight').hidden = !interrupted;
+      $('air-dog').value = world.dogs[0].kind;
+      $('air-speed').setAttribute('aria-pressed',String(!!world.airPractice.slow));
+      $('air-distance').hidden = !last;
+      $('air-fight').hidden = !last && !interrupted;
+      $('air-fight').textContent = interrupted ? 'Edgeguard as Noodle · 3 stocks' : 'Guard against Rival · 3 stocks';
+      $('air-return-fight').textContent = 'Recover as ' + world.dogs[0].stats.name + ' · 3 stocks';
       $('air-distance').textContent = wide ? 'Start low' : 'Start wide';
-      message = last ? 'Your jump and Up Special are spent. Aim ' + (wide ? '' : 'up and ') +
+      message = interrupted ? 'Aim up and ' + (practiceSide === 'left' ? 'right' : 'left') +
+        ' and tap Special. Release it as Noodle swings. At “Cast again now,” use Up + Special a second time and steer in.' :
+        last ? 'Your jump and Up Special are spent. Aim ' + (wide ? '' : 'up and ') +
         (practiceSide === 'left' ? 'right' : 'left') + ' and tap Shield to catch the ledge.' : edge
         ? 'Aim up and ' +
           (practiceSide === 'left' ? 'right' : 'left') +
@@ -3817,7 +3840,7 @@
     ['Defense','Combo escape','escape',['tip','close','counter','break','gripEscape','gripThrow','carry']],
     ['Defense','Shield pressure','shield',['kick','drop','strike','grab','counterGrab','dodgeTiming','breakEscape','breakPunish','jumpIn','low','high','poke']],
     ['Defense','Launch & survival','launch',['throw','juggle','breakaway','survival','last-stock','escape','stock-return','stock-catch']],
-    ['Defense','Air dodge','air',['neutral','edge','lastDodge']],
+    ['Defense','Air dodge','air',['neutral','edge','lastDodge','interrupted']],
     ['Recovery','Edgeguarding','edge',['lip','shortCatch','longCatch','tip','deep','corner','inside']],
     ['Recovery','Ledge recovery','ledge',['training','right','attack-training']],
     ['Recovery','Ledge timing','climb',['escape','trap','rise','coverRise','patience']],
@@ -3843,6 +3866,7 @@
     'shield-jumpIn':'empty hop falling aerial grab', 'freshness-training':'stale moves staling',
     'freshness-drive':'launch height angle ground slide ledge side smash back air',
     'air-lastDodge':'recovery low wide directional air dodge edgeguard',
+    'air-interrupted':'up special recovery hit reset return edgeguard',
     'partner-training':'local two players sparring', 'reset-training':'free training dummy',
     'wall-ceiling':'ceiling tech under stage recovery Noodle Pip',
   };
@@ -4177,15 +4201,25 @@
   $('air-neutral').onclick = () => drill('air', false, 'neutral');
   $('air-edge').onclick = () => drill('air', false, 'edge');
   $('air-lastDodge').onclick = () => drill('air', false, 'lastDodge');
+  $('air-interrupted').onclick = () => drill('air', false, 'interrupted');
+  $('air-dog').onchange = e => drill('air', false, 'interrupted', undefined, e.target.value);
+  $('air-speed').onclick = () => {
+    world.airPractice.slow = !world.airPractice.slow;
+    $('air-speed').setAttribute('aria-pressed',String(world.airPractice.slow));
+    $('game').focus({preventScroll:true});
+  };
   $('air-distance').onclick = () => drill('air', false, 'lastDodge', !world.airPractice.wide);
-  $('air-fight').onclick = () => {
-    const {side,wide} = world.airPractice;
+  function fightRecovery(slot) {
+    const {side,wide,pattern} = world.airPractice;
     const [returner,guard] = world.dogs;
     leaveOnline();
     afterStory = null;
-    startMatch({...settings, mode:'solo', p1:guard.kind, p2:returner.kind, cpuLevel:'rival', stage:world.stage,
-      fetch:false, minutes:7, dodgeReturn:{side,wide}}, undefined, 42);
-  };
+    const opening = pattern === 'interrupted' ? {interruptedReturn:{side,slot}} : {dodgeReturn:{side,wide}};
+    startMatch({...settings, mode:'solo', p1:slot ? guard.kind : returner.kind, p2:slot ? returner.kind : guard.kind,
+      cpuLevel:'rival', stage:world.stage, fetch:false, minutes:7, ...opening}, undefined, 42);
+  }
+  $('air-fight').onclick = () => fightRecovery(1);
+  $('air-return-fight').onclick = () => fightRecovery(0);
   $('air-side').onclick = () => {
     practiceSide = practiceSide === 'left' ? 'right' : 'left';
     drill('air', false, world.airPractice.pattern);
@@ -5234,7 +5268,7 @@
         if (frameLab.mode === 'frozen') {
           accumulator = frameLab.pending > 0 ? 1 / 60 : 0;
           if (frameLab.pending > 0) frameLab.pending--;
-        } else accumulator += world.wallPractice?.heavy || world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow ? dt / 2 : dt;
+        } else accumulator += world.wallPractice?.heavy || world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow || world.airPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const slot = world.trainingPlayerSlot;
           const input = playerInput(0, pads, slot);
@@ -5565,6 +5599,13 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
       drill('platform', false, 'shield-drop');
+    }
+    else if (/^#training\/interrupted-return(?:\/(pip|brisket|noodle|clover))?$/.test(hash)) {
+      menuScreen('match');
+      afterStory = null;
+      practiceSide = 'left';
+      startMatch({...settings,mode:'training',p1:hash.split('/')[2] || 'pip',p2:'noodle',stage:'nightmail',fetch:false});
+      drill('air',false,'interrupted');
     }
     else if (/^#training\/last-dodge(?:\/(pip|brisket|noodle|clover))?$/.test(hash)) {
       menuScreen('match');

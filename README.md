@@ -296,6 +296,10 @@ Choose **Training → Air-dodge practice → In place**. Jump and tap Shield as 
 
 Offstage, each fighter’s HUD shows the air jump, Up Special and air dodge. Spent options are crossed out. Pip’s Up Special stays lit while he can take his second hop. The strip disappears when the fighter catches the ledge or gets back over a floor.
 
+A damaging hit that knocks you out of your Up Special or catches you airborne after you spent it can give you another Up Special. A mint arrow appears over your dog when that happens. Steer during the launch and time the next cast as hitstun ends. Your air jump and dodge keep their previous state. A downward meteor launch keeps the resources you had before impact, so a timed spike can still close out the stock.
+
+In **Interrupted return**, play any dog against Noodle at the edge. Aim up toward the stage and tap Special once. Release Special as Knot Poke hits, then cast again at the cue. Brisket can hold the second cast to charge Kennel Cannon. Clover can keep holding to ride Disc Sail. Switch ledges or turn off **Half speed** to try the same recovery at match speed. Both stock-match buttons start at the instant of the hit, with three stocks each. You can play either side. [Play Interrupted return](https://caleb-guyer.github.io/dog-fight-3/#training/interrupted-return)
+
 In **Last dodge**, you have already spent your jump and Up Special. From the low mark, aim diagonally up toward the ledge and tap Shield. Choose **Start wide** and try the diagonal again, then retry with a horizontal dodge for full reach. **Guard against Rival · 3 stocks** swaps the roles. Rival starts at your mark with the same resources and can dodge to the ledge even if you wait at the lip. [Play Last dodge](https://caleb-guyer.github.io/dog-fight-3/#training/last-dodge)
 
 ## Launch defense
