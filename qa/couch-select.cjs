@@ -1,8 +1,8 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 global.window={};
-require('../docs/engine.js');require('../docs/couch-select.js');
-const {Selection,Seats}=window.CouchSelect;
+require('../docs/engine.js');require('../docs/controls.js');require('../docs/couch-select.js');
+const {Selection}=window.CouchSelect, {Seats}=window.FightControls;
 const {fighters,arenas,coatFor,Battle,StockSet,idleInput}=window.DogFight;
 const dogs=Object.keys(fighters),stages=Object.keys(arenas);
 const cfg={stage:'picnic',mode:'local',p1:'pip',p2:'brisket',coatBook:[{},{}],fetch:false};
@@ -54,4 +54,26 @@ test('controllers keep seats across hotplug, sparse indices, and a replacement',
   const single=new Seats([a]);assert.equal(single.get(1,[a]),a);
   single.sync([a,b]);assert.equal(single.get(0,[a,b]),b);assert.equal(single.get(1,[a,b]),a);
   single.sync([a,b,c]);assert.deepEqual(single.ids,[3,0]);
+});
+
+test('the previous loser owns both picks while the winner can ready or withdraw independently',()=>{
+  for(const picker of [0,1])for(const p1 of dogs)for(const p2 of dogs)for(const target of dogs)for(const arena of stages){
+    const holder=1-picker, pick=new Selection({...cfg,p1,p2,coats:[3,0]},()=>assert.fail('counterpicks never use a coin'),picker);
+    const keep=pick.dogs[holder], color=pick.colors[holder];
+    pick.choose(holder,1);pick.coat(holder,1);pick.back(holder);
+    pick.lock(holder);pick.back(holder);pick.lock(holder);
+    while(pick.dogs[picker]!==target)pick.choose(picker,1);
+    pick.coat(picker,1);pick.lock(picker);
+    assert.equal(pick.phase,'stages');assert.equal(pick.winner,null);
+    pick.back(picker);assert.equal(pick.phase,'fighters');assert.equal(pick.locked[holder],true);
+    pick.lock(picker);pick.back(holder);pick.choose(holder,1);
+    while(pick.stages[picker]!==arena)pick.choose(picker,1);
+    pick.lock(picker);pick.choose(picker,-1);assert.equal(pick.winner,null);
+    pick.back(picker);pick.lock(picker);pick.lock(holder);
+    assert.equal(pick.winner,arena);assert.equal(pick.dogs[holder],keep);assert.equal(pick.colors[holder],color);
+    if(target===keep)assert.notEqual(pick.colors[picker],color);
+    const battle=new Battle({...cfg,p1:pick.dogs[0],p2:pick.dogs[1],coats:pick.colors,stage:pick.winner,form:'flat'});
+    assert.deepEqual(battle.matchCard.players.map(p=>p.kind),pick.dogs);
+    assert.deepEqual(battle.matchCard.players.map(p=>p.coat),pick.colors);
+  }
 });

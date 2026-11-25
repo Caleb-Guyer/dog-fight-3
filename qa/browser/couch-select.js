@@ -67,10 +67,37 @@ async function controllers(browser) {
     await held(0,[],1);
     for(let i=0;i<18 && !await page.locator('#set-score').isVisible();i++)await page.clock.runFor(2000);
     assert.match(await page.locator('#set-score').textContent(),/P1 1 – 0 P2/);
-    await held(0);await press('[data-do=set-pick]');await press('[data-stage=nightmail]');
+    await held(0);await pad(0,[0]);
+    assert.match(await phase(),/P2.*fighter/);
+    await page.keyboard.press('d');assert.equal(await name(0),'Brisket');
+    await pad(0,[],1);assert.equal(await name(1),'Noodle');
+    await pad(0,[0]);assert.match(await phase(),/P2.*arena/);
+    await pad(0,[1]);assert.match(await phase(),/fighter/);
+    await pad(0,[0]);await pad(0,[],1);
+    const nextArena=await name(1);await pad(0,[0]);
+    assert.match(await page.locator('#couch-call').textContent(),/Waiting for P1/);
+    await page.keyboard.press('q');
     await page.clock.runFor(2500);assert.match(await page.locator('#match-set').textContent(),/Game 2/);
+    assert.match(await page.locator('#match-stage').textContent(),new RegExp(nextArena));
+    assert.deepEqual(await page.evaluate(()=>lastBattle.dogs.map(d=>d.kind)),['brisket','noodle']);
     await page.evaluate(()=>{window.pads[4]=makePad(4);});await held(4,[2],-1);
     assert.deepEqual(await page.evaluate(()=>inputPair.map(x=>[x.attack,x.x])),[[true,-1],[false,0]]);
+    await held(4,[],-1);
+    for(let i=0;i<22 && !await page.locator('#set-score').isVisible();i++)await page.clock.runFor(2000);
+    assert.match(await page.locator('#set-score').textContent(),/P1 1 – 1 P2/);await held(4);
+    await page.keyboard.press('q');assert.match(await phase(),/P1.*fighter/);
+    await pad(0,[0]);await pad(0,[1]);await pad(0,[],1);assert.equal(await name(1),'Noodle');
+    await pad(0,[0]);await pad(4,[],-1);assert.equal(await name(0),'Pip');
+    await pad(4,[0]);await pad(4,[0]);await page.clock.runFor(2500);
+    assert.equal(await page.locator('#match-set').textContent(),'Game 3 · 1–1');
+    // P1 switched from Brisket to Pip. Its first-game win still belongs to Brisket.
+    await held(0,[],1);
+    for(let i=0;i<22 && !await page.locator('#set-score').isVisible();i++)await page.clock.runFor(2000);
+    assert.match(await page.locator('#set-score').textContent(),/P1 2 – 1 P2/);
+    assert.deepEqual(await page.locator('.set-history li strong').allTextContents(),['P1 Brisket','P2 Noodle','P1 Pip']);
+    await press('[data-do=match-card]');await press('[data-card-game="0"]');
+    assert.match(await page.locator('.card-stats th[scope=col]').last().textContent(),/Brisket/);
+    await press('[data-card-game="1"]');assert.match(await page.locator('.card-stats th[scope=col]').last().textContent(),/Noodle/);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
@@ -79,7 +106,8 @@ async function handheld(browser){
   page.on('pageerror',e=>errors.push(e.message));await clock(page);
   const press=s=>page.locator(s).tap(), btn=(i,k)=>'[data-seat="'+i+'"] [data-action="'+k+'"]';
   try{
-    await page.goto(root+'#local/pick-together');
+    await page.goto(root+'#local/best-of-three');
+    assert.match(await page.locator('#couch-rules').textContent(),/Best of three/);
     await press(btn(0,'prev'));await press(btn(1,'next'));await press(btn(0,'coat'));
     await press('#couch-back');assert.equal(await page.evaluate(()=>document.activeElement.id),'pick-together');
     await press('#pick-together');assert.equal(await page.locator('[data-seat="0"] [data-name]').textContent(),'Pip');

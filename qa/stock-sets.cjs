@@ -137,7 +137,13 @@ async function soloAndLocal(browser){
   assert.match(await page.locator('#set-score').textContent(),/P1 0 – 1 P2/);
   await press('[data-do=set-pick]');await page.keyboard.press('Escape');
   assert.equal(await page.locator('.set-history li').count(),1);
-  await press('[data-do=set-pick]');await press('[data-stage=canal]');await fresh(d,2,'0–1');
+  await press('[data-do=set-pick]');
+  const pickButton=(i,action)=>'[data-seat="'+i+'"] [data-action="'+action+'"]';
+  await press(pickButton(1,'lock'));
+  assert(await page.locator(pickButton(1,'next')).isDisabled());
+  await press(pickButton(0,'lock'));await press(pickButton(0,'prev'));await press(pickButton(0,'prev'));
+  assert.equal(await page.locator('[data-seat="0"] [data-name]').textContent(),'Canal Lock');
+  await press(pickButton(0,'lock'));await fresh(d,2,'0–1');
   assert.equal(await page.locator('#match-stage').textContent(),'Canal Lock · Three platforms');
   await press('#pause');await press('[data-do=rematch]');await fresh(d,2,'0–1');
   await page.goto(root+'?solo-set#solo/best-of-three');await observe(page);await fresh(d,1,'0–0');
