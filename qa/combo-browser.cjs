@@ -1248,6 +1248,30 @@ async function testDashShield(page,mobile) {
   await press('reset-training');assert(await status.isHidden());
 }
 
+async function testHaymaker(page,mobile) {
+  await page.goto(root + '?armor-test#training/haymaker');
+  const status = page.locator('#footwork-status');
+  const {hold,press,waitFor} = await trainingControls(page,mobile,status);
+  for (const [role,answer,outcome] of [
+    ['armor','release','armoredPunch'], ['armor','hold','interruptedPunch'],
+    ['armorGrab','attack','armoredPunch'], ['armorGrab','grab','caughtArmor'],
+  ]) {
+    await press('footwork-' + role);
+    if (answer === 'grab') await press('footwork-side');
+    await hold(['attack']);
+    await waitFor('count');
+    await hold(role === 'armor' ? ['smash'] : []);
+    await waitFor('go');
+    if (role === 'armorGrab') await hold([answer]);
+    else if (answer === 'release') await hold([]);
+    await waitFor(outcome);
+    assert.match(await status.textContent(),/Haymaker landed|Punch interrupted|Grabbed the planted shoulder/);
+    await hold([]);
+  }
+  await press('reset-training');
+  assert(await status.isHidden());
+}
+
 async function testDiscReflect(page,mobile) {
   await page.goto(root+'?disc-matchup#training/disc-reflect');
   const status=page.locator('#footwork-status');
@@ -1680,6 +1704,7 @@ async function testDevice(browser, mobile) {
     await testShoulderCarry(page, mobile);
     await testDiscReflect(page, mobile);
     await testDashShield(page, mobile);
+    await testHaymaker(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
