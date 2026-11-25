@@ -2362,6 +2362,11 @@
     }
     event(name, e) {
       const f = e.f;
+      if (name === 'ringBell') {
+        this.add('star',e.point.x,e.point.y,gold,.25,32);
+        this.add('ring',e.point.x,e.point.y,cream,.32,41);
+        return;
+      }
       if (e.hard && (name === 'wallBounce' || name === 'meteorBounce' || name === 'floorBounce' || name === 'ceilingBounce')) {
         this.add('hardImpact', e.point.x, e.point.y, '#ef574b', 13 / 60, 26, e.dir, { wall: name === 'wallBounce', ceiling:name === 'ceilingBounce' });
         return;
@@ -2585,7 +2590,7 @@
       const focus = finishers[0];
       if (focus) this.finishReturn = .24;
       else this.finishReturn = Math.max(0,this.finishReturn-dt);
-      let targetZoom = off || reduced.matches ? wideShot :
+      let targetZoom = world.bells ? Math.min(width/1060,height/580,1.5) : off || reduced.matches ? wideShot :
         clamp(Math.min(width / (spread + 505), height / (vertical + 345)), wideShot, 1.5);
       let launchCenterY, survivalX;
       if (koTest) {
@@ -2613,12 +2618,12 @@
         targetZoom = Math.min(2.55,width/(right-left+248),height/(bottom-top+232));
       }
       const blend = resized ? 1 : this.finishReturn && !steady ? 1-Math.exp(-dt*(focus ? 18 : 12)) :
-        koTest || survival ? 1 : 1 - Math.exp(-dt * (targetZoom < this.zoom ? 7.5 : 4));
+        koTest || survival || world.bells ? 1 : 1 - Math.exp(-dt * (targetZoom < this.zoom ? 7.5 : 4));
       this.zoom += (targetZoom - this.zoom) * blend;
       const halfW = width / (2 * this.zoom), halfH = height / (2 * this.zoom);
-      const centerX = survival ? survivalX : koTest ? world.freshnessPractice.marks[0] + (a.kind === 'clover' ? 176 : 89) :
+      const centerX = world.bells ? 600 : survival ? survivalX : koTest ? world.freshnessPractice.marks[0] + (a.kind === 'clover' ? 176 : 89) :
         halfW >= 600 ? 600 : clamp((a.x + b.x) / 2, halfW, 1200 - halfW);
-      const centerY = koTest || survival ? launchCenterY : halfH >= 337.5 ? 337.5 : clamp((a.y + b.y) / 2 - 67, halfH, 675 - halfH);
+      const centerY = world.bells ? 324 : koTest || survival ? launchCenterY : halfH >= 337.5 ? 337.5 : clamp((a.y + b.y) / 2 - 67, halfH, 675 - halfH);
       this.cx += ((focusX ?? centerX) - this.cx) * blend;
       this.cy += ((focusY ?? centerY) - this.cy) * blend;
       if (focus && !steady) {
@@ -2640,6 +2645,7 @@
       window.ArenaArt.draw(ctx, world.stage, world.time, {
         left, top, right: left + 2 * halfW, bottom: top + 2 * halfH,
       },world.form);
+      if (world.bells) window.BellBreak.draw(ctx,world);
       if (this.finishReturn) finalHitBackdrop(ctx,left,top,2*halfW,2*halfH,focus,steady,this.finishReturn/.24);
       if (world.suddenDeath) {
         const inset = world.blastInset();

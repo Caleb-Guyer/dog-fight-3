@@ -167,7 +167,7 @@ body .topbar .wordmark {
 }
 .mode-rack {
   overflow: auto;
-  grid-template-rows: repeat(5,minmax(max-content,1fr));
+  grid-template-rows: repeat(6,minmax(max-content,1fr));
 }
 .mode-rack button {
   padding-left: clamp(16px, 3vw, 58px);
@@ -351,6 +351,13 @@ body:is(.playing, .cinema-active) .full-button span {
 }
 dialog[data-view='cup'] { width: min(550px,calc(100% - 20px)); }
 .cup-dogs { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; margin-bottom: 16px; }
+#bell-map {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 2px solid #76644f;
+  image-rendering: pixelated;
+}
 .cup-dog { display: grid; justify-items: center; padding: 4px; background: var(--ink); color: var(--cream); border: 2px solid var(--ink); }
 .cup-dog[aria-pressed='true'] { background: var(--gold); color: var(--ink); }
 .cup-dog img { width: 44px; height: 42px; object-fit: contain; image-rendering: pixelated; }

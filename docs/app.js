@@ -333,7 +333,7 @@
         else if(world.finished==='fallen')id=null;
         else playing=playing && !paused;
       } else if(fight.end!==null){
-        id=dialogType && fight.dogs[fight.end] ? 'win-'+fight.dogs[fight.end].kind : null;
+        id=dialogType && fight.endReason!=='fall' && fight.dogs[fight.end] ? 'win-'+fight.dogs[fight.end].kind : null;
       } else {
         id=fight.stage;playing=playing && !paused && countdown<=0;
         urgent=!world.lesson && fight.mode!=='training' && (fight.suddenDeath ||
@@ -370,6 +370,12 @@
     oscillator.stop(now + length + 0.014);
   }
   function sound(name, detail = {}) {
+    if (name === 'ringBell') {
+      const pitch=[392,440,494,587,659,784][detail.count-1];
+      tone(pitch,pitch,.19,0,'sine',.14);
+      tone(pitch*2.01,pitch*2,.13,.003,'triangle',.045);
+      return;
+    }
     if(name==='ko' || name==='break') music?.duck(.33);
     else if(name==='parry' || name==='hit' && detail.emphatic) music?.duck(.16);
     if (name === 'hit') {
@@ -793,6 +799,12 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if (dialogType==='bell-result') return;
+    if (dialogType==='bells' || dialogType==='bells-loading') {
+      dismiss();
+      $('home-bells').focus({preventScroll:true});
+      return;
+    }
     if (dialogType==='finish-replay') {
       showResult();
       document.querySelector('[data-do=watch-finish]')?.focus();
@@ -1402,6 +1414,14 @@
     for (const [i,option] of Array.from($('combo-slot').options).entries()) option.textContent = takeName(i);
   }
   function updateHUD() {
+    if (world.bells) {
+      const clock=$('match-clock'), count=$('match-set');
+      const time=window.BellBreak.formatTime(world.matchFrames,1);
+      if (clock.textContent!==time) clock.textContent=time;
+      const label=world.cleared+' / '+world.bells.length+' bells';
+      if (count.textContent!==label) count.textContent=label;
+      return;
+    }
     const landing = world.spacingPractice?.pattern === 'landing' && world.spacingPractice;
     const compare = $('hop-compare');
     if (landing || !compare.hidden) {
@@ -1551,6 +1571,83 @@
   }
   let matchConfig, soloSeed, localSet = null, practiceFight = null;
   let finishTape=null, clipScreen=null, victoryShot=null;
+  let bellChoice='pip', bellLoad;
+  const sessionBests=new Map();
+  const bellKey=kind=>'dog-fight-3.bells.1.'+kind;
+  function bellBest(kind) {
+    const tab=sessionBests.get(kind) || Infinity;
+    let disk;
+    try { disk=window.BellBreak.readBest(localStorage.getItem(bellKey(kind))); } catch {}
+    const best=Math.min(tab,disk || Infinity);
+    return Number.isFinite(best) ? best : null;
+  }
+  function saveBellTime(run) {
+    const kind=run.dogs[0].kind, key=bellKey(kind);
+    const commit=()=>{
+      const previous=bellBest(kind);
+      run.record=!previous || run.matchFrames<previous;
+      if (!run.record) return;
+      sessionBests.set(kind,run.matchFrames);
+      try { localStorage.setItem(key,String(run.matchFrames)); }
+      catch { run.tabOnly=true; }
+    };
+    return navigator.locks ? navigator.locks.request(key,commit).catch(commit) : Promise.resolve(commit());
+  }
+  async function bellSheet(kind=bellChoice) {
+    if (!Object.hasOwn(fighters,kind)) return;
+    if (page!=='home') showHome(false);
+    if (!window.BellBreak) {
+      showDialog('bells-loading','Bell Break','<p role="status">Opening the bell yard…</p>');
+      if (!bellLoad) bellLoad=new Promise((resolve,reject)=>{
+        const script=document.createElement('script');
+        script.src='./bell-break.js?v=bell-yard-1';
+        script.onload=()=>window.BellBreak ? resolve() : reject();
+        script.onerror=reject;
+        document.head.append(script);
+      }).finally(()=>{bellLoad=null;});
+      try { await bellLoad; }
+      catch {
+        if (dialogType==='bells-loading') showDialog('bells','Bell Break',
+          '<p>The course could not load.</p><button class="primary" data-do="bells-sheet">Try again</button>');
+        return;
+      }
+      if (dialogType!=='bells-loading') return;
+    }
+    bellChoice=kind;
+    const {courses,formatTime}=window.BellBreak, course=courses[kind], best=bellBest(kind);
+    const device=getPads().length?1:matchMedia('(pointer:coarse)').matches?2:0;
+    const rows=Object.keys(courses).map(id=>'<button class="cup-dog" data-bell-dog="'+id+'" aria-pressed="'+(id===kind)+
+      '"><img alt="" src="'+portrait(id,savedCoat(0,id))+'"><strong>'+fighters[id].name+'</strong></button>').join('');
+    showDialog('bells','Bell Break','<div class="cup-dogs" role="group" aria-label="Choose a dog and course">'+rows+
+      '</div><h3 class="card-stage">'+course.name+'</h3><canvas id="bell-map" width="540" height="177" role="img" aria-label="'+
+      course.name+' starting layout on '+arenas[course.stage].name+'"></canvas>'+
+      '<p>Strike all six bells in any order. Falling out ends the run. '+course.tip+'</p>'+
+      '<p id="bell-bindings"></p>'+
+      '<p>Personal best · <strong>'+(best?formatTime(best):'No clear yet')+'</strong></p>'+
+      '<div class="dialog-actions"><button class="primary" data-do="bells-start">Start course</button></div>');
+    $('bell-bindings').textContent=device===2 ? 'Tap Jump, then Attack to strike in the air.' :
+      'Jump · '+schoolHint('platform',device)+'     Attack · '+schoolHint('jab',device);
+    window.BellBreak.preview($('bell-map'),kind,savedCoat(0,kind));
+    document.querySelector('[data-do=bells-start]').focus({preventScroll:true});
+  }
+  function startBells() {
+    const kind=bellChoice;
+    startMatch({mode:'targets',p1:kind,p2:'pip',coats:[savedCoat(0,kind),0],stage:window.BellBreak.courses[kind].stage,fetch:false});
+  }
+  function bellResult() {
+    const run=world, {formatTime}=window.BellBreak, won=run.endReason==='clear';
+    const best=bellBest(run.dogs[0].kind);
+    showDialog('bell-result',won?'Course cleared!':'Missed the landing',
+      '<h3 class="card-stage">'+run.course.name+'</h3><p>'+run.cleared+' / '+run.bells.length+' bells · '+formatTime(run.matchFrames)+'</p>'+
+      '<p id="bell-record">'+(best?'Personal best · '+formatTime(best):'No clear yet')+'</p>'+
+      '<div class="dialog-actions"><button class="primary" data-do="bells-start">Run again</button>'+
+      '<button class="utility" data-do="bells-sheet">Choose course</button><button class="utility" data-do="home">Main menu</button></div>',false);
+    if (won) run.saved.then(()=>{
+      if (world===run && dialogType==='bell-result') $('bell-record').textContent=
+        (run.record?'New personal best':'Personal best')+' · '+formatTime(bellBest(run.dogs[0].kind))+(run.tabOnly?' · Saved for this tab':'');
+    });
+    document.querySelector('[data-do=bells-start]').focus({preventScroll:true});
+  }
   const reducedReplays=matchMedia('(prefers-reduced-motion: reduce)');
   const cup = window.YardCup, unsavedCup = new Map();
   let cupAttempt = null, cupChoice = settings.p1, cupShown;
@@ -1901,10 +1998,13 @@
     view = resume?.view || new FightView($('blast-radar'));
     showContactBoxes(false);
     view.shakeEnabled = settings.shake;
-    world = resume?.battle || new Battle({...config, rivalRead:series?.openingRead}, (name, e) => {
+    const Match = config.mode==='targets' ? window.BellBreak.Run : Battle;
+    world = resume?.battle || new Match({...config, rivalRead:series?.openingRead}, (name, e) => {
       world?.lesson?.contact(name,e);
       view.event(name, e);
       sound(name, e);
+      if (name==='ringBell') announce(e.count+' of '+world.bells.length+' bells');
+      if (name==='win' && world?.bells) world.saved=saveBellTime(world);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
       if (world?.meteorPractice && e.f?.index === 0) meteorFeedback(name, e);
       if (world?.survivalPractice && e.f?.index === 0) survivalFeedback(name, e);
@@ -1982,12 +2082,21 @@
     $('dummy-damage').value = '0';
     $('damage-output').textContent = '0%';
     const matchName = online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
-      (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : modes[config.mode];
+      (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : world.bells ? 'Bell Break' : modes[config.mode];
     $('match-mode').textContent = cupAttempt ? 'Arcade Cup · Round '+(cupAttempt.round+1)+'/4' :
       world.lesson ? 'Fight School' : matchName + (config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = stageName(config.stage,world.form);
     const set = online.series || localSet;
     $('match-set').hidden = !set;
+    if (world.bells) {
+      $('match-stage').textContent=world.course.name;
+      $('match-set').hidden=$('match-clock').hidden=false;
+      $('match-set').removeAttribute('aria-label');
+      $('match-clock').setAttribute('aria-label','Course time');
+      $('match-clock').classList.remove('urgent');
+      $('countdown').classList.remove('sudden');
+      for (const id of ['hud','hop-compare','training-move','training-combo','training-charge','grapple-prompt']) $(id).hidden=true;
+    }
     if (set) {
       $('match-set').textContent = 'Game ' + set.games.length + ' · ' + set.score.join('–');
       $('match-set').setAttribute('aria-label', 'Best of three, game ' + set.games.length + ', P1 ' + set.score[0] + ', P2 ' + set.score[1]);
@@ -2030,6 +2139,14 @@
   }
   function showPause() {
     if (page !== 'match' || !world || world.end !== null) return;
+    if (world.bells) {
+      showDialog('pause',world.course.name+' paused','<p>'+world.cleared+' of six bells · '+window.BellBreak.formatTime(world.matchFrames)+
+        '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button>'+
+        '<button class="utility" data-do="bells-start">Restart course</button><button class="utility" data-do="controls">Controls</button>'+
+        '<button class="utility" data-do="moves">Move list</button><button class="utility" data-do="bells-sheet">Choose course</button></div>');
+      document.querySelector('[data-do=resume]').focus();
+      return;
+    }
     if (world.lesson) return schoolList();
     if (cupAttempt) {
       showDialog('pause','Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+(cupAttempt.round+1)+
@@ -2278,6 +2395,7 @@
     announce(title + '. ' + name(winner) + ' wins. Set score ' + set.score.join(' to '));
   }
   function showResult() {
+    if (world.bells) return bellResult();
     const result = online.match?.confirmedWorld || world;
     if (cupAttempt) return cupResult(result.mode==='adventure' ? result.finished==='exit' : result.end===0);
     const f = result.dogs[result.end], elapsed = Math.floor(result.matchFrames / 60);
@@ -2433,6 +2551,14 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    const dog=e.target.closest('[data-bell-dog]');
+    if (dog) {
+      bellSheet(dog.dataset.bellDog);
+      document.querySelector('[data-bell-dog][aria-pressed=true]').focus();
+      return;
+    }
+    if (action==='bells-start') return startBells();
+    if (action==='bells-sheet') return bellSheet();
     if (action==='watch-finish') return showFinishReplay();
     if (action==='clip-back') return exitDialog();
     const review=e.target.closest('[data-school-review]');
@@ -5349,6 +5475,7 @@
     if (next) beginRun(Number(next.dataset.nextStop), 0);
   });
   $('home-cup').onclick = () => cupSheet();
+  $('home-bells').onclick = () => bellSheet();
   $('home-adventure').onclick = () => {
     audioReady();
     sound('menu');
@@ -6301,7 +6428,10 @@
     const hash = location.hash;
     const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
     const [,arena,form] = hash.split('/');
-    if (hash === '#arcade' || (hash === '#arcade/'+arena && Object.hasOwn(cup.courses,arena))) {
+    if (hash==='#bells' || (hash==='#bells/'+arena && Object.hasOwn(fighters,arena))) {
+      showHome(false);
+      bellSheet(arena || 'pip');
+    } else if (hash === '#arcade' || (hash === '#arcade/'+arena && Object.hasOwn(cup.courses,arena))) {
       showHome(false);
       cupSheet(arena || settings.p1);
     } else if (hash === '#solo/'+arena+'/'+form && Object.hasOwn(arenas,arena) && Object.hasOwn(stageForms,form)) {
