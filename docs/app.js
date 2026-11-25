@@ -23,6 +23,7 @@
     isSweetPractice,
     cpuLevels,
     stockMinutes,
+    validStockCount,
     warmupPartners,
     seededRandom,
     clamp,
@@ -243,6 +244,7 @@
     mode: 'solo',
     cpuLevel: 'arcade',
     minutes: 7,
+    lives: 3,
     timed: false,
     bestOfThree: false,
     p1: 'pip',
@@ -270,6 +272,7 @@
     if (Object.hasOwn(modes, s.mode)) settings.mode = s.mode;
     if (Object.hasOwn(cpuLevels, s.cpuLevel)) settings.cpuLevel = s.cpuLevel;
     if (stockMinutes.includes(s.minutes)) settings.minutes = s.minutes;
+    if(validStockCount(s.lives))settings.lives=s.lives;
     settings.timed=s.timed===true;
     if(settings.timed && !settings.minutes)settings.minutes=3;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
@@ -665,7 +668,7 @@
     showDialog('couch',title,'');
     const pair=rotationPicking?rotation.players.slice(0,2):null;
     const config=counter?{...matchConfig,stage:world.stage,stageForm:world.form,coats:[world.coatFor(0),world.coatFor(1)]}:
-      pair?{...settings,p1:pair[0].kind,p2:pair[1].kind,coats:pair.map(p=>p.coat),coatBook:pair.map(p=>({[p.kind]:p.coat})),
+      pair?{...settings,...rotation.rules,p1:pair[0].kind,p2:pair[1].kind,coats:pair.map(p=>p.coat),coatBook:pair.map(p=>({[p.kind]:p.coat})),
         rotationRound:rotation.bout,rotationTags:pair.map(p=>p.name),bestOfThree:rotation.sets,couchSeats:rotationPads}:settings;
     couchPanel=window.CouchSelect.panel($('dialog-body'),config,keys,getPads(),{
       sound,announce,drawStageTile,leave:exitDialog,between:counter?{picker:localSet.picker,game:localSet.games.length+1}:null,
@@ -682,14 +685,14 @@
         if(pair){
           rotation.remember(pick.dogs,pick.colors);rotationPads=seats;saveRotation();
           rotationPicking=false;
-          startMatch({...config,timeBattle:config.timed,p1:pick.dogs[0],p2:pick.dogs[1],stage,form:lobbyForm(),coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats},
+          startMatch({...config,stockCount:config.lives,timeBattle:config.timed,p1:pick.dogs[0],p2:pick.dogs[1],stage,form:config.stageForm,coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats},
             undefined,undefined,config.bestOfThree?new StockSet(stage):null);return;
         }
         [settings.p1,settings.p2]=pick.dogs;
         settings.stage=stage;
         for(const [i,kind] of pick.dogs.entries())settings.coatBook[i][kind]=pick.colors[i];
         save();
-        startMatch({...settings,timeBattle:settings.timed,stage,form:lobbyForm(),coats:pick.colors.slice(),couchSeats:seats},undefined,undefined,
+        startMatch({...settings,stockCount:settings.lives,timeBattle:settings.timed,stage,form:lobbyForm(),coats:pick.colors.slice(),couchSeats:seats},undefined,undefined,
           settings.bestOfThree?new StockSet(stage):null);
       },
     });
@@ -722,7 +725,7 @@
     const training = settings.mode === 'training';
     $('rules-label').disabled = training;
     $('rules-label').innerHTML = icon('paw') + (training ? 'Unlimited' :
-      (settings.bestOfThree ? 'Best of three' : 'Rules') + (settings.timed?' · Time Battle · ':' · 3 stocks · ') + (settings.minutes ? settings.minutes + ' min' : 'No clock') + ' ▾');
+      (settings.bestOfThree ? 'Best of three' : 'Rules') + (settings.timed?' · Time Battle · ':' · '+stockLabel(settings.lives)+' · ') + (settings.minutes ? settings.minutes + ' min' : 'No clock') + ' ▾');
     $('start').innerHTML =
       icon('play') + '<span>' + (training ? 'Start training' : settings.bestOfThree ? 'Start set' : 'Start fight') + '</span>';
     syncFetch();
@@ -883,6 +886,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='rulebook')return backFromRulebook();
     if(dialogType==='pack-relay')return backFromRelay();
     if(dialogType==='finish-picker')return $('finish-picker-back').click();
     if(dialogType==='finish-comparison')return leaveFinishTrial(true);
@@ -1423,8 +1427,8 @@
     return '<span class="air-resources" role="img" aria-label="' + label + '" title="' + label + '">' +
       airResources.map((name,i) => '<span' + (mask & (1<<i) ? '' : ' class="spent"') + '>' + name + '</span>').join('') + '</span>';
   }
-  function stockPaws(count) {
-    return Array.from({ length: 3 }, (_, i) =>
+  function stockPaws(count,total=3) {
+    return Array.from({ length: total }, (_, i) =>
       '<i class="' + (i >= count ? 'lost' : '') + '" data-icon="paw">' + svg('paw') + '</i>').join('');
   }
   const tenth = n => Number(n.toFixed(1));
@@ -1438,17 +1442,18 @@
     const scored=points!==null;
     const team=battle.relayTeams?.[slot], sudden=!!battle.suddenDeath;
     let card=hudCards[slot];
-    if(!card || card.kind!==f.kind || card.coat!==coat || card.label!==label || card.training!==training || card.scored!==scored || card.team!==team || (team && card.sudden!==sudden)){
+    const total=battle.stockCount || 3;
+    if(!card || card.kind!==f.kind || card.coat!==coat || card.label!==label || card.training!==training || card.scored!==scored || card.team!==team || card.total!==total || (team && card.sudden!==sudden)){
       const root=document.createElement('div');
       root.className='hud-card'+(slot?' two':'');
       root.innerHTML='<span class="hud-portrait"><img alt=""></span><div><span class="hud-name"><small></small></span>'+
         '<strong class="percentage"></strong><span class="lives">'+(team?team.map((kind,i)=>'<img alt="" title="'+fighters[kind].name+
-          '" src="'+portrait(kind,battle.relayCoats[slot][i])+'">').join(''):scored?'':training?'∞':stockPaws(3))+'</span></div>';
+          '" src="'+portrait(kind,battle.relayCoats[slot][i])+'">').join(''):scored?'':training?'∞':stockPaws(total,total))+'</span></div>';
       const picture=root.querySelector('.hud-portrait'), name=root.querySelector('.hud-name');
       picture.firstChild.src=portrait(f.kind,coat);
       name.firstChild.textContent=label;name.append(f.stats.name);
       if(card)card.root.replaceWith(root);else $('hud').append(root);
-      card=hudCards[slot]={root,picture,kind:f.kind,coat,label,training,scored,team,sudden,lives:root.querySelector('.lives'),
+      card=hudCards[slot]={root,picture,kind:f.kind,coat,label,training,scored,team,sudden,total,lives:root.querySelector('.lives'),
         percent:root.querySelector('.percentage'),alert:'',recovery:null,rage:0};
     }
     if(card.damage!==f.damage){
@@ -2073,11 +2078,12 @@
     const choices = stockMinutes.filter(n=>n || !settings.timed).map(n => '<button type="button" class="utility" data-minutes="' + n +
       '" aria-pressed="' + (settings.minutes === n) + '">' + (n ? n + ' min' : 'No clock') + '</button>').join('');
     showDialog('stock-rules', settings.timed?'Time Battle rules':'Stock match rules',
+      '<div class="dialog-actions"><button class="primary" data-do="rulebook">Choose or create a ruleset</button></div>'+
       '<h3>Battle rules</h3><div class="dialog-actions"><button class="utility" data-scoring="stock" aria-pressed="'+!settings.timed+'">Stock</button>'+
       '<button class="utility" data-scoring="time" aria-pressed="'+settings.timed+'">Time Battle</button>'+
       '<button class="utility" data-do="pack-relay">Pack Relay · Choose teams</button></div>'+
       (settings.timed?'<p>Respawn until time expires. Earn one point if a rival falls within ten seconds of your hit. Lose one point whenever you fall. A tie starts Sudden Death.</p>':
-      '<p>Three stocks each. When time runs out, the dog with more stocks wins. Tied stocks or a double final knockout start Sudden Death.</p>') +
+      '<p>'+stockLabel(settings.lives)+' each. When time runs out, the dog with more stocks wins. Tied stocks or a double final knockout start Sudden Death.</p>') +
       '<h3>Match format</h3><div class="dialog-actions"><button class="utility" data-format="single" aria-pressed="' + !settings.bestOfThree +
       '">Single game</button><button class="utility" data-format="set" aria-pressed="' + settings.bestOfThree + '">Best of three</button></div>' +
       '<p>In a set, the loser picks the next arena. First to two wins takes the set.</p>' +
@@ -2088,6 +2094,16 @@
       '<div class="dialog-actions"><button class="utility" data-do="sudden-start">Play Sudden Death</button></div>');
     document.querySelector('[data-minutes="' + settings.minutes + '"]').focus({preventScroll:true});
   };
+  function backFromRulebook(){
+    $('rules-label').onclick();$('dialog-body').querySelector('[data-do="rulebook"]').focus();
+  }
+  function openRulebook(hash){
+    if(!window.VersusRulebook)return waitForDispatch('Versus rulesets',()=>loadDispatch('VersusRulebook'),()=>openRulebook(hash),backFromRulebook);
+    showDialog('rulebook','Versus rulesets','');
+    window.VersusRulebook.open($('dialog-body'),settings,{storage,hash,back:backFromRulebook,apply(rules){
+      Object.assign(settings,rules);save();dismiss();syncFetch();syncLobby();$('start').focus();sound('menu');
+    }});
+  }
   function startShieldReadMatch(series = false) {
     leaveOnline();
     afterStory = null;
@@ -2712,7 +2728,7 @@
       players.map((p,i) => '<td>' + value(p,i) + '</td>').join('') + '</tr>';
     const relayRows=card.relayTeams?['Lead','Second','Anchor'].map((label,k)=>row(label+' damage',(p,i)=>
       fighters[card.relayTeams[i][k]].name+' · '+(k>card.relayTeams[i].indexOf(p.kind)?'On bench':tenth(card.relayDamage[i][k])+'%'))).join(''):'';
-    const stats = row('Damage dealt', p => tenth(p.damage) + '%') + relayRows + row('Hits landed', p => p.hits) +
+    const stats = (card.stockCount?row('Starting stocks',()=>card.stockCount):'') + row('Damage dealt', p => tenth(p.damage) + '%') + relayRows + row('Hits landed', p => p.hits) +
       row('Hits blocked', p => p.blocks) + row('Parries', p => p.parries) + row('Shield breaks suffered',p=>p.shieldBreaks) +
       row('Landing techs',p=>p.techs) + row('Knockdowns taken',p=>p.knockdowns) +
       (card.points?row('Regulation points',(_,i)=>card.points[i])+row('Credited KOs',(_,i)=>losses.filter(l=>l.slot!==i && l.credited).length)+
@@ -2859,7 +2875,7 @@
     announce(f.stats.name + ' wins the Golden Tennis Ball');
     document.querySelector('#dialog-body .primary').focus();
   }
-  $('start').onclick = () => startMatch({...settings,timeBattle:settings.timed,form:lobbyForm(),coats:lobbyCoats}, undefined, undefined,
+  $('start').onclick = () => startMatch({...settings,stockCount:settings.lives,timeBattle:settings.timed,form:lobbyForm(),coats:lobbyCoats}, undefined, undefined,
     settings.mode !== 'training' && settings.bestOfThree ? new StockSet(settings.stage) : null);
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
@@ -2963,6 +2979,7 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if(action==='rulebook')return openRulebook();
     if(action==='corner-practice' && corner)return startCornerLesson();
     if(action==='corner-toggle' && corner){
       settings.cornerTips=!settings.cornerTips;save();
@@ -5335,8 +5352,9 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
+    VersusRulebook:'versus-rules.js?v=1',
     PackRelay:'pack-relay.js?v=1',
-    WinnerStays:'winner-stays.js?v=rotation-1', CouchSelect:'couch-select.js?v=time-battle-1',
+    WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=rulesets-1',
     FinishTools:'finish-tools.js?v=time-battle-1',
     FighterSchool:'fighter-lessons.js?v=school-examples-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
@@ -7278,7 +7296,9 @@
     const hash = location.hash;
     const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
     const [,arena,form] = hash.split('/');
-    if(hash==='#local/pack-relay' || hash==='#solo/pack-relay'){
+    if(/^#(local|solo)\/rules(?:\/|$)/.test(hash)){
+      settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();openRulebook(hash);
+    }else if(hash==='#local/pack-relay' || hash==='#solo/pack-relay'){
       settings.mode=hash.startsWith('#local')?'local':'solo';
       editing=0;toLobby();openRelay();
     }else if(hash==='#local/winner-stays'){

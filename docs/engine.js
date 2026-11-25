@@ -235,6 +235,14 @@
   const maxDI = (18 * Math.PI) / 180;
   const verticalLaunch = Math.sin(65 * Math.PI / 180);
   const stockMinutes = [1, 3, 7, 0];
+  const validStockCount=n=>Number.isInteger(n) && n>=1 && n<=5;
+  function versusRules(config={}){
+    const timed=(config.timeBattle ?? config.timed)===true;
+    const lives=config.stockCount ?? config.lives, form=config.form ?? config.stageForm;
+    return {timed,lives:validStockCount(lives)?lives:3,
+      minutes:stockMinutes.includes(config.minutes) && (!timed || config.minutes)?config.minutes:timed?3:7,
+      bestOfThree:config.bestOfThree===true,stageForm:Object.hasOwn(stageForms,form)?form:'original',fetch:config.fetch!==false};
+  }
   const warmupPartners={stand:{title:'Stand still',tag:'DUMMY'},shield:{title:'Hold shield',tag:'SHIELD'},spar:{title:'Spar with CPU',tag:'CPU'}};
   const blastSideMargin = 115, bottomBlastY = 765;
   const blastZone = (x, y, width, inset = 0) => x < -blastSideMargin + inset ? 'left' : x > width + blastSideMargin - inset ? 'right' :
@@ -2768,6 +2776,9 @@
       this.random = this.mode === 'training' && random === Math.random
         ? seededRandom(Math.floor(random() * 0x100000000)) : random;
       this.dogs = [newFighter(this.relayTeams?.[0][0] || config.p1,0),newFighter(this.relayTeams?.[1][0] || config.p2,1)];
+      this.stockCount=versus && !timed && !this.relayTeams && config.lesson===undefined && !config.schoolFinal &&
+        validStockCount(config.stockCount)?config.stockCount:3;
+      for(const f of this.dogs)f.stocks=this.stockCount;
       this.terrain = this.layout?.terrain || platforms(this.geometryStage, 0);
       this.ledgeClaims = [];
       this.grapple = null;
@@ -2841,6 +2852,7 @@
         players:this.dogs.map(f => ({kind:f.kind, coat:this.coatFor(f.index), damage:0, hits:0, blocks:0, parries:0,
           techs:0, knockdowns:0, shieldBreaks:0, lastHit:null})),
         losses:[],
+        ...(this.stockCount!==3?{stockCount:this.stockCount}:{}),
         ...(this.relayTeams ? {relayTeams:this.relayTeams,relayDamage:[[0,0,0],[0,0,0]]} : {}),
         ...(timed ? {points:[0,0],minutes} : {}),
       } : null;
@@ -11290,6 +11302,7 @@
   window.DogFight = {
     cpuLevels,
     stockMinutes,
+    validStockCount,versusRules,
     validRelayTeams,relayCoats,
     warmupPartners,
     seededRandom,

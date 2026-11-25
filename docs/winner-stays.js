@@ -14,6 +14,7 @@
   class Lineup {
     constructor(settings){
       this.bout=1;this.serial=3;this.sets=!!settings.bestOfThree;
+      this.rules=window.DogFight.versusRules(settings);
       this.players=[player(1,settings.p1,settings.coats?.[0]??0),player(2,settings.p2,settings.coats?.[1]??0),player(3,'noodle')];
     }
     static read(storage){
@@ -21,7 +22,8 @@
         const s=JSON.parse(storage.getItem(key));
         if(s && natural(s.bout) && s.bout>0 && natural(s.serial) && typeof s.sets==='boolean' &&
           Array.isArray(s.players) && s.players.length>=3 && s.players.length<=8 && s.players.every(valid) && s.serial>=s.players.length)
-          return Object.assign(Object.create(Lineup.prototype),{bout:s.bout,serial:s.serial,sets:s.sets,players:s.players});
+          return Object.assign(Object.create(Lineup.prototype),{bout:s.bout,serial:s.serial,sets:s.sets,players:s.players,
+            rules:s.rules?window.DogFight.versusRules(s.rules):null});
       }catch{}
       return null;
     }

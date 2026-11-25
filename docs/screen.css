@@ -103,6 +103,13 @@ body .topbar .wordmark {
 #school-coach div { display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; }
 #school-coach[data-state^="example"] { border-color:#96dcd1; }
 #school-bindings { color:#aadcd8; }
+.rules-source,.rules-fields label { display:grid; gap:4px; }
+.rules-source { margin:10px 0; }
+.rules-fields { display:grid; gap:0; }
+.rules-fields label { grid-template-columns:minmax(94px,1fr) minmax(0,1.5fr); align-items:center; padding:4px 0; border-bottom:1px solid #62596a; }
+.rules-fields select,.rules-source select,.rules-source input,#rules-link { font:inherit; min-width:0; padding:5px; }
+#rules-link { width:100%; box-sizing:border-box; }
+#rules-status:empty { display:none; }
 #corner-tip {
   position:absolute; z-index:1; top:calc(var(--top-edge) + 51px); left:var(--left-edge);
   width:max-content; max-width:min(35ch,85%); padding:6px 10px; box-sizing:border-box;

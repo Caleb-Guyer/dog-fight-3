@@ -83,7 +83,8 @@
     }));
     const play=root.querySelector('#couch-start'), back=root.querySelector('#couch-back'), call=root.querySelector('#couch-call');
     if(settings.rotationTags)cards.forEach((c,i)=>{c.el.querySelector('header b').textContent='P'+(i+1)+' · '+settings.rotationTags[i];});
-    root.querySelector('#couch-rules').textContent=(settings.bestOfThree?'Best of three':'Single game')+((settings.timeBattle??settings.timed)?' · Time Battle · ':' · 3 stocks · ')+
+    const lives=settings.stockCount ?? settings.lives ?? 3;
+    root.querySelector('#couch-rules').textContent=(settings.bestOfThree?'Best of three':'Single game')+((settings.timeBattle??settings.timed)?' · Time Battle · ':' · '+lives+(lives===1?' stock · ':' stocks · '))+
       (settings.minutes?settings.minutes+' min':'No clock')+' · '+stageForms[settings.stageForm].name+' · Fetch Ball '+(settings.fetch?'on':'off');
     const key=(i,action)=>window.FightControls.keyName(keys[i][action]);
     let lastCel=-1,closed=false;
