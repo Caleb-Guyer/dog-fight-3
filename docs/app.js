@@ -2213,7 +2213,7 @@
     $('partner-training').setAttribute('aria-pressed','false');
     localSet = series;
     matchConfig = { ...config };
-    corner=config.schoolFinal && !visit ? resume?.corner || new window.FightSchool.Corner() : null;
+    corner=config.schoolFinal && !visit ? resume?.corner || new window.FightSchool.Corner(config.schoolTarget) : null;
     $('corner-tip').hidden=true;
     delete $('corner-tip').dataset.cue;
     if((series || config.relayTeams) && config.mode==='local' && !online.match && config.lesson===undefined && !matchConfig.couchSeats)
@@ -2265,6 +2265,7 @@
     const Match = config.mode==='targets' ? window.BellBreak.Run : Battle;
     world = resume?.battle || new Match({...config, rivalRead:series?.openingRead}, (name, e) => {
       world?.lesson?.contact(name,e);
+      corner?.target?.contact(name,e,world);
       view.event(name, e);
       sound(name, e);
       if (name==='ringBell') announce(e.count+' of '+world.bells.length+' bells');
@@ -2468,7 +2469,7 @@
         'Resume</button><button class="utility" data-do="controls">' +
         icon('keyboard') +
         'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div>' +
-        (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
+        targetRecap() + (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
           (corner?'<button class="utility" data-do="corner-practice">Practice · '+schoolLessons.find(l=>l.id===corner.lesson).title+'</button>'+
             '<button class="utility" data-do="corner-toggle" aria-pressed="'+settings.cornerTips+'">Ringside tips · '+(settings.cornerTips?'On':'Off')+'</button>':'')+
           (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight ? 'Retry position' : 'Practice this position') + '</button>' : '') +
@@ -2797,7 +2798,11 @@
     const series=online.series || localSet;
     const entry={time:Date.now(),mode:recordMode(),side:online.match?online.side:0,stage:result.stage,form:result.form,
       round:series?.games.length || (cupAttempt?cupAttempt.round+1:0),winner:result.end,card:structuredClone(result.matchCard)};
-    records.add(entry);
+    const ticket=records.add(entry);
+    if(matchConfig.schoolFinal){
+      schoolSave.firstFightDone=true;
+      saveSchool(result.end===0?{won:true}:{loss:window.FightSchool.rematchLesson(result.matchCard).id,ticket});
+    }
     if(matchConfig.rotationRound && (!localSet || localSet.score[result.end]>=1) && rotation.finish(matchConfig.rotationRound,result.end))saveRotation();
     recordedFights.add(result);
   }
@@ -2944,17 +2949,13 @@
     const set = online.series || localSet;
     if (set) return showSetResult(result, set, finish, duration);
     if (matchConfig?.schoolFinal && !online.match) {
-      if (!schoolSave.firstFightDone) {
-        schoolSave.firstFightDone=true;
-        saveSchool();
-      }
       const won=result.end===0;
       const review=won ? null : window.FightSchool.rematchLesson(result.matchCard);
       showDialog('result',won?'First fight won!':'First fight finished',
         '<div class="winner"><img alt="" src="'+portrait(f.kind,result.coatFor(f.index))+'"><div><h3>'+f.stats.name+
         ' wins!</h3><p>'+finish+' · '+duration+'</p></div></div><p>'+
         (won?'Pip’s next opponent is Noodle on Picnic Table in the Arcade Cup.':review.reason)+
-        '</p><div class="dialog-actions"><button class="'+(won?'primary':'utility')+'" data-do="school-cup">Pip’s Arcade Cup</button>'+
+        '</p>'+targetRecap()+'<div class="dialog-actions"><button class="'+(won?'primary':'utility')+'" data-do="school-cup">Pip’s Arcade Cup</button>'+
         '<button class="'+(won?'utility':'primary')+'" data-do="rematch">Rematch Brisket</button>'+
         (review?'<button class="utility" data-school-review="'+review.id+'">'+review.button+'</button>':'')+cardButton+
         '<button class="utility" data-do="fighter-classes">Fighter lessons</button>'+
@@ -3206,7 +3207,10 @@
     if (action === 'shield-read-match') startShieldReadMatch();
     if (action === 'cut-off-clover') startCloverApproach();
     if (action === 'shield-read-set') startShieldReadMatch(true);
-    if (action === 'rematch') startMatch(matchConfig, undefined, soloSeed, localSet);
+    if (action === 'rematch') {
+      if(matchConfig.schoolFinal && world.end!==null)return startFirstFight(world.end===1?window.FightSchool.rematchLesson(world.matchCard).id:null);
+      startMatch(matchConfig, undefined, soloSeed, localSet);
+    }
     if (action === 'controls') showControls();
     if (action === 'moves') showMoves(world?.dogs[world.trainingPlayerSlot].kind || settings.p1);
   });
@@ -5663,11 +5667,13 @@
   }
   function savedGames() {
     const items=[];
-    if (schoolSave.started && (schoolSave.passed.length<schoolLessons.length || !schoolSave.firstFightDone)) {
+    if (schoolSave.started && (schoolSave.rematch || schoolSave.passed.length<schoolLessons.length || !schoolSave.firstFightDone)) {
       const index=unfinishedLesson(), final=index<0;
+      const r=schoolSave.rematch;
       items.push({id:'school',title:'Fight School',kind:'pip',playedAt:schoolSave.playedAt,
-        detail:final?'First stock match · Pip vs. Rookie Brisket':'Lesson '+(index+1)+' · '+schoolLessons[index].title,
-        action:final?'Play match':'Continue'});
+        detail:r?(r.fight?'Rematch Brisket':'Rematch practice')+' · '+schoolLessons.find(l=>l.id===r.id).title:
+          final?'First stock match · Pip vs. Rookie Brisket':'Lesson '+(index+1)+' · '+schoolLessons[index].title,
+        action:r?(r.fight?'Play match':'Practice'):final?'Play match':'Continue'});
     }
     const book = nightUnlocked() ? nightChapter : yardChapter, saved = chapterSaves.get(book);
     if ((saved.started || book===nightChapter) && (!saved.complete || saved.pending)) {
@@ -5712,7 +5718,7 @@
   }
   function resumeSavedGame(id) {
     if (!savedGames().some(g=>g.id===id)) return showHome();
-    if (id==='school') return unfinishedLesson()<0 ? startFirstFight() : resumeCourse();
+    if (id==='school') return resumeCourse();
     if (id==='adventure') { selectChapter(nightUnlocked()?nightChapter:yardChapter); return continueAdventure(); }
     // Use the route card's checked transaction, including its cross-tab retry guard.
     cupSheet(id);
@@ -6268,10 +6274,13 @@
   const schoolSave=readSchool();
   let schoolUnsaved=false;
   const unfinishedLesson=()=>window.FightSchool.unfinished(schoolSave);
-  function saveSchool() {
+  function saveSchool(change) {
     const disk=readSchool();
     schoolSave.passed=schoolLessons.filter(l=>disk.passed.includes(l.id) || schoolSave.passed.includes(l.id)).map(l=>l.id);
     schoolSave.firstFightDone ||= disk.firstFightDone;
+    schoolSave.firstFightWon ||= disk.firstFightWon;
+    if(!schoolUnsaved)schoolSave.rematch=disk.rematch;
+    window.FightSchool.updateRematch(schoolSave,change);
     schoolSave.started ||= disk.started;
     schoolSave.seen=true;
     if (schoolSave.started) schoolSave.playedAt=Date.now();
@@ -6315,17 +6324,24 @@
     if(!pad && schoolDevice===1)schoolDevice=null;
     return schoolDevice ?? (pad?1:matchMedia('(pointer:coarse)').matches?2:0);
   }
+  function targetRecap(){
+    const t=corner?.target;
+    return t?'<p id="rematch-target"><strong>'+t.title+'</strong> · '+t.line+'</p>':'';
+  }
   function renderCorner(pads){
     const cue=corner.read(world), device=promptDevice(pads), tip=$('corner-tip');
-    if(!settings.cornerTips || !cue){if(!tip.hidden)tip.hidden=true;return;}
-    const key=cue+'/'+device;
+    const t=corner.target;
+    const goal=t && (t.doneAt!==null?world.matchFrames-t.doneAt<160:(!cue || cue==='opening') && world.matchFrames<300);
+    if(!settings.cornerTips || (!cue && !goal)){if(!tip.hidden)tip.hidden=true;return;}
+    const key=(goal?t.id+'/'+t.title:cue)+'/'+device;
+    if(goal)corner.lesson=t.id;
     if(tip.dataset.cue!==key){
       const label=action=>{
         if(device===0)return keyFor(0,action);
         if(device===2)return action[0].toUpperCase()+action.slice(1);
         return ['left','right','up'].includes(action)?'stick '+action:padFor(0,action);
       };
-      const [title,line]=window.FightSchool.cornerLine(cue,label);
+      const [title,line]=goal?[t.title,t.line]:window.FightSchool.cornerLine(cue,label);
       $('corner-title').textContent=title;$('corner-line').textContent=line;tip.dataset.cue=key;
     }
     if(tip.hidden)tip.hidden=false;
@@ -6369,10 +6385,14 @@
       return;
     }
     if(matchConfig.cornerLesson){next.textContent='Return to fight';return;}
-    if (lesson.done && !schoolSave.passed.includes(lesson.id)) {
-      schoolSave.passed.push(lesson.id);
-      schoolSave.index=Math.min(lesson.index+1,schoolLessons.length-1);
-      saveSchool();
+    if (lesson.done) {
+      const passed=schoolSave.passed.includes(lesson.id);
+      if(!passed){
+        schoolSave.passed.push(lesson.id);
+        if(!matchConfig.schoolReview)schoolSave.index=Math.min(lesson.index+1,schoolLessons.length-1);
+      }
+      if(!passed || matchConfig.reviewTicket && schoolSave.rematch?.ticket===matchConfig.reviewTicket && !schoolSave.rematch.fight)
+        saveSchool({fight:matchConfig.reviewTicket});
     }
     $('school-next').textContent=matchConfig.schoolReview?'Rematch Brisket':
       lesson.index===schoolLessons.length-1 && unfinishedLesson()<0?'Play first match':'Next lesson';
@@ -6380,18 +6400,19 @@
   function startLesson(index,schoolReview=false) {
     leaveOnline();
     afterStory=null;
-    schoolSave.index=index;
+    if(!schoolReview)schoolSave.index=index;
     schoolSave.started=true;
     saveSchool();
     startMatch({...settings,mode:'local',stage:schoolLessons[index].id==='platform'?'picnic':'nightmail',
-      p1:'pip',p2:'brisket',fetch:false,minutes:0,lesson:index,schoolReview});
+      p1:'pip',p2:'brisket',fetch:false,minutes:0,lesson:index,schoolReview,
+      reviewTicket:schoolReview && schoolSave.rematch?.id===schoolLessons[index].id ? schoolSave.rematch.ticket : null});
     delete $('school-coach').dataset.key;
     renderSchool(getPads());
   }
   function nextLesson() {
     if(world.lesson.example)return replaySchoolLesson(false);
     if(matchConfig.cornerLesson)return returnToFight();
-    if (matchConfig.schoolReview) return startFirstFight();
+    if (matchConfig.schoolReview) return startFirstFight(world.lesson.id);
     const next=world.lesson.index+1;
     const kind=world.lesson.course;
     if(kind)return next<window.FighterSchool.courses[kind].lessons.length?startFighterLesson(kind,next):fighterSheet(kind);
@@ -6399,11 +6420,13 @@
     else if (unfinishedLesson()>=0) startLesson(unfinishedLesson());
     else startFirstFight();
   }
-  function startFirstFight() {
+  function startFirstFight(target=schoolSave.rematch?.id) {
     leaveOnline();
     afterStory=null;
-    saveSchool();
-    startMatch({...settings,mode:'solo',schoolFinal:true,p1:'pip',p2:'brisket',cpuLevel:'rookie',stage:'picnic',fetch:false,minutes:7});
+    schoolSave.started=true;
+    saveSchool({fight:target && schoolSave.rematch?.id===target?schoolSave.rematch.ticket:null});
+    startMatch({...settings,mode:'solo',schoolFinal:true,schoolTarget:target,p1:'pip',p2:'brisket',cpuLevel:'rookie',
+      stage:'picnic',form:'original',stockCount:3,timeBattle:false,fetch:false,minutes:7});
   }
   function startCornerLesson(){
     const visit=pausedFight(), index=schoolLessons.findIndex(l=>l.id===corner.lesson);
@@ -6412,6 +6435,8 @@
     delete $('school-coach').dataset.key;renderSchool(getPads());
   }
   function resumeCourse() {
+    const r=schoolSave.rematch;
+    if(r)return r.fight?startFirstFight(r.id):startLesson(schoolLessons.findIndex(l=>l.id===r.id),true);
     const index=unfinishedLesson();
     if (index<0 && !schoolSave.firstFightDone) return startFirstFight();
     startLesson(index<0?0:index);
@@ -6421,7 +6446,7 @@
       '<p>'+schoolSave.passed.length+' of '+schoolLessons.length+' lessons cleared. Choose a lesson to play as Pip.</p><div id="school-syllabus">'+
       schoolLessons.map((l,i)=>'<button type="button" class="utility" data-lesson="'+i+'">'+(i+1)+'. '+l.title+
         (schoolSave.passed.includes(l.id)?' ✓':'')+'</button>').join('')+'</div><div class="dialog-actions"><button class="primary" id="school-resume">'+
-      (world?.lesson?'Back to lesson':unfinishedLesson()<0?(schoolSave.firstFightDone?'Replay course':'Play first match'):
+      (world?.lesson?'Back to lesson':schoolSave.rematch?(schoolSave.rematch.fight?'Rematch Brisket':'Continue rematch practice'):unfinishedLesson()<0?(schoolSave.firstFightDone?'Replay course':'Play first match'):
         schoolSave.started?'Continue course':'Start course')+'</button><button class="utility" data-do="fighter-classes">Fighter lessons</button><button class="utility" data-do="home">Main menu</button></div>');
     $('school-syllabus').onclick=e=>{const button=e.target.closest('[data-lesson]');if(button) startLesson(Number(button.dataset.lesson));};
     $('school-resume').onclick=()=>world?.lesson?dismiss():resumeCourse();
@@ -7516,6 +7541,7 @@
             const second=world.lesson ? world.lesson.partner(input) : world.hasSecondPlayer ? playerInput(1,pads) : idleInput;
             finishTape?.record(world,input,second);
             world.step(1 / 60, input, second);
+            corner?.target?.step(world);
             if (world.lesson) world.lesson.afterStep(world);
             if (frameLab.mode === 'frozen') {
               frameLab.count++;
