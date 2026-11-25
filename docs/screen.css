@@ -402,6 +402,18 @@ dialog[data-view='couch'] { width: min(640px,calc(100% - 16px)); }
 .cup-dog[aria-pressed='true'] { background: var(--gold); color: var(--ink); }
 .cup-dog img { width: 44px; height: 42px; object-fit: contain; image-rendering: pixelated; }
 .cup-dog strong { font: 15px var(--pixel); }
+.relay-row { display:grid; grid-template-columns:2.8em repeat(3,minmax(0,1fr)); align-items:center; gap:5px; margin:7px 0; }
+.relay-row .cup-dog { grid-template-columns:auto auto; justify-content:center; align-items:center; gap:4px; }
+.relay-row .cup-dog img { width:30px; height:29px; }
+.relay-settings { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+.relay-settings label { display:grid; gap:3px; }
+.relay-settings select { max-width:100%; padding:4px; background:var(--ink); color:var(--cream); font:inherit; }
+.lives img { width:21px; height:18px; object-fit:contain; image-rendering:pixelated; }
+@media(max-width:520px) {
+  .relay-row .cup-dog { grid-template-columns:1fr; gap:1px; }
+  .relay-row .cup-dog strong { font-size:13px; }
+  .lives img { width:16px; height:14px; }
+}
 .cup-stops { list-style: none; padding: 0; margin: 10px 0; border-top: 2px solid var(--ink); }
 .cup-stops li { display: grid; grid-template-columns: 2ch 1fr auto; gap: 8px; align-items: center; padding: 5px; border-bottom: 1px solid #b9ac8c; }
 .cup-stops li[aria-current] { background: #e3cd9c; }

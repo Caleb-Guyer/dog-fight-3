@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const {fighters,arenas,stageForms,validCoat} = window.DogFight;
+  const {fighters,arenas,stageForms,validCoat,validRelayTeams} = window.DogFight;
   const prefix='dog-fight-3.record.1.', limit=12;
   const number=n=>Number.isFinite(n) && n>=0;
   const count=n=>Number.isSafeInteger(n) && n>=0;
@@ -17,7 +17,9 @@
       ['hits','blocks','parries','techs','knockdowns','shieldBreaks'].every(k=>count(p[k]))) &&
       count(c.frames) && ['time','ko','sudden'].includes(c.reason) && Array.isArray(c.losses) &&
       (c.points===undefined || (scores(c.points) && [1,3,7].includes(c.minutes))) &&
+      (c.relayTeams===undefined || (validRelayTeams(c.relayTeams) && c.players.every((p,i)=>c.relayTeams[i].includes(p.kind)))) &&
       c.losses.every(l=>l && slot(l.slot) && count(l.frame) && number(l.damage) &&
+        (!c.relayTeams || (c.relayTeams[l.slot].includes(l.kind) && validCoat(l.coat))) &&
         (c.points && !l.suddenRound ? scores(l.points) && typeof l.credited==='boolean' : count(l.remaining)) &&
         zones.includes(l.zone) && count(l.suddenRound) && (!l.lastHit || typeof l.lastHit.id==='string' && count(l.lastHit.frame)));
   }
@@ -64,7 +66,7 @@
     }
   }
   function coaching(card,who) {
-    const p=card.players[who], rival=card.players[1-who], name=fighters[p.kind].name;
+    const p=card.players[who], rival=card.players[1-who], name=card.relayTeams?'Your pack':fighters[p.kind].name;
     const lost=card.losses.filter(l=>l.slot===who), falls=lost.filter(l=>l.zone==='bottom').length;
     const last=lost.at(-1);
     const times=n=>n===1?'once':n+' times';
@@ -77,7 +79,7 @@
     if(last && last.lastHit && (last.zone==='left' || last.zone==='right' || last.zone==='top')) return {id:'launch-survival',label:'Practice launch influence',
       why:name+(last.points?' lost a point at ':' lost a stock at ')+Math.round(last.damage)+'% at the '+last.zone+' blast line. Try steering a strong launch during the hit freeze.'};
     if(rival.hits && !p.blocks && !p.parries) return {id:'shield-strike',label:'Practice defending a strike',
-      why:fighters[rival.kind].name+' landed '+rival.hits+(rival.hits===1?' hit':' hits')+'. '+name+' recorded no blocks or parries. Try the shield timing against an incoming swing.'};
+      why:(card.relayTeams?'The other pack':fighters[rival.kind].name)+' landed '+rival.hits+(rival.hits===1?' hit':' hits')+'. '+name+' recorded no blocks or parries. Try the shield timing against an incoming swing.'};
     if(p.blocks) return {id:'shield-crossup',label:'Counter a landing aerial',
       why:name+' blocked '+p.blocks+(p.blocks===1?' hit':' hits')+'. Practice punishing Brisket after a landing aerial touches your shield.'};
     if(!p.hits && !rival.hits) return null;
