@@ -1228,6 +1228,26 @@ async function trainingControls(page,mobile,status) {
   return {hold,press,waitFor};
 }
 
+async function testDashShield(page,mobile) {
+  await page.goto(root+'?guard-approach#training/dash-shield');
+  const status=page.locator('#footwork-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for(const outcome of ['caughtCounter','ranIntoSwing','jumpedClear']){
+    await press('footwork-dashShield');
+    if(outcome==='jumpedClear')await press('footwork-side');
+    const dir=outcome==='jumpedClear'?'left':'right';
+    await hold([dir]);await waitFor('atMark');
+    if(outcome!=='ranIntoSwing'){
+      await hold([dir,'shield']);await waitFor('dashBlocked');
+      if(outcome==='caughtCounter')await hold(['shield','grab']);
+    }
+    await waitFor(outcome);
+    assert.match(await status.textContent(), /Brisket|Gate Check/);
+    await hold([]);
+  }
+  await press('reset-training');assert(await status.isHidden());
+}
+
 async function testDiscReflect(page,mobile) {
   await page.goto(root+'?disc-matchup#training/disc-reflect');
   const status=page.locator('#footwork-status');
@@ -1659,6 +1679,7 @@ async function testDevice(browser, mobile) {
     await testGripEscape(page, mobile);
     await testShoulderCarry(page, mobile);
     await testDiscReflect(page, mobile);
+    await testDashShield(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
