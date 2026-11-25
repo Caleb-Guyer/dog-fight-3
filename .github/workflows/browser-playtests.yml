@@ -20,6 +20,7 @@ jobs:
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/arcade-cup.js
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/saved-games.js
   sound-test:
     runs-on: ubuntu-24.04
     timeout-minutes: 3
