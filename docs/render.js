@@ -181,6 +181,11 @@
     if (a.diving) return 0.44 + 0.16 * Math.min(a.diveTime * 4, 1);
     if (a.moveId === 'cloverSail' && !a.folded && a.time >= a.start + a.active) return 0.57;
     if (a.anchor && a.time >= a.start) return 0.45 + Math.min(0.17, (a.time - a.start) * 0.7);
+    if (a.floorAttack && a.late && a.time + 1e-8 >= a.start) {
+      const end = a.late.start + a.late.active;
+      if (a.time + 1e-8 >= end) return 0.68 + 0.32 * clamp((a.time - end) / (a.end - end), 0, 1);
+      return attackWindow(a).rear ? 0.58 : 0.45;
+    }
     // A lingering hit is the follow-through of the same swing.
     const beat = a.late ? a : attackWindow(a);
     if (a.airSide && a.late && a.time >= a.start) {
@@ -1154,8 +1159,9 @@
     ctx.restore();
   }
   function floorSweep(ctx, f, a) {
-    if (a.time + 1e-8 < a.start || a.time >= a.start + a.active - 1e-8) return;
-    const [x, y, rx, ry] = a.box;
+    const beat = attackWindow(a);
+    if (a.time + 1e-8 < beat.start || a.time >= beat.start + beat.active - 1e-8) return;
+    const [x, y, rx, ry] = beat.box;
     const phase = attackPhase(a);
     const early = phase < 0.54;
     let forward, rear;
@@ -1176,13 +1182,12 @@
     ctx.save();
     ctx.translate(snap(f.x, 2), snap(f.y, 2));
     ctx.scale(f.face, 1);
-    // One sweep spans both sides on every active frame. Its leading edge switches
-    // with the striking limb as the dog turns over.
     for (const [sign, point] of [
       [1, forward],
       [-1, rear],
     ]) {
-      const leading = (sign === 1) === early;
+      if (!a.around && sign !== (beat.rear ? -1 : 1)) continue;
+      const leading = !a.around || (sign === 1) === early;
       const near = x + sign * (rx - 25),
         outer = x + sign * (rx - 3);
       const low = y + ry * 0.65;
@@ -3237,8 +3242,8 @@
         landingEffect(ctx, { type: 'techLand', x: -25, y: 0, size: 11, dir: 1 }, 0.3);
         floorRollTrack(ctx, f);
       } else if (side === 'floorAttack') {
-        const move = window.DogFight.moves.getupSweep;
-        f.attack = { ...move, time: move.start + move.active * 0.32, moveId: 'getupSweep' };
+        const moveId = window.DogFight.kits[kind].floorAttack, move = window.DogFight.moves[moveId];
+        f.attack = { ...move, time: move.start + move.active * 0.32, moveId };
         phase = attackPhase(f.attack);
       } else if (side === 'shieldRoll' || side === 'spotDodge') {
         const rolling = side === 'shieldRoll';

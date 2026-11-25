@@ -310,7 +310,18 @@ Over open air, watch the gold streaks beside your tumbling dog. When they turn m
 
 In **Training → Launch practice → Spike landing**, tap Attack to take Pogo Paw at 100%. Let it bounce you once, tap Attack to retry, then tap Shield at the hit spark. Add a side on the next attempt to roll away. **Offstage spike** puts the same exchange past the ledge. Break the fall and reach the stage to earn **Saved the stock**. Switch sides, adjust your starting damage, or turn off half speed to play it at match speed.
 
-**Missed tech.** After the bounce, tap Attack for a two-sided, 7% **Get-up Sweep**, tap a side for a get-up roll, or tap Up or Jump to stand. If you wait, your dog stands automatically. A prone dog can duck a high swing, but a low hit can catch it.
+**Missed tech.** After the bounce, tap Attack for your dog’s get-up attack, tap a side to roll, or tap Up or Jump to stand. If you wait, your dog stands automatically. A prone dog can duck a high swing, but a low hit can catch it.
+
+| Dog | Get-up attack | In front | Behind | Can act again after |
+| --- | --- | --- | --- | --- |
+| Pip | Kickstand | Frame 7, 6% | Frame 11, 6% | 27 frames |
+| Brisket | Mat Slap | Frame 14, 9% | Frame 14, 9% | 43 frames |
+| Noodle | Leash Lash | Frame 10, 7%, long reach | Frame 17, 5%, short reach | 34 frames |
+| Clover | Reverse Rim | Frame 15, 8% | Frame 8, 6% | 32 frames |
+
+Each get-up attack can hit a given rival once. In **Bait the get-up**, let Clover hit you, switch to **Start behind**, and compare when her disc reaches you. Retry, hold Shield, and tap Grab at the block spark to catch her as she stands. Switch sides to mirror the exchange. [Practice against Clover](https://caleb-guyer.github.io/dog-fight-3/#training/get-up)
+
+In a three-stock fight, try Brisket’s running grab and down throw against Rival Clover. Follow her landing. If she misses the tech, an early shield can scare her into rolling. If she commits to the sweep, shield it and tap Grab for another throw. [Play Brisket against Rival Clover](https://caleb-guyer.github.io/dog-fight-3/#solo/get-up)
 
 A missed tech carries some of the sideways launch into a skid. A hard landing near the lip can carry you offstage. A timed tech plants you or sends you into your chosen roll.
 
