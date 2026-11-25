@@ -2699,7 +2699,9 @@
       '"><small>' + heading(i) + '</small>' + name(i) + '</th>').join('');
     const row = (label, value) => '<tr><th scope="row">' + label + '</th>' +
       players.map((p,i) => '<td>' + value(p,i) + '</td>').join('') + '</tr>';
-    const stats = row('Damage dealt', p => tenth(p.damage) + '%') + row('Hits landed', p => p.hits) +
+    const relayRows=card.relayTeams?['Lead','Second','Anchor'].map((label,k)=>row(label+' damage',(p,i)=>
+      fighters[card.relayTeams[i][k]].name+' · '+(k>card.relayTeams[i].indexOf(p.kind)?'On bench':tenth(card.relayDamage[i][k])+'%'))).join(''):'';
+    const stats = row('Damage dealt', p => tenth(p.damage) + '%') + relayRows + row('Hits landed', p => p.hits) +
       row('Hits blocked', p => p.blocks) + row('Parries', p => p.parries) + row('Shield breaks suffered',p=>p.shieldBreaks) +
       row('Landing techs',p=>p.techs) + row('Knockdowns taken',p=>p.knockdowns) +
       (card.points?row('Regulation points',(_,i)=>card.points[i])+row('Credited KOs',(_,i)=>losses.filter(l=>l.slot!==i && l.credited).length)+

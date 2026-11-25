@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const {fighters,arenas,stageForms,cpuLevels,validRelayTeams,relayCoats}=window.DogFight;
+  const {fighters,arenas,stageForms,cpuLevels,stockMinutes,validRelayTeams,relayCoats}=window.DogFight;
   const roster=Object.keys(fighters);
   function openingTeams(config,storage){
     let teams=config.relayTeams;
@@ -28,6 +28,8 @@
       '<div id="relay-lineups"></div><h3 id="relay-pick-label"></h3><div class="cup-dogs" id="relay-roster" role="group" aria-labelledby="relay-pick-label"></div>'+
       '<div class="relay-settings"><label>Arena<select id="relay-stage">'+options(arenas,config.stage)+'</select></label>'+
       '<label>Stage form<select id="relay-form">'+options(stageForms,config.form)+'</select></label>'+
+      '<label>Clock<select id="relay-clock">'+stockMinutes.map(n=>'<option value="'+n+'"'+(n===config.minutes?' selected':'')+'>'+
+        (n?n+' min':'No clock')+'</option>').join('')+'</select></label>'+
       (config.mode==='solo'?'<label>CPU<select id="relay-cpu">'+options(cpuLevels,config.cpuLevel)+'</select></label>':'')+'</div>'+
       '<div class="dialog-actions"><button class="primary" id="relay-play">Start relay</button><button class="utility" id="relay-back">Back</button></div>');
     function draw(){
@@ -58,7 +60,8 @@
     root.querySelector('#relay-play').onclick=()=>{
       try{storage.setItem('dog-fight-3.relay.'+config.mode,JSON.stringify(teams));}catch{}
       start({...config,p1:teams[0][0],p2:teams[1][0],relayTeams:teams,stage:root.querySelector('#relay-stage').value,
-        form:root.querySelector('#relay-form').value,cpuLevel:root.querySelector('#relay-cpu')?.value || config.cpuLevel});
+        form:root.querySelector('#relay-form').value,minutes:Number(root.querySelector('#relay-clock').value),
+        cpuLevel:root.querySelector('#relay-cpu')?.value || config.cpuLevel});
     };
     root.querySelector('[data-relay-slot][aria-pressed=true]').focus({preventScroll:true});
   }
