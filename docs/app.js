@@ -897,6 +897,11 @@
   const dialogPresses=new Set();
   let movePreview=null;
   function showDialog(kind, title, html, close = true) {
+    if((kind.startsWith('finish-') || kind==='match-card' || kind==='record-card') && !$('replay-sheet')){
+      const link=document.createElement('link');
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=1';
+      link.onerror=()=>link.remove();document.head.append(link);
+    }
     movePreview=null;
     dialogPresses.clear();
     if (page === 'dispatch-story' && film) setFilmPaused(true);
