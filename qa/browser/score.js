@@ -30,7 +30,7 @@ async function renderScores(page){
   for(const [id,peak,rms,tail] of levels){
     assert(peak>.04 && peak<.94 && rms>.009 && tail<.0001,[id,peak,rms,tail].join('/'));
   }
-  console.log('Rendered all 10 scores. Largest full-volume peak '+Math.max(...levels.map(x=>x[1])).toFixed(3)+'.');
+  console.log('::notice title=Sound render::Rendered all 10 scores. Largest full-volume peak '+Math.max(...levels.map(x=>x[1])).toFixed(3)+'.');
 }
 async function observe(context) {
   await context.addInitScript(()=>{

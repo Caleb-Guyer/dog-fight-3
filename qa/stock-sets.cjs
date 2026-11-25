@@ -21,6 +21,11 @@ async function device(browser,mobile,hash) {
 }
 async function observe(page) {
   await page.evaluate(()=>{
+    const update=YardScore.Player.prototype.update;
+    YardScore.Player.prototype.update=function(...args){
+      window.observedScore=this;
+      return update.apply(this,args);
+    };
     const proto=DogFight.Battle.prototype,step=proto.step,cpu=proto.cpu;
     proto.step=function(...args){
       window.observedBattle=this;
@@ -192,7 +197,10 @@ async function onlineSet(browser,phoneBrowser) {
   for(const [i,loser] of [guest,host,guest].entries()){
     const winner=loser===host?guest:host,slot=loser===host?0:1;
     await leaveThreeStocks(loser,slot);
-    for(const d of [loser,winner])await d.page.locator('#set-score').waitFor();
+    for(const d of [loser,winner]){
+      await d.page.locator('#set-score').waitFor();
+      await d.page.waitForFunction(winningSlot=>window.observedScore?.track==='win-'+window.observedBattle?.dogs[winningSlot].kind,1-slot);
+    }
     assert.equal(await a.locator('#set-score').textContent(),await b.locator('#set-score').textContent());
     assert.equal(await b.locator('.set-history li').count(),i+1);
     if(i<2){

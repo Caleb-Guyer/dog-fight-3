@@ -66,3 +66,9 @@ test('pauses and muting stop the output, stalls do not burst and victory plays o
   p.restart();p.update('win-brisket',false,.4,true);assert(!p.finished && notes.length>end);
   p.update(null,false,.4,true);assert.equal(p.bus,null);
 });
+test('impact ducking lowers the music briefly and keeps the next beat in place',()=>{
+  const {p,ctx}=transport();p.update('canal',false,.5,true);
+  const beat=p.nextAt;p.duck(.16);ctx.currentTime=.02;p.update('canal',false,.5,true);
+  assert.equal(p.volume,.5*.43);assert.equal(p.nextAt,beat);
+  ctx.currentTime=.18;p.update('canal',false,.5,true);assert.equal(p.volume,.5);
+});
