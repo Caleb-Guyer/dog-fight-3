@@ -10,6 +10,31 @@ async function clock(page){
 async function state(page,value){
   assert.equal(await page.locator('#school-coach').getAttribute('data-state'),value,await page.locator('#school-task').innerText());
 }
+async function firstExample(browser){
+  const page=await browser.newPage(),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await clock(page);
+  try{
+    await page.goto(root+'#tutorial');
+    const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.school')).passed);
+    let attempts=0;
+    await page.route('**/fighter-lessons.js*',r=>attempts++?r.continue():r.abort());
+    await page.keyboard.press('Enter');
+    await page.locator('#dispatch-load-retry').click();
+    await page.locator('#school-coach[data-state=example]').waitFor();
+    await page.clock.runFor(900);await state(page,'example');
+    await page.clock.runFor(1800);await state(page,'example-ended');
+    assert.deepEqual(await saved(),[]);
+    await page.locator('#school-example').click();
+    await state(page,'example');
+    await page.keyboard.press('Enter');await state(page,'playing');
+    await page.clock.runFor(1700);
+    assert.deepEqual(await saved(),[]);
+    await page.keyboard.down('d');await page.clock.runFor(1500);await page.keyboard.up('d');
+    await state(page,'passed');assert.deepEqual(await saved(),['move']);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
 async function keyboard(browser){
   const page=await browser.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
@@ -29,6 +54,12 @@ async function keyboard(browser){
     assert.equal(await page.locator('#dialog-title').textContent(),'Fight School');
     await click('[data-do=fighter-classes]');await click(dog('pip'));await click(lesson(0));
     assert.match(await page.locator('#school-bindings').textContent(),/D \+ Q/);
+    await click('#school-example');
+    assert.equal(await page.locator('#school-bindings').textContent(),'D + Q');
+    await page.keyboard.down('a');await time(3600);await page.keyboard.up('a');
+    await state(page,'example-ended');
+    assert.equal(await page.evaluate(()=>localStorage.getItem('dog-fight-3.fighter-lesson.pip-0')),null);
+    await page.keyboard.press('Enter');await state(page,'playing');
     await page.keyboard.down('d');await page.keyboard.down('q');await time(80);await page.keyboard.up('q');await time(120);
     await state(page,'playing');await page.keyboard.down('q');await time(250);await page.keyboard.up('q');await page.keyboard.up('d');
     await state(page,'passed');await page.keyboard.press('Enter');
@@ -70,9 +101,16 @@ async function touch(browser){
     assert.match(await page.locator('#school-task').textContent(),/Tap Attack now/);
     await press(['attack'],220);
     await state(page,'passed');await tap('#school-next');
+    await tap('#school-example');await state(page,'example');
+    assert.equal(await page.locator('#school-bindings').textContent(),'Up + Right + Special');
+    await page.clock.runFor(4200);await state(page,'example-ended');
+    await tap('#school-next');await state(page,'playing');
     await press(['up','special'],85);await page.clock.runFor(410);await press(['right'],650);
     await state(page,'passed');await tap('#school-next');await tap('[data-class-back]');await state(page,'passed');
     await tap('#school-list');await tap('[data-do=home]');assert(await page.locator('#home').isVisible());
+    await page.goto(root+'?direct#fighters/clover/recovery');
+    await page.locator('#school-example').waitFor();
+    assert.match(await page.locator('#school-title').textContent(),/Fold the sail/);
     assert.deepEqual(errors,[]);
   }finally{await ctx.close();}
 }
@@ -92,6 +130,10 @@ async function controller(browser){
   try{
     await page.goto(root+'#fighters/brisket');await page.locator(lesson(1)).click();
     assert.match(await page.locator('#school-bindings').textContent(),/Stick up \+ B/);
+    await input(0,0,8,100);await state(page,'example');await input(0,0,-1,50);
+    assert.match(await page.locator('#school-bindings').textContent(),/Stick up \+ Stick right \+ B/);
+    await input(0,0,0,100);await state(page,'playing');await input(0,0,-1,50);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('dog-fight-3.fighter-lesson.brisket-1')),null);
     await input(1,-1,1,320);await input(1,0,-1,1900);
     await state(page,'passed');await input(0,0,0,60);
     assert.match(await page.locator(lesson(1)).textContent(),/✓/);
@@ -100,5 +142,5 @@ async function controller(browser){
 }
 (async()=>{
   const b=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await keyboard(b);await touch(b);await controller(b);}finally{await b.close();}
+  try{await firstExample(b);await keyboard(b);await touch(b);await controller(b);}finally{await b.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+e.stack.replaceAll('\n','%0A'));process.exitCode=1;});

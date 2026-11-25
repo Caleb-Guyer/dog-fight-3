@@ -1,6 +1,7 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 global.window={};
 require('../docs/engine.js');
+require('../docs/fight-school.js');
 require('../docs/fighter-lessons.js');
 const {Battle,idleInput}=window.DogFight;
 const {Trial,courses,cleared,mark,hint}=window.FighterSchool;
@@ -61,4 +62,26 @@ test('chord hints follow the current device and layout',()=>{
   const info=courses.noodle.lessons[0],key=(i,k)=>({special:'Q',attack:'J'})[k],pad=(i,k)=>({special:'Y',attack:'X'})[k];
   assert.equal(hint(info,0,key,pad),'Q → J');assert.equal(hint(info,1,key,pad),'Y → X');
   assert.equal(hint(info,2,key,pad),'Special → Attack');
+});
+const {Lesson,lessons}=window.FightSchool;
+const demos=lessons.map((l,i)=>[l.id,i,Lesson,'pip','brisket',l.id==='platform'?'picnic':'nightmail']);
+for(const [kind,course] of Object.entries(courses))for(const [i] of course.lessons.entries())
+  demos.push([kind+'-'+i,i,Trial,kind,course.rival,course.stage]);
+for(const [id,index,Type,p1,p2,stage] of demos)test('the '+id+' example clears the actual lesson through displayed inputs',()=>{
+  let lesson;
+  const world=new Battle({mode:'local',p1,p2,stage,minutes:0,lesson:index,fetch:false},(name,e)=>lesson?.contact(name,e));
+  lesson=new Type(index,world);
+  const example=new window.FighterSchool.Example(id), observed=new Set();
+  for(let n=0;n<600 && !lesson.done && !lesson.missed;n++){
+    const input=example.input();
+    if(!input){observed.add(example.index);continue;}
+    assert(observed.has(example.index),'input gets a readable cue before the action');
+    const {keys}=example.cue;
+    assert.equal(input.x,Number(keys.includes('right')));
+    assert.equal(input.y,Number(keys.includes('down'))-Number(keys.includes('up')));
+    for(const key of ['attack','smash','grab','jump','special','shield'])assert.equal(input[key],keys.includes(key));
+    if(lesson.canStep(input)){world.step(1/60,input,lesson.partner(input));lesson.afterStep(world);}
+  }
+  assert(lesson.done && !lesson.missed);
+  if(id.endsWith('-1') || id==='return')assert(world.dogs[0].ground>=0);
 });
