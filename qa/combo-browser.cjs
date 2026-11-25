@@ -644,6 +644,44 @@ async function testAngledTilts(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
 }
 
+async function testAttackPress(page, mobile) {
+  const {hold,press}=await trainingControls(page,mobile);
+  const activate=loc=>mobile?loc.tap():loc.click();
+  const challenge=root+'?attack-press#solo/intercept-clover';
+  async function opening(quick,pad=false) {
+    assert.match(await page.locator('#match-mode').innerText(),/solo.*rival/i);
+    assert.equal(await page.locator('#match-clock').innerText(),'7:00');
+    const before=await page.locator('.percentage').allTextContents();
+    assert.deepEqual(before,['0%','0%']);
+    if(pad) {
+      await page.evaluate(()=>{
+        const controller={index:0,id:'Attack timing pad',axes:[1,0,0,0],
+          buttons:Array.from({length:17},(_,i)=>({pressed:i===2}))};
+        Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[controller]});
+      });
+    } else await hold(['right','attack']);
+    await page.clock.runFor(2760);
+    if(pad)await page.evaluate(()=>{delete navigator.getGamepads;});
+    else await hold([]);
+    const after=await page.locator('.percentage').allTextContents();
+    assert.deepEqual(after,quick?['0%','5%']:['9%','0%']);
+    assert.equal(await page.locator('.lives[aria-label="3 stocks"]').count(),2);
+  }
+  await page.goto(challenge); await opening(true);
+  await press('pause'); await activate(page.locator('[data-do="rematch"]'));
+  await opening(true,!mobile);
+  const p1=page.locator('[data-do="option-quickAttack1"]'),p2=page.locator('[data-do="option-quickAttack2"]');
+  await page.goto(root+'?attack-options'); await press('home-options');
+  assert.equal(await p1.getAttribute('aria-pressed'),'true');
+  await activate(p1);
+  await page.reload(); await press('home-options');
+  assert.equal(await p1.getAttribute('aria-pressed'),'false');
+  assert.equal(await p2.getAttribute('aria-pressed'),'true');
+  await page.goto(challenge); await opening(false);
+  await page.goto(root+'?attack-options'); await press('home-options'); await activate(p1);
+  console.log((mobile?'Touch':'Keyboard and gamepad')+' intercepted Clover on GO, restarted the stock fight and compared the saved hold-to-smash controls.');
+}
+
 async function testLedgePatience(page, mobile) {
   await page.goto(root+'?grip#training/ledge-patience');
   const status=page.locator('#climb-status');
@@ -2187,6 +2225,7 @@ async function testDevice(browser, mobile) {
     await testWallJumps(page, mobile);
     await testCeilingTech(page, mobile);
     await testLedgePatience(page, mobile);
+    await testAttackPress(page, mobile);
     await testShortHops(page, mobile);
     await testFlickJumps(page, mobile);
     await testRage(page, mobile);
