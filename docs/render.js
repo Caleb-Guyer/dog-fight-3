@@ -65,7 +65,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const second = world.mode === 'local' ? 'P2' : world.mode === 'training' ? 'DUMMY' : 'CPU';
-    const labels = ['P1', second];
+    const labels = world.comboPractice?.defending ? ['TAPE','YOU'] : ['P1', second];
     const widths = labels.map((label) => snap(Math.max(26, ctx.measureText(label).width + 8), 2));
     const tops = world.dogs.map((f) => {
       let top = -f.stats.height;
