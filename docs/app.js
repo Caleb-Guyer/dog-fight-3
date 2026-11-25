@@ -4805,17 +4805,27 @@
     if (next<schoolLessons.length) startLesson(next);
     else startMatch({...settings,mode:'solo',p1:'pip',p2:'brisket',cpuLevel:'rookie',stage:'picnic',fetch:false,minutes:7});
   }
+  function resumeCourse() {
+    startLesson(schoolSave.passed.length===schoolLessons.length?0:schoolSave.index);
+  }
   function schoolList() {
     showDialog('school','Fight School',
       '<p>'+schoolSave.passed.length+' of '+schoolLessons.length+' lessons cleared. Choose a lesson to play as Pip.</p><div id="school-syllabus">'+
       schoolLessons.map((l,i)=>'<button type="button" class="utility" data-lesson="'+i+'">'+(i+1)+'. '+l.title+
         (schoolSave.passed.includes(l.id)?' ✓':'')+'</button>').join('')+'</div><div class="dialog-actions"><button class="primary" id="school-resume">'+
-      (world?.lesson?'Back to lesson':schoolSave.passed.length?'Continue course':'Start course')+'</button><button class="utility" data-do="home">Main menu</button></div>');
+      (world?.lesson?'Back to lesson':schoolSave.passed.length===schoolLessons.length?'Replay course':schoolSave.passed.length?'Continue course':'Start course')+'</button><button class="utility" data-do="home">Main menu</button></div>');
     $('school-syllabus').onclick=e=>{const button=e.target.closest('[data-lesson]');if(button) startLesson(Number(button.dataset.lesson));};
-    $('school-resume').onclick=()=>world?.lesson?dismiss():startLesson(schoolSave.index);
+    $('school-resume').onclick=()=>world?.lesson?dismiss():resumeCourse();
     $('school-resume').focus({preventScroll:true});
   }
-  $('welcome-play').onclick=()=>startLesson(schoolSave.index);
+  $('home').addEventListener('click',e=>{
+    if (!$('school-welcome').hidden && e.target.closest('button')) {
+      if (!schoolSave.seen) saveSchool();
+      $('school-welcome').hidden=true;
+      $('home').classList.remove('has-welcome');
+    }
+  });
+  $('welcome-play').onclick=resumeCourse;
   $('welcome-dismiss').onclick=()=>{saveSchool();showHome();};
   $('home-school').onclick=schoolList;
   $('school-next').onclick=nextLesson;
@@ -5566,7 +5576,7 @@
       startMatch({...settings,mode:'training',p1:hash.split('/')[2] || 'pip',p2:'brisket',stage:'nightmail',fetch:false});
       drill('shield',false,'crossup',undefined,{choice:'front',dir:1});
     } else if (hash === '#tutorial') {
-      startLesson(schoolSave.index);
+      resumeCourse();
     } else if (hash === '#training/shield-punish') {
       leaveOnline();
       afterStory = null;
