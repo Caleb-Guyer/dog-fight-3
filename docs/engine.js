@@ -94,6 +94,12 @@
     trio: {name:'Three platforms', geometry:'bandstand', description:'Two low platforms and a high center perch.'},
   };
   const stageGeometry = (stage, form) => stageForms[form]?.geometry || stage;
+  const validCoat = value => Number.isInteger(value) && value >= 0 && value < 4;
+  function coatFor(slot, first, second, choices) {
+    const one = validCoat(choices?.[0]) ? choices[0] : 0;
+    const two = validCoat(choices?.[1]) ? choices[1] : 0;
+    return slot === 0 ? one : first === second && one === two ? (two + 1) % 4 : two;
+  }
   const idleInput = Object.freeze({
     x: 0,
     y: 0,
@@ -2724,6 +2730,7 @@
   class Battle {
     constructor(config, event = () => {}, random = Math.random) {
       this.stage = config.stage;
+      this.coats = [0,1].map(i => validCoat(config.coats?.[i]) ? config.coats[i] : 0);
       this.form = (config.mode === 'solo' || config.mode === 'local') && config.lesson === undefined &&
         Object.hasOwn(stageForms, config.form) ? config.form : 'original';
       this.layout = config.layout || null;
@@ -2813,11 +2820,14 @@
         this.copyFightFrom(opening);
       }
       this.matchCard = versus && config.lesson === undefined ? {
-        players:this.dogs.map(f => ({kind:f.kind, damage:0, hits:0, blocks:0, parries:0, lastHit:null})),
+        players:this.dogs.map(f => ({kind:f.kind, coat:this.coatFor(f.index), damage:0, hits:0, blocks:0, parries:0, lastHit:null})),
         losses:[],
       } : null;
     }
     get geometryStage() { return stageGeometry(this.stage, this.form); }
+    coatFor(slot) {
+      return this.mode === 'adventure' ? 0 : coatFor(slot,this.dogs[0].kind,this.dogs[1].kind,this.coats);
+    }
     resetCpu() {
       const memory = this.bot;
       this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
@@ -11205,6 +11215,8 @@
     arenas,
     stageForms,
     stageGeometry,
+    validCoat,
+    coatFor,
     platforms,
     topBlastY,
     bottomBlastY,

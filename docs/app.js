@@ -233,11 +233,12 @@
     return '<i data-icon="' + name + '">' + svg(name) + '</i>';
   }
   document.querySelectorAll('i[data-icon]').forEach((el) => (el.innerHTML = svg(el.dataset.icon)));
-  const portrait = (kind) => window.DogArt.portrait(kind);
+  const {portrait,coatNames} = window.DogArt;
   const modes = { solo: 'Solo', local: 'Local versus', training: 'Training' };
   const settings = {
     stage: 'picnic',
     stageForm: 'original',
+    coatBook: [{},{}],
     mode: 'solo',
     cpuLevel: 'arcade',
     minutes: 7,
@@ -259,6 +260,10 @@
     const s = JSON.parse(localStorage.getItem('dog-fight-3.config') || '{}');
     if (Object.hasOwn(arenas, s.stage)) settings.stage = s.stage;
     if (Object.hasOwn(stageForms, s.stageForm)) settings.stageForm = s.stageForm;
+    for (const slot of [0,1]) for (const kind of Object.keys(fighters)) {
+      const coat = s.coatBook?.[slot]?.[kind];
+      if (window.DogFight.validCoat(coat)) settings.coatBook[slot][kind] = coat;
+    }
     if (Object.hasOwn(modes, s.mode)) settings.mode = s.mode;
     if (Object.hasOwn(cpuLevels, s.cpuLevel)) settings.cpuLevel = s.cpuLevel;
     if (stockMinutes.includes(s.minutes)) settings.minutes = s.minutes;
@@ -607,6 +612,9 @@
     toggle.querySelector('.toggle-value').textContent = settings.fetch ? 'On' : 'Off';
   }
   const lobbyForm = () => settings.mode === 'training' ? 'original' : settings.stageForm;
+  const savedCoat = (slot,kind) => settings.coatBook[slot][kind] ?? 0;
+  let lobbyCoats = [0,0];
+  const lobbyCoat = slot => window.DogFight.coatFor(slot,settings.p1,settings.p2,lobbyCoats);
   const stageName = (stage, form) => arenas[stage].name + (form && form !== 'original' ? ' · ' + stageForms[form].name : '');
   function drawStageTile(canvas, stage, form) {
     const ctx = canvas.getContext('2d');
@@ -617,6 +625,10 @@
     ctx.restore();
   }
   function syncLobby() {
+    lobbyCoats = [savedCoat(0,settings.p1),savedCoat(1,settings.p2)];
+    const chosen = editing ? settings.p2 : settings.p1;
+    $('lobby-coat').setAttribute('aria-label','Choose coat for ' + labelFor(editing) + ' ' + fighters[chosen].name +
+      ', currently ' + coatNames[chosen][lobbyCoat(editing)]);
     $('cpu-level').hidden = settings.mode !== 'solo';
     $('cpu-level').textContent = 'CPU · ' + cpuLevels[settings.cpuLevel].name;
     document
@@ -635,7 +647,7 @@
     $('slots').innerHTML = [settings.p1, settings.p2]
       .map((kind, i) => {
         const name = fighters[kind].name;
-        return `<button class="slot" type="button" data-index="${i}" aria-pressed="${i === editing}" aria-label="Choose ${slotLabel(i)} fighter, currently ${name}">
+        return `<button class="slot" type="button" data-index="${i}" aria-pressed="${i === editing}" aria-label="Choose ${slotLabel(i)} fighter, currently ${name}, ${coatNames[kind][lobbyCoat(i)]}">
         <span class="small-tag">${labelFor(i)}</span><span class="slot-name">${name}</span>${icon('edit')}
       </button>`;
       })
@@ -646,7 +658,7 @@
           (kind === settings.p1 ? '<span class="badge">P1</span>' : '') +
           (kind === settings.p2 ? '<span class="badge two">' + labelFor(1) + '</span>' : '');
         return `<button type="button" data-kind="${kind}" class="roster-card ${editing ? 'picking-two' : ''}" aria-pressed="${kind === settings[editing ? 'p2' : 'p1']}" aria-label="Choose ${f.name}, ${f.breed}, ${f.style}">
-        <span class="mug"><img src="${portrait(kind)}" alt=""></span>
+        <span class="mug"><img src="${portrait(kind,kind === chosen ? lobbyCoat(editing) : savedCoat(editing,kind))}" alt=""></span>
         <span class="card-copy"><strong>${f.name}</strong><small>${f.breed}</small></span>
         <span class="card-badges">${badges}</span>
       </button>`;
@@ -658,15 +670,48 @@
     $('preview').setAttribute(
       'aria-label',
       'Preview of ' +
-        fighters[settings.p1].name +
+        coatNames[settings.p1][lobbyCoat(0)] + ' ' + fighters[settings.p1].name +
         ' and ' +
-        fighters[settings.p2].name +
+        coatNames[settings.p2][lobbyCoat(1)] + ' ' + fighters[settings.p2].name +
         ' on ' +
         stageName(settings.stage,lobbyForm()),
     );
     lastPreview = -1;
-    drawPreview($('preview'), settings, performance.now() / 1000);
+    drawPreview($('preview'), settings, performance.now() / 1000,lobbyCoats);
   }
+  function showCoats() {
+    const net = page === 'online-lobby', slot = net ? 0 : editing;
+    const kind = net ? onlineDog : slot ? settings.p2 : settings.p1;
+    const current = net ? savedCoat(0,kind) : lobbyCoat(slot);
+    const mirror = !net && settings.p1 === settings.p2;
+    const options = coatNames[kind].map((name,i) => {
+      const swap = mirror && i === lobbyCoat(1-slot);
+      return '<button class="coat-option" type="button" data-coat="' + i + '" aria-pressed="' + (current === i) +
+        '"><img alt="" src="' + portrait(kind,i) + '"><strong>' + name + '</strong>' +
+        (swap ? '<small>Swap with ' + labelFor(1-slot) + '</small>' : '') + '</button>';
+    });
+    showDialog('coats',(net ? '' : labelFor(slot) + ' · ') + fighters[kind].name + ' coats',
+      '<div class="coat-grid">' + options.join('') + '</div>' +
+      (net ? '<p>If both players pick the same dog and coat, P2 wears the next coat.</p>' : ''));
+    document.querySelector('[data-coat][aria-pressed=true]').focus();
+  }
+  function chooseCoat(coat) {
+    const net = page === 'online-lobby', slot = net ? 0 : editing;
+    const kind = net ? onlineDog : slot ? settings.p2 : settings.p1;
+    if (!net && settings.p1 === settings.p2) {
+      const other = lobbyCoat(1-slot);
+      settings.coatBook[1-slot][kind] = other === coat ? lobbyCoat(slot) : other;
+    }
+    settings.coatBook[slot][kind] = coat;
+    save();
+    dismiss();
+    if (net) onlineStatus('idle','','');
+    else syncLobby();
+    $(net ? 'online-coat' : 'lobby-coat').focus();
+    announce(fighters[kind].name + ' · ' + coatNames[kind][coat]);
+  }
+  $('lobby-coat').onclick = showCoats;
+  $('online-coat').onclick = showCoats;
   document.querySelector('.mode-tabs').addEventListener('click', (e) => {
     const el = e.target.closest('[data-mode]');
     if (!el) return;
@@ -1470,7 +1515,7 @@
           '<div class="hud-card ' +
           (i ? 'two' : '') +
           '">' + (returns[i] ? '<span class="stock-alert' + (returns[i] === 'Last tag' ? ' last' : '') + '">' + returns[i] + '</span>' : '') + '<span class="hud-portrait"><img alt="" src="' +
-          portrait(f.kind) +
+          portrait(f.kind,confirmed.coatFor(i)) +
           '">' + (rage ? '<span class="rage-meter" role="img" aria-label="' + rageTitle + '" title="' + rageTitle +
             '"><i style="width:' + (rage * 10) + '%"></i></span>' : '') + '</span><div><span class="hud-name"><small>' +
           labelFor(i) +
@@ -1906,7 +1951,7 @@
     const {players, losses, frames, reason} = game.card;
     const slot = i => i === 1 && result.mode === 'solo' ? 'CPU' : 'P' + (i + 1);
     const name = i => fighters[players[i].kind].name;
-    const headings = players.map((p,i) => '<th scope="col"><img alt="" src="' + portrait(p.kind) +
+    const headings = players.map((p,i) => '<th scope="col"><img alt="" src="' + portrait(p.kind,p.coat) +
       '"><small>' + labelFor(i) + '</small>' + name(i) + '</th>').join('');
     const row = (label, value) => '<tr><th scope="row">' + label + '</th>' +
       players.map((p,i) => '<td>' + value(p,i) + '</td>').join('') + '</tr>';
@@ -1961,7 +2006,7 @@
     }
     const winner = champion ?? result.end;
     showDialog(net ? 'online-result' : 'result', title,
-      '<div class="winner"><img alt="" src="' + portrait(result.dogs[winner].kind) + '"><div><h3>' + name(winner) +
+      '<div class="winner"><img alt="" src="' + portrait(result.dogs[winner].kind,result.coatFor(winner)) + '"><div><h3>' + name(winner) +
       (champion === null ? ' wins game ' + set.games.length : ' wins the set') + '</h3><p>' + finish + ' · ' + duration +
       '</p></div></div><h3 id="set-score">Set score · P1 ' + set.score[0] + ' – ' + set.score[1] + ' ' +
       (world.mode === 'solo' ? 'CPU' : 'P2') + '</h3><ol class="set-history" aria-label="Game winners">' + history +
@@ -1991,7 +2036,7 @@
     if (online.match) {
       const title = result.end === online.side ? 'You win!' : 'Opponent wins';
       showDialog('online-result', title,
-        '<div class="winner"><img alt="" src="' + portrait(f.kind) + '"><div><h3>' + f.stats.name +
+        '<div class="winner"><img alt="" src="' + portrait(f.kind,result.coatFor(f.index)) + '"><div><h3>' + f.stats.name +
         ' wins!</h3><p>' + finish + ' · ' + duration + '</p></div></div><p id="net-rematch-status" role="status"></p>' +
         '<div class="dialog-actions"><button class="primary" data-do="online-rematch">Rematch</button><button class="utility" data-do="online-leave">Online lobby</button>' + cardButton + '</div>', false);
       updateVotes();
@@ -2003,7 +2048,7 @@
       'result',
       'Match result',
       '<div class="winner"><img alt="" src="' +
-        portrait(f.kind) +
+        portrait(f.kind,result.coatFor(f.index)) +
         '"><div><span class="mode-label">' +
         labelFor(f.index) +
         '</span><h3 style="margin-top:9px">' +
@@ -2019,10 +2064,12 @@
     announce(f.stats.name + ' wins the Golden Tennis Ball');
     document.querySelector('[data-do=rematch]').focus();
   }
-  $('start').onclick = () => startMatch({...settings,form:lobbyForm()}, undefined, undefined,
+  $('start').onclick = () => startMatch({...settings,form:lobbyForm(),coats:lobbyCoats}, undefined, undefined,
     settings.mode !== 'training' && settings.bestOfThree ? new StockSet(settings.stage) : null);
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
+    const coat = e.target.closest('[data-coat]');
+    if (coat && dialogType === 'coats') return chooseCoat(Number(coat.dataset.coat));
     const game = e.target.closest('[data-card-game]');
     if (game) return showMatchCard(Number(game.dataset.cardGame));
     const format = e.target.closest('[data-format]');
@@ -2040,11 +2087,11 @@
       return;
     }
     if (e.target.closest('[data-do="sudden-start"]')) {
-      startMatch({ ...settings, form:lobbyForm(), suddenStart:true });
+      startMatch({ ...settings, form:lobbyForm(), coats:lobbyCoats, suddenStart:true });
       return;
     }
     if (e.target.closest('[data-do="last-stock-start"]')) {
-      startMatch({ ...settings, form:lobbyForm(), lastStockStart:true });
+      startMatch({ ...settings, form:lobbyForm(), coats:lobbyCoats, lastStockStart:true });
       return;
     }
     const choice = e.target.closest('[data-cpu]')?.dataset.cpu;
@@ -5049,7 +5096,7 @@
         button.type = 'button';
         button.className = 'net-dog';
         button.dataset.dog = kind;
-        button.innerHTML = '<img alt="" src="' + portrait(kind) + '"><strong>' + dog.name + '</strong><small>' + dog.style + '</small>';
+        button.innerHTML = '<img alt=""><strong>' + dog.name + '</strong><small>' + dog.style + '</small>';
         roster.append(button);
       }
     }
@@ -5068,7 +5115,14 @@
     $('online-invite-url').hidden = true;
     $('online-room-code').textContent = room ? code : '';
     $('online-copy').textContent = 'Copy invite link';
+    $('online-coat').disabled = busy;
+    $('online-coat').textContent = 'Coat · ' + coatNames[onlineDog][savedCoat(0,onlineDog)];
     for (const button of $('online-roster').children) {
+      const kind = button.dataset.dog, coat = savedCoat(0,kind);
+      if (button.dataset.color !== String(coat)) {
+        button.querySelector('img').src = portrait(kind,coat);
+        button.dataset.color = String(coat);
+      }
       button.disabled = busy;
       button.setAttribute('aria-pressed', String(button.dataset.dog === onlineDog));
     }
@@ -5102,7 +5156,7 @@
       return;
     }
     if (request === onlineRequest) online.start(action, onlineDog, code, $('online-stage').value,
-      $('online-format').getAttribute('aria-pressed') === 'true', $('online-form').value);
+      $('online-format').getAttribute('aria-pressed') === 'true', $('online-form').value, savedCoat(0,onlineDog));
   }
   function updateVotes() {
     const button = document.querySelector('[data-do=online-rematch], [data-set-next]');
@@ -5695,7 +5749,7 @@
       film.tick(dt);
     } else if (page === 'lobby') {
       if (now - lastPreview > 1 / 24 && !document.hidden && !$('dialog').open) {
-        drawPreview($('preview'), settings, now);
+        drawPreview($('preview'), settings, now,lobbyCoats);
         lastPreview = now;
       }
     } else if (!paused && world?.mode === 'adventure') {
@@ -5800,6 +5854,10 @@
       leaveOnline();
       afterStory = null;
       startMatch({...settings,mode:'solo',p1:'pip',p2:'brisket',cpuLevel:'arcade',stage:arena,form,fetch:false,minutes:7},undefined,17);
+    } else if (hash === '#solo/mirror') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings,mode:'solo',p1:'pip',p2:'pip',coats:[0,1],stage:'picnic',fetch:false,cpuLevel:'arcade',minutes:7},undefined,17);
     } else if (hash === '#solo/best-of-three') {
       leaveOnline();
       afterStory = null;

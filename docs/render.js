@@ -135,7 +135,7 @@
     oval(ctx, f.x, floor.y + 1, 24 * strength + 5, 3, ink);
     ctx.restore();
   }
-  function drawPreview(canvas, config, time) {
+  function drawPreview(canvas, config, time, coats) {
     const aspect = (canvas.clientWidth || 900) / (canvas.clientHeight || 280);
     const viewportWidth = clamp(660 + (aspect - 1.7) * 190, 680, 1110);
     const viewportHeight = viewportWidth / aspect;
@@ -168,6 +168,7 @@
         y = podiums[i].y;
       oval(ctx, x, y + 1, 20 * scale, 2 * scale, '#30293280');
       window.DogArt.draw(ctx, kind, x, y, {
+        coat:window.DogFight.coatFor(i,config.p1,config.p2,coats),
         face: i ? -1 : 1,
         scale,
         time: t + i * 0.42,
@@ -1666,6 +1667,7 @@
       spriteTime = f.wallAction.time;
     }
     window.DogArt.draw(ctx, f.kind, snap(f.x, 2), snap(f.y, 2), {
+      coat:world.coatFor(f.index),
       face,
       scale: 1,
       time: spriteTime,
@@ -3028,6 +3030,7 @@
       const [state, phase] = pose(f, world?.end ?? null, f.grip && world?.dogs[f.grip.owner]);
       const moving = f.tumble || f.wallAction || f.airDodge;
       window.DogArt.draw(ctx, f.kind, x, y + 20, {
+        coat:world.coatFor(f.index),
         face:f.wallAction ? -f.wallAction.dir : f.reaction?.face || f.face, scale:.53,
         time:moving ? reduced.matches ? .2 : moving.time : time, pose:state, phase,
       });
