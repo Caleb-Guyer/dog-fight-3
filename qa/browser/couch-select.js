@@ -101,6 +101,47 @@ async function controllers(browser) {
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
+async function shuffleDraft(browser){
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.addInitScript(()=>{
+    window.testPad={index:0,id:'Guest pad',axes:[0,0],buttons:Array.from({length:17},()=>({pressed:false}))};
+    Object.defineProperty(navigator,'getGamepads',{value:()=>[window.testPad]});
+  });
+  await clock(page);
+  try{
+    await page.goto(root);await page.locator('[data-enter-mode=solo]').tap();
+    const slot=i=>page.locator('#slots [data-index="'+i+'"] .slot-name').textContent();
+    const random=page.locator('#lobby-random');
+    for(const i of [0,1]){
+      await page.locator('#slots [data-index="'+i+'"]').tap();
+      const other=await slot(1-i),seen=[await slot(i)];
+      for(let n=0;n<3;n++){
+        await random.tap();seen.push(await slot(i));assert.equal(await slot(1-i),other);
+        assert.equal(await page.evaluate(()=>document.activeElement.id),'lobby-random');
+      }
+      assert.equal(new Set(seen).size,4);
+    }
+    const chosen=[await slot(0),await slot(1)];
+    await page.locator('#start').tap();
+    assert.match(await page.locator('#match-stage').textContent(),/Picnic Table/);
+    await page.goto(root+'#local/pick-together');
+    const name=i=>page.locator('[data-seat="'+i+'"] [data-name]').textContent();
+    assert.deepEqual([await name(0),await name(1)],chosen);
+    await page.keyboard.press('u');const keyboardPick=await name(0);assert.notEqual(keyboardPick,chosen[0]);
+    await page.keyboard.press('j');await page.keyboard.press('u');assert.equal(await name(0),keyboardPick);
+    await page.evaluate(()=>{testPad.buttons[2].pressed=true;});await page.clock.runFor(250);
+    const padPick=await name(1);assert.notEqual(padPick,chosen[1]);
+    await page.clock.runFor(300);assert.equal(await name(1),padPick);
+    await page.locator('[data-seat="1"] [data-action=shuffle]').tap();assert.notEqual(await name(1),padPick);
+    const pair=[await name(0),await name(1)];
+    await page.locator('[data-seat="1"] [data-action=lock]').tap();
+    for(const i of [0,1])await page.locator('[data-seat="'+i+'"] [data-action=lock]').tap();
+    await page.locator('#couch-start').tap();
+    const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.config')));
+    assert.deepEqual([saved.p1,saved.p2],pair.map(n=>n.toLowerCase()));assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
 async function handheld(browser){
   const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true,reducedMotion:'reduce'}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));await clock(page);
@@ -140,5 +181,5 @@ async function handheld(browser){
 }
 (async()=>{
   const b=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await controllers(b);await handheld(b);}finally{await b.close();}
+  try{await controllers(b);await handheld(b);await shuffleDraft(b);}finally{await b.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});

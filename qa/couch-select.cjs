@@ -8,6 +8,34 @@ const dogs=Object.keys(fighters),stages=Object.keys(arenas);
 const cfg={stage:'picnic',mode:'local',p1:'pip',p2:'brisket',coatBook:[{},{}],fetch:false};
 require('../docs/stage-strike.js');
 const {Draft}=window.StageStrike;
+test('each seat draws a full roster and consecutive draws never repeat across refills',()=>{
+  for(const roll of [0,.45,.99999])for(const start of dogs){
+    const pick=new Selection({...cfg,p1:start,p2:start},()=>roll);
+    const seen=[start];
+    for(let i=1;i<20;i++){
+      pick.shuffle(0);seen.push(pick.dogs[0]);
+      assert.notEqual(seen[i],seen[i-1]);
+      assert.equal(pick.dogs[1],start);
+      if(pick.dogs[0]===start)assert.notEqual(pick.colors[0],pick.colors[1]);
+      if(i%4===3)assert.equal(new Set(seen.slice(-4)).size,4);
+    }
+    pick.lock(0);
+    const keep=pick.dogs[0], coat=pick.colors[0];
+    pick.shuffle(0);assert.equal(pick.dogs[0],keep);
+    const other=[start];
+    for(let i=0;i<3;i++){pick.shuffle(1);other.push(pick.dogs[1]);}
+    assert.equal(new Set(other).size,4);assert.equal(pick.colors[0],coat);
+    pick.lock(1);const pair=pick.dogs.slice();pick.shuffle(1);
+    assert.deepEqual(pick.dogs,pair);
+  }
+});
+test('random counterpicks respect the winner, the arena phase and saved coats',()=>{
+  const pick=new Selection({...cfg,coatBook:[{},{noodle:3}]},()=>.6,1);
+  pick.shuffle(0);assert.equal(pick.dogs[0],'pip');
+  pick.shuffle(1);assert.equal(pick.dogs[1],'noodle');assert.equal(pick.colors[1],3);
+  pick.lock(1);pick.shuffle(1);assert.equal(pick.dogs[1],'noodle');
+  pick.lock(1);pick.lock(0);assert.equal(pick.winner,cfg.stage);
+});
 test('all opening strikes produce exactly one unstruck arena in the 1-2-1 turn order',()=>{
   function walk(first,used){
     const d=new Draft(first);
