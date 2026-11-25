@@ -69,7 +69,7 @@ jobs:
           persist-credentials: false
       - name: Play all lessons and measure menu and match timing
         run: |
-          node --test qa/fight-school.cjs qa/fighter-lessons.cjs qa/layouts.cjs qa/couch-select.cjs
+          node --test qa/fight-school.cjs qa/fighter-lessons.cjs qa/layouts.cjs qa/couch-select.cjs qa/winner-stays.cjs
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
           python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/school-http.log" 2>&1 &
           game_pid=$!
@@ -81,6 +81,7 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/layouts.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/coats.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/couch-select.js
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/winner-stays.js
   combo-practice:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
