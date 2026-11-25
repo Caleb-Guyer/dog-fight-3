@@ -70,6 +70,7 @@ async function run(browser){
   await page.locator('[data-do="close"]').click();assert(await page.locator('[data-do="resume"]').isVisible());
   await page.goto(root+'?restore#controls');
   assert.equal(await page.locator('[data-key="attack"]').textContent(),'J');
+  await page.evaluate(()=>localStorage.clear());
   await page.goto(root+'?players#local/profiles');
   await click('profile-edit');
   await bind('attack','q');
