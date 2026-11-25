@@ -5296,7 +5296,7 @@
   $('combo-reply').onchange = e => {
     const d = world.comboPractice;
     drill('combo', false, d.source === 'record' && d.tape.length ? 'replay' : d.source, e.target.value);
-    if (e.target.value !== 'p2') e.target.focus({ preventScroll: true });
+    if (e.target.value !== 'p2' && d.source!=='throwChase') e.target.focus({ preventScroll: true });
   };
   $('combo-slow').onclick = () => {
     const d = world.comboPractice;
