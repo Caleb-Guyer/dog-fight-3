@@ -5,6 +5,28 @@ on:
 permissions:
   contents: read
 jobs:
+  fight-render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: f818ae42d59c605a19b69b4dabab76df7c103ce7
+          path: previous
+          persist-credentials: false
+      - name: Verify fighter pixels and measure match rendering
+        run: |
+          DF3_ART_REFERENCE=previous/docs/fighters-art.js node --test qa/fighter-pixels.cjs
+          npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/render-http.log" 2>&1 &
+          game_pid=$!
+          python3 -m http.server 8081 --bind 127.0.0.1 --directory previous/docs > "$RUNNER_TEMP/reference-http.log" 2>&1 &
+          previous_pid=$!
+          trap 'kill "$game_pid" "$previous_pid"' EXIT
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fight-render.js
   cold-start:
     runs-on: ubuntu-24.04
     timeout-minutes: 4
