@@ -124,5 +124,13 @@
     draw();poll(pads,performance.now()/1000);
     return {keyboard,poll,bindings(next){keys=next;}};
   }
-  window.StageStrike={Draft,panel};
+  function history(games){
+    const past={strike:'struck',ban:'banned',pick:'picked'};
+    const rows=games.map((game,i)=>{
+      const turns=(game.strikes || []).map(move=>'P'+(move.slot+1)+' '+past[move.action]+' '+arenas[move.stage].name);
+      return '<p><strong>Game '+(i+1)+' · '+arenas[game.stage].name+'</strong><br>'+turns.join(' · ')+'</p>';
+    });
+    return '<details id="strike-history"><summary>Stage picks and bans</summary>'+rows.join('')+'</details>';
+  }
+  window.StageStrike={Draft,panel,history};
 })();
