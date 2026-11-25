@@ -814,9 +814,7 @@
       hint: 'Leave movement neutral to land in place, or hold left or right to roll through. The roll covers more ground and takes longer to finish.',
     },
     floorAttack: {
-      label: 'Get-up Sweep',
       input: 'After a knockdown · tap Attack',
-      hint: 'Sweep both sides for 7% as you get up. You can also tap a side to roll or tap Up or Jump to stand. A rival can lock a missed landing with two opening jabs. Choose your get-up as the bounce settles.',
     },
   };
   function guideMoveRow(move, input, direction, category) {
@@ -875,7 +873,7 @@
     const rows =
       section === 'defense'
         ? Object.entries(defenseGuide)
-            .map(([key, move]) => guideMoveRow(move, move.input, key, section))
+            .map(([key, move]) => guideMoveRow(key === 'floorAttack' ? moves[kit.floorAttack] : move, move.input, key, section))
             .join('')
         : Object.entries(entries)
             .map(([side, id]) => guideMoveRow(moveSet[id], inputs[side], side, section))
@@ -2717,6 +2715,30 @@
   function chaseFeedback(name, e) {
     const d = world.chasePractice, status = $('launch-status'), tip = $('recovery-tip');
     const attack = d.role === 'attack';
+    if (d.bait) {
+      const rival = world.dogs[d.slot], move = moves[rival.kit.floorAttack];
+      const feedback = {
+        fall:['Watch the landing', 'Stay close and watch which way the rival faces.'],
+        down:['Rival knocked down', 'Hold Shield to block the sweep, or step outside its reach.'],
+        getup:[move.label, move.hint],
+        sweepBlock:['Blocked ' + move.label, 'Tap Grab out of shield before the rival stands.'],
+        sweepParry:['Parried ' + move.label, 'Their swing stopped. Tap Attack or Grab to punish.'],
+        sweep:[move.label + ' hit you', 'Try shielding the swing, then grabbing as the rival gets up.'],
+        grabPunish:['Grabbed the recovery', 'Tap Attack to pummel or choose a direction to throw.'],
+        punished:['Hit the get-up', 'Your attack landed before the rival could act again.'],
+        interrupted:['Hit before the swing', 'Let the rival begin their get-up attack to practice the punish.'],
+        heldGuard:['Blocked, rival stood up', 'Tap Grab when the sweep hits your shield.'],
+        lateGrab:['Rival recovered before the grab', 'Try parrying the sweep, then jab during the opening.'],
+        escaped:['Rival stood up', 'Stay close enough to hit or grab during the recovery.'],
+        away:['Left the setup', 'Choose Bait the get-up to retry.'],
+      };
+      const state = e.outcome || e.phase;
+      status.dataset.result = state;
+      [status.textContent, tip.textContent] = feedback[state];
+      if (d.contactFrame && ['sweep','sweepBlock','sweepParry'].includes(state))
+        status.textContent += ' · frame ' + d.contactFrame + ' ' + d.contactSide;
+      return;
+    }
     if (name === 'chaseCue') {
       status.dataset.result = e.phase;
       if (e.phase === 'fall') status.textContent = attack ? 'Watch the landing' : 'Tap Shield before landing';
@@ -2914,7 +2936,7 @@
     } else if (name === 'getup') {
       label =
         e.type === 'floorAttack'
-          ? 'Get-up Sweep'
+          ? moves[e.f.kit.floorAttack].label
           : e.dir
             ? 'Get-up roll ' + (e.dir < 0 ? 'left' : 'right')
             : 'Stand up';
@@ -3086,7 +3108,8 @@
     const launch = ledge === 'launch';
     const breakaway = launch && pattern === 'breakaway';
     const juggle = launch && pattern === 'juggle';
-    const chase = launch && (pattern === 'attack' || pattern === 'defend');
+    const baitSweep = launch && (pattern === 'bait' || pattern === 'baitBack');
+    const chase = launch && (pattern === 'attack' || pattern === 'defend' || baitSweep);
     const stock = launch && (pattern === 'stockReturn' || pattern === 'stockCatch');
     const survival = launch && (pattern === 'survival' || pattern === 'lastStock');
     const meteor = launch && (pattern === 'spikeFloor' || pattern === 'spikeEdge');
@@ -3196,6 +3219,9 @@
       $('launch-edge-spike').setAttribute('aria-pressed', String(pattern === 'spikeEdge'));
       $('launch-lock').setAttribute('aria-pressed', String(chase && pattern === 'attack'));
       $('launch-escape').setAttribute('aria-pressed', String(chase && pattern === 'defend'));
+      $('launch-bait').setAttribute('aria-pressed', String(baitSweep));
+      $('launch-behind').hidden = !baitSweep;
+      $('launch-behind').setAttribute('aria-pressed', String(pattern === 'baitBack'));
       if (launchOptions) $('launch-slow').setAttribute('aria-pressed', String(launchOptions.slow));
     }
     $('edge-status').hidden = $('edge-patterns').hidden = !edge;
@@ -3486,7 +3512,8 @@
     } else if (chase) {
       result.dataset.result = 'ready';
       result.textContent = 'Tap Attack to begin';
-      message = pattern === 'attack' ? 'Tap Attack to start the fall. As the rival lands, tap neutral Attack. You can jab twice, then tap Down + Smash.'
+      message = baitSweep ? 'Tap Attack to start. Try waiting beside the rival, then retry and block their get-up attack. Tap Grab at the shield spark.' :
+        pattern === 'attack' ? 'Tap Attack to start the fall. As the rival lands, tap neutral Attack. You can jab twice, then tap Down + Smash.'
         : 'Tap Attack to start the fall. Tap Shield just before you land. If you miss, try rolling away or sweeping as the second jab settles.';
     } else if (breakaway) {
       result.dataset.result='ready';
@@ -3711,6 +3738,8 @@
   };
   $('launch-lock').onclick = () => drill('launch', false, 'attack');
   $('launch-escape').onclick = () => drill('launch', false, 'defend');
+  $('launch-bait').onclick = () => drill('launch', false, world.chasePractice?.role === 'baitBack' ? 'baitBack' : 'bait');
+  $('launch-behind').onclick = () => drill('launch', false, world.chasePractice.role === 'bait' ? 'baitBack' : 'bait');
   $('launch-floor-spike').onclick = () => drill('launch', false, 'spikeFloor');
   $('launch-edge-spike').onclick = () => drill('launch', false, 'spikeEdge');
   $('launch-stock-return').onclick = () => drill('launch', false, 'stockReturn');
@@ -4856,6 +4885,11 @@
       const stage = openingStages[hash];
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage,
         cpuLevel:'rival', minutes:7, fetch:false }, undefined, 42);
+    } else if (hash === '#solo/get-up') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, p1:'brisket', p2:'clover', mode:'solo', stage:'picnic',
+        cpuLevel:'rival', minutes:7, fetch:false}, undefined, 4);
     } else if (hash === '#solo/shield-punish') {
       leaveOnline();
       afterStory = null;
@@ -4986,6 +5020,12 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'noodle', stage:'picnic', fetch:false });
       drill('launch', false, 'spikeFloor', 1, 'impact');
+    }
+    else if (hash === '#training/get-up') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, mode:'training', p1:'pip', p2:'clover', stage:'picnic', fetch:false});
+      drill('launch', false, 'bait');
     }
     else if (hash === '#training/boost-grab') {
       leaveOnline();
