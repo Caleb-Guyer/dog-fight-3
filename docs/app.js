@@ -1157,6 +1157,19 @@
     if (!e.repeat) toggleFullscreen();
   });
   const stockLabel = (n) => n + (n === 1 ? ' stock' : ' stocks');
+  const airResources = ['Jump', 'Up Sp.', 'Dodge'];
+  function offstageOptions(f, terrain) {
+    if (f.ground >= 0 || f.ledge || f.stockLift || f.respawning || !f.stocks || f.floorAction ||
+        terrain.some(p => !p.thin && f.x >= p.x1 && f.x <= p.x2 && f.y <= p.y+5)) return null;
+    return Number(f.jumps > 0) + 2*Number(!f.usedUp || f.hopWindow > 0) + 4*Number(!f.usedDodge);
+  }
+  function recoveryStrip(mask) {
+    if (mask === null) return '';
+    const remaining = ['Air jump','Up Special','Air dodge'].filter((_,i) => mask & (1<<i));
+    const label = 'Air jump, Up Special, air dodge · Remaining: ' + (remaining.join(', ') || 'none');
+    return '<span class="air-resources" role="img" aria-label="' + label + '" title="' + label + '">' +
+      airResources.map((name,i) => '<span' + (mask & (1<<i) ? '' : ' class="spent"') + '>' + name + '</span>').join('') + '</span>';
+  }
   function stockPaws(count) {
     return Array.from({ length: 3 }, (_, i) =>
       '<i class="' + (i >= count ? 'lost' : '') + '" data-icon="paw">' + svg('paw') + '</i>').join('');
@@ -1353,8 +1366,9 @@
       const human = online.match ? online.side === i : world.mode === 'local' || i === 0;
       return human ? '↓ or Jump' : 'Lift ready';
     });
+    const recovery = scores.map(f => offstageOptions(f, confirmed.terrain));
     const key =
-      scores.map((f, i) => f.kind + ':' + f.damage + ':' + f.stocks + returns[i]).join('|') +
+      scores.map((f, i) => f.kind + ':' + f.damage + ':' + f.stocks + returns[i] + '/' + recovery[i]).join('|') +
       world.mode +
       '/' +
       combo.hits +
@@ -1409,7 +1423,7 @@
           (world.mode === 'training' ? 'Unlimited stocks' : stockLabel(f.stocks)) +
           '">' +
           lives +
-          '</span></div></div>'
+          '</span></div>' + recoveryStrip(recovery[i]) + '</div>'
         );
       })
       .join('');
@@ -3143,6 +3157,20 @@
   }
   function airFeedback(name, e) {
     const result = $('air-status');
+    if (e.pattern === 'lastDodge') {
+      if (name === 'airStart') {
+        result.dataset.result = 'approach';
+        result.textContent = 'Returning';
+      } else {
+        result.dataset.result = e.outcome;
+        result.textContent = {ledge:'Caught the ledge',land:'Back onstage',miss:'Fell short'}[e.outcome];
+        $('recovery-tip').textContent = e.outcome === 'miss' ? (world.airPractice.wide ?
+          'Aim straight inward for the full horizontal distance. Choose Last dodge to retry.' :
+          'Aim up and inward together, then tap Shield. Choose Last dodge to retry.') :
+          'Try the other starting point, or guard this ledge against Rival in a stock match.';
+      }
+      return;
+    }
     if (name === 'airStart') {
       result.dataset.result = 'approach';
       result.textContent = e.pattern === 'edge' ? 'Guard at the ledge' : 'Watch your landing';
@@ -3366,7 +3394,8 @@
     else if (platform) world.resetPlatformPractice(pattern, world.platformPractice?.slow ?? true);
     else if (wall) world.resetWallPractice(pattern, direction === 'impact' ? '' : direction, direction === 'impact');
     else if (shield) world.resetShieldPractice(pattern, direction ?? world.shieldPractice?.worn ?? true);
-    else if (air) world.resetAirPractice(pattern, practiceSide);
+    else if (air) world.resetAirPractice(pattern, practiceSide,
+      pattern === 'lastDodge' && (direction ?? world.airPractice?.wide ?? false));
     else if (roll) world.resetLedgeRollPractice(pattern, practiceSide);
     else if (climb) world.resetClimbPractice(pattern, practiceSide, world.climbPractice?.slow ?? true);
     else if (trump) world.resetLedgeTrumpPractice(pattern, practiceSide);
@@ -3667,17 +3696,22 @@
         ? 'The guard is waiting where your roll ends. Tap Shield to test the read, or jump from the ledge.'
         : 'Tap Shield to roll through the guard’s swing. As your dog turns back, tap Attack.';
     } else if (air) {
-      const edge = pattern === 'edge';
+      const edge = pattern === 'edge', last = pattern === 'lastDodge', wide = world.airPractice.wide;
       $('air-status').dataset.result = 'ready';
       $('air-status').textContent = edge
         ? practiceSide === 'left'
           ? 'Left ledge'
           : 'Right ledge'
         : 'Jump to begin';
-      $('air-neutral').setAttribute('aria-pressed', String(!edge));
+      if (last) $('air-status').textContent = (wide ? 'Wide' : 'Low') + ' · ' + practiceSide + ' ledge';
+      $('air-neutral').setAttribute('aria-pressed', String(!edge && !last));
       $('air-edge').setAttribute('aria-pressed', String(edge));
-      $('air-side').hidden = !edge;
-      message = edge
+      $('air-lastDodge').setAttribute('aria-pressed', String(last));
+      $('air-side').hidden = !edge && !last;
+      $('air-distance').hidden = $('air-fight').hidden = !last;
+      $('air-distance').textContent = wide ? 'Start low' : 'Start wide';
+      message = last ? 'Your jump and Up Special are spent. Aim ' + (wide ? '' : 'up and ') +
+        (practiceSide === 'left' ? 'right' : 'left') + ' and tap Shield to catch the ledge.' : edge
         ? 'Aim up and ' +
           (practiceSide === 'left' ? 'right' : 'left') +
           ', then tap Shield to slip past the guard and catch the lip.'
@@ -3783,7 +3817,7 @@
     ['Defense','Combo escape','escape',['tip','close','counter','break','gripEscape','gripThrow','carry']],
     ['Defense','Shield pressure','shield',['kick','drop','strike','grab','counterGrab','dodgeTiming','breakEscape','breakPunish','jumpIn','low','high','poke']],
     ['Defense','Launch & survival','launch',['throw','juggle','breakaway','survival','last-stock','escape','stock-return','stock-catch']],
-    ['Defense','Air dodge','air',['neutral','edge']],
+    ['Defense','Air dodge','air',['neutral','edge','lastDodge']],
     ['Recovery','Edgeguarding','edge',['lip','shortCatch','longCatch','tip','deep','corner','inside']],
     ['Recovery','Ledge recovery','ledge',['training','right','attack-training']],
     ['Recovery','Ledge timing','climb',['escape','trap','rise','coverRise','patience']],
@@ -3808,6 +3842,7 @@
     'shield-grab':'spot dodge roll', 'shield-strike':'perfect shield release',
     'shield-jumpIn':'empty hop falling aerial grab', 'freshness-training':'stale moves staling',
     'freshness-drive':'launch height angle ground slide ledge side smash back air',
+    'air-lastDodge':'recovery low wide directional air dodge edgeguard',
     'partner-training':'local two players sparring', 'reset-training':'free training dummy',
     'wall-ceiling':'ceiling tech under stage recovery Noodle Pip',
   };
@@ -4141,9 +4176,19 @@
   $('air-dodge-training').onclick = () => drill('air', false, world?.airPractice?.pattern || 'neutral');
   $('air-neutral').onclick = () => drill('air', false, 'neutral');
   $('air-edge').onclick = () => drill('air', false, 'edge');
+  $('air-lastDodge').onclick = () => drill('air', false, 'lastDodge');
+  $('air-distance').onclick = () => drill('air', false, 'lastDodge', !world.airPractice.wide);
+  $('air-fight').onclick = () => {
+    const {side,wide} = world.airPractice;
+    const [returner,guard] = world.dogs;
+    leaveOnline();
+    afterStory = null;
+    startMatch({...settings, mode:'solo', p1:guard.kind, p2:returner.kind, cpuLevel:'rival', stage:world.stage,
+      fetch:false, minutes:7, dodgeReturn:{side,wide}}, undefined, 42);
+  };
   $('air-side').onclick = () => {
     practiceSide = practiceSide === 'left' ? 'right' : 'left';
-    drill('air', false, 'edge');
+    drill('air', false, world.airPractice.pattern);
   };
   const campaign = window.DispatchScript;
   let storage;
@@ -4456,14 +4501,17 @@
     }
     const hero = world.dogs[0], foes = world.foes, lead = foes[0];
     const boss = world.layout.rules === 'boss', horde = world.layout.rules === 'horde';
+    const recovery = world.bridge ? null : offstageOptions(hero, world.terrain);
     const grip = world.grapple;
     const order = !grip || grip.phase === 'throw' ? world.objective : grip.owner === 0
       ? grappleControls(world,grip) : 'Grabbed · Tap action buttons to escape';
-    const key = [world.roomIndex, world.wave, hero.stocks, tenth(hero.damage), world.stamps, order,
+    const key = [world.roomIndex, world.wave, hero.stocks, tenth(hero.damage), world.stamps, order, recovery,
       ...foes.flatMap((e) => [e.f.stocks, tenth(e.f.damage), e.hp])].join('|');
     if (key === adventureKey) return;
     adventureKey = key;
     $('runner-score').hidden = !!world.bridge;
+    $('runner-recovery').hidden = recovery === null;
+    if (recovery !== null) $('runner-recovery').innerHTML = recoveryStrip(recovery);
     if (!world.bridge) {
       showPercent($('runner-percent'), hero.damage);
       showStocks($('runner-lives'), hero.stocks, hero.stats.name);
@@ -5517,6 +5565,13 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
       drill('platform', false, 'shield-drop');
+    }
+    else if (/^#training\/last-dodge(?:\/(pip|brisket|noodle|clover))?$/.test(hash)) {
+      menuScreen('match');
+      afterStory = null;
+      practiceSide = 'left';
+      startMatch({...settings, mode:'training', p1:hash.split('/')[2] || 'pip', p2:'brisket', stage:'nightmail', fetch:false});
+      drill('air', false, 'lastDodge', false);
     }
     else if (hash === '#training/launch-height') {
       menuScreen('match');

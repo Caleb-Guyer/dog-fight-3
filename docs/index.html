@@ -11,13 +11,13 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=rapid-jab-1" />
+    <link rel="stylesheet" href="./style.css?v=last-dodge-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=practice-room-1" />
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=rapid-jab-1"></script>
     <script defer src="./arena-art.js?v=canal-lock-1"></script>
-    <script defer src="./engine.js?v=low-launch-1"></script>
+    <script defer src="./engine.js?v=last-dodge-1"></script>
     <script defer src="./render.js?v=low-launch-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
@@ -32,7 +32,7 @@
     <script defer src="./dispatch-run.js?v=stock-return-1"></script>
     <script defer src="./dispatch-view.js?v=blast-radar-1"></script>
     <script defer src="./online.js?v=low-launch-1"></script>
-    <script defer src="./app.js?v=low-launch-1"></script>
+    <script defer src="./app.js?v=last-dodge-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -303,6 +303,7 @@
                   <strong class="percentage" id="runner-percent"></strong>
                   <span class="lives" id="runner-lives" role="img"></span>
                 </span>
+                <span id="runner-recovery" hidden></span>
               </div>
             </div>
             <div id="machine-meter" class="machine-meter" hidden>
@@ -615,7 +616,10 @@
           <span id="air-patterns" role="group" aria-label="Air-dodge drill" hidden>
             <button id="air-neutral" type="button" class="utility" aria-pressed="true">In place</button>
             <button id="air-edge" type="button" class="utility" aria-pressed="false">At the ledge</button>
+            <button id="air-lastDodge" type="button" class="utility" aria-pressed="false">Last dodge</button>
+            <button id="air-distance" type="button" class="utility" hidden>Start wide</button>
             <button id="air-side" type="button" class="utility" hidden>Switch ledge</button>
+            <button id="air-fight" type="button" class="utility" hidden>Guard against Rival · 3 stocks</button>
           </span>
           <button id="training-moves" type="button" class="utility">Move list</button>
         </div>
