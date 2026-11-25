@@ -274,6 +274,7 @@
     if (Object.hasOwn(cpuLevels, s.cpuLevel)) settings.cpuLevel = s.cpuLevel;
     if (stockMinutes.includes(s.minutes)) settings.minutes = s.minutes;
     if(validStockCount(s.lives))settings.lives=s.lives;
+    if(window.DogFight.validHandicap(s.handicap) && s.handicap.some(Boolean))settings.handicap=s.handicap;
     settings.timed=s.timed===true;
     if(settings.timed && !settings.minutes)settings.minutes=3;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
@@ -673,14 +674,14 @@
     showDialog('couch',title,'');
     const pair=rotationPicking?rotation.players.slice(0,2):null;
     const config=counter?{...matchConfig,stage:world.stage,stageForm:world.form,coats:[world.coatFor(0),world.coatFor(1)]}:
-      pair?{...settings,...rotation.rules,p1:pair[0].kind,p2:pair[1].kind,coats:pair.map(p=>p.coat),coatBook:pair.map(p=>({[p.kind]:p.coat})),
+      pair?{...settings,...rotation.rules,handicap:rotation.rules?.handicap,p1:pair[0].kind,p2:pair[1].kind,coats:pair.map(p=>p.coat),coatBook:pair.map(p=>({[p.kind]:p.coat})),
         rotationRound:rotation.bout,rotationTags:pair.map(p=>p.name),bestOfThree:rotation.sets,couchSeats:rotationPads}:settings;
     couchPanel=window.CouchSelect.panel($('dialog-body'),strikes?{...config,bestOfThree:true}:config,keys,getPads(),{
       sound,announce,drawStageTile,leave:exitDialog,between:counter?{picker:localSet.picker,game:localSet.games.length+1}:null,
       lineupReady:strikes?(pick,seats)=>{
         for(const [i,kind] of pick.dogs.entries())pick.coats[i][kind]=pick.colors[i];
         beginStageStrike({...config,p1:pick.dogs[0],p2:pick.dogs[1],coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats,
-          form:counter?world.form:lobbyForm(),stockCount:config.stockCount ?? config.lives,timeBattle:config.timeBattle ?? config.timed},counter?localSet:null);
+          form:counter?world.form:lobbyForm(),...lobbyBattleRules(config)},counter?localSet:null);
       }:null,
       start(pick,seats) {
         const stage=pick.winner;
@@ -695,14 +696,14 @@
         if(pair){
           rotation.remember(pick.dogs,pick.colors);rotationPads=seats;saveRotation();
           rotationPicking=false;
-          startMatch({...config,stockCount:config.lives,timeBattle:config.timed,p1:pick.dogs[0],p2:pick.dogs[1],stage,form:config.stageForm,coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats},
+          startMatch({...config,...lobbyBattleRules(config),p1:pick.dogs[0],p2:pick.dogs[1],stage,form:config.stageForm,coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats},
             undefined,undefined,config.bestOfThree?new StockSet(stage):null);return;
         }
         [settings.p1,settings.p2]=pick.dogs;
         settings.stage=stage;
         for(const [i,kind] of pick.dogs.entries())settings.coatBook[i][kind]=pick.colors[i];
         save();
-        startMatch({...settings,stockCount:settings.lives,timeBattle:settings.timed,stage,form:lobbyForm(),coats:pick.colors.slice(),couchSeats:seats},undefined,undefined,
+        startMatch({...settings,...lobbyBattleRules(settings),stage,form:lobbyForm(),coats:pick.colors.slice(),couchSeats:seats},undefined,undefined,
           settings.bestOfThree?new StockSet(stage):null);
       },
     });
@@ -736,7 +737,10 @@
   }
   function openStrikeSet(){
     if(settings.mode==='local')return pickTogether(false,true);
-    beginStageStrike({...settings,mode:'solo',form:lobbyForm(),stockCount:settings.lives,timeBattle:settings.timed,coats:lobbyCoats.slice()});
+    beginStageStrike({...settings,mode:'solo',form:lobbyForm(),...lobbyBattleRules(settings),coats:lobbyCoats.slice()});
+  }
+  function lobbyBattleRules(config){
+    return {stockCount:config.stockCount ?? config.lives,timeBattle:config.timeBattle ?? config.timed,spawnDamage:config.handicap};
   }
   $('winner-stays').onclick=rotationBoard;
   const lobbyCoat = slot => window.DogFight.coatFor(slot,settings.p1,settings.p2,lobbyCoats);
@@ -776,8 +780,8 @@
     $('slots').innerHTML = [settings.p1, settings.p2]
       .map((kind, i) => {
         const name = fighters[kind].name;
-        return `<button class="slot" type="button" data-index="${i}" aria-pressed="${i === editing}" aria-label="Choose ${slotLabel(i)} fighter, currently ${name}, ${coatNames[kind][lobbyCoat(i)]}">
-        <span class="small-tag">${labelFor(i)}</span><span class="slot-name">${name}</span>${icon('edit')}
+        return `<button class="slot" type="button" data-index="${i}" aria-pressed="${i === editing}" aria-label="Choose ${slotLabel(i)} fighter, currently ${name}, ${coatNames[kind][lobbyCoat(i)]}${!training && settings.handicap?', starting damage '+settings.handicap[i]+'%':''}">
+        <span class="small-tag">${labelFor(i)}${!training && settings.handicap?' · '+settings.handicap[i]+'%':''}</span><span class="slot-name">${name}</span>${icon('edit')}
       </button>`;
       })
       .join('');
@@ -2119,42 +2123,26 @@
       start:cfg=>startMatch({...cfg,bestOfThree:false,timeBattle:false},undefined,undefined,null)});
   }
   $('rules-label').onclick = () => {
-    const choices = stockMinutes.filter(n=>n || !settings.timed).map(n => '<button type="button" class="utility" data-minutes="' + n +
-      '" aria-pressed="' + (settings.minutes === n) + '">' + (n ? n + ' min' : 'No clock') + '</button>').join('');
-    showDialog('stock-rules', settings.timed?'Time Battle rules':'Stock match rules',
-      '<div class="dialog-actions"><button class="primary" data-do="rulebook">Choose or create a ruleset</button></div>'+
-      '<h3>Battle rules</h3><div class="dialog-actions"><button class="utility" data-scoring="stock" aria-pressed="'+!settings.timed+'">Stock</button>'+
-      '<button class="utility" data-scoring="time" aria-pressed="'+settings.timed+'">Time Battle</button>'+
-      '<button class="utility" data-do="pack-relay">Pack Relay · Choose teams</button></div>'+
-      (settings.timed?'<p>Respawn until time expires. Earn one point if a rival falls within ten seconds of your hit. Lose one point whenever you fall. A tie starts Sudden Death.</p>':
-      '<p>'+stockLabel(settings.lives)+' each. When time runs out, the dog with more stocks wins. Tied stocks or a double final knockout start Sudden Death.</p>') +
-      '<h3>Match format</h3><div class="dialog-actions"><button class="utility" data-format="single" aria-pressed="' + !settings.bestOfThree +
-      '">Single game</button><button class="utility" data-format="set" aria-pressed="' + settings.bestOfThree + '">Best of three</button></div>' +
-      '<p>In a set, the loser picks the next arena. First to two wins takes the set.</p>' +
-      (settings.mode==='training'?'':'<div class="dialog-actions"><button class="utility" data-do="strike-set">Play a stage strike set</button></div>')+
-      '<h3>Match clock</h3><div class="dialog-actions">' + choices + '</div>' +
-      '<p>Play the last stock with both dogs at 125%. When a hit threatens the match, steer during the close-up to change your launch.</p>' +
-      '<div class="dialog-actions"><button class="utility" data-do="last-stock-start">Play last stock</button></div>' +
-      '<p>Sudden Death starts both dogs at 300% on one stock. The side boundaries close in after five seconds.</p>' +
-      '<div class="dialog-actions"><button class="utility" data-do="sudden-start">Play Sudden Death</button></div>');
+    if(!window.VersusRulebook)return waitForDispatch('Match rules',()=>loadDispatch('VersusRulebook'),()=>$('rules-label').click(),()=>$('rules-label').focus());
+    showDialog('stock-rules',settings.timed?'Time Battle rules':'Stock match rules',window.VersusRulebook.quick(settings,stockLabel));
     document.querySelector('[data-minutes="' + settings.minutes + '"]').focus({preventScroll:true});
   };
   function backFromRulebook(){
     if(page==='online-lobby'){dismiss();$('online-rulebook').focus();return;}
-    $('rules-label').onclick();$('dialog-body').querySelector('[data-do="rulebook"]').focus();
+    $('rules-label').onclick();$('dialog-body').querySelector('[data-do="rulebook"]')?.focus();
   }
-  function openRulebook(hash){
-    if(!window.VersusRulebook)return waitForDispatch('Versus rulesets',()=>loadDispatch('VersusRulebook'),()=>openRulebook(hash),backFromRulebook);
+  function openRulebook(hash,focusDamage=false){
+    if(!window.VersusRulebook)return waitForDispatch('Versus rulesets',()=>loadDispatch('VersusRulebook'),()=>openRulebook(hash,focusDamage),backFromRulebook);
     const room=page==='online-lobby';
     showDialog('rulebook',room?'Friend room rulesets':'Versus rulesets','');
-    window.VersusRulebook.open($('dialog-body'),room?{...readRoomSetup(),mode:'online'}:settings,{storage,hash,back:backFromRulebook,apply(rules){
+    window.VersusRulebook.open($('dialog-body'),room?{...readRoomSetup(),mode:'online'}:settings,{storage,hash,focusDamage,back:backFromRulebook,apply(rules){
       if(room){
         customSetup=rules;
         $('online-rules').options[0].textContent='Stock · '+stockLabel(rules.lives)+' · '+clockLabel(rules.timed?7:rules.minutes);
         $('online-rules').value=String(rules.timed?rules.minutes:0);$('online-form').value=rules.stageForm;
         setRoomFormat(rules.bestOfThree);updateRoomSetup();dismiss();$('online-create').focus();sound('menu');return;
       }
-      Object.assign(settings,rules);save();dismiss();syncLobby();$('start').focus();sound('menu');
+      Object.assign(settings,{handicap:undefined},rules);save();dismiss();syncLobby();$('start').focus();sound('menu');
     }});
   }
   function startShieldReadMatch(series = false) {
@@ -2843,7 +2831,7 @@
       players.map((p,i) => '<td>' + value(p,i) + '</td>').join('') + '</tr>';
     const relayRows=card.relayTeams?['Lead','Second','Anchor'].map((label,k)=>row(label+' damage',(p,i)=>
       fighters[card.relayTeams[i][k]].name+' · '+(k>card.relayTeams[i].indexOf(p.kind)?'On bench':tenth(card.relayDamage[i][k])+'%'))).join(''):'';
-    const stats = (card.stockCount?row('Starting stocks',()=>card.stockCount):'') + row('Damage dealt', p => tenth(p.damage) + '%') + relayRows + row('Hits landed', p => p.hits) +
+    const stats = (card.stockCount?row('Starting stocks',()=>card.stockCount):'') + (card.handicap?row('Starting damage',(_,i)=>card.handicap[i]+'%'):'') + row('Damage dealt', p => tenth(p.damage) + '%') + relayRows + row('Hits landed', p => p.hits) +
       row('Hits blocked', p => p.blocks) + row('Parries', p => p.parries) + row('Shield breaks suffered',p=>p.shieldBreaks) +
       row('Landing techs',p=>p.techs) + row('Knockdowns taken',p=>p.knockdowns) +
       (card.points?row('Regulation points',(_,i)=>card.points[i])+row('Credited KOs',(_,i)=>losses.filter(l=>l.slot!==i && l.credited).length)+
@@ -2995,7 +2983,7 @@
     announce(f.stats.name + ' wins the Golden Tennis Ball');
     document.querySelector('#dialog-body .primary').focus();
   }
-  $('start').onclick = () => startMatch({...settings,stockCount:settings.lives,timeBattle:settings.timed,form:lobbyForm(),coats:lobbyCoats}, undefined, undefined,
+  $('start').onclick = () => startMatch({...settings,...lobbyBattleRules(settings),form:lobbyForm(),coats:lobbyCoats}, undefined, undefined,
     settings.mode !== 'training' && settings.bestOfThree ? new StockSet(settings.stage) : null);
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
@@ -3108,6 +3096,7 @@
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
     if(action==='rulebook')return openRulebook();
+    if(action==='handicap')return openRulebook(undefined,true);
     if(action==='corner-practice' && corner)return startCornerLesson();
     if(action==='corner-toggle' && corner){
       settings.cornerTips=!settings.cornerTips;save();
@@ -5562,9 +5551,9 @@
   let campaign = yardChapter;
   const dispatchSources={
     PlayerProfiles:'player-profiles.js?v=1',
-    VersusRulebook:'versus-rules.js?v=room-rules-1',
+    VersusRulebook:'versus-rules.js?v=handicap-1',
     PackRelay:'pack-relay.js?v=1',
-    WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=fighter-shuffle-1',StageStrike:'stage-strike.js?v=2',
+    WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=handicap-1',StageStrike:'stage-strike.js?v=2',
     ComboLab:'combo-lab.js?v=1', FinishTools:'finish-tools.js?v=replay-inputs-1',
     FighterSchool:'fighter-lessons.js?v=special-studies-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',

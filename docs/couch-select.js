@@ -96,7 +96,8 @@
     if(settings.rotationTags)cards.forEach((c,i)=>{c.el.querySelector('header b').textContent='P'+(i+1)+' · '+settings.rotationTags[i];});
     const lives=settings.stockCount ?? settings.lives ?? 3;
     root.querySelector('#couch-rules').textContent=(settings.bestOfThree?'Best of three':'Single game')+((settings.timeBattle??settings.timed)?' · Time Battle · ':' · '+lives+(lives===1?' stock · ':' stocks · '))+
-      (settings.minutes?settings.minutes+' min':'No clock')+' · '+stageForms[settings.stageForm].name+' · Fetch Ball '+(settings.fetch?'on':'off');
+      (settings.minutes?settings.minutes+' min':'No clock')+' · '+stageForms[settings.stageForm].name+' · Fetch Ball '+(settings.fetch?'on':'off')+
+      (settings.handicap?' · P1 '+settings.handicap[0]+'% / P2 '+settings.handicap[1]+'%':'');
     const key=(i,action)=>window.FightControls.keyName(keys[i][action]);
     let lastCel=-1,closed=false;
     function paint(time=0) {
