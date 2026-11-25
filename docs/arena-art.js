@@ -611,16 +611,18 @@
     });
   }
 
-  function buildPicnic(p = new Pixels(W, H)) {
+  function buildPicnic(p = new Pixels(W, H), furniture = true) {
     distantGarden(p);
     fan(p, 22, 110, '#665c53', '#caab82', '#8c735e', '#b66d58');
     fan(p, 35, 112, '#68746a', '#c5c1a1', '#929b84', '#68948a', true);
     fan(p, 357, 107, '#666f63', '#b1a889', '#827f6a', '#c58d63', true);
     fence(p);
     ground(p);
-    hurdleLegs(p, 105);
-    hurdleLegs(p, 235);
-    picnicLegs(p);
+    if (furniture) {
+      hurdleLegs(p, 105);
+      hurdleLegs(p, 235);
+      picnicLegs(p);
+    }
     return p.canvas;
   }
 
@@ -921,7 +923,7 @@
     });
   }
 
-  function buildLaundry(p = new Pixels(W, H), depth = H) {
+  function buildLaundry(p = new Pixels(W, H), depth = H, furniture = true) {
     city(p, depth);
     clothesWire(
       p,
@@ -967,6 +969,7 @@
       ],
     );
     // Repaired leaning masts and the fixed central wire for the basket trolley.
+    if (!furniture) return p.canvas;
     p.poly([86, 148, 87, 74, 90, 73, 89, 148], '#77767a');
     p.line(88, 75, 87, 148, '#aa9990');
     p.r(85, 74, 6, 2, '#8b7d7d');
@@ -1163,7 +1166,7 @@
     }
   }
 
-  function widerGarden(p) {
+  function widerGarden(p, furniture) {
     const left = -wing,
       right = W + wing,
       bottom = H + below;
@@ -1263,10 +1266,10 @@
         grass(p, xl + dx + 3, 228 + h, 1, '#536f59', '#92a173');
       }
     }
-    buildPicnic(p);
+    buildPicnic(p, furniture);
   }
 
-  function widerCity(p) {
+  function widerCity(p, furniture) {
     const left = -wing,
       right = W + wing,
       bottom = H + below;
@@ -1302,7 +1305,7 @@
       }
     }
     sidelines(p, true);
-    buildLaundry(p, bottom);
+    buildLaundry(p, bottom, furniture);
     // Rows of distant windows end at the far pavement. Slant the cobbles
     // into the street so this plane reads behind the foreground rooftops.
     const street = [
@@ -1514,7 +1517,7 @@
       }
     });
   }
-  function drawBandstand(ctx, seconds, b) {
+  function drawBandstand(ctx, seconds, b, form) {
     const bank=riverbank(), area=b || { left:0, top:0, right:1200, bottom:675 };
     ctx.fillStyle='#282640'; ctx.fillRect(area.left,area.top,area.right-area.left,area.bottom-area.top);
     for (const upper of [true,false]) {
@@ -1531,7 +1534,7 @@
     }
     for (let x=Math.floor(area.left/1200)*1200;x<area.right;x+=1200) ctx.drawImage(bank,x,-192,1200,960);
     ctx.drawImage(bandstandPavilion(),0,0,1200,675);
-    const floors=window.DogFight.platforms('bandstand',0);
+    const floors=form === 'flat' ? [] : window.DogFight.platforms('bandstand',0);
     for (const p of floors) {
       const w=p.x2-p.x1, art=bandstandDeck(w/3,p.thin);
       ctx.drawImage(art,p.x1,p.y,w,art.height*3);
@@ -1543,15 +1546,15 @@
     }
   }
 
-  function surroundings(ctx, key, b) {
+  function surroundings(ctx, key, b, furniture) {
     const laundry = key === 'laundry',
       edge = wing * 3,
       top = -above * 3,
       bottom = (H + below) * 3;
-    const art = sprite(key + '-surroundings', W + 2 * wing, H + above + below, (p) => {
+    const art = sprite(key + '-surroundings-' + furniture, W + 2 * wing, H + above + below, (p) => {
       p.g.translate(wing, above);
-      if (laundry) widerCity(p);
-      else widerGarden(p);
+      if (laundry) widerCity(p, furniture);
+      else widerGarden(p, furniture);
     });
     if (b.top < top || b.bottom > bottom) {
       for (const high of [true, false]) {
@@ -1704,7 +1707,7 @@
     });
   }
 
-  function drawNightMail(ctx, seconds, bounds) {
+  function drawNightMail(ctx, seconds, bounds, form) {
     const b = bounds || { left:0, top:0, right:1200, bottom:675 };
     const time = reducedScenery?.matches || !Number.isFinite(seconds) ? 0 : seconds;
     function band(start, end, color) {
@@ -1744,6 +1747,7 @@
       for (let i = 0; i < 46; i++) p.r(rng()*112,10+rng()*8,2,1,'#403e50');
     });
     repeat(ballast,596,160);
+    if (form === 'trio') return;
     const [deck] = window.DogFight.platforms('nightmail',0), car = mailCar();
     const sx = (deck.x2-deck.x1)/car.width;
     ctx.drawImage(car,deck.x1,deck.y,deck.x2-deck.x1,car.height*3);
@@ -1826,7 +1830,7 @@
     });
   }
 
-  function drawCanal(ctx, seconds, bounds) {
+  function drawCanal(ctx, seconds, bounds, form) {
     const b = bounds || {left:0,top:0,right:1200,bottom:675};
     const time = Number.isFinite(seconds) ? seconds : 0;
     const [gate, ferry] = window.DogFight.platforms('canal',time);
@@ -1862,6 +1866,7 @@
       for(let x=Math.floor((b.left-flow)/(ripple.width*3))*ripple.width*3+flow;x<b.right;x+=ripple.width*3)
         ctx.drawImage(ripple,x,y,ripple.width*3,ripple.height*3);
     // The trolley follows a taut cable. Only the yellow timber deck is a landing surface.
+    if (form !== 'original') return;
     rect(24,196,1152,3,'#667a70');
     const tower=sprite('canal-mast',16,96,p=>{
       p.r(7,0,3,96,'#65786b'); p.r(6,3,6,3,'#879383'); p.r(3,1,12,2,'#687a6d');
@@ -1881,37 +1886,97 @@
     ctx.drawImage(canalGate(),gate.x1,gate.y,gate.x2-gate.x1,126);
   }
 
-  function draw(ctx, stageId, seconds = 0, bounds) {
+  const deckColors = {
+    picnic:['#ffe3ab','#d19a64','#a66848','#634842','#e9c9a0'],
+    laundry:['#e8b5aa','#ae827f','#795f70','#514756','#b6c4bd'],
+    nightmail:['#f1c182','#9d6861','#725260','#39384a','#d4a88a'],
+    canal:['#ffe09a','#9aa78c','#647d75','#3f514f','#bd784e'],
+    bandstand:['#ffdfa0','#cb895e','#8e5554','#453545','#d8ad74'],
+  };
+  const formDecks = new Map();
+  function buildFormDecks(stage, form) {
+    const geometry = window.DogFight.stageGeometry(stage,form);
+    return window.DogFight.platforms(geometry,0).map(floor => {
+      const width = floor.x2-floor.x1, w = Math.round(width/3);
+      const h = floor.thin ? 6 : form === 'trio' ? 15 : 38;
+      const art = sprite('form-'+stage+'-'+w+'-'+h,w,h,p => {
+        const [lip,top,side,dark,trim] = deckColors[stage];
+        const bands = floor.thin ? [[0,0,2],[1,2,4],[3,4,6]] : form === 'flat' ?
+          [[0,0,4],[2,4,32],[6,32,38]] : [[0,0,5],[1,5,8],[3,8,12],[6,12,15]];
+        for (const [inset,y,end] of bands) {
+          p.r(inset,y,w-2*inset,end-y,dark);
+          p.r(inset+1,y,w-2*inset-2,end-y-1,y ? side : top);
+        }
+        p.r(0,0,w,1,lip);
+        for (let x=5;x<w-8;x+=13) {
+          p.r(x,1,4,1,top); p.dot(x+5,2,dark);
+          if (floor.thin) p.r(x,3,5,1,trim);
+        }
+        if (floor.thin) return;
+        const y = form === 'flat' ? 12 : 4, tall = form === 'flat' ? 14 : 5;
+        for (let x=9;x<w-21;x+=22) {
+          if (stage === 'picnic') {
+            for (let j=0;j<3;j++) p.r(x+j*6,y+(j%2)*3,6,3,j%2 ? lip : trim);
+            p.r(x+1,y+7,15,1,dark);
+          } else if (stage === 'canal') {
+            p.r(x,y,14,tall,dark);
+            for(let c=2;c<14;c+=4) p.r(x+c,y,1,tall,trim);
+            p.dot(x+16,y+2,lip);
+          } else if (stage === 'bandstand') {
+            p.line(x,y,x+7,y+6,trim); p.line(x+7,y+6,x+14,y,trim); p.dot(x+7,y+7,lip);
+          } else {
+            p.r(x,y,16,tall,dark); p.r(x+1,y+1,14,tall-2,trim);
+            p.r(x+6,y+1,2,tall-2,side); p.r(x-1,y+tall,18,1,top);
+          }
+        }
+        for (const x of [2,w-5]) p.r(x,1,3,2,lip);
+      });
+      return {art,x:floor.x1,y:floor.y,width,height:h*3};
+    });
+  }
+  function drawFormDecks(ctx, stage, form) {
+    if (form === 'original' || (stage === 'nightmail' && form === 'flat') ||
+        (stage === 'bandstand' && form === 'trio')) return;
+    const key = stage + '-' + form;
+    if (!formDecks.has(key)) formDecks.set(key,buildFormDecks(stage,form));
+    for (const deck of formDecks.get(key)) ctx.drawImage(deck.art,deck.x,deck.y,deck.width,deck.height);
+  }
+  function draw(ctx, stageId, seconds = 0, bounds, form = 'original') {
     if (stageId === 'canal') {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      drawCanal(ctx,seconds,bounds);
+      drawCanal(ctx,seconds,bounds,form);
+      drawFormDecks(ctx,stageId,form);
       ctx.restore();
       return;
     }
     if (stageId === 'nightmail') {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      drawNightMail(ctx,seconds,bounds);
+      drawNightMail(ctx,seconds,bounds,form);
+      drawFormDecks(ctx,stageId,form);
       ctx.restore();
       return;
     }
     if (stageId === 'bandstand') {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
-      drawBandstand(ctx,seconds,bounds);
+      drawBandstand(ctx,seconds,bounds,form);
+      drawFormDecks(ctx,stageId,form);
       ctx.restore();
       return;
     }
     const laundry = stageId === 'laundry',
       key = laundry ? 'laundry' : 'picnic';
-    if (!scenes.has(key)) scenes.set(key, laundry ? buildLaundry() : buildPicnic());
+    const furniture = form === 'original', sceneKey = key + '-' + furniture;
+    if (!scenes.has(sceneKey)) scenes.set(sceneKey, laundry ? buildLaundry(undefined,H,furniture) : buildPicnic(undefined,furniture));
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     if (bounds && (bounds.left < 0 || bounds.top < 0 || bounds.right > 1200 || bounds.bottom > 675))
-      surroundings(ctx, key, bounds);
-    ctx.drawImage(scenes.get(key), 0, 0, 1200, 675);
-    if (laundry) {
+      surroundings(ctx, key, bounds, furniture);
+    ctx.drawImage(scenes.get(sceneKey), 0, 0, 1200, 675);
+    if (!furniture) drawFormDecks(ctx,stageId,form);
+    else if (laundry) {
       ctx.drawImage(roof(false), 130, 450, 390, 228);
       ctx.drawImage(roof(true), 680, 450, 390, 228);
       ctx.drawImage(chimney(), 805, 310, 130, 141);

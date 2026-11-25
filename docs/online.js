@@ -1,8 +1,8 @@
 (() => {
   'use strict';
 
-  const prefix = 'dogfight3-cg-versus-v68-';
-  const channel = 'dogfight3-v68';
+  const prefix = 'dogfight3-cg-versus-v69-';
+  const channel = 'dogfight3-v69';
   const quickId = prefix + 'quickplay';
   const roomAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick', 'tiltMode', 'shortHop', 'quickAttack'];
@@ -191,7 +191,7 @@
       this.link = this.match = this.series = null;
       if (message) this.events.closed(message);
     }
-    start(action, kind, code = '', openingStage = '', bestOfThree = false) {
+    start(action, kind, code = '', openingStage = '', bestOfThree = false, form = 'original') {
       this.close();
       if (!fighter(kind) || !['create', 'join', 'quick'].includes(action)) return;
       if (action === 'join' && !validCode(code)) return this.events.closed('Enter the six-character room code.');
@@ -199,6 +199,7 @@
         return this.events.closed('Online play needs an internet connection and a browser with WebRTC.');
       this.action = action;
       this.roomSet = action === 'create' && bestOfThree;
+      this.roomForm = action === 'create' && Object.hasOwn(window.DogFight.stageForms,form) ? form : 'original';
       this.openingStage = action === 'create' && Object.hasOwn(window.DogFight.arenas, openingStage) ? openingStage : '';
       this.kind = kind;
       this.code = action === 'create' ? roomCode() : code;
@@ -330,8 +331,13 @@
       this.status('room', message + ' Your room is open.');
     }
     validStart(msg) {
-      const series = msg.length === 7 && msg[6] === 2 && this.action !== 'quick';
-      if ((msg.length !== 6 && !series) || (this.round && series !== !!this.series)) return false;
+      const form = msg[7] ?? 'original';
+      if (msg.length === 8) {
+        if (this.action === 'quick' || ![1,2].includes(msg[6]) ||
+            typeof msg[7] !== 'string' || !Object.hasOwn(window.DogFight.stageForms,form)) return false;
+      } else if (msg.length !== 6 && !(msg.length === 7 && msg[6] === 2)) return false;
+      const series = msg[6] === 2;
+      if ((this.action === 'quick' && series) || (this.round && (series !== !!this.series || form !== this.roomForm))) return false;
       if (this.series && (!this.finished || !this.theirVote ||
           (this.series.champion === null && msg[4] !== this.nextStage))) return false;
       return msg[1] === this.round + 1 && fighter(msg[2]) && msg[3] === this.kind &&
@@ -345,22 +351,24 @@
       const stage = this.series ? (this.series.champion === null ? this.nextStage : opener) :
         this.round ? stages[(stages.indexOf(this.stage) + 1) % stages.length] : opener;
       const data = ['start', this.round + 1, this.kind, this.remoteKind, stage, seed];
-      if (this.roomSet) data.push(2);
+      if (this.roomForm && this.roomForm !== 'original') data.push(this.roomSet ? 2 : 1, this.roomForm);
+      else if (this.roomSet) data.push(2);
       this.send(data);
       this.beginRound(data);
     }
-    beginRound([, round, p1, p2, stage, seed, firstTo]) {
+    beginRound([, round, p1, p2, stage, seed, firstTo, form = 'original']) {
       if (firstTo === 2) {
         if (!this.series || this.series.champion !== null) this.series = new window.DogFight.StockSet(stage);
         else if (!this.series.advance(stage)) return;
       }
       this.round = round;
       this.stage = stage;
+      this.roomForm = form;
       this.myVote = this.theirVote = this.finished = false;
       this.myResult = this.theirResult = null;
       this.nextStage = this.earlyVote = undefined;
       this.phase = 'playing';
-      const config = { mode: 'local', p1, p2, stage, fetch: true };
+      const config = { mode: 'local', p1, p2, stage, form, fetch: true };
       this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed);
       this.events.start(config, seededRandom(seed));
     }

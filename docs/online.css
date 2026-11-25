@@ -71,7 +71,7 @@
 #online-status:empty { display: none; }
 .room-setup { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 6px 8px; }
 .room-setup label { grid-column: 1 / -1; color: #e7dfca; font-size: 16px; }
-#online-stage { min-width: 0; width: 100%; min-height: 43px; padding: 7px; color: #ffe4af; background: #202432;
+#online-stage, #online-form { min-width: 0; width: 100%; min-height: 43px; padding: 7px; color: #ffe4af; background: #202432;
   border: 2px solid #838390; border-radius: 0; font: 16px/1.2 var(--body); }
 @media (max-width: 390px) { .room-setup { grid-template-columns: 1fr; } }
 #online-actions, #online-wait, #online-invite { display: grid; gap: 12px; }
