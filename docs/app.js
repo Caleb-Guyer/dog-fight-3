@@ -2833,7 +2833,7 @@
       '<div class="winner"><img alt="" src="' +
         portrait(f.kind,result.coatFor(f.index)) +
         '"><div><span class="mode-label">' +
-        labelFor(f.index) +
+        (result.relayTeams?result.relayTeams[f.index].map(kind=>fighters[kind].name).join(' · '):labelFor(f.index)) +
         '</span><h3 style="margin-top:9px">' +
         (result.relayTeams?labelFor(f.index)+'’s pack':f.stats.name) +
         ' wins!</h3><p>' +
