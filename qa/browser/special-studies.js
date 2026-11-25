@@ -8,9 +8,10 @@ async function play(browser,phone){
   try{
     await page.addInitScript(()=>localStorage.setItem('dog-fight-3.controls',JSON.stringify({keyboard:[{special:'KeyQ'},{}]})));
     await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
-    await page.goto(root+(phone?'#moves/pip/neutral':'#local'));
+    await page.goto(root+(phone?'#moves/pip/neutral':''));
     if(!phone){
       assert.equal(await page.evaluate(()=>!!window.FighterSchool),false);
+      await press('[data-enter-mode="local"]');
       await press('#lobby-moves');await press('[data-guide-section="specials"]');
       await page.route('**/fighter-lessons.js*',r=>r.abort(),{times:1});
       await press('[data-watch-special="neutral"]');await press('#dispatch-load-retry');
