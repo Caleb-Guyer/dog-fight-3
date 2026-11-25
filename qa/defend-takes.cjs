@@ -223,3 +223,101 @@ test('shield counters replay as ordinary local inputs on two delayed rollback pe
     }
   }
 });
+
+test('a sparring partner controls the defender through hit freeze just as in local and delayed online play',()=>{
+  const c=config('pip','brisket','laundry');
+  const w=new Battle(c,()=>{},seededRandom(seed)), ref=new Battle({...c,mode:'local'},()=>{},seededRandom(seed));
+  w.trainingPartner=true;
+  const peers=[peer(0,c),peer(1,c)];
+  for(const b of [ref,...peers.flatMap(p=>[p.world,p.net.confirmedWorld])])b.resetTraining();
+  const history=[combat(ref)];
+  let freezeInputs=0;
+  for(let i=0;i<120;i++){
+    const shift=w.hitStop>0 && w.dogs[1].hitShift;
+    if(shift)freezeInputs++;
+    const x=shift?1:0;
+    const pair=[input({attack:[0,10,20].includes(i)}),input({x,grabX:x,shield:i>=50,attack:i===80})];
+    w.step(dt,...pair);ref.step(dt,...pair);
+    assert.deepEqual(combat(w),combat(ref));
+    history.push(combat(ref));
+    for(const [side,p] of peers.entries()){
+      if(i>=5)assert(p.net.receive(i-5,peers[1-side].packets[i-5]));
+      p.net.tick(()=>pair[side],p.world);
+      assert.deepEqual(combat(p.net.confirmedWorld),history[p.net.confirmed]);
+    }
+  }
+  assert(freezeInputs>0);
+  for(const [side,p] of peers.entries()){
+    const remote=peers[1-side].packets;
+    for(let i=p.net.received;i<remote.length;i++)assert(p.net.receive(i,remote[i]));
+    p.net.confirm(p.world);
+    assert.deepEqual(combat(p.world),combat(w));
+  }
+  w.resetTraining();
+  assert.equal(w.hasSecondPlayer,false);
+  for(let i=0;i<20;i++)w.step(dt,idleInput,input({shield:true}));
+  assert.equal(w.dogs[1].shield,false);
+});
+
+test('a saved grip can branch into either throw and repeat on the same moving stage',()=>{
+  const w=new Battle(config('pip','brisket','laundry'),()=>{},seededRandom(seed));
+  w.trainingPartner=true;
+  for(let i=0;i<150 && w.grapple?.phase!=='hold';i++)w.step(dt,idleInput,input({grab:i===0}));
+  assert.equal(w.grapple?.owner,1);
+  assert.equal(w.grapple.phase,'hold');
+  const moment=w.saveTrainingMoment(), time=w.time;
+  function release(side){
+    w.restoreTrainingMoment(moment);
+    assert.strictEqual(w.dogs[0].grip,w.grapple);
+    assert.strictEqual(w.dogs[1].grip,w.grapple);
+    assert.equal(w.time,time);
+    const path=[], ids=new Set();
+    for(let i=0;i<90;i++){
+      w.step(dt,idleInput,i===0?input(side):idleInput);
+      if(w.grapple?.throwId)ids.add(w.grapple.throwId);
+      path.push(combat(w));
+    }
+    assert.equal(w.lastCombo.target,0);
+    return {path,ids:[...ids]};
+  }
+  const forward=release({x:-1,grabX:-1}), up=release({y:-1});
+  assert.deepEqual(forward.ids,[kits.brisket.throws.forward]);
+  assert.deepEqual(up.ids,[kits.brisket.throws.up]);
+  assert.notDeepEqual(forward.path,up.path);
+  assert.deepEqual(release({x:-1,grabX:-1}),forward);
+  assert.equal(moment.state.grapple.phase,'hold');
+});
+
+test('retry restores a live projectile and subsequent random Fetch Ball spawns',()=>{
+  const w=new Battle(config('clover','pip','canal'),()=>{},seededRandom(seed));
+  w.trainingPartner=true;
+  for(let i=0;i<55 && !w.projectiles.length;i++)w.step(dt,input({special:i===0}),input({shield:true}));
+  assert(w.projectiles.length);
+  const moment=w.saveTrainingMoment();
+  function play(){
+    const trace=[];
+    for(let i=0;i<360;i++){
+      w.step(dt,idleInput,input({shield:i<45}));
+      trace.push([w.time,w.dogs[1].damage,w.projectiles.map(p=>[p.x,p.y,p.owner]),w.ball && [w.ball.x,w.ball.y],w.random.state]);
+    }
+    return trace;
+  }
+  const first=play();
+  assert(first.some(frame=>frame[3]));
+  w.restoreTrainingMoment(moment);assert.deepEqual(play(),first);
+});
+
+test('the same recorded attack can hit P2 or meet their shield on replay',()=>{
+  const w=new Battle(config(),()=>{},seededRandom(seed));
+  w.resetComboPractice('record','p2',false);
+  assert.equal(w.hasSecondPlayer,true);
+  for(let i=0;i<100;i++)w.step(dt,input({attack:i===0}),idleInput);
+  assert.equal(w.comboPractice.contacts[0].kind,'hit');
+  w.resetComboPractice('replay','p2',false);
+  for(let i=0;i<100;i++)w.step(dt,idleInput,input({shield:true}));
+  assert.equal(w.comboPractice.contacts[0].kind,'block');
+  assert.equal(w.dogs[1].damage,0);
+  w.resetComboPractice('defend','p2',false);
+  assert.equal(w.hasSecondPlayer,false);
+  assert.equal(w.trainingPlayerSlot,1);
+});

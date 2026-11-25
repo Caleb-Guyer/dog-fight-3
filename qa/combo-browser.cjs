@@ -1362,6 +1362,75 @@ async function testShieldPunish(page,mobile) {
   assert.equal(await latest.innerText(),result);
 }
 
+async function testPartnerTraining(page,mobile) {
+  await page.goto(root+'?partners#training/sparring');
+  const latest=page.locator('#combo-latest'), {press,hold}=await trainingControls(page,mobile,latest);
+  const names=()=>page.locator('.hud-name small').allTextContents();
+  assert.deepEqual(await names(),['P1','P2']);
+  assert.equal(await page.locator('#dummy-damage').getAttribute('aria-label'),'P2 starting damage');
+  assert(await page.locator('#moment-retry').isDisabled());
+  await page.evaluate(()=>{
+    const proto=window.DogFight.Battle.prototype, step=proto.step;
+    proto.step=function(...args){
+      const result=step.apply(this,args);
+      window.partnerFrame={time:this.time,dogs:this.dogs.map(f=>({x:f.x,y:f.y,ground:f.ground,shield:f.shield,damage:f.damage}))};
+      return result;
+    };
+    const pad=i=>({index:i,id:'Test pad '+i,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))});
+    window.partnerPads=[pad(0),pad(1)];
+    Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>window.partnerPads.slice(0,window.padCount)});
+    window.padCount=1;
+  });
+  const frame=()=>page.evaluate(()=>window.partnerFrame);
+  const ticks=ms=>page.clock.runFor(ms);
+  await ticks(40);
+  await page.evaluate(()=>{window.partnerPads[0].buttons[4].pressed=true;});
+  await hold(['attack']);await ticks(48);await hold([]);await ticks(300);
+  assert.equal((await frame()).dogs[1].damage,0);
+  assert((await frame()).dogs[1].shield);
+  assert(!(await frame()).dogs[0].shield);
+  await page.evaluate(()=>{window.partnerPads[0].buttons[4].pressed=false;window.padCount=2;});
+  await press('reset-training');
+  assert.deepEqual(await names(),['P1','P2']);
+  await page.evaluate(()=>{window.partnerPads[0].buttons[4].pressed=true;window.partnerPads[1].buttons[2].pressed=true;});
+  await ticks(32);
+  await page.evaluate(()=>{window.partnerPads[1].buttons[2].pressed=false;});
+  await ticks(240);
+  assert((await frame()).dogs[0].shield);
+  assert.equal((await frame()).dogs[0].damage,0);
+  await page.evaluate(()=>{window.padCount=0;window.partnerPads[0].buttons[4].pressed=false;});
+  await press('reset-training');
+  await page.keyboard.press(',');
+  await ticks(240);
+  assert.match(await page.locator('#training-combo').innerText(),/P1 took 1 hit/);
+  if(mobile)await press('frame-toggle');else await page.keyboard.press('[');
+  const saved=await frame();
+  if(mobile)await press('moment-save');else await page.keyboard.press('1');
+  assert.match(await page.locator('#recovery-tip').innerText(),/Moment saved/);
+  await press('frame-toggle');
+  await page.keyboard.down('ArrowRight');await ticks(420);await page.keyboard.up('ArrowRight');
+  assert((await frame()).dogs[1].x>saved.dogs[1].x+20);
+  if(mobile)await press('moment-retry');else await page.keyboard.press('2');
+  assert.equal(await page.locator('#frame-toggle').getAttribute('aria-pressed'),'true');
+  assert.match(await page.locator('#recovery-tip').innerText(),/Moment restored/);
+  await press('frame-step');await ticks(32);
+  const again=await frame();
+  assert(Math.abs(again.time-saved.time-1/60)<1e-6);
+  assert(Math.abs(again.dogs[1].x-saved.dogs[1].x)<3);
+  await press('combo-training');
+  assert(await page.locator('#moment-save').isHidden());
+  await press('combo-record');
+  await page.selectOption('#combo-reply','p2');
+  await hold(['attack']);await ticks(48);await hold([]);await ticks(500);
+  assert.match(await latest.innerText(),/Quick Paw · [\d.]+%/);
+  await press('combo-replay');
+  assert.deepEqual(await names(),['REPLAY','P2']);
+  await page.keyboard.down('/');await ticks(700);await page.keyboard.up('/');
+  assert.match(await latest.innerText(),/Quick Paw · blocked/);
+  await press('reset-training');assert.deepEqual(await names(),['P1','DUMMY']);
+  assert(await page.locator('#moment-retry').isEnabled());
+}
+
 async function testDiscReflect(page,mobile) {
   await page.goto(root+'?disc-matchup#training/disc-reflect');
   const status=page.locator('#footwork-status');
@@ -1766,6 +1835,7 @@ async function testDevice(browser, mobile) {
     console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed examples, recording, replay, reply changes and free-training reset.');
     await testDefendTakes(page, mobile);
     await testShieldPunish(page, mobile);
+    await testPartnerTraining(page, mobile);
     await testEdges(page, mobile);
     await testTumble(page, mobile);
     await testBraking(page, mobile);
