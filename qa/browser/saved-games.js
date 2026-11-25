@@ -119,7 +119,10 @@ async function graduation(browser) {
   assert.equal(await page.evaluate(()=>rematchWorld.dogs[0].stocks),3);
   await page.locator('#pause').click();
   assert.match(await page.locator('#rematch-target').textContent(),/Rematch target.*Get back onstage/);
-  await page.locator('[data-do=resume]').click();
+  await page.locator('[data-do=corner-practice]').click();
+  assert.match(await page.locator('#school-title').textContent(),/Recover/);
+  await page.locator('#school-list').click();
+  assert.equal(await page.evaluate(()=>rematchWorld.dogs[0].stocks),3);
   await page.evaluate(()=>{
     const w=rematchWorld,f=w.dogs[0],floor=w.terrain[0];
     Object.assign(f,{x:floor.x1-50,y:floor.y+44,ground:-1,face:1,jumps:1,coyote:0,vx:0,vy:0});
@@ -139,8 +142,35 @@ async function graduation(browser) {
   assert.match(await page.locator('#school-count').textContent(),/1 \/ 10/);
   await page.close();
 }
+async function touchRematch(browser){
+  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+    await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+    await page.goto(root);
+    await page.evaluate(()=>localStorage.setItem('dog-fight-3.school',JSON.stringify({
+      started:true,seen:true,lesson:'stock',passed:FightSchool.lessons.map(l=>l.id),firstFightDone:true,
+      rematch:{id:'guard',ticket:'0000000000000001-0123456789abcdef',fight:false}
+    })));
+    await page.reload();await page.locator('#home-continue').tap();
+    assert.match(await page.locator('#school-count').textContent(),/Rematch practice/);
+    await page.locator('#school-example').tap();await page.clock.runFor(1800);
+    const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.school')).rematch);
+    assert.equal((await saved()).fight,false);
+    await page.locator('#school-next').tap();
+    const b=await page.locator('[data-touch=shield]').boundingBox(),cdp=await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:b.x+b.width/2,y:b.y+b.height/2}]});
+    await page.clock.runFor(1100);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    assert.equal((await saved()).fight,true);
+    await page.locator('#school-next').tap();await page.clock.runFor(3100);
+    await page.locator('#pause').tap();
+    assert.match(await page.locator('#rematch-target').textContent(),/Rematch target.*Block or parry/);
+    assert(await page.locator('#dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+  }finally{await page.close();}
+}
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try {await savedRoutes(browser);await graduation(browser);assert.deepEqual(errors,[]);}
+  try {await savedRoutes(browser);await graduation(browser);await touchRematch(browser);assert.deepEqual(errors,[]);}
   finally{await browser.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});
