@@ -66,7 +66,8 @@
     ctx.textBaseline = 'middle';
     const second = world.mode === 'local' || world.hasSecondPlayer ? 'P2' : world.mode === 'training' ? 'DUMMY' : 'CPU';
     const recorded = world.hasSecondPlayer && world.comboPractice && world.comboPractice.source !== 'record';
-    const labels = world.comboPractice?.defending ? ['TAPE','YOU'] : [recorded ? 'TAPE' : 'P1', second];
+    const labels = world.warmupPartner ? ['YOU',window.DogFight.warmupPartners[world.warmupPartner].tag] :
+      world.comboPractice?.defending ? ['TAPE','YOU'] : [recorded ? 'TAPE' : 'P1', second];
     const widths = labels.map((label) => snap(Math.max(26, ctx.measureText(label).width + 8), 2));
     const tops = world.dogs.map((f) => {
       let top = -f.stats.height;
