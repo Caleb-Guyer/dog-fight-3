@@ -159,6 +159,8 @@ In a three-stock match against Rival Clover, hold Down + forward from the openin
 
 In **Training → Platform practice**, choose **Rival below** to catch the other dog with a falling aerial. Choose **Rival on top** to catch them with your down tilt on the same platform. On Laundry Line the second setup puts you both on the moving basket. Select either setup again to retry with your fighters and stage.
 
+In **Pick your landing**, jump straight up from the chalk on Bandstand. Tap Down at the apex and release to fast-fall onto the top perch. Hold Down through the top and release to catch the side perch. Hold through both and you can attack the rival on the deck. Try Pip’s Scramble by releasing Down and tapping Attack, or keep Down held as Brisket and tap Attack for Belly Drop. The same choices work in stock matches. [Play Pick your landing](https://caleb-guyer.github.io/dog-fight-3/#training/pick-your-landing)
+
 Choose **Hold the top** for a drill on Moonbell Bandstand with your selected dogs. Tap Attack to start the climb. The challenger jumps onto the right wing, then comes up through the high platform with their own up air. Try shielding it once. Repeat the drill and tap Down + Attack as the challenger jumps off the wing to intercept them. Returning to free practice or a different setup restores your arena.
 
 Your dog crouches for three frames before a grounded jump. Release Jump during the crouch for a short hop. Hold Jump through it for a full jump. Press Attack with Jump or during the crouch to launch a short-hop aerial in the direction you aimed. To attack on the way down, jump first and press Attack later. Jump a second time in midair, then use Up + Special to recover. Down + Jump drops through a raised platform.

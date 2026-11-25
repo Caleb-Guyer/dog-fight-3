@@ -2102,6 +2102,7 @@
       drop: 0,
       dropPlatform: -1,
       dropPrep: null,
+      airPassHold: 0,
       downTicks: 0,
       crouch: false,
       crawling: false,
@@ -2599,6 +2600,7 @@
     f.drop = 0;
     f.dropPlatform = -1;
     f.dropPrep = null;
+    f.airPassHold = 0;
     f.crouch = f.crawling = false;
     f.jumpSquat = null;
     f.fastFall = false;
@@ -3353,11 +3355,18 @@
         this.platformPractice = { pattern, defend:true, platform:1, originalStage, slow, phase:'ready', outcome:'' };
         return;
       }
-      if (pattern === 'hold' || pattern === 'shield-drop') {
+      if (pattern === 'hold' || pattern === 'shield-drop' || pattern === 'layers') {
         const originalStage = this.stage;
         this.stage = 'bandstand';
         this.terrain = platforms(this.stage, this.time);
         const [guard, challenger] = this.dogs, top = this.terrain[3];
+        if (pattern === 'layers') {
+          const wing = this.terrain[1], mark = (top.x1 + wing.x2) / 2;
+          Object.assign(guard,{x:mark, y:top.y, ground:3, face:1});
+          Object.assign(challenger,{x:mark + guard.stats.width + challenger.stats.width, y:this.terrain[0].y, ground:0, face:-1});
+          this.platformPractice = {pattern, platform:3, originalStage, slow, phase:'ready', outcome:''};
+          return;
+        }
         if (pattern === 'shield-drop') {
           const wing = this.terrain[2], mark = (wing.x1 + wing.x2) / 2;
           Object.assign(guard, { x: mark, y: wing.y, ground: 2, face: 1 });
@@ -3393,6 +3402,24 @@
     checkPlatformPractice() {
       const drill = this.platformPractice, f = this.dogs[0];
       if (drill.phase === 'done') return;
+      if (drill.pattern === 'layers') {
+        if (drill.phase === 'ready') {
+          if (f.ground < 0 && f.vy < 0) drill.phase = 'rise';
+          else if (f.ground !== drill.platform) this.finishPlatformPractice('missed');
+          return;
+        }
+        if (f.ground >= 0) {
+          const landing = f.ground === 3 ? 'top' : f.ground === 1 && drill.phase === 'belowTop' ? 'wing' :
+            f.ground === 0 && drill.phase === 'fall' ? 'deck' : 'missed';
+          this.finishPlatformPractice(landing);
+        }
+        else if (f.ledge || f.respawning) this.finishPlatformPractice('missed');
+        else if (drill.phase === 'rise' && f.vy >= 0) {
+          drill.phase = 'apex';
+          this.emit('platformClimb',{f});
+        }
+        return;
+      }
       if (drill.pattern === 'shield-drop') {
         if (drill.phase === 'fall' && f.ground >= 0) this.finishPlatformPractice('landed');
         else if (drill.phase === 'exposed' && f.ground >= 0) this.finishPlatformPractice('early');
@@ -5661,6 +5688,7 @@
       if (out.length) this.knockouts(out);
     }
     trainingRivalInput(dt, player) {
+      if (this.platformPractice?.pattern === 'layers') return idleInput;
       if (this.edgePractice) return this.edgeRivalInput();
       if (this.survivalPractice) return this.survivalInput();
       if (this.stockPractice) return this.stockPracticeInput();
@@ -6590,7 +6618,7 @@
         drill.phase = fromShield && drill.phase === 'blocked' ? 'fall' : 'exposed';
         return;
       }
-      if (drill?.phase === 'ready' && drill.pattern !== 'hold' && f.index === 0 && platform === drill.platform) {
+      if (drill?.phase === 'ready' && (drill.pattern === 'below' || drill.pattern === 'top') && f.index === 0 && platform === drill.platform) {
         if (drill.pattern === 'top') this.finishPlatformPractice('left');
         else drill.phase = 'fall';
       }
@@ -7192,6 +7220,10 @@
       }
       if (f.ground < 0) {
         if (f.charge >= 0) cancelCharge(f);
+        // A tap can fast-fall onto a perch. Keep Down held for three free air frames to pass it.
+        const passing = input.y >= .74 && !input.shield && !f.attack && !f.command && !f.floorAction &&
+          !f.dodge && controlsFall(f) && (!f.encounter || f.encounter.kind === f.kind);
+        f.airPassHold = passing ? Math.min(3,(f.airPassHold || 0) + 1) : 0;
         if (!dodgeGlide) {
           const controlled = controlsFall(f);
           if (!controlled || (f.fastFallBuffer && framesToApex(f) > fastFallBufferFrames)) f.fastFallBuffer = 0;
@@ -7220,7 +7252,20 @@
         }
         if (f.vy >= 0) {
           const meteor = f.tumble?.meteor;
-          const landing = meteor ? this.landingSurface(f, oldY, oldX, dt) : this.landingSurface(f, oldY);
+          let landing = meteor || f.airPassHold === 3 ? this.landingSurface(f, oldY, oldX, dt) : this.landingSurface(f, oldY);
+          if (f.airPassHold === 3 && this.terrain[landing]?.thin) {
+            const platform = landing;
+            f.drop = .24;
+            f.dropPlatform = platform;
+            landing = this.landingSurface(f, oldY, oldX, dt, this.terrain, this.time, true);
+            const drill = this.platformPractice;
+            if (f.index === 0 && drill?.pattern === 'layers' && drill.phase !== 'done') {
+              if (platform === drill.platform) drill.phase = 'belowTop';
+              else if (platform === 1 && drill.phase === 'belowTop') drill.phase = 'fall';
+              else this.finishPlatformPractice('missed');
+            }
+            this.emit('airPlatformPass',{f,platform,point:{x:f.x,y:this.terrain[platform].y}});
+          }
           const source = this.terrain[f.dropPlatform];
           if (f.drop > 0 && (!source || f.y > source.y + 3 || landing >= 0)) {
             f.drop = 0;
@@ -7340,10 +7385,10 @@
           f.invuln = Math.max(f.invuln, dt - 1e-8);
       }
     }
-    landingSurface(f, oldY, oldX = f.x, dt = 0, terrain = this.terrain, time = this.time) {
+    landingSurface(f, oldY, oldX = f.x, dt = 0, terrain = this.terrain, time = this.time, solidOnly = false) {
       let landing = -1;
       for (const [i, p] of terrain.entries()) {
-        if (p.thin && f.drop > 0 && f.dropPlatform === i) continue;
+        if (p.thin && (solidOnly || (f.drop > 0 && f.dropPlatform === i))) continue;
         if (oldY > p.y + (f.drop > 0 ? 1e-8 : 2) || f.y < p.y ||
             (landing >= 0 && p.y >= terrain[landing].y)) continue;
         const t = dt ? floorCrossing(oldY, f.y, p.y) : 1;
@@ -9597,8 +9642,12 @@
       let route = brain.platformRoute;
       if (!route) {
         const height = foe.y - f.y;
-        if (brain.timer > 0 || !this.terrain[f.ground]?.thin || height < 55 || height > 200) return null;
-        route = brain.platformRoute = { perch: f.ground, landing: foe.ground, airFrames: 0 };
+        const descending = f.ground < 0;
+        if (brain.timer > 0 || height < 55 || height > (descending ? 290 : 200)) return null;
+        if (descending && (this.cpuLevel !== 'rival' || !controlsFall(f) || f.command || f.floorAction)) return null;
+        const perch = descending ? this.floorAhead(f,.24) : f.ground;
+        if (!this.terrain[perch]?.thin || this.terrain[perch].y >= floor.y) return null;
+        route = brain.platformRoute = { perch, landing: foe.ground, airFrames: 0, descending };
         brain.hop = null;
         brain.jumpHold = brain.guard = brain.hold = 0;
       }
@@ -9608,11 +9657,22 @@
       }
       if (f.ground === route.perch)
         return f.prev.y >= 0.74 && !f.dropPrep ? idleInput : { ...idleInput, y: 1 };
+      if (route.descending) {
+        const next = this.floorAhead(f,.24);
+        if (this.terrain[next]?.thin && this.terrain[next].y < floor.y) return {...idleInput,y:1};
+        if (!strike.plunge && f.y + f.vy*strike.start >= floor.y) {
+          const quick = moves[f.kit.air.neutral], [cx,, radius] = quick.box;
+          if (quick.start < strike.start && Math.abs(targetX - f.x - cx*f.face) <= radius + foe.stats.width) {
+            brain.platformRoute = null;
+            return {...idleInput,attack:true,tapped:{attack:true}};
+          }
+        }
+      }
       // Release Down before the aerial. Read the rival's height against this dog's own active window.
       route.airFrames++;
       const travel = strike.plunge ? 685 * Math.min(strike.active / 2, 0.09)
         : f.kit.fastFallSpeed * (strike.start + Math.min(strike.active / 2, 0.09));
-      if (route.airFrames < 2 || f.y + y + ry + travel < foe.y - bodyHeight(foe) * 0.92) return idleInput;
+      if ((!route.descending && route.airFrames < 2) || f.y + y + ry + travel < foe.y - bodyHeight(foe) * 0.92) return idleInput;
       brain.platformRoute = null;
       return { ...idleInput, y: 1, attack: true, tapped: { attack: true } };
     }

@@ -2352,6 +2352,7 @@
       if (name === 'stockLeave') this.add(name, e.point.x, e.point.y, mint, 0.18, 24);
       if (name === 'landingCancel') this.add(name, e.point.x, e.point.y, mint, 0.18, f.stats.width * 0.7);
       if (name === 'fastFall') this.add(name, e.point.x-f.face*(f.stats.width+8), e.point.y, cream, .14, 7);
+      if (name === 'airPlatformPass') this.add('platformDrop', e.point.x, e.point.y, cream, .14, f.stats.width * .75, f.face);
       if (name === 'edgeCancel') this.add(name, e.point.x, e.point.y, mint, 0.16, 12, e.dir);
       if (name === 'specialTurn') this.add(name, e.point.x, e.point.y, e.turn === 'turnaround' ? gold : mint,
         0.16, f.stats.width, e.turn === 'turnaround' ? e.face : Math.sign(e.vx) || e.face, { wave: e.turn === 'wavebounce' });
@@ -2702,6 +2703,17 @@
             pixelLine(ctx, x, y, x + 15, y, color, width, 2);
             pixelLine(ctx, x, y, x + 6, y - 6, color, width, 2);
             pixelLine(ctx, x, y, x + 6, y + 6, color, width, 2);
+          }
+        }
+      }
+      if (world.platformPractice?.pattern === 'layers') {
+        const [wing,top] = [world.terrain[1],world.terrain[3]], x = snap((top.x1 + wing.x2)/2,2);
+        for (const floor of [top,wing]) {
+          const y = floor.y + 3;
+          for (const side of [-1,1]) {
+            const at = x + 12*side;
+            pixelLine(ctx,at,y,at+5*side,y-3,ink,5,2);
+            pixelLine(ctx,at,y,at+5*side,y-3,cream,2,2);
           }
         }
       }
