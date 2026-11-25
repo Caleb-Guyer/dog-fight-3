@@ -28,7 +28,7 @@
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
   const $ = (id) => document.getElementById(id);
   const footworkPatterns = ['bait','match','power','armor','armorGrab','disc','reflect','returnFire',
-    'brake','dashShield','pivot','antiAir','angleHigh','angleLow','cancelDash','cancelTurn'];
+    'brake','dashShield','pivot','antiAir','angleHigh','angleLow','cancelDash','cancelTurn','boostGrab','boostPivot'];
   const glyphs = {
     paw: [
       '...##.##....',
@@ -1032,7 +1032,7 @@
         '</ul>';
     } else if (section === 'throws') {
       contents =
-        '<p class="recovery-note"><strong>Grab</strong> Use U (P1), M (P2), Y on a gamepad, or Grab on touch. Grab during a run to catch ahead. Reverse and press Grab together to catch behind. After a catch, tap Attack to pummel or tap a direction to throw. Forward follows your new facing. Grab again also throws forward. Tap action buttons when caught to escape.</p><ul class="move-rows guide-throws">' +
+        '<p class="recovery-note"><strong>Grab</strong> Use U (P1), M (P2), Y on a gamepad, or Grab on touch. Grab during a run to catch ahead. Reverse and press Grab together to catch behind. For a boost grab, start a dash attack and tap Grab in its first two frames. Hold back as you grab for a sliding pivot catch. After a catch, tap Attack to pummel or tap a direction to throw. Forward follows your new facing. Grab again also throws forward. Tap action buttons when caught to escape.</p><ul class="move-rows guide-throws">' +
         rows +
         '</ul>';
     } else if (section === 'smashes') {
@@ -2451,6 +2451,18 @@
         : 'Retry and hold Shield when the mint streak points back at Clover. Switch sides to mirror the throw.';
       return;
     }
+    if (world.footworkPractice.boost) {
+      const pivot = pattern === 'boostPivot';
+      status.textContent = {cancelNow:pivot ? 'Reverse + Grab' : 'Tap Grab now',
+        boostCatch:'Boost grab caught the shield', boostPivotCatch:'Caught behind', regularCatch:'Regular grab',
+        shortReach:world.footworkPractice.closestGap > 0 ? 'Grab fell short by ' + Math.ceil(world.footworkPractice.closestGap) + ' px' : 'Missed the grab',
+        guardedDash:'Dash attack blocked', groundHit:'Ground hit'}[state];
+      $('recovery-tip').textContent = state === 'cancelNow' ? (pivot ? 'Press back and tap Grab.' : 'Tap Grab during the windup.') :
+        state === 'boostCatch' || state === 'boostPivotCatch' || state === 'regularCatch' ?
+          'You have the collar. Tap Attack to pummel or choose a direction to throw.' :
+          'Retry with Attack first. Tap Grab in the first two frames of the dash attack.';
+      return;
+    }
     if (pattern === 'cancelDash' || pattern === 'cancelTurn') {
       const practice = world.footworkPractice, player = world.dogs[0], dash = pattern === 'cancelDash';
       const aim = dash ? 'Up' : practice.dir > 0 ? 'Right' : 'Left';
@@ -3348,6 +3360,7 @@
         dashShield:'Run to the chalk',
         angleHigh: 'Tag the hop', angleLow: 'Clip the recovery',
         cancelDash:'Catch the hop from a run', cancelTurn:'Turn away, then swing back',
+        boostGrab:'Shield just beyond dash-grab range', boostPivot:'Rival behind your run',
         bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
         reflect:'Pip · tap Attack to start', returnFire:'Clover · tap neutral Special',
         armor:'Brisket · punch through a jab', armorGrab:'Pip · catch the shoulder',
@@ -3362,6 +3375,8 @@
         cancelTurn:'Tap ' + (practice.dir > 0 ? 'Left' : 'Right') + ' + Attack to start a tilt facing away. Immediately press ' +
           (practice.dir > 0 ? 'Right' : 'Left') + ' + Jump to swing a back air toward the rival.',
         angleHigh: angleTip, angleLow: angleTip,
+        boostGrab:'You’re running. Tap Grab once to test its reach. Retry with Attack, then tap Grab as the windup begins.',
+        boostPivot:'You’re running away from the rival. Tap Attack, then press back and tap Grab to reach behind you.',
         antiAir: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk as the rival hops. Hold Up and tap Jump + Smash together. Hold Smash longer to compare.',
         brake: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Release forward for a beat, then press forward and tap Attack together. Compare that with holding forward and tapping Attack.',
         dashShield:'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Keep forward held and add Shield when Brisket swings. Tap Grab on the block to catch him before he jumps away.',
@@ -4968,6 +4983,12 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'noodle', stage:'picnic', fetch:false });
       drill('launch', false, 'spikeFloor', 1, 'impact');
+    }
+    else if (hash === '#training/boost-grab') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, mode:'training', p1:'brisket', p2:'pip', stage:'picnic', fetch:false});
+      drill('footwork',false,'boostGrab');
     }
     else if (hash === '#training/attack-cancel') {
       menuScreen('match');
