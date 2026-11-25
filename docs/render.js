@@ -209,6 +209,7 @@
   function attackPose(f) {
     const a = f.attack;
     if (a.riposte) return 'brisketRiposte';
+    if (a.flurryBeat && a.flurryBeat % 2 === 0) return 'pipSpeedBagCross';
     if (a.folded) return 'fall';
     if (a.diving) return 'pipSlideDive';
     if (a.anchor && a.time + 1e-8 >= a.start) return 'noodleReelLedge';

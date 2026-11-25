@@ -1779,6 +1779,24 @@
       hit: { torsoTurn: -4, rearX: 2, rearY: -1 },
       follow: { rearX: 1 },
     },
+    pipSpeedBag: {
+      base: 'attack', ground: true,
+      wind: { bodyY: 2, fistX: -5, fistY: 3, rearY: -5 },
+      hit: { bodyX: 2, torsoTurn: 9, fistX: 6, fistY: 3, rearX: -6, headTurn: -5 },
+      follow: { fistX: -3, fistY: -2, rearX: 4, bodyY: 1 },
+    },
+    pipSpeedBagCross: {
+      base: 'jab2', ground: true,
+      wind: { bodyY: 1, rearX: -5, fistY: -5 },
+      hit: { torsoTurn: -12, rearX: 8, rearY: -3, fistX: -5, headTurn: 6 },
+      follow: { rearX: -3, rearY: 1, fistX: 4, bodyY: 2 },
+    },
+    pipBellKick: {
+      ground: true, sole: 'front',
+      wind: { bodyY: 2, torsoTurn: -9, rightX: 4, rightY: -13, rearY: -6 },
+      hit: { bodyX: 2, torsoTurn: -19, headTurn: 10, rightX: 21, rightY: -18, rightFootTurn: -26, fistX: -5, rearX: -9 },
+      follow: { bodyX: -1, rightX: 6, rightY: -7, rightFootTurn: 12, torsoTurn: 7 },
+    },
     pipHeel: {
       ground: true,
       sole: 'front',
