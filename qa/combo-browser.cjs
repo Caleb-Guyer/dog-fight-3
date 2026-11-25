@@ -672,7 +672,8 @@ async function testLedgePatience(page, mobile) {
     await until(s=>s.swing>=5 && s.swing<=9);
     await hold(['shield']); await until(s=>s.rolling); await hold([]);
     await until(s=>s.standing); await hold([inward,'attack']);
-    const result=await until(s=>s.dealt>0); await hold([]);
+    await page.clock.runFor(20); await hold([]);
+    const result=await until(s=>s.dealt>0);
     assert.equal(result.dealt,5); assert.equal(result.taken,120);
   }
   await watch();
