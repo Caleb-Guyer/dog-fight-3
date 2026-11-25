@@ -1,0 +1,105 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),zlib=require('node:zlib');
+const {execFileSync}=require('node:child_process');
+if(process.env.GITHUB_ACTIONS!=='true'||process.env.RUNNER_OS!=='Linux')throw Error('Run browser input on hosted Linux.');
+const {chromium}=require('playwright-core');
+const types={js:'application/javascript',html:'text/html',css:'text/css',png:'image/png',ttf:'font/ttf'};
+function assets(directory,prefix,files){
+  for(const f of fs.readdirSync(directory,{withFileTypes:true})){
+    const name=path.join(directory,f.name),url=prefix+'/'+f.name;
+    if(f.isDirectory()){assets(name,url,files);continue;}
+    const ext=path.extname(f.name).slice(1), gzip=['js','html','css'].includes(ext);
+    const bytes=fs.readFileSync(name),body=gzip?zlib.gzipSync(bytes,{level:6}):bytes;
+    const headers={'Content-Type':types[ext]||'application/octet-stream','Content-Length':body.length};
+    if(gzip)headers['Content-Encoding']='gzip';
+    files.set(url,{body,headers});
+  }
+}
+const deferred=['dispatch-actors','dispatch-bridge','dispatch-covers','dispatch-film','dispatch-run','dispatch-view','yard-art'];
+async function sample(browser,url,candidate){
+  const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  try{
+    const page=await context.newPage(), cdp=await context.newCDPSession(page),errors=[];
+    page.on('pageerror',e=>errors.push(e.message));
+    await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});
+    await cdp.send('Network.enable');
+    await cdp.send('Network.emulateNetworkConditions',{offline:false,latency:60,downloadThroughput:750000,uploadThroughput:250000});
+    await page.goto(url,{waitUntil:'domcontentloaded'});
+    const boot=await page.evaluate(async(candidate)=>{
+      const cover=document.querySelector('#title-cover');
+      if(cover.decode)await cover.decode();
+      const canvas=document.createElement('canvas');canvas.width=320;canvas.height=180;
+      const ctx=canvas.getContext('2d');ctx.imageSmoothingEnabled=false;ctx.drawImage(cover,0,0,320,180);
+      const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',ctx.getImageData(0,0,320,180).data))).join(',');
+      const original=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(dt,a,b){
+        const x=this.dogs[0].x,result=original.apply(this,arguments);
+        if(!window.walkedAt && this.lesson && a.x>0 && this.dogs[0].x>x)window.walkedAt=performance.now();
+        return result;
+      };
+      const scripts=performance.getEntriesByType('resource').filter(r=>new URL(r.name).pathname.endsWith('.js'));
+      return {hash,png:candidate?null:canvas.toDataURL('image/png').split(',')[1],ready:performance.getEntriesByType('navigation')[0].domContentLoadedEventEnd,
+        scripts:scripts.length,js:scripts.reduce((n,r)=>n+r.decodedBodySize,0),
+        payload:performance.getEntriesByType('resource').reduce((n,r)=>n+r.encodedBodySize,0)+performance.getEntriesByType('navigation')[0].encodedBodySize};
+    },candidate);
+    await page.locator('#welcome-play').tap();
+    const position=await page.locator('[data-touch=right]').boundingBox();assert(position);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:position.x+position.width/2,y:position.y+position.height/2}]});
+    await page.waitForFunction(()=>window.walkedAt>0);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    const resources=await page.evaluate(()=>performance.getEntriesByType('resource').map(r=>new URL(r.name).pathname));
+    for(const name of deferred)assert.equal(resources.some(p=>p.endsWith('/'+name+'.js')),!candidate,name);
+    assert.deepEqual(errors,[]);
+    return {...boot,move:await page.evaluate(()=>window.walkedAt)};
+  }finally{await context.close();}
+}
+async function recovery(browser,url){
+  const page=await browser.newPage(),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  try{
+    // Leave the route while its art is in flight, then finish the original request.
+    let release;
+    const gate=new Promise(resolve=>release=resolve);
+    await page.route('**/dispatch-covers.js*',async route=>{await gate;await route.continue();});
+    await page.goto(url);await page.locator('#home-adventure').click();await page.locator('#dispatch-load-back').click();
+    release();await page.waitForFunction(()=>!!window.DispatchCovers);
+    assert(await page.locator('#home').isVisible());
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'welcome-play');
+    await page.locator('#home-adventure').click();await page.locator('#route-films').click();
+    await page.locator('[data-reel=opening]').click();await page.locator('#story-next:enabled').waitFor();
+    assert(await page.evaluate(()=>!!window.DispatchFilm && !window.DispatchRun));
+    await page.locator('#story-map').click();await page.keyboard.press('Escape');
+    await page.route('**/yard-art.js*',route=>route.abort(),{times:1});
+    await page.locator('#dispatch-start').click();await page.locator('#story-skip').click();
+    await page.locator('#dispatch-load-retry').waitFor();await page.locator('#dispatch-load-retry').click();
+    await page.locator('#dispatch-hud').waitFor();assert.equal(await page.locator('#match-stage').textContent(),'Parcel Alley');
+    assert(await page.evaluate(()=>!!window.DispatchActors && !!window.DispatchView));
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
+(async()=>{
+  const files=new Map();assets('docs','/new',files);assets('previous/docs','/old',files);
+  const server=http.createServer((req,res)=>{
+    const path=new URL(req.url,'http://localhost').pathname;
+    const file=files.get(path.endsWith('/')?path+'index.html':path);
+    if(!file){res.writeHead(404);res.end();return;}
+    res.writeHead(200,file.headers);res.end(file.body);
+  });
+  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const origin='http://127.0.0.1:'+server.address().port;
+  const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
+  try{
+    const rows={old:[],new:[]};
+    for(let i=0;i<3;i++)for(const build of i===1?['new','old']:['old','new'])
+      rows[build].push(await sample(browser,origin+'/'+build+'/',build==='new'));
+    const median=(rows,k)=>Math.round(rows.map(r=>r[k]).sort((a,b)=>a-b)[1]);
+    const result=Object.fromEntries(Object.entries(rows).map(([build,r])=>[build,Object.fromEntries(
+      ['ready','move','scripts','js','payload'].map(k=>[k,median(r,k)]))]));
+    console.log('::notice title=Cold start::'+JSON.stringify(result));
+    assert.equal(result.old.scripts-result.new.scripts,7);
+    assert(result.old.payload-result.new.payload>35000);
+    if(rows.old[0].hash!==rows.new[0].hash)console.log('Reference-title '+rows.old[0].png);
+    assert.equal(rows.old[0].hash,rows.new[0].hash,'home cover pixels');
+    await recovery(browser,origin+'/new/');
+  }finally{await browser.close();server.close();}
+})().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});

@@ -81,7 +81,7 @@ async function playCourse(browser,mobile) {
     const menu=page.locator('#dialog [data-do="home"]');
     if (mobile) await menu.tap(); else await menu.click();
     await press('home-adventure'); await press('dispatch-start'); await press('story-skip');
-    assert(await page.locator('#match').isVisible());assert(await page.locator('#school-coach').isHidden());
+    await page.locator('#dispatch-hud').waitFor();assert(await page.locator('#match').isVisible());assert(await page.locator('#school-coach').isHidden());
     assert.deepEqual(errors,[]);
   } finally {await context.close();}
 }

@@ -5,6 +5,22 @@ on:
 permissions:
   contents: read
 jobs:
+  cold-start:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 19b3d18a04ac8b88e7633ec55cd2b4a5ef81a341
+          path: previous
+          persist-credentials: false
+      - name: Compare first movement on a cold phone visit and play through a mission load retry
+        run: |
+          npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/cold-start.js
   arcade-cup:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
