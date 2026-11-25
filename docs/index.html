@@ -11,14 +11,14 @@
     <title>Dog Fight 3 · Backyard Brawl</title>
     <link rel="icon" href="./assets/favicon.png" type="image/png" />
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
-    <link rel="stylesheet" href="./style.css?v=last-dodge-1" />
+    <link rel="stylesheet" href="./style.css?v=interrupted-return-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
     <link rel="stylesheet" href="./screen.css?v=practice-room-1" />
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=rapid-jab-1"></script>
     <script defer src="./arena-art.js?v=canal-lock-1"></script>
-    <script defer src="./engine.js?v=last-dodge-1"></script>
-    <script defer src="./render.js?v=low-launch-1"></script>
+    <script defer src="./engine.js?v=interrupted-return-1"></script>
+    <script defer src="./render.js?v=interrupted-return-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=stock-return-1"></script>
     <script defer src="./dispatch-view.js?v=blast-radar-1"></script>
-    <script defer src="./online.js?v=low-launch-1"></script>
-    <script defer src="./app.js?v=last-dodge-1"></script>
+    <script defer src="./online.js?v=interrupted-return-1"></script>
+    <script defer src="./app.js?v=interrupted-return-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -617,9 +617,15 @@
             <button id="air-neutral" type="button" class="utility" aria-pressed="true">In place</button>
             <button id="air-edge" type="button" class="utility" aria-pressed="false">At the ledge</button>
             <button id="air-lastDodge" type="button" class="utility" aria-pressed="false">Last dodge</button>
+            <button id="air-interrupted" type="button" class="utility" aria-pressed="false">Interrupted return</button>
+            <label id="air-dog-label" hidden>Returning dog
+              <select id="air-dog"><option value="pip">Pip</option><option value="brisket">Brisket</option><option value="noodle">Noodle</option><option value="clover">Clover</option></select>
+            </label>
+            <button id="air-speed" type="button" class="utility" aria-pressed="true" hidden>Half speed</button>
             <button id="air-distance" type="button" class="utility" hidden>Start wide</button>
             <button id="air-side" type="button" class="utility" hidden>Switch ledge</button>
             <button id="air-fight" type="button" class="utility" hidden>Guard against Rival · 3 stocks</button>
+            <button id="air-return-fight" type="button" class="utility" hidden>Recover · 3 stocks</button>
           </span>
           <button id="training-moves" type="button" class="utility">Move list</button>
         </div>

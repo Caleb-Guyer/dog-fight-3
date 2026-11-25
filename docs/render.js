@@ -2126,6 +2126,15 @@
       }
       return;
     }
+    if (e.type === 'recoveryRestored') {
+      const y = e.y - (reduced.matches ? 0 : snap(9*p,2));
+      for (const [color,width] of [[ink,6],[mint,3]]) {
+        pixelLine(ctx,e.x,y+7,e.x,y-6,color,width,2);
+        pixelLine(ctx,e.x-6,y,e.x,y-6,color,width,2);
+        pixelLine(ctx,e.x+6,y,e.x,y-6,color,width,2);
+      }
+      return;
+    }
     if (e.type === 'fastFall') {
       const y = e.y + (reduced.matches ? 0 : snap(p * 8, 2));
       for (const [color,width] of [[ink,6],[cream,3]]) {
@@ -2358,6 +2367,8 @@
         this.add(brace ? 'techLand' : 'knockDust', e.point.x, e.point.y, brace ? mint : gold, .16, brace ? 16 : 8, 1, {ceiling:true});
       }
       if (name === 'stockLeave') this.add(name, e.point.x, e.point.y, mint, 0.18, 24);
+      if (name === 'hit' && e.recoveryRestored)
+        this.add('recoveryRestored',f.x,f.y-f.stats.height-12,mint,.30,8);
       if (name === 'landingCancel') this.add(name, e.point.x, e.point.y, mint, 0.18, f.stats.width * 0.7);
       if (name === 'fastFall') this.add(name, e.point.x-f.face*(f.stats.width+8), e.point.y, cream, .14, 7);
       if (name === 'airPlatformPass') this.add('platformDrop', e.point.x, e.point.y, cream, .14, f.stats.width * .75, f.face);

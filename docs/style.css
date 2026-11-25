@@ -718,7 +718,7 @@ body.playing .tools .utility,
 #combo-previous { color: #a5dace; }
 #combo-history { pointer-events: auto; }
 #combo-list { margin: 4px 0 0; padding-left: 1.7em; max-height: 6em; overflow-y: auto; }
-#combo-reply, #jump-in-choice { background: var(--ink); color: var(--cream); padding: 4px; font: inherit; }
+#combo-reply, #jump-in-choice, #air-dog { background: var(--ink); color: var(--cream); padding: 4px; font: inherit; }
 #jump-in-options:not([hidden]) { display: inline-flex; align-items: center; gap: 4px; }
 #launch-status[data-result='tech'],
 #launch-status[data-result='clean'],
@@ -788,6 +788,8 @@ body.playing .tools .utility,
 #trump-status[data-result='clear'],
 #trump-status[data-result='intercepted'],
 #air-status[data-result='evade'],
+#air-status[data-result='cast'],
+#air-status[data-result='saved'],
 #air-status[data-result='ledge'],
 #air-status[data-result='land'] {
   border-left-color: var(--aqua);
