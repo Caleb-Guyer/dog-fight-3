@@ -5,6 +5,13 @@
   const channel = 'dogfight3-v69';
   const counterpickFeature = 'fighter-counterpick';
   const timeFeature = 'time-score-1';
+  const roomFeature='room-rules-1';
+  function readRoomRules(msg){
+    if(msg.length!==13 || msg[8]!==roomFeature || !['stock','time'].includes(msg[9]) ||
+      !window.DogFight.validStockCount(msg[10]) || !window.DogFight.stockMinutes.includes(msg[11]) ||
+      (msg[9]==='time' && !msg[11]) || typeof msg[12]!=='boolean')return null;
+    return {timed:msg[9]==='time',lives:msg[10],minutes:msg[11],fetch:msg[12],bestOfThree:msg[6]===2,stageForm:msg[7]};
+  }
   const validTime = minutes => [1,3,7].includes(minutes);
   const quickId = prefix + 'quickplay';
   const roomAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -194,9 +201,10 @@
       this.phase = 'idle';
       this.disposePeer(true);
       this.link = this.match = this.series = null;
+      this.offer=null;this.accepted=false;
       if (message) this.events.closed(message);
     }
-    start(action, kind, code = '', openingStage = '', bestOfThree = false, form = 'original', coat = 0, timeMinutes = 0) {
+    start(action, kind, code = '', openingStage = '', bestOfThree = false, form = 'original', coat = 0, timeMinutes = 0, rules = null) {
       this.close();
       if (!fighter(kind) || !['create', 'join', 'quick'].includes(action)) return;
       if (action === 'join' && !validCode(code)) return this.events.closed('Enter the six-character room code.');
@@ -206,6 +214,12 @@
       this.roomSet = action === 'create' && bestOfThree;
       this.timeMinutes = action === 'create' && validTime(timeMinutes) ? timeMinutes : 0;
       this.roomForm = action === 'create' && Object.hasOwn(window.DogFight.stageForms,form) ? form : 'original';
+      this.roomRules=action==='create' && rules?window.DogFight.versusRules(rules):null;
+      this.customRound=false;
+      if(this.roomRules){
+        this.roomForm=this.roomRules.stageForm;this.roomSet=this.roomRules.bestOfThree;
+        this.timeMinutes=this.roomRules.timed?this.roomRules.minutes:0;
+      }
       this.openingStage = action === 'create' && Object.hasOwn(window.DogFight.arenas, openingStage) ? openingStage : '';
       this.kind = kind;
       this.coat = window.DogFight.validCoat(coat) ? coat : 0;
@@ -284,13 +298,18 @@
       };
       conn.on('open', () => {
         if (!current()) return conn.close();
-        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature] : ['join',this.kind,this.coat]);
+        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature] : ['join',this.kind,this.coat]);
       });
       conn.on('data', (data) => {
         if (!current() || !Array.isArray(data)) return;
         if (conn === this.link) return this.receive(data);
         if (host && data[0] === 'join' && fighter(data[1])) {
           if (this.link) return reject('full');
+          const rules=this.roomRules;
+          this.customRound=!!rules && data[5]===roomFeature;
+          if(rules && !this.customRound && (!rules.fetch || !rules.timed && (rules.lives!==3 || rules.minutes!==7))){
+            this.status('room','Ask your opponent to reload the game to play these room rules.');return reject('rules-version');
+          }
           if (this.timeMinutes && data[4] !== timeFeature) {
             this.status('room','Ask your opponent to reload the game to join this Time Battle.');
             return reject('rules-version');
@@ -301,12 +320,15 @@
           // Ordered delivery puts both players' colors in the opening match configuration.
           if (window.DogFight.validCoat(data[2])) conn.send(this.fighterPicks ? ['coat',this.coat,counterpickFeature] : ['coat',this.coat]);
           this.attach(conn);
-          this.hostRound();
+          this.hostRound(this.customRound);
           if (this.action === 'quick') peer.disconnect();
         } else if (!host && !this.round && data[0] === 'coat' && window.DogFight.validCoat(data[1])) {
           this.remoteCoat = data[1];
           this.fighterPicks = this.action === 'join' && data[2] === counterpickFeature;
-        } else if (!host && data[0] === 'start' && this.validStart(data)) {
+        } else if (!host && this.action==='join' && !this.round && data[0]==='room-offer' && readRoomRules(data) && this.validStart(data)){
+          this.remoteKind=data[2];this.offer=['start',...data.slice(1)];this.attach(conn);
+          this.status('review','Review the host’s rules before starting.');
+        } else if (!host && data[0] === 'start' && data[8]!==roomFeature && this.validStart(data)) {
           this.remoteKind = data[2];
           this.attach(conn);
           this.beginRound(data);
@@ -347,6 +369,7 @@
       if (this.action !== 'create' || !this.peer?.open) return this.close(message);
       const conn = this.link;
       this.link = this.match = this.series = null;
+      this.offer=null;this.accepted=this.customRound=false;
       this.round = 0;
       clearInterval(this.watch);
       if (conn) conn.close();
@@ -360,9 +383,12 @@
     validStart(msg) {
       const form = msg[7] ?? 'original';
       const timed = msg.length === 10;
+      const rules=readRoomRules(msg);
       if (timed && (this.action !== 'join' || msg[8] !== timeFeature || !validTime(msg[9]))) return false;
-      if (this.round && (timed ? msg[9] : 0) !== (this.timeMinutes || 0)) return false;
-      if (msg.length === 8 || timed) {
+      if(rules && this.action!=='join')return false;
+      if(this.round && (!!rules!==!!this.customRound ||
+        (rules?Object.keys(rules).some(k=>rules[k]!==this.roomRules[k]):(timed?msg[9]:0)!==(this.timeMinutes||0))))return false;
+      if (msg.length === 8 || timed || rules) {
         if (this.action === 'quick' || ![1,2].includes(msg[6]) ||
             typeof msg[7] !== 'string' || !Object.hasOwn(window.DogFight.stageForms,form)) return false;
       } else if (msg.length !== 6 && !(msg.length === 7 && msg[6] === 2)) return false;
@@ -376,7 +402,7 @@
         typeof msg[4] === 'string' && Object.hasOwn(window.DogFight.arenas, msg[4]) &&
         Number.isInteger(msg[5]) && msg[5] >= 0 && msg[5] <= 0xffffffff;
     }
-    hostRound() {
+    hostRound(preview=false) {
       const seed = randomInt();
       const stages = Object.keys(window.DogFight.arenas);
       const opener = this.openingStage || stages[seed % stages.length];
@@ -384,13 +410,31 @@
         this.round ? stages[(stages.indexOf(this.stage) + 1) % stages.length] : opener;
       const dogs=this.nextLineup()?.map(d=>d.kind) || [this.kind,this.remoteKind];
       const data = ['start', this.round + 1, ...dogs, stage, seed];
-      if (this.timeMinutes) data.push(this.roomSet ? 2 : 1, this.roomForm || 'original', timeFeature, this.timeMinutes);
+      if(this.customRound){
+        const rules=this.roomRules;
+        data.push(this.roomSet?2:1,this.roomForm,roomFeature,rules.timed?'time':'stock',rules.lives,rules.minutes,rules.fetch);
+      }else if (this.timeMinutes) data.push(this.roomSet ? 2 : 1, this.roomForm || 'original', timeFeature, this.timeMinutes);
       else if (this.roomForm && this.roomForm !== 'original') data.push(this.roomSet ? 2 : 1, this.roomForm);
       else if (this.roomSet) data.push(2);
+      if(preview){
+        this.offer=data;this.send(['room-offer',...data.slice(1)]);
+        this.status('room','Your opponent is reviewing the match.');return;
+      }
       this.send(data);
       this.beginRound(data);
     }
-    beginRound([, round, p1, p2, stage, seed, firstTo, form = 'original', feature, minutes]) {
+    acceptRules(){
+      if(this.phase!=='review' || this.side!==1 || !this.offer || this.accepted)return;
+      this.accepted=true;this.send(['room-ready',this.offer[5]]);
+      if(this.offer)this.status('ready','Ready. Starting the fight…');
+    }
+    get preview(){
+      if(!this.offer)return null;
+      return {p1:this.offer[2],p2:this.offer[3],stage:this.offer[4],rules:readRoomRules(this.offer)};
+    }
+    beginRound(data) {
+      const [, round, p1, p2, stage, seed, firstTo, form = 'original', feature, minutes]=data;
+      const rules=readRoomRules(data);
       const coats = this.nextLineup()?.map(d=>d.coat) || (this.side === 1 ? [this.remoteCoat,this.coat] : [this.coat,this.remoteCoat]);
       if (firstTo === 2) {
         if (!this.series || this.series.champion !== null) this.series = new window.DogFight.StockSet(stage);
@@ -400,12 +444,15 @@
       this.roster=[p1,p2].map((kind,i)=>({kind,coat:window.DogFight.coatFor(i,p1,p2,coats)}));
       this.stage = stage;
       this.roomForm = form;
-      this.timeMinutes = feature === timeFeature && validTime(minutes) ? minutes : 0;
+      this.offer=null;this.accepted=false;this.customRound=!!rules;
+      if(rules)this.roomRules=rules;
+      this.timeMinutes = rules ? (rules.timed?rules.minutes:0) : feature === timeFeature && validTime(minutes) ? minutes : 0;
       this.myVote = this.theirVote = this.finished = false;
       this.myResult = this.theirResult = null;
       this.nextStage = this.nextPick = this.earlyVote = undefined;
       this.phase = 'playing';
       const config = { mode: 'local', p1, p2, stage, form, coats, fetch: true };
+      if(rules)Object.assign(config,{stockCount:rules.lives,minutes:rules.minutes,fetch:rules.fetch});
       if (this.timeMinutes) Object.assign(config, {timeBattle:true,minutes:this.timeMinutes});
       this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed);
       this.events.start(config, seededRandom(seed));
@@ -415,6 +462,12 @@
       if (msg[0] === 'leave') return this.opponentLeft('Your opponent left.');
       if (msg[0] === 'ping') return this.send(['pong']);
       if (msg[0] === 'pong') return;
+      if(!this.round && this.offer){
+        if(this.side===0 && msg.length===2 && msg[0]==='room-ready' && msg[1]===this.offer[5]){
+          const start=this.offer;this.send(start);this.beginRound(start);
+        }else if(this.side===1 && this.accepted && msg.length===this.offer.length && msg.every((v,i)=>v===this.offer[i]))this.beginRound(msg);
+        return;
+      }
       if (msg[0] === 'start' && this.side === 1 && this.myVote && this.validStart(msg))
         return this.beginRound(msg);
       if (!this.match || msg[1] !== this.round) return;
