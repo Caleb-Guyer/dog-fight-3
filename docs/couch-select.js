@@ -82,6 +82,7 @@
       device:el.querySelector('[data-device]'),arrows:el.querySelectorAll('.couch-choice button'),
     }));
     const play=root.querySelector('#couch-start'), back=root.querySelector('#couch-back'), call=root.querySelector('#couch-call');
+    if(settings.rotationTags)cards.forEach((c,i)=>{c.el.querySelector('header b').textContent='P'+(i+1)+' · '+settings.rotationTags[i];});
     root.querySelector('#couch-rules').textContent=(settings.bestOfThree?'Best of three':'Single game')+' · 3 stocks · '+
       (settings.minutes?settings.minutes+' min':'No clock')+' · '+stageForms[settings.stageForm].name+' · Fetch Ball '+(settings.fetch?'on':'off');
     const key=(i,action)=>window.FightControls.keyName(keys[i][action]);
@@ -150,7 +151,7 @@
         choosing?'Ready both dogs to open the arena vote.':'Matching votes choose the arena. A split vote goes to a coin toss.';
       play.hidden=!winner;
       play.textContent=settings.bestOfThree?'Start set':'Start fight';
-      back.textContent=choosing?'Back to fighter select':'Change fighters';
+      back.textContent=choosing?(settings.rotationRound?'Back to lineup':'Back to fighter select'):'Change fighters';
       if(winner)play.focus({preventScroll:true});
       lastCel=-1;paint();
     }
