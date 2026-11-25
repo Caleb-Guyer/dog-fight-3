@@ -2470,7 +2470,7 @@
         icon('keyboard') +
         'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div>' +
         targetRecap() + (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
-          (corner?'<button class="utility" data-do="corner-practice">Practice · '+schoolLessons.find(l=>l.id===corner.lesson).title+'</button>'+
+          (corner?'<button class="utility" data-do="corner-practice">Practice · '+schoolLessons.find(l=>l.id===corner.practice).title+'</button>'+
             '<button class="utility" data-do="corner-toggle" aria-pressed="'+settings.cornerTips+'">Ringside tips · '+(settings.cornerTips?'On':'Off')+'</button>':'')+
           (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight ? 'Retry position' : 'Practice this position') + '</button>' : '') +
           '<button class="utility" data-do="practice">Find a drill</button>' +
@@ -6326,7 +6326,7 @@
   }
   function targetRecap(){
     const t=corner?.target;
-    return t?'<p id="rematch-target"><strong>'+t.title+'</strong> · '+t.line+'</p>':'';
+    return t?'<p id="rematch-target"><strong>'+(world.end!==null && t.doneAt===null?'Still to practice':t.title)+'</strong> · '+t.line+'</p>':'';
   }
   function renderCorner(pads){
     const cue=corner.read(world), device=promptDevice(pads), tip=$('corner-tip');
@@ -6334,7 +6334,6 @@
     const goal=t && (t.doneAt!==null?world.matchFrames-t.doneAt<160:(!cue || cue==='opening') && world.matchFrames<300);
     if(!settings.cornerTips || (!cue && !goal)){if(!tip.hidden)tip.hidden=true;return;}
     const key=(goal?t.id+'/'+t.title:cue)+'/'+device;
-    if(goal)corner.lesson=t.id;
     if(tip.dataset.cue!==key){
       const label=action=>{
         if(device===0)return keyFor(0,action);
@@ -6356,7 +6355,8 @@
     $('school-coach').dataset.key=key;
     $('school-coach').dataset.state=state;
     const count=lesson.course?window.FighterSchool.courses[lesson.course].lessons.length:schoolLessons.length;
-    $('school-count').textContent=matchConfig.cornerLesson?'First fight practice':(lesson.course?fighters[lesson.course].name+' · Fighter lessons':'Fight School')+' · '+(lesson.index+1)+' / '+count;
+    $('school-count').textContent=matchConfig.cornerLesson?'First fight practice':matchConfig.schoolReview?'Rematch practice · Pip vs. Brisket':
+      (lesson.course?fighters[lesson.course].name+' · Fighter lessons':'Fight School')+' · '+(lesson.index+1)+' / '+count;
     $('school-list').textContent=matchConfig.cornerLesson?'Back to fight':'Lessons';
     $('school-title').textContent=info.title;
     const watch=$('school-example'),next=$('school-next');
@@ -6429,7 +6429,7 @@
       stage:'picnic',form:'original',stockCount:3,timeBattle:false,fetch:false,minutes:7});
   }
   function startCornerLesson(){
-    const visit=pausedFight(), index=schoolLessons.findIndex(l=>l.id===corner.lesson);
+    const visit=pausedFight(), index=schoolLessons.findIndex(l=>l.id===corner.practice);
     startMatch({...settings,mode:'local',stage:'nightmail',form:'original',p1:'pip',p2:'brisket',fetch:false,minutes:0,
       lesson:index,cornerLesson:true},undefined,undefined,null,{visit});
     delete $('school-coach').dataset.key;renderSchool(getPads());
