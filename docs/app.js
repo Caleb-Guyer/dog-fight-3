@@ -1403,6 +1403,58 @@
     const [whole, fraction] = String(tenth(damage)).split('.');
     return fraction ? whole + '<small>.' + fraction + '</small>' : whole;
   }
+  const hudCards=[];
+  function updateFighterCard(f,slot,coat,alert,recovery){
+    const label=labelFor(slot), training=world.mode==='training';
+    let card=hudCards[slot];
+    if(!card || card.kind!==f.kind || card.coat!==coat || card.label!==label || card.training!==training){
+      const root=document.createElement('div');
+      root.className='hud-card'+(slot?' two':'');
+      root.innerHTML='<span class="hud-portrait"><img alt=""></span><div><span class="hud-name"><small></small></span>'+
+        '<strong class="percentage"></strong><span class="lives">'+(training?'∞':stockPaws(3))+'</span></div>';
+      const picture=root.querySelector('.hud-portrait'), name=root.querySelector('.hud-name');
+      picture.firstChild.src=portrait(f.kind,coat);
+      name.firstChild.textContent=label;name.append(f.stats.name);
+      if(card)card.root.replaceWith(root);else $('hud').append(root);
+      card=hudCards[slot]={root,picture,kind:f.kind,coat,label,training,lives:root.querySelector('.lives'),
+        percent:root.querySelector('.percentage'),alert:'',recovery:null,rage:0};
+    }
+    if(card.damage!==f.damage){
+      card.damage=f.damage;
+      showPercent(card.percent,f.damage);
+      const rage=tenth((rageScale(f.damage)-1)*100);
+      if(card.rage!==rage){
+        card.rage=rage;
+        if(rage){
+          if(!card.meter){
+            card.picture.insertAdjacentHTML('beforeend','<span class="rage-meter" role="img"><i></i></span>');
+            card.meter=card.picture.lastChild;
+          }
+          const title='Rage +'+rage+'% knockback';
+          card.meter.setAttribute('aria-label',title);card.meter.title=title;
+          card.meter.firstChild.style.width=(rage*10)+'%';
+        }else{card.meter.remove();card.meter=null;}
+      }
+    }
+    if(card.stocks!==f.stocks){
+      card.stocks=f.stocks;
+      Array.from(card.lives.children).forEach((paw,i)=>paw.classList.toggle('lost',i>=f.stocks));
+      card.lives.setAttribute('aria-label',training?'Unlimited stocks':stockLabel(f.stocks));
+    }
+    if(card.alert!==alert){
+      card.alert=alert;
+      if(!alert){card.badge.remove();card.badge=null;}
+      else{
+        if(!card.badge){card.badge=document.createElement('span');card.root.prepend(card.badge);}
+        card.badge.className='stock-alert'+(alert==='Last tag'?' last':'');card.badge.textContent=alert;
+      }
+    }
+    if(card.recovery!==recovery){
+      card.recovery=recovery;
+      card.strip?.remove();card.strip=null;
+      if(recovery!==null){card.root.insertAdjacentHTML('beforeend',recoveryStrip(recovery));card.strip=card.root.lastChild;}
+    }
+  }
   const moveLabel = id => (moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id]).label;
   function freshnessResult(sample) {
     const parts = [];
@@ -1579,7 +1631,8 @@
       $('recovery-tip').hidden = !lab.waiting;
     }
     const power = player.smashCharge ? smashPower(player.charge) : player.lastSmashPower;
-    chargeReadout.hidden = world.mode !== 'training' || !!world.wavePractice || power === null || (!!lab && !player.smashCharge);
+    const hideCharge = world.mode !== 'training' || !!world.wavePractice || power === null || (!!lab && !player.smashCharge);
+    if(chargeReadout.hidden!==hideCharge)chargeReadout.hidden=hideCharge;
     if (!chargeReadout.hidden) {
       const value = player.smashCharge
         ? power >= 1
@@ -1631,36 +1684,7 @@
         (world.trainingPartner || combo.target === 0 ? 'P' + ((combo.target ?? 1)+1) + ' took ' : '') +
         combo.hits + (combo.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(combo.damage) + '% damage';
     }
-    $('hud').innerHTML = scores
-      .map((f, i) => {
-        const rage = tenth((rageScale(f.damage) - 1) * 100);
-        const rageTitle = 'Rage +' + rage + '% knockback';
-        const lives =
-          world.mode === 'training'
-            ? '∞'
-            : stockPaws(f.stocks);
-        return (
-          '<div class="hud-card ' +
-          (i ? 'two' : '') +
-          '">' + (returns[i] ? '<span class="stock-alert' + (returns[i] === 'Last tag' ? ' last' : '') + '">' + returns[i] + '</span>' : '') + '<span class="hud-portrait"><img alt="" src="' +
-          portrait(f.kind,confirmed.coatFor(i)) +
-          '">' + (rage ? '<span class="rage-meter" role="img" aria-label="' + rageTitle + '" title="' + rageTitle +
-            '"><i style="width:' + (rage * 10) + '%"></i></span>' : '') + '</span><div><span class="hud-name"><small>' +
-          labelFor(i) +
-          '</small>' +
-          f.stats.name +
-          '</span><strong class="percentage ' +
-          (f.damage >= 110 ? 'danger' : f.damage >= 65 ? 'high' : '') +
-          '">' +
-          percentDigits(f.damage) +
-          '%</strong><span class="lives" aria-label="' +
-          (world.mode === 'training' ? 'Unlimited stocks' : stockLabel(f.stocks)) +
-          '">' +
-          lives +
-          '</span></div>' + recoveryStrip(recovery[i]) + '</div>'
-        );
-      })
-      .join('');
+    scores.forEach((f,i)=>updateFighterCard(f,i,confirmed.coatFor(i),returns[i],recovery[i]));
   }
   let matchConfig, soloSeed, localSet = null, practiceFight = null;
   let finishTape=null, clipScreen=null, victoryShot=null;
@@ -5626,7 +5650,8 @@
     if ($('dispatch-objective').textContent !== order) $('dispatch-objective').textContent = order;
   }
   function showPercent(element, damage) {
-    element.className = 'percentage' + (damage >= 110 ? ' danger' : damage >= 65 ? ' high' : '');
+    const css='percentage' + (damage >= 110 ? ' danger' : damage >= 65 ? ' high' : '');
+    if(element.className!==css)element.className=css;
     if (element.textContent !== tenth(damage) + '%') element.innerHTML = percentDigits(damage) + '%';
   }
   function showStocks(element, count, name) {
@@ -6722,7 +6747,8 @@
           lastCount = number;
           sound(number ? 'tick' : 'go');
         }
-        $('countdown').textContent = number || 'GO!';
+        const caption=String(number || 'GO!');
+        if($('countdown').textContent!==caption)$('countdown').textContent=caption;
         if (!number) {
           // Discard released countdown taps. Held keyboard and touch controls start with the stick on GO.
           taps.clear();
