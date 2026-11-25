@@ -644,6 +644,24 @@ async function testAngledTilts(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
 }
 
+async function testPlatformLayers(page,mobile) {
+  await page.goto(root+'?platform-pass#training/pick-your-landing');
+  const status=page.locator('#platform-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for(const route of ['top','wing','aerial']){
+    if(route!=='top')await press('platform-layers');
+    await hold(['jump']);await waitFor('apex');await hold(['down']);
+    if(route==='top')await page.clock.runFor(50);
+    else await waitFor('belowTop');
+    if(route==='aerial'){await waitFor('fall');await hold(['attack']);}
+    else await hold([]);
+    await waitFor(route);await hold([]);
+    if(route==='aerial'){
+      assert.match(await status.textContent(),/Scramble hit the rival/);
+      assert.equal(await page.locator('#hud .percentage').nth(1).textContent(),'6%');
+    }
+  }
+}
 async function testJumpPower(page, mobile) {
   await page.goto(root+'?jump-power#training/jump-in-damage');
   const status=page.locator('#spacing-status');
@@ -2177,6 +2195,7 @@ async function testDevice(browser, mobile) {
   try {
     await page.clock.install({ time: new Date('2030-01-01T00:00:00Z') });
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+    await testPlatformLayers(page,mobile);
     await testJumpPower(page, mobile);
     await testAttackPress(page, mobile);
     await page.goto(root + '#training/combos');
