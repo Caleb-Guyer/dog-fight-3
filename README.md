@@ -587,6 +587,10 @@ Choose **Training → Practice ledge attack** to start hanging with the dummy in
 
 ## Ledge climbs
 
+Rival can leave the stage to intercept a high recovery. When you drift toward the edge within reach, the guard short-hops outward, swings its own forward aerial, then steers back. An early air jump changes your height. A directional air dodge can take you through the swing.
+
+In **Training → Air dodge → Beat the edgeguard**, tap Attack to start offstage as Pip. Let Brisket's shoulder connect once. Retry, drift inward, and jump when his paws leave the ground. The drill scores a clean return only when you reach the stage. Switch ledges, choose another returning dog, or turn off half speed. **Recover · 3 stocks** carries the same matchup and starting positions into a full Rival fight. [Beat the edgeguard](https://caleb-guyer.github.io/dog-fight-3/#training/beat-the-edgeguard)
+
 Your first catch lasts four seconds at 0% and two at 120% or higher. Each regrab takes another 18 frames off the clock, down to a minimum of 75 frames. Three amber marks at the lip count down the last three quarters of a second. If you stay put, your paws slip and you fall with an air jump available. After six catches, you need to land or take a hit to catch again.
 
 In **Ledge timing → Wait out Haymaker**, Brisket charges just beyond the lip. Climb early to see how he catches your paws. With Pip or Clover, wait until the punch starts moving, tap Shield to roll, then aim inward and tap Attack. Brisket and Noodle can wait below the fist until it extends and tap Attack for Porch Bump or Latch Whip. Switch ledges or choose half speed to see where each opening starts. [Practice the timing](https://caleb-guyer.github.io/dog-fight-3/#training/ledge-patience)
