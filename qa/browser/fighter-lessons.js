@@ -63,7 +63,9 @@ async function touch(browser){
   try{
     await page.goto(root+'#fighters/noodle');await tap(lesson(0));await tap('#school-retry');
     assert.equal(await page.locator('#school-bindings').textContent(),'Special → Attack');
-    await press(['special'],110);assert.match(await page.locator('#school-task').textContent(),/reels/);
+    await press(['special'],64);
+    for(let i=0;i<14 && !(await page.locator('#school-task').textContent()).includes('reels');i++)await page.clock.runFor(16);
+    assert.match(await page.locator('#school-task').textContent(),/reels/);
     for(let i=0;i<25 && !(await page.locator('#school-task').textContent()).includes('Tap Attack now');i++)await page.clock.runFor(24);
     assert.match(await page.locator('#school-task').textContent(),/Tap Attack now/);
     await press(['attack'],220);
