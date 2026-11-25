@@ -48,6 +48,19 @@ function attempt(kind,delay,reverse=false,freeze=false){
   if(freeze)for(let i=0;i<3;i++)w.step(dt,idleInput);
   return {w,f,cues};
 }
+test('finishing the swing reports the actual block or miss',()=>{
+  for(const [kind,pattern,outcome] of [
+    ['brisket','boostGrab','guardedDash'],['noodle','boostGrab','swingMiss'],['pip','boostPivot','swingMiss'],
+  ]){
+    const w=new Battle(config(kind,'pip'),()=>{},seededRandom(seed));
+    w.resetFootworkPractice(pattern,1);
+    for(let i=0;i<100 && w.footworkPractice.phase!=='done';i++){
+      w.step(dt,input(1,{attack:i===0 || i===10}));
+    }
+    assert.equal(w.footworkPractice.outcome,outcome);
+  }
+});
+
 test('only a fresh grab in the first two dash-attack frames converts, including a tap through hit freeze',()=>{
   for(const kind of Object.keys(kits)){
     for(const t of [1,2])for(const reverse of [false,true])for(const frozen of [false,true]){
