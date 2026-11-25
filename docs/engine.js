@@ -236,10 +236,13 @@
   const verticalLaunch = Math.sin(65 * Math.PI / 180);
   const stockMinutes = [1, 3, 7, 0];
   const validStockCount=n=>Number.isInteger(n) && n>=1 && n<=5;
+  const validHandicap=pair=>Array.isArray(pair) && pair.length===2 && [pair[0],pair[1]].every(
+    n=>Number.isInteger(n) && n>=0 && n<=150 && n%10===0);
   function versusRules(config={}){
     const timed=(config.timeBattle ?? config.timed)===true;
     const lives=config.stockCount ?? config.lives, form=config.form ?? config.stageForm;
     return {timed,lives:validStockCount(lives)?lives:3,
+      ...(validHandicap(config.handicap) && config.handicap.some(Boolean)?{handicap:config.handicap.slice()}:{}),
       minutes:stockMinutes.includes(config.minutes) && (!timed || config.minutes)?config.minutes:timed?3:7,
       bestOfThree:config.bestOfThree===true,stageForm:Object.hasOwn(stageForms,form)?form:'original',fetch:config.fetch!==false};
   }
@@ -2778,6 +2781,9 @@
       this.dogs = [newFighter(this.relayTeams?.[0][0] || config.p1,0),newFighter(this.relayTeams?.[1][0] || config.p2,1)];
       this.stockCount=versus && !timed && !this.relayTeams && config.lesson===undefined && !config.schoolFinal &&
         validStockCount(config.stockCount)?config.stockCount:3;
+      if(versus && !this.relayTeams && config.lesson===undefined && !config.schoolFinal && !config.suddenStart &&
+        !config.lastStockStart && validHandicap(config.spawnDamage) && config.spawnDamage.some(Boolean))
+        this.spawnDamage=config.spawnDamage.slice();
       for(const f of this.dogs)f.stocks=this.stockCount;
       this.terrain = this.layout?.terrain || platforms(this.geometryStage, 0);
       this.ledgeClaims = [];
@@ -2862,6 +2868,7 @@
           techs:0, knockdowns:0, shieldBreaks:0, lastHit:null})),
         losses:[],
         ...(this.stockCount!==3?{stockCount:this.stockCount}:{}),
+        ...(this.spawnDamage?{handicap:this.spawnDamage.slice()}:{}),
         ...(this.relayTeams ? {relayTeams:this.relayTeams,relayDamage:[[0,0,0],[0,0,0]]} : {}),
         ...(timed ? {points:[0,0],minutes} : {}),
       } : null;
@@ -2893,6 +2900,7 @@
       const stocks = f.stocks, previous = f.prev;
       Object.assign(f, newFighter(f.kind, f.index));
       f.stocks = stocks;
+      if(this.spawnDamage && !this.suddenDeath)f.damage=this.spawnDamage[f.index];
       f.x = point?.x ?? arenas[this.geometryStage].spawn[f.index];
       f.y = this.terrain[ground].y;
       f.ground = ground;
@@ -11603,7 +11611,7 @@
   window.DogFight = {
     cpuLevels,
     stockMinutes,
-    validStockCount,versusRules,
+    validStockCount,validHandicap,versusRules,
     validRelayTeams,relayCoats,
     warmupPartners,
     seededRandom,
