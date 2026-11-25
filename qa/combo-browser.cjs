@@ -644,6 +644,51 @@ async function testAngledTilts(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
 }
 
+async function testCeilingTech(page, mobile) {
+  await page.goto(root+'?undertable#training/ceiling-tech');
+  const status=page.locator('#wall-status');
+  const {press,hold,waitFor}=await trainingControls(page,mobile,status);
+  const observe=()=>page.evaluate(()=>{
+    const proto=window.DogFightView.FightView.prototype, draw=proto.draw;
+    proto.draw=function(canvas,world,...args){
+      const f=world.dogs[0];
+      window.ceilingProbe={x:f.x, ledge:f.ledge?.x, kind:f.kind, frame:world.matchFrames};
+      if(f.ledge)window.caughtLip=f.ledge.x;
+      return draw.call(this,canvas,world,...args);
+    };
+  });
+  await observe();
+  await hold(['attack']);await waitFor('flight');await hold([]);
+  await waitFor('ceilingBounce');
+  await press('wall-side');
+  assert.equal(await page.locator('#wall-ceiling').getAttribute('aria-pressed'),'true');
+  await hold(['attack']);await waitFor('flight');await hold(['shield']);
+  await waitFor('ceilingTech');await hold(['right']);
+  for(let n=0;n<35;n++) {
+    if(await page.evaluate(()=>window.ceilingProbe?.x>1041)) break;
+    await page.clock.runFor(20);
+  }
+  assert(await page.evaluate(()=>window.ceilingProbe.x>1041));
+  await hold(['up','special']);await waitFor('returned');await hold([]);
+  assert.equal(await page.evaluate(()=>window.ceilingProbe.ledge),1040);
+  await page.goto(root+'?stock-under#solo/under-the-table');
+  await observe();
+  assert.equal(await page.locator('.percentage').first().innerText(),'90%');
+  await hold(['up','special']);await page.clock.runFor(3250);await hold([]);
+  assert.equal(await page.locator('.lives').first().getAttribute('aria-label'),'2 stocks');
+  await press('pause');
+  const restart=page.locator('[data-do="rematch"]');
+  if(mobile)await restart.tap();else await restart.click();
+  await hold(['left']);await page.clock.runFor(2600);
+  for(let n=0;n<15 && !await page.evaluate(()=>window.ceilingProbe?.x<159);n++) await page.clock.runFor(16);
+  assert(await page.evaluate(()=>window.ceilingProbe.x<159));
+  await hold(['up','special']);
+  await page.clock.runFor(320);await hold([]);
+  assert.equal(await page.locator('.lives').first().getAttribute('aria-label'),'3 stocks');
+  assert.equal(await page.evaluate(()=>window.caughtLip),160);
+  console.log((mobile?'Touch':'Keyboard')+' played a ceiling bounce, shield tech and mirrored lasso recovery.');
+}
+
 async function testWallJumps(page, mobile) {
   await page.goto(root+'#training/wall-jumps');
   const status=page.locator('#wall-status');
@@ -2088,6 +2133,7 @@ async function testDevice(browser, mobile) {
     await testStockClock(page, mobile);
     await testAngledTilts(page, mobile);
     await testWallJumps(page, mobile);
+    await testCeilingTech(page, mobile);
     await testShortHops(page, mobile);
     await testFlickJumps(page, mobile);
     await testRage(page, mobile);
