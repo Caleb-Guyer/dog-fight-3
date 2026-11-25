@@ -740,6 +740,7 @@
   }
   $('winner-stays').onclick=rotationBoard;
   const lobbyCoat = slot => window.DogFight.coatFor(slot,settings.p1,settings.p2,lobbyCoats);
+  const fighterDraws=[0,1].map(()=>new window.FightControls.FighterShuffle(Object.keys(fighters)));
   const stageName = (stage, form) => arenas[stage].name + (form && form !== 'original' ? ' · ' + stageForms[form].name : '');
   function drawStageTile(canvas, stage, form) {
     const ctx = canvas.getContext('2d');
@@ -752,6 +753,7 @@
   function syncLobby() {
     lobbyCoats = [savedCoat(0,settings.p1),savedCoat(1,settings.p2)];
     const chosen = editing ? settings.p2 : settings.p1;
+    $('lobby-random').setAttribute('aria-label','Random dog for '+slotLabel(editing));
     $('lobby-coat').setAttribute('aria-label','Choose coat for ' + labelFor(editing) + ' ' + fighters[chosen].name +
       ', currently ' + coatNames[chosen][lobbyCoat(editing)]);
     $('cpu-level').hidden = settings.mode !== 'solo';
@@ -857,19 +859,20 @@
     sound('menu');
     announce('Choose a fighter for ' + slotLabel(editing));
   });
-  $('roster').addEventListener('click', (e) => {
-    const el = e.target.closest('[data-kind]');
-    if (!el) return;
-    const kind = el.dataset.kind;
+  function pickLobbyFighter(kind,random=false) {
     settings[editing ? 'p2' : 'p1'] = kind;
     save();
     syncLobby();
-    $('roster')
-      .querySelector('[data-kind="' + kind + '"]')
-      .focus({ preventScroll: true });
+    const focus=random?$('lobby-random'):$('roster').querySelector('[data-kind="' + kind + '"]');
+    focus.focus({ preventScroll: true });
     audioReady();
     sound('menu');
     announce(fighters[kind].name + ' selected for ' + slotLabel(editing));
+  }
+  $('lobby-random').onclick=()=>pickLobbyFighter(fighterDraws[editing].draw(editing?settings.p2:settings.p1),true);
+  $('roster').addEventListener('click', (e) => {
+    const el=e.target.closest('[data-kind]');
+    if(el)pickLobbyFighter(el.dataset.kind);
   });
   for (const event of ['pointerover', 'focusin'])
     $('roster').addEventListener(event, (e) => {
@@ -5631,7 +5634,7 @@
     PlayerProfiles:'player-profiles.js?v=1',
     VersusRulebook:'versus-rules.js?v=room-rules-1',
     PackRelay:'pack-relay.js?v=1',
-    WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=stage-strike-1',StageStrike:'stage-strike.js?v=2',
+    WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=fighter-shuffle-1',StageStrike:'stage-strike.js?v=2',
     FinishTools:'finish-tools.js?v=stock-replay-1',
     FighterSchool:'fighter-lessons.js?v=special-studies-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
