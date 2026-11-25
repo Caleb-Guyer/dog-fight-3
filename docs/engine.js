@@ -4549,7 +4549,10 @@
       this.emit('wallReturn', { f });
     }
     placeShieldLanding(slot,dir,cross) {
-      const floor = this.terrain[0], x = (floor.x1+floor.x2)/2;
+      const floor = this.terrain[0], middle = (floor.x1+floor.x2)/2;
+      // On Canal, leave the ferry a clear lane for the duration of the dive.
+      const ferry = this.stage === 'canal' && platforms(this.stage,this.time+.15)[1];
+      const x = ferry ? middle + ((ferry.x1+ferry.x2)/2 < middle ? 1 : -1)*(floor.x2-floor.x1)*.3 : middle;
       const guard = this.dogs[slot], aerial = this.dogs[1-slot];
       Object.assign(guard,{x,y:floor.y,face:dir,ground:0,shield:true,prev:{...idleInput,shield:true}});
       Object.assign(aerial,{x:x+dir*(cross?18:74),y:floor.y-110,vx:-dir*360,vy:180,face:-dir,ground:-1,jumps:1});
