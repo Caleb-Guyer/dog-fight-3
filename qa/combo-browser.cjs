@@ -644,6 +644,32 @@ async function testAngledTilts(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
 }
 
+async function testLastDodge(page,mobile) {
+  await page.goto(root+'?last-dodge#training/last-dodge');
+  const status = page.locator('#air-status');
+  const {hold,press,waitFor} = await trainingControls(page,mobile,status);
+  const strip = page.locator('#hud .hud-card').first().locator('.air-resources');
+  assert.equal(await strip.locator('.spent').count(),2);
+  assert.match(await strip.getAttribute('aria-label'),/Remaining: Air dodge$/);
+  const box = await strip.boundingBox(), viewport = page.viewportSize();
+  assert(box && box.x>=0 && box.y>=0 && box.x+box.width<=viewport.width+1 && box.y+box.height<=viewport.height+1);
+  await hold(['up','right','shield']); await page.clock.runFor(34);
+  assert.match(await strip.getAttribute('aria-label'),/Remaining: none$/);
+  await hold([]); await waitFor('ledge');
+  assert.equal(await strip.count(),0);
+  await press('air-distance');
+  assert.match(await status.textContent(),/Wide · left ledge/);
+  await hold(['up','right','shield']); await page.clock.runFor(34); await hold([]); await waitFor('miss');
+  await press('air-side');
+  assert.match(await status.textContent(),/Wide · right ledge/);
+  await hold(['left','shield']); await page.clock.runFor(34); await hold([]); await waitFor('ledge');
+  await press('air-fight');
+  assert.match(await page.locator('#match-mode').textContent(),/solo.*rival/i);
+  assert.deepEqual(await page.locator('#hud .hud-name').allTextContents(),['P1Brisket','CPUPip']);
+  assert.equal(await page.locator('#hud .lives[aria-label="3 stocks"]').count(),2);
+  assert.match(await page.locator('#hud .two .air-resources').getAttribute('aria-label'),/Remaining: Air dodge$/);
+}
+
 async function testLaunchHeight(page,mobile) {
   await page.goto(root+'?low-launch#training/launch-height');
   const {hold,press} = await trainingControls(page,mobile);
@@ -2256,6 +2282,7 @@ async function testDevice(browser, mobile) {
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
     await testRapidJab(page,mobile);
     await testLaunchHeight(page,mobile);
+    await testLastDodge(page,mobile);
     await testPlatformLayers(page,mobile);
     await testJumpPower(page, mobile);
     await testAttackPress(page, mobile);
