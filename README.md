@@ -46,6 +46,10 @@ In that opening, let Brisket approach once to see his Yard Buster. On the rematc
 
 ## Solo opponents
 
+**Arcade Cup** gives each dog a four-round route. Fight the other three dogs in three-stock matches, then take your chosen fighter and coat into Bell Depot against the Copper Hound. The rivals progress from Rookie through Arcade to Rival. Every round starts with three stocks. Cleared rounds save separately for each dog. Retrying a lost round or re-entering an unfinished one adds one retry.
+
+The route card keeps your clear count and personal best. Fewer retries ranks first, followed by more stocks kept and then less time spent in winning fights. To try a rooftop run, pick Noodle, fight Brisket across the laundry gap, and use the perches against Clover in round two. [Enter Noodle’s Arcade Cup](https://caleb-guyer.github.io/dog-fight-3/#arcade/noodle)
+
 Rival can punish a blocked smash or a heavy landing. At close range each dog can grab out of shield. At higher damage it looks for its own up smash. Remaining recovery frames, shield pushback and the reach of the move determine whether it commits. As Brisket, try Haymaker up close against Pip, then back up and make only the tip connect. [Play the three-stock match](https://caleb-guyer.github.io/dog-fight-3/#solo/shield-punish)
 
 Choose **CPU** in Fighter select. **Rookie** pauses between grounded attacks, **Arcade** plays the original mix of combos and counters, and **Rival** also learns how you escape after blocking. All three use the selected dog's regular damage, speed, stocks and recovery.

@@ -18,11 +18,13 @@
     enemy.duration = duration;
   }
   class DispatchRun extends Battle {
-    constructor({ room = 0, checkpoint = 0, stamps = 0, atCheckpoint = null }, emit = () => {}) {
+    constructor({ room = 0, checkpoint = 0, stamps = 0, atCheckpoint = null, cupFighter, coat = 0 }, emit = () => {}) {
       const script = rooms[room], saved = script.checkpoints[checkpoint - 1];
       const bridge = script.signals ? new window.DispatchBridge(script, checkpoint) : null;
       const layout = bridge ? { ...script, terrain: bridge.geometry(0) } : script;
-      super({ stage: 'dispatch', layout, mode: 'adventure', p1: chapterFighter, p2: 'brisket', fetch: false }, emit);
+      const cupBoss = script.rules === 'boss' && Object.hasOwn(window.DogFight.fighters,cupFighter);
+      super({ stage: 'dispatch', layout, mode: 'adventure', p1: cupBoss ? cupFighter : chapterFighter, p2: 'brisket', fetch: false }, emit);
+      this.cupCoat = cupBoss && window.DogFight.validCoat(coat) ? coat : 0;
       this.roomIndex = room;
       this.atCheckpoint = saved && !bridge ? atCheckpoint : null;
       const runner = this.dogs[0];
@@ -59,6 +61,7 @@
       const lead = nearest ? clamp((nearest.x - hero.x) / 2, -this.cameraWidth * 0.21, this.cameraWidth * 0.21) : 0;
       return clamp(hero.x + lead - this.cameraWidth / 2, 0, travel);
     }
+    coatFor(slot) { return slot === 0 ? this.cupCoat : 0; }
     setCameraWidth(width) {
       if (width === this.cameraWidth) return;
       this.cameraWidth = width;

@@ -1535,6 +1535,97 @@
       .join('');
   }
   let matchConfig, soloSeed, localSet = null, practiceFight = null;
+  const cup = window.YardCup, cupMemory = new Map();
+  let cupAttempt = null, cupChoice = settings.p1;
+  function cupEntry(kind) {
+    try {
+      const data = localStorage.getItem('dog-fight-3.cup.'+kind);
+      if (data) return cup.read(JSON.parse(data));
+    } catch {}
+    return cup.read(cupMemory.get(kind));
+  }
+  function updateCup(kind,change) {
+    const key = 'dog-fight-3.cup.' + kind;
+    const commit = () => {
+      const entry = cupEntry(kind), next = change(entry);
+      if (next && next !== entry) {
+        cupMemory.set(kind,next);
+        try { localStorage.setItem(key,JSON.stringify(next)); } catch {}
+      }
+      return next;
+    };
+    return navigator.locks ? navigator.locks.request(key,commit) : Promise.resolve(commit());
+  }
+  function cupRecord(run) {
+    return run.retries + (run.retries === 1 ? ' retry' : ' retries') + ' · ' +
+      cup.stocks(run) + '/12 stocks kept · ' + cardTime(cup.frames(run));
+  }
+  function cupSheet(kind = cupChoice) {
+    if (!Object.hasOwn(cup.courses,kind)) return;
+    if (page !== 'home') showHome(false);
+    cupChoice = kind;
+    const entry = cupEntry(kind), run = entry.active, course = cup.courses[kind], round = run?.wins.length || 0;
+    const selectors = Object.keys(cup.courses).map(id=>'<button class="cup-dog" data-cup-dog="'+id+'" aria-pressed="'+(id===kind)+
+      '"><img alt="" src="'+portrait(id,id===kind && run ? run.coat : savedCoat(0,id))+'"><strong>'+fighters[id].name+'</strong></button>');
+    const stops = [...course.bouts,[null]].map(([dog,stage,form],i)=>{
+      const title = dog ? fighters[dog].name : 'Copper Hound', venue = dog ? stageName(stage,form) : 'Bell Depot';
+      return '<li'+(round===i?' aria-current="step"':'')+'><span>'+(i+1)+'</span><div><strong>'+title+
+        '</strong><small>'+venue+'</small></div><b>'+(i<round ? stockLabel(run.wins[i].stocks)+' kept' :
+          i===round ? 'Up next' : dog ? cpuLevels[cup.levels[i]].name : 'Boss')+'</b></li>';
+    }).join('');
+    const tip = course.bouts[round]?.[3] || campaign.rooms[campaign.lastRoom].objective;
+    showDialog('cup','Arcade Cup','<div class="cup-dogs" role="group" aria-label="Choose a route">'+selectors.join('')+
+      '</div><h3 class="card-stage">'+course.name+'</h3><ol class="cup-stops">'+stops+'</ol><p>'+tip+'</p>'+
+      (entry.best ? '<p><strong>Personal best</strong> · '+cupRecord(entry.best)+' · '+entry.clears+
+        (entry.clears===1?' clear':' clears')+'</p>' : '')+
+      '<div class="dialog-actions"><button class="primary" data-do="cup-start">'+
+      (run ? run.started ? 'Retry round '+(round+1) : 'Continue to round '+(round+1) : 'Start '+fighters[kind].name+'’s run')+
+      '</button></div>');
+    document.querySelector('[data-do=cup-start]').focus({preventScroll:true});
+  }
+  async function startCupRound(kind) {
+    const button = document.querySelector('[data-do=cup-start],[data-do=cup-next]');
+    if (!button || button.disabled) return;
+    button.disabled = true;
+    audioReady();
+    const entry = await updateCup(kind,e=>cup.begin(e,crypto.randomUUID(),savedCoat(0,kind)));
+    if (!button.isConnected) return;
+    const run = entry.active, round = run.wins.length;
+    const attempt = {kind,id:run.id,retries:run.retries,round,coat:run.coat};
+    const bout = cup.courses[kind].bouts[round];
+    if (!bout) return beginRun(campaign.lastRoom,0,null,attempt);
+    const [p2,stage,form] = bout;
+    startMatch({...settings,mode:'solo',p1:kind,p2,stage,form,coats:[run.coat,0],
+      cpuLevel:cup.levels[round],fetch:false,minutes:7},undefined,17+round*31,null,{cupRound:attempt});
+  }
+  async function cupResult(won) {
+    const attempt = cupAttempt;
+    if (!attempt || attempt.saving) return;
+    if (!attempt.settled) {
+      attempt.saving = true;
+      const lives = world.dogs[0].stocks, elapsed = world.matchFrames;
+      const entry = await updateCup(attempt.kind,e=>cup.finish(e,attempt,won,lives,elapsed));
+      attempt.saving = false;
+      if (cupAttempt !== attempt) return;
+      if (!entry) return cupSheet(attempt.kind);
+      attempt.settled = entry;
+    }
+    const entry = attempt.settled, kind = attempt.kind, next = attempt.round+1;
+    const clear = won && next === cup.rounds;
+    const title = clear ? 'Arcade Cup clear!' : won ? 'Round '+next+' clear' : 'Round '+next+' lost';
+    const nextDog = cup.courses[kind].bouts[next]?.[0];
+    const line = clear ? cupRecord(entry.last) : won ? 'Next up · '+(nextDog ? fighters[nextDog].name : 'Copper Hound') :
+      'Retry this round with three fresh stocks.';
+    showDialog('result',title,'<div class="winner"><img alt="" src="'+portrait(kind,attempt.coat)+'"><div><h3>'+
+      cup.courses[kind].name+'</h3><p>'+line+'</p></div></div>'+
+      (clear ? '<p><strong>Personal best</strong> · '+cupRecord(entry.best)+'</p>' : '')+
+      '<div class="dialog-actions"><button class="primary" data-do="'+(clear?'cup-sheet':'cup-next')+'">'+
+      (clear ? 'Choose a route' : won ? 'Play round '+(next+1) : 'Retry round '+next)+'</button>'+
+      (!clear?'<button class="utility" data-do="cup-sheet">Route card</button>':'')+
+      (world.matchCard ? cardButton : '')+'<button class="utility" data-do="home">Main menu</button></div>',false);
+    document.querySelector('#dialog-body .primary').focus();
+    announce(title+'. '+line);
+  }
   const frameLab = {mode:'live', count:0, pending:0, renderTime:0};
   let trainingMoment = null;
   function frameState(f) {
@@ -1718,7 +1809,8 @@
     }
     return report;
   }
-  function startMatch(config = settings, random = Math.random, opening, series = null, {visit, resume, leadInFrames = 0} = {}) {
+  function startMatch(config = settings, random = Math.random, opening, series = null, {visit, resume, leadInFrames = 0, cupRound = null} = {}) {
+    cupAttempt = cupRound;
     music?.restart();
     practiceFight = visit || null;
     const rehearsal = !!visit && config.mode === 'solo';
@@ -1849,7 +1941,8 @@
     $('damage-output').textContent = '0%';
     const matchName = online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
       (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : modes[config.mode];
-    $('match-mode').textContent = world.lesson ? 'Fight School' : matchName + (config.lastStockStart ? ' · Last stock' : '');
+    $('match-mode').textContent = cupAttempt ? 'Arcade Cup · Round '+(cupAttempt.round+1)+'/4' :
+      world.lesson ? 'Fight School' : matchName + (config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = stageName(config.stage,world.form);
     const set = online.series || localSet;
     $('match-set').hidden = !set;
@@ -1874,6 +1967,7 @@
     announce(matchName + ' on ' + stageName(config.stage,world.form));
   }
   function toLobby() {
+    cupAttempt = null;
     leaveOnline();
     localSet = null;
     practiceFight = null;
@@ -1894,6 +1988,14 @@
   function showPause() {
     if (page !== 'match' || !world || world.end !== null) return;
     if (world.lesson) return schoolList();
+    if (cupAttempt) {
+      showDialog('pause','Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+(cupAttempt.round+1)+
+        ' of 4. Leaving now restarts this round on your next attempt.</p><div class="dialog-actions">'+
+        '<button class="primary" data-do="resume">Resume</button><button class="utility" data-do="moves">Move list</button>'+
+        '<button class="utility" data-do="controls">Controls</button><button class="utility" data-do="cup-sheet">Leave to route card</button></div>');
+      document.querySelector('[data-do=resume]').focus();
+      return;
+    }
     if (online.match) {
       showDialog('online-menu', 'Match menu',
         '<p>The online fight is still running.</p><div class="dialog-actions"><button class="primary" data-do="resume">Return to fight</button><button class="utility" data-do="online-leave">Leave match</button></div>');
@@ -2020,6 +2122,7 @@
   }
   function showResult() {
     const result = online.match?.confirmedWorld || world;
+    if (cupAttempt) return cupResult(result.end === 0);
     const f = result.dogs[result.end], elapsed = Math.floor(result.matchFrames / 60);
     const duration = Math.floor(elapsed / 60) + 'm ' + String(elapsed % 60).padStart(2, '0') + 's';
     const finish = result.endReason === 'time' ? 'Time expired · ' + result.dogs.map(d=>d.stocks).join('–') + ' stocks (P1–P2)' :
@@ -2154,6 +2257,14 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    const cupDog = e.target.closest('[data-cup-dog]');
+    if (cupDog) {
+      cupSheet(cupDog.dataset.cupDog);
+      document.querySelector('[data-cup-dog][aria-pressed=true]').focus();
+      return;
+    }
+    if (action === 'cup-sheet') return cupSheet(cupAttempt?.kind || cupChoice);
+    if (action === 'cup-start' || action === 'cup-next') return startCupRound(cupAttempt?.kind || cupChoice);
     if (action === 'match-card') return showMatchCard();
     if (action === 'card-back') return exitDialog();
     if (action==='bindings') openLayouts(dialogType);
@@ -4480,6 +4591,7 @@
   }
   const countMarks = (bits) => campaign.rooms.filter((_, i) => bits & (1 << i)).length;
   function menuScreen(id, keepRoom = false) {
+    cupAttempt = null;
     localSet = null;
     practiceFight = null;
     $('match-set').hidden = true;
@@ -4671,7 +4783,8 @@
     if (!checkpoint && intro) playScene(intro);
     else beginRun(index, checkpoint, checkpoint ? progress.atCheckpoint : null);
   }
-  function beginRun(index, checkpoint, atCheckpoint = null) {
+  function beginRun(index, checkpoint, atCheckpoint = null, cupRound = null) {
+    cupAttempt = cupRound;
     music?.restart();
     dismiss();
     $('pause-label').textContent = 'Pause';
@@ -4686,6 +4799,8 @@
     adventureKey = '';
     for (const id of [
       'home',
+      'online-lobby',
+      'match-set',
       'dispatch-route',
       'dispatch-story',
       'lobby',
@@ -4702,21 +4817,22 @@
     document.body.classList.remove('menu-screen', 'training-active', 'cinema-active', 'with-drill-readout');
     $('freshness-readout').hidden = $('wave-readout').hidden = $('combo-readout').hidden = true;
     document.body.classList.add('playing', 'adventure-active');
-    saveProgress({ room: index, checkpoint, pending: '' });
+    if (!cupRound) saveProgress({ room: index, checkpoint, pending: '' });
     $('blast-radar').hidden = true;
     view = new window.DispatchView();
     view.shakeEnabled = settings.shake;
     noticeUntil = 0;
     $('dispatch-notice').hidden = true;
-    world = new window.DispatchRun({ room: index, checkpoint, atCheckpoint, stamps: progress.stamps }, (name, e) => {
+    world = new window.DispatchRun({ room: index, checkpoint, atCheckpoint, stamps: cupRound ? 0 : progress.stamps,
+      cupFighter:cupRound?.kind,coat:cupRound?.coat }, (name, e) => {
       view.event(name, e);
       if (name === 'dispatchCheckpoint') {
-        saveProgress({ room: index, checkpoint: e.checkpoint, atCheckpoint: e.atCheckpoint });
+        if (!cupRound) saveProgress({ room: index, checkpoint: e.checkpoint, atCheckpoint: e.atCheckpoint });
         tone(485, 735, 0.12);
         tone(735, 980, 0.13, 0.12);
         dispatchNotice(stored ? 'Checkpoint saved' : 'Checkpoint reached');
       } else if (name === 'dispatchStamp') {
-        saveProgress({ room: index, stamp: index });
+        if (!cupRound) saveProgress({ room: index, stamp: index });
         tone(760, 1150, 0.09);
         dispatchNotice('Postmark collected');
       } else if (name === 'dispatchSignal') {
@@ -4739,15 +4855,15 @@
       } else if (name === 'machineSwing') tone(135, 55, 0.11);
       else sound(name, e);
     });
-    $('match-mode').textContent = 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
+    $('match-mode').textContent = cupRound ? 'Arcade Cup · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
     $('match-stage').textContent = world.layout.name;
-    $('runner-portrait').src = portrait(world.dogs[0].kind);
+    $('runner-portrait').src = portrait(world.dogs[0].kind,world.coatFor(0));
     $('runner-name').textContent = world.dogs[0].stats.name;
     updateDispatchHUD();
     view.draw($('game'), world, 0, 0);
     $('game').focus({ preventScroll: true });
     window.scrollTo(0, 0);
-    announce('Adventure · ' + world.layout.name);
+    announce((cupRound ? 'Arcade Cup final · ' : 'Adventure · ') + world.layout.name);
   }
   function dispatchNotice(message) {
     $('dispatch-notice').textContent = message;
@@ -4813,6 +4929,7 @@
     accumulator += dt;
     while (accumulator >= 1 / 60 && !world.finished) {
       const input = playerInput(0, pads);
+      if (cupAttempt) world.matchFrames++;
       world.step(1 / 60, input);
       taps.clear();
       touchTaps.clear();
@@ -4820,6 +4937,7 @@
     }
     updateDispatchHUD();
     view.draw($('game'), world, dt, world.time);
+    if (cupAttempt && world.finished) return cupResult(world.finished==='exit');
     if (world.finished === 'exit') {
       const { layout, roomIndex } = world;
       if (layout.outro) playScene(layout.outro);
@@ -4942,6 +5060,7 @@
     const next = e.target.closest('[data-next-stop]');
     if (next) beginRun(Number(next.dataset.nextStop), 0);
   });
+  $('home-cup').onclick = () => cupSheet();
   $('home-adventure').onclick = () => {
     audioReady();
     sound('menu');
@@ -5850,7 +5969,10 @@
     const hash = location.hash;
     const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
     const [,arena,form] = hash.split('/');
-    if (hash === '#solo/'+arena+'/'+form && Object.hasOwn(arenas,arena) && Object.hasOwn(stageForms,form)) {
+    if (hash === '#arcade' || (hash === '#arcade/'+arena && Object.hasOwn(cup.courses,arena))) {
+      showHome(false);
+      cupSheet(arena || settings.p1);
+    } else if (hash === '#solo/'+arena+'/'+form && Object.hasOwn(arenas,arena) && Object.hasOwn(stageForms,form)) {
       leaveOnline();
       afterStory = null;
       startMatch({...settings,mode:'solo',p1:'pip',p2:'brisket',cpuLevel:'arcade',stage:arena,form,fetch:false,minutes:7},undefined,17);
