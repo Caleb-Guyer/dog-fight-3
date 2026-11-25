@@ -2,9 +2,10 @@
   'use strict';
   const workerURL=new URL('finish-gif.js?v=finish-gif-1',document.currentScript.src);
   const {moves,specials,throws,smashes,pummels}=window.DogFight;
-  function moments(tape){
+  function analyze(tape,slot){
     const list=[];
-    let player;
+    let player,escape=null,knockedOut=false,lifeStart=0;
+    const markEscape=(frame,label)=>{escape={frame:Math.max(lifeStart,frame-15),label};};
     player=tape.playback(0,(event,e)=>{
       const frame=player.frame+1;
       let label;
@@ -12,16 +13,32 @@
         const who=event==='hit'?e.owner:e.f, id=e.moveId;
         const move=(moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id])?.label || e.name || 'Hit';
         label=(who?who.stats.name+' · ':'')+move;
-      }else if(event==='ko')label=e.f.stats.name+' · KO';
+        const target=event==='hit'?e.f:e.target;
+        if(target?.index===slot)markEscape(frame,'Before '+move);
+      }else if(event==='ko'){
+        label=e.f.stats.name+' · KO';
+        if(e.f.index===slot)knockedOut=true;
+      }
       else if(event==='parry')label=e.f.stats.name+' · Parry';
       else if(event==='win' && player.battle.endReason==='time')label='Time expired';
       if(!label)return;
       if(list.at(-1)?.frame===frame && list.at(-1).label===label)return;
       list.push({frame,label});
     });
-    while(player.step()){}
-    return list.slice(-4);
+    while(player.frame<player.length){
+      const dog=player.battle.dogs[slot];
+      const planted=dog && (dog.ground>=0 || dog.ledge) && !dog.stun && !dog.tumble && !dog.grip && !dog.stockLift;
+      knockedOut=false;
+      player.step();
+      if(knockedOut){
+        if(player.frame<player.length){escape=null;lifeStart=player.frame;}
+      }else if(planted && dog.ground<0 && !dog.ledge && !dog.tumble && !dog.stun && !dog.grip && !dog.reaction){
+        markEscape(player.frame,'Before leaving the stage');
+      }
+    }
+    return {marks:list.slice(-4),escape:escape || {frame:Math.max(lifeStart,player.length-90),label:'Before the knockout'}};
   }
+  const moments=tape=>analyze(tape).marks;
   function buildGIF(tape,stage,shake,signal,progress){
     return new Promise((resolve,reject)=>{
       if(signal.aborted){reject(new DOMException('Cancelled','AbortError'));return;}
@@ -67,9 +84,10 @@
       worker.postMessage({type:'start',width:out.width,height:out.height});
     });
   }
-  function install({tape,stage,shake,signal,jump,root,filename}){
+  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
-    const marks=moments(tape);
+    const {marks,escape}=analyze(tape,slot);
+    escapeReady?.(escape);
     for(const {frame,label} of marks){
       const b=document.createElement('button');b.type='button';b.className='utility';
       b.textContent=label;b.dataset.clipMoment=frame;b.title='Jump to frame '+frame;
@@ -102,5 +120,5 @@
       }finally{active=null;}
     };
   }
-  window.FinishTools={install,moments};
+  window.FinishTools={install,moments,analyze};
 })();
