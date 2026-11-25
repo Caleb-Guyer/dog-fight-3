@@ -1611,10 +1611,11 @@ async function testCrawl(page,mobile) {
       return {ink:canvas.toDataURL(),top};
     }
     const frames=Array.from({length:6},(_,i)=>sprite('crawl',i/6));
-    return {distinct:new Set(frames.map(f=>f.ink)).size,highest:Math.min(...frames.map(f=>f.top)),crouch:sprite('crouch',0).top};
+    return {distinct:new Set(frames.map(f=>f.ink)).size,heights:frames.map(f=>118-f.top),crouch:118-sprite('crouch',0).top};
   });
   assert.equal(art.distinct,6);
-  assert(art.highest>art.crouch,'Belly crawl should draw lower than an ordinary crouch: '+JSON.stringify(art));
+  assert(art.heights.every(h=>h<art.crouch && Math.abs(h-28)<=2),
+    'Every crawl frame should match the lowered body: '+JSON.stringify(art));
   await press('reset-training');
   assert(await status.isHidden());
 }
