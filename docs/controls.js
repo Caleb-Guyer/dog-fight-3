@@ -49,5 +49,18 @@
     if(other) layout[device][other.slot][other.action]=old;
     map[action]=value;
   }
-  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names};
+  // Keep a player's dog assigned to their pad when the other player unplugs.
+  class Seats {
+    constructor(pads) { this.ids=[null,null]; this.sync(pads); }
+    sync(pads) {
+      for (const pad of pads) {
+        if (this.ids.includes(pad.index)) continue;
+        const order=pads.length===1?[1,0]:[0,1];
+        const slot=order.find(i=>!this.get(i,pads));
+        if(slot!==undefined) this.ids[slot]=pad.index;
+      }
+    }
+    get(i,pads) { return pads.find(p=>p.index===this.ids[i]); }
+  }
+  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,Seats};
 })();
