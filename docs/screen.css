@@ -392,6 +392,18 @@ dialog[data-view='cup'] { width: min(550px,calc(100% - 20px)); }
 .rotation-line button { flex:none; }
 .couch-seat header b { overflow-wrap:anywhere; }
 dialog[data-view='couch'] { width: min(640px,calc(100% - 16px)); }
+dialog[data-view='stage-strike'] { width:min(820px,calc(100% - 16px)); }
+#strike-stages { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px; }
+#strike-stages button { display:grid; align-content:start; gap:3px; min-width:0; padding:4px; text-align:left; }
+#strike-stages canvas { display:block; width:100%; height:auto; image-rendering:pixelated; }
+#strike-stages strong { line-height:1.12; }
+#strike-stages small { min-height:1.1em; }
+#strike-stages button[aria-pressed=true] { outline:2px solid var(--gold); outline-offset:-2px; }
+#strike-stages button[data-out=true] canvas { filter:grayscale(1); opacity:.5; }
+#strike-stages button:disabled { opacity:1; }
+#strike-history summary { cursor:pointer; }
+#strike-history p { margin:.45rem 0; }
+@media(max-width:600px){#strike-stages { grid-template-columns:repeat(3,minmax(0,1fr)); }}
 .couch-seats { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin: 10px 0; }
 .couch-seat {
   --seat: #ffbb85;

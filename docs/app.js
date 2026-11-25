@@ -659,21 +659,28 @@
       end:()=>{rotation=null;rotationPads=null;try{rotationStorage.removeItem(window.WinnerStays.key);}catch{}
         settings.mode='local';toLobby();$('winner-stays').focus({preventScroll:true});}});
   }
-  function pickTogether(forRotation=false) {
+  function pickTogether(forRotation=false,openingStrikes=false) {
     const counter=page==='match' && world?.mode==='local' && !online.match && localSet?.picker!=null;
+    const strikes=openingStrikes || (counter && matchConfig.stageStrikes);
+    if(counter && localSet.pendingStrike)return showStrikeBoard(localSet.pendingStrike,localSet);
     if(!counter && (page!=='lobby' || settings.mode!=='local'))return;
     rotationPicking=forRotation===true;
     const title=counter?'Game '+(localSet.games.length+1)+' · P1 '+localSet.score[0]+' – '+localSet.score[1]+' P2':
       rotationPicking?'Winner stays · Bout '+rotation.bout:'Pick together';
-    if(!window.CouchSelect)return waitForDispatch(title,()=>loadDispatch('CouchSelect'),()=>pickTogether(forRotation),
+    if(!window.CouchSelect)return waitForDispatch(title,()=>loadDispatch('CouchSelect'),()=>pickTogether(forRotation,openingStrikes),
       ()=>rotationPicking?rotationBoard():counter?showResult():$('pick-together').focus());
     showDialog('couch',title,'');
     const pair=rotationPicking?rotation.players.slice(0,2):null;
     const config=counter?{...matchConfig,stage:world.stage,stageForm:world.form,coats:[world.coatFor(0),world.coatFor(1)]}:
       pair?{...settings,...rotation.rules,p1:pair[0].kind,p2:pair[1].kind,coats:pair.map(p=>p.coat),coatBook:pair.map(p=>({[p.kind]:p.coat})),
         rotationRound:rotation.bout,rotationTags:pair.map(p=>p.name),bestOfThree:rotation.sets,couchSeats:rotationPads}:settings;
-    couchPanel=window.CouchSelect.panel($('dialog-body'),config,keys,getPads(),{
+    couchPanel=window.CouchSelect.panel($('dialog-body'),strikes?{...config,bestOfThree:true}:config,keys,getPads(),{
       sound,announce,drawStageTile,leave:exitDialog,between:counter?{picker:localSet.picker,game:localSet.games.length+1}:null,
+      lineupReady:strikes?(pick,seats)=>{
+        for(const [i,kind] of pick.dogs.entries())pick.coats[i][kind]=pick.colors[i];
+        beginStageStrike({...config,p1:pick.dogs[0],p2:pick.dogs[1],coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats,
+          form:counter?world.form:lobbyForm(),stockCount:config.stockCount ?? config.lives,timeBattle:config.timeBattle ?? config.timed},counter?localSet:null);
+      }:null,
       start(pick,seats) {
         const stage=pick.winner;
         if(!stage)return;
@@ -700,6 +707,36 @@
     });
   }
   $('pick-together').onclick=pickTogether;
+  function strikeBack(){
+    if(page==='match')return showResult();
+    dismiss();$('rules-label').focus({preventScroll:true});
+  }
+  function beginStageStrike(config,series=null){
+    if(!window.StageStrike)return waitForDispatch('Stage strike set',()=>loadDispatch('StageStrike'),()=>beginStageStrike(config,series),strikeBack);
+    if(series?.pendingStrike)return showStrikeBoard(series.pendingStrike,series);
+    const picker=series?.picker ?? null;
+    const draft=new window.StageStrike.Draft(picker===null?crypto.getRandomValues(new Uint8Array(1))[0]%2:1-picker,picker);
+    const entry={draft,config:{...config,bestOfThree:true,stageStrikes:true},seats:config.couchSeats || new controls.Seats(getPads())};
+    if(series)series.pendingStrike=entry;
+    showStrikeBoard(entry,series);
+  }
+  function showStrikeBoard(entry,series){
+    const {draft,config,seats}=entry;
+    showDialog('stage-strike','Stage strike set','');
+    couchPanel=window.StageStrike.panel($('dialog-body'),{draft,seats,keys,pads:getPads(),drawStageTile,sound,leave:strikeBack,
+      dogs:[config.p1,config.p2],form:config.form,solo:config.mode==='solo',game:series?series.games.length+1:1,
+      previous:series?.current.stage,start(stage){
+        if(series && !series.advance(stage))return;
+        const set=series || new StockSet(stage);
+        delete set.pendingStrike;
+        set.current.strikes=draft.moves.slice();
+        startMatch({...config,stage},undefined,undefined,set);
+      }});
+  }
+  function openStrikeSet(){
+    if(settings.mode==='local')return pickTogether(false,true);
+    beginStageStrike({...settings,mode:'solo',form:lobbyForm(),stockCount:settings.lives,timeBattle:settings.timed,coats:lobbyCoats.slice()});
+  }
   $('winner-stays').onclick=rotationBoard;
   const lobbyCoat = slot => window.DogFight.coatFor(slot,settings.p1,settings.p2,lobbyCoats);
   const stageName = (stage, form) => arenas[stage].name + (form && form !== 'original' ? ' · ' + stageForms[form].name : '');
@@ -888,6 +925,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='stage-strike')return strikeBack();
     if(dialogType==='profiles')return $('profile-back').click();
     if(dialogType==='rulebook')return backFromRulebook();
     if(dialogType==='pack-relay')return backFromRelay();
@@ -1414,7 +1452,7 @@
   // Use the first play gesture. Leaving fullscreen is respected for the rest of this visit.
   document.addEventListener('click', (e) => {
     if (triedFullscreen || !nativeScreen || inFullscreen() || navigator.userActivation?.isActive === false) return;
-    const start = e.target.closest?.('#start, #couch-start, #dispatch-start, [data-stop], [data-reel], #online-quick, #online-create, #online-join');
+    const start = e.target.closest?.('#start, #couch-start, #strike-confirm[data-play=true], #dispatch-start, [data-stop], [data-reel], #online-quick, #online-create, #online-join');
     if (start && !start.disabled && (e.isTrusted || navigator.userActivation?.isActive)) toggleFullscreen(false);
   }, true);
   document.addEventListener('keydown', (e) => {
@@ -2103,6 +2141,7 @@
       '<h3>Match format</h3><div class="dialog-actions"><button class="utility" data-format="single" aria-pressed="' + !settings.bestOfThree +
       '">Single game</button><button class="utility" data-format="set" aria-pressed="' + settings.bestOfThree + '">Best of three</button></div>' +
       '<p>In a set, the loser picks the next arena. First to two wins takes the set.</p>' +
+      (settings.mode==='training'?'':'<div class="dialog-actions"><button class="utility" data-do="strike-set">Play a stage strike set</button></div>')+
       '<h3>Match clock</h3><div class="dialog-actions">' + choices + '</div>' +
       '<p>Play the last stock with both dogs at 125%. When a hit threatens the match, steer during the close-up to change your launch.</p>' +
       '<div class="dialog-actions"><button class="utility" data-do="last-stock-start">Play last stock</button></div>' +
@@ -2851,10 +2890,16 @@
     const title = champion === null ? 'Game ' + set.games.length + ' result' : 'Set complete';
     const history = set.games.map((g,i) => '<li><span>' + (i+1) + ' · ' + arenas[g.stage].name +
       '</span><strong>' + name(g.winner,g.card?.players[g.winner].kind) + '</strong></li>').join('');
+    const stageLog=matchConfig.stageStrikes?'<details id="strike-history"><summary>Stage picks and bans</summary>'+
+      set.games.map((g,i)=>'<p><strong>Game '+(i+1)+' · '+arenas[g.stage].name+'</strong><br>'+
+        (g.strikes || []).map(m=>'P'+(m.slot+1)+' '+({strike:'struck',ban:'banned',pick:'picked'})[m.action]+' '+arenas[m.stage].name).join(' · ')+'</p>').join('')+'</details>':'';
     let action, text, next = '';
     if (champion !== null) {
       action = net ? 'online-rematch' : matchConfig.rotationRound?'rotation':'new-set';
       text = action==='rotation'?'Next challenger':'Play another set';
+    } else if(!net && matchConfig.stageStrikes){
+      action='strike-next';text=set.pendingStrike?'Resume stage picks':'Counterpick for game '+(set.games.length+1);
+      next='<p>'+name(1-picker)+' bans two arenas. '+name(picker)+' chooses from the remaining three.</p>';
     } else if (!net && world.mode === 'solo' && picker === 1) {
       const stage = set.cpuPick(result.dogs[1].kind);
       next = '<p>' + name(1) + ' picks ' + stageName(stage,result.form) + '. ' + (stageForms[result.form].description || arenas[stage].description) + '</p>';
@@ -2873,7 +2918,7 @@
       (champion === null ? ' wins game ' + set.games.length : ' wins the set') + '</h3><p>' + finish + ' · ' + duration +
       '</p></div></div><h3 id="set-score">Set score · P1 ' + set.score[0] + ' – ' + set.score[1] + ' ' +
       (world.mode === 'solo' ? 'CPU' : 'P2') + '</h3><ol class="set-history" aria-label="Game winners">' + history +
-      '</ol>' + next + (net ? '<p id="net-rematch-status" role="status"></p>' : cpuReadReport()) +
+      '</ol>' + stageLog + next + (net ? '<p id="net-rematch-status" role="status"></p>' : cpuReadReport()) +
       '<div class="dialog-actions"><button class="primary" data-set-next data-do="' + action + '">' + text +
       '</button><button class="utility" data-do="' + (net ? 'online-leave">Online lobby' : 'lobby">Fighter select') +
       '</button>' + cardButton + '</div>', false);
@@ -3105,6 +3150,12 @@
     if (action === 'practice') showPractice();
     if (action === 'rehearse') rehearsePosition();
     if (action === 'return-fight') returnToFight();
+    if(action==='strike-set')return openStrikeSet();
+    if(action==='strike-next'){
+      if(localSet.pendingStrike)return showStrikeBoard(localSet.pendingStrike,localSet);
+      if(world.mode==='local')return pickTogether();
+      return beginStageStrike(matchConfig,localSet);
+    }
     if (action === 'set-pick') {
       if(!online.match && world.mode==='local')return pickTogether();
       if(online.match && online.fighterPicks)return showRoomFighters();
@@ -3125,6 +3176,7 @@
     }
     if (action === 'cpu-counterpick') startNextSetGame(localSet.cpuPick(world.dogs[1].kind));
     if (action === 'new-set') {
+      if(matchConfig.stageStrikes)return beginStageStrike(matchConfig);
       const stage = localSet.games[0].stage;
       startMatch({...matchConfig, stage}, undefined, undefined, new StockSet(stage));
     }
@@ -5473,7 +5525,7 @@
     PlayerProfiles:'player-profiles.js?v=1',
     VersusRulebook:'versus-rules.js?v=room-rules-1',
     PackRelay:'pack-relay.js?v=1',
-    WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=rulesets-1',
+    WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=stage-strike-1',StageStrike:'stage-strike.js?v=1',
     FinishTools:'finish-tools.js?v=stock-replay-1',
     FighterSchool:'fighter-lessons.js?v=school-examples-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
@@ -7146,11 +7198,11 @@
       if (!e.repeat) toggleFilm();
       return;
     }
-    if (dialogType==='couch' && couchPanel?.keyboard(e)) return;
+    if (['couch','stage-strike'].includes(dialogType) && couchPanel?.keyboard(e)) return;
     if(dialogType==='result' && world?.mode==='local' && !online.match &&
-        document.activeElement?.dataset.do==='set-pick' && keys.some(map=>map.attack===e.code)) {
+        ['set-pick','strike-next'].includes(document.activeElement?.dataset.do) && keys.some(map=>map.attack===e.code)) {
       e.preventDefault();
-      if(!e.repeat)pickTogether();
+      if(!e.repeat)document.activeElement.click();
       return;
     }
     if (e.code === 'Escape' && !$('dialog').open) {
@@ -7299,7 +7351,7 @@
     const move=menuRepeat.poll(direction,menuOpen && !document.hidden ? dialogType || page : '',time);
     const back=now.back && !oldPad.back, confirm=now.confirm && !oldPad.confirm;
     if(menuOpen && (move || back || confirm || now.pause && !oldPad.pause))document.body.classList.add('pad-navigation');
-    if(dialogType==='couch'){oldPad=now;return;}
+    if(dialogType==='couch' || dialogType==='stage-strike'){oldPad=now;return;}
     if(dialogType==='bindings' && edit.mode==='test' && edit.device==='pad'){
       if(now.pause && !oldPad.pause)leaveLayouts();
       oldPad=now;return;
@@ -7383,7 +7435,7 @@
     before = now;
     const pads = getPads();
     padMenu(pads,now);
-    if(dialogType==='couch' && !document.hidden)couchPanel?.poll(pads,now);
+    if((dialogType==='couch' || dialogType==='stage-strike') && !document.hidden)couchPanel?.poll(pads,now);
     if(page==='match' && world?.mode==='local')matchConfig?.couchSeats?.sync(pads);
     if (finishTrial) tickFinishTrial(dt,pads);
     else if (clipScreen) tickClip(dt);
@@ -7506,6 +7558,8 @@
     }else if(hash==='#local/pack-relay' || hash==='#solo/pack-relay'){
       settings.mode=hash.startsWith('#local')?'local':'solo';
       editing=0;toLobby();openRelay();
+    }else if(hash==='#local/stage-strike' || hash==='#solo/stage-strike'){
+      settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();openStrikeSet();
     }else if(hash==='#local/winner-stays'){
       settings.mode='local';editing=0;toLobby();rotationBoard();
     }else if (hash==='#local/pick-together' || hash==='#local/best-of-three') {

@@ -4,6 +4,8 @@ A cartoon platform fighter for one or two players. Play **The Last Dispatch** st
 
 ## Play
 
+**Stage strike sets** are a best-of-three option in Solo and Local versus. At fighter select, open **Rules → Play a stage strike set**. Both local players lock in their dogs. A coin flip gives one player the first strike, the other removes two arenas, and the first removes one more. Game one takes place on the remaining arena. Between games the winner bans two stages and the loser picks from the other three. In local play the loser can also switch dogs and coats. Use your movement keys or D-pad to highlight a stage and Attack or A to confirm. On touch, choose an arena tile and confirm the named action. [Play a couch stage strike set](https://caleb-guyer.github.io/dog-fight-3/#local/stage-strike) · [Draft against the CPU](https://caleb-guyer.github.io/dog-fight-3/#solo/stage-strike)
+
 **[Play Dog Fight 3](https://caleb-guyer.github.io/dog-fight-3/)**
 
 At fighter select, open **Player profiles** to bring your controls to either seat. Choose P1 or P2, customize the keys, controller buttons, ground Attack, flick jump and aim stick, then save under a name. When a friend takes the other seat, choose their name and **Use for P2**. If keys overlap, review the exact swaps or choose **Keep both keyboards** to bring over the controller and play settings alone. Profiles stay on this browser. [Open player profiles](https://caleb-guyer.github.io/dog-fight-3/#local/profiles)
