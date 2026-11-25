@@ -3,6 +3,7 @@
 
   const prefix = 'dogfight3-cg-versus-v69-';
   const channel = 'dogfight3-v69';
+  const counterpickFeature = 'fighter-counterpick';
   const quickId = prefix + 'quickplay';
   const roomAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick', 'tiltMode', 'shortHop', 'quickAttack'];
@@ -206,6 +207,7 @@
       this.kind = kind;
       this.coat = window.DogFight.validCoat(coat) ? coat : 0;
       this.remoteCoat = 0;
+      this.fighterPicks = false;
       this.code = action === 'create' ? roomCode() : code;
       this.attempts = 0;
       this.round = 0;
@@ -279,7 +281,7 @@
       };
       conn.on('open', () => {
         if (!current()) return conn.close();
-        if (!host) conn.send(['join', this.kind, this.coat]);
+        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature] : ['join',this.kind,this.coat]);
       });
       conn.on('data', (data) => {
         if (!current() || !Array.isArray(data)) return;
@@ -288,13 +290,15 @@
           if (this.link) return reject('full');
           this.remoteKind = data[1];
           this.remoteCoat = window.DogFight.validCoat(data[2]) ? data[2] : 0;
+          this.fighterPicks = this.roomSet && data[3] === counterpickFeature && window.DogFight.validCoat(data[2]);
           // Ordered delivery puts both players' colors in the opening match configuration.
-          if (window.DogFight.validCoat(data[2])) conn.send(['coat',this.coat]);
+          if (window.DogFight.validCoat(data[2])) conn.send(this.fighterPicks ? ['coat',this.coat,counterpickFeature] : ['coat',this.coat]);
           this.attach(conn);
           this.hostRound();
           if (this.action === 'quick') peer.disconnect();
         } else if (!host && !this.round && data[0] === 'coat' && window.DogFight.validCoat(data[1])) {
           this.remoteCoat = data[1];
+          this.fighterPicks = this.action === 'join' && data[2] === counterpickFeature;
         } else if (!host && data[0] === 'start' && this.validStart(data)) {
           this.remoteKind = data[2];
           this.attach(conn);
@@ -339,6 +343,11 @@
       if (conn) conn.close();
       this.status('room', message + ' Your room is open.');
     }
+    nextLineup() {
+      if (!this.round || !this.roster) return null;
+      if (!this.nextPick) return this.roster;
+      return this.roster.map((dog,i)=>i===this.series?.picker ? this.nextPick : dog);
+    }
     validStart(msg) {
       const form = msg[7] ?? 'original';
       if (msg.length === 8) {
@@ -349,7 +358,9 @@
       if ((this.action === 'quick' && series) || (this.round && (series !== !!this.series || form !== this.roomForm))) return false;
       if (this.series && (!this.finished || !this.theirVote ||
           (this.series.champion === null && msg[4] !== this.nextStage))) return false;
-      return msg[1] === this.round + 1 && fighter(msg[2]) && msg[3] === this.kind &&
+      const lineup=this.nextLineup();
+      const agreed=lineup ? msg[2]===lineup[0].kind && msg[3]===lineup[1].kind : fighter(msg[2]) && msg[3]===this.kind;
+      return msg[1] === this.round + 1 && agreed &&
         typeof msg[4] === 'string' && Object.hasOwn(window.DogFight.arenas, msg[4]) &&
         Number.isInteger(msg[5]) && msg[5] >= 0 && msg[5] <= 0xffffffff;
     }
@@ -359,25 +370,27 @@
       const opener = this.openingStage || stages[seed % stages.length];
       const stage = this.series ? (this.series.champion === null ? this.nextStage : opener) :
         this.round ? stages[(stages.indexOf(this.stage) + 1) % stages.length] : opener;
-      const data = ['start', this.round + 1, this.kind, this.remoteKind, stage, seed];
+      const dogs=this.nextLineup()?.map(d=>d.kind) || [this.kind,this.remoteKind];
+      const data = ['start', this.round + 1, ...dogs, stage, seed];
       if (this.roomForm && this.roomForm !== 'original') data.push(this.roomSet ? 2 : 1, this.roomForm);
       else if (this.roomSet) data.push(2);
       this.send(data);
       this.beginRound(data);
     }
     beginRound([, round, p1, p2, stage, seed, firstTo, form = 'original']) {
+      const coats = this.nextLineup()?.map(d=>d.coat) || (this.side === 1 ? [this.remoteCoat,this.coat] : [this.coat,this.remoteCoat]);
       if (firstTo === 2) {
         if (!this.series || this.series.champion !== null) this.series = new window.DogFight.StockSet(stage);
         else if (!this.series.advance(stage)) return;
       }
       this.round = round;
+      this.roster=[p1,p2].map((kind,i)=>({kind,coat:window.DogFight.coatFor(i,p1,p2,coats)}));
       this.stage = stage;
       this.roomForm = form;
       this.myVote = this.theirVote = this.finished = false;
       this.myResult = this.theirResult = null;
-      this.nextStage = this.earlyVote = undefined;
+      this.nextStage = this.nextPick = this.earlyVote = undefined;
       this.phase = 'playing';
-      const coats = this.side === 1 ? [this.remoteCoat,this.coat] : [this.coat,this.remoteCoat];
       const config = { mode: 'local', p1, p2, stage, form, coats, fetch: true };
       this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed);
       this.events.start(config, seededRandom(seed));
@@ -387,7 +400,7 @@
       if (msg[0] === 'leave') return this.opponentLeft('Your opponent left.');
       if (msg[0] === 'ping') return this.send(['pong']);
       if (msg[0] === 'pong') return;
-      if (msg[0] === 'start' && this.side === 1 && this.myVote && msg[2] === this.remoteKind && this.validStart(msg))
+      if (msg[0] === 'start' && this.side === 1 && this.myVote && this.validStart(msg))
         return this.beginRound(msg);
       if (!this.match || msg[1] !== this.round) return;
       if (msg[0] === 'input' && !this.finished && !this.match.receive(msg[2], msg[3]))
@@ -398,15 +411,15 @@
           return this.close('The match results did not agree. Find another match.');
       }
       if (msg[0] === 'rematch') {
-        if (this.theirVote || msg.length < 2 || msg.length > 3) return;
+        if (this.theirVote || ![2,3,5].includes(msg.length)) return;
         if (this.series && !this.finished) {
           // Ordered peers can reach the same confirmed finish on different render frames.
           if (this.theirResult === 0 || this.theirResult === 1) this.earlyVote = msg;
           return;
         }
         if (this.series && this.theirResult !== this.myResult) return;
-        if (!this.validVote(1-this.side, msg[2])) return;
-        if (msg[2] !== undefined) this.nextStage = msg[2];
+        if (!this.validVote(1-this.side,msg[2],msg[3],msg[4])) return;
+        this.keepPick(msg[2],msg[3],msg[4]);
         this.theirVote = true;
         this.events.votes();
         if (!this.side && this.myVote) this.hostRound();
@@ -426,15 +439,25 @@
         this.receive(msg);
       }
     }
-    validVote(side, stage) {
-      return this.series?.picker === side ? typeof stage === 'string' && Object.hasOwn(window.DogFight.arenas, stage)
-        : stage === undefined;
+    validVote(side, stage, kind, coat) {
+      if(this.series?.picker!==side)return stage===undefined && kind===undefined && coat===undefined;
+      if(typeof stage!=='string' || !Object.hasOwn(window.DogFight.arenas,stage))return false;
+      if(kind===undefined && coat===undefined)return true;
+      const winner=this.roster[1-side];
+      return this.fighterPicks && fighter(kind) && window.DogFight.validCoat(coat) && (kind!==winner.kind || coat!==winner.coat);
     }
-    rematch(stage) {
-      if (!this.match || !this.finished || this.myVote || !this.validVote(this.side, stage)) return;
+    keepPick(stage,kind,coat) {
       if (stage !== undefined) this.nextStage = stage;
+      if (kind !== undefined) this.nextPick = {kind,coat};
+    }
+    rematch(stage,kind,coat) {
+      if (!this.match || !this.finished || this.myVote || !this.validVote(this.side,stage,kind,coat)) return;
+      this.keepPick(stage,kind,coat);
       this.myVote = true;
-      this.send(stage === undefined ? ['rematch', this.round] : ['rematch', this.round, stage]);
+      const vote=['rematch',this.round];
+      if(stage!==undefined)vote.push(stage);
+      if(kind!==undefined)vote.push(kind,coat);
+      this.send(vote);
       this.events.votes();
       if (!this.side && this.theirVote) this.hostRound();
     }
