@@ -139,6 +139,10 @@
   const rageScale = damage => 1 + .10 * clamp((damage - 35) / 115, 0, 1);
   const finishingLaunch = (move, name) => !move?.setupHit && !move?.second && !move?.pull && !move?.bounce && name !== 'snare';
   const canStayPlanted = (vx, vy) => Math.hypot(vx, vy) <= 150 && Math.abs(vy) <= 96;
+  function groundedLift(move, grounded, speed, sweet) {
+    if (!grounded || !move?.lowLaunch || sweet?.angle != null) return 1;
+    return smoothStep(clamp((speed - 250) / 150, 0, 1));
+  }
   const toward = (value, target, amount) => value + clamp(target - value, -amount, amount);
   const inputWindow = 7 / 60;
   // Convert the local control preference before recording or sending the regular Jump button.
@@ -937,6 +941,7 @@
       landingWindow: [3, 14],
     },
     pipBackKick: {
+      lowLaunch: true,
       label: 'Back Heel',
       hint: 'A quick heel strike behind you with a low launch.',
       frames: [3, 4, 10],
@@ -1028,6 +1033,7 @@
       landingWindow: [4, 27],
     },
     brisketHip: {
+      lowLaunch: true,
       label: 'Hip Check',
       hint: 'Back into them at close range for a heavy hip check. Grazing them at full reach gives a softer bump.',
       frames: [6, 6, 15],
@@ -1134,6 +1140,7 @@
       late: { start: 11 / 60, active: 9 / 60, box: [47, -27, 46, 20], dmg: 4, base: 88, growth: 1.65, angle: 28, pull: true, stun: 0.32 },
     },
     noodleTail: {
+      lowLaunch: true,
       label: 'Tail Flick',
       hint: 'Catch them at the very tip of the tail to send them skimming offstage.',
       frames: [4, 6, 12],
@@ -1227,6 +1234,7 @@
       landingWindow: [3, 15],
     },
     cloverBack: {
+      lowLaunch: true,
       label: 'Backhand',
       hint: 'The broad face of the disc sends the rival out. Scoop them on its upper rim to loft them for a chase.',
       frames: [4, 5, 11],
@@ -1446,6 +1454,7 @@
   };
   const smashes = {
     pipBoltKick: {
+      lowLaunch: true,
       label: 'Bolt Kick',
       hint: 'Pip springs forward with both feet. The short windup lets you punish a missed attack.',
       frames: [6, 5, 14],
@@ -1507,6 +1516,7 @@
       },
     },
     brisketHaymaker: {
+      lowLaunch: true,
       label: 'Haymaker',
       hint: 'Release Smash to plant your feet. When the gold shoulder marks appear, one hit worth up to 8% deals damage without stopping the punch. Grabs still catch you.',
       frames: [12, 5, 24],
@@ -1545,6 +1555,7 @@
       sweetSpot: { box: [0, -30, 66, 31], bonus: 4, launch: 1.14 },
     },
     noodleLeadSnap: {
+      lowLaunch: true,
       label: 'Lead Snap',
       hint: 'Crack the lead straight ahead. The knot at the far end hits much harder than the middle of the rope.',
       frames: [9, 5, 20],
@@ -1599,6 +1610,7 @@
       rope: 'low',
     },
     cloverLineDrive: {
+      lowLaunch: true,
       label: 'Line Drive',
       hint: 'Fire the disc straight ahead. A longer charge gives it more speed, range, and knockback.',
       frames: [9, 3, 18],
@@ -2765,6 +2777,7 @@
         const floor = this.terrain[0];
         this.setLedgeTrap({index:0, left:true, x:floor.x1, y:floor.y});
       }
+      if (config.driveOpening && this.mode === 'solo') this.placeDriveFighters(config.driveOpening.edge, config.driveOpening.damage);
     }
     resetCpu() {
       const memory = this.bot;
@@ -2876,6 +2889,7 @@
     setDummyDamage(value) {
       const damage = clamp(Number(value) || 0, 0, 200);
       const lab = this.freshnessPractice;
+      if (lab?.drive) return this.resetDrivePractice(lab.drive.edge, damage);
       if (lab) return this.resetFreshnessPractice(true, lab.guard, lab.koTest, damage, lab.rageDamage);
       this.trainingDamage = damage;
       this.dogs[1].damage = this.trainingDamage;
@@ -4049,7 +4063,7 @@
     resetFreshnessPractice(repeat = false, guard = false, koTest = false, damage, rageDamage = null) {
       const prior = this.freshnessPractice;
       const rageTest = rageDamage !== null;
-      const same = prior && prior.koTest === koTest && (prior.rageDamage != null) === rageTest;
+      const same = prior && !prior.drive && prior.koTest === koTest && (prior.rageDamage != null) === rageTest;
       const histories = repeat && same && !rageTest ? this.dogs.map(f => f.moveHistory) : null;
       this.resetTraining();
       const original = koTest ? { dogs: this.dogs, damage: this.trainingDamage } : null;
@@ -4081,6 +4095,27 @@
         marks: this.dogs.map(f => f.x), baseline: this.trainingDamage,
         previous: comparable ? prior.last ? { last: prior.last, trace: prior.trace, rageDamage: prior.rageDamage } : prior.previous : null };
     }
+    placeDriveFighters(edge, damage) {
+      const floor = this.terrain[0];
+      const mark = edge ? floor.x2 - 4 : (floor.x1 + floor.x2) / 2 + 32;
+      const [attacker, defender] = this.dogs;
+      Object.assign(attacker, {x:mark - 64, y:floor.y, ground:0, face:1});
+      Object.assign(defender, {x:mark, y:floor.y, ground:0, face:-1, damage});
+    }
+    resetDrivePractice(edge = false, damage = 0) {
+      const prior = this.freshnessPractice;
+      const previous = !prior?.drive ? null : prior.last ? {
+        last:prior.last, trace:prior.trace, edge:prior.drive.edge, baseline:prior.baseline,
+      } : prior.previous;
+      this.resetFreshnessPractice();
+      const lab = this.freshnessPractice;
+      lab.original = {dogs:this.dogs, damage:this.trainingDamage};
+      lab.baseline = this.trainingDamage = damage;
+      lab.drive = {edge};
+      lab.previous = previous;
+      this.placeDriveFighters(edge, damage);
+      lab.marks = this.dogs.map(f => f.x);
+    }
     sampleFreshness(owner, use, moveId, power, damage, response, blocked = false) {
       const lab = this.freshnessPractice;
       if (!lab || owner.index !== 0 || !moveId) return;
@@ -4094,6 +4129,13 @@
         sample.hits++;
         sample.damage += damage;
         sample.launch = response;
+        if (lab.drive && response > 0) {
+          const target = this.dogs[1];
+          sample.angle = Math.round(Math.atan2(-target.vy, Math.abs(target.vx)) * 180 / Math.PI);
+          sample.slide = !!target.reaction?.groundSlide;
+          sample.startX = target.x;
+          lab.trace = [[target.x, target.y]];
+        }
       }
       if (use) use.sample = sample;
       lab.last = sample;
@@ -4104,11 +4146,15 @@
       if (!report?.launch || report.outcome) return;
       const target = this.dogs[1];
       const landed = target.ground >= 0 || target.ledge;
-      const last = lab.trace.at(-1), y = target.y;
-      if (lab.trace.length < 130 && (!last || out || landed || Math.hypot(target.x - last[0], y - last[1]) >= 16))
-        lab.trace.push([target.x, y]);
       if (out) report.outcome = target.y < topBlastY ? 'Top KO' : 'KO';
+      else if (report.slide) {
+        if (target.ground < 0) report.outcome = 'Slid off the edge';
+        else if (target.stun <= 0) report.outcome = 'Ground slide · ' + Math.round(Math.abs(target.x - report.startX)) + ' px';
+      }
       else if (landed) report.outcome = target.ledge ? 'Ledge catch' : 'Landed';
+      const last = lab.trace.at(-1), y = target.y;
+      if (lab.trace.length < 130 && (!last || report.outcome || Math.hypot(target.x - last[0], y - last[1]) >= (report.slide ? 5 : 16)))
+        lab.trace.push([target.x, y]);
       if (report.outcome) lab.revision++;
     }
     resetFootworkPractice(pattern = 'bait', dir = 1, slow = true) {
@@ -6721,7 +6767,7 @@
         f.waveSlide = 0;
         f.landingAerial = '';
       }
-      if (f.reaction?.planted && !f.stun) f.reaction = null;
+      if ((f.reaction?.planted || f.reaction?.groundSlide) && !f.stun) f.reaction = null;
       if (f.respawning > 0) return;
       if (f.ledgeTrump) {
         f.ledgeTrump.time += dt;
@@ -7182,6 +7228,8 @@
         if (!f.stun) f.vx += input.x * 175 * dt;
       } else if (f.ground >= 0 && f.stun > 0 && f.reaction?.planted) {
         f.vx = toward(f.vx, 0, f.kit.footwork.traction * 0.45 * dt);
+      } else if (f.ground >= 0 && f.stun > 0 && f.reaction?.groundSlide) {
+        f.vx = toward(f.vx, 0, f.kit.footwork.traction * .18 * dt);
       } else if (f.stun > 0 || f.ledgeTrump || f.wallAction?.type === 'wallTechJump' || f.wallAction?.type === 'wallKick') {
         f.vx *= Math.pow(0.68, dt);
         f.vx += input.x * 100 * dt;
@@ -7250,7 +7298,7 @@
           f.dropPrep = null;
           f.crouch = f.crawling = false;
           f.jumps = 1;
-          f.coyote = cancel ? 0 : 0.085;
+          f.coyote = cancel || f.reaction?.groundSlide ? 0 : 0.085;
           if (cancel) {
             const frames = Math.round(f.landingLag * 60);
             const moveId = f.landingAerial;
@@ -8754,13 +8802,14 @@
       const finish = finishingLaunch(move, name);
       const rage = finish && growth > 0 && name !== 'ball' ? rageScale(ownerDamage) : 1;
       const speed = (base + target.damage * growth) * (0.75 + 0.25 * power) * rage / target.stats.weight;
+      const lift = groundedLift(move, target.ground >= 0, speed * (braced ? crouchLaunchScale : 1), sweet);
       // Brisket's landing shockwave and a weak grounded spike still pop the rival up.
       const meteor = !!move?.meteor && !(use?.plunge && use.landed) && speed * (braced ? crouchLaunchScale : 1) >= tumbleSpeed;
       if (move) {
         const degrees = sweet?.angle ?? move.angle;
-        const angle = ((degrees < 0 && target.ground >= 0 && !meteor ? 46 : degrees) * Math.PI) / 180;
+        const angle = ((degrees < 0 && target.ground >= 0 && !meteor ? 46 : degrees) * lift * Math.PI) / 180;
         target.vx = face * speed * Math.cos(angle);
-        target.vy = -speed * Math.sin(angle) - (angle >= 0 ? 40 : 0);
+        target.vy = -speed * Math.sin(angle) - (angle >= 0 ? 40 * lift : 0);
         if (move.pull) {
           const spacing = owner.stats.width + target.stats.width;
           let pocket = owner.x + face * (spacing - 4);
@@ -8785,7 +8834,8 @@
         target.vy *= crouchLaunchScale;
       }
       const planted = braced && canStayPlanted(target.vx, target.vy);
-      if (planted) target.vy = 0;
+      const groundSlide = lift === 0 && !planted;
+      if (planted || groundSlide) target.vy = 0;
       else {
         if (groundAtHit >= 0) target.jumps = 1;
         target.y -= 1;
@@ -8820,7 +8870,7 @@
       else if (braced) target.stun *= crouchLaunchScale;
       const emphatic =
         !!move?.hard || (name === 'heavy' && !move?.setupHit) || name === 'shoulder' || speed > 630;
-      target.reaction = { duration: target.stun, face: planted ? target.face : -face, hard: emphatic || speed > 460, planted };
+      target.reaction = { duration: target.stun, face: planted ? target.face : -face, hard: emphatic || speed > 460, planted, groundSlide };
       const launchSpeed = Math.hypot(target.vx, target.vy);
       this.sampleFreshness(owner, use, moveId, power, applied, launchSpeed);
       if (finish && launchSpeed >= tumbleSpeed) {
@@ -9370,8 +9420,9 @@
             foe.moveHistory.some(entry => entry.moveId === a.moveId) && Number.isFinite(a.angle)) {
           const rage = a.growth > 0 && finishingLaunch(a, a.name) ? rageScale(foe.damage) : 1;
           const speed = (a.base + (f.damage + a.dmg) * a.growth) * rage / f.stats.weight;
-          const angle = Math.max(a.angle, 0) * Math.PI / 180;
-          if (canStayPlanted(crouchLaunchScale * speed * Math.cos(angle), crouchLaunchScale * (40 + speed * Math.sin(angle))))
+          const lift = groundedLift(a, f.ground >= 0, speed * crouchLaunchScale);
+          const angle = Math.max(a.angle, 0) * lift * Math.PI / 180;
+          if (canStayPlanted(crouchLaunchScale * speed * Math.cos(angle), crouchLaunchScale * (40 * lift + speed * Math.sin(angle))))
             choice = 'crouch';
         }
         let aim;

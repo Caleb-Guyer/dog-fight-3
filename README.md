@@ -143,6 +143,8 @@ Each dog remembers its last nine moves that connected. Repeating the most recent
 
 In **Training → Move freshness**, hit the dummy, choose **Return to marks**, and repeat the move. The dummy returns to the same starting percentage, and your dog keeps its history. The gold trail follows the current launch. The dashed mint trail traces the previous attempt. Open **Recent moves** to see what counted. **Dummy shield** measures shieldstun and **Fresh start** clears the history.
 
+In **Launch height**, tap Smash as Pip. At 0%, Brisket skids along the roof. Choose **Move to ledge** and the same kick can slide him off. Set Brisket to 60% and try it again to see the kick lift him into the air. The readout measures the angle at contact, before either fighter can steer the launch. **Fight this opening · 3 stocks** starts a seven-minute Rival match at the marks and damage you picked. [Play Launch height](https://caleb-guyer.github.io/dog-fight-3/#training/launch-height)
+
 Choose **KO test** for a vertical launch test against Pip. From your chalk mark, fully charge **Up + Smash** and release. Once Pip crosses the top blast line, choose **Return to marks** and do it again. The same charge lets Pip land on the second attempt. Each playable dog has its own starting percentage for this comparison.
 
 **Rage.** Above 35% damage, your own hits and throws start launching rivals farther. The gold line under your portrait fills as your damage climbs. At 150% you get the maximum 10% knockback bonus. Losing a stock resets it. The move still deals its usual damage and shield pressure. Setup hits in a multi-hit move, rope pulls, floor bounces and the Fetch Ball keep their usual launch.
