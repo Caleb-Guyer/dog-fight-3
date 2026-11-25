@@ -1262,7 +1262,11 @@ async function testHaymaker(page,mobile) {
     await waitFor('count');
     await hold(role === 'armor' ? ['smash'] : []);
     await waitFor('go');
-    if (role === 'armorGrab') await hold([answer]);
+    if (role === 'armorGrab') {
+      await hold([answer]);
+      await page.clock.runFor(36);
+      await hold([]);
+    }
     else if (answer === 'release') await hold([]);
     await waitFor(outcome);
     assert.match(await status.textContent(),/Haymaker landed|Punch interrupted|Grabbed the planted shoulder/);
