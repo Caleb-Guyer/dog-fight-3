@@ -245,6 +245,7 @@
     fetch: true,
     sound: true,
     volume: 75,
+    musicVolume: 55,
     shake: true,
     tiltStick: false,
     quickAttack1: true,
@@ -261,6 +262,7 @@
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
     for (const key of ['fetch', 'sound', 'shake', 'tiltStick','flickJump1','flickJump2','quickAttack1','quickAttack2','bestOfThree']) if (typeof s[key] === 'boolean') settings[key] = s[key];
     if (Number.isFinite(s.volume)) settings.volume = Math.max(0, Math.min(100, s.volume));
+    if (Number.isFinite(s.musicVolume)) settings.musicVolume = Math.max(0, Math.min(100, s.musicVolume));
   } catch {
     /* Settings are optional in private browsing. */
   }
@@ -297,6 +299,43 @@
     document.querySelectorAll('.touch-pad .held').forEach((el) => el.classList.remove('held'));
   }
   let audioContext;
+  let music=null, musicUnlocked=false, musicFocused=true;
+  let auditionTrack='picnic', auditionPlaying=false, auditionUrgent=false;
+  const missionMusic=['picnic','bandstand','nightmail','canal','nightmail'];
+  function unlockMusic() {
+    musicUnlocked=true;
+    if (audioContext?.state!=='running') audioReady();
+  }
+  window.addEventListener('pointerdown',unlockMusic,{capture:true,passive:true});
+  window.addEventListener('keydown',unlockMusic,{capture:true});
+  function updateMusic() {
+    if(!musicUnlocked || !audioContext) return;
+    const level=settings.sound ? settings.musicVolume/100*settings.volume/100 : 0;
+    if(!music && (!level || audioContext.state!=='running')) return;
+    music ||= new window.YardScore.Player(audioContext);
+    let id='menu', urgent=false, playing=musicFocused && !document.hidden, gain=level;
+    if(dialogType==='sound-test'){
+      id=auditionTrack;playing=playing && auditionPlaying;urgent=auditionUrgent;
+    } else if(page==='dispatch-story') id=null;
+    else if(page==='match' && world){
+      const fight=online.match?.confirmedWorld || world;
+      if(world.mode==='adventure'){
+        id=missionMusic[world.roomIndex];
+        if(world.finished==='exit')id='win-'+world.dogs[0].kind;
+        else if(world.finished==='fallen')id=null;
+        else playing=playing && !paused;
+      } else if(fight.end!==null){
+        id=dialogType && fight.dogs[fight.end] ? 'win-'+fight.dogs[fight.end].kind : null;
+      } else {
+        id=fight.stage;playing=playing && !paused && countdown<=0;
+        urgent=!world.lesson && fight.mode!=='training' && (fight.suddenDeath ||
+          (fight.dogs[0].stocks===1 && fight.dogs[1].stocks===1));
+        if(world.lesson || fight.mode==='training') gain*=.55;
+      }
+    }
+    music.update(id,urgent,gain,playing);
+    if(dialogType==='sound-test') refreshAudition();
+  }
   function audioReady() {
     if (!settings.sound) return;
     try {
@@ -1616,6 +1655,7 @@
     return report;
   }
   function startMatch(config = settings, random = Math.random, opening, series = null, {visit, resume, leadInFrames = 0} = {}) {
+    music?.restart();
     practiceFight = visit || null;
     const rehearsal = !!visit && config.mode === 'solo';
     trainingMoment = null;
@@ -4509,6 +4549,7 @@
     else beginRun(index, checkpoint, checkpoint ? progress.atCheckpoint : null);
   }
   function beginRun(index, checkpoint, atCheckpoint = null) {
+    music?.restart();
     dismiss();
     $('pause-label').textContent = 'Pause';
     $('countdown').classList.remove('net-lag', 'sudden');
@@ -4685,19 +4726,62 @@
       document.querySelector('[data-do=dispatch-retry]').focus();
     }
   }
+  function auditionLocation(id) {
+    if(arenas[id])return arenas[id].name;
+    return id==='menu'?'Main menu':'Victory';
+  }
+  function refreshAudition() {
+    const notice=$('audition-status');
+    if(!notice)return;
+    const text=!settings.sound || !settings.volume || !settings.musicVolume ? 'Muted in Options' :
+      !auditionPlaying ? 'Stopped' : music?.finished ? 'Finished' :
+      audioContext?.state!=='running' ? 'Press Play to enable audio' :
+      auditionUrgent && !music?.urgent ? 'Final-stock mix at the next bar' : auditionUrgent ? 'Final-stock mix' : 'Playing';
+    if(notice.textContent!==text)notice.textContent=text;
+  }
+  function showSoundTest() {
+    const tracks=window.YardScore.scores;
+    auditionPlaying=false;auditionUrgent=false;
+    showDialog('sound-test','Sound Test','<div class="option-list"><label for="audition-track">Track <select id="audition-track">'+
+      Object.values(tracks).map(t=>'<option value="'+t.id+'">'+auditionLocation(t.id)+' · '+t.title+'</option>').join('')+
+      '</select></label><button id="audition-mix" type="button" aria-pressed="false">Final-stock mix</button></div>'+
+      '<p id="audition-status" role="status">Stopped</p><div class="dialog-actions"><button id="audition-play" class="primary" type="button">Play from start</button>'+
+      '<button id="audition-stop" class="utility" type="button">Stop</button><button id="audition-back" class="utility" type="button">Options</button></div>');
+    const select=$('audition-track'),mix=$('audition-mix');
+    select.value=auditionTrack;
+    mix.hidden=!arenas[auditionTrack];
+    const play=()=>{
+      unlockMusic();auditionPlaying=true;music?.restart();updateMusic();refreshAudition();
+    };
+    select.onchange=()=>{
+      auditionTrack=select.value;auditionUrgent=false;mix.hidden=!arenas[auditionTrack];
+      mix.setAttribute('aria-pressed','false');play();
+    };
+    mix.onclick=()=>{
+      auditionUrgent=!auditionUrgent;
+      mix.setAttribute('aria-pressed',String(auditionUrgent));
+      if(!auditionPlaying)play();else updateMusic();
+    };
+    $('audition-play').onclick=play;
+    $('audition-stop').onclick=()=>{auditionPlaying=false;music?.restart();refreshAudition();};
+    $('audition-back').onclick=showOptions;
+    refreshAudition();
+  }
   function showOptions() {
     showDialog(
       'options',
       'Options',
       '<div class="option-list"><button type="button" data-do="option-sound" aria-pressed="' +
         settings.sound +
-        '">Sound effects <b>' +
+        '">Sound <b>' +
         (settings.sound ? 'On' : 'Off') +
-        '</b></button><label for="option-volume">Volume <input type="range" id="option-volume" min="0" max="100" step="5" value="' +
+        '</b></button><label for="option-volume">Master volume <input type="range" id="option-volume" min="0" max="100" step="5" value="' +
         settings.volume +
         '"><output id="option-volume-value">' +
         settings.volume +
-        '%</output></label><button type="button" data-do="option-shake" aria-pressed="' +
+        '%</output></label><label for="option-music">Music level <input type="range" id="option-music" min="0" max="100" step="5" value="'+
+        settings.musicVolume+'"><output id="option-music-value">'+settings.musicVolume+'%</output></label>'+
+        '<button type="button" id="open-sound-test">Sound Test</button><button type="button" data-do="option-shake" aria-pressed="' +
         settings.shake +
         '">Camera shake <b>' +
         (settings.shake ? 'On' : 'Off') +
@@ -4718,7 +4802,13 @@
         '<p>Flick the left stick up or tap Up to jump. For an up tilt, aim gently, hold Walk, or slide from the center dot on touch. Online uses your P1 controls.</p></div><div class="dialog-actions"><button class="primary" data-do="close">Done</button></div>',
     );
   }
+  $('dialog-body').addEventListener('click',e=>{if(e.target.closest('#open-sound-test'))showSoundTest();});
   $('dialog-body').addEventListener('input', (e) => {
+    if(e.target.id==='option-music'){
+      settings.musicVolume=Number(e.target.value);
+      $('option-music-value').textContent=settings.musicVolume+'%';
+      save();audioReady();updateMusic();
+    }
     if (e.target.id === 'option-volume') {
       settings.volume = Number(e.target.value);
       $('option-volume-value').textContent = settings.volume + '%';
@@ -5135,11 +5225,13 @@
     el.addEventListener('lostpointercapture', release);
   });
   function onBlur() {
+    musicFocused=false;music?.stop();
     clearInput();
     if (page === 'dispatch-story') setFilmPaused(true);
     if (page === 'match' && !online.match && !paused && world?.end === null) showPause();
   }
   window.addEventListener('blur', onBlur);
+  window.addEventListener('focus',()=>{musicFocused=true;});
   const redrawPausedStage = () => {
     if (page === 'match' && world && view && (paused || frameLab.mode === 'frozen'))
       view.draw($('game'), world, 0, frameLab.mode === 'frozen' ? frameLab.renderTime : world.time, online.match?.confirmedWorld || world);
@@ -5154,6 +5246,7 @@
   } else window.addEventListener('resize', reframeFilm);
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) onBlur();
+    else musicFocused=document.hasFocus();
   });
   function getPads() {
     try {
@@ -5166,7 +5259,7 @@
   function menuButtons() {
     const root = $('dialog').open ? $('dialog') : $(page);
     return root
-      ? [...root.querySelectorAll('button,input:not([readonly])')].filter(
+      ? [...root.querySelectorAll('button,input:not([readonly]),select')].filter(
           (el) => el.offsetWidth && el.offsetHeight && !el.disabled,
         )
       : [];
@@ -5194,7 +5287,7 @@
       e.altKey ||
       e.ctrlKey ||
       e.metaKey ||
-      e.target instanceof HTMLInputElement
+      e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement
     )
       return;
     if (e.code === 'KeyP' && page === 'dispatch-story' && !$('dialog').open) {
@@ -5337,6 +5430,7 @@
       next: any(13) || any(15) || pads.some((p) => (p.axes[0] || 0) > 0.65 || (p.axes[1] || 0) > 0.65),
       prev: any(12) || any(14) || pads.some((p) => (p.axes[0] || 0) < -0.65 || (p.axes[1] || 0) < -0.65),
     };
+    if (!musicUnlocked && now.confirm && !oldPad.confirm) unlockMusic();
     if (now.pause && !oldPad.pause) {
       if (dialogType === 'pause' || dialogType === 'online-menu') dismiss();
       else if (page === 'match' && !dialogType) showPause();
@@ -5353,7 +5447,11 @@
         now.next&&!oldPad.next || now.prev&&!oldPad.prev || now.confirm&&!oldPad.confirm)) {
       const items = menuButtons();
       const n = items.indexOf(document.activeElement);
-      if (n >= 0 && items[n].type === 'range' && now.horizontal && now.horizontal !== oldPad.horizontal) {
+      if (items[n] instanceof HTMLSelectElement && now.horizontal && now.horizontal !== oldPad.horizontal) {
+        const el=items[n];
+        el.selectedIndex=(el.selectedIndex+now.horizontal+el.options.length)%el.options.length;
+        el.dispatchEvent(new Event('change',{bubbles:true}));
+      } else if (n >= 0 && items[n].type === 'range' && now.horizontal && now.horizontal !== oldPad.horizontal) {
         if (now.horizontal > 0) items[n].stepUp();
         else items[n].stepDown();
         items[n].dispatchEvent(new Event('input', { bubbles: true }));
@@ -5493,6 +5591,7 @@
           studying ? world.time : frameLab.mode === 'frozen' ? frameLab.renderTime : now, confirmed || world);
       }
     }
+    updateMusic();
     requestAnimationFrame(frame);
   }
   updateAudio();
@@ -5576,6 +5675,8 @@
       afterStory = null;
       startMatch({...settings,mode:'training',p1:hash.split('/')[2] || 'pip',p2:'brisket',stage:'nightmail',fetch:false});
       drill('shield',false,'crossup',undefined,{choice:'front',dir:1});
+    } else if (hash === '#sound-test') {
+      showHome(false);showSoundTest();
     } else if (hash === '#tutorial') {
       resumeCourse();
     } else if (hash === '#training/shield-punish') {

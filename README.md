@@ -100,7 +100,8 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 ## Modes and controls
 
 - **Solo** pits your dog against a computer opponent.
-- **Options** saves sound effects, volume and camera shake in this browser. Menus support pointer, touch, arrow keys and Enter, or a gamepad D-pad and its confirm button.
+- **Options** saves sound, master volume, music level and camera shake in this browser. Menus support pointer, touch, arrow keys and Enter, or a gamepad D-pad and its confirm button.
+- **Sound Test** plays the menu theme, all five arena tunes and each dog's victory fanfare. In a stock fight, the arena band changes its arrangement on the next bar when both fighters reach their last stock. Try the ordinary and final-stock versions of *Clothesline Waltz* on Laundry Line, then compare it with *Overnight Freight* on Night Mail. The music level can go to zero while combat cues stay audible. [Open Sound Test](https://caleb-guyer.github.io/dog-fight-3/#sound-test)
 - **Local versus** lets two people play on one device. Select either nameplate in the arena preview, then choose that side's dog from the roster.
 - **Training** starts you within striking distance of a stationary dummy. It shows the last move you used and counts hits that connect before the dummy can act again. Reset positions, change the dummy's starting damage, or practice getting back from the ledge.
 - **Fetch Ball** adds a tennis ball that both dogs can bat around. The third swat powers up the shot.
