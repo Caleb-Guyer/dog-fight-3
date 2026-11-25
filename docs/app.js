@@ -4618,12 +4618,14 @@
     }
     const touchSmash = !i && touches.has('smash') && (!touchFlick?.deferSmash || touchFlick.committed);
     const fromCenter = !i && touchPointers.get(walkPointer)?.dataset.touch;
-    const walk = key('walk') || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
+    // A quick thumb release can leave queued direction taps after the center-slide gesture ends.
+    const tappedWalk = aim?.x === x * (64 / 127) && x !== 0;
+    const walk = key('walk') || tappedWalk || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
     const shield = key('shield') || down(pad, 4) || down(pad, 5);
     const shortHop = key('hop') || down(pad, 6);
     const grounded = world.dogs[fighterIndex].ground >= 0;
     const gentleGuard = shield && grounded && (key('walk') || fromCenter);
-    const gentleDown = y > 0 && !shield && (key('walk') || fromCenter === 'down');
+    const gentleDown = y > 0 && !shield && (key('walk') || fromCenter === 'down' || aim?.y === 64 / 127);
     const side = (walk ? x * (64 / 127) : x) || axis(0) || (!left && !right && aim?.x) || 0;
     const vertical = ((gentleGuard || gentleDown) ? y * (64 / 127) : y) || axis(1) || (!up && !downAim && aim?.y) || 0;
     // Keep a held direction aimed when the second bumper is released. Centering rearms the dodge.
