@@ -92,13 +92,45 @@ async function graduation(browser) {
   await page.locator('[data-do=match-card]').click();await page.locator('[data-do=card-back]').click();
   await page.locator('[data-school-review=return]').focus();await page.keyboard.press('Enter');await page.locator('#school-retry').click();
   assert.match(await page.locator('#school-title').textContent(),/Recover/);
+  await page.goto(root+'?resume-practice');
+  assert.match(await page.locator('#home-continue').textContent(),/Rematch practice · Recover to the stage/);
+  await page.locator('#home-continue').focus();await page.keyboard.press('Enter');
+  assert.match(await page.locator('#school-title').textContent(),/Recover/);
   await page.keyboard.down('w');await page.keyboard.down('k');await page.clock.runFor(80);
   await page.keyboard.up('w');await page.keyboard.up('k');await page.keyboard.down('d');await page.clock.runFor(1650);await page.keyboard.up('d');
   assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'passed');
   assert.equal(await page.locator('#school-next').textContent(),'Rematch Brisket');
-  await page.evaluate(()=>window.out=1);
-  await page.locator('#school-next').click();await page.clock.runFor(4500);
+  await page.goto(root+'?resume-rematch');
+  assert.match(await page.locator('#home-continue').textContent(),/Rematch Brisket · Recover to the stage/);
+  await page.evaluate(()=>{
+    const proto=DogFight.Battle.prototype,step=proto.step;
+    proto.step=function(...args){
+      if(this.mode==='solo' && this.end===null){
+        window.rematchWorld=this;
+        if(window.blastRival){
+          this.dogs[1].y=950;this.knockouts([this.dogs[1]]);
+        }
+      }
+      return step.apply(this,args);
+    };
+  });
+  await page.evaluate(()=>confirmPad(true));await page.clock.runFor(32);
+  await page.evaluate(()=>confirmPad(false));await page.clock.runFor(2500);
+  assert.equal(await page.evaluate(()=>rematchWorld.dogs[0].stocks),3);
+  await page.locator('#pause').click();
+  assert.match(await page.locator('#rematch-target').textContent(),/Rematch target.*Get back onstage/);
+  await page.locator('[data-do=resume]').click();
+  await page.evaluate(()=>{
+    const w=rematchWorld,f=w.dogs[0],floor=w.terrain[0];
+    Object.assign(f,{x:floor.x1-50,y:floor.y+44,ground:-1,face:1,jumps:1,coyote:0,vx:0,vy:0});
+    w.dogs[1].x=floor.x2-10;
+  });
+  await page.keyboard.down('w');await page.keyboard.down('k');await page.clock.runFor(80);
+  await page.keyboard.up('w');await page.keyboard.up('k');await page.keyboard.down('d');await page.clock.runFor(1650);await page.keyboard.up('d');
+  assert.equal(await page.locator('#corner-title').textContent(),'Target met');
+  await page.evaluate(()=>window.blastRival=true);await page.clock.runFor(4500);
   assert.equal(await page.locator('#dialog-title').textContent(),'First fight won!');
+  assert.match(await page.locator('#rematch-target').textContent(),/Target met.*back onstage/);
   await page.locator('[data-do=school-cup]').click();
   assert.equal(await page.locator('[data-cup-dog][aria-pressed=true]').getAttribute('data-cup-dog'),'pip');
   await page.goto(root+'?finished');

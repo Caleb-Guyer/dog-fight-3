@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),
 const {execFileSync}=require('node:child_process');
 if(process.env.GITHUB_ACTIONS!=='true'||process.env.RUNNER_OS!=='Linux')throw Error('Run browser input on hosted Linux.');
 const {chromium}=require('playwright-core');
-const types={js:'application/javascript',html:'text/html',css:'text/css',png:'image/png',ttf:'font/ttf'};
+const types={js:'application/javascript',html:'text/html',css:'text/css',png:'image/png',ttf:'font/ttf',woff2:'font/woff2'};
 function assets(directory,prefix,files){
   for(const f of fs.readdirSync(directory,{withFileTypes:true})){
     const name=path.join(directory,f.name),url=prefix+'/'+f.name;
@@ -48,6 +48,8 @@ async function sample(browser,url,candidate){
     await page.waitForFunction(()=>window.walkedAt>0);
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
     const resources=await page.evaluate(()=>performance.getEntriesByType('resource').map(r=>new URL(r.name).pathname));
+    assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.woff2')),candidate);
+    assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.ttf')),!candidate);
     for(const name of deferred)assert.equal(resources.some(p=>p.endsWith('/'+name+'.js')),!candidate,name);
     assert.deepEqual(errors,[]);
     return {...boot,move:await page.evaluate(()=>window.walkedAt)};
@@ -63,6 +65,24 @@ async function recovery(browser,url){
     await page.route('**/dispatch-covers.js*',async route=>{await gate;await route.continue();});
     await page.goto(url);await page.locator('#home-adventure').click();await page.locator('#dispatch-load-back').click();
     release();await page.waitForFunction(()=>!!window.DispatchCovers);
+    const sameFont=await page.evaluate(async()=>{
+      await document.fonts.load('24px "Brawl Pixel"');
+      const reference=await new FontFace('Original Pixel','url(./assets/brawl-pixel.ttf)').load();
+      document.fonts.add(reference);
+      const canvas=document.createElement('canvas');canvas.width=850;canvas.height=115;
+      const ctx=canvas.getContext('2d');
+      function pixels(family){
+        ctx.clearRect(0,0,canvas.width,canvas.height);
+        for(const [row,size] of [13,20,31].entries()){
+          ctx.font=size+'px "'+family+'"';
+          ctx.fillText('Pip vs. Brisket · Rematch 0123456789%!',0,32+row*36);
+        }
+        return ctx.getImageData(0,0,canvas.width,canvas.height).data;
+      }
+      const a=pixels('Brawl Pixel'),b=pixels('Original Pixel');
+      return a.some(v=>v!==0) && a.every((v,i)=>v===b[i]);
+    });
+    assert(sameFont,'The webfont should render the original arcade lettering pixel for pixel');
     assert(await page.locator('#home').isVisible());
     assert.equal(await page.evaluate(()=>document.activeElement.id),'home-adventure');
     await page.locator('#home-adventure').click();await page.locator('#route-films').click();

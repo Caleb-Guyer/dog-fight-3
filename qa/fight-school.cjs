@@ -65,10 +65,12 @@ test('a first-fight loss offers a lesson grounded in the stock timeline and hit 
 
 function tryLesson(index,play) {
   const id=lessons[index].id, events=[];
+  const target=new window.FightSchool.Corner(id).target;
   let lesson;
   const w=new Battle({mode:'local',stage:id==='platform'?'picnic':'nightmail',p1:'pip',p2:'brisket',fetch:false,minutes:0},
-    (name,e)=>{lesson?.contact(name,e);events.push(name);});
+    (name,e)=>{if(lesson)target?.contact(name,e,w);lesson?.contact(name,e);events.push(name);});
   lesson=new Lesson(index,w);
+  target?.step(w);
   for(let n=0;n<260 && !lesson.done && !lesson.missed;n++) {
     const i={...idleInput,quickAttack:true};
     if(play) switch(id) {
@@ -83,9 +85,9 @@ function tryLesson(index,play) {
       case 'return':i.x=1;i.y=n===0?-1:0;i.special=n===0;break;
       case 'stock':i.x=n<34?1:0;i.smash=n<32;i.smashX=1;break;
     }
-    if(lesson.canStep(i)){w.step(1/60,i,lesson.partner(i));lesson.afterStep(w);}
+    if(lesson.canStep(i)){w.step(1/60,i,lesson.partner(i));lesson.afterStep(w);target?.step(w);}
   }
-  return {lesson,w,events};
+  return {lesson,w,events,target};
 }
 for (const [index,info] of lessons.entries()) test(info.title+' requires a real action',()=>{
   const attempt=tryLesson(index,true);
@@ -93,4 +95,42 @@ for (const [index,info] of lessons.entries()) test(info.title+' requires a real 
   assert(!tryLesson(index,false).lesson.done);
   if(info.id==='stock'){assert(attempt.events.includes('ko'));assert.equal(attempt.w.dogs[1].stocks,2);}
   if(info.id==='return')assert(attempt.lesson.cast && attempt.w.dogs[0].ground===0);
+});
+test('all four rematch targets recognize performed moves and ignore idle fighters',()=>{
+  for(const id of ['return','guard','jab','stock']){
+    const index=lessons.findIndex(l=>l.id===id);
+    assert.notEqual(tryLesson(index,true).target.doneAt,null,id);
+    assert.equal(tryLesson(index,false).target.doneAt,null,id);
+  }
+});
+test('respawning cannot count as recovering and a missed smash cannot earn a knockout',()=>{
+  const {world,pip,brisket,floor}=cornerFight();
+  const recovery=new window.FightSchool.Corner('return').target;
+  Object.assign(pip,{ground:-1,x:floor.x1-55});recovery.step(world);
+  recovery.contact('ko',{f:pip},world);
+  Object.assign(pip,{ground:0,x:600});recovery.step(world);
+  assert.equal(recovery.doneAt,null);
+  const stock=new window.FightSchool.Corner('stock').target;
+  world.matchCard.players[1].lastHit={id:pip.kit.smashes.side,frame:12};
+  world.matchFrames=613;stock.contact('ko',{f:brisket},world);assert.equal(stock.doneAt,null);
+  const jab=new window.FightSchool.Corner('jab').target;
+  jab.contact('hit',{owner:brisket,f:pip,moveId:brisket.kit.ground[0]},world);assert.equal(jab.doneAt,null);
+  const guard=new window.FightSchool.Corner('guard').target;
+  guard.contact('parry',{f:pip},world);assert.equal(guard.doneAt,613);
+});
+test('saved rematch practice survives reload, rejects invalid data and respects a newer result',()=>{
+  const {readProgress,updateRematch}=window.FightSchool;
+  const a='0000000000000001-0123456789abcdef',b='0000000000000002-0123456789abcdef';
+  const save=readProgress({firstFightDone:true});
+  assert.equal(save.rematch,null);
+  updateRematch(save,{loss:'return',ticket:a});
+  const restored=readProgress(save);assert.deepEqual(restored.rematch,{id:'return',ticket:a,fight:false});
+  updateRematch(restored,{loss:'guard',ticket:b});updateRematch(restored,{fight:a});
+  assert.equal(restored.rematch.fight,false);updateRematch(restored,{fight:b});
+  assert.equal(readProgress(restored).rematch.fight,true);
+  for(const rematch of [{id:'unknown',ticket:a},{id:'guard',ticket:25}]){
+    assert.equal(readProgress({...save,rematch}).rematch,null);
+  }
+  updateRematch(restored,{won:true});updateRematch(restored,{loss:'stock',ticket:a});
+  assert.equal(restored.firstFightWon,true);assert.equal(readProgress(restored).rematch,null);
 });
