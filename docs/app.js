@@ -358,6 +358,9 @@
       tone(490, 245, 0.075, 0, 'triangle', 0.06);
     } else if (name === 'ledgeRoll') {
       tone(215, 86, 0.085, 0, 'triangle', 0.045);
+    } else if (name === 'ledgeStrain' || name === 'ledgeSlip') {
+      const pitch = name === 'ledgeStrain' ? 440 : 210;
+      tone(pitch, pitch / 2, .10, 0, 'triangle', .06);
     } else if (name === 'ledgeClimbPlant') {
       tone(142, 71, 0.046, 0, 'triangle', 0.035);
     } else if (name === 'shieldRoll' || name === 'spotDodge') {
@@ -881,7 +884,7 @@
     const ledgeMove =
       '<h3 class="guide-section">Ledge attack</h3><ul class="move-rows guide-ledge">' +
       guideMoveRow(moves[kit.ledgeAttack], 'While hanging · tap Attack', 'ledge', 'ledge') +
-      '</ul>';
+      '</ul><p>Wait below a swing, then choose your get-up. Three amber marks count down to a slip. Damage and repeated catches shorten your grip.</p>';
     const sections =
       '<div class="guide-tabs" role="group" aria-label="Move categories">' +
       [
@@ -1316,7 +1319,12 @@
     }
     const shownMove = player.smashCharge ? smashes[player.smashCharge.moveId].label : player.lastMove;
     const returns = scores.map((f, i) => {
-      if (!f.stockLift) return f.stockGuard ? (f.stockGuard <= 24 / 60 + 1e-8 ? 'Last tag' : 'Protected') : '';
+      if (!f.stockLift) {
+        if (f.stockGuard) return f.stockGuard <= 24 / 60 + 1e-8 ? 'Last tag' : 'Protected';
+        if (f.ledge && window.DogFight.gripFramesLeft(f) <= window.DogFight.gripWarningFrames) return 'Grip slipping';
+        if (f.ledgeCatches >= window.DogFight.maxLedgeCatches) return f.ledge ? 'Last grip' : 'Land to regrab';
+        return '';
+      }
       if (!f.stockLift.ready) return 'Returning';
       const human = online.match ? online.side === i : world.mode === 'local' || i === 0;
       return human ? '↓ or Jump' : 'Lift ready';
@@ -1627,7 +1635,7 @@
         spacingFeedback(name, e);
       if (name === 'escapeCue' || name === 'escapeResult') escapeFeedback(e);
       if (world?.climbPractice && (name === 'climbCue' || name === 'climbResult' ||
-          (name === 'ledgeClimbPlant' && world.climbPractice.phase === 'active')))
+          (name === 'ledgeClimbPlant' && world.climbPractice.role !== 'patience' && world.climbPractice.phase === 'active')))
         climbFeedback(name, e);
       if (name === 'platformResult' || name === 'platformClimb' || name === 'platformBlock' ||
           (name === 'platformDrop' && world?.platformPractice && e.f.index === 0))
@@ -2169,6 +2177,28 @@
   }
   function climbFeedback(name, e) {
     const drill = world.climbPractice, status = $('climb-status'), trap = drill.role === 'trap';
+    if (drill.role === 'patience') {
+      const outcome = e.outcome || e.phase;
+      const [label, tip] = {
+        start:['Brisket is charging', 'Stay on the ledge and watch his front paw.'],
+        swing:['Haymaker released', 'Tap Shield as the punch comes forward.'],
+        opening:['Punch missed', 'Roll in, then aim toward Brisket and tap Attack while he recovers.'],
+        punched:['Caught by Haymaker', 'Hold the lip through the charge. An early climb gives Brisket a target.'],
+        punished:['Whiff punished', 'Your hit caught Brisket before he recovered.'],
+        grabbed:['Grab punish', 'Your grab caught Brisket after the swing.'],
+        interrupted:['Beat the punch', 'You reached Brisket first. Try waiting for his swing.'],
+        blockedPunch:['Haymaker blocked', 'Your shield took the blow. Try rolling through the swing.'],
+        parriedPunch:['Haymaker parried', 'You released Shield just before the punch landed.'],
+        guardedReply:['Brisket blocked', 'Roll a little earlier to leave more time for your counter.'],
+        escaped:['Back onstage', 'You got past the punch with your stock intact.'],
+        slipped:['Lost your grip', 'Leave before the last amber mark disappears.'],
+        fell:['Missed the return', 'Try Shield while hanging to roll onto the stage.'],
+      }[outcome];
+      status.dataset.result = outcome;
+      status.textContent = label;
+      $('recovery-tip').textContent = tip + (e.outcome ? ' Choose Wait out Haymaker to retry.' : '');
+      return;
+    }
     if (drill.route) {
       const cover = drill.role === 'coverRise', inward = drill.route.dir > 0 ? 'right' : 'left';
       const outcome = e.outcome || e.phase;
@@ -3391,12 +3421,13 @@
       }
     } else if (climb) {
       const trap = pattern === 'trap', inward = practiceSide === 'left' ? 'right' : 'left';
-      for (const role of ['escape','trap','rise','coverRise'])
+      for (const role of ['escape','trap','rise','coverRise','patience'])
         $('climb-' + role).setAttribute('aria-pressed', String(pattern === role));
       $('climb-slow').setAttribute('aria-pressed', String(world.climbPractice.slow));
       $('climb-status').dataset.result = 'ready';
       $('climb-status').textContent = practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
-      message = pattern === 'rise' ? 'Tap Down + Jump to spring from below the lip. Release Down, hold ' + inward + ' and tap Attack. Land onstage after the hit.' :
+      message = pattern === 'patience' ? 'Tap Attack to start. Hang below Brisket’s charge. As his punch comes forward, tap Shield to roll, then aim ' + inward + ' and tap Attack.' :
+        pattern === 'rise' ? 'Tap Down + Jump to spring from below the lip. Release Down, hold ' + inward + ' and tap Attack. Land onstage after the hit.' :
         pattern === 'coverRise' ? 'Hold Shield or tap Attack to start. Watch the rival spring from below and swing. Block, parry, or intercept the return.' :
         trap ? 'Tap Attack to start. Watch the rival’s paws touch down, then tap Attack again to catch the climb.'
         : 'Press ' + inward + ' to climb. Release the direction and hold Shield as your dog stands up.';
@@ -3641,7 +3672,7 @@
     ['Defense','Air dodge','air',['neutral','edge']],
     ['Recovery','Edgeguarding','edge',['lip','shortCatch','longCatch','tip','deep','corner','inside']],
     ['Recovery','Ledge recovery','ledge',['training','right','attack-training']],
-    ['Recovery','Ledge timing','climb',['escape','trap','rise','coverRise']],
+    ['Recovery','Ledge timing','climb',['escape','trap','rise','coverRise','patience']],
     ['Recovery','Ledge roll','roll',['guard','read']],
     ['Recovery','Contested ledge','trump',['take','defend']],
     ['Recovery','Stage techs & wall jumps','wall',['training','impact','ceiling','pip','noodle']],
@@ -3904,7 +3935,7 @@
   };
   $('ledge-roll-training').onclick = () => drill('roll', false, world?.rollPractice?.pattern || 'guard');
   $('climb-training').onclick = () => drill('climb', false, world?.climbPractice?.role || 'escape');
-  for (const role of ['escape','trap','rise','coverRise'])
+  for (const role of ['escape','trap','rise','coverRise','patience'])
     $('climb-' + role).onclick = () => drill('climb', false, role);
   $('climb-side').onclick = () => {
     practiceSide = practiceSide === 'left' ? 'right' : 'left';
@@ -5109,6 +5140,11 @@
         '<div class="dialog-actions"><button class="primary" data-do="rehearse">Practice this position</button>' +
         '<button class="utility" data-do="resume">Play the stock</button></div>');
       document.querySelector('[data-do=rehearse]').focus();
+    } else if (hash === '#solo/ledge-trap') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'rival',
+        minutes:7, fetch:false, ledgeTrapStart:true}, undefined, 42);
     } else if (hash === '#solo/under-the-table') {
       leaveOnline();
       afterStory = null;
@@ -5198,6 +5234,12 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'clover', p2:'brisket', stage:'nightmail', fetch:false });
       drill('shield', false, 'counterGrab');
+    } else if (hash === '#training/ledge-patience') {
+      leaveOnline();
+      afterStory = null;
+      practiceSide = 'left';
+      startMatch({...settings, mode:'training', p1:'pip', p2:'brisket', stage:'picnic', fetch:false});
+      drill('climb',false,'patience');
     } else if (hash === '#training/ledge-return') {
       leaveOnline();
       afterStory = null;

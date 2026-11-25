@@ -255,6 +255,14 @@
   const protectionTime = f => Math.max(f.invuln || 0, f.respawning || 0, f.stockGuard || 0,
     f.shieldBreak?.phase === 'pop' ? 1/60 : 0);
   const shortCatchFrames = 15;
+  const maxLedgeCatches = 6;
+  const gripWarningFrames = 45;
+  function ledgeHangLimit(f, previousCatches) {
+    return Math.max(75, 240 - Math.min(120, Math.floor(f.damage)) - 18 * previousCatches);
+  }
+  function gripFramesLeft(f) {
+    return (f.ledge.hangFrames ?? ledgeHangLimit(f, 0)) - Math.round(f.ledgeTime * 60);
+  }
   function ledgeGuardFrames(f) {
     if (!f.ledgeProtectionReady) return 0;
     const airFrames = Math.round(f.airborneTime * 60);
@@ -2086,6 +2094,7 @@
       ledgeLock: 0,
       ledgeDropJump: false,
       ledgeTime: 0,
+      ledgeCatches: 0,
       airborneTime: 0,
       ledgeProtectionReady: true,
       ledgeTrump: null,
@@ -2729,6 +2738,10 @@
         Object.assign(hero, {x:floor.x1+23, y:floor.y+40+hero.stats.height, ground:-1, jumps:1, damage:90, face:-1});
         Object.assign(guard, {x:floor.x1+65, y:floor.y, ground:0, face:-1});
       }
+      if (config.ledgeTrapStart && this.mode === 'solo') {
+        const floor = this.terrain[0];
+        this.setLedgeTrap({index:0, left:true, x:floor.x1, y:floor.y});
+      }
     }
     resetCpu() {
       const memory = this.bot;
@@ -2740,6 +2753,7 @@
       if (fromKO && this.mode === 'solo') {
         this.bot.pressure = null;
         this.bot.ledgeReturn = null;
+        this.bot.ledgeTrap = null;
         this.bot.jumpIn = null;
         this.bot.shieldWatch = 0;
         this.bot.rookieNext = 0;
@@ -2858,6 +2872,7 @@
         this.trainingDamage = this.freshnessPractice.original.damage;
       }
       if (this.footworkPractice) this.dogs = this.footworkPractice.originalDogs;
+      if (this.climbPractice?.originalDogs) this.dogs = this.climbPractice.originalDogs;
       if (this.spacingPractice?.originalDogs) this.dogs = this.spacingPractice.originalDogs;
       if (this.escapePractice) this.dogs = this.escapePractice.originalDogs;
       if (this.shieldPractice?.originalDogs) this.dogs = this.shieldPractice.originalDogs;
@@ -4431,8 +4446,23 @@
         dummy.damage = this.trainingDamage;
       }
     }
+    setLedgeTrap(edge) {
+      const [climber,guard] = this.dogs, dir = edge.left ? 1 : -1;
+      climber.damage = 120;
+      this.hangLedge(climber, edge);
+      const [reach,,radius] = smashes[guard.kit.smashes.side].box;
+      Object.assign(guard,{x:edge.x + dir*(reach+radius+climber.stats.width+4),
+        y:edge.y, ground:edge.index, face:-dir, vx:0, vy:0});
+    }
     resetClimbPractice(role = 'escape', side = 'left', slow = true) {
       const edge = this.resetTraining(side);
+      if (role === 'patience') {
+        const originalDogs = this.dogs;
+        this.dogs = [originalDogs[0],newFighter('brisket',1)];
+        this.setLedgeTrap(edge);
+        this.climbPractice = {role,side,slow,originalDogs,slot:0,phase:'ready',time:0};
+        return;
+      }
       const rise = role === 'rise' || role === 'coverRise';
       const slot = role === 'trap' || role === 'coverRise' ? 1 : 0;
       const climber = this.dogs[slot], guard = this.dogs[1 - slot];
@@ -4448,6 +4478,11 @@
       if (drill.phase === 'done') return idleInput;
       drill.time += dt;
       const climber = this.dogs[drill.slot], guard = this.dogs[1 - drill.slot];
+      if (drill.role === 'patience') {
+        const trap = this.ledgeSmashInput(guard,climber,drill);
+        if (trap) return trap;
+        return {...idleInput,shield:drill.swung && !guard.attack};
+      }
       if (drill.route) {
         if (drill.role === 'coverRise')
           return drill.time >= .20 ? this.ledgeReturnInput(climber,drill.route) || idleInput : idleInput;
@@ -4480,6 +4515,21 @@
       const drill = this.climbPractice;
       if (drill.phase !== 'active') return;
       const climber = this.dogs[drill.slot], guard = this.dogs[1 - drill.slot];
+      if (drill.role === 'patience') {
+        const swing = guard.attack;
+        if (swing?.moveId === guard.kit.smashes.side) {
+          if (!drill.swung) this.emit('climbCue',{f:climber,phase:'swing'});
+          drill.swung = true;
+          if (!drill.passed && swing.time + 1e-8 >= swing.start+swing.active) {
+            drill.passed = true;
+            this.emit('climbCue',{f:climber,phase:'opening'});
+          }
+        }
+        if (drill.passed && !swing && climber.ground >= 0 && !climber.floorAction && !climber.attack)
+          this.finishClimbPractice('escaped');
+        else if (climber.y > guard.y+170 || drill.time > 5) this.finishClimbPractice('fell');
+        return;
+      }
       if (drill.route) {
         if (climber.grip?.target === drill.slot) return this.finishClimbPractice('intercepted');
         if (climber.ledge && drill.released) return this.finishClimbPractice('regrab');
@@ -5299,7 +5349,7 @@
           if (drill.role === 'coverRise') {
             if (!input1.shield && !input1.attack && !input1.tapped?.attack) return;
             drill.consumeAttack = !!(input1.attack || input1.tapped?.attack);
-          } else if (drill.role === 'trap') {
+          } else if (drill.role === 'trap' || drill.role === 'patience') {
             if (!input1.attack && !input1.tapped?.attack) return;
             drill.consumeAttack = true;
           } else if (!(Math.abs(input1.x) > 0.45 || input1.y > 0.5 || input1.attack || input1.jump ||
@@ -5506,6 +5556,7 @@
       for (const f of this.dogs) {
         if (f.ground >= 0) {
           f.airborneTime = 0;
+          f.ledgeCatches = 0;
           f.ledgeProtectionReady = true;
           f.ledgeTrump = null;
           f.wallAction = null;
@@ -6611,15 +6662,7 @@
       }
       const jumpTap = f.jumpBuffer > 0 || (f.heldRecoveryJump && f.ground >= 0) || !!f.jumpSquat;
       if (f.ledge?.dropQueued) {
-        const edge = f.ledge;
-        f.ledge = null;
-        f.ledgeDropJump = true;
-        f.invuln = Math.min(f.invuln,(shortCatchFrames-1)/60-1e-8);
-        f.ledgeLock = .45;
-        f.coyote = 0;
-        f.vy = 65;
-        f.jumps = 1;
-        this.emit('ledgeRelease',{f,edge});
+        this.releaseLedge(f, false);
         if (this.climbPractice?.route && this.climbPractice.slot === f.index) {
           this.climbPractice.released = true;
           this.emit('climbCue',{f:this.dogs[0],phase:'release'});
@@ -6655,6 +6698,7 @@
           point: { x: f.x, y: f.y - f.stats.height * 0.45 } });
       }
       if (f.ledge) {
+        const previousGrip = gripFramesLeft(f);
         f.ledgeTime += dt;
         const inward = f.ledge.left ? 1 : -1;
         const steerIn = input.x * inward > 0.45;
@@ -6672,10 +6716,15 @@
           f.ledgeLock = 0.52;
           f.guardBuffer = 0;
           f.guardAim = null;
-        } else if (f.ledge.climbQueued || (steerIn && (!f.ledge.carriedIn || f.ledgeTime + 1e-8 >= ledgeDriftGrace)) || f.ledgeTime > 2) {
+        } else if (f.ledge.climbQueued || (steerIn && (!f.ledge.carriedIn || f.ledgeTime + 1e-8 >= ledgeDriftGrace))) {
           this.beginLedgeOption(f, 'ledgeClimb');
           return this.advanceFloor(f, dt);
-        } else return;
+        } else {
+          const framesLeft = gripFramesLeft(f);
+          if (previousGrip > gripWarningFrames && framesLeft <= gripWarningFrames) this.emit('ledgeStrain', {f,edge:f.ledge});
+          if (framesLeft > 0) return;
+          this.releaseLedge(f, true);
+        }
       }
       const getup = f.attack;
       if (getup?.edge && !getup.planted) {
@@ -7250,6 +7299,7 @@
       return landing;
     }
     nearestLedge(f, horizontal, above, below) {
+      if (f.ledgeCatches >= maxLedgeCatches) return null;
       let best = null,
         distance = Infinity;
       for (const [index, p] of this.terrain.entries()) {
@@ -7274,7 +7324,7 @@
       this.ledgeClaims.length = 0;
     }
     hangLedge(f, edge) {
-      if (sameLedge(f.ledge, edge)) return;
+      if (sameLedge(f.ledge, edge) || f.ledgeCatches >= maxLedgeCatches) return;
       const rival = this.dogs.find((other) => other !== f && sameLedge(other.ledge, edge));
       const trump = !!rival;
       const guardFrames = ledgeGuardFrames(f), protectedCatch = guardFrames > 0;
@@ -7298,7 +7348,10 @@
       f.throwBounce = null;
       f.face = inward;
       // Give a player drifting toward the stage a moment to choose a get-up attack.
-      f.ledge = { ...edge, carriedIn: f.prev.x * inward > 0.45, protectedCatch, guardFrames };
+      const previousCatches = f.ledgeCatches ?? 0;
+      const hangFrames = ledgeHangLimit(f, previousCatches);
+      f.ledgeCatches = previousCatches + 1;
+      f.ledge = { ...edge, carriedIn: f.prev.x * inward > 0.45, protectedCatch, guardFrames, hangFrames };
       f.ledgeTrump = null;
       f.ledgeProtectionReady = false;
       f.airborneTime = f.ledgeTime = 0;
@@ -7328,12 +7381,26 @@
       if (trump)
         this.emit('ledgeTrump', { f, target: rival, edge, dir: inward, point: { x: edge.x, y: edge.y } });
     }
+    releaseLedge(f, slipped) {
+      const edge = f.ledge;
+      f.ledge = null;
+      f.ledgeDropJump = true;
+      f.invuln = Math.min(f.invuln,(shortCatchFrames-1)/60-1e-8);
+      f.ledgeLock = .45;
+      f.coyote = 0;
+      f.vy = 65;
+      f.jumps = 1;
+      this.emit(slipped ? 'ledgeSlip' : 'ledgeRelease', {f,edge});
+      if (slipped && this.climbPractice?.role === 'patience' && f.index === 0) this.finishClimbPractice('slipped');
+    }
     tryLedge(f, horizontal, below) {
       const edge = this.nearestLedge(f, horizontal, 5, below);
       if (edge) this.ledgeClaims.push({ f, edge });
       return !!edge;
     }
     catchRival(owner, target, attack) {
+      if (this.climbPractice?.role === 'patience' && owner.index === 0)
+        this.finishClimbPractice(this.climbPractice.passed ? 'grabbed' : 'interrupted');
       if (this.chasePractice?.bait && target.index === 1 && this.chasePractice.phase !== 'done')
         this.finishChase(this.chasePractice.phase === 'getup' ? 'grabPunish' : 'interrupted');
       const pressure = this.bot.pressure;
@@ -8237,7 +8304,10 @@
       this.emit('shieldCue', { f, phase, pattern:d.pattern, frames, struggles, moveId });
     }
     dealDamage(target, damage, preserveCombo) {
-      if (damage > 0) target.ledgeProtectionReady = true;
+      if (damage > 0) {
+        target.ledgeProtectionReady = true;
+        target.ledgeCatches = 0;
+      }
       const applied = Math.min(damage, 999 - target.damage);
       if (this.mode === 'training' && (target.index === 1 || this.trainingPartner)) {
         if ((target.stun <= 0 && !preserveCombo) || (this.trainingPartner && this.lastCombo.target !== target.index))
@@ -8271,6 +8341,8 @@
         this.emit('apexParry',{f:target});
       }
       if (!projectile) {
+        if (this.climbPractice?.role === 'patience' && target.index === 0)
+          this.finishClimbPractice('parriedPunch');
         if (this.climbPractice?.role === 'coverRise' && target.index === 0 && owner.attack?.airSide)
           this.finishClimbPractice('parriedRise');
         owner.attack = owner.floorAction = owner.run = owner.command = owner.reaction = null;
@@ -8400,7 +8472,9 @@
         this.spacingPractice.contact = moveId;
         this.emit('spacingContact', { f: owner, moveId });
       }
-      if (this.climbPractice?.climbed && target.index === this.climbPractice.slot && moveId === owner.kit.ground[0])
+      if (this.climbPractice?.role === 'patience')
+        this.finishClimbPractice(target.index === 0 ? 'blockedPunch' : 'guardedReply');
+      else if (this.climbPractice?.climbed && target.index === this.climbPractice.slot && moveId === owner.kit.ground[0])
         this.finishClimbPractice(this.climbPractice.role === 'trap' ? 'late' : 'guarded');
       if (this.climbPractice?.role === 'coverRise' && target.index === 0 && use?.airSide)
         this.finishClimbPractice('blockedRise');
@@ -8707,7 +8781,9 @@
       if (this.chasePractice) this.chaseHit(target, moveId, previousLocks, 0);
       if (this.climbPractice?.phase === 'active') {
         const drill = this.climbPractice;
-        if (drill.route) {
+        if (drill.role === 'patience') {
+          this.finishClimbPractice(target.index === 0 ? 'punched' : drill.passed ? 'punished' : 'interrupted');
+        } else if (drill.route) {
           if (target.index === drill.slot) this.finishClimbPractice('intercepted');
           else if (drill.role === 'coverRise') this.finishClimbPractice('hitByRise');
           else if (drill.airJump && use?.airSide && !drill.contact) {
@@ -9476,6 +9552,29 @@
       brain.platformRoute = null;
       return { ...idleInput, y: 1, attack: true, tapped: { attack: true } };
     }
+    ledgeSmashInput(f, foe, brain) {
+      const edge = foe.ledge, plan = brain.ledgeTrap;
+      if (plan && !f.smashCharge) plan.released = true;
+      if (f.kind !== 'brisket' || f.stun || f.grip || f.shieldBreak || f.floorAction || f.attack || f.ground < 0) return null;
+      if (plan && !plan.released && f.smashCharge?.side === 'side') {
+        const action = foe.floorAction;
+        // Commit as the climb or roll becomes visible. A patient opponent can wait out the charge.
+        const opening = action?.type === 'ledgeClimb' ? foe.kit.ledgeClimb.protectedThrough - 12 : 4;
+        const exposed = !edge && (!action || action.time * 60 >= opening);
+        if (exposed || this.time + 1e-8 >= plan.deadline) {
+          plan.released = true;
+          return idleInput;
+        }
+        return {...idleInput,smash:true,smashX:f.face};
+      }
+      if (!edge || plan?.edge === edge || f.smashCharge || f.command || f.charge >= 0 || f.shield || f.landingLag ||
+          f.run || f.ground !== edge.index || f.face !== (edge.left ? -1 : 1)) return null;
+      const gap = (edge.x - f.x) * f.face, move = smashes[f.kit.smashes.side];
+      const reach = move.box[0]+move.box[2]+foe.stats.width;
+      if (gap < reach || gap > reach+foe.kit.ledgeClimb.distance-3) return null;
+      brain.ledgeTrap = {edge, deadline:this.time + (52 + Math.floor(this.random()*18))/60};
+      return {...idleInput,smash:true,smashX:f.face};
+    }
     cpuCoverLip(f, foe) {
       const floor = this.terrain[f.ground];
       if (!floor || floor.thin || f.stun || f.grip || f.shield || f.shieldDrop || f.attack || f.charge >= 0 ||
@@ -10049,6 +10148,8 @@
         const basic = this.rookieNeutral(f, foe);
         if (basic) return basic;
       } else if (this.cpuLevel === 'rival') {
+        const trap = this.ledgeSmashInput(f,foe,brain);
+        if (trap) return trap;
         const punish = this.shieldPunishInput(f,foe);
         if (punish) return punish;
         if (f.floorAction?.type === 'spotDodge') {
@@ -10658,6 +10759,9 @@
     canCancelMeteor,
     launchInfluence,
     liftReserve,
+    gripWarningFrames,
+    gripFramesLeft,
+    maxLedgeCatches,
     protectionTime,
     isReversalPractice,
     isFootstoolPractice,
