@@ -644,6 +644,40 @@ async function testAngledTilts(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
 }
 
+async function testRapidJab(page,mobile) {
+  await page.goto(root+'?jab#training/rapid-jab');
+  const {hold,press}=await trainingControls(page,mobile), latest=page.locator('#combo-latest');
+  async function until(text){
+    for(let i=0;i<170;i++){
+      if((await latest.textContent()).includes(text))return;
+      await page.clock.runFor(25);
+    }
+    assert.fail('Expected '+text+', got '+await latest.textContent());
+  }
+  await hold(['attack']);await page.clock.runFor(55);await hold([]);await until('Hold Attack now');
+  await hold(['attack']);await until('Release for Bell Kick');await hold([]);await until('Bell Kick · 5%');
+  assert.match(await page.locator('#combo-summary').textContent(),/4 hits · 14\.4%/);
+  await press('combo-flurry');await hold(['attack']);await page.clock.runFor(55);await hold([]);await until('Hold Attack now');
+  await hold(['attack']);await until('Bell Kick · 5%');await hold([]);
+  assert.match(await page.locator('#combo-summary').textContent(),/8 hits · 20%/);
+  const poses=await page.evaluate(()=>{
+    const canvas=document.createElement('canvas');canvas.width=200;canvas.height=150;
+    const ctx=canvas.getContext('2d');
+    return ['pipSpeedBag','pipSpeedBagCross','pipBellKick'].map(pose=>{
+      ctx.clearRect(0,0,200,150);
+      window.DogArt.draw(ctx,'pip',92,120,{face:1,scale:1,time:0,pose,phase:.55});
+      return canvas.toDataURL();
+    });
+  });
+  assert.equal(new Set(poses).size,3);
+  await press('combo-escapeFlurry');await hold(['attack','shield']);await page.clock.runFor(3200);await hold([]);
+  assert.match(await latest.textContent(),/Quick Paw · blocked/);
+  assert.match(await page.locator('#combo-summary').textContent(),/Took 0 hits · 0%/);
+  await press('combo-fight-pip');
+  assert.match(await page.locator('#match-mode').innerText(),/solo.*rival/i);
+  assert.deepEqual(await page.locator('#hud .percentage').allTextContents(),['0%','0%']);
+  assert.equal(await page.locator('#hud .lives[aria-label="3 stocks"]').count(),2);
+}
 async function testPlatformLayers(page,mobile) {
   await page.goto(root+'?platform-pass#training/pick-your-landing');
   const status=page.locator('#platform-status');
@@ -2195,6 +2229,7 @@ async function testDevice(browser, mobile) {
   try {
     await page.clock.install({ time: new Date('2030-01-01T00:00:00Z') });
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+    await testRapidJab(page,mobile);
     await testPlatformLayers(page,mobile);
     await testJumpPower(page, mobile);
     await testAttackPress(page, mobile);
