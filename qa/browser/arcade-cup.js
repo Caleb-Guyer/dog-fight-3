@@ -7,7 +7,7 @@ const root = 'http://127.0.0.1:8080/';
 const errors = [];
 async function playCup(browser) {
   const page=await browser.newPage({viewport:{width:1280,height:720}});
-  page.on('pageerror',e=>errors.push(e.message));
+  page.on('pageerror',e=>{errors.push(e.message);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));});
   const record=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.cup.noodle')));
   const tap=action=>page.locator('[data-do="'+action+'"]').click();
   const title=async text=>page.getByRole('heading',{name:text,exact:true}).waitFor();
@@ -38,6 +38,13 @@ async function playCup(browser) {
     });
   }
   await observe();
+  await page.waitForFunction(()=>window.fight?.matchFrames>0,null,{timeout:9000}).catch(async e=>{
+    const view=await page.evaluate(()=>({mode:document.querySelector('#match-mode').textContent,
+      dialog:document.querySelector('#dialog').open && document.querySelector('#dialog-title').textContent,
+      action:document.activeElement.outerHTML.slice(0,130),state:document.body.className,
+      run:localStorage.getItem('dog-fight-3.cup.noodle'),count:document.querySelector('#countdown').textContent}));
+    throw Error('First Cup frame: '+JSON.stringify(view)+' '+errors.join(', ')+' '+e.message);
+  });
   await page.keyboard.down('d');
   await page.waitForFunction(()=>window.moved);
   await page.keyboard.up('d');
