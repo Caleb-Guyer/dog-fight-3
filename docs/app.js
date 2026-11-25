@@ -2648,7 +2648,8 @@
       try{
         await loadDispatch('FinishTools');
         if(signal.aborted)return;
-        window.FinishTools.install({tape,signal,stage:stageName(result.stage,result.form),shake:settings.shake,root:$('dialog-body'),
+        clipScreen.syncInputs=window.FinishTools.install({tape,signal,stage:stageName(result.stage,result.form),shake:settings.shake,root:$('dialog-body'),
+          twoPlayers:result.mode==='local',initialSeat:review?.slot ?? loss?.slot ?? 0,frame:()=>clipScreen.player.frame,
           slot:review?loss.slot:undefined,escapeReady:review?mark=>{
             $('clip-escape-start').textContent=mark.label+' · frame '+mark.frame;
             $('clip-escape').onclick=()=>startFinishTrial(mark.frame,loss.slot,review);
@@ -2701,6 +2702,7 @@
     if ($('clip-practice')) $('clip-practice').disabled=end || player.battle.end!==null;
     $('clip-seek').value=player.frame;
     $('clip-frame').textContent='Frame '+player.frame+' / '+player.length;
+    clipScreen.syncInputs?.();
     const scores=player.battle.dogs.map(d=>d.stats.name+' '+tenth(d.damage)+'% · '+fighterScore(player.battle,d.index)).join('  /  ');
     if ($('clip-scores').textContent!==scores) $('clip-scores').textContent=scores;
   }
@@ -5635,7 +5637,7 @@
     VersusRulebook:'versus-rules.js?v=room-rules-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=fighter-shuffle-1',StageStrike:'stage-strike.js?v=2',
-    FinishTools:'finish-tools.js?v=stock-replay-1',
+    FinishTools:'finish-tools.js?v=replay-inputs-1',
     FighterSchool:'fighter-lessons.js?v=special-studies-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',

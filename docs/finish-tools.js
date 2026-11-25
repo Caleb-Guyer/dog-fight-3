@@ -39,6 +39,66 @@
     return {marks:list.slice(-4),escape:escape || {frame:Math.max(lifeStart,player.length-90),label:'Before the knockout'}};
   }
   const moments=tape=>analyze(tape).marks;
+  const buttons={jump:'Jump',shortHop:'Short hop',attack:'Attack',special:'Special',smash:'Smash',shield:'Shield',grab:'Grab',aimStick:'Strike stick'};
+  function stick(x=0,y=0){
+    const horizontal=Math.round(x*100),vertical=Math.round(y*100);
+    return [horizontal && (horizontal<0?'Left ':'Right ')+Math.abs(horizontal)+'%',
+      vertical && (vertical<0?'Up ':'Down ')+Math.abs(vertical)+'%'].filter(Boolean).join(' + ') || 'Center';
+  }
+  function inputFrame(tape,frame,slot){
+    const input=tape.controlsAt(frame,slot),previous=frame?tape.controlsAt(frame-1,slot):input;
+    const movement=stick(input.x,input.y);
+    const strike=sample=>sample.aimStick || sample.tapped?.aimStick || sample.smash || sample.tapped?.smash ?
+      stick(sample.smashX??sample.x,sample.smashY??sample.y):'';
+    const aim=strike(input), actions=[];
+    let changed=movement!==stick(previous.x,previous.y) || aim!==strike(previous);
+    for(const [key,label] of Object.entries(buttons)){
+      const held=!!input[key],was=!!previous[key],tap=!!(frame && input.tapped?.[key]);
+      if(held!==was || tap || (!was && previous.tapped?.[key]))changed=true;
+      if(key==='jump' && (input.shortHop || (!held && previous.shortHop)))continue;
+      if(held)actions.push(label+(tap || !was?' pressed':' held'));
+      else if(tap)actions.push(label+' tapped');
+      else if(was)actions.push(label+' released');
+    }
+    return {movement,aim,actions,changed:!!frame && changed};
+  }
+  function inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump}){
+    const panel=document.createElement('details');
+    panel.id='clip-inputs';
+    panel.innerHTML='<summary>Recorded inputs</summary><div class="clip-input-seats" role="group" aria-label="Recorded player">'+
+      (twoPlayers?'<button type="button" class="utility" data-input-seat="0">P1</button><button type="button" class="utility" data-input-seat="1">P2</button>':'<strong>P1 inputs</strong>')+
+      '</div><p class="clip-stick"></p><p class="clip-buttons"></p><div class="dialog-actions">'+
+      '<button type="button" class="utility" data-input-prev>Previous change</button><button type="button" class="utility" data-input-next>Next change</button></div>';
+    nav.before(panel);
+    const seats=[...panel.querySelectorAll('[data-input-seat]')],move=panel.querySelector('.clip-stick'),actions=panel.querySelector('.clip-buttons');
+    const prev=panel.querySelector('[data-input-prev]'),next=panel.querySelector('[data-input-next]');
+    let slot=twoPlayers?initialSeat:0;
+    const history=[];
+    function update(){
+      if(!panel.open || !panel.isConnected)return;
+      if(!history[slot]){
+        const rows=Array.from({length:tape.length+1},(_,n)=>inputFrame(tape,n,slot));
+        history[slot]={rows,changes:rows.flatMap((r,n)=>r.changed?[n]:[])};
+      }
+      const {rows,changes}=history[slot],cursor=frame(),row=rows[cursor];
+      for(const b of seats)b.setAttribute('aria-pressed',String(Number(b.dataset.inputSeat)===slot));
+      const steer='Move · '+row.movement+(row.aim?'   /   Strike aim · '+row.aim:'');
+      const keys=row.actions.join(' · ') || 'No buttons';
+      if(move.textContent!==steer)move.textContent=steer;
+      if(actions.textContent!==keys)actions.textContent=keys;
+      prev.disabled=!(changes[0]<cursor);
+      next.disabled=!(changes.at(-1)>cursor);
+    }
+    for(const b of seats)b.onclick=()=>{slot=Number(b.dataset.inputSeat);update();};
+    function seekChange(dir){
+      const cursor=frame(),changes=history[slot].changes;
+      const n=dir<0?changes.findLast(v=>v<cursor):changes.find(v=>v>cursor);
+      if(n!==undefined)jump(n);
+    }
+    prev.onclick=()=>seekChange(-1);next.onclick=()=>seekChange(1);
+    panel.ontoggle=update;
+    return update;
+  }
   function buildGIF(tape,stage,shake,signal,progress){
     return new Promise((resolve,reject)=>{
       if(signal.aborted){reject(new DOMException('Cancelled','AbortError'));return;}
@@ -84,7 +144,7 @@
       worker.postMessage({type:'start',width:out.width,height:out.height});
     });
   }
-  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady}){
+  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
     const {marks,escape}=analyze(tape,slot);
     escapeReady?.(escape);
@@ -119,6 +179,7 @@
         status.textContent=e.name==='AbortError'?'GIF cancelled.':'Could not make the GIF. Try again.';
       }finally{active=null;}
     };
+    return inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump});
   }
-  window.FinishTools={install,moments,analyze};
+  window.FinishTools={install,moments,analyze,inputFrame};
 })();

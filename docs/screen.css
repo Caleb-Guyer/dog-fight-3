@@ -434,6 +434,11 @@ dialog[data-view='special-preview'] { width:min(760px,calc(100% - 16px)); }
 @media(max-height:520px) { #move-arena { width:min(100%,64dvh); } }
 .clip-status { display:flex; flex-wrap:wrap; justify-content:space-between; gap:3px 8px; font-size:13px; margin-top:5px; }
 #clip-seek { display:block; width:100%; margin:5px 0; accent-color:#6b4569; }
+#clip-inputs { margin:6px 0; border-block:1px solid currentColor; padding:4px 2px; }
+#clip-inputs summary { cursor:pointer; font-weight:bold; }
+.clip-input-seats { display:flex; gap:4px; align-items:center; margin-top:4px; }
+.clip-input-seats [aria-pressed=true] { color:var(--ink); background:var(--gold); }
+#dialog-body #clip-inputs p { margin:4px 0; font-variant-numeric:tabular-nums; }
 @media(max-height:520px) {
   dialog[data-view='finish-replay'] .dialog-inner { padding:8px 12px; }
   dialog[data-view='finish-replay'] .dialog-heading, #dialog-body .clip-caption { margin:2px 0; padding-bottom:2px; }
