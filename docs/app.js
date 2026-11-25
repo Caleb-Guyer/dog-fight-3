@@ -875,6 +875,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='sound-test')return backFromSoundTest();
     if(dialogType==='rotation')return rotationBack();
     if(dialogType==='fighter-school')return leaveFighterSheet();
     if(dialogType==='dispatch-load')return $('dispatch-load-back').click();
@@ -2249,6 +2250,7 @@
     announce(matchName + ' on ' + stageName(config.stage,world.form));
   }
   function toLobby() {
+    const fromMenu=page==='home';
     finishTape=null;
     cupAttempt = null;
     leaveOnline();
@@ -2265,7 +2267,9 @@
     $('match').hidden = true;
     $('countdown').textContent = '';
     syncLobby();
-    $(settings.mode==='local'?'pick-together':'start').focus({ preventScroll: true });
+    const first=settings.mode==='local'?$('pick-together'):fromMenu?
+      $('roster').querySelector('[data-kind="'+settings.p1+'"]'):$('start');
+    first.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }
   function showPause() {
@@ -5768,8 +5772,13 @@
     };
     $('audition-play').onclick=play;
     $('audition-stop').onclick=()=>{auditionPlaying=false;music?.restart();refreshAudition();};
-    $('audition-back').onclick=showOptions;
+    $('audition-back').onclick=backFromSoundTest;
     refreshAudition();
+    select.focus();
+  }
+  function backFromSoundTest(){
+    showOptions();
+    $('open-sound-test').focus();
   }
   function showOptions() {
     showDialog(
@@ -5805,6 +5814,7 @@
         }).join('') +
         '<p>Flick the left stick up or tap Up to jump. For an up tilt, aim gently, hold Walk, or slide from the center dot on touch. Online uses your P1 controls.</p></div><div class="dialog-actions"><button class="primary" data-do="close">Done</button></div>',
     );
+    document.querySelector('[data-do=option-sound]').focus();
   }
   $('dialog-body').addEventListener('click',e=>{if(e.target.closest('#open-sound-test'))showSoundTest();});
   $('dialog-body').addEventListener('input', (e) => {
@@ -6023,7 +6033,17 @@
   $('school-list').onclick=openLessonList;
   $('home-guide').onclick = () => showMoves(settings.p1);
   $('home-options').onclick = showOptions;
-  $('lobby-home').onclick = $('route-home').onclick = () => showHome();
+  let homeLauncher=null;
+  $('home').addEventListener('click',e=>{
+    const button=e.target.closest('button');
+    if(button)homeLauncher=button;
+  },true);
+  function returnToHome(){
+    showHome(false);
+    if(homeLauncher?.getClientRects().length && !homeLauncher.disabled)homeLauncher.focus();
+    else focusHome();
+  }
+  $('lobby-home').onclick = $('route-home').onclick = returnToHome;
   $('route-films').onclick = () => showReels();
   $('route-switch').onclick = () => {
     if (!nightUnlocked()) return;
@@ -6175,7 +6195,7 @@
     button.textContent = 'Best of three · ' + (on ? 'On' : 'Off');
   };
   $('home-online').onclick = () => { audioReady(); sound('menu'); showOnline(); };
-  $('online-home').onclick = () => showHome();
+  $('online-home').onclick = returnToHome;
   $('online-cancel').onclick = () => showOnline(online.phase === 'room' ? 'Room closed.' : 'Matchmaking canceled.');
   $('online-quick').onclick = () => seekOpponent('quick');
   $('online-create').onclick = () => seekOpponent('create');
@@ -6501,21 +6521,32 @@
   }
   const down = (pad, i) => !!pad?.buttons?.[i]?.pressed;
   function menuButtons() {
-    const root = $('dialog').open ? $('dialog') : $(page);
-    return root
-      ? [...root.querySelectorAll('button,input:not([readonly]),select')].filter(
-          (el) => el.offsetWidth && el.offsetHeight && !el.disabled,
-        )
-      : [];
+    const roots=$('dialog').open?[$('dialog')]:[$(page),document.querySelector('.topbar')];
+    return roots.flatMap(root=>root ? [...root.querySelectorAll('button:enabled,input:enabled:not([readonly]),select:enabled,a[href],summary')] : [])
+      .filter(el=>el.getClientRects().length && !el.closest('[inert]'));
   }
-  function moveMenuFocus(direction) {
-    const items = menuButtons(),
-      i = items.indexOf(document.activeElement);
-    if (items.length)
-      items[
-        i < 0 ? (direction > 0 ? 0 : items.length - 1) : (i + direction + items.length) % items.length
-      ].focus();
+  let focusLane=null;
+  function moveMenuFocus(direction,items=menuButtons()) {
+    if(!items.length)return;
+    const current=items.indexOf(document.activeElement);
+    if(current<0){focusLane=null;items[0].focus();return;}
+    const rects=items.map(el=>el.getBoundingClientRect()), rect=rects[current];
+    const horizontal=direction==='left'||direction==='right';
+    const low=horizontal?'top':'left', high=horizontal?'bottom':'right';
+    const fraction=focusLane?.item===items[current] && focusLane.horizontal===horizontal ? focusLane.fraction : .5;
+    const lane=rect[low]+fraction*(rect[high]-rect[low]);
+    const next=window.FightControls.menuNeighbor(rects,current,direction,lane);
+    if(next===current)return;
+    const dest=rects[next];
+    focusLane={item:items[next],horizontal,fraction:clamp((lane-dest[low])/Math.max(1,dest[high]-dest[low]),0,1)};
+    items[next].focus();
+    tone(440,580,.035,0,'triangle',.026);
   }
+  function nativeMenuInput() {
+    if(document.body.classList.contains('pad-navigation'))document.body.classList.remove('pad-navigation');
+  }
+  window.addEventListener('pointerdown',()=>{nativeMenuInput();focusLane=null;},{capture:true,passive:true});
+  window.addEventListener('keydown',nativeMenuInput,true);
   function menuBack() {
     if ($('dialog').open) {
       exitDialog();
@@ -6523,7 +6554,7 @@
     }
     if (page === 'dispatch-story') $('story-map').click();
     else if (page === 'online-lobby' && !$('online-wait').hidden) showOnline();
-    else if (page === 'dispatch-route' || page === 'lobby' || page === 'online-lobby') showHome();
+    else if (page === 'dispatch-route' || page === 'lobby' || page === 'online-lobby') returnToHome();
   }
   window.addEventListener('keydown', (e) => {
     if (
@@ -6553,7 +6584,7 @@
     }
     if (['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(e.code)) {
       e.preventDefault();
-      moveMenuFocus(e.code === 'ArrowDown' || e.code === 'ArrowRight' ? 1 : -1);
+      moveMenuFocus(e.code.slice(5).toLowerCase());
     }
   });
   function playerInput(i, pads, fighterIndex = i) {
@@ -6657,10 +6688,11 @@
   const idlePad={};
   let oldPad = idlePad;
   const menuPadButtons = new Map();
-  function padMenu(pads) {
+  const menuRepeat=new window.FightControls.MenuRepeat();
+  function padMenu(pads,time) {
     if(dialogType==='bindings' && edit.mode==='test' && edit.device==='pad')showTestInputs(pads);
     if (!pads.length) {
-      if (oldPad!==idlePad) { oldPad=idlePad; menuPadButtons.clear(); }
+      if (oldPad!==idlePad) { oldPad=idlePad; menuPadButtons.clear();menuRepeat.poll('','',time); }
       return;
     }
     // A and B also fight. Consume menu presses until that particular pad releases them.
@@ -6672,21 +6704,22 @@
       else menuPadButtons.delete(pad.index);
     }
     const any = (i) => pads.some((p) => down(p, i));
+    let direction='', padIndex=null;
+    for(const pad of pads){
+      direction=window.FightControls.menuDirection(pad,pad.index===oldPad.padIndex ? oldPad.direction : '');
+      if(direction){padIndex=pad.index;break;}
+    }
     const now = {
       pause: any(9),
       freeze: any(10),
       step: any(11),
       confirm: any(0),
       back: any(1),
-      horizontal:
-        any(15) || pads.some((p) => (p.axes[0] || 0) > 0.65)
-          ? 1
-          : any(14) || pads.some((p) => (p.axes[0] || 0) < -0.65)
-            ? -1
-            : 0,
-      next: any(13) || any(15) || pads.some((p) => (p.axes[0] || 0) > 0.65 || (p.axes[1] || 0) > 0.65),
-      prev: any(12) || any(14) || pads.some((p) => (p.axes[0] || 0) < -0.65 || (p.axes[1] || 0) < -0.65),
+      direction,padIndex,
     };
+    const move=menuRepeat.poll(direction,menuOpen && !document.hidden ? dialogType || page : '',time);
+    const back=now.back && !oldPad.back, confirm=now.confirm && !oldPad.confirm;
+    if(menuOpen && (move || back || confirm || now.pause && !oldPad.pause))document.body.classList.add('pad-navigation');
     if(dialogType==='couch'){oldPad=now;return;}
     if(dialogType==='bindings' && edit.mode==='test' && edit.device==='pad'){
       if(now.pause && !oldPad.pause)leaveLayouts();
@@ -6705,25 +6738,25 @@
         (now.freeze && !oldPad.freeze || now.step && !oldPad.step)) {
       if (now.freeze && !oldPad.freeze) toggleFrames();
       else stepTrainingFrame();
-    } else if (menuOpen && (now.horizontal!==oldPad.horizontal || now.back&&!oldPad.back ||
-        now.next&&!oldPad.next || now.prev&&!oldPad.prev || now.confirm&&!oldPad.confirm)) {
+    } else if (menuOpen && back) {
+      menuBack();
+    } else if (menuOpen && (move || confirm)) {
       const items = menuButtons();
-      const n = items.indexOf(document.activeElement);
-      if (items[n] instanceof HTMLSelectElement && now.horizontal && now.horizontal !== oldPad.horizontal) {
-        const el=items[n];
-        el.selectedIndex=(el.selectedIndex+now.horizontal+el.options.length)%el.options.length;
-        el.dispatchEvent(new Event('change',{bubbles:true}));
-      } else if (n >= 0 && items[n].type === 'range' && now.horizontal && now.horizontal !== oldPad.horizontal) {
-        if (now.horizontal > 0) items[n].stepUp();
-        else items[n].stepDown();
-        items[n].dispatchEvent(new Event('input', { bubbles: true }));
-      } else if (now.back && !oldPad.back) menuBack();
-      else if (items.length && ((now.next && !oldPad.next) || (now.prev && !oldPad.prev)))
-        moveMenuFocus(now.next ? 1 : -1);
-      if (now.confirm && !oldPad.confirm) {
-        if (n >= 0) items[n].click();
-        else if (items.length) items[0].click();
+      const active=document.activeElement, horizontal=direction==='right'?1:direction==='left'?-1:0;
+      if(move){
+        if(horizontal && active instanceof HTMLSelectElement && items.includes(active)){
+          const options=[...active.options].filter(o=>!o.matches(':disabled'));
+          if(options.length){
+            const n=options.indexOf(active.selectedOptions[0]);
+            active.selectedIndex=options[(n+horizontal+options.length)%options.length].index;
+            active.dispatchEvent(new Event('change',{bubbles:true}));
+          }
+        }else if(horizontal && active.type==='range' && items.includes(active)){
+          if(horizontal>0)active.stepUp();else active.stepDown();
+          active.dispatchEvent(new Event('input',{bubbles:true}));
+        }else moveMenuFocus(direction,items);
       }
+      if(confirm)(items.includes(document.activeElement)?document.activeElement:items[0])?.click();
     }
     oldPad = now;
   }
@@ -6762,7 +6795,7 @@
       dt = Math.min(0.09, Math.max(0, now - before));
     before = now;
     const pads = getPads();
-    padMenu(pads);
+    padMenu(pads,now);
     if(dialogType==='couch' && !document.hidden)couchPanel?.poll(pads,now);
     if(page==='match' && world?.mode==='local')matchConfig?.couchSeats?.sync(pads);
     if (clipScreen) tickClip(dt);
