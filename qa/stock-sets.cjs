@@ -22,7 +22,11 @@ async function device(browser,mobile,hash) {
 async function observe(page) {
   await page.evaluate(()=>{
     const proto=DogFight.Battle.prototype,step=proto.step,cpu=proto.cpu;
-    proto.step=function(...args){window.observedBattle=this;return step.apply(this,args);};
+    proto.step=function(...args){
+      window.observedBattle=this;
+      if(!window.firstControl)window.firstControl={x:args[1].x,grab:args[1].grab,grabTap:!!args[1].tapped?.grab};
+      return step.apply(this,args);
+    };
     proto.cpu=function(...args){
       if(window.runCpuOff && this.mode==='solo'){
         const [a,b]=this.dogs;
@@ -63,7 +67,14 @@ async function leaveThreeStocks(device,slot) {
       await direction(mobile?side:side==='left'?'a':'d');
       await page.waitForTimeout(100);
     }
-    assert(await result.isVisible(),'three stocks in '+await page.locator('#match-stage').textContent());
+    if(!await result.isVisible()){
+      const state=await page.evaluate(()=>({stage:document.querySelector('#match-stage').textContent,
+        status:document.querySelector('#online-status').textContent,call:document.querySelector('#countdown').textContent,
+        hidden:document.hidden,dialog:document.querySelector('#dialog').open && document.querySelector('#dialog-title').textContent,
+        active:[...document.querySelectorAll('.touch-pad .held')].map(el=>el.dataset.touch),
+        dogs:window.observedBattle?.dogs.map(f=>[f.x,f.y,f.ground,f.prev.x,f.stocks])}));
+      assert.fail('Unfinished stock game '+JSON.stringify(state));
+    }
   }finally{await direction('');if(touch)await touch.detach();}
 }
 async function soloAndLocal(browser){
@@ -71,6 +82,10 @@ async function soloAndLocal(browser){
   await press('[data-mode=local]');await press('#rules-label');await press('[data-format=set]');
   assert.match(await page.locator('#start').textContent(),/Start set/);
   await press('#start');await fresh(d,1,'0–0');
+  await page.keyboard.down('d');await page.keyboard.press('u');
+  await page.waitForFunction(()=>!!window.firstControl);
+  assert.deepEqual(await page.evaluate(()=>window.firstControl),{x:1,grab:false,grabTap:false});
+  await page.keyboard.up('d');
   await press('#pause');await press('[data-do=rematch]');await fresh(d,1,'0–0');
   await leaveThreeStocks(d,0);
   assert.match(await page.locator('#set-score').textContent(),/P1 0 – 1 P2/);
@@ -90,8 +105,8 @@ async function soloAndLocal(browser){
   assert.equal(await page.locator('#match-stage').textContent(),'Picnic Table');
   await page.close();console.log('Couch counterpick, game-two restart and solo CPU counterpick passed.');
 }
-async function onlineSet(browser) {
-  const host=await device(browser,false,'#online'), guest=await device(browser,true,'#online');
+async function onlineSet(browser,phoneBrowser) {
+  const host=await device(browser,false,'#online'), guest=await device(phoneBrowser,true,'#online');
   const {page:a}=host,{page:b}=guest;
   await host.press('#online-format');await a.selectOption('#online-stage','nightmail');await host.press('#online-create');
   await a.locator('#online-invite').waitFor();await b.locator('#online-code').fill(await a.locator('#online-room-code').textContent());
@@ -117,9 +132,15 @@ async function onlineSet(browser) {
   await b.close();await a.close();console.log('Desktop host and phone guest completed a 2–1 WebRTC set and started another.');
 }
 async function main(){
-  const browser=await chromium.launch({executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim(),
-    headless:true,args:['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']});
-  try{await soloAndLocal(browser);await onlineSet(browser);assert.deepEqual(errors,[]);}
+  const options={executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim(),
+    headless:true,args:['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']};
+  const browser=await chromium.launch(options);
+  try{
+    await soloAndLocal(browser);
+    const phone=await chromium.launch(options);
+    try{await onlineSet(browser,phone);}finally{await phone.close();}
+    assert.deepEqual(errors,[]);
+  }
   finally{await browser.close();}
 }
 main().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});
