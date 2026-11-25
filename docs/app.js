@@ -842,7 +842,9 @@
     film?.score.mix();
     sound('menu');
   };
+  const dialogPresses=new Set();
   function showDialog(kind, title, html, close = true) {
+    dialogPresses.clear();
     if (page === 'dispatch-story' && film) setFilmPaused(true);
     couchPanel = null;
     clipScreen?.lifetime.abort();
@@ -929,6 +931,15 @@
     dismiss();
   }
   $('dialog-close').onclick = exitDialog;
+  // Releasing a gameplay touch over a newly opened result can synthesize a click there.
+  $('dialog').addEventListener('pointerdown',e=>dialogPresses.add(e.pointerId),true);
+  $('dialog').addEventListener('pointercancel',e=>dialogPresses.delete(e.pointerId),true);
+  $('dialog').addEventListener('click',e=>{
+    if(!e.isTrusted || e.detail===0)return;
+    const startedHere=e.pointerId===undefined?dialogPresses.size>0:dialogPresses.has(e.pointerId);
+    if(e.pointerId===undefined)dialogPresses.clear();else dialogPresses.delete(e.pointerId);
+    if(!startedHere){e.preventDefault();e.stopImmediatePropagation();}
+  },true);
   $('dialog').addEventListener('cancel', (e) => {
     e.preventDefault();
     exitDialog();
