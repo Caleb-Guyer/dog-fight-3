@@ -5286,7 +5286,7 @@
   const dispatchSources={
     WinnerStays:'winner-stays.js?v=rotation-1', CouchSelect:'couch-select.js?v=time-battle-1',
     FinishTools:'finish-tools.js?v=time-battle-1',
-    FighterSchool:'fighter-lessons.js?v=fighter-school-1',
+    FighterSchool:'fighter-lessons.js?v=school-examples-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=night-mail-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=night-mail-1', DispatchView:'dispatch-view.js?v=night-mail-1',
@@ -6049,14 +6049,30 @@
     schoolPadActive=active;
     if(!pad && schoolDevice===1)schoolDevice=null;
     const device=schoolDevice ?? (pad?1:matchMedia('(pointer:coarse)').matches?2:0);
-    const state=lesson.missed?'retry':lesson.done?'passed':'playing';
-    const key=lesson.id+'/'+state+'/'+device+'/'+(lesson.note || '');
+    const example=lesson.example;
+    const state=example?(lesson.done || lesson.missed?'example-ended':'example'):lesson.missed?'retry':lesson.done?'passed':'playing';
+    const key=lesson.id+'/'+state+'/'+device+'/'+(example?example.index:lesson.note || '');
     if ($('school-coach').dataset.key===key) return;
     $('school-coach').dataset.key=key;
     $('school-coach').dataset.state=state;
     const count=lesson.course?window.FighterSchool.courses[lesson.course].lessons.length:schoolLessons.length;
     $('school-count').textContent=(lesson.course?fighters[lesson.course].name+' · Fighter lessons':'Fight School')+' · '+(lesson.index+1)+' / '+count;
     $('school-title').textContent=info.title;
+    const watch=$('school-example'),next=$('school-next');
+    $('school-retry').hidden=!!example;
+    watch.hidden=!!example && !lesson.done && !lesson.missed;
+    watch.textContent=(device===1?'View · ':'')+(example?'Watch again':'Watch example');
+    watch.title=device===0 && !lesson.done && !example?'Press Enter to watch this lesson':watch.textContent;
+    if(example){
+      const {keys,caption}=example.cue;
+      $('school-count').textContent+=' · Example '+(example.index+1)+' / '+example.cues.length+' · ½ speed';
+      $('school-task').textContent=lesson.done?'Your turn. Try the same technique from the starting position.':lesson.missed?'The example ended. Try the technique from the starting position.':caption;
+      $('school-bindings').textContent=lesson.done || lesson.missed ? (lesson.course?window.FighterSchool.hint(info,device,keyFor,padFor):schoolHint(info.id,device)) :
+        keys.length?window.FighterSchool.hint({keys:[keys]},device,keyFor,padFor):'Release the controls';
+      next.hidden=false;
+      next.textContent=(device===1?'A · ':device===0?'Enter · ':'')+'Try it';
+      return;
+    }
     $('school-task').textContent=lesson.missed?(lesson.course?'Retry to practice the technique from the starting position.':'The stock ended. Retry to return to the starting position.'):
       lesson.done?info.success:lesson.note || info.task;
     $('school-bindings').textContent=lesson.done ? (device===1?'A to continue':device===0?'Enter to continue':'') :
@@ -6087,6 +6103,7 @@
     renderSchool(getPads());
   }
   function nextLesson() {
+    if(world.lesson.example)return replaySchoolLesson(false);
     if (matchConfig.schoolReview) return startFirstFight();
     const next=world.lesson.index+1;
     const kind=world.lesson.course;
@@ -6137,6 +6154,15 @@
     delete $('school-coach').dataset.key;
     renderSchool(getPads());
   }
+  function replaySchoolLesson(example){
+    if(!world?.lesson || page!=='match')return;
+    if(example && !window.FighterSchool)
+      return waitForDispatch('Lesson example',()=>loadDispatch('FighterSchool'),()=>replaySchoolLesson(true),()=>{});
+    startMatch(matchConfig);
+    if(example)world.lesson.example=new window.FighterSchool.Example(world.lesson.id);
+    delete $('school-coach').dataset.key;
+    renderSchool(getPads());
+  }
   function openLessonList(){return world?.lesson?.course?fighterSheet(world.lesson.course):schoolList();}
   $('home').addEventListener('click',e=>{
     if (!$('school-welcome').hidden && e.target.closest('button')) {
@@ -6176,6 +6202,7 @@
   $('welcome-dismiss').onclick=()=>{saveSchool();showHome();};
   $('home-school').onclick=schoolList;
   $('school-next').onclick=nextLesson;
+  $('school-example').onclick=()=>replaySchoolLesson(true);
   $('school-retry').onclick=()=>world.lesson.course?startFighterLesson(world.lesson.course,world.lesson.index):startLesson(world.lesson.index,matchConfig.schoolReview);
   $('school-list').onclick=openLessonList;
   $('home-guide').onclick = () => showMoves(settings.p1);
@@ -6559,8 +6586,10 @@
   }
   window.addEventListener('keydown', (e) => {
     if (page !== 'match' || $('dialog').open) return;
-    if (world?.lesson?.done && e.code==='Enter' && !e.repeat && e.target=== $('game')) {
-      e.preventDefault(); nextLesson(); return;
+    if (world?.lesson && e.code==='Enter' && !e.repeat && e.target=== $('game')) {
+      e.preventDefault();
+      if(world.lesson.done || world.lesson.example)nextLesson();else replaySchoolLesson(true);
+      return;
     }
     if (e.target instanceof HTMLSelectElement) return;
     if (!matchKeys.has(e.code) && world?.mode === 'training' && !$('moment-save').hidden && (e.code === 'Digit1' || e.code === 'Digit2')) {
@@ -6900,6 +6929,7 @@
     }
     const now = {
       pause: any(9),
+      example: any(8),
       freeze: any(10),
       step: any(11),
       confirm: any(0),
@@ -6924,7 +6954,9 @@
       else if (page === 'match' && !dialogType) showPause();
       else if (page === 'dispatch-story' && !dialogType) toggleFilm();
       else if (page === 'lobby' && !dialogType) $('start').click();
-    } else if (world?.lesson?.done && !menuOpen && now.confirm && !oldPad.confirm) {
+    } else if (world?.lesson && !menuOpen && now.example && !oldPad.example) {
+      replaySchoolLesson(true);
+    } else if ((world?.lesson?.done || world?.lesson?.example) && !menuOpen && now.confirm && !oldPad.confirm) {
       for (const pad of pads) if (down(pad,0)) menuPadButtons.set(pad.index,1);
       nextLesson();
     } else if (page === 'match' && world?.mode === 'training' && !$('dialog').open &&
@@ -7032,10 +7064,11 @@
         if (frameLab.mode === 'frozen') {
           accumulator = frameLab.pending > 0 ? 1 / 60 : 0;
           if (frameLab.pending > 0) frameLab.pending--;
-        } else accumulator += world.wallPractice?.heavy || world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow || world.airPractice?.slow ? dt / 2 : dt;
+        } else accumulator += world.lesson?.example || world.wallPractice?.heavy || world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow || world.airPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const slot = world.trainingPlayerSlot;
-          const input = playerInput(0, pads, slot);
+          const lesson=world.lesson;
+          const input = lesson?.example ? (lesson.done || lesson.missed ? null : lesson.example.input()) : playerInput(0,pads,slot);
           const player = world.dogs[slot];
           if (drillWaiting) {
             const ready = player.ledge
@@ -7051,7 +7084,7 @@
               if (!player.ledge) $('recovery-tip').textContent = player.kit.recovery;
             }
           }
-          if (!drillWaiting && (!world.lesson || world.lesson.canStep(input))) {
+          if (input && !drillWaiting && (!world.lesson || world.lesson.canStep(input))) {
             const airborne = player.ground < 0;
             const second=world.lesson ? world.lesson.partner(input) : world.hasSecondPlayer ? playerInput(1,pads) : idleInput;
             finishTape?.record(world,input,second);
@@ -7110,6 +7143,9 @@
     }else if (hash==='#local/pick-together' || hash==='#local/best-of-three') {
       if(hash==='#local/best-of-three')settings.bestOfThree=true;
       settings.mode='local';editing=0;toLobby();pickTogether();
+    } else if(Object.hasOwn(fighters,arena) && ['recovery','signature'].includes(form) && hash==='#fighters/'+arena+'/'+form){
+      showHome(false);
+      waitForDispatch('Fighter lesson',()=>loadDispatch('FighterSchool'),()=>startFighterLesson(arena,form==='recovery'?1:0),()=>showHome());
     } else if(hash==='#fighters' || (hash==='#fighters/'+arena && Object.hasOwn(fighters,arena))){
       showHome(false);
       fighterSheet(arena || 'pip');
