@@ -835,7 +835,7 @@
       '</strong><span>' +
       move.hint +
       (category === 'air' && move.late ? ' Clean ' + move.dmg + '%. Late ' + move.late.dmg +
-        '% from frame ' + Math.round(move.late.start * 60) + '.' : '') +
+        '% from frame ' + Math.round(move.late.start * 60) + '. A short hop deals 85% of these values.' : '') +
       (category === 'air' && move.meteor ? ' A strong spike rebounds off the floor. A falling rival can cancel from flight frame ' +
         (move.meteor + 1) + ' with a saved jump or Up Special.' : '') +
       (move.landingWindow ? ' Landing on frames ' + move.landingWindow[0] + '–' + (move.landingWindow[1] - 1) +
@@ -1155,6 +1155,10 @@
       '<i class="' + (i >= count ? 'lost' : '') + '" data-icon="paw">' + svg('paw') + '</i>').join('');
   }
   const tenth = n => Number(n.toFixed(1));
+  function percentDigits(damage) {
+    const [whole, fraction] = String(tenth(damage)).split('.');
+    return fraction ? whole + '<small>.' + fraction + '</small>' : whole;
+  }
   const moveLabel = id => (moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id]).label;
   function freshnessResult(sample) {
     const parts = [];
@@ -1382,7 +1386,7 @@
           '</span><strong class="percentage ' +
           (f.damage >= 110 ? 'danger' : f.damage >= 65 ? 'high' : '') +
           '">' +
-          Math.floor(f.damage) +
+          percentDigits(f.damage) +
           '%</strong><span class="lives" aria-label="' +
           (world.mode === 'training' ? 'Unlimited stocks' : stockLabel(f.stocks)) +
           '">' +
@@ -1637,7 +1641,7 @@
       if (name === 'waveContact' || name === 'waveResult') waveFeedback();
       if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingJab' ||
           name === 'spacingCancelStart' || name === 'spacingCancelCue' || name === 'footstoolCue' || name === 'apexCue' ||
-          name === 'apexGuard' || name === 'apexParry' ||
+          name === 'apexGuard' || name === 'apexParry' || name === 'airPowerCue' ||
           (name === 'fastFall' && e.f.index === 0 && world.spacingPractice.pattern === 'fastfall') ||
           (name === 'footstool' && isFootstoolPractice(world.spacingPractice)) ||
           name === 'spacingResult' || name === 'spacingRetry' || (name === 'specialTurn' && e.f.index === 0 && isReversalPractice(world.spacingPractice))))
@@ -2041,6 +2045,22 @@
   }
   function spacingFeedback(name, e) {
     const practice = world.spacingPractice, status = $('spacing-status');
+    if (practice.pattern === 'airPower') {
+      if (name === 'airPowerCue') {
+        status.dataset.result = 'swing';
+        status.textContent = 'Tap Attack';
+        return;
+      }
+      if (name !== 'spacingResult') return;
+      const summarize = r => (r.short ? 'Short hop' : 'Full jump') + ' · ' + r.hits +
+        (r.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(r.damage) + '% · ready on frame ' + r.frames;
+      status.dataset.result = e.outcome;
+      status.textContent = practice.result ? summarize(practice.result) : e.outcome === 'other' ? 'Different move' : 'Missed';
+      $('recovery-tip').textContent = (practice.previous ? 'Last time you got ' + summarize(practice.previous) + '. ' : '') +
+        (practice.result ? 'Choose Jump-in damage to compare the other jump.' :
+          'Choose Jump-in damage to retry. Keep the stick centered and tap Attack as your paws reach the chalk on the way down.');
+      return;
+    }
     if (practice.pattern === 'fastfall') {
       const tip = $('recovery-tip');
       if (name === 'apexCue') {
@@ -3403,6 +3423,7 @@
       $('spacing-approach').setAttribute('aria-pressed', String(approach));
       $('spacing-retreat').setAttribute('aria-pressed', String(pattern === 'retreat'));
       $('spacing-landing').setAttribute('aria-pressed', String(pattern === 'landing'));
+      $('spacing-airPower').setAttribute('aria-pressed', String(pattern === 'airPower'));
       $('spacing-fastfall').setAttribute('aria-pressed', String(pattern === 'fastfall'));
       $('spacing-apex-pause').hidden = pattern !== 'fastfall';
       $('spacing-apex-pause').setAttribute('aria-pressed', String(!!practice.pauseAtApex));
@@ -3430,6 +3451,10 @@
         ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
         : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
       if (pattern === 'landing' && (practice.flickJump ?? settings.flickJump1)) message = flickJumpTip;
+      if (pattern === 'airPower') {
+        $('spacing-status').textContent = 'Hold Hop or Jump';
+        message = 'Hold Hop for a short hop or hold Jump for a full jump. Keep the stick centered. Tap Attack as your paws come down to the chalk beside the rival’s ears.';
+      }
       if (pattern === 'fastfall') {
         $('spacing-status').textContent = moves[player.kit.air.neutral].label + ' · tap Attack';
         message = 'You’re rising into Pip’s shield. Tap Attack with no direction. At the apex, hold Shield for an ordinary fall or tap Down and hold Shield to land sooner.';
@@ -3684,7 +3709,7 @@
     ['Movement','Wavedash','wave',['back','platform']],
     ['Movement','Platforms','platform',['below','top','hold','ferry','shield-drop']],
     ['Attack','Combo practice','combo',['example','late','record','defend','mix']],
-    ['Attack','Aerial spacing','spacing',['approach','retreat','landing','fastfall','sweet','cancel','footstool','footstoolTech','reverse','wavebounce']],
+    ['Attack','Aerial spacing','spacing',['approach','retreat','landing','airPower','fastfall','sweet','cancel','footstool','footstoolTech','reverse','wavebounce']],
     ['Attack','Knockdowns','launch',['lock','bait','floor-spike','edge-spike']],
     ['Attack','Move freshness','freshness',['training','ko','rage']],
     ['Defense','Combo escape','escape',['tip','close','counter','break','gripEscape','gripThrow','carry']],
@@ -3889,6 +3914,7 @@
   $('spacing-approach').onclick = () => drill('spacing', false, 'approach');
   $('spacing-retreat').onclick = () => drill('spacing', false, 'retreat');
   $('spacing-landing').onclick = () => drill('spacing', false, 'landing');
+  $('spacing-airPower').onclick = () => drill('spacing', false, 'airPower');
   $('spacing-fastfall').onclick = () => drill('spacing', false, 'fastfall');
   $('spacing-apex-pause').onclick = () => {
     const d = world.spacingPractice;
@@ -4353,8 +4379,8 @@
     const grip = world.grapple;
     const order = !grip || grip.phase === 'throw' ? world.objective : grip.owner === 0
       ? grappleControls(world,grip) : 'Grabbed · Tap action buttons to escape';
-    const key = [world.roomIndex, world.wave, hero.stocks, Math.floor(hero.damage), world.stamps, order,
-      ...foes.flatMap((e) => [e.f.stocks, Math.floor(e.f.damage), e.hp])].join('|');
+    const key = [world.roomIndex, world.wave, hero.stocks, tenth(hero.damage), world.stamps, order,
+      ...foes.flatMap((e) => [e.f.stocks, tenth(e.f.damage), e.hp])].join('|');
     if (key === adventureKey) return;
     adventureKey = key;
     $('runner-score').hidden = !!world.bridge;
@@ -4376,7 +4402,7 @@
         const team = horde ? 'Sorting crew' : world.layout.rules === 'relay' ? 'Cage guards' : lead.f.stats.name;
         showStocks($('rival-lives'), world.rivalStocks, team);
         if (horde) $('rival-score').setAttribute('aria-label', foes.filter((e) => e.f.stocks)
-          .map((e) => e.f.stats.name + ' ' + Math.floor(e.f.damage) + '%').join(', '));
+          .map((e) => e.f.stats.name + ' ' + tenth(e.f.damage) + '%').join(', '));
         else $('rival-score').removeAttribute('aria-label');
       }
     }
@@ -4385,7 +4411,7 @@
   }
   function showPercent(element, damage) {
     element.className = 'percentage' + (damage >= 110 ? ' danger' : damage >= 65 ? ' high' : '');
-    element.textContent = Math.floor(damage) + '%';
+    if (element.textContent !== tenth(damage) + '%') element.innerHTML = percentDigits(damage) + '%';
   }
   function showStocks(element, count, name) {
     const label = name + ' · ' + stockLabel(count);
@@ -5415,6 +5441,12 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'noodle', p2:'pip', stage:'nightmail', fetch:false });
       drill('spacing', false, 'fastfall');
+    }
+    else if (hash === '#training/jump-in-damage') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, mode:'training', p1:'pip', p2:'brisket', stage:'nightmail', fetch:false});
+      drill('spacing', false, 'airPower');
     }
     else if (hash === '#training/short-hops' || hash === '#training/flick-jump') {
       menuScreen('match');
