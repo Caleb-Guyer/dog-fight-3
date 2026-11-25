@@ -620,30 +620,47 @@
   const lobbyForm = () => settings.mode === 'training' ? 'original' : settings.stageForm;
   const savedCoat = (slot,kind) => settings.coatBook[slot][kind] ?? 0;
   let lobbyCoats = [0,0];
-  let couchPanel=null,couchLoad=null;
-  async function pickTogether() {
+  let couchPanel=null,rotation=null,rotationPads=null,rotationPicking=false;
+  let rotationStorage;
+  function saveRotation(){return rotation.save(rotationStorage);}
+  function rotationBack(){
+    if(page==='match')return showResult();
+    dismiss();$('winner-stays').focus({preventScroll:true});
+  }
+  function rotationBoard(){
+    if(!window.WinnerStays)return waitForDispatch('Winner stays',()=>loadDispatch('WinnerStays'),rotationBoard,rotationBack);
+    if(!rotation){
+      try{rotationStorage=window.sessionStorage;}catch{}
+      rotation=window.WinnerStays.Lineup.read(rotationStorage);
+      const finished=page==='match' && world?.mode==='local' && !online.match && world.end!==null;
+      if(!rotation){
+        const cfg=finished?{...matchConfig,bestOfThree:!!localSet,coats:[world.coatFor(0),world.coatFor(1)]}:
+          {...settings,coats:[lobbyCoat(0),lobbyCoat(1)]};
+        rotation=new window.WinnerStays.Lineup(cfg);
+        if(finished)rotation.finish(1,localSet?.champion ?? world.end);
+      }
+      if(finished)rotationPads=matchConfig.couchSeats;
+    }
+    rotationPicking=false;
+    showDialog('rotation','Winner stays','');
+    window.WinnerStays.board($('dialog-body'),rotation,{portrait,save:saveRotation,back:rotationBack,
+      play:()=>{if(page!=='lobby'){settings.mode='local';toLobby();}pickTogether(true);},
+      end:()=>{rotation=null;rotationPads=null;try{rotationStorage.removeItem(window.WinnerStays.key);}catch{}
+        settings.mode='local';toLobby();$('winner-stays').focus({preventScroll:true});}});
+  }
+  function pickTogether(forRotation=false) {
     const counter=page==='match' && world?.mode==='local' && !online.match && localSet?.picker!=null;
     if(!counter && (page!=='lobby' || settings.mode!=='local'))return;
-    const title=counter?'Game '+(localSet.games.length+1)+' · P1 '+localSet.score[0]+' – '+localSet.score[1]+' P2':'Pick together';
-    if(!window.CouchSelect){
-      showDialog('couch-load',title,'<p role="status">Opening fighter select…</p>');
-      if(!couchLoad)couchLoad=new Promise((resolve,reject)=>{
-        const script=document.createElement('script');script.src='./couch-select.js?v=counterpick-1';
-        script.onload=()=>window.CouchSelect?resolve():reject();
-        script.onerror=reject;document.head.append(script);
-      }).finally(()=>{couchLoad=null;});
-      try {await couchLoad;}
-      catch {
-        if(dialogType==='couch-load'){
-          showDialog('couch-load',title,'<p>Fighter select could not load.</p><button id="couch-retry" class="primary">Try again</button>');
-          $('couch-retry').onclick=pickTogether;
-        }
-        return;
-      }
-      if(dialogType!=='couch-load')return;
-    }
+    rotationPicking=forRotation===true;
+    const title=counter?'Game '+(localSet.games.length+1)+' · P1 '+localSet.score[0]+' – '+localSet.score[1]+' P2':
+      rotationPicking?'Winner stays · Bout '+rotation.bout:'Pick together';
+    if(!window.CouchSelect)return waitForDispatch(title,()=>loadDispatch('CouchSelect'),()=>pickTogether(forRotation),
+      ()=>rotationPicking?rotationBoard():counter?showResult():$('pick-together').focus());
     showDialog('couch',title,'');
-    const config=counter?{...matchConfig,stage:world.stage,stageForm:world.form,coats:[world.coatFor(0),world.coatFor(1)]}:settings;
+    const pair=rotationPicking?rotation.players.slice(0,2):null;
+    const config=counter?{...matchConfig,stage:world.stage,stageForm:world.form,coats:[world.coatFor(0),world.coatFor(1)]}:
+      pair?{...settings,p1:pair[0].kind,p2:pair[1].kind,coats:pair.map(p=>p.coat),coatBook:pair.map(p=>({[p.kind]:p.coat})),
+        rotationRound:rotation.bout,rotationTags:pair.map(p=>p.name),bestOfThree:rotation.sets,couchSeats:rotationPads}:settings;
     couchPanel=window.CouchSelect.panel($('dialog-body'),config,keys,getPads(),{
       sound,announce,drawStageTile,leave:exitDialog,between:counter?{picker:localSet.picker,game:localSet.games.length+1}:null,
       start(pick,seats) {
@@ -652,8 +669,15 @@
         if(counter) {
           if(!localSet.advance(stage))return;
           for(const [i,kind] of pick.dogs.entries())pick.coats[i][kind]=pick.colors[i];
+          if(config.rotationRound){rotation.remember(pick.dogs,pick.colors);saveRotation();}
           startMatch({...matchConfig,p1:pick.dogs[0],p2:pick.dogs[1],stage,coats:pick.colors.slice(),coatBook:pick.coats},undefined,undefined,localSet);
           return;
+        }
+        if(pair){
+          rotation.remember(pick.dogs,pick.colors);rotationPads=seats;saveRotation();
+          rotationPicking=false;
+          startMatch({...config,p1:pick.dogs[0],p2:pick.dogs[1],stage,form:lobbyForm(),coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats},
+            undefined,undefined,config.bestOfThree?new StockSet(stage):null);return;
         }
         [settings.p1,settings.p2]=pick.dogs;
         settings.stage=stage;
@@ -665,6 +689,7 @@
     });
   }
   $('pick-together').onclick=pickTogether;
+  $('winner-stays').onclick=rotationBoard;
   const lobbyCoat = slot => window.DogFight.coatFor(slot,settings.p1,settings.p2,lobbyCoats);
   const stageName = (stage, form) => arenas[stage].name + (form && form !== 'original' ? ' · ' + stageForms[form].name : '');
   function drawStageTile(canvas, stage, form) {
@@ -682,6 +707,7 @@
       ', currently ' + coatNames[chosen][lobbyCoat(editing)]);
     $('cpu-level').hidden = settings.mode !== 'solo';
     $('pick-together').hidden=settings.mode!=='local';
+    $('winner-stays').hidden=settings.mode!=='local';
     $('cpu-level').textContent = 'CPU · ' + cpuLevels[settings.cpuLevel].name;
     document
       .querySelectorAll('[data-mode]')
@@ -849,9 +875,11 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='rotation')return rotationBack();
     if(dialogType==='fighter-school')return leaveFighterSheet();
     if(dialogType==='dispatch-load')return $('dispatch-load-back').click();
-    if (dialogType==='couch' || dialogType==='couch-load'){
+    if (dialogType==='couch'){
+      if(rotationPicking)return rotationBoard();
       if(page==='match')return showResult();
       dismiss();$('pick-together').focus({preventScroll:true});return;
     }
@@ -2162,6 +2190,7 @@
     const matchName = online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
       (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : world.bells ? 'Bell Break' : modes[config.mode];
     $('match-mode').textContent = cupAttempt ? 'Arcade Cup · Round '+(cupAttempt.round+1)+'/4' :
+      config.rotationRound?'Bout '+config.rotationRound+' · P1 '+config.rotationTags[0]+' / P2 '+config.rotationTags[1]:
       world.lesson ? 'Fight School' : matchName + (config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = stageName(config.stage,world.form);
     const set = online.series || localSet;
@@ -2297,6 +2326,17 @@
     victoryShot={canvas,kind:dog.kind,coat:result.coatFor(slot),elapsed:0,cel:-1};
     drawVictory(0);
     const stats=document.querySelector('#dialog-body [data-do=match-card]');
+    if(stats && result.mode==='local' && !online.match && (!localSet || localSet.champion!==null)){
+      if(matchConfig.rotationRound){
+        const winner=localSet?.champion ?? result.end, challenger=1-winner;
+        const handoff=document.createElement('p');handoff.id='rotation-handoff';
+        handoff.textContent=matchConfig.rotationTags[winner]+' keeps P'+(winner+1)+' · '+rotation.players[winner].streak+
+          ' win streak. Pass P'+(challenger+1)+' to '+rotation.players[challenger].name+'.';
+        canvas.closest('.winner').after(handoff);
+      }else{
+        const b=document.createElement('button');b.className='utility';b.dataset.do='rotation';b.textContent='Winner stays';stats.before(b);
+      }
+    }
     if (finishTape?.length && stats) {
       const button=document.createElement('button');
       button.className='utility';button.dataset.do='watch-finish';button.textContent='Watch finish';
@@ -2430,6 +2470,7 @@
     const entry={time:Date.now(),mode:recordMode(),side:online.match?online.side:0,stage:result.stage,form:result.form,
       round:series?.games.length || (cupAttempt?cupAttempt.round+1:0),winner:result.end,card:structuredClone(result.matchCard)};
     records.add(entry);
+    if(matchConfig.rotationRound && (!localSet || localSet.score[result.end]>=1) && rotation.finish(matchConfig.rotationRound,result.end))saveRotation();
     recordedFights.add(result);
   }
   function showRecords(focusId) {
@@ -2515,8 +2556,8 @@
       '</span><strong>' + name(g.winner,g.card?.players[g.winner].kind) + '</strong></li>').join('');
     let action, text, next = '';
     if (champion !== null) {
-      action = net ? 'online-rematch' : 'new-set';
-      text = 'Play another set';
+      action = net ? 'online-rematch' : matchConfig.rotationRound?'rotation':'new-set';
+      text = action==='rotation'?'Next challenger':'Play another set';
     } else if (!net && world.mode === 'solo' && picker === 1) {
       const stage = set.cpuPick(result.dogs[1].kind);
       next = '<p>' + name(1) + ' picks ' + stageName(stage,result.form) + '. ' + (stageForms[result.form].description || arenas[stage].description) + '</p>';
@@ -2604,13 +2645,13 @@
         ' wins!</h3><p>' +
         finish + ' · ' +
         duration +
-        '</p></div></div>' + cpuReadReport() + '<div class="dialog-actions"><button class="primary" data-do="rematch">' +
-        icon('reset') +
-        'Rematch</button><button class="utility" data-do="lobby">Fighter select</button>' + cardButton + '<button class="utility" data-do="home">Main menu</button></div>',
+        '</p></div></div>' + cpuReadReport() + '<div class="dialog-actions"><button class="primary" data-do="'+
+        (matchConfig.rotationRound?'rotation':'rematch')+'">'+(matchConfig.rotationRound?'Next challenger':icon('reset')+'Rematch')+
+        '</button><button class="utility" data-do="lobby">Fighter select</button>' + cardButton + '<button class="utility" data-do="home">Main menu</button></div>',
       false,
     );
     announce(f.stats.name + ' wins the Golden Tennis Ball');
-    document.querySelector('[data-do=rematch]').focus();
+    document.querySelector('#dialog-body .primary').focus();
   }
   $('start').onclick = () => startMatch({...settings,form:lobbyForm(),coats:lobbyCoats}, undefined, undefined,
     settings.mode !== 'training' && settings.bestOfThree ? new StockSet(settings.stage) : null);
@@ -2726,6 +2767,7 @@
     const saved = e.target.closest('[data-resume-id]');
     if (saved && dialogType==='saved-games') return resumeSavedGame(saved.dataset.resumeId);
     if (action==='school-cup') return cupSheet('pip');
+    if (action==='rotation') return rotationBoard();
     if (action==='fighter-classes') return fighterSheet(world?.lesson?.course || settings.p1);
     const cupDog = e.target.closest('[data-cup-dog]');
     if (cupDog) {
@@ -5067,6 +5109,7 @@
   };
   const campaign = window.DispatchScript;
   const dispatchSources={
+    WinnerStays:'winner-stays.js?v=rotation-1', CouchSelect:'couch-select.js?v=rotation-1',
     FinishTools:'finish-tools.js?v=finish-gif-1',
     FighterSchool:'fighter-lessons.js?v=fighter-school-1',
     DispatchCovers:'dispatch-covers.js?v=missions-1', DispatchFilm:'dispatch-film.js?v=widefilm-1',
@@ -6768,7 +6811,9 @@
     const hash = location.hash;
     const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
     const [,arena,form] = hash.split('/');
-    if (hash==='#local/pick-together' || hash==='#local/best-of-three') {
+    if(hash==='#local/winner-stays'){
+      settings.mode='local';editing=0;toLobby();rotationBoard();
+    }else if (hash==='#local/pick-together' || hash==='#local/best-of-three') {
       if(hash==='#local/best-of-three')settings.bestOfThree=true;
       settings.mode='local';editing=0;toLobby();pickTogether();
     } else if(hash==='#fighters' || (hash==='#fighters/'+arena && Object.hasOwn(fighters,arena))){
