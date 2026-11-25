@@ -96,6 +96,8 @@ function exchange(mode,kind,left,route,seed) {
   for(let n=0;n<170;n++) {
     const a={attack:n===0 && mode==='training'};
     if(route==='early' && n===5) a.x=dir;
+    if(route==='strike' && f.ledge && g.attack?.moveId==='brisketHaymaker' && g.attack.time>=g.attack.start)
+      a.attack=true;
     if(route==='roll' && !rolled && g.attack?.moveId==='brisketHaymaker' && g.attack.time>=5*tick) {
       a.shield=true; rolled=true;
     } else if(rolled && !attacked && !f.floorAction && !f.ledge) {
@@ -121,6 +123,11 @@ test('each fighter can clear the swing from either ledge and the drill restores 
     const {w}=exchange('training',kind,left,'roll',42);
     assert.equal(w.climbPractice.outcome,['pip','clover'].includes(kind)?'punished':'escaped');
     assert.equal(w.dogs[0].damage,120);
+    if(kind==='brisket' || kind==='noodle') {
+      const counter=exchange('training',kind,left,'strike',42);
+      assert.equal(counter.w.climbPractice.outcome,'punished');
+      assert.deepEqual(counter.events[0],[1,w.dogs[0].kit.ledgeAttack]);
+    }
     const missed=exchange('training',kind,left,'wait',42);
     assert.equal(missed.w.climbPractice.outcome,'slipped');
     const other=new Battle({...config,mode:'training',p1:kind,p2:'clover'});
