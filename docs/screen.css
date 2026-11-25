@@ -103,6 +103,16 @@ body .topbar .wordmark {
 #school-coach div { display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; }
 #school-coach[data-state^="example"] { border-color:#96dcd1; }
 #school-bindings { color:#aadcd8; }
+#corner-tip {
+  position:absolute; z-index:1; top:calc(var(--top-edge) + 51px); left:var(--left-edge);
+  width:max-content; max-width:min(35ch,85%); padding:6px 10px; box-sizing:border-box;
+  background:#222335f2; border-left:4px solid #88d6c5; color:var(--cream);
+  font-size:clamp(12px,1.1vw,16px); line-height:1.3; pointer-events:none;
+}
+#corner-tip strong { display:block; color:#a8e3d5; }
+@media(max-height:520px) and (orientation:landscape){
+  #corner-tip { top:calc(var(--top-edge) + 38px); max-width:30ch; font-size:11px; }
+}
 #school-syllabus { display:grid; gap:5px; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); }
 #school-syllabus button { text-align:left; }
 .layout-switch { display:flex; flex-wrap:wrap; gap:12px; }

@@ -77,6 +77,60 @@
       }
     }
   }
+  const cornerTips={
+    opening:['jab','First stock','Close in on Brisket. Release the direction and tap {attack} for a jab.'],
+    guard:['guard','Under pressure','Hold {shield} before Brisket’s next swing to block it.'],
+    grab:['throw','Brisket is shielding','Get within paw’s reach and tap {grab} to catch him through his shield.'],
+    finish:['stock','At the edge','Face the edge. Hold {side} + {smash}, then release {smash} to launch Brisket.'],
+    jump:['return','Air jump available','Steer {side} toward the ledge and tap {jump} for height.'],
+    rise:['return','Recover with Fence Hopper','Aim {up} + {special}, then steer {side} toward the ledge.'],
+    hop:['return','Second hop available','Release {special}. Aim {up} and tap {special} again while steering {side}.'],
+    drift:['return','Drift toward the ledge','Hold {side} to bring Pip back within reach.'],
+    hang:['return','Ledge caught','Tap {side} to climb onto the stage, or tap {jump} to jump from the ledge.'],
+  };
+  function cornerSituation(world){
+    const [pip,brisket]=world.dogs, floor=world.terrain[0];
+    if(world.end!==null || pip.stockLift || pip.respawning || world.suddenDeath)return '';
+    if(pip.ledge)return 'hang/'+(pip.ledge.left?'right':'left');
+    if(pip.ground<0 && (pip.x<floor.x1 || pip.x>floor.x2)){
+      const side=pip.x<floor.x1?'right':'left';
+      if(pip.stun>0 || pip.impactLag>0)return 'drift/'+side;
+      const move=pip.hopWindow>0?'hop':pip.jumps>0?'jump':!pip.usedUp?'rise':'drift';
+      return move+'/'+side;
+    }
+    if(pip.ground<0 || brisket.stockLift || brisket.stockGuard || brisket.ground<0 || world.grapple)return '';
+    const near=Math.abs(pip.y-brisket.y)<60 && Math.abs(pip.x-brisket.x)<110;
+    if(near && brisket.shield)return 'grab';
+    if(near && brisket.damage>=105){
+      if(brisket.x>pip.x && floor.x2-brisket.x<150)return 'finish/right';
+      if(brisket.x<pip.x && brisket.x-floor.x1<150)return 'finish/left';
+    }
+    const [you,cpu]=world.matchCard.players;
+    if(cpu.hits>=2 && !you.blocks && !you.parries)return 'guard';
+    return !you.hits && world.matchFrames<=360?'opening':'';
+  }
+  class Corner {
+    constructor(){this.seen=new Set();this.stock=0;this.cue='';this.lesson='jab';this.until=0;}
+    read(world){
+      const stock=world.dogs[0].stocks, frame=world.matchFrames;
+      if(stock!==this.stock){this.stock=stock;this.seen.clear();this.cue='';}
+      const cue=cornerSituation(world);
+      if(cue!==this.cue){
+        this.cue=cue;this.until=0;
+        if(cue){
+          const id=cue.split('/')[0];
+          this.lesson=cornerTips[id][0];
+          if(this.lesson==='return')this.until=Infinity;
+          else if(!this.seen.has(cue)){this.seen.add(cue);this.until=frame+210;}
+        }
+      }
+      return frame<this.until?cue:'';
+    }
+  }
+  function cornerLine(cue,label){
+    const [id,side]=cue.split('/'), [,title,line]=cornerTips[id];
+    return [title,line.replace(/\{(\w+)\}/g,(_,action)=>label(action==='side'?side:action))];
+  }
   function readProgress(raw) {
     const passed=lessons.filter(l=>Array.isArray(raw?.passed) && raw.passed.includes(l.id)).map(l=>l.id);
     const index=Math.max(0,lessons.findIndex(l=>l.id===raw?.lesson));
@@ -99,5 +153,5 @@
     if (!pip.hits) return {id:'jab',button:'Practice jabs',reason:'Pip finished without landing a hit. Try a jab when Brisket is within paw’s reach.'};
     return {id:'stock',button:'Practice knockouts',reason:'Practice charging a side smash to finish a stock near the edge.'};
   }
-  window.FightSchool={lessons,Lesson,readProgress,unfinished,rematchLesson};
+  window.FightSchool={lessons,Lesson,Corner,cornerLine,readProgress,unfinished,rematchLesson};
 })();
