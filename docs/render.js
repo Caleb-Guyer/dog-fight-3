@@ -2447,6 +2447,7 @@
       if (name === 'waveland') this.add('skid', e.point.x - e.dir * 8, e.point.y, cream, 0.22,
         clamp(30 + e.speed * 0.06, 40, 64), e.dir);
       if (name === 'skid') this.add('skid', f.x - e.face * 9, f.y, cream, 0.18, 56, e.face);
+      if (name === 'dashShield') this.add('skid', e.point.x - e.dir * 10, e.point.y, '#d6b687', .15, 34, e.dir);
       if (name === 'turnJump') this.add('skid', f.x - e.dir * 8, f.y, '#d6b687', 0.13, 28, e.dir);
       if (name === 'attackCancel') {
         const dir = Math.sign(f.vx) || e.face;
