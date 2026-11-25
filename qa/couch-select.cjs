@@ -6,6 +6,52 @@ const {Selection}=window.CouchSelect, {Seats}=window.FightControls;
 const {fighters,arenas,coatFor,Battle,StockSet,idleInput}=window.DogFight;
 const dogs=Object.keys(fighters),stages=Object.keys(arenas);
 const cfg={stage:'picnic',mode:'local',p1:'pip',p2:'brisket',coatBook:[{},{}],fetch:false};
+require('../docs/stage-strike.js');
+const {Draft}=window.StageStrike;
+test('all opening strikes produce exactly one unstruck arena in the 1-2-1 turn order',()=>{
+  function walk(first,used){
+    const d=new Draft(first);
+    for(const s of used){
+      assert(!d.take(1-d.turn,s));assert(!d.take(d.turn,'missing'));
+      assert(d.take(d.turn,s));assert(!d.take(d.turn,s));
+    }
+    if(used.length===4){
+      assert.deepEqual(d.moves.map(m=>m.slot),[first,1-first,1-first,first]);
+      assert.deepEqual(d.moves.map(m=>m.action),Array(4).fill('strike'));
+      assert.equal(d.winner,stages.find(s=>!used.includes(s)));
+      assert(!d.take(0,d.winner));assert(!d.take(1,d.winner));return;
+    }
+    assert.equal(d.winner,null);
+    for(const s of d.remaining)walk(first,[...used,s]);
+  }
+  walk(0,[]);walk(1,[]);
+});
+test('either game winner bans twice, and either loser can counterpick any remaining stage',()=>{
+  for(const picker of [0,1])for(const a of stages)for(const b of stages.filter(s=>s!==a)){
+    for(const stage of stages.filter(s=>s!==a && s!==b)){
+      const d=new Draft(1-picker,picker);
+      assert(!d.take(picker,a));assert(d.take(1-picker,a));assert(!d.take(1-picker,a));assert(d.take(1-picker,b));
+      assert(!d.take(picker,a));assert(!d.take(picker,b));assert(!d.take(1-picker,stage));
+      assert(d.take(picker,stage));assert.equal(d.winner,stage);
+      assert.deepEqual(d.moves.map(m=>m.action),['ban','ban','pick']);
+    }
+  }
+});
+test('CPU decisions respect the pool, fighter matchup, and standardized stage geometry',()=>{
+  for(const p1 of dogs)for(const p2 of dogs)for(const form of ['original','flat','trio'])for(const picker of [null,0,1]){
+    const d=new Draft(1,picker);let count=0;
+    while(d.turn!==null && count++<5){
+      if(d.turn===1)assert(d.cpu([p1,p2],form,'picnic'));
+      else{assert(!d.cpu([p1,p2],form,'picnic'));assert(d.take(0,d.remaining[0]));}
+    }
+    assert(stages.includes(d.winner));assert(!d.cpu([p1,p2],form));
+  }
+  const choose=(dog,form)=>{
+    const d=new Draft(0,1);d.take(0,'picnic');d.take(0,'canal');d.cpu(['pip',dog],form,'laundry');return d.winner;
+  };
+  assert.equal(choose('brisket','original'),'nightmail');assert.equal(choose('noodle','original'),'laundry');
+  assert.equal(choose('brisket','flat'),choose('noodle','flat'));
+});
 test('every matchup keeps distinct mirrored coats and a ready dog stays put',()=>{
   for(const p1 of dogs)for(const p2 of dogs)for(const c1 of [0,1,2,3])for(const c2 of [0,1,2,3]){
     const pick=new Selection({...cfg,p1,p2,coatBook:[{[p1]:c1},{[p2]:c2}]});
