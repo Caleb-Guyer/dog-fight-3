@@ -402,6 +402,10 @@ In **Training → Launch practice → Spike landing**, tap Attack to take Pogo P
 
 **Missed tech.** After the bounce, tap Attack for your dog’s get-up attack, tap a side to roll, or tap Up or Jump to stand. If you wait, your dog stands automatically. A prone dog can duck a high swing, but a low hit can catch it.
 
+**Read the tech.** Rival CPUs can plant in place, roll away, or roll back through a chaser. A running approach gives them a reason to cross behind you. They check the space at the edge and favor a different response after you hit or grab their recovery. In Launch practice, choose **Read the tech** and tap Attack to cue Clover’s fall. Cycle **Response** to rehearse each direction. In **Rival mix**, a hit or grab before Clover can act scores a read. Switch sides or try full speed when you can cover the landing at half speed. [Practice the tech chase](https://caleb-guyer.github.io/dog-fight-3/#training/read-the-tech)
+
+Take Brisket into a three-stock match on Picnic Table. Down throw Clover, then try holding your ground on one landing and running after her on the next. Watch where she plants her paws before committing to your follow-up. [Play the Rival match](https://caleb-guyer.github.io/dog-fight-3/#solo/tech-chase)
+
 | Dog | Get-up attack | In front | Behind | Can act again after |
 | --- | --- | --- | --- | --- |
 | Pip | Kickstand | Frame 7, 6% | Frame 11, 6% | 27 frames |
