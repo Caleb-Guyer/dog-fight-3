@@ -568,6 +568,10 @@ async function versusRules(browser){
   await press('#rules-use');
   assert.match(await p.locator('#rules-label').textContent(),/2 stocks · 3 min/);
   await press('#pick-together');assert.match(await p.locator('#couch-rules').textContent(),/2 stocks/);
+  for(const phase of ['Choose your fighters','Vote for the opening arena']){
+    assert.equal(await p.locator('#couch-phase').textContent(),phase);
+    for(const seat of [0,1])await press('[data-seat="'+seat+'"] [data-action=lock]');
+  }
   await press('#couch-start');await p.waitForFunction(()=>window.observedBattle?.matchFrames>1);
   assert.deepEqual(await p.evaluate(()=>[observedBattle.form,observedBattle.fetch,observedBattle.dogs.map(f=>f.stocks)]),['flat',false,[2,2]]);
   assert.equal(await p.locator('#hud .lives i').count(),4);
