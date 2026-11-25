@@ -61,7 +61,25 @@
       waves: [[{ ...foe('conductor', 739), hp: 170 }]],
     },
   ];
-  for (const room of rooms) {
+  const nightRooms = [
+    {
+      id: 'mailroof', name: 'Night Mail Roof', type: 'Horde', rules: 'horde', intro: 'nightmail',
+      length: 1240, start: 602,
+      terrain: [solid(146, 1094, 510), shelf(245, 416, 424), shelf(646, 825, 392)],
+      orders: ['Throw a disc with neutral Special. Aim toward it and tap Special to chase.', 'Stay above the porter. Up + Special opens Clover’s sail.'],
+      waves: [[foe('puncher', 884), foe('clipper', 292)], [foe('porter', 890, 2), foe('puncher', 346)]],
+      checkpoints: [{wave: 1, name: 'brake van'}],
+      dispatch: 'Clover finds a red signal lens in the brake van. At the east switch, Noodle is about to wave the train over a bridge missing half its span.',
+    },
+    {
+      id: 'eastsignal', name: 'East Signal Box', type: 'Rival duel', rules: 'duel', outro: 'firstlight',
+      length: 1080, start: 364,
+      terrain: [solid(200, 880, 505), shelf(345, 520, 409), shelf(585, 718, 329)],
+      objective: 'Hold the switch for three stocks. Noodle’s long reach covers the low platform.',
+      waves: [[foe('noodle', 714, fightStocks)]],
+    },
+  ];
+  for (const room of [...rooms, ...nightRooms]) {
     room.checkpoints ??= [];
     room.spawns = [room.start, ...Array(3).fill(room.start)].map((x) => ({ x, ground: 0 }));
     room.walls = room.terrain.flatMap((p, index) =>
@@ -130,8 +148,16 @@
       ],
     },
   };
-  const saveKey = 'dog-fight-3.last-dispatch.v1';
-  const lastRoom = rooms.length - 1;
+  const nightScenes = {
+    nightmail: { stop:'mailroof', title:'The overnight bag', pages:[
+      ['East platform · 11:59 pm', 'The mail train slides in without a headlamp. Every sack on the roof is addressed to a station that closed years ago. One sack ticks.'],
+      ['Clover', '“Pip, stay by the bell. If this train comes back the same way, ring twice.” She sends her disc over the guardrail and follows it onto the roof.'],
+    ]},
+    firstlight: { stop:'eastsignal', title:'Two short rings', completesChapter:true, pages:[
+      ['East Signal Box', 'Clover slots the red lens into the lamp. Noodle pulls the brake wire. The mail van stops with its front wheels hanging over the river.'],
+      ['Clover', 'From three stations away come two short rings. Inside the ticking sack, dozens of lost station clocks strike midnight together. This time, someone is there to hear them.'],
+    ]},
+  };
   function checkpointFighter(value) {
     if (!Number.isInteger(value?.stocks) || value.stocks < 1 || value.stocks > fightStocks ||
         !Number.isFinite(value.damage) || value.damage < 0 || value.damage > 999) return null;
@@ -140,10 +166,11 @@
     if (history.length) snapshot.moveHistory = history;
     return snapshot;
   }
-  function readSave(storage) {
+  function readSave(storage, book) {
+    const {saveKey, rooms, scenes, lastRoom} = book;
     let raw;
     try { raw = JSON.parse(storage.getItem(saveKey)); } catch {}
-    if (raw?.version === 1 && raw.started === true) {
+    if (book.number === 1 && raw?.version === 1 && raw.started === true) {
       // Earlier chapters had three stops. A pending rescue still belongs at the cage.
       const oldRoom = [0, 1, 2].includes(raw.room) ? raw.room : 0;
       const room = oldRoom === 1 && raw.pending === 'rescue' ? 1 : [0, 3, lastRoom][oldRoom];
@@ -185,5 +212,12 @@
     if (event.complete) fresh.complete = true;
     return fresh;
   }
-  window.DispatchScript = { rooms, scenes, saveKey, lastRoom, chapterFighter, fightStocks, readSave, record };
+  function chapter(number, title, rooms, scenes, chapterFighter, saveKey) {
+    const book = {number, title, rooms, scenes, chapterFighter, saveKey, lastRoom:rooms.length-1, fightStocks, record};
+    book.readSave = storage => readSave(storage, book);
+    return book;
+  }
+  const yard = chapter(1, 'The Silent Yard', rooms, scenes, chapterFighter, 'dog-fight-3.last-dispatch.v1');
+  const night = chapter(2, 'The Night Mail', nightRooms, nightScenes, 'clover', 'dog-fight-3.night-mail.v1');
+  window.DispatchScript = {...yard, chapters:[yard, night]};
 })();

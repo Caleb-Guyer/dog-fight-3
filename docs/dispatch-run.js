@@ -1,7 +1,8 @@
 (() => {
   'use strict';
   const { Battle, idleInput, clamp, shieldContact } = window.DogFight;
-  const { rooms, chapterFighter, fightStocks } = window.DispatchScript;
+  const { chapters, fightStocks } = window.DispatchScript;
+  const isDog = kind => Object.hasOwn(window.DogFight.fighters, kind);
   const machines = {
     clipper: { name: 'Ticket Clipper', width: 26, height: 64, weight: 1.03, speed: 157, reach: 59,
       windup: 0.53, damage: 7, base: 155, growth: 3.6 },
@@ -18,7 +19,8 @@
     enemy.duration = duration;
   }
   class DispatchRun extends Battle {
-    constructor({ room = 0, checkpoint = 0, stamps = 0, atCheckpoint = null, cupFighter, coat = 0 }, emit = () => {}) {
+    constructor({ chapter = 1, room = 0, checkpoint = 0, stamps = 0, atCheckpoint = null, cupFighter, coat = 0 }, emit = () => {}) {
+      const {rooms, chapterFighter} = chapters[chapter-1];
       const script = rooms[room], saved = script.checkpoints[checkpoint - 1];
       const bridge = script.signals ? new window.DispatchBridge(script, checkpoint) : null;
       const layout = bridge ? { ...script, terrain: bridge.geometry(0) } : script;
@@ -26,6 +28,7 @@
       super({ stage: 'dispatch', layout, mode: 'adventure', p1: cupBoss ? cupFighter : chapterFighter, p2: 'brisket', fetch: false }, emit);
       this.cupCoat = cupBoss && window.DogFight.validCoat(coat) ? coat : 0;
       this.roomIndex = room;
+      this.chapter = chapter;
       this.atCheckpoint = saved && !bridge ? atCheckpoint : null;
       const runner = this.dogs[0];
       runner.stocks = this.atCheckpoint?.stocks ?? fightStocks;
@@ -79,12 +82,13 @@
       if (this.layout.rules === 'horde') {
         const n = this.rivalStocks;
         return 'Wave ' + (this.wave + 1) + ' of ' + this.layout.waves.length +
-          ' · ' + n + (n === 1 ? ' crew stock' : ' crew stocks');
+          ' · ' + n + (n === 1 ? ' crew stock' : ' crew stocks') +
+          (this.layout.orders ? ' · ' + this.layout.orders[this.wave] : '');
       }
       return this.layout.objective;
     }
     cpuControlled(f) {
-      return f.encounter?.kind === 'brisket';
+      return isDog(f.encounter?.kind);
     }
     opponents(f) {
       if (f.index) return f.absent ? [] : [this.dogs[0]];
@@ -108,7 +112,7 @@
       f.face = f.x < hero.x ? 1 : -1;
       if (machines[e.kind]) f.stats = { ...f.stats, ...machines[e.kind] };
       f.encounter = e;
-      if (returning && e.kind === 'brisket') this.beginStockReturn(f);
+      if (returning && isDog(e.kind)) this.beginStockReturn(f);
       Object.assign(e, { cycle: 0, move: 'stamp', face: f.face, spent: false, hurt: 0, jumpHold: 0 });
       phase(e, 'approach', 1);
     }
@@ -116,6 +120,7 @@
       this.foes = this.layout.waves[this.wave].map((spec, i) => {
         const index = i + 1, f = this.dogs[index] || { kind: 'brisket', index };
         this.dogs[index] = f;
+        f.kind = isDog(spec.kind) ? spec.kind : 'brisket';
         f.stocks = spec.stocks;
         const e = { kind: spec.kind, hp: spec.hp ?? null, maxHP: spec.hp ?? null, f, spec };
         this.placeOpponent(e, false);
@@ -194,7 +199,7 @@
     machineInput(e, dt) {
       const { f, kind } = e, hero = this.dogs[0];
       if (!f.stocks || (f.respawning && !f.stockLift) || (kind === 'conductor' && e.hp <= 0)) return idleInput;
-      if (kind === 'brisket') return this.cpu(dt);
+      if (isDog(kind)) return this.cpu(dt);
       if (f.grip || f.impactLag > 1e-8) return idleInput;
       if (f.ledge) return { ...idleInput, x: f.ledge.left ? 1 : -1, jump: true };
       e.jumpHold = Math.max(0, e.jumpHold - dt);

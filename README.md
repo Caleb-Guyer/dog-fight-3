@@ -108,6 +108,8 @@ Winning a fight earns its postmark. Sorting Bridge has a collectible postmark. C
 
 Four animated pixel-art cutscenes play during the chapter, with timed captions and an original score. Each shot fills your screen with scenery that extends around the dogs on ultrawide monitors and in portrait. **Pause** (P or gamepad Start) holds the current frame. **Next** jumps to the next caption and **Skip scene** moves the adventure along. With reduced motion enabled, each scene opens on a still frame and **Play** starts the animation. Rewatch unlocked scenes from **Adventure → Cutscenes**. [Open the cutscene library](https://caleb-guyer.github.io/dog-fight-3/#cutscenes)
 
+Finish The Silent Yard to open **Chapter 02 · The Night Mail**. A completed Chapter 1 save opens it immediately. Clover boards the overnight train in a scored pixel-art cutscene. On **Night Mail Roof**, take five crew stocks in two waves with three stocks of your own. The brake van checkpoint remembers your damage and remaining stocks. Throw Clover’s disc with neutral Special, then aim toward it and tap Special again to chase it across the roof. At **East Signal Box**, hold the switch against Noodle in a three-stock duel to unlock the closing film, **Two short rings**. Each chapter has its own postmarks, cutscene shelf and save. Use the chapter button on the route map to revisit Pip’s missions.
+
 The chapter script, dialogue, encounter order, terrain, checkpoints and postmarks live in `docs/dispatch-script.js`. The runtime in `docs/dispatch-run.js` plays those encounters using the regular fighting engine. The ferry, lift and drawspans use the moving surfaces in `docs/dispatch-bridge.js`.
 
 ## Publish on GitHub Pages

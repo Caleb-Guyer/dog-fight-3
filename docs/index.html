@@ -24,9 +24,9 @@
     <script defer src="./controls.js?v=counterpick-1"></script>
     <script defer src="./score.js?v=yard-band-1"></script>
     <script defer src="./render.js?v=bell-yard-1"></script>
-    <script defer src="./dispatch-script.js?v=continue-1"></script>
+    <script defer src="./dispatch-script.js?v=night-mail-1"></script>
     <script defer src="./online.js?v=room-counterpick-1"></script>
-    <script defer src="./app.js?v=fast-cels-1"></script>
+    <script defer src="./app.js?v=night-mail-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -87,7 +87,7 @@
             <img id="title-cover" width="320" height="180" src="./assets/dispatch-title.png" alt="" />
             <span class="ticket-corner">Adventure</span>
             <span class="feature-caption"
-              ><span><small>Chapter 01 · The Silent Yard</small><strong>The Last Dispatch</strong></span
+              ><span><small id="home-chapter">Chapter 01 · The Silent Yard</small><strong>The Last Dispatch</strong></span
               ><b>Story map</b></span
             >
           </button>
@@ -182,7 +182,7 @@
               role="img"
               aria-label="Rail map from Parcel Alley through the Weigh House, Freight Exchange and Sorting Bridge to Bell Depot"
             ></canvas>
-            <div><span>Chapter 01</span><strong>The Silent Yard</strong></div>
+            <div><span id="route-number">Chapter 01</span><strong id="route-chapter">The Silent Yard</strong></div>
           </div>
           <div class="route-manifest">
             <h2>Route sheet</h2>
@@ -197,6 +197,7 @@
           <div class="route-save"><strong id="route-progress"></strong><span id="route-marks"></span></div>
           <div class="route-actions">
             <button class="board-back" id="route-films" type="button">Cutscenes</button>
+            <button class="board-back" id="route-switch" type="button" hidden></button>
             <button class="dispatch-primary" id="dispatch-start" type="button">Begin chapter</button>
           </div>
         </div>
