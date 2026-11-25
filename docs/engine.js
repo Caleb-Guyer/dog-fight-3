@@ -2823,6 +2823,7 @@
         const floor = this.terrain[0];
         this.setLedgeTrap({index:0, left:true, x:floor.x1, y:floor.y});
       }
+      if (config.highReturn && this.mode === 'solo') this.placeHighReturn(config.highReturn);
       if(config.scoutedRoll && this.mode==='solo' && this.cpuLevel==='rival'){
         const left=config.scoutedRoll.side!=='right', floors=this.terrain.filter(p=>!p.thin);
         const floor=left?floors[0]:floors.at(-1);
@@ -2896,6 +2897,7 @@
       f.y = this.terrain[ground].y;
       f.ground = ground;
       if (f.index === 1) {
+        this.bot.edgeHop = null;
         this.bot.juggleRead = this.bot.driftEscape = null;
         this.bot.jumpHold = 0;
         this.bot.hop = null;
@@ -4954,12 +4956,21 @@
         if (f.stun && !f.usedUp) break;
       }
     }
+    placeHighReturn(side) {
+      const outward = side === 'right' ? 1 : -1, floors = this.terrain.filter(p => !p.thin);
+      const floor = outward < 0 ? floors[0] : floors.at(-1), lip = outward < 0 ? floor.x1 : floor.x2;
+      const [returner, guard] = this.dogs;
+      Object.assign(returner, {x:lip+outward*108, y:floor.y-108, ground:-1, jumps:1,
+        vx:-outward*90, vy:25, face:-outward, damage:60});
+      Object.assign(guard, {x:lip-outward*10, y:floor.y, ground:this.terrain.indexOf(floor), face:outward});
+    }
     resetAirPractice(pattern = 'neutral', side = 'left', wide = false, kind) {
-      const slow = pattern === 'interrupted' && (this.airPractice?.pattern !== pattern || this.airPractice.slow);
+      const high = pattern === 'highReturn';
+      const slow = (high || pattern === 'interrupted') && (this.airPractice?.pattern !== pattern || this.airPractice.slow);
       this.resetTraining();
-      const originalDogs = pattern === 'interrupted' ? this.dogs : null;
+      const originalDogs = high || pattern === 'interrupted' ? this.dogs : null;
       if (originalDogs) {
-        this.dogs = [newFighter(kind || originalDogs[0].kind,0),newFighter('noodle',1)];
+        this.dogs = [newFighter(kind || originalDogs[0].kind,0),newFighter(high ? originalDogs[1].kind : 'noodle',1)];
         this.dogs[1].damage = this.trainingDamage;
       }
       const [f, dummy] = this.dogs;
@@ -4967,7 +4978,8 @@
       const platform = side === 'left' ? solid[0] : solid[solid.length - 1];
       const inward = side === 'left' ? 1 : -1;
       const edge = inward > 0 ? platform.x1 : platform.x2;
-      if (originalDogs) this.placeInterruptedReturn(side,0);
+      if (high) this.placeHighReturn(side);
+      else if (originalDogs) this.placeInterruptedReturn(side,0);
       else if (pattern === 'lastDodge') this.placeLastDodge(side, wide, 0);
       else if (pattern === 'edge') {
         Object.assign(f, {
@@ -4986,6 +4998,7 @@
         });
       }
       this.airPractice = { pattern, side, wide, originalDogs, slow, phase: 'ready', time: 0, evaded: '', outcome: '' };
+      if (high) this.airPractice.platform = dummy.ground;
     }
     finishAirPractice(outcome) {
       const drill = this.airPractice;
@@ -4996,8 +5009,24 @@
     }
     airPracticeInput(dt) {
       const drill = this.airPractice;
-      if (drill.phase === 'done') return idleInput;
       const [f, dummy] = this.dogs;
+      if (drill.pattern === 'highReturn') {
+        const floor = this.terrain[drill.platform];
+        if (f.ledge || f.ground >= 0) this.finishAirPractice(drill.clipped ? 'saved' : drill.counter ? 'counter' : 'clean');
+        if (drill.phase === 'approach' || this.bot.edgeHop) {
+          const input = this.rivalEdgeHop(dummy,f,floor,floor.x1,floor.x2);
+          if (input?.jump) {
+            drill.phase = 'swing';
+            this.emit('airCue',{f:dummy,pattern:drill.pattern,phase:'takeoff'});
+          }
+          if (input) return input;
+        }
+        if (dummy.ground >= 0 || dummy.ledge) return idleInput;
+        const inside = clamp(dummy.x,floor.x1+52,floor.x2-52), under = dummy.x >= floor.x1 && dummy.x <= floor.x2;
+        return this.cpuRecoveryInput(dummy,floor,inside,under,!under || dummy.y>floor.y+28,
+          {...idleInput,x:Math.sign(inside-dummy.x)}) || idleInput;
+      }
+      if (drill.phase === 'done') return idleInput;
       if (drill.pattern === 'interrupted') {
         if (drill.phase === 'approach') {
           drill.phase = 'swing';
@@ -5871,13 +5900,19 @@
       }
       if (this.airPractice?.phase === 'ready') {
         const start =
+          this.airPractice.pattern === 'highReturn' ? input1.attack || input1.tapped?.attack :
           this.airPractice.pattern === 'interrupted' ? input1.y < -.48 && (input1.special || input1.tapped?.special) :
           this.airPractice.pattern === 'neutral'
             ? input1.jump
             : Math.hypot(input1.x, input1.y) >= 0.35 || input1.shield || input1.jump || input1.special;
         if (!start) return;
         this.airPractice.phase = 'approach';
+        if (this.airPractice.pattern === 'highReturn') this.airPractice.cueHeld = true;
         this.emit('airStart', { f: this.dogs[0], pattern: this.airPractice.pattern });
+      }
+      if (this.airPractice?.cueHeld) {
+        this.airPractice.cueHeld = !!input1.attack;
+        input1 = {...input1,attack:false,tapped:{...input1.tapped,attack:false}};
       }
       if (this.hitStop > 0) {
         this.captureInput(this.dogs[0], input1);
@@ -6001,7 +6036,8 @@
         this.updateBall(dt);
       const inset = this.blastInset();
       const out = this.dogs.filter(f => !f.absent && blastZone(f.x, f.y, this.stageWidth, inset));
-      if (this.airPractice?.pattern === 'interrupted' && out.includes(this.dogs[0])) this.finishAirPractice('miss');
+      if (out.includes(this.dogs[0]) && (this.airPractice?.pattern === 'interrupted' || this.airPractice?.pattern === 'highReturn'))
+        this.finishAirPractice('miss');
       const carryDrill = this.escapePractice;
       if (carryDrill?.spacing === 'carry' && carryDrill.phase !== 'done') {
         const rival = this.dogs[1];
@@ -9350,7 +9386,12 @@
         } else if (this.shieldPractice.pattern === 'poke') this.finishShieldPractice(poked ? 'found' : 'hitOpen');
         else this.finishShieldPractice(counter ? 'counterHit' : 'interrupted');
       }
-      if (this.airPractice?.pattern === 'interrupted') {
+      if (this.airPractice?.pattern === 'highReturn' && this.airPractice.phase !== 'done') {
+        const drill = this.airPractice;
+        if (target.index === 0) drill.clipped = true;
+        else drill.counter = true;
+        this.emit('airCue',{f:target,pattern:drill.pattern,phase:target.index === 0 ? 'clipped' : 'counterHit'});
+      } else if (this.airPractice?.pattern === 'interrupted') {
         if (target.index === 0 && recoveryRestored && this.airPractice.phase !== 'done') {
           this.airPractice.phase = 'clipped';
           this.airPractice.readyToCast = false;
@@ -10248,6 +10289,86 @@
       brain.ledgeTrap = {edge, deadline:this.time + (52 + Math.floor(this.random()*18))/60};
       return {...idleInput,smash:true,smashX:f.face};
     }
+    cpuRecoveryInput(f, closest, inside, under, unsafe, result) {
+      if (f.attack?.charging) {
+        result.x = Math.sign(inside - f.x);
+        result.special = f.attack.chargeTime < (f.y > closest.y + 60 ? 0.36 : 0.22);
+        return result;
+      }
+      if (f.attack?.moveId === 'cloverSail') {
+        result.x = Math.sign(inside - f.x);
+        result.special = !under || f.y > closest.y - 32;
+        return result;
+      }
+      if (unsafe) {
+        if (this.cpuLevel === 'rival' && !f.tumble && !f.stun && !f.attack && !f.wallAction && !f.airDodge &&
+            f.y - f.stats.height > closest.y + 4) {
+          const outward = f.x < (closest.x1 + closest.x2)/2 ? -1 : 1;
+          const lip = outward < 0 ? closest.x1 : closest.x2;
+          if ((f.x - lip) * outward < f.stats.width * .45 + 2)
+            return {...idleInput, x:outward};
+        }
+        if (this.cpuLevel === 'rival' && f.kit.wallKick && !f.usedWallKick && !f.jumps && !f.attack &&
+            !f.tumble && !f.stun && !f.wallAction && !f.airDodge && f.y > closest.y + 78) {
+          const away = f.x < (closest.x1 + closest.x2)/2 ? -1 : 1;
+          if (this.wallForKick(f, away)) return { ...idleInput, x:away, tapped:{jump:true} };
+        }
+        this.bot.platformRoute = null;
+        this.bot.hop = null;
+        result.x = Math.sign(inside - f.x);
+        if (!f.stun && !f.dodge) {
+          const secondHop = f.kind === 'pip' && f.hopWindow > 0 && f.vy > -395;
+          const canHook = f.kind === 'noodle' && !f.usedUp && this.nearestLedge(f, 180, -24, 155);
+          if (
+            secondHop ||
+            (!f.attack && (canHook || (!f.usedUp && !f.jumps && f.y > closest.y + 5 && f.vy > -140)))
+          ) {
+            result.y = -1;
+            result.special = true;
+            result.tapped = { special: true };
+          } else if (!f.attack && f.vy > 30 && f.y > closest.y - 13 && f.jumps > 0) result.jump = true;
+        }
+        return result;
+      }
+      return null;
+    }
+    rivalEdgeHop(f, foe, floor, left, right) {
+      const plan = this.bot.edgeHop;
+      if (plan) {
+        if (f.stun || f.grip || f.tumble || f.ledge || f.airDodge || f.wallAction || f.stockLift ||
+            this.time > plan.until || (f.ground >= 0 && !f.jumpSquat) || (plan.swung && !f.attack && !f.command)) {
+          this.bot.edgeHop = null;
+          return null;
+        }
+        if (f.jumpSquat) return {...idleInput,x:plan.outward};
+        if (!plan.swung && this.time >= plan.swingAt) {
+          plan.swung = true;
+          return {...idleInput,x:plan.outward,aimStick:true,smashX:plan.outward,tapped:{aimStick:true}};
+        }
+        return {...idleInput,x:plan.swung ? -plan.outward : plan.outward};
+      }
+      if (f.ground < 0 || f.attack || f.stun || f.command || f.landingLag || f.shield || f.shieldDrop ||
+          f.impactLag || f.floorAction || f.jumpSquat || f.charge >= 0 || f.grip || f.run?.turned ||
+          !floor || floor.thin || foe.ground >= 0 || foe.ledge || foe.stockLift || foe.attack || foe.airDodge ||
+          protectionTime(foe) || foe.absent) return null;
+      const outward = foe.x < left ? -1 : foe.x > right ? 1 : 0;
+      const lip = outward < 0 ? left : right;
+      if (!outward || f.face !== outward || outward*(lip-f.x) > 38 || outward*(lip-f.x) < -6 ||
+          outward*(foe.x-lip) < 48 || outward*(foe.x-lip) > 155 ||
+          foe.y >= floor.y-38 || foe.y < floor.y-180 || foe.vy < -190) return null;
+      const move = moves[f.kit.air.forward], [cx,cy,rx,ry] = move.box;
+      // Project the current flight only. A jump or dodge after takeoff can beat the commitment.
+      const windup = 8/60, flight = windup+move.start, contact = jumpSquatTime+flight;
+      const guardY = f.y-f.stats.jump*.6*flight+770*f.kit.gravity*flight*flight;
+      const rivalY = foe.y+foe.vy*contact+770*foe.kit.gravity*contact*contact;
+      const reach = (foe.x+foe.vx*contact-f.x)*outward;
+      const drift = Math.min(f.kit.airDrift.speed*flight, Math.max(0,f.vx*outward)*flight+f.kit.airAccel*flight*flight*.5);
+      if (Math.abs(reach-drift-cx) > rx+foe.stats.width-5 ||
+          Math.abs(rivalY-bodyHeight(foe)*.52-guardY-cy) > ry+bodyHeight(foe)*.4-4) return null;
+      this.bot.hop = null;
+      this.bot.edgeHop = {outward,swingAt:this.time+jumpSquatTime+windup,until:this.time+1,swung:false};
+      return {...idleInput,x:outward,jump:true,shortHop:true,tapped:{jump:true}};
+    }
     cpuCoverLip(f, foe) {
       const floor = this.terrain[f.ground];
       if (!floor || floor.thin || f.stun || f.grip || f.shield || f.shieldDrop || f.attack || f.charge >= 0 ||
@@ -10822,6 +10943,8 @@
         const basic = this.rookieNeutral(f, foe);
         if (basic) return basic;
       } else if (this.cpuLevel === 'rival') {
+        const intercept = this.rivalEdgeHop(f,foe,this.terrain[f.ground],outerLeft,outerRight);
+        if (intercept) return intercept;
         const jab = f.attack;
         if (jab && f.kind === 'pip' && f.ground >= 0 && !f.grip) {
           const gap = (foe.x-f.x)*f.face;
@@ -11152,46 +11275,8 @@
       if (specialTurn) return specialTurn;
       const downward = brain.timer <= 0 && this.cpuDownAir(f, foe, closest);
       if (downward) return downward;
-      if (f.attack?.charging) {
-        result.x = Math.sign(inside - f.x);
-        result.special = f.attack.chargeTime < (f.y > closest.y + 60 ? 0.36 : 0.22);
-        return result;
-      }
-      if (f.attack?.moveId === 'cloverSail') {
-        result.x = Math.sign(inside - f.x);
-        result.special = !under || f.y > closest.y - 32;
-        return result;
-      }
-      if (unsafe) {
-        if (this.cpuLevel === 'rival' && !f.tumble && !f.stun && !f.attack && !f.wallAction && !f.airDodge &&
-            f.y - f.stats.height > closest.y + 4) {
-          const outward = f.x < (closest.x1 + closest.x2)/2 ? -1 : 1;
-          const lip = outward < 0 ? closest.x1 : closest.x2;
-          if ((f.x - lip) * outward < f.stats.width * .45 + 2)
-            return {...idleInput, x:outward};
-        }
-        if (this.cpuLevel === 'rival' && f.kit.wallKick && !f.usedWallKick && !f.jumps && !f.attack &&
-            !f.tumble && !f.stun && !f.wallAction && !f.airDodge && f.y > closest.y + 78) {
-          const away = f.x < (closest.x1 + closest.x2)/2 ? -1 : 1;
-          if (this.wallForKick(f, away)) return { ...idleInput, x:away, tapped:{jump:true} };
-        }
-        brain.platformRoute = null;
-        brain.hop = null;
-        result.x = Math.sign(inside - f.x);
-        if (!f.stun && !f.dodge) {
-          const secondHop = f.kind === 'pip' && f.hopWindow > 0 && f.vy > -395;
-          const canHook = f.kind === 'noodle' && !f.usedUp && this.nearestLedge(f, 180, -24, 155);
-          if (
-            secondHop ||
-            (!f.attack && (canHook || (!f.usedUp && !f.jumps && f.y > closest.y + 5 && f.vy > -140)))
-          ) {
-            result.y = -1;
-            result.special = true;
-            result.tapped = { special: true };
-          } else if (!f.attack && f.vy > 30 && f.y > closest.y - 13 && f.jumps > 0) result.jump = true;
-        }
-        return result;
-      }
+      const recovery = this.cpuRecoveryInput(f,closest,inside,under,unsafe,result);
+      if (recovery) return recovery;
       if (f.smashCharge?.button === 'smash') {
         result.x = result.y = 0;
         result.jump = false;

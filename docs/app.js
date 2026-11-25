@@ -4444,6 +4444,18 @@
   }
   function airFeedback(name, e) {
     const result = $('air-status');
+    if (e.pattern === 'highReturn') {
+      const phase = name === 'airStart' ? 'approach' : e.phase || e.outcome;
+      const guard = world.dogs[1];
+      result.dataset.result = phase;
+      result.textContent = {approach:'Returning high',takeoff:guard.stats.name+' jumps out',clipped:'Clipped · keep recovering',
+        counterHit:'Counter hit · reach the stage',clean:'Clean return',saved:'Recovered after the hit',
+        counter:'Countered and recovered',miss:'Stock lost'}[phase];
+      if (phase === 'takeoff') $('recovery-tip').textContent = 'Jump over '+moves[guard.kit.air.forward].label+' or dodge through it. Steer back to the stage.';
+      if (phase === 'clipped') $('recovery-tip').textContent = 'Steer toward the lip. Use your remaining jump or Up Special as soon as you can act.';
+      if (name === 'airResult') $('recovery-tip').textContent = 'Choose Beat the edgeguard to retry, or take this opening into a three-stock fight.';
+      return;
+    }
     if (e.pattern === 'interrupted') {
       const phase = name === 'airStart' ? 'approach' : e.phase || e.outcome;
       const move = specials[world.dogs[0].kit.specials.up].label;
@@ -4709,7 +4721,7 @@
     else if (shield) world.resetShieldPractice(pattern, direction ?? world.shieldPractice?.worn ?? true, study?.choice, study?.dir);
     else if (air) world.resetAirPractice(pattern, practiceSide,
       pattern === 'lastDodge' && (direction ?? world.airPractice?.wide ?? false),
-      study ?? (world.airPractice?.pattern === 'interrupted' ? world.dogs[0].kind : undefined));
+      study ?? (world.airPractice?.pattern === pattern ? world.dogs[0].kind : undefined));
     else if (roll) world.resetLedgeRollPractice(pattern, practiceSide);
     else if (climb) world.resetClimbPractice(pattern, practiceSide, world.climbPractice?.slow ?? true);
     else if (trump) world.resetLedgeTrumpPractice(pattern, practiceSide);
@@ -5017,7 +5029,7 @@
         : 'Tap Shield to roll through the guard’s swing. As your dog turns back, tap Attack.';
     } else if (air) {
       const edge = pattern === 'edge', last = pattern === 'lastDodge', wide = world.airPractice.wide;
-      const interrupted = pattern === 'interrupted';
+      const interrupted = pattern === 'interrupted', high = pattern === 'highReturn';
       $('air-status').dataset.result = 'ready';
       $('air-status').textContent = edge
         ? practiceSide === 'left'
@@ -5025,13 +5037,14 @@
           : 'Right ledge'
         : 'Jump to begin';
       if (last) $('air-status').textContent = (wide ? 'Wide' : 'Low') + ' · ' + practiceSide + ' ledge';
-      if (interrupted) $('air-status').textContent = world.dogs[0].stats.name + ' · ' + practiceSide + ' ledge';
-      $('air-neutral').setAttribute('aria-pressed', String(!edge && !last && !interrupted));
+      if (interrupted || high) $('air-status').textContent = world.dogs[0].stats.name + ' · ' + practiceSide + ' ledge';
+      $('air-neutral').setAttribute('aria-pressed', String(pattern === 'neutral'));
       $('air-edge').setAttribute('aria-pressed', String(edge));
       $('air-lastDodge').setAttribute('aria-pressed', String(last));
       $('air-interrupted').setAttribute('aria-pressed', String(interrupted));
-      $('air-side').hidden = !edge && !last && !interrupted;
-      $('air-dog-label').hidden = $('air-speed').hidden = $('air-return-fight').hidden = !interrupted;
+      $('air-highReturn').setAttribute('aria-pressed', String(high));
+      $('air-side').hidden = !edge && !last && !interrupted && !high;
+      $('air-dog-label').hidden = $('air-speed').hidden = $('air-return-fight').hidden = !interrupted && !high;
       $('air-dog').value = world.dogs[0].kind;
       $('air-speed').setAttribute('aria-pressed',String(!!world.airPractice.slow));
       $('air-distance').hidden = !last;
@@ -5039,7 +5052,8 @@
       $('air-fight').textContent = interrupted ? 'Edgeguard as Noodle · 3 stocks' : 'Guard against Rival · 3 stocks';
       $('air-return-fight').textContent = 'Recover as ' + world.dogs[0].stats.name + ' · 3 stocks';
       $('air-distance').textContent = wide ? 'Start low' : 'Start wide';
-      message = interrupted ? 'Aim up and ' + (practiceSide === 'left' ? 'right' : 'left') +
+      message = high ? 'Tap Attack to start drifting back. Watch '+world.dogs[1].stats.name+' jump off the edge. Change height or air dodge, then get back onstage.' :
+        interrupted ? 'Aim up and ' + (practiceSide === 'left' ? 'right' : 'left') +
         ' and tap Special. Release it as Noodle swings. At “Cast again now,” use Up + Special a second time and steer in.' :
         last ? 'Your jump and Up Special are spent. Aim ' + (wide ? '' : 'up and ') +
         (practiceSide === 'left' ? 'right' : 'left') + ' and tap Shield to catch the ledge.' : edge
@@ -5178,7 +5192,7 @@
     ['Defense','Combo escape','escape',['tip','close','counter','break','gripEscape','gripThrow','carry']],
     ['Defense','Shield pressure','shield',['kick','drop','crossup','strike','grab','counterGrab','dodgeTiming','breakEscape','breakPunish','jumpIn','low','high','poke']],
     ['Defense','Launch & survival','launch',['throw','juggle','breakaway','survival','last-stock','escape','stock-return','stock-catch']],
-    ['Defense','Air dodge','air',['neutral','edge','lastDodge','interrupted']],
+    ['Defense','Air dodge','air',['neutral','edge','lastDodge','interrupted','highReturn']],
     ['Recovery','Edgeguarding','edge',['lip','shortCatch','longCatch','tip','deep','corner','inside']],
     ['Recovery','Ledge recovery','ledge',['training','right','attack-training']],
     ['Recovery','Ledge timing','climb',['escape','trap','rise','coverRise','patience']],
@@ -5206,6 +5220,7 @@
     'freshness-drive':'launch height angle ground slide ledge side smash back air',
     'air-lastDodge':'recovery low wide directional air dodge edgeguard',
     'air-interrupted':'up special recovery hit reset return edgeguard',
+    'air-highReturn':'offstage high recovery short hop forward aerial edgeguard rival',
     'partner-training':'local two players sparring', 'reset-training':'free training dummy',
     'wall-ceiling':'ceiling tech under stage recovery Noodle Pip',
   };
@@ -5570,7 +5585,8 @@
   $('air-edge').onclick = () => drill('air', false, 'edge');
   $('air-lastDodge').onclick = () => drill('air', false, 'lastDodge');
   $('air-interrupted').onclick = () => drill('air', false, 'interrupted');
-  $('air-dog').onchange = e => drill('air', false, 'interrupted', undefined, e.target.value);
+  $('air-highReturn').onclick = () => drill('air', false, 'highReturn');
+  $('air-dog').onchange = e => drill('air', false, world.airPractice.pattern, undefined, e.target.value);
   $('air-speed').onclick = () => {
     world.airPractice.slow = !world.airPractice.slow;
     $('air-speed').setAttribute('aria-pressed',String(world.airPractice.slow));
@@ -5582,9 +5598,10 @@
     const [returner,guard] = world.dogs;
     leaveOnline();
     afterStory = null;
-    const opening = pattern === 'interrupted' ? {interruptedReturn:{side,slot}} : {dodgeReturn:{side,wide}};
+    const opening = pattern === 'highReturn' ? {highReturn:side} :
+      pattern === 'interrupted' ? {interruptedReturn:{side,slot}} : {dodgeReturn:{side,wide}};
     startMatch({...settings, mode:'solo', p1:slot ? guard.kind : returner.kind, p2:slot ? returner.kind : guard.kind,
-      cpuLevel:'rival', stage:world.stage, fetch:false, minutes:7, ...opening}, undefined, 42);
+      cpuLevel:'rival', stage:world.stage, form:world.form, fetch:false, minutes:7, stockCount:3, timeBattle:false, ...opening}, undefined, 42);
   }
   $('air-fight').onclick = () => fightRecovery(1);
   $('air-return-fight').onclick = () => fightRecovery(0);
@@ -8006,6 +8023,12 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
       drill('platform', false, 'shield-drop');
+    }
+    else if (hash === '#training/beat-the-edgeguard') {
+      afterStory = null;
+      practiceSide = 'left';
+      startMatch({...settings,mode:'training',p1:'pip',p2:'brisket',stage:'picnic',fetch:false});
+      drill('air',false,'highReturn');
     }
     else if (/^#training\/interrupted-return(?:\/(pip|brisket|noodle|clover))?$/.test(hash)) {
       menuScreen('match');
