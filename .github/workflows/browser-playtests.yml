@@ -207,3 +207,18 @@ jobs:
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/stock-sets.cjs --pack-relay
+  versus-rules:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Save, share and play a custom ruleset with keyboard, touch and controller
+        run: |
+          node --test qa/versus-rules.cjs
+          npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/rules-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/stock-sets.cjs --rulesets

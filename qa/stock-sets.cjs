@@ -555,11 +555,64 @@ async function packRelay(browser){
   await phone.close();
   console.log('Both lineups, all three live handoffs, carryover damage, records, rematch and solo touch controls passed.');
 }
+async function versusRules(browser){
+  const {page:p,press}=await device(browser,false,'#solo');await press('[data-mode=local]');
+  await press('#rules-label');await press('[data-do=rulebook]');
+  await p.selectOption('#rules-choice','preset-1');
+  assert.equal(await p.locator('#rules-lives').inputValue(),'1');
+  await p.locator('#rules-name').fill('Sunday finals <3');await press('#rules-save');
+  const id=await p.locator('#rules-choice').inputValue();assert.match(id,/^[a-f0-9-]{36}$/);
+  await p.selectOption('#rules-lives','2');await press('#rules-update');await press('#rules-share');
+  const link=await p.locator('#rules-link').inputValue();
+  assert.equal(new URL(link).hash,'#local/rules/stock/2/3/single/flat/off');
+  await press('#rules-use');
+  assert.match(await p.locator('#rules-label').textContent(),/2 stocks · 3 min/);
+  await press('#pick-together');assert.match(await p.locator('#couch-rules').textContent(),/2 stocks/);
+  await press('#couch-start');await p.waitForFunction(()=>window.observedBattle?.matchFrames>1);
+  assert.deepEqual(await p.evaluate(()=>[observedBattle.form,observedBattle.fetch,observedBattle.dogs.map(f=>f.stocks)]),['flat',false,[2,2]]);
+  assert.equal(await p.locator('#hud .lives i').count(),4);
+  await p.keyboard.down('a');
+  try{await p.waitForFunction(()=>observedBattle.dogs[0].stocks===1);}
+  finally{await p.keyboard.up('a');}
+  assert.equal(await p.locator('#hud .lives').first().locator('.lost').count(),1);
+  await p.keyboard.down('a');
+  try{await p.locator('[data-do=match-card]').waitFor({timeout:22000});}
+  finally{await p.keyboard.up('a');}
+  await press('[data-do=match-card]');assert.match(await p.locator('.card-stats').textContent(),/Starting stocks22/);
+  assert.equal(await p.locator('.card-timeline li').count(),2);await press('[data-do=card-back]');await press('[data-do=rematch]');
+  assert.equal(await p.locator('#hud .lives[aria-label="2 stocks"]').count(),2);
+  await p.goto(root+'?fresh#local/rules');await p.selectOption('#rules-choice',id);
+  assert.equal(await p.locator('#rules-name').inputValue(),'Sunday finals <3');assert.equal(await p.locator('#rules-lives').inputValue(),'2');
+  await p.selectOption('#rules-clock','0');await p.selectOption('#rules-type','time');
+  assert(await p.locator('#rules-lives').isHidden());assert.equal(await p.locator('#rules-clock').inputValue(),'3');
+  assert.equal(await p.locator('#rules-clock option[value="0"]').count(),0);
+  await press('#rules-remove');await press('#rules-remove');assert.equal(await p.locator('#rules-choice option[value="'+id+'"]').count(),0);
+  await press('#rules-back');await p.keyboard.press('Escape');
+  await p.goto(root+'?school#tutorial/first-match');
+  assert.equal(await p.locator('#hud .lives[aria-label="3 stocks"]').count(),2);
+  await p.close();
+  const phone=await device(browser,true,new URL(link).hash),q=phone.page;
+  assert.equal(await q.locator('#rules-choice').inputValue(),'shared');
+  assert.equal(await q.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.config')||'{}').lives??3),3);
+  await q.selectOption('#rules-lives','4');
+  await q.evaluate(()=>{
+    window.rulesPad={index:0,id:'Rules controller',axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
+    Object.defineProperty(navigator,'getGamepads',{value:()=>[rulesPad]});
+    document.querySelector('#rules-lives').focus();rulesPad.buttons[15].pressed=true;
+  });
+  await q.waitForFunction(()=>document.querySelector('#rules-lives').value==='5');
+  await q.evaluate(()=>{rulesPad.buttons[15].pressed=false;});
+  await q.selectOption('#rules-format','set');await phone.press('#rules-use');await phone.press('#start');
+  await q.waitForFunction(()=>window.observedBattle?.matchFrames>1);
+  assert.equal(await q.locator('#hud .lives i').count(),10);assert.match(await q.locator('#match-set').textContent(),/Game 1/);
+  await q.close();console.log('Named rules survived a reload, a complete two-stock fight, rematch, and transfer to a fresh touch/controller lobby.');
+}
 async function main(){
   const options={executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim(),
     headless:true,args:['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']};
   const browser=await chromium.launch(options);
   try{
+    if(process.argv.includes('--rulesets')){await versusRules(browser);assert.deepEqual(errors,[]);return;}
     if(process.argv.includes('--pack-relay')){await packRelay(browser);assert.deepEqual(errors,[]);return;}
     if(process.argv.includes('--time-battle')){
       const phone=await chromium.launch(options);
