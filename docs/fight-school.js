@@ -109,8 +109,38 @@
     if(cpu.hits>=2 && !you.blocks && !you.parries)return 'guard';
     return !you.hits && world.matchFrames<=360?'opening':'';
   }
+  const targets={
+    return:['Get back onstage after going off the edge.','You made it back onstage.'],
+    guard:['Block or parry a hit from Brisket.','You defended against Brisket’s hit.'],
+    jab:['Land the opening jab on Brisket.','Your opening jab connected.'],
+    stock:['Take a stock with Pip’s side smash.','Your side smash took a stock.']
+  };
+  class RematchTarget {
+    constructor(id){this.id=id;this.offstage=false;this.doneAt=null;}
+    get title(){return this.doneAt===null?'Rematch target':'Target met';}
+    get line(){return targets[this.id][this.doneAt===null?0:1];}
+    contact(name,e,world){
+      if(this.doneAt!==null)return;
+      const who=e.f?.index;
+      if(name==='ko' && who===0)this.offstage=false;
+      if(this.id==='guard' && who===0 && (name==='block' || name==='parry'))this.doneAt=world.matchFrames;
+      if(this.id==='jab' && name==='hit' && who===1 && e.owner?.index===0 && e.moveId===e.owner.kit.ground[0])this.doneAt=world.matchFrames;
+      if(this.id==='stock' && name==='ko' && who===1){
+        const last=world.matchCard.players[1].lastHit;
+        if(last?.id===world.dogs[0].kit.smashes.side && world.matchFrames-last.frame<=600)this.doneAt=world.matchFrames;
+      }
+    }
+    step(world){
+      if(this.id!=='return' || this.doneAt!==null)return;
+      const pip=world.dogs[0],floor=world.terrain[0];
+      if(!pip.stocks || pip.stockLift || pip.respawning){this.offstage=false;return;}
+      if(pip.ledge || pip.ground<0 && (pip.x<floor.x1 || pip.x>floor.x2))this.offstage=true;
+      if(this.offstage && pip.ground>=0 && !pip.ledge && !pip.floorAction)this.doneAt=world.matchFrames;
+    }
+  }
   class Corner {
-    constructor(){this.seen=new Set();this.stock=0;this.cue='';this.lesson='jab';this.until=0;}
+    constructor(id){this.seen=new Set();this.stock=0;this.cue='';this.lesson='jab';this.until=0;
+      this.target=Object.hasOwn(targets,id)?new RematchTarget(id):null;}
     read(world){
       const stock=world.dogs[0].stocks, frame=world.matchFrames;
       if(stock!==this.stock){this.stock=stock;this.seen.clear();this.cue='';}
@@ -134,7 +164,11 @@
   function readProgress(raw) {
     const passed=lessons.filter(l=>Array.isArray(raw?.passed) && raw.passed.includes(l.id)).map(l=>l.id);
     const index=Math.max(0,lessons.findIndex(l=>l.id===raw?.lesson));
-    return {seen:raw?.seen===true,started:raw?.started===true || passed.length>0 || index>0,
+    const won=raw?.firstFightWon===true,r=raw?.rematch;
+    const rematch=!won && r && Object.hasOwn(targets,r.id) && typeof r.ticket==='string' && /^\d{16}-[0-9a-f]{16}$/.test(r.ticket)?
+      {id:r.id,ticket:r.ticket,fight:r.fight===true}:null;
+    return {seen:raw?.seen===true,started:raw?.started===true || passed.length>0 || index>0 || !!rematch,
+      firstFightWon:won,rematch,
       firstFightDone:raw?.firstFightDone===true,playedAt:Number.isSafeInteger(raw?.playedAt) && raw.playedAt>0 ? raw.playedAt : 0,
       index,passed};
   }
@@ -145,6 +179,12 @@
     }
     return -1;
   }
+  function updateRematch(save,change){
+    if(change?.won)save.firstFightWon=true;
+    if(save.firstFightWon){save.rematch=null;return;}
+    if(change?.loss)save.rematch={id:change.loss,ticket:change.ticket,fight:false};
+    if(change?.fight && save.rematch?.ticket===change.fight)save.rematch.fight=true;
+  }
   function rematchLesson(card) {
     const falls=card.losses.filter(loss=>loss.slot===0 && loss.zone==='bottom').length;
     if (falls) return {id:'return',button:'Practice recovery',reason:'Pip lost '+falls+(falls===1?' stock':' stocks')+' below the stage. Try reaching the ledge with Up Special.'};
@@ -153,5 +193,5 @@
     if (!pip.hits) return {id:'jab',button:'Practice jabs',reason:'Pip finished without landing a hit. Try a jab when Brisket is within paw’s reach.'};
     return {id:'stock',button:'Practice knockouts',reason:'Practice charging a side smash to finish a stock near the edge.'};
   }
-  window.FightSchool={lessons,Lesson,Corner,cornerLine,readProgress,unfinished,rematchLesson};
+  window.FightSchool={lessons,Lesson,Corner,cornerLine,readProgress,unfinished,rematchLesson,updateRematch};
 })();

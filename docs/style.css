@@ -1,6 +1,6 @@
 @font-face {
   font-family: Brawl Pixel;
-  src: url('./assets/brawl-pixel.ttf') format('truetype');
+  src: url('./assets/brawl-pixel.woff2') format('woff2'), url('./assets/brawl-pixel.ttf') format('truetype');
   font-display: swap;
   font-weight: 400;
 }
