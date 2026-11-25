@@ -2175,14 +2175,20 @@
       $('recovery-tip').textContent = tip + ' Choose ' + (practice.pattern === 'approach' ? 'Approach' : 'Retreat') + ' to retry.';
     }
   }
+  function ledgeTrapCounterTip(f) {
+    if (f.kind === 'brisket' || f.kind === 'noodle')
+      return 'Stay below the fist until it extends, then tap Attack for ' + moves[f.kit.ledgeAttack].label + '.';
+    return 'As the punch comes forward, tap Shield to roll. Aim inward and tap Attack as your paws land.';
+  }
   function climbFeedback(name, e) {
     const drill = world.climbPractice, status = $('climb-status'), trap = drill.role === 'trap';
     if (drill.role === 'patience') {
       const outcome = e.outcome || e.phase;
       const [label, tip] = {
         start:['Brisket is charging', 'Stay on the ledge and watch his front paw.'],
-        swing:['Haymaker released', 'Tap Shield as the punch comes forward.'],
-        opening:['Punch missed', 'Roll in, then aim toward Brisket and tap Attack while he recovers.'],
+        swing:['Haymaker released', ledgeTrapCounterTip(world.dogs[0])],
+        opening:['Punch missed', world.dogs[0].ledge ? 'Tap Attack from the lip or roll in while Brisket recovers.' :
+          'Brisket is recovering. Aim toward him and tap Attack.'],
         punched:['Caught by Haymaker', 'Hold the lip through the charge. An early climb gives Brisket a target.'],
         punished:['Whiff punished', 'Your hit caught Brisket before he recovered.'],
         grabbed:['Grab punish', 'Your grab caught Brisket after the swing.'],
@@ -3426,7 +3432,7 @@
       $('climb-slow').setAttribute('aria-pressed', String(world.climbPractice.slow));
       $('climb-status').dataset.result = 'ready';
       $('climb-status').textContent = practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
-      message = pattern === 'patience' ? 'Tap Attack to start. Hang below Brisket’s charge. As his punch comes forward, tap Shield to roll, then aim ' + inward + ' and tap Attack.' :
+      message = pattern === 'patience' ? 'Tap Attack to start. Hang below Brisket’s charge. ' + ledgeTrapCounterTip(world.dogs[0]) :
         pattern === 'rise' ? 'Tap Down + Jump to spring from below the lip. Release Down, hold ' + inward + ' and tap Attack. Land onstage after the hit.' :
         pattern === 'coverRise' ? 'Hold Shield or tap Attack to start. Watch the rival spring from below and swing. Block, parry, or intercept the return.' :
         trap ? 'Tap Attack to start. Watch the rival’s paws touch down, then tap Attack again to catch the climb.'

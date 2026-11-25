@@ -499,7 +499,7 @@ Choose **Training → Practice ledge attack** to start hanging with the dummy in
 
 Your first catch lasts four seconds at 0% and two at 120% or higher. Each regrab takes another 18 frames off the clock, down to a minimum of 75 frames. Three amber marks at the lip count down the last three quarters of a second. If you stay put, your paws slip and you fall with an air jump available. After six catches, you need to land or take a hit to catch again.
 
-In **Ledge timing → Wait out Haymaker**, Brisket charges just beyond the lip. Climb early to see how he catches your paws. On the retry, wait until the punch starts moving, tap Shield to roll, then aim inward and tap Attack. The drill lets you switch ledges or slow the fight down. [Practice the timing](https://caleb-guyer.github.io/dog-fight-3/#training/ledge-patience)
+In **Ledge timing → Wait out Haymaker**, Brisket charges just beyond the lip. Climb early to see how he catches your paws. With Pip or Clover, wait until the punch starts moving, tap Shield to roll, then aim inward and tap Attack. Brisket and Noodle can wait below the fist until it extends and tap Attack for Porch Bump or Latch Whip. Switch ledges or choose half speed to see where each opening starts. [Practice the timing](https://caleb-guyer.github.io/dog-fight-3/#training/ledge-patience)
 
 Try the same read in a three-stock match. Pip starts on the left ledge at 120%. Brisket watches for an early get-up, and keeps fighting after the first exchange. [Play the ledge trap](https://caleb-guyer.github.io/dog-fight-3/#solo/ledge-trap)
 
