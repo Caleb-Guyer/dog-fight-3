@@ -1571,6 +1571,40 @@ async function testDodgeTiming(page,mobile) {
   assert(await status.isHidden());
 }
 
+async function testBoostGrabs(page,mobile) {
+  await page.goto(root+'?running-catches#training/boost-grab');
+  const status=page.locator('#footwork-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  await hold(['right','grab']);
+  await waitFor('shortReach');
+  assert.match(await status.textContent(),/short by \d+ px/);
+  await hold([]);
+
+  for (const [pattern,run,reach] of [
+    ['boostGrab','right','right'],
+    ['boostPivot','right','left'],
+    ['boostPivot','left','right'],
+  ]) {
+    await press('footwork-'+pattern);
+    if (run==='left') await press('footwork-side');
+    await hold([run,'attack']);
+    await waitFor('cancelNow');
+    await hold([reach,'grab']);
+    await waitFor(pattern==='boostPivot'?'boostPivotCatch':'boostCatch');
+    assert.match(await page.locator('#recovery-tip').textContent(),/direction to throw/);
+    await hold([]);
+    await page.clock.runFor(75);
+    await hold(['up']);
+    await page.clock.runFor(1500);
+    await hold([]);
+    const target=await page.locator('#hud .percentage').nth(1).textContent();
+    assert(parseInt(target,10)>0,'Up throw should damage the shielding rival, got '+target);
+  }
+  await press('reset-training');
+  assert(await status.isHidden());
+  console.log((mobile?'Touch':'Keyboard')+' passed short grab, boost grab, both pivot directions and up throws.');
+}
+
 async function testAttackCancel(page,mobile) {
   await page.goto(root+'?cancel#training/attack-cancel');
   const status=page.locator('#footwork-status');
@@ -1835,6 +1869,7 @@ async function testDevice(browser, mobile) {
     console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed examples, recording, replay, reply changes and free-training reset.');
     await testDefendTakes(page, mobile);
     await testShieldPunish(page, mobile);
+    await testBoostGrabs(page, mobile);
     await testPartnerTraining(page, mobile);
     await testEdges(page, mobile);
     await testTumble(page, mobile);
