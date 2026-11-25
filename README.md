@@ -614,6 +614,8 @@ While hanging, tap **Shield** to roll past a guard and turn back toward the ledg
 
 In **Training → Ledge roll practice**, **Close guard** swings at the lip. Roll past and tap Attack as your dog turns. **Read the roll** waits at the landing spot with a grab. Try jumping from the same position to make the grab miss. **Switch ledge** mirrors either setup.
 
+Choose **Teach the guard** to practice against a Rival that learns your timing. Tap Attack to start each catch, wait a beat, then roll. Choose **Next catch** and repeat. After seeing two consecutive rolls, the guard moves into grab range and faces the predicted landing spot. On the third catch, hang back until the grab misses, or try a jump. Noodle’s long grab can still catch a low jump. Choose **Fight this Rival** to start a three-stock match with the same dogs, arena, and learned timing. Rival CPUs can learn the same habit during ordinary solo games. [Teach the guard](https://caleb-guyer.github.io/dog-fight-3/#training/roll-habit)
+
 ## Ledge trumping
 
 Catch the same lip as a hanging dog to take their place. A falling catch, a directional air dodge and Noodle’s Ledge Lasso can all do it. The displaced dog pops outward without taking damage and can jump, attack, or use a recovery special after the brief recoil. Rolling, jumping or dropping before the other dog arrives leaves the lip free.
