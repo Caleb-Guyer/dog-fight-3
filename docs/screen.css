@@ -287,6 +287,62 @@ body:is(.playing, .cinema-active) .full-button span {
 #training-tools button {
   white-space: nowrap;
 }
+dialog[data-view='practice'] { width: min(620px, calc(100% - 20px)); }
+dialog[data-view='practice'] .dialog-inner {
+  display: flex;
+  flex-direction: column;
+  max-height: min(85dvh, 720px);
+}
+dialog[data-view='practice'] #dialog-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.practice-search { display: grid; gap: 4px; font-weight: bold; }
+#practice-query {
+  width: 100%;
+  padding: 7px 9px;
+  border: 2px solid var(--ink);
+  color: var(--ink);
+  background: #fff6de;
+}
+.practice-lanes { display: flex; flex-wrap: wrap; gap: 4px; margin-block: 8px 4px; }
+.practice-lanes button { min-height: 32px; padding: 3px 7px; }
+.practice-lanes [aria-pressed='true'] { background: var(--gold); color: var(--ink); }
+#practice-count { font-size: 13px; margin-block: 2px 4px; }
+#practice-results {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--edge) var(--paper);
+  padding: 3px 6px 5px 3px;
+}
+#practice-results section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 135px), 1fr));
+  gap: 5px;
+  margin-bottom: 14px;
+}
+#practice-results h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-block: 4px;
+  border-bottom: 2px solid var(--edge);
+  font: 18px var(--pixel);
+}
+#practice-results [data-exercise] {
+  padding: 7px;
+  min-height: 38px;
+  border: 1px solid var(--edge);
+  background: #fff2cd;
+  font: 15px/1.15 var(--body);
+  text-align: left;
+}
+#practice-results [data-exercise]:hover, #practice-results [data-exercise]:focus-visible { background: var(--gold); }
+@media (max-height: 480px) {
+  dialog[data-view='practice'] .dialog-inner { max-height: 92dvh; padding: 8px 12px; }
+  dialog[data-view='practice'] .dialog-heading { margin-bottom: 4px; padding-bottom: 3px; }
+  .practice-search { grid-template-columns: auto 1fr; align-items: center; }
+}
 
 /* The projector draws scenery across the whole surface, behind the captions and controls. */
 #dispatch-story {

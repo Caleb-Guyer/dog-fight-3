@@ -3030,6 +3030,12 @@
       return this.mode === 'local' || (this.mode === 'training' && (this.trainingPartner ||
         (this.comboPractice?.reply === 'p2' && !this.comboPractice.defending)));
     }
+    copyFightFrom(source) {
+      const {emit, random, ...state} = source;
+      // Copy one graph so both ends of a grab and fighter keys in hit ledgers stay linked.
+      Object.assign(this, structuredClone(state));
+      this.random.state = random.state;
+    }
     saveTrainingMoment() {
       // Copy one graph. Both dogs can share a grip, and some hit ledgers refer to a fighter by identity.
       const {dogs, terrain, ledgeClaims, grapple, projectiles, ball, nextBall, hitStop, finalHitHold,

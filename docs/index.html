@@ -13,11 +13,11 @@
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="./style.css?v=stock-set-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
-    <link rel="stylesheet" href="./screen.css?v=blast-radar-1" />
+    <link rel="stylesheet" href="./screen.css?v=practice-room-1" />
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=belly-crawl-1"></script>
     <script defer src="./arena-art.js?v=canal-lock-1"></script>
-    <script defer src="./engine.js?v=belly-crawl-1"></script>
+    <script defer src="./engine.js?v=practice-room-1"></script>
     <script defer src="./render.js?v=belly-crawl-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
@@ -31,8 +31,8 @@
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
     <script defer src="./dispatch-run.js?v=stock-return-1"></script>
     <script defer src="./dispatch-view.js?v=blast-radar-1"></script>
-    <script defer src="./online.js?v=belly-crawl-1"></script>
-    <script defer src="./app.js?v=belly-crawl-1"></script>
+    <script defer src="./online.js?v=practice-room-1"></script>
+    <script defer src="./app.js?v=practice-room-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -384,6 +384,8 @@
         </div>
         <p id="recovery-tip" hidden></p>
         <div id="training-tools" class="training-tools" hidden>
+          <button id="practice-menu" type="button" class="utility">Find a drill</button>
+          <button id="return-fight" type="button" class="utility" hidden>Back to fight</button>
           <span id="damage-control">
             <label for="dummy-damage"><span id="damage-label">Dummy damage</span> <output id="damage-output" for="dummy-damage">0%</output></label>
             <input id="dummy-damage" aria-label="Dummy damage" type="range" min="0" max="200" value="0" step="5" />

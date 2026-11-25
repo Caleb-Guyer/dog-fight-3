@@ -41,13 +41,6 @@
     return held;
   }
 
-  function restoreBattle(world, confirmed) {
-    const { emit, random, ...state } = confirmed;
-    // Clone the graph together: grips are shared and hit ledgers use fighters as Map keys.
-    Object.assign(world, structuredClone(state));
-    world.random.state = random.state;
-  }
-
   const silent = () => {};
   const dodgeCues = new Set(['dodge', 'shieldRoll', 'spotDodge', 'ledgeRoll']);
 
@@ -116,10 +109,10 @@
         this.confirmed++;
       }
       if (this.confirmedWorld.end !== null) {
-        restoreBattle(world, this.confirmedWorld);
+        world.copyFightFrom(this.confirmedWorld);
         this.pending.length = this.remote.length = 0;
       } else if (correction) {
-        restoreBattle(world, this.confirmedWorld);
+        world.copyFightFrom(this.confirmedWorld);
         for (const record of this.pending) {
           record.other = this.prediction;
           this.step(world, record.mine, record.other, silent);

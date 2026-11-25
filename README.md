@@ -12,6 +12,10 @@ Each dog starts with three stocks. Dealing damage makes the next hit launch a ri
 
 For a **best-of-three set**, open **Rules** on Fighter select, choose **Best of three**, then **Start set**. Both dogs get three fresh stocks each game. First to two wins takes the set. The loser picks the next arena and can ask for the same stage again. If you lose to Brisket on Picnic Table, try the same matchup on Moonbell Bandstand and use the low platforms to escape his grab. A solo CPU makes its own counterpick after a loss. The scorecard keeps each game's arena and winner. [Play Pip vs. Rival Brisket in a best-of-three](https://caleb-guyer.github.io/dog-fight-3/#solo/best-of-three)
 
+In a Solo fight, pause as Brisket closes in and choose **Practice this position**. Try shielding his approach, then choose **Pause → Retry position** and jump instead. Each attempt starts on the same frame with the same CPU, damage, stocks and stage. **Back to fight** resumes the original exchange. During a best-of-three, only the original fight counts toward the set.
+
+Choose **Find a drill** in Training or from a paused Solo fight. Search for a situation such as “jab lock,” “crawl,” or “parry,” or browse by category with the D-pad. Choose a drill to play it. When you enter from Solo, **Back to fight** returns you to your paused stock. [Open the drill list](https://caleb-guyer.github.io/dog-fight-3/#training/practice)
+
 Hold a direction during the opening countdown to start moving on **GO!**. A button tapped and released before the bell leaves your dog free to act.
 
 After a knockout, your next stock arrives on an airmail lift. When its lamps turn mint, tap **Down** to drop, a **side** to step off, or **Jump** to spring away with an air jump in reserve. An aerial attack, Special or air dodge can also take you off the lift. Four mail tags show how much protection you carry. Leave as it docks for up to 96 frames of protection. Wait the full two seconds and it drops you with 24 frames. Both players can see the last tag go out.
