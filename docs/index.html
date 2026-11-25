@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=shoulder-carry-1"></script>
     <script defer src="./arena-art.js?v=canal-lock-1"></script>
-    <script defer src="./engine.js?v=combo-takes-1"></script>
+    <script defer src="./engine.js?v=shield-punish-1"></script>
     <script defer src="./render.js?v=combo-takes-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
@@ -32,7 +32,7 @@
     <script defer src="./dispatch-run.js?v=stock-return-1"></script>
     <script defer src="./dispatch-view.js?v=blast-radar-1"></script>
     <script defer src="./online.js?v=haymaker-1"></script>
-    <script defer src="./app.js?v=combo-takes-1"></script>
+    <script defer src="./app.js?v=shield-punish-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -398,11 +398,12 @@
           <small id="box-key" hidden>Mint body · Coral melee · Gold sweet spot</small>
           <button id="combo-training" type="button" class="utility">Combo practice</button>
           <span id="combo-controls" role="group" aria-label="Combo practice controls" hidden>
-            <label for="combo-reply" id="combo-reply-label">Rival after contact</label>
+            <label for="combo-reply" id="combo-reply-label">Rival response</label>
             <select id="combo-reply">
               <option value="stand">Stand still</option>
               <option value="guard">Shield / air dodge</option>
               <option value="away">Flick away</option>
+              <option value="punish">Block and punish</option>
             </select>
             <button id="combo-example" type="button" class="utility">Dog’s combo</button>
             <button id="combo-late" type="button" class="utility">Late jab</button>

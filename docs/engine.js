@@ -2850,6 +2850,7 @@
       this.airPractice = null;
       this.dogs.forEach((f) => this.spawn(f, false));
       this.comboPractice = null;
+      this.bot.blockedSwing = null;
       this.edgePractice = null;
       this.projectiles = [];
       this.ball = null;
@@ -3016,6 +3017,11 @@
     }
     comboRivalInput(dt, frozen) {
       const d = this.comboPractice, rival = this.dogs[1];
+      if (d.reply === 'punish') {
+        if (rival.grip?.owner === rival.index && rival.grip.phase === 'hold')
+          return {...idleInput, x:rival.face, grabX:rival.face};
+        return this.shieldPunishInput(rival,this.dogs[0]) || {...idleInput, shield:rival.ground >= 0};
+      }
       if (!d.contacts.length || rival.grip) return idleInput;
       if (d.reply === 'away' && frozen)
         return { ...idleInput, x: Math.sign(rival.x - this.dogs[0].x) || this.dogs[0].face };
@@ -3027,7 +3033,7 @@
     }
     comboContact(target, kind, moveId, damage = 0) {
       const d = this.comboPractice;
-      if (d?.defending && d.phase === 'active' && target.index === 0 && !d.counter &&
+      if ((d?.defending || d?.reply === 'punish') && d.phase === 'active' && target.index === 0 && !d.counter &&
           (kind === 'hit' || kind === 'grab' || kind === 'throw'))
         d.counter = {kind, moveId, damage};
       if (!d || d.phase !== 'active' || target.index !== 1) return;
@@ -8064,6 +8070,9 @@
       }
       target.shieldHP -= damage * 0.027;
       const broken = target.shieldHP <= 0;
+      if (target.index === 1 && owner.index === 0 &&
+          (this.cpuLevel === 'rival' || (!this.comboPractice?.defending && this.comboPractice?.reply === 'punish')))
+        this.bot.blockedSwing = !broken && !projectile && (use?.airSide || use?.smashSide) ? use : null;
       if (this.shieldPractice?.brokenSlot === target.index && this.shieldPractice.phase === 'awake')
         this.guardBreakCue(target, 'guarded', this.shieldPractice.frames, this.shieldPractice.struggles, moveId);
       if (this.cpuLevel === 'rival' && owner.index === 1 && target.index === 0 && !projectile &&
@@ -8788,6 +8797,36 @@
       const height = foe.y - f.y - bodyHeight(foe) * 0.5;
       if (Math.abs(gap - x) > rx + foe.stats.width || Math.abs(height - y) > ry + bodyHeight(foe) * 0.4) return null;
       return { ...idleInput, y: 0.6, tapped: { attack: true } };
+    }
+    shieldPunishInput(f, foe) {
+      const swing = this.bot.blockedSwing;
+      if (!swing) return null;
+      const guarding = {...idleInput, shield:true};
+      const sameSwing = foe.attack === swing;
+      const recovery = sameSwing ? swing.end - swing.time : foe.landingLag;
+      const landingNear = sameSwing && foe.ground < 0 && foe.vy >= 0 && this.floorAhead(foe,.22) === f.ground;
+      if (!f.shield || f.ground < 0 || f.stun || f.grip || f.command || protectionTime(foe) ||
+          (foe.attack && !sameSwing) || foe.grip || foe.stun || recovery <= 0 ||
+          (foe.ground !== f.ground && !landingNear)) {
+        this.bot.blockedSwing = null;
+        return null;
+      }
+      // Keep guarding a descending attack and any second swing. Judge the actual landing, including cancels.
+      if (landingNear || f.impactLag > 0 || f.shieldStun > 0 ||
+          (sameSwing && swing.second && swing.time < swing.second.start + swing.second.active)) return guarding;
+      const grab = grabs[f.kit.grab], smash = smashes[f.kit.smashes.up];
+      for (const move of foe.damage >= 75 ? [smash,grab] : [grab,smash]) {
+        const isGrab = move === grab;
+        const startup = move.start + (isGrab && f.shieldGrabWindow > 0 ? shieldGrabPenalty : 0);
+        if (startup + 1/60 > recovery || (isGrab && foe.regrabLock)) continue;
+        const [x,y,rx,ry] = move.box, height = bodyHeight(foe);
+        const dx = (foe.x + foe.vx*Math.min(startup,.05) - f.x)*f.face;
+        if ((!isGrab && !move.around && dx < -2) || Math.abs(dx-x) > rx+foe.stats.width-3 ||
+            Math.abs(foe.y-height*.52-f.y-y) > ry+height*.4) continue;
+        this.bot.blockedSwing = null;
+        return isGrab ? {...guarding,tapped:{grab:true}} : {...guarding,smashY:-1,tapped:{smash:true}};
+      }
+      return guarding;
     }
     cpuGuard(f, foe) {
       if (f.ground < 0 || f.attack || f.stun || f.charge >= 0 || f.dodge || f.landingLag) return null;
@@ -9724,6 +9763,8 @@
         const basic = this.rookieNeutral(f, foe);
         if (basic) return basic;
       } else if (this.cpuLevel === 'rival') {
+        const punish = this.shieldPunishInput(f,foe);
+        if (punish) return punish;
         if (f.floorAction?.type === 'spotDodge') {
           const dodge = f.floorAction, grab = foe.attack, gap = (foe.x - f.x) * f.face;
           const wait = Math.max(0, dodge.duration - spotCounterLead - dodge.time);
