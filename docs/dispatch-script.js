@@ -79,7 +79,26 @@
       waves: [[foe('noodle', 714, fightStocks)]],
     },
   ];
-  for (const room of [...rooms, ...nightRooms]) {
+  const lift = {
+    id:'deadletter', name:'Dead Letter Lift', type:'Bonus relay', rules:'relay', length:1180, start:432,
+    terrain:[solid(170,1010,512),shelf(246,440,417),shelf(725,919,350)],
+    waves:[[foe('noodle',754)],[foe('brisket',395)],[foe('clover',778)]],
+    stops:['Sorting floor','Parcel vault','Roof hatch'], levels:['rookie','arcade','rival'],
+    shelves:[[417,350],[355,419],[387,387]], stampRoom:rooms.findIndex(r=>r.id==='bridge'),
+    bestKey:'dog-fight-3.dead-letter-lift.v1',
+  };
+  function liftBest(storage, clear, remembered) {
+      let previous;
+      try { previous=JSON.parse(storage.getItem(lift.bestKey)); } catch {}
+      const valid=r=>r && Number.isInteger(r.stocks) && r.stocks>=1 && r.stocks<=fightStocks && Number.isSafeInteger(r.frames) && r.frames>0;
+      const better=(a,b)=>a.stocks>b.stocks || a.stocks===b.stocks && a.frames<b.frames;
+      if(!valid(previous))previous=null;
+      if(valid(remembered) && (!previous || better(remembered,previous)))previous=remembered;
+      if(!valid(clear) || previous && !better(clear,previous))return previous;
+      try { storage.setItem(lift.bestKey,JSON.stringify(clear)); } catch {}
+      return clear;
+  }
+  for (const room of [...rooms, ...nightRooms, lift]) {
     room.checkpoints ??= [];
     room.spawns = [room.start, ...Array(3).fill(room.start)].map((x) => ({ x, ground: 0 }));
     room.walls = room.terrain.flatMap((p, index) =>
@@ -218,6 +237,9 @@
     return book;
   }
   const yard = chapter(1, 'The Silent Yard', rooms, scenes, chapterFighter, 'dog-fight-3.last-dispatch.v1');
+  yard.bonus=lift;
+  yard.liftUnlocked=save=>!!(save.stamps & (1<<lift.stampRoom));
+  yard.liftBest=liftBest;
   const night = chapter(2, 'The Night Mail', nightRooms, nightScenes, 'clover', 'dog-fight-3.night-mail.v1');
   window.DispatchScript = {...yard, chapters:[yard, night]};
 })();

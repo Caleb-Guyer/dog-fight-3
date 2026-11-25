@@ -82,6 +82,14 @@
     F2 F5 A5 . C6 A5 F5
     E2 G#5 - E5 B4 D5 E5
     A2m A5 - E5 A4 - .`);
+  score('deadletter','Third Floor Bell',118,.06,'mallet','R..OF.R.','.t..f..t','k.hhskh.',`D3m A4 . D5 F5 - E5 D5 .
+    Bb2 F4 . Bb4 D5 . A4 - .
+    G2m G4 Bb4 . D5 - F5 E5 D5
+    A2 C#5 - B4 . A4 . E4 .
+    D3m A4 D5 . A5 G5 . F5 D5
+    G2m Bb4 - D5 G5 . F5 D5 .
+    A2 E5 A5 . G5 E5 . C#5 A4
+    D3m F5 E5 D5 - A4 . D5 -`,[0,1,2,3,4,5,6,7]);
   const victories={
     pip:['Pip · Bell lap','pulse','G2 B4 D5 G5 . A5 B5 . D6','G2 B5 A5 G5 - - - - .'],
     brisket:['Brisket · Big finish','horn','C2 C4 . G4 - E4 G4 C5 .','C2 G4 . C5 - - - - .'],

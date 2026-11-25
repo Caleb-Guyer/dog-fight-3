@@ -338,7 +338,8 @@
     else if(page==='match' && world){
       const fight=finishTrial?.player.battle || online.match?.confirmedWorld || world;
       if(world.mode==='adventure'){
-        id=missionMusic[world.roomIndex];
+        id=world.sideRoute?world.layout.id:missionMusic[world.roomIndex];
+        urgent=world.sideRoute && world.wave===2;
         if(world.finished==='exit')id='win-'+world.dogs[0].kind;
         else if(world.finished==='fallen')id=null;
         else playing=playing && !paused;
@@ -5634,8 +5635,8 @@
     FinishTools:'finish-tools.js?v=stock-replay-1',
     FighterSchool:'fighter-lessons.js?v=special-studies-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
-    DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=night-mail-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=night-mail-1', DispatchView:'dispatch-view.js?v=night-mail-1',
+    DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=letter-lift-1', DispatchView:'dispatch-view.js?v=letter-lift-1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -5703,6 +5704,7 @@
   if (nightUnlocked()) campaign = nightChapter;
   let progress = chapterSaves.get(campaign),
     stored = !!storage;
+  let liftBest=null;
   function selectChapter(book) {
     campaign = book;
     progress = chapterSaves.get(book);
@@ -5834,6 +5836,7 @@
     afterStory = null;
     if(!window.DispatchCovers)return waitForDispatch('Route map',()=>loadDispatch('DispatchCovers'),()=>showRoute(then),()=>showHome());
     const night = campaign===nightChapter;
+    $('route-bonus').hidden=night || progress.room<yardChapter.bonus.stampRoom;
     window.DispatchCovers.draw($('route-cover'), night?'eastRoute':'route', progress.room);
     $('route-cover').setAttribute('aria-label','Rail map · '+campaign.rooms.map(r=>r.name).join(' to '));
     $('route-number').textContent = 'Chapter 0'+campaign.number;
@@ -6056,10 +6059,29 @@
     if (!checkpoint && intro) playScene(intro);
     else beginRun(index, checkpoint, checkpoint ? progress.atCheckpoint : null);
   }
+  function liftScore(clear) {
+    return stockLabel(clear.stocks)+' left · '+cardTime(clear.frames)+'.'+String(Math.floor(clear.frames%60*100/60)).padStart(2,'0');
+  }
+  function showLiftTicket(clear) {
+    const bonus=yardChapter.bonus, open=yardChapter.liftUnlocked(progress);
+    liftBest=yardChapter.liftBest(storage,null,liftBest);
+    showDialog('lift-ticket',clear?'Dead Letter Lift clear':bonus.name,
+      (open?'<p>The bridge postmark fits the brass slot. Noodle, Brisket and Clover are waiting, one on each landing. Take all three stocks before Pip loses his last.</p>':
+      '<p>The lift takes a Sorting Bridge postmark. Look above the Crane House checkpoint, where the short shelves lead up to the gantry.</p>')+
+      (clear?'<p>Your delivery · '+liftScore(clear)+'</p>':'')+
+      (liftBest?'<p>Personal best · '+liftScore(liftBest)+'</p>':'')+
+      '<div class="dialog-actions"><button class="primary" id="lift-enter">'+(open?clear?'Ride again':'Ride the lift':
+        progress.room>=bonus.stampRoom?'Search Sorting Bridge':progress.started?'Continue chapter':'Begin chapter')+
+      '</button><button class="utility" data-do="route">Route map</button></div>');
+    $('lift-enter').onclick=()=>open?beginRun(bonus.id,0):progress.room>=bonus.stampRoom?enterStop(bonus.stampRoom):continueAdventure();
+    $('lift-enter').focus();
+  }
   function beginRun(index, checkpoint, atCheckpoint = null, cupRound = null) {
     corner=null;
     const book = cupRound ? yardChapter : campaign;
-    if(!missionReady())return waitForDispatch(book.rooms[index].name,loadMission,
+    const sideRoute=book.bonus?.id===index, mission=sideRoute?book.bonus:book.rooms[index];
+    if(sideRoute && !book.liftUnlocked(progress))return showRoute(()=>showLiftTicket());
+    if(!missionReady())return waitForDispatch(mission.name,loadMission,
       ()=>beginRun(index,checkpoint,atCheckpoint,cupRound),()=>cupRound?cupSheet(cupRound.kind):showRoute());
     finishTape=null;
     cupAttempt = cupRound;
@@ -6096,7 +6118,7 @@
     document.body.classList.remove('menu-screen', 'training-active', 'cinema-active', 'with-drill-readout');
     $('freshness-readout').hidden = $('wave-readout').hidden = $('combo-readout').hidden = true;
     document.body.classList.add('playing', 'adventure-active');
-    if (!cupRound) saveProgress({ room: index, checkpoint, pending: '' });
+    if (!cupRound && !sideRoute) saveProgress({ room: index, checkpoint, pending: '' });
     $('blast-radar').hidden = true;
     view = new window.DispatchView();
     view.shakeEnabled = settings.shake;
@@ -6114,13 +6136,14 @@
         if (cupRound) return;
         saveProgress({ room: index, stamp: index });
         tone(760, 1150, 0.09);
-        dispatchNotice('Postmark collected');
+        dispatchNotice(book.bonus?.stampRoom===index?'Postmark collected · Dead Letter Lift unlocked':'Postmark collected');
       } else if (name === 'dispatchSignal') {
         tone(330, 660, 0.19);
         dispatchNotice(e.name + ' raised');
       } else if (name === 'dispatchWave') {
         tone(420, 570, 0.12);
-        if (book.rooms[index].rules === 'horde') dispatchNotice('Wave ' + e.wave);
+        if (sideRoute) dispatchNotice(mission.stops[e.wave-1]+' · '+world.foes[0].f.stats.name);
+        else if (mission.rules === 'horde') dispatchNotice('Wave ' + e.wave);
       } else if (name === 'ko') {
         sound(name, e);
         dispatchNotice(e.f.stats.name + (e.remaining ? ' · ' + stockLabel(e.remaining) + ' left' : ' out'));
@@ -6135,7 +6158,7 @@
       } else if (name === 'machineSwing') tone(135, 55, 0.11);
       else sound(name, e);
     });
-    $('match-mode').textContent = cupRound ? 'Arcade Cup · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
+    $('match-mode').textContent = sideRoute?'Bonus dispatch · Relay':cupRound ? 'Arcade Cup · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
     $('match-stage').textContent = world.layout.name;
     $('runner-portrait').src = portrait(world.dogs[0].kind,world.coatFor(0));
     $('runner-name').textContent = world.dogs[0].stats.name;
@@ -6184,14 +6207,14 @@
       } else {
         $('rival-percent').hidden = horde;
         if (!horde) showPercent($('rival-percent'), lead.f.damage);
-        const team = horde ? 'Sorting crew' : world.layout.rules === 'relay' ? 'Cage guards' : lead.f.stats.name;
+        const team = world.sideRoute?'Lift crew':horde ? 'Sorting crew' : world.layout.rules === 'relay' ? 'Cage guards' : lead.f.stats.name;
         showStocks($('rival-lives'), world.rivalStocks, team);
         if (horde) $('rival-score').setAttribute('aria-label', foes.filter((e) => e.f.stocks)
           .map((e) => e.f.stats.name + ' ' + tenth(e.f.damage) + '%').join(', '));
         else $('rival-score').removeAttribute('aria-label');
       }
     }
-    $('dispatch-marks').textContent = cupAttempt ? 'Arcade Cup · Round 4 / 4' :
+    $('dispatch-marks').textContent = world.sideRoute?'Noodle / Brisket / Clover':cupAttempt ? 'Arcade Cup · Round 4 / 4' :
       'Postmarks ' + countMarks(world.stamps) + ' / ' + campaign.rooms.length;
     if ($('dispatch-objective').textContent !== order) $('dispatch-objective').textContent = order;
   }
@@ -6221,6 +6244,11 @@
     view.draw($('game'), world, dt, world.time);
     if (cupAttempt && world.finished) return cupResult(world.finished==='exit');
     if (world.finished === 'exit') {
+      if(world.sideRoute){
+        const clear={stocks:world.dogs[0].stocks,frames:world.runFrames};
+        liftBest=yardChapter.liftBest(storage,clear,liftBest);
+        return showRoute(()=>showLiftTicket(clear));
+      }
       const { layout, roomIndex } = world;
       if (layout.outro) playScene(layout.outro);
       else {
@@ -6250,6 +6278,7 @@
     }
   }
   function auditionLocation(id) {
+    if(id==='deadletter')return yardChapter.bonus.name;
     if(arenas[id])return arenas[id].name;
     return id==='menu'?'Main menu':'Victory';
   }
@@ -6272,12 +6301,12 @@
       '<button id="audition-stop" class="utility" type="button">Stop</button><button id="audition-back" class="utility" type="button">Options</button></div>');
     const select=$('audition-track'),mix=$('audition-mix');
     select.value=auditionTrack;
-    mix.hidden=!arenas[auditionTrack];
+    mix.hidden=!arenas[auditionTrack] && auditionTrack!=='deadletter';
     const play=()=>{
       unlockMusic();auditionPlaying=true;music?.restart();updateMusic();refreshAudition();
     };
     select.onchange=()=>{
-      auditionTrack=select.value;auditionUrgent=false;mix.hidden=!arenas[auditionTrack];
+      auditionTrack=select.value;auditionUrgent=false;mix.hidden=!arenas[auditionTrack] && auditionTrack!=='deadletter';
       mix.setAttribute('aria-pressed','false');play();
     };
     mix.onclick=()=>{
@@ -6642,6 +6671,7 @@
   }
   $('lobby-home').onclick = $('route-home').onclick = returnToHome;
   $('route-films').onclick = () => showReels();
+  $('route-bonus').onclick = () => showLiftTicket();
   $('route-switch').onclick = () => {
     if (!nightUnlocked()) return;
     selectChapter(campaign===yardChapter ? nightChapter : yardChapter);
@@ -7927,6 +7957,7 @@
       toLobby();
     }
     else if (hash === '#cutscenes') openFilmLibraryLink();
+    else if (hash === '#adventure/dead-letter-lift') {selectChapter(yardChapter);showRoute(()=>showLiftTicket());}
     else if (hash === '#adventure') showRoute();
     else if (hash === '#online' || hash==='#online/best-of-three') {
       showOnline();

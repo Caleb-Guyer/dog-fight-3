@@ -20,14 +20,18 @@
   }
   class DispatchRun extends Battle {
     constructor({ chapter = 1, room = 0, checkpoint = 0, stamps = 0, atCheckpoint = null, cupFighter, coat = 0 }, emit = () => {}) {
-      const {rooms, chapterFighter} = chapters[chapter-1];
-      const script = rooms[room], saved = script.checkpoints[checkpoint - 1];
+      const {rooms, chapterFighter, bonus} = chapters[chapter-1];
+      const sideRoute = !!bonus && room===bonus.id;
+      const script = sideRoute ? bonus : rooms[room], saved = script.checkpoints[checkpoint - 1];
       const bridge = script.signals ? new window.DispatchBridge(script, checkpoint) : null;
-      const layout = bridge ? { ...script, terrain: bridge.geometry(0) } : script;
+      const layout = bridge ? { ...script, terrain: bridge.geometry(0) } :
+        sideRoute ? {...script,terrain:script.terrain.map(p=>({...p}))} : script;
       const cupBoss = script.rules === 'boss' && Object.hasOwn(window.DogFight.fighters,cupFighter);
       super({ stage: 'dispatch', layout, mode: 'adventure', p1: cupBoss ? cupFighter : chapterFighter, p2: 'brisket', fetch: false }, emit);
       this.cupCoat = cupBoss && window.DogFight.validCoat(coat) ? coat : 0;
       this.roomIndex = room;
+      this.sideRoute=sideRoute;
+      this.runFrames=0;
       this.chapter = chapter;
       this.atCheckpoint = saved && !bridge ? atCheckpoint : null;
       const runner = this.dogs[0];
@@ -78,6 +82,7 @@
       return stocks;
     }
     get objective() {
+      if (this.sideRoute) return this.layout.stops[this.wave]+' · '+(this.wave+1)+' of 3 · '+this.foes[0].f.stats.name;
       if (this.bridge) return this.bridge.objective(this.dogs[0].x);
       if (this.layout.rules === 'horde') {
         const n = this.rivalStocks;
@@ -117,6 +122,7 @@
       phase(e, 'approach', 1);
     }
     startWave() {
+      if (this.sideRoute) this.cpuLevel=this.layout.levels[this.wave];
       this.foes = this.layout.waves[this.wave].map((spec, i) => {
         const index = i + 1, f = this.dogs[index] || { kind: 'brisket', index };
         this.dogs[index] = f;
@@ -287,6 +293,7 @@
       this.emit('dispatchCheckpoint', { f, checkpoint: this.checkpoint, atCheckpoint: this.atCheckpoint });
     }
     awardMark() {
+      if(this.sideRoute)return;
       const bit = 1 << this.roomIndex;
       if (this.stamps & bit) return;
       this.stamps |= bit;
@@ -331,6 +338,7 @@
     }
     step(dt, input = idleInput) {
       if (this.finished) return;
+      if(this.sideRoute && !this.clearDelay)this.runFrames++;
       if (this.clearDelay > 0) {
         this.time += dt;
         this.clearDelay = Math.max(0, this.clearDelay - dt);
@@ -339,6 +347,13 @@
         return;
       }
       const frozen = this.hitStop > 0;
+      if (this.sideRoute && !frozen) {
+        const shelves=this.layout.shelves[this.wave], motion=25*Math.sin((this.time+dt)*1.25);
+        for(let i=0;i<2;i++){
+          const platform=this.layout.terrain[i+1], target=shelves[i]+(i ? -motion : motion);
+          platform.y+=clamp(target-platform.y,-62*dt,62*dt);
+        }
+      }
       if (this.bridge && !frozen) this.layout.terrain = this.bridge.geometry(dt, this.dogs[0]);
       const inputs = this.foes.length && !frozen ? this.foes.map((e) => this.machineInput(e, dt)) : idleInput;
       super.step(dt, input, inputs);

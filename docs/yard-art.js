@@ -2866,6 +2866,49 @@
       ctx.drawImage(art, left, Math.round(platform.y), right - left, art.height * cell);
     });
   }
+  function letterLift(ctx,view) {
+    const {width,height,top,cameraX,time,terrain}=view;
+    // One bay of the lift shaft. Reuse the pigeonholes and parcels as the car passes each landing.
+    const bay=piece('letter-lift-bay',124,78,p=>{
+      p.r(0,0,124,78,'#383846');
+      p.r(7,5,109,61,'#252b37');p.r(12,9,99,51,'#58454a');
+      const rng=seeded(318);
+      for(let row=0;row<3;row++)for(let col=0;col<5;col++){
+        const x=14+col*19,y=10+row*16;
+        p.r(x,y,17,14,'#342e39');p.r(x+1,y+12,16,2,'#7b5c50');
+        if(rng()<.64){
+          const h=4+Math.floor(rng()*5);
+          p.r(x+2,y+12-h,12,h,'#9c7964');p.r(x+2,y+12-h,12,1,'#b99979');
+          p.r(x+8,y+12-h,2,h,'#61525a');p.r(x+3,y+9,3,2,'#c5b19a');
+        }else envelope(p,x+3,y+5,11,7,'#a39a89','#776e69','#9d6961');
+      }
+      p.r(0,64,124,5,'#292a38');p.r(0,64,124,1,'#846d66');
+      for(const x of [2,117]){
+        p.r(x,0,4,78,'#262e3c');p.r(x,0,1,78,'#65626a');
+        for(let y=3;y<78;y+=17)p.r(x+1,y,1,2,'#93827a');
+      }
+      p.line(5,76,24,68,'#55505b',2);p.line(99,68,117,76,'#55505b',2);
+    });
+    const pitch=bay.height*cell, fall=Math.floor(time*26)%pitch;
+    for(let y=top-((top-fall)%pitch+pitch)%pitch;y<top+height;y+=pitch)
+      pan(ctx,bay,cameraX,.55,width,y);
+    for(const p of terrain.slice(1)){
+      for(const anchor of [p.x1+12,p.x2-12]){
+        const x=Math.round(anchor-cameraX);
+        ctx.fillStyle='#33323c';ctx.fillRect(x-3,top,7,p.y-top);
+        ctx.fillStyle='#ab9280';ctx.fillRect(x,top,2,p.y-top);
+      }
+    }
+    const sign=piece('letter-lift-dial',51,19,p=>{
+      p.r(0,0,51,19,'#302e3b');p.r(1,1,49,17,'#826450');p.r(3,3,45,13,'#353640');
+      envelope(p,5,5,11,8,'#e2be89','#946b55','#b56356');
+      for(let i=0;i<3;i++)p.oval(23+i*9,9,3,3,'#665256');
+    });
+    const sx=Math.round(view.length/2-cameraX-sign.width*cell/2);
+    ctx.drawImage(sign,sx,126,sign.width*cell,sign.height*cell);
+    ctx.fillStyle='#efc269';ctx.fillRect(sx+(21+view.floor*9)*cell,147,5*cell,5*cell);
+    drawSurfaces(ctx,terrain,'exchange',cameraX,width,true);
+  }
   function draw(ctx, view) {
     const {
       terrain = [],
@@ -2885,6 +2928,7 @@
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.imageSmoothingEnabled = false;
+    if(view.room==='deadletter'){letterLift(ctx,view);ctx.restore();return;}
     if(view.room==='mailroof' || view.room==='eastsignal'){
       nightLine(ctx,view);ctx.restore();return;
     }
