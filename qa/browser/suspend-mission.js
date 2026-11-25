@@ -32,7 +32,9 @@ async function play(browser,touch){
     const expected=await page.evaluate(()=>fingerprint(liveRun));
     await press('[data-do=suspend-mission]');
     await page.waitForFunction(()=>document.getElementById('home-continue').dataset.save==='suspend-1-1');
-    assert.match(await page.locator('#home-continue').textContent(),/The Weigh House.*Suspended.*Resume mission/);
+    assert.equal(await page.locator('#continue-title').textContent(),'The Weigh House');
+    assert.match(await page.locator('#continue-detail').textContent(),/^Suspended · \d stocks? · \d+%$/);
+    assert.equal(await page.locator('#continue-action').textContent(),'Resume mission');
     const old=await page.evaluate(async()=>(await DispatchSuspend.list())[0]);
     // A fresh document has only the persistent stores, with no live battle or cached mission scripts.
     await page.goto(root+'?resume');await page.waitForFunction(()=>document.querySelector('#home-continue').dataset.save==='suspend-1-1');
