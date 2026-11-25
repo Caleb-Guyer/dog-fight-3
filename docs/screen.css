@@ -100,7 +100,8 @@ body .topbar .wordmark {
 #school-coach h2 { margin:2px 0; font-size:clamp(15px,2vh,22px); }
 #school-coach p { margin:3px 0; line-height:1.25; }
 #school-coach button, #school-welcome button { padding:5px 9px; min-height:28px; }
-#school-coach div { display:flex; gap:7px; margin-top:5px; }
+#school-coach div { display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; }
+#school-coach[data-state^="example"] { border-color:#96dcd1; }
 #school-bindings { color:#aadcd8; }
 #school-syllabus { display:grid; gap:5px; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); }
 #school-syllabus button { text-align:left; }

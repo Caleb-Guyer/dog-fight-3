@@ -107,6 +107,62 @@
       }
     }
   }
+  // Durations are in fight frames. A short hold before each new input lets the
+  // viewer read the cue without changing the timing between real inputs.
+  const examples={
+    move:[[120,'right','Hold right until Pip reaches the middle of the roof.']],
+    platform:[[16,'jump','Hold Jump to rise through the bench.'],[4,'','Release Jump while Pip is rising.'],
+      [1,'jump','Press Jump again in the air.'],[90,'','Let Pip land on the bench.']],
+    jab:[[24,'attack','Leave the direction centered and tap Attack when Brisket is within reach.']],
+    tilt:[[24,'down attack','Aim down and tap Attack with both paws planted.']],
+    air:[[1,'jump attack','Press Jump and Attack together to start a short-hop aerial.'],[36,'','Let the aerial connect.']],
+    guard:[[60,'shield','Hold Shield while Brisket swings at the bubble.']],
+    throw:[[8,'grab','Reach through Brisket’s shield with Grab.'],[40,'right','Once Pip has hold of him, press right to throw.']],
+    special:[[40,'right special','Aim toward Brisket and press Special to pounce.']],
+    return:[[1,'up right special','Aim up and toward the roof, then press Special to launch.'],[120,'right','Keep steering toward the roof as Pip comes down.']],
+    stock:[[32,'right smash','Hold right and Smash to charge near the edge.'],[2,'right','Release Smash while facing Brisket.'],
+      [120,'','Watch where the charged kick sends him.']],
+    'pip-0':[[1,'right special','Pounce toward Brisket.'],[12,'right','Release Special and watch for the bounce.'],
+      [1,'right special','Press Special into Brisket again during the bounce.'],[80,'right','Follow the second pounce.']],
+    'pip-1':[[1,'up right special','Launch the first Fence Hopper up toward the edge.'],[11,'right','Release Special so Pip can use the second hop.'],
+      [1,'up right special','Aim up-right and press Special for the second hop.'],[100,'right','Carry the second hop onto the table.']],
+    'brisket-0':[[57,'','Wait while Pip charges. Watch his front paw.'],[1,'down special','Brace just before Pip releases the smash.'],
+      [80,'','Stand Firm catches the swing and strikes back.']],
+    'brisket-1':[[20,'up right special','Hold Special to charge Kennel Cannon past halfway.'],[140,'right','Release Special and aim right as Brisket launches.']],
+    'noodle-0':[[1,'special','Tap Special with the direction centered to cast Tug Rope.'],[24,'','Let go of Special while Noodle reels Brisket in.'],
+      [32,'attack','Tap Attack as Brisket comes within jab range.']],
+    'noodle-1':[[1,'up right special','Cast Ledge Lasso toward the lip.'],[23,'','Let the rope reel Noodle all the way to the edge.'],
+      [90,'right','From the ledge, press toward the roof to climb.']],
+    'clover-0':[[1,'special','Throw Round Trip with the direction centered.'],[22,'','Release Special while the disc flies ahead.'],
+      [1,'right special','Aim after the disc and press Special to chase.'],[80,'','Watch Clover meet her disc.']],
+    'clover-1':[[1,'up right special','Open Disc Sail with Up and Special.'],[39,'right special','Keep holding Special and steer right until the deck is underneath.'],
+      [100,'right','Release Special over the deck to fold the sail and land.']],
+  };
+  class Example {
+    constructor(id){
+      this.cues=examples[id].map(([frames,chord,caption])=>{
+        const keys=chord?chord.split(' '):[];
+        const input={...idleInput,quickAttack:true};
+        for(const key of keys){
+          if(key==='right')input.x=1;
+          else if(key==='up')input.y=-1;
+          else if(key==='down')input.y=1;
+          else input[key]=true;
+        }
+        if(input.smash)input.smashX=input.x;
+        return {frames,keys,caption,input};
+      });
+      this.index=0;
+      this.frame=-18;
+    }
+    get cue(){return this.cues[this.index];}
+    input(){
+      if(this.frame===this.cue.frames && this.index+1<this.cues.length){
+        this.index++;this.frame=-18;
+      }
+      return this.frame++<0?null:this.cue.input;
+    }
+  }
   function hint(info,device,keyFor,padFor){
     function label(action){
       if(device===0)return keyFor(0,action);
@@ -141,5 +197,5 @@
     root.querySelector('[data-class-back]').onclick=back;
     root.querySelector('[data-class-dog][aria-pressed=true]').focus({preventScroll:true});
   }
-  window.FighterSchool={courses,Trial,hint,sheet,mark,cleared};
+  window.FighterSchool={courses,Trial,Example,hint,sheet,mark,cleared};
 })();
