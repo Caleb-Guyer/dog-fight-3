@@ -1553,7 +1553,7 @@
     }
     return report;
   }
-  function startMatch(config = settings, random = Math.random, opening, series = null, {visit, resume} = {}) {
+  function startMatch(config = settings, random = Math.random, opening, series = null, {visit, resume, leadInFrames = 0} = {}) {
     practiceFight = visit || null;
     const rehearsal = !!visit && config.mode === 'solo';
     trainingMoment = null;
@@ -1656,6 +1656,11 @@
       }
       if (name === 'win') resultDelay = 0.7;
     }, random);
+    if (leadInFrames) {
+      const opener = new Battle(config, undefined, seededRandom(soloSeed));
+      for (let frame = 0; frame < leadInFrames; frame++) opener.step(1 / 60, idleInput, idleInput);
+      world.copyFightFrom(opener);
+    }
     if (rehearsal) {
       world.copyFightFrom(visit.battle);
       const {cx, cy, zoom, leftFighter} = visit.view;
@@ -1678,7 +1683,7 @@
     }
     $('pause-label').textContent = online.match ? 'Match menu' : 'Pause';
     const position = rehearsal ? visit : resume;
-    countdown = position ? position.countdown : config.mode === 'training' || world.suddenDeath ? 0 : 2.4;
+    countdown = position ? position.countdown : config.mode === 'training' || world.suddenDeath || leadInFrames ? 0 : 2.4;
     lastCount = position?.lastCount || 0;
     resultDelay = 0;
     hudKey = '';
@@ -4846,7 +4851,7 @@
       // Apply the air dodge's radial dead zone to the whole stick, including shallow angles.
       airDodgeX: digitalAim ? (left || right ? grabX : 0) : pad?.axes?.[0] || 0,
       airDodgeY: digitalAim ? y : pad?.axes?.[1] || 0,
-      jump: key('jump') || down(pad, 0) || shortHop,
+      jump: key('jump') || (down(pad, 0) && !(menuPadButtons.get(pad.index) & 1)) || shortHop,
       shortHop,
       attack: key('attack') || down(pad, 2),
       smash: held.has(map.smash) || tapped('smash') || touchSmash || down(pad, 7),
@@ -4854,7 +4859,7 @@
       tiltMode: settings.tiltStick && aimStick,
       smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : x || axis(0) || savedSmash?.rawX || 0,
       smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : y || axis(1) || savedSmash?.y || 0,
-      special: key('special') || down(pad, 1),
+      special: key('special') || (down(pad, 1) && !(menuPadButtons.get(pad.index) & 2)),
       shield,
       grab: key('grab') || down(pad, 3),
       tapped: {
@@ -4878,7 +4883,16 @@
     return input;
   }
   let oldPad = {};
+  const menuPadButtons = new Map();
   function padMenu(pads) {
+    // A and B also fight. Consume menu presses until that particular pad releases them.
+    const menuOpen = page !== 'match' || $('dialog').open;
+    for (const pad of pads) {
+      const buttons = (down(pad, 0) ? 1 : 0) | (down(pad, 1) ? 2 : 0);
+      const used = menuOpen ? buttons : (menuPadButtons.get(pad.index) || 0) & buttons;
+      if (used) menuPadButtons.set(pad.index, used);
+      else menuPadButtons.delete(pad.index);
+    }
     const any = (i) => pads.some((p) => down(p, i));
     const now = {
       pause: any(9),
@@ -5064,6 +5078,15 @@
       const stage = openingStages[hash];
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage,
         cpuLevel:'rival', minutes:7, fetch:false }, undefined, 42);
+    } else if (hash === '#solo/shoulder-charge') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'rival',
+        minutes:7, fetch:false}, undefined, 42, null, {leadInFrames:54});
+      showDialog('pause', 'Brisket’s Shoulder Charge', '<p>Brisket is bearing down on Pip. Hold Shield as play starts, then retry the position and jump over him.</p>' +
+        '<div class="dialog-actions"><button class="primary" data-do="rehearse">Practice this position</button>' +
+        '<button class="utility" data-do="resume">Play the stock</button></div>');
+      document.querySelector('[data-do=rehearse]').focus();
     } else if (hash === '#solo/crawl') {
       leaveOnline();
       afterStory = null;
