@@ -2820,7 +2820,8 @@
         this.copyFightFrom(opening);
       }
       this.matchCard = versus && config.lesson === undefined ? {
-        players:this.dogs.map(f => ({kind:f.kind, coat:this.coatFor(f.index), damage:0, hits:0, blocks:0, parries:0, lastHit:null})),
+        players:this.dogs.map(f => ({kind:f.kind, coat:this.coatFor(f.index), damage:0, hits:0, blocks:0, parries:0,
+          techs:0, knockdowns:0, shieldBreaks:0, lastHit:null})),
         losses:[],
       } : null;
     }
@@ -6627,6 +6628,7 @@
       if (type === 'floorAttack') beginAttack(f, 'floorAttack', 0, 0, f.kit.floorAttack);
       const event =
         type === 'downed' ? 'knockdown' : type === 'tech' || type === 'techRoll' ? 'tech' : 'getup';
+      if (this.matchCard && event!=='getup') this.matchCard.players[f.index][event==='tech'?'techs':'knockdowns']++;
       if (f.index === 0 && this.launchPractice?.phase === 'flight' && this.launchPractice.pattern !== 'juggle')
         this.launchPractice.phase = 'landed';
       this.emit(event, { f, type, dir, point: { x: f.x, y: f.y } });
@@ -8620,6 +8622,7 @@
       f.vx = 0;
       f.vy = -485;
       f.shieldBreak = { phase:'pop', time:0, sector:shiftSector(f.prev), struggles:0 };
+      if (this.matchCard) this.matchCard.players[f.index].shieldBreaks++;
       cancelCharge(f);
       this.emit('break', { f });
       this.guardBreakCue(f, 'pop');

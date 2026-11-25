@@ -799,6 +799,10 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if (dialogType==='record-card') return showRecords(reviewCard.id);
+    if (dialogType==='records') {
+      dismiss(); $('home-records').focus({preventScroll:true}); return;
+    }
     if (dialogType==='bell-result') return;
     if (dialogType==='bells' || dialogType==='bells-loading') {
       dismiss();
@@ -2077,7 +2081,7 @@
     }
     $('training-tools').hidden = config.mode !== 'training';
     $('return-fight').hidden = !visit;
-    $('return-fight').textContent=visit?.returnResult?'Back to results':'Back to fight';
+    $('return-fight').textContent=visit?.review?'Back to match stats':visit?.returnResult?'Back to results':'Back to fight';
     setFrameMode('live');
     $('dummy-damage').value = '0';
     $('damage-output').textContent = '0%';
@@ -2187,7 +2191,7 @@
         (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
           (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight ? 'Retry position' : 'Practice this position') + '</button>' : '') +
           '<button class="utility" data-do="practice">Find a drill</button>' +
-          (practiceFight ? '<button class="utility" data-do="return-fight">'+(practiceFight.returnResult?'Back to results':'Back to fight')+'</button>' : '') + '</div>' : '') +
+          (practiceFight ? '<button class="utility" data-do="return-fight">'+$('return-fight').textContent+'</button>' : '') + '</div>' : '') +
         cpuReadReport() + '<div class="dialog-actions">' + (world.mode === 'solo' && !localSet && !practiceFight && !matchConfig.schoolFinal ?
           '<button class="utility" data-do="cpu-level">Replay with another CPU</button>' : '') +
         (practiceFight ? '' : '<button class="utility" data-do="rematch">' + icon('reset') + 'Restart match</button>') +
@@ -2317,22 +2321,60 @@
     const seconds = Math.floor(frame / 60);
     return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2,'0');
   }
-  function showMatchCard(index) {
-    const result = online.match?.confirmedWorld || world;
-    const set = online.series || localSet;
-    const games = set?.games || [{stage:result.stage, winner:result.end, card:result.matchCard}];
+  const recordedFights=new WeakSet();
+  const recordModes={solo:'Solo',local:'Local versus',online:'Online versus',cup:'Arcade Cup',school:'Fight School'};
+  let reviewCard=null;
+  function recordMode() {
+    return online.match?'online':cupAttempt?'cup':matchConfig?.schoolFinal?'school':world.mode;
+  }
+  function recordFight(result) {
+    if (!result?.matchCard || result.end===null || practiceFight || recordedFights.has(result)) return;
+    const series=online.series || localSet;
+    const entry={time:Date.now(),mode:recordMode(),side:online.match?online.side:0,stage:result.stage,form:result.form,
+      round:series?.games.length || (cupAttempt?cupAttempt.round+1:0),winner:result.end,card:structuredClone(result.matchCard)};
+    records.add(entry);
+    recordedFights.add(result);
+  }
+  function showRecords(focusId) {
+    if (page!=='home') showHome(false);
+    const rows=records.list();
+    const buttons=rows.map(({id,entry})=>{
+      const dogs=entry.card.players, winner=dogs[entry.winner];
+      const date=new Date(entry.time).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+      return '<button data-record-id="'+id+'"><img alt="" src="'+portrait(winner.kind,winner.coat)+'"><span><strong>'+
+        fighters[dogs[0].kind].name+' vs. '+fighters[dogs[1].kind].name+'</strong><small>'+recordModes[entry.mode]+
+        (entry.round?' · Game '+entry.round:'')+' · '+arenas[entry.stage].name+' · '+date+'</small></span><b>'+
+        fighters[winner.kind].name+' wins</b></button>';
+    }).join('');
+    showDialog('records','Fight Records',rows.length?
+      '<p>Last '+window.FightRecords.limit+' completed stock fights on this device.</p><div class="saved-games">'+buttons+'</div>'+
+      (rows.some(r=>records.transient.has(r.id))?'<p>Storage is unavailable. Recent games are kept in this tab.</p>':''):
+      '<p>Your next completed stock fight will appear here with both fighters’ stats and a stock-by-stock recap.</p>'+
+      '<div class="dialog-actions"><button class="primary" data-do="record-solo">Play a solo fight</button></div>');
+    (Array.from(document.querySelectorAll('[data-record-id]')).find(b=>b.dataset.recordId===focusId) ||
+      document.querySelector('[data-record-id],[data-do=record-solo]')).focus({preventScroll:true});
+  }
+  function showMatchCard(index,archived=null,id=null) {
+    const result = archived ? null : online.match?.confirmedWorld || world;
+    const set = archived ? null : online.series || localSet;
+    const games = archived ? [archived] : set?.games || [{stage:result.stage, winner:result.end, card:result.matchCard}];
     index ??= games.length - 1;
     const game = games[index];
     if (!game?.card) return;
     const {players, losses, frames, reason} = game.card;
-    const slot = i => i === 1 && result.mode === 'solo' ? 'CPU' : 'P' + (i + 1);
+    const mode=archived?.mode || recordMode(), side=archived?.side ?? (online.match ? online.side : 0);
+    const form=archived?.form || result.form;
+    const slot = i => i===1 && ['solo','school','cup'].includes(mode) ? 'CPU' : 'P'+(i+1);
+    const heading=i=>slot(i)+(mode==='online' && i===side?' · YOU':'');
+    reviewCard={id,archived,index,game,mode,side};
     const name = i => fighters[players[i].kind].name;
     const headings = players.map((p,i) => '<th scope="col"><img alt="" src="' + portrait(p.kind,p.coat) +
-      '"><small>' + labelFor(i) + '</small>' + name(i) + '</th>').join('');
+      '"><small>' + heading(i) + '</small>' + name(i) + '</th>').join('');
     const row = (label, value) => '<tr><th scope="row">' + label + '</th>' +
       players.map((p,i) => '<td>' + value(p,i) + '</td>').join('') + '</tr>';
     const stats = row('Damage dealt', p => tenth(p.damage) + '%') + row('Hits landed', p => p.hits) +
-      row('Hits blocked', p => p.blocks) + row('Parries', p => p.parries) +
+      row('Hits blocked', p => p.blocks) + row('Parries', p => p.parries) + row('Shield breaks suffered',p=>p.shieldBreaks) +
+      row('Landing techs',p=>p.techs) + row('Knockdowns taken',p=>p.knockdowns) +
       row('Stocks lost', (_,i) => losses.filter(loss => loss.slot === i).length);
     const timeline = losses.map(loss => {
       const hit = loss.lastHit, id = hit?.id;
@@ -2347,14 +2389,22 @@
     const tabs = games.length > 1 ? '<nav class="card-games" aria-label="Game stats">' + games.map((g,i) =>
       '<button class="utility" data-card-game="' + i + '" aria-pressed="' + (i === index) + '">Game ' + (i+1) + '</button>'
     ).join('') + '</nav>' : '';
-    showDialog('match-card', 'Match stats', tabs + '<h3 class="card-stage">' +
-      (set ? 'Game ' + (index+1) + ' · ' : '') + stageName(game.stage,result.form) + '</h3><p class="card-finish">' +
+    const tips=(mode==='local'?[0,1]:[side]).map(i=>{
+      const tip=window.FightRecords.coaching(game.card,i);
+      if(!tip)return '';
+      return '<div class="record-tip"><strong>'+heading(i)+' · '+name(i)+'</strong><p>'+tip.why+'</p>'+
+        (online.match?'<small>'+tip.label+' · Available from Fight Records after leaving the room.</small>':
+          '<button class="utility" data-record-drill="'+i+'">'+tip.label+'</button>')+'</div>';
+    }).join('');
+    showDialog(archived?'record-card':'match-card', 'Match stats', tabs + '<h3 class="card-stage">' +
+      (set ? 'Game ' + (index+1) + ' · ' : archived ? recordModes[mode]+' · ' : '') + stageName(game.stage,form) + '</h3><p class="card-finish">' +
       slot(game.winner) + ' ' + name(game.winner) + ' wins · ' +
       (reason === 'time' ? 'Time expired' : reason === 'sudden' ? 'Sudden Death' : 'Knockout') + ' · ' + cardTime(frames) + '</p>' +
       '<table class="card-stats" aria-label="Fighter stats"><thead><tr><td></td>' + headings +
-      '</tr></thead><tbody>' + stats + '</tbody></table><h3 class="card-timeline-title">Stock timeline</h3>' +
+      '</tr></thead><tbody>' + stats + '</tbody></table>'+
+      (tips?'<h3 class="card-timeline-title">Corner practice</h3>'+tips:'')+'<h3 class="card-timeline-title">Stock timeline</h3>' +
       (timeline ? '<ol class="card-timeline">' + timeline + '</ol>' : '<p>Both fighters kept all their stocks.</p>') +
-      '<div class="dialog-actions"><button class="primary" data-do="card-back">Back to results</button></div>');
+      '<div class="dialog-actions"><button class="primary" data-do="card-back">'+(archived?'Back to Fight Records':'Back to results')+'</button></div>');
     (document.querySelector('[data-card-game][aria-pressed=true]') || $('dialog-close')).focus();
   }
   function showSetResult(result, set, finish, duration) {
@@ -2397,6 +2447,7 @@
   function showResult() {
     if (world.bells) return bellResult();
     const result = online.match?.confirmedWorld || world;
+    recordFight(result);
     if (cupAttempt) return cupResult(result.mode==='adventure' ? result.finished==='exit' : result.end===0);
     const f = result.dogs[result.end], elapsed = Math.floor(result.matchFrames / 60);
     const duration = Math.floor(elapsed / 60) + 'm ' + String(elapsed % 60).padStart(2, '0') + 's';
@@ -2469,6 +2520,14 @@
     if (coat && dialogType === 'coats') return chooseCoat(Number(coat.dataset.coat));
     const game = e.target.closest('[data-card-game]');
     if (game) return showMatchCard(Number(game.dataset.cardGame));
+    const record=e.target.closest('[data-record-id]');
+    if (record && dialogType==='records') {
+      const id=record.dataset.recordId, entry=records.get(id);
+      return entry?showMatchCard(0,entry,id):showRecords();
+    }
+    const exercise=e.target.closest('[data-record-drill]');
+    if (exercise && ['record-card','match-card'].includes(dialogType) && !online.match)
+      return practiceFromCard(Number(exercise.dataset.recordDrill));
     const format = e.target.closest('[data-format]');
     if (format) {
       settings.bestOfThree = format.dataset.format === 'set';
@@ -2551,6 +2610,9 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if (action==='record-solo') {
+      settings.mode='solo'; editing=0; save(); audioReady(); return toLobby();
+    }
     const dog=e.target.closest('[data-bell-dog]');
     if (dog) {
       bellSheet(dog.dataset.bellDog);
@@ -4452,10 +4514,28 @@
     startMatch(visit.config, undefined, visit.seed, null, {visit});
   }
   function returnToFight() {
+    const review=practiceFight?.review;
+    if (review?.archived) {
+      showHome(false);
+      return showMatchCard(review.index,review.archived,review.id);
+    }
     const finished=practiceFight?.returnResult, resume=finished || practiceFight;
     if (!resume) return;
     startMatch(resume.config, undefined, resume.seed, resume.series, {resume,cupRound:resume.cupRound});
-    if (finished) showResult();
+    if (finished) {
+      showResult();
+      if(review)showMatchCard(review.index);
+    }
+  }
+  function practiceFromCard(slot) {
+    const review=reviewCard, {card,stage}=review.game;
+    const tip=window.FightRecords.coaching(card,slot);
+    if(!tip)return;
+    const [fighter,rival]=[card.players[slot],card.players[1-slot]];
+    const visit={review,returnResult:review.archived?null:pausedFight()};
+    startMatch({mode:'training',p1:fighter.kind,p2:rival.kind,stage,fetch:false,coats:[fighter.coat,rival.coat]},
+      undefined,undefined,null,{visit});
+    startExercise(tip.id);
   }
   const practiceGroups = [
     ['Movement','Footwork','footwork', footworkPatterns],
@@ -4874,6 +4954,7 @@
   try {
     storage = window.localStorage;
   } catch {}
+  const records=new window.FightRecords.Book(storage);
   let progress = campaign.readSave(storage),
     stored = !!storage;
   let film = null,
@@ -5475,6 +5556,7 @@
     if (next) beginRun(Number(next.dataset.nextStop), 0);
   });
   $('home-cup').onclick = () => cupSheet();
+  $('home-records').onclick=()=>showRecords();
   $('home-bells').onclick = () => bellSheet();
   $('home-adventure').onclick = () => {
     audioReady();
@@ -5607,6 +5689,11 @@
     }
   });
   window.addEventListener('storage',e=>{
+    if (dialogType==='records' && (e.key===null || e.key.startsWith(window.FightRecords.prefix))) {
+      const focused=document.activeElement;
+      showRecords(focused?.dataset.recordId);
+      if(focused===$('dialog-close')) focused.focus({preventScroll:true});
+    }
     if (e.key!==null && e.key!==schoolKey && e.key!==campaign.saveKey && !e.key.startsWith('dog-fight-3.cup.')) return;
     if (!schoolUnsaved && (e.key===null || e.key===schoolKey)) {
       const disk=readSchool();
@@ -6311,7 +6398,10 @@
     const call = !ended && waiting > 850 ? 'Waiting for opponent…' : roundCall(match.confirmedWorld);
     if ($('countdown').textContent!==call) $('countdown').textContent=call;
     updateHUD();
-    if (ended) online.finish(match.confirmedWorld.end);
+    if (ended) {
+      recordFight(match.confirmedWorld);
+      online.finish(match.confirmedWorld.end);
+    }
   }
   function frame(timestamp) {
     const now = timestamp / 1000,
@@ -6400,6 +6490,7 @@
           touchTaps.clear();
           accumulator = Math.max(0, accumulator - 1 / 60);
         }
+        if (world.end!==null && !online.match) recordFight(world);
         if (world.endReason === 'time') $('countdown').textContent = 'Time!';
         if (world.lesson) renderSchool(pads);
         updateHUD();
@@ -6428,7 +6519,10 @@
     const hash = location.hash;
     const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
     const [,arena,form] = hash.split('/');
-    if (hash==='#bells' || (hash==='#bells/'+arena && Object.hasOwn(fighters,arena))) {
+    if (hash==='#records') {
+      showHome(false);
+      showRecords();
+    } else if (hash==='#bells' || (hash==='#bells/'+arena && Object.hasOwn(fighters,arena))) {
       showHome(false);
       bellSheet(arena || 'pip');
     } else if (hash === '#arcade' || (hash === '#arcade/'+arena && Object.hasOwn(cup.courses,arena))) {
