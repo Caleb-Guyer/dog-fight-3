@@ -5,6 +5,7 @@
   const number=n=>Number.isFinite(n) && n>=0;
   const count=n=>Number.isSafeInteger(n) && n>=0;
   const slot=n=>n===0 || n===1;
+  const scores=v=>Array.isArray(v) && v.length===2 && v.every(Number.isSafeInteger);
   const zones=['left','right','top','bottom'];
   function valid(entry) {
     if (!entry || !count(entry.time) || entry.time>8.64e15 || !count(entry.round) || !slot(entry.winner) || !slot(entry.side) ||
@@ -15,7 +16,9 @@
       Object.hasOwn(fighters,p.kind) && validCoat(p.coat) && number(p.damage) &&
       ['hits','blocks','parries','techs','knockdowns','shieldBreaks'].every(k=>count(p[k]))) &&
       count(c.frames) && ['time','ko','sudden'].includes(c.reason) && Array.isArray(c.losses) &&
-      c.losses.every(l=>l && slot(l.slot) && count(l.frame) && number(l.damage) && count(l.remaining) &&
+      (c.points===undefined || (scores(c.points) && [1,3,7].includes(c.minutes))) &&
+      c.losses.every(l=>l && slot(l.slot) && count(l.frame) && number(l.damage) &&
+        (c.points && !l.suddenRound ? scores(l.points) && typeof l.credited==='boolean' : count(l.remaining)) &&
         zones.includes(l.zone) && count(l.suddenRound) && (!l.lastHit || typeof l.lastHit.id==='string' && count(l.lastHit.frame)));
   }
   class Book {
@@ -72,7 +75,7 @@
     if (p.knockdowns) return {id:'launch-escape',label:'Practice a landing tech',
       why:name+' hit the floor in tumble '+times(p.knockdowns)+'. Tap Shield just before impact to land in place or roll.'};
     if(last && last.lastHit && (last.zone==='left' || last.zone==='right' || last.zone==='top')) return {id:'launch-survival',label:'Practice launch influence',
-      why:name+' lost a stock at '+Math.round(last.damage)+'% at the '+last.zone+' blast line. Try steering a strong launch during the hit freeze.'};
+      why:name+(last.points?' lost a point at ':' lost a stock at ')+Math.round(last.damage)+'% at the '+last.zone+' blast line. Try steering a strong launch during the hit freeze.'};
     if(rival.hits && !p.blocks && !p.parries) return {id:'shield-strike',label:'Practice defending a strike',
       why:fighters[rival.kind].name+' landed '+rival.hits+(rival.hits===1?' hit':' hits')+'. '+name+' recorded no blocks or parries. Try the shield timing against an incoming swing.'};
     if(p.blocks) return {id:'shield-crossup',label:'Counter a landing aerial',
