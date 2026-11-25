@@ -326,9 +326,9 @@ body:is(.playing, .cinema-active) .full-button span {
   white-space: nowrap;
 }
 dialog[data-view='match-card'] { width: min(540px, calc(100% - 20px)); }
-.card-games { display: flex; gap: 6px; margin-bottom: 12px; }
-.card-games button { flex: 1; min-width: 0; }
-.card-games [aria-pressed='true'] { background: var(--gold); color: var(--ink); }
+.card-games, .form-choices { display: flex; gap: 6px; margin-bottom: 12px; }
+.card-games button, .form-choices button { flex: 1; min-width: 0; }
+.card-games [aria-pressed='true'], .form-choices [aria-pressed='true'] { background: var(--gold); color: var(--ink); }
 .card-stage, .card-timeline-title { font: 20px/1.15 var(--pixel); margin: 0; }
 #dialog-body .card-finish { margin: 4px 0 12px; }
 .card-stats { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 14px; }

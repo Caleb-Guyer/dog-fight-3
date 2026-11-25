@@ -139,13 +139,15 @@
     const aspect = (canvas.clientWidth || 900) / (canvas.clientHeight || 280);
     const viewportWidth = clamp(660 + (aspect - 1.7) * 190, 680, 1110);
     const viewportHeight = viewportWidth / aspect;
-    const rooftops = config.stage === 'laundry';
+    const form = config.mode === 'training' ? 'original' : config.stageForm;
+    const geometry = window.DogFight.stageGeometry(config.stage,form);
+    const rooftops = geometry === 'laundry';
     const t = reduced.matches ? 1.4 : Math.floor(time * 9) / 9;
     const stageTime = rooftops ? (1.5 * Math.PI + 0.28 * Math.sin(t * 0.75)) / 0.7 : t;
-    const ground = platforms(config.stage, stageTime);
+    const ground = platforms(geometry, stageTime);
     const onDeck = ground.length < 3;
     const podiums = onDeck ? [ground[0], ground[0]] : rooftops ? [ground[2], ground[3]] : [ground[1], ground[2]];
-    const positions = onDeck ? window.DogFight.arenas[config.stage].spawn : podiums.map((p) => (p.x1 + p.x2) / 2);
+    const positions = onDeck ? window.DogFight.arenas[geometry].spawn : podiums.map((p) => (p.x1 + p.x2) / 2);
     const center = (positions[0] + positions[1]) / 2;
     const width = Math.round(viewportWidth),
       height = Math.max(1, Math.round(viewportHeight));
@@ -159,7 +161,7 @@
     const left = Math.round(center - width / 2);
     const top = Math.round(podiums[0].y - height * (rooftops ? 0.8 : 0.69));
     ctx.translate(-left, -top);
-    window.ArenaArt.draw(ctx, config.stage, stageTime, { left, top, right: left + width, bottom: top + height });
+    window.ArenaArt.draw(ctx, config.stage, stageTime, { left, top, right: left + width, bottom: top + height },form);
     const scale = clamp((viewportHeight * (rooftops ? 0.49 : 0.56)) / 77, 0.8, 3.1);
     [config.p1, config.p2].forEach((kind, i) => {
       const x = snap(positions[i]),
@@ -2635,7 +2637,7 @@
       const top = Math.round(this.cy) - halfH - sy / this.zoom;
       window.ArenaArt.draw(ctx, world.stage, world.time, {
         left, top, right: left + 2 * halfW, bottom: top + 2 * halfH,
-      });
+      },world.form);
       if (this.finishReturn) finalHitBackdrop(ctx,left,top,2*halfW,2*halfH,focus,steady,this.finishReturn/.24);
       if (world.suddenDeath) {
         const inset = world.blastInset();
