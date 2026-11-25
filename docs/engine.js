@@ -5264,7 +5264,7 @@
         }
       }
       for (const f of this.dogs) {
-        if (f.impactLag > 1e-8) f.impactLag = Math.max(0, f.impactLag - dt);
+        if (f.impactLag > 1e-8) f.impactLag = f.impactLag <= dt + 1e-8 ? 0 : f.impactLag - dt;
         else {
           const wasDodging = f.airDodge || f.floorAction?.wear !== undefined;
           if (!f.grip) this.move(f, inputs[f.index], dt);
@@ -6216,7 +6216,7 @@
       if (f.ground < 0) f.shieldStun = f.shieldGrabWindow = 0;
       else if (f.shieldStun > 1e-8) {
         // The guard stays up. Keep a tapped response and its original aim until the block ends.
-        f.shieldStun = Math.max(0, f.shieldStun - dt);
+        f.shieldStun = f.shieldStun <= dt + 1e-8 ? 0 : f.shieldStun - dt;
         const floor = this.terrain[f.ground];
         f.x += f.vx * dt;
         f.vx *= Math.pow(0.72, dt * 60);
