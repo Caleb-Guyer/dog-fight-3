@@ -112,6 +112,7 @@ async function benchmark(browser,url,phone=false) {
       Object.defineProperty(HTMLElement.prototype,'offsetWidth',d);return reads;
     });
     await page.goto(url+'?bench#solo/night-mail');
+    await page.keyboard.press('Shift');
     await page.waitForTimeout(3000);
     await page.evaluate(()=>{window.samples.length=0;});
     await page.waitForFunction(()=>window.samples.length>=120);
