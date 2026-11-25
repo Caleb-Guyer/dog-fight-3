@@ -1572,6 +1572,89 @@ async function testDodgeTiming(page,mobile) {
   assert(await status.isHidden());
 }
 
+async function testPracticeRoom(page,mobile) {
+  const press = selector => mobile ? page.locator(selector).tap() : page.locator(selector).click();
+  const action = name => press('[data-do="' + name + '"]');
+  const query = page.locator('#practice-query');
+  await page.goto(root + '?drill-list#training/practice');
+  const entries = await page.locator('[data-exercise]').evaluateAll(items => items.map(el => el.dataset.exercise));
+  assert(entries.length >= 85 && new Set(entries).size === entries.length);
+  assert(await page.locator('#return-fight').isHidden());
+  await press('[data-lane="Defense"]');
+  await query.fill('parry');
+  assert.equal(await page.locator('[data-exercise]').count(), 2);
+  await query.fill('xyzzy');
+  assert.match(await page.locator('#practice-count').innerText(), /No drills/);
+  await press('#practice-results button');
+  await query.fill('noodle crawl');
+  assert.equal(await page.locator('[data-exercise]').count(), 1);
+  if (mobile) await press('[data-exercise="footwork-crawl"]');
+  else {
+    await query.press('ArrowDown');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.exercise), 'footwork-crawl');
+    await page.keyboard.press('Enter');
+  }
+  assert.equal(await page.locator('#footwork-crawl').getAttribute('aria-pressed'), 'true');
+  await press('#practice-menu');
+  await query.fill('jab lock');
+  await press('[data-exercise="launch-lock"]');
+  assert.equal(await page.locator('#launch-lock').getAttribute('aria-pressed'), 'true');
+  await press('#practice-menu');
+  await press('[data-exercise="wall-noodle"]');
+  assert.equal(await page.locator('#wall-noodle').getAttribute('aria-pressed'), 'true');
+  await page.goto(root + '?branch-stock#solo/best-of-three');
+  await page.evaluate(() => {
+    const proto = window.DogFightView.FightView.prototype, draw = proto.draw;
+    proto.draw = function(canvas, battle, ...args) {
+      window.lastDrawnBattle = battle;
+      return draw.call(this, canvas, battle, ...args);
+    };
+    window.fightStamp = b => ({dogs:b.dogs.map(f => [f.x,f.y,f.vx,f.vy,f.damage,f.stocks,f.lastMove]),
+      frames:b.matchFrames, clock:b.clockFrames, time:b.time, bot:b.bot, seed:b.random.state});
+  });
+  await page.clock.runFor(3600);
+  await press('#pause');
+  await action('practice');
+  await press('#dialog-close');
+  assert.equal(await page.locator('#dialog').getAttribute('data-view'), 'pause');
+  const mark = await page.evaluate(() => {
+    window.originalFight = window.lastDrawnBattle;
+    return window.fightStamp(window.originalFight);
+  });
+  assert(mark.frames > 0);
+  await action('rehearse');
+  assert.match(await page.locator('#match-mode').innerText(), /Practice.*Rival/);
+  assert(await page.locator('#match-set').isHidden());
+  const stamp = () => page.evaluate(() => window.fightStamp(window.lastDrawnBattle));
+  assert.deepEqual(await stamp(), mark);
+  assert(await page.evaluate(() => window.lastDrawnBattle !== window.originalFight));
+  await page.clock.runFor(500);
+  await press('#pause');
+  const attempt = await stamp();
+  assert(attempt.frames > mark.frames);
+  await action('rehearse');
+  assert.deepEqual(await stamp(), mark);
+  await page.clock.runFor(500);
+  await press('#pause');
+  const again = await stamp();
+  assert(Math.abs(again.frames - attempt.frames) <= 1);
+  await action('practice');
+  await query.fill('noodle crawl');
+  await press('[data-exercise="footwork-crawl"]');
+  assert.match((await page.locator('.hud-name').allTextContents()).join(' '), /Noodle.*Clover/i);
+  assert.deepEqual(await page.evaluate(() => window.fightStamp(window.originalFight)), mark);
+  await press('#return-fight');
+  assert.deepEqual(await stamp(), mark);
+  assert(await page.evaluate(() => window.lastDrawnBattle === window.originalFight));
+  assert.match(await page.locator('#match-set').innerText(), /Game 1.*0–0/);
+  assert.match(await page.locator('#match-mode').innerText(), /Solo.*Rival/);
+  await page.clock.runFor(200);
+  assert((await stamp()).frames > mark.frames);
+  await press('#pause');
+  assert.equal(await page.locator('[data-do="return-fight"]').count(), 0);
+  console.log((mobile ? 'Touch' : 'Keyboard') + ' launched searched drills, replayed a live Rival position and resumed the unchanged set.');
+}
+
 async function testCrawl(page,mobile) {
   await page.goto(root+'?low-approach#training/crawl');
   const status=page.locator('#footwork-status');
@@ -1950,6 +2033,7 @@ async function testDevice(browser, mobile) {
     await testDefendTakes(page, mobile);
     await testShieldPunish(page, mobile);
     await testCrawl(page, mobile);
+    await testPracticeRoom(page, mobile);
     await testGetUpAttacks(page, mobile);
     await testBoostGrabs(page, mobile);
     await testPartnerTraining(page, mobile);
