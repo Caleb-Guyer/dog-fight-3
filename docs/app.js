@@ -6064,6 +6064,7 @@
   }
   function showLiftTicket(clear) {
     const bonus=yardChapter.bonus, open=yardChapter.liftUnlocked(progress);
+    const bridge=yardChapter.rooms[bonus.stampRoom], checkpoint=progress.room>bonus.stampRoom?bridge.checkpoints.length:progress.checkpoint;
     liftBest=yardChapter.liftBest(storage,null,liftBest);
     showDialog('lift-ticket',clear?'Dead Letter Lift clear':bonus.name,
       (open?'<p>The bridge postmark fits the brass slot. Noodle, Brisket and Clover are waiting, one on each landing. Take all three stocks before Pip loses his last.</p>':
@@ -6071,9 +6072,9 @@
       (clear?'<p>Your delivery · '+liftScore(clear)+'</p>':'')+
       (liftBest?'<p>Personal best · '+liftScore(liftBest)+'</p>':'')+
       '<div class="dialog-actions"><button class="primary" id="lift-enter">'+(open?clear?'Ride again':'Ride the lift':
-        progress.room>=bonus.stampRoom?'Search Sorting Bridge':progress.started?'Continue chapter':'Begin chapter')+
+        progress.room>=bonus.stampRoom?'Search '+(checkpoint?bridge.checkpoints[checkpoint-1].name:bridge.name):progress.started?'Continue chapter':'Begin chapter')+
       '</button><button class="utility" data-do="route">Route map</button></div>');
-    $('lift-enter').onclick=()=>open?beginRun(bonus.id,0):progress.room>=bonus.stampRoom?enterStop(bonus.stampRoom):continueAdventure();
+    $('lift-enter').onclick=()=>open?beginRun(bonus.id,0):progress.room>=bonus.stampRoom?enterStop(bonus.stampRoom,checkpoint):continueAdventure();
     $('lift-enter').focus();
   }
   function beginRun(index, checkpoint, atCheckpoint = null, cupRound = null) {
