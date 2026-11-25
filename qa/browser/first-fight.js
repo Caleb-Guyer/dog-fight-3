@@ -72,6 +72,14 @@ async function playCourse(browser,mobile) {
     assert(await page.locator('#school-coach').isHidden());
     const record=await page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.school')));
     assert.equal(record.passed.length,10);assert.deepEqual(errors,[]);
+    await page.goto(current+'?replay#tutorial');
+    assert.match(await page.locator('#school-count').textContent(),/ 1 \/ 10$/);
+    await press('school-list');
+    const menu=page.locator('#dialog [data-do="home"]');
+    if (mobile) await menu.tap(); else await menu.click();
+    await press('home-adventure'); await press('dispatch-start'); await press('story-skip');
+    assert(await page.locator('#match').isVisible());assert(await page.locator('#school-coach').isHidden());
+    assert.deepEqual(errors,[]);
   } finally {await context.close();}
 }
 
