@@ -847,6 +847,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='dispatch-load')return $('dispatch-load-back').click();
     if (dialogType==='couch' || dialogType==='couch-load'){
       if(page==='match')return showResult();
       dismiss();$('pick-together').focus({preventScroll:true});return;
@@ -1775,6 +1776,15 @@
     audioReady();
     const current = () => button.isConnected && $('dialog').open;
     const expected = cupShown;
+    if(expected.active?.wins.length===cup.courses[kind].bouts.length && !missionReady()){
+      button.textContent='Loading Bell Depot…';
+      try { await loadMission(); }
+      catch {
+        if(current()){button.disabled=false;button.textContent='Retry loading Bell Depot';button.focus();}
+        return;
+      }
+      if(!current())return;
+    }
     const entry = await updateCup(kind,latest=>{
       const run = latest.active, shown = expected.active;
       if (!current() || latest.clears!==expected.clears || run?.id!==shown?.id ||
@@ -2628,10 +2638,7 @@
     if (reel && !reel.disabled) {
       audioReady();
       const key = reel.dataset.reel;
-      story(key, () => {
-        showRoute();
-        showReels(key);
-      }, true);
+      story(key, () => showRoute(()=>showReels(key)), true);
       return;
     }
     const guide = e.target.closest('[data-guide-kind]');
@@ -5030,6 +5037,50 @@
     drill('air', false, world.airPractice.pattern);
   };
   const campaign = window.DispatchScript;
+  const dispatchSources={
+    DispatchCovers:'dispatch-covers.js?v=missions-1', DispatchFilm:'dispatch-film.js?v=widefilm-1',
+    DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=stocks-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=yard-cup-1', DispatchView:'dispatch-view.js?v=blast-radar-1',
+  };
+  const dispatchLoads=new Map();
+  function loadDispatch(part) {
+    if(window[part])return Promise.resolve();
+    if(!dispatchLoads.has(part)){
+      const task=new Promise((resolve,reject)=>{
+        const script=document.createElement('script');
+        script.src='./'+dispatchSources[part];
+        const failed=()=>{script.remove();reject(new Error('Could not load '+part));};
+        script.onload=()=>window[part]?resolve():failed();
+        script.onerror=failed;
+        document.head.append(script);
+      });
+      dispatchLoads.set(part,task.finally(()=>dispatchLoads.delete(part)));
+    }
+    return dispatchLoads.get(part);
+  }
+  const missionParts=['DispatchActors','YardArt','DispatchBridge','DispatchRun','DispatchView'];
+  const missionReady=()=>missionParts.every(part=>window[part]);
+  const loadMission=()=>Promise.all(missionParts.map(loadDispatch));
+  function waitForDispatch(title,load,enter,back) {
+    showDialog('dispatch-load',title,'<p role="status" id="dispatch-loading">Loading…</p><div class="dialog-actions">'+
+      '<button class="primary" id="dispatch-load-retry" hidden>Retry</button><button class="utility" id="dispatch-load-back">Back</button></div>',false);
+    const cancel=$('dispatch-load-back'), retry=$('dispatch-load-retry');
+    cancel.onclick=()=>{dismiss();back();};
+    cancel.focus({preventScroll:true});
+    function attempt(){
+      retry.hidden=true;
+      $('dispatch-loading').textContent='Loading…';
+      load().then(()=>{
+        if(cancel.isConnected && $('dialog').open){dismiss();enter();}
+      },()=>{
+        if(!cancel.isConnected || !$('dialog').open)return;
+        $('dispatch-loading').textContent=title+' could not load.';
+        retry.hidden=false;retry.focus({preventScroll:true});
+      });
+    }
+    retry.onclick=attempt;
+    attempt();
+  }
   let storage;
   try {
     storage = window.localStorage;
@@ -5089,7 +5140,6 @@
     afterStory = null;
     if (!schoolUnsaved) Object.assign(schoolSave,readSchool());
     refreshHomeSaves();
-    window.DispatchCovers.draw($('title-cover'), 'title');
     if (focus) focusHome();
   }
   function focusHome() {
@@ -5152,9 +5202,10 @@
   }
   $('home-continue').onclick=()=>resumeSavedGame($('home-continue').dataset.save);
   $('other-saves').onclick=showSavedGames;
-  function showRoute() {
+  function showRoute(then) {
     menuScreen('dispatch-route');
     afterStory = null;
+    if(!window.DispatchCovers)return waitForDispatch('Route map',()=>loadDispatch('DispatchCovers'),()=>showRoute(then),()=>showHome());
     window.DispatchCovers.draw($('route-cover'), 'route', progress.room);
     const stops = $('route-stops');
     stops.replaceChildren();
@@ -5201,6 +5252,7 @@
             ? 'Continue'
             : 'Begin chapter';
     $('dispatch-start').focus({ preventScroll: true });
+    if(then)then();
   }
   const filmLoads = new Map();
   function loadFilm(key) {
@@ -5234,7 +5286,7 @@
     showDialog('cutscenes', 'Cutscenes', '<div class="film-library">' + rows.join('') + '</div>');
     for (const button of document.querySelectorAll('[data-reel]:enabled')) {
       const canvas = button.querySelector('canvas'), key = button.dataset.reel;
-      if (window.DispatchFilms[key]) window.DispatchFilm.poster(canvas,key);
+      if (window.DispatchFilms[key] && window.DispatchFilm) window.DispatchFilm.poster(canvas,key);
       else window.DispatchCovers.draw(canvas,key);
     }
     document.querySelector('[data-reel="' + selected + '"]').focus();
@@ -5261,8 +5313,7 @@
     $('story-map').textContent = fromLibrary ? 'Cutscenes' : 'Route map';
     $('story-skip').hidden = fromLibrary;
     $('story-next').onclick = () => film?.next();
-    if (!window.DispatchFilms[key]) {
-      window.DispatchCovers.draw($('story-cover'),key);
+    if (!window.DispatchFilms?.[key] || !window.DispatchFilm) {
       $('film-time').textContent = '';
       $('film-progress').style.transform = 'scaleX(0)';
       $('story-speaker').textContent = '';
@@ -5270,7 +5321,12 @@
       $('story-next').textContent = 'Next';
       $('film-pause').disabled = $('story-next').disabled = true;
       $(fromLibrary ? 'story-map' : 'story-skip').focus({preventScroll:true});
-      try { await loadFilm(key); }
+      try {
+        await loadDispatch('DispatchCovers');
+        if (page!=='dispatch-story' || afterStory!==then) return;
+        window.DispatchCovers.draw($('story-cover'),key);
+        await Promise.all([loadDispatch('DispatchFilm'),loadFilm(key)]);
+      }
       catch {
         if (page!=='dispatch-story' || afterStory!==then) return;
         $('story-text').textContent = 'The cutscene could not load.';
@@ -5327,7 +5383,9 @@
   }
   function chapterClear() {
     saveProgress({ room: campaign.lastRoom, pending: '', complete: true });
-    showRoute();
+    showRoute(showChapterClear);
+  }
+  function showChapterClear() {
     showDialog(
       'dispatch-clear',
       'Chapter clear',
@@ -5356,6 +5414,8 @@
     else beginRun(index, checkpoint, checkpoint ? progress.atCheckpoint : null);
   }
   function beginRun(index, checkpoint, atCheckpoint = null, cupRound = null) {
+    if(!missionReady())return waitForDispatch(campaign.rooms[index].name,loadMission,
+      ()=>beginRun(index,checkpoint,atCheckpoint,cupRound),()=>cupRound?cupSheet(cupRound.kind):showRoute());
     finishTape=null;
     cupAttempt = cupRound;
     music?.restart();
@@ -5519,12 +5579,13 @@
       else {
         const next = roomIndex + 1;
         saveProgress({ room: next, pending: '' });
-        showRoute();
-        showDialog('dispatch-next', layout.name + ' clear',
-          '<p>' + layout.dispatch + '</p><div class="dialog-actions"><button class="primary" data-next-stop="' +
-          next + '">Continue to ' + campaign.rooms[next].name + '</button>' +
-          '<button class="utility" data-do="route">Route map</button></div>');
-        document.querySelector('[data-next-stop]').focus();
+        showRoute(()=>{
+          showDialog('dispatch-next', layout.name + ' clear',
+            '<p>' + layout.dispatch + '</p><div class="dialog-actions"><button class="primary" data-next-stop="' +
+            next + '">Continue to ' + campaign.rooms[next].name + '</button>' +
+            '<button class="utility" data-do="route">Route map</button></div>');
+          document.querySelector('[data-next-stop]').focus();
+        });
       }
     } else if (world.finished === 'fallen') {
       showDialog(
@@ -6638,8 +6699,7 @@
   }
   updateAudio();
   function openFilmLibraryLink() {
-    showRoute();
-    showReels();
+    showRoute(()=>showReels());
   }
   function openLink() {
     const hash = location.hash;
