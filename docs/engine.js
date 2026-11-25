@@ -11270,6 +11270,7 @@
     rageScale,
     clamp,
     attackWindow,
+    segmentEntry,
     activeArmor,
     canCancelMeteor,
     launchInfluence,
