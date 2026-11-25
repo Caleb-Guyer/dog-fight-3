@@ -122,6 +122,7 @@
         time: reduced.matches ? 0 : t,
         terrain: world.terrain,
         room: l.id,
+        floor: world.wave,
         length: l.length,
         combat: !world.bridge,
         stockArena: !!l.rules,

@@ -144,6 +144,8 @@ Finish The Silent Yard to open **Chapter 02 · The Night Mail**. A completed Cha
 
 The chapter script, dialogue, encounter order, terrain, checkpoints and postmarks live in `docs/dispatch-script.js`. The runtime in `docs/dispatch-run.js` plays those encounters using the regular fighting engine. The ferry, lift and drawspans use the moving surfaces in `docs/dispatch-bridge.js`.
 
+The postmark above Sorting Bridge’s Crane House opens **Dead Letter Lift** on the Chapter 1 route map. Take Pip’s three stocks through three landings. Noodle holds the sorting floor, Brisket guards the parcel vault, and Rival Clover waits at the roof hatch. Two freight pallets rise and fall throughout the fight. Your damage and remaining stocks carry to the next landing. Clears are ranked by stocks left, then time. You can ride again or continue your main chapter from its saved checkpoint. [Open the lift ticket](https://caleb-guyer.github.io/dog-fight-3/#adventure/dead-letter-lift)
+
 ## Publish on GitHub Pages
 
 1. Create or open your GitHub repository. A public repository named `dog-fight-3` is a simple choice.
