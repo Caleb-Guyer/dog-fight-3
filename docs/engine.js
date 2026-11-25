@@ -1464,8 +1464,9 @@
     },
     brisketHaymaker: {
       label: 'Haymaker',
-      hint: 'Plant your feet and throw a heavy straight punch. It has a slow windup and sends rivals far sideways.',
+      hint: 'Release Smash to plant your feet. When the gold shoulder marks appear, one hit worth up to 8% deals damage without stopping the punch. Grabs still catch you.',
       frames: [12, 5, 24],
+      armor: { first:5, limit:8 },
       box: [54, -41, 47, 34],
       dmg: 17,
       base: 242,
@@ -2345,6 +2346,11 @@
   }
   function smashPower(heldFor) {
     return clamp(heldFor / smashChargeTime, 0, 1);
+  }
+  function activeArmor(f) {
+    const a = f.attack;
+    return f.ground >= 0 && (!f.encounter || f.encounter.kind === f.kind) && a?.armor && !a.armorSpent &&
+      a.time + 1e-8 >= a.armor.first / 60 && a.time + 1e-8 < a.start ? a.armor : null;
   }
   const smashStrength = (power) => 1 + 0.4 * power;
   function lockSmash(f, button, aim, face, command) {
@@ -3899,17 +3905,17 @@
       this.resetTraining();
       const originalDogs = this.dogs;
       const discRole = pattern === 'reflect' ? 'bark' : pattern === 'returnFire' ? 'cast' : '';
-      const playerKind = {returnFire:'clover', reflect:'pip', power:'pip'}[pattern];
+      const playerKind = {returnFire:'clover', reflect:'pip', power:'pip', armor:'brisket', armorGrab:'pip'}[pattern];
       const player = playerKind ? newFighter(playerKind, 0) : originalDogs[0];
       const kind = { bait: 'brisket', match: player.kind, power: 'brisket', disc: 'clover', brake: 'pip',
         pivot: player.kind, antiAir: originalDogs[1].kind, angleHigh: originalDogs[1].kind,
         angleLow: originalDogs[1].kind, cancelDash: originalDogs[1].kind, cancelTurn: originalDogs[1].kind,
-        reflect:'clover', returnFire:'pip', dashShield:'brisket' }[pattern];
+        reflect:'clover', returnFire:'pip', dashShield:'brisket', armor:'pip', armorGrab:'brisket' }[pattern];
       const dummy = newFighter(kind, 1);
       this.dogs = [player, dummy];
       const floor = this.terrain[0], center = (floor.x1 + floor.x2) / 2;
       const box = grabs[dummy.kit.grab].box, jab = moves[player.kit.ground[0]];
-      const gap = discRole ? 254 : pattern === 'disc' ? 225 : pattern === 'power' ? 135 : (jab.box[0] + jab.box[2]) * 2 - 14;
+      const gap = discRole ? 254 : ({disc:225, power:135, armor:58, armorGrab:58}[pattern] ?? (jab.box[0] + jab.box[2]) * 2 - 14);
       dummy.x = pattern === 'bait' ? center + 45 : center + dir * gap / 2;
       let mark = pattern === 'bait' ? dummy.x - box[0] - box[2] - player.stats.width + 5 : center;
       player.x = pattern === 'bait' ? mark - 27 : center - dir * gap / 2;
@@ -3965,7 +3971,7 @@
         dummy.x += shift;
       }
       const discBeat = { pip: 60, brisket: 64, noodle: 65, clover: 62 };
-      const sendAt = pattern === 'disc' ? discBeat[player.kind] : pattern === 'power' ? 74 : 75;
+      const sendAt = {disc:discBeat[player.kind], power:74, armor:79, armorGrab:69}[pattern] ?? 75;
       this.footworkPractice = { phase: 'ready', pattern, dir, slow: pattern !== 'bait' && slow,
         mark, originalDogs, tell: 0, beat: 0, sent: false, sendAt, outcome: '' };
       if (discRole) this.footworkPractice.discRole = discRole;
@@ -4049,6 +4055,12 @@
           this.emit('footworkCue', { phase: drill.beat === 3 ? 'go' : 'count', beat: drill.beat, f: player });
         }
         // The dummy commits on a fixed count. Player input never changes its timing.
+        if (drill.pattern === 'armorGrab') {
+          if (frame >= drill.sendAt - 7 && frame < drill.sendAt) return {...idleInput, smash:true};
+          if (frame === drill.sendAt) drill.phase = 'swing';
+          if (frame >= 120) this.finishFootwork('missedSwing');
+          return idleInput;
+        }
         if (!drill.sent && frame >= drill.sendAt) {
           drill.sent = true;
           drill.phase = 'swing';
@@ -4080,6 +4092,13 @@
     gradeFootwork(target, projectile = false) {
       const drill = this.footworkPractice;
       if (!drill || drill.phase === 'done') return;
+      if (drill.pattern === 'armor' || drill.pattern === 'armorGrab') {
+        const attacker = this.dogs[1-target.index], a = attacker.attack;
+        if (a?.grabAttempt) this.finishFootwork(activeArmor(target) ? 'caughtArmor' : 'ordinaryGrab');
+        else if (a?.moveId === 'brisketHaymaker') this.finishFootwork(a.armorSpent ? 'armoredPunch' : 'cleanPunch');
+        else this.finishFootwork('interruptedPunch');
+        return;
+      }
       if (drill.pattern === 'dashShield') {
         const grabbed = target.index === 1 && drill.phase === 'guarded' && this.dogs[0].attack?.grabAttempt;
         this.finishFootwork(grabbed ? 'caughtCounter' : target.index === 0 ? 'ranIntoSwing' : 'intercepted');
@@ -4996,7 +5015,7 @@
         if (!input1.special && !input1.tapped?.special) return;
         footwork.phase = 'swing';
       }
-      if (footwork && (footwork.discRole === 'bark' || ['disc', 'power', 'match'].includes(footwork.pattern))) {
+      if (footwork && (footwork.discRole === 'bark' || ['disc','power','match','armor','armorGrab'].includes(footwork.pattern))) {
         if (footwork.phase === 'ready') {
           if (!input1.attack && !input1.tapped?.attack) return;
           footwork.phase = 'count';
@@ -7944,6 +7963,8 @@
       target.parryFlash = 12 / 60;
       target.parryFace = brace || target.face;
       target.lastMove = 'Parry';
+      if (owner.attack?.moveId === 'brisketHaymaker' && this.footworkPractice?.pattern === 'armorGrab' &&
+          this.footworkPractice.phase !== 'done') this.finishFootwork('parriedPunch');
       if (this.edgePractice?.corner && target.index === 0) this.finishEdgePractice('parriedCorner');
       if (this.spacingPractice?.pattern === 'cancel' && this.spacingPractice.sent && target.index === 0)
         this.finishSpacingPractice('parried');
@@ -8116,7 +8137,20 @@
       rememberMove(owner, moveId, use, power, guarded);
       if (guarded) {
         this.block(target, owner, damage, name, face, point, projectile, moveId, use, power);
+        if (moveId === 'brisketHaymaker' && this.footworkPractice?.pattern === 'armorGrab' &&
+            this.footworkPractice.phase !== 'done') this.finishFootwork('blockedPunch');
         return false;
+      }
+      const armor = activeArmor(target);
+      if (armor && damage > 0 && damage <= armor.limit && !grab && !move?.pull && !move?.bounce &&
+          name !== 'snare' && name !== 'rope') {
+        stance.armorSpent = true;
+        const applied = this.dealDamage(target, damage);
+        this.comboContact(target, 'hit', moveId || name, applied);
+        this.sampleFreshness(owner, use, moveId, power, applied, 0);
+        this.hitStop = Math.max(this.hitStop, 3/60);
+        this.emit('hit', {f:target, owner, name, moveId, face, point, power, damage:applied, speed:0, armored:true});
+        return true;
       }
       const poked = target.shield && !grab && !covered;
       const caughtDodge = target.airDodge?.hitstunCancelFrames && target.airDodge.time>=target.airDodge.safeUntil-1e-8;
@@ -10227,6 +10261,7 @@
     rageScale,
     clamp,
     attackWindow,
+    activeArmor,
     canCancelMeteor,
     launchInfluence,
     liftReserve,

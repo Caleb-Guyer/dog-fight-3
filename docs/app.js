@@ -27,6 +27,8 @@
   } = window.DogFight;
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
   const $ = (id) => document.getElementById(id);
+  const footworkPatterns = ['bait','match','power','armor','armorGrab','disc','reflect','returnFire',
+    'brake','dashShield','pivot','antiAir','angleHigh','angleLow','cancelDash','cancelTurn'];
   const glyphs = {
     paw: [
       '...##.##....',
@@ -320,7 +322,10 @@
   }
   function sound(name, detail = {}) {
     if (name === 'hit') {
-      if (detail.lock) {
+      if (detail.armored) {
+        tone(155, 92, .055, 0, 'triangle', .12);
+        tone(750, 460, .04, .008, 'square', .033);
+      } else if (detail.lock) {
         const note = detail.lock === 2 ? 285 : 206;
         tone(note, 78, 0.061, 0, 'triangle', 0.09);
         tone(note * 2, note, 0.032, 0.018, 'square', 0.031);
@@ -2327,6 +2332,18 @@
     const state = e.outcome || e.phase;
     status.dataset.result = state;
     const pattern = world.footworkPractice.pattern;
+    if (pattern === 'armor' || pattern === 'armorGrab') {
+      const punch = pattern === 'armor';
+      status.textContent = {count:'Beat ' + e.beat, go:punch ? 'Release Smash!' : 'Grab now!',
+        caughtArmor:'Grabbed the planted shoulder', ordinaryGrab:'Grab landed outside the armor window',
+        armoredPunch:'Jab absorbed · Haymaker landed', cleanPunch:'Haymaker landed clean',
+        interruptedPunch:'Punch interrupted', blockedPunch:'Blocked Haymaker', parriedPunch:'Parried Haymaker',
+        missedSwing:'No clean hit'}[state];
+      if (e.outcome) $('recovery-tip').textContent = punch ?
+        'Try again. Holding Smash through the jab leaves Brisket open. Release on the third light to punch through it.' :
+        'Retry with Attack on the third light, then try Grab on that same beat. A catch leaves you free to pummel or throw.';
+      return;
+    }
     if (pattern === 'dashShield') {
       status.textContent = {
         atMark:'Hold Shield now', dashBlocked:'Dash shield · tap Grab', standingBlock:'Blocked · tap Grab',
@@ -3225,7 +3242,7 @@
         'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
     } else if (footwork) {
       const practice = world.footworkPractice;
-      for (const id of ['bait', 'match', 'power', 'disc', 'reflect', 'returnFire', 'brake', 'dashShield', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
+      for (const id of footworkPatterns)
         $('footwork-' + id).setAttribute('aria-pressed', String(practice.pattern === id));
       $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
       $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
@@ -3239,6 +3256,7 @@
         cancelDash:'Catch the hop from a run', cancelTurn:'Turn away, then swing back',
         bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
         reflect:'Pip · tap Attack to start', returnFire:'Clover · tap neutral Special',
+        armor:'Brisket · punch through a jab', armorGrab:'Pip · catch the shoulder',
       }[pattern];
       const discInput = player.kind === 'noodle' ? 'aim toward Clover and tap Attack' : 'tap Attack';
       const diagonal = (pattern === 'angleLow' ? 'down-' : 'up-') + (practice.dir > 0 ? 'right' : 'left');
@@ -3257,6 +3275,8 @@
         bait: 'Dash right to the chalk, then reverse. When Brisket misses his grab, dash back in and tap Attack. Choose Footwork practice to retry.',
         match: 'Tap Attack to start the count. On the third chalk light, tap Attack again to meet the other dog’s jab.',
         power: 'You’re Pip. Tap Attack to start and immediately hold Smash. Release on the third light to kick through Brisket’s Body Check.',
+        armor:'Tap Attack to start, then hold Smash. Release on the third light. Pip will jab as Brisket plants his feet.',
+        armorGrab:'Tap Attack to start the count. Try a jab on the third light. Retry and tap Grab on the same beat to catch Brisket.',
         disc: 'Tap Attack to start. Clover throws Round Trip. On the third light, ' + discInput + ' to bat the disc away.',
         reflect:'Tap Attack to call for the throw. When Clover releases Round Trip, tap Special with the directions released. Catch the disc on the second bark.',
         returnFire:'Tap Special with the directions released. Pip is watching your throw. Hold Shield when you hear the second bark send the disc back.',
@@ -3444,7 +3464,7 @@
     $('game').focus({ preventScroll: true });
   };
   $('footwork-training').onclick = () => drill('footwork', false, world.footworkPractice?.pattern || 'bait');
-  for (const pattern of ['bait', 'match', 'power', 'disc', 'reflect', 'returnFire', 'brake', 'dashShield', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
+  for (const pattern of footworkPatterns)
     $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
   $('footwork-side').onclick = () => drill('footwork', false, world.footworkPractice.pattern, -world.footworkPractice.dir);
   $('footwork-pause').onclick = () => {
@@ -4712,6 +4732,11 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/haymaker' || hash === '#training/catch-haymaker') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, mode:'training', p1:'brisket', p2:'pip', stage:'nightmail', fetch:false});
+      drill('footwork', false, hash === '#training/haymaker' ? 'armor' : 'armorGrab');
     } else if (hash === '#training/dash-shield') {
       leaveOnline();
       afterStory = null;
