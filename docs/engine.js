@@ -11222,7 +11222,7 @@
       if (!value || value===idleInput) return idleInput;
       return value.tapped ? {...value,tapped:{...value.tapped}} : {...value};
     }
-    playback(offset=0,emit=()=>{}) {
+    playback(offset=0,emit=()=>{},liveSlot=null) {
       if (!this.length) return null;
       const frame=clamp(Math.trunc(offset),0,this.length), start=this.count-this.length;
       const block=this.blocks.findLast(b=>b.start<=start+frame);
@@ -11230,10 +11230,13 @@
       const inputs=this.blocks.filter(b=>b.start>=block.start).flatMap(b=>b.inputs);
       let index=0;
       while (index<start+frame-block.start) battle.step(1/60,...inputs[index++]);
+      // Seek with the original rules before handing the CPU fighter to a human.
+      if(liveSlot===1 && battle.mode==='solo')battle.mode='local';
       battle.emit=emit;
-      return {battle,frame,length:this.length,step(){
+      return {battle,frame,length:this.length,step(live=idleInput){
         if (this.frame>=this.length) return false;
-        battle.step(1/60,...inputs[index++]);
+        const [first,second]=inputs[index++];
+        battle.step(1/60,liveSlot===0?live:first,liveSlot===1?live:second);
         this.frame++;
         return true;
       }};

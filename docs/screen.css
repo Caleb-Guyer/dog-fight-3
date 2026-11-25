@@ -949,3 +949,7 @@ dialog[data-view='practice'] #dialog-body {
 @media (forced-colors: active) {
   .pad-navigation :is(button,input,select,a,summary):focus { outline-color: Highlight; }
 }
+.coat-grid.finish-picks { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.finish-comparison { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+.finish-comparison :is(td,th) { padding:8px 5px; border-bottom:1px solid #82796d; text-align:left; }
+.finish-comparison td:last-child { font-weight:bold; }
