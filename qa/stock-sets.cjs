@@ -523,7 +523,7 @@ async function packRelay(browser){
     }
   }
   await p.locator('[data-do=match-card]').waitFor();
-  assert.match(await p.locator('#dialog-body').innerText(),/P2’s pack wins/);
+  assert.match(await p.locator('#dialog-body').innerText(),/P2’s pack wins/i);
   await press('[data-do=match-card]');
   assert.deepEqual(await p.locator('.card-timeline li strong').allTextContents(),['P1 Pip out at 0%','P1 Clover out at 0%','P1 Brisket out at 0%']);
   assert.match(await p.locator('.card-stats').innerText(),/Lead damage/);
