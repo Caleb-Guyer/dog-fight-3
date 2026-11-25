@@ -1732,8 +1732,10 @@ async function testDevice(browser, mobile) {
     assert(await page.locator('#combo-readout').isHidden());
     await activate('combo-training');
     assert(await page.locator('#combo-record').isVisible());
-    assert(await page.locator('#combo-replay').isDisabled());
+    assert(await page.locator('#combo-replay').isEnabled());
+    assert.equal(await page.locator('#combo-slot option:checked').textContent(),'A · Your recording');
     console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed examples, recording, replay, reply changes and free-training reset.');
+    await testDefendTakes(page, mobile);
     await testEdges(page, mobile);
     await testTumble(page, mobile);
     await testBraking(page, mobile);
@@ -1766,7 +1768,6 @@ async function testDevice(browser, mobile) {
     await testDiscReflect(page, mobile);
     await testDashShield(page, mobile);
     await testHaymaker(page, mobile);
-    await testDefendTakes(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();
