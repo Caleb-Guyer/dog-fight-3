@@ -13,7 +13,7 @@ async function device(browser,mobile,hash) {
   await page.route('**/vendor/peerjs-1.5.5.min.js',async route=>{
     const res=await route.fetch();
     await route.fulfill({response:res,body:(await res.text())+
-      "\nwindow.Peer=class extends window.Peer {constructor(id,options){super(id,{...options,host:'127.0.0.1',port:9001,path:'/df3',secure:false,config:{iceServers:[]}});}};"});
+      "\nwindow.Peer=class extends window.Peer {constructor(id,options){super(id,{...options,host:'127.0.0.1',port:9001,path:'/df3',secure:false,config:{iceServers:[]}});window.signalingPeer=this;}};"});
   });
   await page.goto(root+hash);
   await observe(page);
@@ -384,7 +384,14 @@ async function onlineSet(browser,phoneBrowser) {
     await d.page.goto(root+'?quick-coats#online');await observe(d.page);
     await d.press('#online-coat');await d.press(d===host?'[data-coat="3"]':'[data-coat="1"]');
   }
-  await host.press('#online-quick');await guest.press('#online-quick');
+  await guest.press('#online-quick');await guest.press('#online-warmup');
+  assert.match(await b.locator('#match-set').innerText(),/Searching/);
+  await guest.press('[data-touch=attack]');
+  await b.waitForFunction(()=>window.observedBattle?.warmupPartner && observedBattle.dogs[1].damage>0);
+  await guest.press('#pause');await guest.press('#warmup-cancel');
+  assert.match(await b.locator('#online-status').innerText(),/canceled/);
+  await guest.press('#online-quick');await guest.press('#online-warmup');
+  await host.press('#online-quick');
   for(const d of [host,guest]){
     await d.page.waitForFunction(()=>window.observedBattle?.matchFrames>2);
     const side=(await d.page.locator('#match-mode').textContent()).includes('P1')?0:1;
@@ -418,14 +425,54 @@ async function timedBattles(browser,phone){
   await local.page.close();
 
   const host=await device(browser,false,'#online'), guest=await device(phone,true,'#online');
+  await host.press('#online-create');await host.press('#online-warmup');
+  await host.page.waitForFunction(()=>window.observedBattle?.warmupPartner==='stand');
+  await host.page.evaluate(()=>signalingPeer.disconnect());
+  await host.page.locator('#online-actions').waitFor();
+  assert.match(await host.page.locator('#online-status').innerText(),/Lost contact with matchmaking/);
+  assert(await host.page.locator('#match').isHidden());
+  await host.press('#online-coat');await host.press('[data-coat="2"]');
   await host.page.selectOption('#online-rules','1');await host.page.selectOption('#online-stage','picnic');
+  await host.page.selectOption('#online-form','flat');
   await host.press('#online-create');await host.page.locator('#online-invite').waitFor();
   assert.match(await host.page.locator('#online-rules-summary').textContent(),/Time Battle · 1 min/);
   const code=await host.page.locator('#online-room-code').textContent();
+  await host.press('#online-warmup');
+  const p=host.page;
+  await p.waitForFunction(()=>window.observedBattle?.warmupPartner==='stand');
+  assert.equal(await p.locator('#match-set').textContent(),'Room '+code);
+  assert.equal(await p.locator('#training-tools').isVisible(),false);
+  assert.deepEqual(await p.evaluate(()=>[observedBattle.form,observedBattle.terrain.length,observedBattle.coatFor(0)]),['flat',1,2]);
+  await p.keyboard.press('j');await p.waitForFunction(()=>observedBattle.dogs[1].damage>0);
+  await host.press('#pause');await host.press('[data-warmup-partner=shield]');
+  await p.waitForFunction(()=>observedBattle.dogs[1].shield && observedBattle.dogs[1].damage>0);
+  await host.press('#pause');await host.press('#warmup-reset');
+  await p.waitForFunction(()=>observedBattle.warmupPartner==='shield' && observedBattle.dogs.every(d=>d.damage===0));
+  await host.press('#pause');await host.press('#warmup-lobby');
+  assert.equal(await p.locator('#online-room-code').innerText(),code);
+  assert(await p.locator('#online-copy').isVisible());
+  await host.press('#online-warmup');
+  await p.evaluate(()=>{
+    window.warmPad={index:0,id:'Warm-up pad',axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
+    Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[warmPad]});
+    warmPad.buttons[9].pressed=true;
+  });
+  await p.locator('#warmup-status').waitFor();
+  await p.evaluate(()=>{warmPad.buttons[9].pressed=false;});
+  await host.press('[data-warmup-partner=spar]');
+  await p.waitForFunction(()=>observedBattle.warmupPartner==='spar' && observedBattle.dogs[0].damage>0);
+  await host.press('#pause');
   await guest.press('#open-code-pad');
   for(const letter of code)await guest.press('[data-letter="'+letter+'"]');
   await guest.press('#code-join');
+  await p.locator('#countdown.opponent-found').waitFor();
+  assert.equal(await p.locator('#dialog').evaluate(el=>el.open),false);
   for(const d of [host,guest])await expectHud(d,zero);
+  for(const d of [host,guest]){
+    await d.page.waitForFunction(()=>window.observedBattle?.mode==='local' && observedBattle.matchFrames>0);
+    assert.deepEqual(await d.page.evaluate(()=>[observedBattle.form,observedBattle.coatFor(0),!!observedBattle.warmupPartner,
+      ...observedBattle.dogs.map(f=>f.damage)]),['flat',2,false,0,0]);
+  }
   await host.page.keyboard.down('a');
   try{await expectHud(host,behind);}finally{await host.page.keyboard.up('a');}
   await expectHud(guest,behind);
