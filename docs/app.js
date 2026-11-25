@@ -3435,9 +3435,9 @@
   $('reset-training').onclick = () => drill(false);
   // Chromium can omit click on a training button after two thumbs release the fight controls.
   const trainingTools = $('training-tools');
-  let trainingPress = null, activatedTouchButton = null;
+  let trainingPress = null, handledTrainingTap = false;
+  document.addEventListener('pointerdown', () => { handledTrainingTap = false; }, true);
   trainingTools.addEventListener('pointerdown', e => {
-    activatedTouchButton = null;
     const button = e.target.closest('button');
     trainingPress = button && !button.disabled && e.pointerType === 'touch'
       ? { button, id: e.pointerId, x: e.clientX, y: e.clientY } : null;
@@ -3449,12 +3449,13 @@
     if (!press || press.id !== e.pointerId || press.button.disabled ||
         Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8 ||
         document.elementFromPoint(e.clientX, e.clientY)?.closest('button') !== press.button) return;
-    activatedTouchButton = press.button;
+    handledTrainingTap = true;
     press.button.click();
   });
-  trainingTools.addEventListener('click', e => {
-    if (e.detail > 0 && activatedTouchButton && e.target.closest('button') === activatedTouchButton) {
-      activatedTouchButton = null;
+  // A toolbar reflow can send the native click from this tap to a different button.
+  document.addEventListener('click', e => {
+    if (e.detail > 0 && handledTrainingTap) {
+      handledTrainingTap = false;
       e.preventDefault();
       e.stopImmediatePropagation();
     }
