@@ -67,7 +67,7 @@
   flex-direction: column;
   min-width: 0;
 }
-.feature-ticket canvas,
+.feature-ticket img,
 .route-print canvas {
   display: block;
   width: 100%;
@@ -616,7 +616,7 @@
     border: 0;
     width: 100%;
   }
-  .feature-ticket canvas {
+  .feature-ticket img {
     aspect-ratio: 2.1;
     object-fit: cover;
   }
