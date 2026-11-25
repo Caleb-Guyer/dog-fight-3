@@ -5,6 +5,28 @@ on:
 permissions:
   contents: read
 jobs:
+  first-fight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: d0f8e49ed0bfe1d7e1111175153cea9a98d069b3
+          path: baseline
+          persist-credentials: false
+      - name: Play all lessons and measure menu and match timing
+        run: |
+          node --test qa/fight-school.cjs
+          npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/school-http.log" 2>&1 &
+          game_pid=$!
+          python3 -m http.server 8081 --bind 127.0.0.1 --directory baseline/docs > "$RUNNER_TEMP/base-http.log" 2>&1 &
+          base_pid=$!
+          trap 'kill "$game_pid" "$base_pid"' EXIT
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/first-fight.js
   combo-practice:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
