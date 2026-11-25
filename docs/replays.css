@@ -29,11 +29,6 @@ dialog[data-view='finish-replay'] { width:min(760px,calc(100% - 16px)); }
 .card-timeline-title { margin-top: 18px; }
 .record-tip { padding: 8px 0; border-bottom: 1px solid #ab9e83; }
 .record-tip p { margin: 4px 0 8px; }
-.card-timeline { list-style: none; margin: 5px 0; padding: 0; }
-.card-timeline li { display: grid; grid-template-columns: 4ch 1fr; gap: 12px; padding: 7px 0; border-bottom: 1px solid #ab9e83; }
-.card-timeline time { font: 16px/1.4 var(--pixel); }
-.card-timeline span { display: block; font-size: 13px; }
-
 .coat-grid.finish-picks { grid-template-columns: repeat(2,minmax(0,1fr)); }
 .finish-comparison { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
 .finish-comparison :is(td,th) { padding:8px 5px; border-bottom:1px solid #82796d; text-align:left; }

@@ -434,6 +434,10 @@ dialog[data-view='special-preview'] { width:min(760px,calc(100% - 16px)); }
 .card-games button, .form-choices button { flex: 1; min-width: 0; }
 .card-games [aria-pressed='true'], .form-choices [aria-pressed='true'] { background: var(--gold); color: var(--ink); }
 .card-stage, .card-timeline-title { font: 20px/1.15 var(--pixel); margin: 0; }
+.card-timeline { list-style: none; margin: 5px 0; padding: 0; }
+.card-timeline li { display: grid; grid-template-columns: 4ch 1fr; gap: 12px; padding: 7px 0; border-bottom: 1px solid #ab9e83; }
+.card-timeline time { font: 16px/1.4 var(--pixel); }
+.card-timeline span { display: block; font-size: 13px; }
 dialog[data-view='practice'] { width: min(620px, calc(100% - 20px)); }
 dialog[data-view='practice'] .dialog-inner {
   display: flex;
