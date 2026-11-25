@@ -651,7 +651,7 @@ async function testAttackPress(page, mobile) {
   async function opening(quick,pad=false) {
     assert.match(await page.locator('#match-mode').innerText(),/solo.*rival/i);
     assert.equal(await page.locator('#match-clock').innerText(),'7:00');
-    const before=await page.locator('.percentage').allTextContents();
+    const before=await page.locator('#hud .percentage').allTextContents();
     assert.deepEqual(before,['0%','0%']);
     if(pad) {
       await page.evaluate(()=>{
@@ -663,9 +663,9 @@ async function testAttackPress(page, mobile) {
     await page.clock.runFor(2760);
     if(pad)await page.evaluate(()=>{delete navigator.getGamepads;});
     else await hold([]);
-    const after=await page.locator('.percentage').allTextContents();
+    const after=await page.locator('#hud .percentage').allTextContents();
     assert.deepEqual(after,quick?['0%','5%']:['9%','0%']);
-    assert.equal(await page.locator('.lives[aria-label="3 stocks"]').count(),2);
+    assert.equal(await page.locator('#hud .lives[aria-label="3 stocks"]').count(),2);
   }
   await page.goto(challenge); await opening(true);
   await press('pause'); await activate(page.locator('[data-do="rematch"]'));
@@ -2156,6 +2156,7 @@ async function testDevice(browser, mobile) {
   try {
     await page.clock.install({ time: new Date('2030-01-01T00:00:00Z') });
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+    await testAttackPress(page, mobile);
     await page.goto(root + '#training/combos');
     const text = id => page.locator('#' + id).innerText();
     const activate = id => mobile ? page.locator('#' + id).tap() : page.locator('#' + id).click();
@@ -2225,7 +2226,6 @@ async function testDevice(browser, mobile) {
     await testWallJumps(page, mobile);
     await testCeilingTech(page, mobile);
     await testLedgePatience(page, mobile);
-    await testAttackPress(page, mobile);
     await testShortHops(page, mobile);
     await testFlickJumps(page, mobile);
     await testRage(page, mobile);
