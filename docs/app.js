@@ -639,7 +639,7 @@
     dismiss();$('winner-stays').focus({preventScroll:true});
   }
   function rotationBoard(){
-    if(!window.WinnerStays)return waitForDispatch('Winner stays',()=>loadDispatch('WinnerStays'),rotationBoard,rotationBack);
+    if(!window.WinnerStays || !versusStyled)return waitForDispatch('Winner stays',()=>loadVersusPanel('WinnerStays'),rotationBoard,rotationBack);
     if(!rotation){
       try{rotationStorage=window.sessionStorage;}catch{}
       rotation=window.WinnerStays.Lineup.read(rotationStorage);
@@ -667,7 +667,7 @@
     rotationPicking=forRotation===true;
     const title=counter?'Game '+(localSet.games.length+1)+' · P1 '+localSet.score[0]+' – '+localSet.score[1]+' P2':
       rotationPicking?'Winner stays · Bout '+rotation.bout:'Pick together';
-    if(!window.CouchSelect)return waitForDispatch(title,()=>loadDispatch('CouchSelect'),()=>pickTogether(forRotation,openingStrikes),
+    if(!window.CouchSelect || !versusStyled)return waitForDispatch(title,()=>loadVersusPanel('CouchSelect'),()=>pickTogether(forRotation,openingStrikes),
       ()=>rotationPicking?rotationBoard():counter?showResult():$('pick-together').focus());
     showDialog('couch',title,'');
     const pair=rotationPicking?rotation.players.slice(0,2):null;
@@ -712,7 +712,7 @@
     dismiss();$('rules-label').focus({preventScroll:true});
   }
   function beginStageStrike(config,series=null){
-    if(!window.StageStrike)return waitForDispatch('Stage strike set',()=>loadDispatch('StageStrike'),()=>beginStageStrike(config,series),strikeBack);
+    if(!window.StageStrike || !versusStyled)return waitForDispatch('Stage strike set',()=>loadVersusPanel('StageStrike'),()=>beginStageStrike(config,series),strikeBack);
     if(series?.pendingStrike)return showStrikeBoard(series.pendingStrike,series);
     const picker=series?.picker ?? null;
     const draft=new window.StageStrike.Draft(picker===null?crypto.getRandomValues(new Uint8Array(1))[0]%2:1-picker,picker);
@@ -2890,9 +2890,7 @@
     const title = champion === null ? 'Game ' + set.games.length + ' result' : 'Set complete';
     const history = set.games.map((g,i) => '<li><span>' + (i+1) + ' · ' + arenas[g.stage].name +
       '</span><strong>' + name(g.winner,g.card?.players[g.winner].kind) + '</strong></li>').join('');
-    const stageLog=matchConfig.stageStrikes?'<details id="strike-history"><summary>Stage picks and bans</summary>'+
-      set.games.map((g,i)=>'<p><strong>Game '+(i+1)+' · '+arenas[g.stage].name+'</strong><br>'+
-        (g.strikes || []).map(m=>'P'+(m.slot+1)+' '+({strike:'struck',ban:'banned',pick:'picked'})[m.action]+' '+arenas[m.stage].name).join(' · ')+'</p>').join('')+'</details>':'';
+    const stageLog=matchConfig.stageStrikes?window.StageStrike.history(set.games):'';
     let action, text, next = '';
     if (champion !== null) {
       action = net ? 'online-rematch' : matchConfig.rotationRound?'rotation':'new-set';
@@ -5525,7 +5523,7 @@
     PlayerProfiles:'player-profiles.js?v=1',
     VersusRulebook:'versus-rules.js?v=room-rules-1',
     PackRelay:'pack-relay.js?v=1',
-    WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=stage-strike-1',StageStrike:'stage-strike.js?v=1',
+    WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=stage-strike-1',StageStrike:'stage-strike.js?v=2',
     FinishTools:'finish-tools.js?v=stock-replay-1',
     FighterSchool:'fighter-lessons.js?v=school-examples-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
@@ -5533,6 +5531,23 @@
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=night-mail-1', DispatchView:'dispatch-view.js?v=night-mail-1',
   };
   const dispatchLoads=new Map();
+  let versusStylesheet, versusStyled=false;
+  function loadVersusPanel(part) {
+    if(!versusStylesheet){
+      versusStylesheet=new Promise((resolve,reject)=>{
+        const link=document.createElement('link');
+        link.rel='stylesheet';
+        link.href='./versus-select.css?v=1';
+        link.onload=()=>{versusStyled=true;resolve();};
+        link.onerror=()=>{
+          link.remove();versusStylesheet=null;
+          reject(new Error('Could not load the versus selection board'));
+        };
+        document.head.append(link);
+      });
+    }
+    return Promise.all([loadDispatch(part),versusStylesheet]);
+  }
   function loadDispatch(part) {
     if(window[part])return Promise.resolve();
     if(!dispatchLoads.has(part)){
