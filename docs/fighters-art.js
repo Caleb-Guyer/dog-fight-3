@@ -2360,6 +2360,24 @@
       tug: { bodyX: -1, bodyY: 1, torsoTurn: -6, headTurn: -5, fistX: -1, fistY: -1,
         rearX: -2, rearY: 2, rearTurn: 8, fistTurn: -6, kneeOut: 2 },
     },
+    brisketShoulderLift: {
+      fromHold:'brisketBearHugHold', ground:true, bothHands:true, behindHead:true, clasp:'both',
+      wind:{bodyY:3, headTurn:9, torsoTurn:7, kneeOut:3},
+      hit:{bodyY:-2, fistX:-9, fistY:-7, fistTurn:-35, rearX:-18, rearY:-9, rearTurn:-74, shoulderY:-2},
+      follow:{bodyY:-1, headTurn:9, torsoTurn:-9, fistX:-11, fistY:-9, rearX:-22, rearY:-8},
+    },
+    brisketShoulderCarry: {
+      ground:true, bothHands:true, behindHead:true, clasp:'both',
+      hold:{bodyY:2, headX:4, headTurn:9, torsoTurn:-9, shoulderY:-2, fistX:-2, fistY:-23,
+        fistTurn:-60, rearX:-18, rearY:-27, rearTurn:-84, leftX:-3, rightX:4, kneeOut:3},
+      tug:{bodyY:1, headTurn:2, fistY:-1, rearY:-1, ear:-1},
+    },
+    brisketCarrySqueeze: {
+      fromHold:'brisketShoulderCarry', ground:true, bothHands:true, behindHead:true, clasp:'both',
+      wind:{bodyY:2, kneeOut:2, headTurn:4},
+      hit:{bodyY:-3, shoulderY:-2, rearX:3, rearY:3, fistX:-3, fistY:-2, headTurn:-7},
+      follow:{bodyY:-1, kneeOut:1, rearX:1, fistX:-1},
+    },
     brisketYardHeave: {
       ground: true, primed: true, bothHands: true, behindHead: true, clasp: 'both', claspRange: [0, 2],
       openHands: 'both', openRange: [3, 5],
@@ -3047,7 +3065,8 @@
   };
 
   const specials = { pip: 'pounce', brisket: 'shoulder', noodle: 'cast', clover: 'disc' };
-  const captiveLoops = ['grappled', 'grappledHigh'];
+  kitMoves.brisketCarryWalk = kitMoves.brisketShoulderCarry;
+  const captiveLoops = ['grappled', 'grappledHigh', 'shouldered'];
   const captiveFlinches = ['grappledFlinch', 'grappledHighFlinch'];
   const captivePoses = [...captiveLoops, ...captiveFlinches];
   const landingPoses = ['tumble', 'tech', 'techRoll', 'downed', 'jabLock', 'floorRise', 'floorAttack'];
@@ -3260,6 +3279,12 @@
       for (const [part, offset] of Object.entries(key)) s[part] += Math.round(offset * amount);
     };
     if (move.fromHold) addKey(kitMoves[move.fromHold].hold, 1);
+    if (pose === 'brisketCarryWalk') {
+      const stride = [0,2,4,3,0,-2,-4,-3][frame];
+      s.leftX += stride; s.rightX -= stride;
+      s.leftY -= Math.max(0,stride); s.rightY += Math.min(0,stride);
+      s.bodyY -= Math.abs(stride)>2 ? 1 : 0;
+    }
     if (move.fromHold && frame < 3) {
       addKey(move.wind, [0, 0.7, 1][frame]);
     } else if (move.hold) {
@@ -4827,6 +4852,15 @@
       case 'grappled':
       case 'grappledHigh':
         captiveStance(s, name, pose === 'grappledHigh', frame);
+        break;
+      case 'shouldered':
+        captiveStance(s, name, true, frame);
+        s.roll = 84 + [0,2,4,3,1,-2,-3,-2][frame];
+        s.leftX = -1; s.rightX = 0; s.kneeOut = 1;
+        s.leftY = 1; s.rightY = 3 + (frame%4===2 ? -2 : 0);
+        s.fistX = -2; s.fistY = -3; s.rearX = -6; s.rearY = 3;
+        s.rollHeight = .84;
+        s.headTurn -= 14;
         break;
       case 'idle':
         s.bodyY = frame === 1 ? 1 : 0;
