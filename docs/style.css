@@ -718,8 +718,8 @@ body.playing .tools .utility,
 #combo-previous { color: #a5dace; }
 #combo-history { pointer-events: auto; }
 #combo-list { margin: 4px 0 0; padding-left: 1.7em; max-height: 6em; overflow-y: auto; }
-#combo-reply, #jump-in-choice, #air-dog { background: var(--ink); color: var(--cream); padding: 4px; font: inherit; }
-#jump-in-options:not([hidden]) { display: inline-flex; align-items: center; gap: 4px; }
+#combo-reply, #jump-in-choice, #shield-landing-choice, #air-dog { background: var(--ink); color: var(--cream); padding: 4px; font: inherit; }
+#jump-in-options:not([hidden]), #shield-landing-options:not([hidden]) { display: inline-flex; align-items: center; gap: 4px; }
 #launch-status[data-result='tech'],
 #launch-status[data-result='clean'],
 #launch-status[data-result='counter'],
@@ -739,6 +739,7 @@ body.playing .tools .utility,
 #shield-status[data-result='bufferedGrab'],
 #shield-status[data-result='landGrab'],
 #shield-status[data-result='punish'],
+#shield-status[data-result='rearPunish'],
 #shield-status[data-result='found'],
 #shield-status[data-result='caughtGuard'],
 #edge-status[data-result='covered'],
