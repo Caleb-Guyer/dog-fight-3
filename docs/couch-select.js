@@ -4,34 +4,21 @@
   const dogs=Object.keys(fighters), stages=Object.keys(arenas);
   function cycle(list,value,n) { return list[(list.indexOf(value)+n+list.length)%list.length]; }
 
-  // Preserve the other player's controller through disconnects and sparse Gamepad indices.
-  class Seats {
-    constructor(pads) { this.ids=[null,null]; this.sync(pads); }
-    sync(pads) {
-      for (const pad of pads) {
-        if (this.ids.includes(pad.index)) continue;
-        const order=pads.length===1?[1,0]:[0,1];
-        const slot=order.find(i=>!this.get(i,pads));
-        if(slot!==undefined) this.ids[slot]=pad.index;
-      }
-    }
-    get(i,pads) { return pads.find(p=>p.index===this.ids[i]); }
-  }
-
   class Selection {
-    constructor(settings,random=Math.random) {
+    constructor(settings,random=Math.random,picker=null) {
       this.phase='fighters';
+      this.picker=picker;
       this.coats=settings.coatBook.map(book=>({...book}));
       this.dogs=[settings.p1,settings.p2];
-      const raw=this.dogs.map((kind,i)=>this.coats[i][kind]??0);
+      const raw=settings.coats ?? this.dogs.map((kind,i)=>this.coats[i][kind]??0);
       this.colors=this.dogs.map((_,i)=>coatFor(i,...this.dogs,raw));
       this.stages=[settings.stage,settings.stage];
       this.locked=[false,false];
-      this.tieSlot=random()<.5?0:1;
+      this.tieSlot=picker ?? (random()<.5?0:1);
     }
     get winner() { return this.phase==='stages' && this.locked.every(Boolean) ? this.stages[this.tieSlot] : null; }
     choose(i,dir) {
-      if(this.locked[i])return;
+      if(this.locked[i] || (this.picker!==null && i!==this.picker))return;
       if(this.phase==='stages'){this.stages[i]=cycle(stages,this.stages[i],dir);return;}
       this.coats[i][this.dogs[i]]=this.colors[i];
       const kind=this.dogs[i]=cycle(dogs,this.dogs[i],dir);
@@ -39,19 +26,27 @@
       this.colors[i]=kind===this.dogs[1-i] && color===this.colors[1-i]?(color+1)%4:color;
     }
     coat(i,dir) {
-      if(this.phase!=='fighters' || this.locked[i])return;
+      if(this.phase!=='fighters' || this.locked[i] || (this.picker!==null && i!==this.picker))return;
       let color=(this.colors[i]+dir+4)%4;
       if(this.dogs[i]===this.dogs[1-i] && color===this.colors[1-i]) color=(color+dir+4)%4;
       this.colors[i]=color;
     }
     lock(i) {
+      if(this.picker!==null && this.phase==='fighters' && i===this.picker) {
+        this.phase='stages';
+        return;
+      }
       this.locked[i]=true;
-      if(this.phase==='fighters' && this.locked.every(Boolean)){
+      if(this.picker===null && this.phase==='fighters' && this.locked.every(Boolean)){
         this.phase='stages';this.locked=[false,false];
       }
     }
     back(i) {
       if(this.locked[i]) { this.locked[i]=false; return; }
+      if(this.picker!==null) {
+        if(i===this.picker)this.phase='fighters';
+        return;
+      }
       if(this.phase==='stages') {
         this.phase='fighters';this.locked=[true,true];this.locked[i]=false;
       }
@@ -73,8 +68,9 @@
     '<small data-detail></small><button type="button" data-action="coat"></button>'+
     '<button type="button" class="couch-lock" data-action="lock"></button><small data-keys></small></section>';
 
-  function panel(root,settings,keys,pads,{start,leave,sound,announce,drawStageTile}) {
-    const pick=new Selection(settings), seats=new Seats(pads), previous=[null,null];
+  function panel(root,settings,keys,pads,{start,leave,sound,announce,drawStageTile,between}) {
+    const pick=new Selection(settings,Math.random,between?.picker);
+    const seats=settings.couchSeats || new window.FightControls.Seats(pads), previous=[null,null];
     const reduced=matchMedia('(prefers-reduced-motion: reduce)');
     const colors=window.DogArt.coatNames;
     root.innerHTML='<h3 id="couch-phase" class="card-stage"></h3><small id="couch-rules"></small><div class="couch-seats">'+card(0)+card(1)+
@@ -91,11 +87,12 @@
     const key=(i,action)=>window.FightControls.keyName(keys[i][action]);
     let lastCel=-1,closed=false;
     function paint(time=0) {
-      if(pick.phase!=='fighters') return;
+      if(pick.phase!=='fighters' && !between) return;
       const cel=reduced.matches?0:Math.floor(time*8);
       if(cel===lastCel)return;
       lastCel=cel;
       cards.forEach(({canvas},i)=>{
+        if(between && pick.phase==='stages' && i===pick.picker)return;
         const ctx=canvas.getContext('2d'), locked=pick.locked[i], edge=i?'#7fc8dc':'#f6aa6c';
         ctx.imageSmoothingEnabled=false;
         ctx.fillStyle=i?'#323d52':'#4b3541';ctx.fillRect(0,0,192,108);
@@ -106,7 +103,32 @@
         window.DogArt.draw(ctx,pick.dogs[i],96,87,{coat:pick.colors[i],face:i?-1:1,scale:1,pose:locked?'win':'idle',time:cel/8});
       });
     }
+    function renderCounterpick() {
+      const choosing=pick.phase==='fighters', picker=pick.picker, player='P'+(picker+1);
+      root.querySelector('#couch-phase').textContent=player+(choosing?' · Keep or change fighter':' · Pick the arena');
+      for(const [i,c] of cards.entries()) {
+        const active=i===picker, kind=pick.dogs[i], locked=pick.locked[i], arena=active && !choosing;
+        c.el.dataset.locked=String(locked);
+        c.name.textContent=arena?arenas[pick.stages[i]].name:fighters[kind].name;
+        c.detail.textContent=arena?(stageForms[settings.stageForm].description || arenas[pick.stages[i]].description):
+          (active?fighters[kind].style:'Won game '+(between.game-1)+' · '+colors[kind][pick.colors[i]]);
+        for(const button of c.arrows)button.disabled=!active || locked;
+        c.coat.hidden=!active || !choosing;
+        c.coat.textContent='Coat · '+colors[kind][pick.colors[i]];
+        c.lock.textContent=locked?'Ready ✓ · Change':active?(choosing?'Choose arena':'Fight here'):'Ready for game '+between.game;
+        c.lock.setAttribute('aria-pressed',String(locked));
+        c.keys.textContent=(active?key(i,'left')+' / '+key(i,'right')+' choose · '+(choosing?key(i,'up')+' / '+key(i,'down')+' coat · ':''):'')+
+          key(i,'attack')+' confirm · '+key(i,'special')+' back';
+        if(arena)drawStageTile(c.canvas,pick.stages[i],settings.stageForm);
+      }
+      call.textContent=pick.locked[picker]?arenas[pick.stages[picker]].name+' selected. Waiting for P'+(2-picker)+' to ready up.':
+        (pick.locked[1-picker]?'P'+(2-picker)+' is ready. ':'')+
+        (choosing?player+' can keep the same dog or change the matchup.':'Game '+between.game+' starts when both players confirm.');
+      play.hidden=true;
+      back.textContent='Back to results';
+    }
     function render() {
+      if(between){renderCounterpick();lastCel=-1;paint();return;}
       const choosing=pick.phase==='fighters', winner=pick.winner;
       root.querySelector('#couch-phase').textContent=choosing?'Choose your fighters':'Vote for the opening arena';
       cards.forEach((c,i)=>{
@@ -138,8 +160,9 @@
     }
     function act(i,action) {
       if(closed)return;
+      if(between && i!==pick.picker && !['back','confirm'].includes(action))return;
       if(action==='back' && !pick.locked[i] && pick.phase==='fighters'){
-        if(pick.locked[1-i])return;
+        if(between ? i!==pick.picker : pick.locked[1-i])return;
         closed=true;leave();return;
       }
       if(action==='back')pick.back(i);
@@ -148,7 +171,9 @@
       else if(action==='left'||action==='right')pick.choose(i,action==='left'?-1:1);
       else if(pick.phase==='fighters')pick.coat(i,action==='up'?-1:1);
       else return;
-      sound('menu');render();
+      sound('menu');
+      if(between && pick.winner){launch();return;}
+      render();
       const choice=pick.phase==='fighters'?colors[pick.dogs[i]][pick.colors[i]]+' '+fighters[pick.dogs[i]].name:arenas[pick.stages[i]].name;
       if(['left','right','up','down'].includes(action))announce('P'+(i+1)+' · '+choice);
     }
@@ -159,7 +184,7 @@
     };
     play.onclick=launch;
     back.onclick=()=>{
-      if(pick.phase==='fighters'){closed=true;leave();return;}
+      if(between || pick.phase==='fighters'){closed=true;leave();return;}
       pick.phase='fighters';pick.locked=[false,false];render();cards[0].lock.focus({preventScroll:true});
     };
     function poll(pads,time) {
@@ -170,7 +195,7 @@
         const mask=padMask(pad,last?.mask||0), index=pad?.index??null;
         if(last?.index!==index)c.device.textContent=pad?'Pad '+(index+1)+' · A ready / B back':'Keyboard';
         previous[i]={index,mask};
-        if(closed || phase!==pick.phase || !pad || last?.index!==index)continue;
+        if(closed || (!between && phase!==pick.phase) || !pad || last?.index!==index)continue;
         const fresh=mask & ~last.mask;
         if(fresh & 32)act(i,'back');
         else {
@@ -192,8 +217,8 @@
       }
       return false;
     }
-    render();poll(pads,0);cards[0].lock.focus({preventScroll:true});
+    render();poll(pads,0);cards[pick.picker??0].lock.focus({preventScroll:true});
     return {poll,keyboard,bindings(next){keys=next;render();}};
   }
-  window.CouchSelect={Selection,Seats,panel};
+  window.CouchSelect={Selection,panel};
 })();
