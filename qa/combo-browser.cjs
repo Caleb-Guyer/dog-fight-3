@@ -1745,6 +1745,7 @@ async function testPartnerTraining(page,mobile) {
   assert(Math.abs(again.time-saved.time-1/60)<1e-6);
   assert(Math.abs(again.dogs[1].x-saved.dogs[1].x)<3);
   await press('combo-training');
+  await page.locator('#combo-controls').waitFor({state:'visible'});
   assert(await page.locator('#moment-save').isHidden());
   await press('combo-record');
   await page.selectOption('#combo-reply','p2');
