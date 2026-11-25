@@ -37,8 +37,12 @@ async function play(browser,solo){
   try{
     if(solo){
       await page.goto(root+'#solo');assert.equal(await page.evaluate(()=>!!window.StageStrike),false);
+      assert.equal(await page.locator('link[href*="versus-select.css"]').count(),0);
+      await page.route('**/versus-select.css*',route=>route.abort(),{times:1});
       await press('#rules-label');await press('[data-do=strike-set]');
+      await press('#dispatch-load-retry');
       await page.locator('#strike-turn').waitFor();
+      assert.equal(await page.locator('#strike-stages').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),3);
       assert(await page.locator('#dialog').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
       for(let step=0;step<8 && await page.locator('#strike-confirm').getAttribute('data-play')!=='true';step++){
         if(await page.locator('#strike-confirm').isDisabled())await page.clock.runFor(710);
