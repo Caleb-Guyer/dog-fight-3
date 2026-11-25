@@ -111,6 +111,10 @@ In **Training → Edge practice**, walk to the chalk and catch a rival’s ledge
 
 In **Training → Footwork practice**, dash right to the chalk and reverse to draw out Brisket’s Bear Hug. As his paws close, turn back and attack before he recovers. The drill reports how many frames he still needed when your punish landed. Choose **Footwork practice** again to retry with the same spacing.
 
+**Run up and shield.** Hold forward for at least three frames of a dash, then add Shield while still holding forward. Your shield rises immediately and your paws slide until they find traction. You can grab or jump out of the stop. To roll forward, release forward and press it again while holding Shield. Pressing Shield and a fresh direction together also rolls.
+
+In **Footwork practice → Run up and shield**, run to the chalk and guard Brisket’s Gate Check. Tap Grab when his paw hits your shield to catch him before he jumps away. Retry and keep running to feel what the same swing does on a clean hit. You can also release Shield just before contact to parry. Switch sides or turn off Half speed to practice the timing in a match. [Play the dash-shield drill](https://caleb-guyer.github.io/dog-fight-3/#training/dash-shield)
+
 **Brake at the chalk** lets you compare two approaches from the same starting line. Hold forward and tap Attack for a dash attack. On the next run, release forward briefly, then press forward and tap Attack together. Your dog slides into its forward tilt. Aim up or down and tap Attack during a run for a sliding vertical tilt. In **Catch the chase**, turn and tap Attack together to hit a pursuer while you still travel away. Each dog brakes at its own rate.
 
 In **Options**, switch **Grounded aim stick** to **Tilt** to throw a tilt with one flick, even while holding a run in the opposite direction. This setting also covers the keyboard aim keys and a swipe outward from Smash on touch. In the air these controls aim aerials. The dedicated Smash button still charges smashes.

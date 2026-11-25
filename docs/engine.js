@@ -151,6 +151,8 @@
   const landingGrabFrames = 4;
   const landingCancelWindow = 7 / 60;
   const runStick = 0.55;
+  const dashShieldReady = f => f.run && !f.run.turned && f.run.age + 1e-8 >= 3 / 60 &&
+    f.vx * f.run.face > f.kit.footwork.walk;
   const pivotWindow = 7 / 60;
   const ledgeDriftGrace = 12 / 60;
   const hangingFeet = [0, -13, 46];
@@ -2042,6 +2044,7 @@
       shieldLeanY: 0,
       shieldImpact: 0,
       shieldAxis: '',
+      brakingShield: false,
       guardIntent: '',
       shieldDrop: 0,
       parryEligible: false,
@@ -3864,7 +3867,7 @@
       const kind = { bait: 'brisket', match: player.kind, power: 'brisket', disc: 'clover', brake: 'pip',
         pivot: player.kind, antiAir: originalDogs[1].kind, angleHigh: originalDogs[1].kind,
         angleLow: originalDogs[1].kind, cancelDash: originalDogs[1].kind, cancelTurn: originalDogs[1].kind,
-        reflect:'clover', returnFire:'pip' }[pattern];
+        reflect:'clover', returnFire:'pip', dashShield:'brisket' }[pattern];
       const dummy = newFighter(kind, 1);
       this.dogs = [player, dummy];
       const floor = this.terrain[0], center = (floor.x1 + floor.x2) / 2;
@@ -3878,6 +3881,11 @@
       dummy.ground = player.ground = 0;
       dummy.y = player.y = floor.y;
       dummy.damage = this.trainingDamage;
+      if (pattern === 'dashShield') {
+        player.x = center - dir * 112;
+        dummy.x = center + dir * 72;
+        mark = center - dir * 15;
+      }
       if (pattern === 'cancelDash' || pattern === 'cancelTurn') {
         const running = pattern === 'cancelDash';
         player.x = mark = center - dir * 55;
@@ -3928,6 +3936,28 @@
     }
     footworkInput(dt) {
       const drill = this.footworkPractice, [player, dummy] = this.dogs;
+      if (drill.pattern === 'dashShield') {
+        if (drill.phase === 'done') return idleInput;
+        if (drill.phase === 'ready' && (player.x - drill.mark) * drill.dir >= -1) {
+          drill.phase = 'atMark';
+          this.emit('footworkCue', {f:player, phase:'atMark'});
+          return {...idleInput, x:-drill.dir * .5, tapped:{attack:true}};
+        }
+        if (drill.phase === 'ready' && drill.braced) {
+          if (!player.shield) drill.braced = false;
+          else if (!player.vx) this.finishFootwork('shortStop');
+        }
+        if (drill.phase === 'guarded') {
+          const swing = dummy.attack;
+          if (!swing || swing.end - swing.time < 3 / 60) drill.jumpQueued = true;
+          if (dummy.ground < 0) drill.airborne = true;
+          if (drill.airborne && (player.y - dummy.y > 75 || dummy.ground >= 0)) this.finishFootwork('jumpedClear');
+          return {...idleInput, jump:!!drill.jumpQueued};
+        }
+        if (drill.phase === 'atMark' && (drill.tell += dt) > .75)
+          this.finishFootwork('avoided');
+        return idleInput;
+      }
       if (drill.discRole) {
         if (drill.phase === 'done') return idleInput;
         drill.tell += dt;
@@ -4013,6 +4043,11 @@
     gradeFootwork(target, projectile = false) {
       const drill = this.footworkPractice;
       if (!drill || drill.phase === 'done') return;
+      if (drill.pattern === 'dashShield') {
+        const grabbed = target.index === 1 && drill.phase === 'guarded' && this.dogs[0].attack?.grabAttempt;
+        this.finishFootwork(grabbed ? 'caughtCounter' : target.index === 0 ? 'ranIntoSwing' : 'intercepted');
+        return;
+      }
       if (drill.discRole) {
         if (!projectile) this.finishFootwork('otherHit');
         return;
@@ -5422,7 +5457,11 @@
           f.guardIntent = 'platformDrop';
         } else if (input.shield && f.shieldAxis && f.guardIntent !== 'platformDrop' &&
             (pressed('shield') || f.shieldAxis !== previousAxis)) {
-          f.guardIntent = f.shieldAxis;
+          // Keep direction-first roll chords during the first two dash frames.
+          // Once running, adding Shield to held forward braces in that lane.
+          const brace = dashShieldReady(f) && previousAxis === f.shieldAxis &&
+            f.shieldAxis === (f.run.face > 0 ? 'right' : 'left');
+          f.guardIntent = brace ? '' : f.shieldAxis;
         } else if (f.shield && was.shield && !input.shield && !f.guardIntent) {
           f.guardIntent = f.shieldStun > 1e-8 ? 'lower' : 'release';
         } else if (input.shield && (f.guardIntent === 'lower' || f.guardIntent === 'release')) {
@@ -5924,7 +5963,7 @@
         ...spendDodge(f, dir ? defense.roll : defense.spot, backRoll ? 2 : 0),
         distance: dir ? defense.rollDistance * (backRoll ? 0.9 : 1) : 0,
       };
-      f.shield = false;
+      f.shield = f.brakingShield = false;
       f.shieldDrop = f.guardBuffer = f.landTime = f.skidTime = f.chainWindow = f.vx = f.vy = 0;
       f.command = f.run = null;
       f.lastMove = dir ? 'Shield Roll' : 'Spot-dodge';
@@ -6397,6 +6436,15 @@
       const waveChord = jumpTap && !f.command && f.guardBuffer > 0 && downDiagonal(f.guardAim);
       const wasShielding = f.shield;
       f.shield = free && grounded && input.shield && f.charge < 0 && !shieldExit;
+      if (!f.shield) f.brakingShield = false;
+      else if (!wasShielding) {
+        f.brakingShield = !!dashShieldReady(f);
+        if (f.brakingShield) {
+          this.emit('dashShield', {f, dir:f.run.face, point:{x:f.x, y:f.y}});
+          if (f.index === 0 && this.footworkPractice?.pattern === 'dashShield')
+            this.footworkPractice.braced = true;
+        }
+      }
       if (f.index === 0 && f.shield && !wasShielding && pressure?.pattern === 'fastfall' && pressure.phase === 'active')
         this.emit('apexGuard',{f});
       if (f.shield) {
@@ -6629,6 +6677,9 @@
         f.vx = toward(f.vx, 0, f.attack.brake * dt);
       } else if (f.ground >= 0 && (f.chargeSlide || f.attack?.slideDir)) {
         f.vx = toward(f.vx, 0, f.kit.footwork.tiltBrake * dt);
+      } else if (f.shield && f.brakingShield) {
+        f.vx = toward(f.vx, 0, f.kit.footwork.traction * dt);
+        if (!f.vx) f.brakingShield = false;
       } else if (onFoot && f.crouch) {
         if (!f.dropPrep) f.vx = toward(f.vx, 0, f.kit.footwork.traction * dt);
         f.run = null;
@@ -6675,6 +6726,7 @@
         }
         if (f.x < p.x1 - 7 || f.x > p.x2 + 7) {
           const cancel = f.landingAerial && f.landingLag > 1e-8 && !f.stun && !f.grip;
+          if (f.brakingShield) f.shield = f.brakingShield = false;
           f.ground = -1;
           f.waveSlide = 0;
           f.dropPrep = null;
@@ -7880,12 +7932,20 @@
         },
       });
       if (target.index === 0) this.finishShieldPractice('parry');
+      if (target.index === 0 && this.footworkPractice?.pattern === 'dashShield' && this.footworkPractice.phase === 'atMark')
+        this.finishFootwork('parriedApproach');
       if (this.escapePractice?.spacing === 'counter' && this.escapePractice.phase === 'swing' && target.index === 0)
         this.finishEscapePractice('parriedKick');
       if (target.index === 0 && (this.platformPractice?.defend || this.platformPractice?.pattern === 'shield-drop'))
         this.finishPlatformPractice('parried');
     }
     block(target, owner, damage, name, face, point, projectile, moveId, use, power) {
+      target.brakingShield = false;
+      const approach = this.footworkPractice;
+      if (target.index === 0 && approach?.pattern === 'dashShield' && approach.phase === 'atMark') {
+        approach.phase = 'guarded';
+        this.emit('footworkCue', {f:target, phase:approach.braced ? 'dashBlocked' : 'standingBlock'});
+      }
       this.comboContact(target, 'block', moveId || name);
       if (this.footworkPractice?.pattern === 'antiAir' && this.footworkPractice.phase !== 'done' && target.index === 1)
         this.finishFootwork('caughtShield');
@@ -9104,6 +9164,21 @@
       return { ...idleInput, x: off ? Math.sign((floor.x1 + floor.x2) / 2 - f.x) : 0,
         aimStick: true, smashY: 1, tapped: { aimStick: true } };
     }
+    cpuDashShield(f, foe) {
+      const swing = foe.attack;
+      if (!swing?.box || swing.projectile || (swing.smashSide !== 'side' && swing.tiltSide !== 'forward') ||
+          swing.time < 2 / 60 || swing.time >= swing.start + swing.active ||
+          f.ground < 0 || f.ground !== foe.ground || f.attack || f.grip || f.floorAction || f.stun ||
+          f.impactLag || f.shieldStun || f.shieldGrabWindow || f.command || f.jumpSquat ||
+          (!dashShieldReady(f) && !(f.shield && f.brakingShield))) return null;
+      const dir = Math.sign(foe.x - f.x), gap = Math.abs(foe.x - f.x);
+      if (foe.face !== -dir || (!f.shield && f.run.face !== dir)) return null;
+      const windup = Math.max(0, swing.start - swing.time);
+      const [offset,,radius] = swing.box;
+      const closing = (f.vx - foe.vx) * dir;
+      if (windup > .15 || gap - closing * windup > offset + radius + f.stats.width + 8) return null;
+      return {...idleInput, x:f.shield ? 0 : dir, shield:true};
+    }
     cpuDiscResponse(f) {
       if (f.ground < 0 || f.stun || f.impactLag || f.grip || f.attack || f.command || f.floorAction ||
           f.charge >= 0 || f.smashCharge || f.jumpSquat || f.respawning) return null;
@@ -9512,7 +9587,8 @@
           }
           return idleInput;
         }
-        const answer = (!unsafe && this.cpuDiscResponse(f)) || this.rivalLedgeReturn(f, foe) || this.readShieldEscape(f, foe) || this.rivalJumpIn(f, foe, dt) ||
+        const answer = (!unsafe && (this.cpuDiscResponse(f) || this.cpuDashShield(f, foe))) ||
+          this.rivalLedgeReturn(f, foe) || this.readShieldEscape(f, foe) || this.rivalJumpIn(f, foe, dt) ||
           this.attackCancelInput(f, foe) || this.runningAntiAir(f, foe) || this.angledTiltInput(f, foe);
         if (answer) return answer;
         // Space a quick forward tilt at the shield's rim. In close the normal grab mixup still applies.

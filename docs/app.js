@@ -2234,6 +2234,20 @@
     const state = e.outcome || e.phase;
     status.dataset.result = state;
     const pattern = world.footworkPractice.pattern;
+    if (pattern === 'dashShield') {
+      status.textContent = {
+        atMark:'Hold Shield now', dashBlocked:'Dash shield · tap Grab', standingBlock:'Blocked · tap Grab',
+        caughtCounter:'Caught Brisket', jumpedClear:'Brisket jumped clear', parriedApproach:'Parried Gate Check',
+        ranIntoSwing:'Gate Check hit you', shortStop:'Stopped short of the chalk',
+        intercepted:'You caught Brisket first', avoided:'Gate Check missed',
+      }[state];
+      if (state === 'dashBlocked' || state === 'standingBlock')
+        $('recovery-tip').textContent = 'Keep Shield held and tap Grab during the block. Brisket will jump as soon as his swing ends.';
+      else if (e.outcome) $('recovery-tip').textContent = state === 'caughtCounter'
+        ? 'You have the grab. Choose a throw, or tap Run up and shield to retry on the same mark.'
+        : 'Run to the chalk. Keep forward held and add Shield as Brisket swings. Tap Grab when his paw hits the shield.';
+      return;
+    }
     if (world.footworkPractice.discRole) {
       const pip = pattern === 'reflect';
       status.textContent = {
@@ -3118,7 +3132,7 @@
         'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
     } else if (footwork) {
       const practice = world.footworkPractice;
-      for (const id of ['bait', 'match', 'power', 'disc', 'reflect', 'returnFire', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
+      for (const id of ['bait', 'match', 'power', 'disc', 'reflect', 'returnFire', 'brake', 'dashShield', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
         $('footwork-' + id).setAttribute('aria-pressed', String(practice.pattern === id));
       $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
       $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
@@ -3127,6 +3141,7 @@
       $('footwork-status').dataset.result = 'ready';
       $('footwork-status').textContent = {
         brake: 'Brake at the chalk', pivot: 'Catch the chase', antiAir: 'Catch the landing',
+        dashShield:'Run to the chalk',
         angleHigh: 'Tag the hop', angleLow: 'Clip the recovery',
         cancelDash:'Catch the hop from a run', cancelTurn:'Turn away, then swing back',
         bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
@@ -3144,6 +3159,7 @@
         angleHigh: angleTip, angleLow: angleTip,
         antiAir: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk as the rival hops. Hold Up and tap Jump + Smash together. Hold Smash longer to compare.',
         brake: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Release forward for a beat, then press forward and tap Attack together. Compare that with holding forward and tapping Attack.',
+        dashShield:'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Keep forward held and add Shield when Brisket swings. Tap Grab on the block to catch him before he jumps away.',
         pivot: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk with the rival on your heels. Press back and tap Attack together to catch them during your skid.',
         bait: 'Dash right to the chalk, then reverse. When Brisket misses his grab, dash back in and tap Attack. Choose Footwork practice to retry.',
         match: 'Tap Attack to start the count. On the third chalk light, tap Attack again to meet the other dog’s jab.',
@@ -3335,7 +3351,7 @@
     $('game').focus({ preventScroll: true });
   };
   $('footwork-training').onclick = () => drill('footwork', false, world.footworkPractice?.pattern || 'bait');
-  for (const pattern of ['bait', 'match', 'power', 'disc', 'reflect', 'returnFire', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
+  for (const pattern of ['bait', 'match', 'power', 'disc', 'reflect', 'returnFire', 'brake', 'dashShield', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
     $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
   $('footwork-side').onclick = () => drill('footwork', false, world.footworkPractice.pattern, -world.footworkPractice.dir);
   $('footwork-pause').onclick = () => {
@@ -4587,6 +4603,11 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/dash-shield') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, mode:'training', p1:'pip', p2:'brisket', stage:'nightmail', fetch:false});
+      drill('footwork',false,'dashShield');
     } else if (hash === '#training/disc-reflect' || hash === '#training/disc-return') {
       leaveOnline();
       afterStory = null;
