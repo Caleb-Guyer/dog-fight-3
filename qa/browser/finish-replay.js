@@ -49,6 +49,55 @@ async function exportFinish(page,press,mobile){
   assert.equal(await page.locator('#clip-toggle').textContent(),Number(n)===length?'Watch again':'Play');
   console.log((mobile?'Touch':'Desktop')+' downloaded '+decoded.count+' GIF frames, '+bytes.length+' bytes.');
 }
+async function reviewMidMatch(page,mobile,press){
+  await page.goto(root+'?stock-review#solo');
+  await press('[data-mode=local]');
+  await page.evaluate(()=>{
+    const step=DogFight.Battle.prototype.step;
+    window.position=w=>[w.matchFrames,w.clockFrames,w.random.state,...w.dogs.map(f=>[f.x,f.y,f.damage,f.stocks])];
+    DogFight.Battle.prototype.step=function(){
+      if(this.mode==='local')window.liveFight ||= this;
+      if(this===window.liveFight && window.checkResume && !window.resumedAt)window.resumedAt=position(this);
+      return step.apply(this,arguments);
+    };
+  });
+  await press('#start');await page.clock.runFor(2850);
+  const cdp=mobile && await page.context().newCDPSession(page);
+  async function move(left){
+    if(!mobile)return left?page.keyboard.down('a'):page.keyboard.up('a');
+    if(!left)return cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    const r=await page.locator('[data-touch=left]').boundingBox();
+    return cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:r.x+r.width/2,y:r.y+r.height/2,id:1}]});
+  }
+  async function fall(count){
+    await move(true);
+    for(let i=0;i<120 && await page.evaluate(()=>liveFight.matchCard.losses.length)<count;i++)await page.clock.runFor(70);
+    await move(false);
+    assert.equal(await page.evaluate(()=>liveFight.matchCard.losses.length),count);
+  }
+  await fall(1);await page.clock.runFor(4500);await press('#pause');
+  const original=await page.evaluate(()=>position(liveFight));
+  await press('[data-do=ko-replays]');await press('[data-ko="0"]');
+  await page.getByText(/Before leaving the stage · frame/).waitFor();
+  await press('#clip-escape');await page.clock.runFor(5100);
+  assert.equal(await page.locator('#dialog-title').textContent(),'Exchange complete');
+  assert.match(await page.locator('#dialog-body').textContent(),/You survived the original knockout/);
+  assert.deepEqual(await page.evaluate(()=>position(liveFight)),original);
+  assert.equal(await page.locator('[data-do=trial-results]').textContent(),'Back to fight');
+  await page.evaluate(()=>{window.checkResume=true;});
+  await press('[data-do=trial-results]');await page.clock.runFor(70);
+  assert.deepEqual(await page.evaluate(()=>resumedAt),original);
+  await fall(2);await page.clock.runFor(3200);await fall(3);await page.clock.runFor(1500);
+  await press('[data-do=match-card]');
+  assert.equal(await page.locator('[data-card-ko]').count(),3);
+  await press('[data-card-ko="0"]');await page.locator('#clip-seek').press('End');
+  assert.match(await page.locator('#clip-scores').textContent(),/2 stocks/);
+  await press('[data-do=clip-back]');assert.equal(await page.locator('[data-card-ko]').count(),3);
+  await press('[data-do=card-back]');await press('[data-do=ko-replays]');
+  assert.deepEqual(await page.locator('[data-ko]').evaluateAll(el=>el.map(e=>e.dataset.ko)),['2','1','0']);
+  await press('#ko-list-back');
+  if(cdp)await cdp.detach();
+}
 async function play(browser,mobile) {
   const page=await browser.newPage({viewport:mobile?{width:390,height:844}:{width:1250,height:760},
     isMobile:mobile,hasTouch:mobile,reducedMotion:mobile?'reduce':'no-preference'});
@@ -149,6 +198,7 @@ async function play(browser,mobile) {
     assert.match(await pip.locator('td').first().textContent(),/0 stocks/);
     assert.match(await pip.locator('td').last().textContent(),/1 stock/);
     await press('[data-do=trial-results]');assert.equal(await page.locator('.winner h3').textContent(),result);
+    await reviewMidMatch(page,mobile,press);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

@@ -7,6 +7,37 @@ const {Battle,FinishTape,seededRandom,idleInput}=window.DogFight;
 const dt=1/60;
 function state({emit,random,...fields}) { return {fields,seed:random.state}; }
 
+test('both delayed peers can revisit the same confirmed non-final knockout after the replay ring rolls over',()=>{
+  const queues=[[],[]],worlds=[],tapes=[new FinishTape(),new FinishTape()];
+  const peers=tapes.map((tape,i)=>{
+    const session=new window.DogOnline.OnlineSession({start(cfg,rng){worlds[i]=new Battle(cfg,undefined,rng);}});
+    session.side=i;session.send=p=>{if(p[0]==='input')queues[1-i].push(p);};
+    session.beginRound(['start',1,'pip','clover','picnic',22]);
+    session.match.onConfirmedInput=(world,a,b)=>tape.record(world,a,b);
+    return session.match;
+  });
+  const deliver=i=>{for(const p of queues[i].splice(0))assert(peers[i].receive(p[2],p[3]));};
+  for(let n=0;n<700;n++){
+    if(n%7===0){deliver(0);deliver(1);}
+    peers.forEach((p,i)=>{
+      p.tick(()=>({...idleInput,x:i===0 && n<160?-1:0}),worlds[i]);
+      assert(tapes[i].knockouts.length<=p.confirmedWorld.matchCard.losses.length);
+    });
+  }
+  peers.forEach((p,i)=>{deliver(i);p.confirm(worlds[i]);tapes[i].captureKnockouts(p.confirmedWorld);});
+  assert.equal(tapes[0].knockouts.length,1);assert.equal(tapes[1].knockouts.length,1);
+  const [a,b]=tapes.map(t=>t.knockouts[0]);
+  assert.deepEqual(a.losses,b.losses);assert.equal(a.losses[0].remaining,2);
+  assert(a.tape.count<tapes[0].count-240);
+  for(const offset of [0,8,a.tape.length])assert.deepEqual(state(a.tape.playback(offset).battle),state(b.tape.playback(offset).battle));
+  const live=peers.map(p=>structuredClone(state(p.confirmedWorld)));
+  for(const c of [a,b]){
+    const fork=c.tape.playback(0,undefined,0);while(fork.step(idleInput)){}
+    assert.equal(fork.battle.dogs[0].stocks,3);
+  }
+  peers.forEach((p,i)=>assert.deepEqual(state(p.confirmedWorld),live[i]));
+});
+
 for(const mode of ['local','solo']) test(mode+' can seek or replay the final 240 ticks exactly',()=>{
   const cfg={mode,p1:'clover',p2:'noodle',stage:'canal',form:'original',fetch:true,coats:[2,1]};
   const battle=new Battle(cfg,undefined,seededRandom(75)), tape=new FinishTape(), expected=new Map();

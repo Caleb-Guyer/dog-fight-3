@@ -10,6 +10,7 @@ async function run(browser,mobile) {
   await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
   const press=selector=>mobile?page.locator(selector).tap():page.locator(selector).click();
   const entries=()=>page.evaluate(()=>new FightRecords.Book(localStorage).list());
+  const timelineFacts=()=>page.locator('.card-timeline :is(time,strong,span)').allTextContents();
   try {
     await page.goto(root+'#records');
     assert(await page.locator('[data-do=record-solo]').isVisible());
@@ -27,24 +28,25 @@ async function run(browser,mobile) {
     const first=await entries();
     assert.equal(first.length,1);assert.equal(first[0].entry.mode,'solo');
     assert.equal(first[0].entry.card.losses[0].slot,0);
-    const timeline=await page.locator('.card-timeline').innerText();
+    const timeline=await timelineFacts();assert.equal(await page.locator('[data-card-ko]').count(),1);
     assert.match(await page.locator('.record-tip').innerText(),/Pip.*bottom blast line/s);
     await press('[data-record-drill="0"]');assert.equal(await page.locator('#match-mode').textContent(),'Training');
     assert.match(await page.locator('#recovery-tip').textContent(),/Special|ledge/);
     if(!mobile){await page.keyboard.down('w');await page.keyboard.press('k');await page.keyboard.up('w');await page.clock.runFor(600);}
     await press('#pause');await press('[data-do=return-fight]');
-    assert.equal(await page.locator('.card-timeline').innerText(),timeline);
+    assert.deepEqual(await timelineFacts(),timeline);
     await press('[data-do=card-back]');await press('[data-do=watch-finish]');await press('[data-do=clip-back]');
     assert.deepEqual(await entries(),first);
     await press('[data-do=home]');await press('#home-records');
-    await press('[data-record-id]');assert.equal(await page.locator('.card-timeline').innerText(),timeline);
+    await press('[data-record-id]');assert.deepEqual(await timelineFacts(),timeline);
+    assert.equal(await page.locator('[data-card-ko]').count(),0);
     await press('[data-record-drill="0"]');await press('#return-fight');
     assert.equal(await page.locator('#dialog').getAttribute('data-view'),'record-card');
     await press('[data-do=card-back]');assert.equal(await page.locator('#dialog').getAttribute('data-view'),'records');
     assert.equal(await page.evaluate(()=>document.activeElement.dataset.recordId),first[0].id);
     assert(await page.locator('#dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
     await page.goto(root+'?reload#records');
-    await press('[data-record-id]');assert.equal(await page.locator('.card-timeline').innerText(),timeline);
+    await press('[data-record-id]');assert.deepEqual(await timelineFacts(),timeline);
     await page.keyboard.press('Escape');await page.keyboard.press('Escape');
     assert.equal(await page.evaluate(()=>document.activeElement.id),'home-records');
     assert.deepEqual(errors,[]);

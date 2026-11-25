@@ -326,7 +326,15 @@ async function onlineSet(browser,phoneBrowser) {
     assert.deepEqual(cards[0],cards[1]);
     if(i===0){
       const scores=[];
+      const firstFalls=[];
       for(const d of [host,guest]){
+        await d.press('[data-do=ko-replays]');
+        assert.equal(await d.page.locator('[data-ko]').count(),3);
+        await d.press('[data-ko="0"]');
+        await d.page.locator('#clip-seek').press('End');
+        const firstFall=await d.page.locator('#clip-scores').textContent();
+        assert.match(firstFall,/2 stocks/);firstFalls.push(firstFall);
+        await d.press('[data-do=clip-back]');await d.press('#ko-list-back');
         await d.press('[data-do=watch-finish]');
         assert.equal(await d.page.locator('#clip-practice').count(),0);
         await d.page.locator('#clip-seek').press('End');
@@ -335,6 +343,7 @@ async function onlineSet(browser,phoneBrowser) {
         await d.press('[data-do=clip-back]');
       }
       assert.equal(scores[0],scores[1]);
+      assert.equal(firstFalls[0],firstFalls[1]);
       await guest.press('[data-do=practice-finish]');
       await guest.press('[data-finish-slot="1"]');
       await b.getByRole('heading',{name:'Exchange complete'}).waitFor();
