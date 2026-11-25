@@ -1130,6 +1130,28 @@ dialog[data-view='moves'] {
   display: grid;
   gap: 8px;
 }
+#online-format { grid-column: 1 / -1; justify-self: start; }
+#match-set {
+  flex: none;
+  padding: 5px 7px;
+  border: 2px solid #76644f;
+  background: #262735ed;
+  color: #ffe1a0;
+  font: 14px/1.2 var(--pixel);
+  white-space: nowrap;
+}
+.set-history { padding: 0; margin: 12px 0; list-style: none; }
+.set-history li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid #665d68;
+}
+@media (max-width: 520px) {
+  #match .match-top:has(#match-set:not([hidden])) > div { display: none; }
+}
 .cpu-choices {
   display: grid;
   gap: 8px;

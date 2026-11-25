@@ -13,6 +13,7 @@
     moveFreshness,
     arenas,
     Battle,
+    StockSet,
     idleInput,
     applyFlickJump,
     rageScale,
@@ -236,6 +237,7 @@
     mode: 'solo',
     cpuLevel: 'arcade',
     minutes: 7,
+    bestOfThree: false,
     p1: 'pip',
     p2: 'brisket',
     fetch: true,
@@ -253,7 +255,7 @@
     if (Object.hasOwn(cpuLevels, s.cpuLevel)) settings.cpuLevel = s.cpuLevel;
     if (stockMinutes.includes(s.minutes)) settings.minutes = s.minutes;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
-    for (const key of ['fetch', 'sound', 'shake', 'tiltStick','flickJump1','flickJump2']) if (typeof s[key] === 'boolean') settings[key] = s[key];
+    for (const key of ['fetch', 'sound', 'shake', 'tiltStick','flickJump1','flickJump2','bestOfThree']) if (typeof s[key] === 'boolean') settings[key] = s[key];
     if (Number.isFinite(s.volume)) settings.volume = Math.max(0, Math.min(100, s.volume));
   } catch {
     /* Settings are optional in private browsing. */
@@ -555,9 +557,9 @@
     const training = settings.mode === 'training';
     $('rules-label').disabled = training;
     $('rules-label').innerHTML = icon('paw') + (training ? 'Unlimited' :
-      'Rules · 3 stocks · ' + (settings.minutes ? settings.minutes + ' min' : 'No clock') + ' ▾');
+      (settings.bestOfThree ? 'Best of three' : 'Rules') + ' · 3 stocks · ' + (settings.minutes ? settings.minutes + ' min' : 'No clock') + ' ▾');
     $('start').innerHTML =
-      icon('play') + '<span>' + (settings.mode === 'training' ? 'Start training' : 'Start fight') + '</span>';
+      icon('play') + '<span>' + (training ? 'Start training' : settings.bestOfThree ? 'Start set' : 'Start fight') + '</span>';
     syncFetch();
     $('picking').innerHTML =
       'Choose for <b class="' + (editing ? 'two' : '') + '">' + labelFor(editing) + '</b>';
@@ -672,6 +674,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if (dialogType === 'set-pick') return showResult();
     if (dialogType === 'result' || dialogType === 'dispatch-fall' || dialogType === 'online-result') return;
     if ((dialogType === 'controls' || dialogType === 'moves' || dialogType === 'cpu-level') && backToPause) {
       backToPause = false;
@@ -694,24 +697,28 @@
       'Fetch Ball',
       '<p>Bat the tennis ball with an attack. Each of the first two swats lights a paw above it. The third swat fires a golden shot that can send a high-damage rival flying.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>',
     );
-  $('choose-stage').onclick = () => {
+  function chooseArena(picking = false) {
+    const current = picking ? world.stage : settings.stage;
     const rows = Object.entries(arenas).map(
       ([id, a]) =>
         '<button class="stage-option" type="button" data-stage="' +
         id +
         '" aria-pressed="' +
-        (id === settings.stage) +
+        (id === current) +
         '"><canvas width="300" height="169" aria-hidden="true"></canvas><span><strong>' +
         a.name +
         '</strong><small>' +
         a.description +
         '</small></span></button>',
     );
-    showDialog('arenas', 'Choose arena', '<div class="stage-options">' + rows.join('') + '</div>');
+    showDialog(picking ? 'set-pick' : 'arenas', picking ? 'Pick the next arena' : 'Choose arena',
+      '<div class="stage-options">' + rows.join('') + '</div>');
     document.querySelectorAll('.stage-option').forEach((el) => {
       drawStageTile(el.querySelector('canvas'), el.dataset.stage);
     });
-  };
+    document.querySelector('[data-stage="' + current + '"]').focus({preventScroll:true});
+  }
+  $('choose-stage').onclick = () => chooseArena();
   function showControls() {
     backToPause = page === 'match';
     const networkGame = !!online.match || page === 'online-lobby';
@@ -1336,7 +1343,7 @@
       })
       .join('');
   }
-  let matchConfig, soloSeed;
+  let matchConfig, soloSeed, localSet = null;
   const frameLab = {mode:'live', count:0, pending:0, renderTime:0};
   function frameState(f) {
     const frames = seconds => Math.ceil(seconds * 60 - 1e-8);
@@ -1433,6 +1440,9 @@
       '" aria-pressed="' + (settings.minutes === n) + '">' + (n ? n + ' min' : 'No clock') + '</button>').join('');
     showDialog('stock-rules', 'Stock match rules',
       '<p>Three stocks each. When time runs out, the dog with more stocks wins. Tied stocks or a double final knockout start Sudden Death.</p>' +
+      '<h3>Match format</h3><div class="dialog-actions"><button class="utility" data-format="single" aria-pressed="' + !settings.bestOfThree +
+      '">Single game</button><button class="utility" data-format="set" aria-pressed="' + settings.bestOfThree + '">Best of three</button></div>' +
+      '<p>In a set, the loser picks the next arena. First to two wins takes the set.</p>' +
       '<h3>Match clock</h3><div class="dialog-actions">' + choices + '</div>' +
       '<p>Play the last stock with both dogs at 125%. When a hit threatens the match, steer during the close-up to change your launch.</p>' +
       '<div class="dialog-actions"><button class="utility" data-do="last-stock-start">Play last stock</button></div>' +
@@ -1452,7 +1462,8 @@
     return '<p>Rival expected a spot-dodge ' + tries + (tries === 1 ? ' time' : ' times') +
       ' and caught ' + (world.bot.spotPunishes || 0) + ' with a delayed down tilt.</p>';
   }
-  function startMatch(config = settings, random = Math.random, opening) {
+  function startMatch(config = settings, random = Math.random, opening, series = null) {
+    localSet = series;
     matchConfig = { ...config };
     if (config.mode === 'solo') {
       soloSeed = opening ?? crypto.getRandomValues(new Uint32Array(1))[0];
@@ -1556,6 +1567,12 @@
       'Solo · ' + cpuLevels[world.cpuLevel].name + ' CPU' : modes[config.mode];
     $('match-mode').textContent = matchName + (config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = arenas[config.stage].name;
+    const set = online.series || localSet;
+    $('match-set').hidden = !set;
+    if (set) {
+      $('match-set').textContent = 'Game ' + set.games.length + ' · ' + set.score.join('–');
+      $('match-set').setAttribute('aria-label', 'Best of three, game ' + set.games.length + ', P1 ' + set.score[0] + ', P2 ' + set.score[1]);
+    }
     $('pause-label').textContent = online.match ? 'Match menu' : 'Pause';
     countdown = config.mode === 'training' || world.suddenDeath ? 0 : 2.4;
     lastCount = 0;
@@ -1573,6 +1590,7 @@
   }
   function toLobby() {
     leaveOnline();
+    localSet = null;
     page = 'lobby';
     dismiss();
     world = null;
@@ -1617,12 +1635,52 @@
         'Resume</button><button class="utility" data-do="controls">' +
         icon('keyboard') +
         'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div>' +
-        cpuReadReport() + '<div class="dialog-actions">' + (world.mode === 'solo' ?
+        cpuReadReport() + '<div class="dialog-actions">' + (world.mode === 'solo' && !localSet ?
           '<button class="utility" data-do="cpu-level">Replay with another CPU</button>' : '') + '<button class="utility" data-do="rematch">' +
         icon('reset') +
         'Restart match</button><button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
     );
     document.querySelector('[data-do=resume]').focus();
+  }
+  function startNextSetGame(stage) {
+    if (localSet?.advance(stage)) startMatch({...matchConfig, stage}, undefined, undefined, localSet);
+  }
+  function showSetResult(result, set, finish, duration) {
+    const net = !!online.match;
+    if (!net) set.finish(result.end);
+    const champion = set.champion, picker = set.picker;
+    const name = i => labelFor(i) + ' ' + result.dogs[i].stats.name;
+    const title = champion === null ? 'Game ' + set.games.length + ' result' : 'Set complete';
+    const history = set.games.map((g,i) => '<li><span>' + (i+1) + ' · ' + arenas[g.stage].name +
+      '</span><strong>' + name(g.winner) + '</strong></li>').join('');
+    let action, text, next = '';
+    if (champion !== null) {
+      action = net ? 'online-rematch' : 'new-set';
+      text = 'Play another set';
+    } else if (!net && world.mode === 'solo' && picker === 1) {
+      const stage = set.cpuPick(result.dogs[1].kind);
+      next = '<p>' + name(1) + ' picks ' + arenas[stage].name + '. ' + arenas[stage].description + '</p>';
+      action = 'cpu-counterpick';
+      text = 'Play game ' + (set.games.length+1);
+    } else {
+      next = '<p>' + name(picker) + ' picks the next arena.</p>';
+      const chooses = !net || online.side === picker;
+      action = chooses ? 'set-pick' : 'online-rematch';
+      text = chooses ? 'Pick arena' : 'Ready for game ' + (set.games.length+1);
+    }
+    const winner = champion ?? result.end;
+    showDialog(net ? 'online-result' : 'result', title,
+      '<div class="winner"><img alt="" src="' + portrait(result.dogs[winner].kind) + '"><div><h3>' + name(winner) +
+      (champion === null ? ' wins game ' + set.games.length : ' wins the set') + '</h3><p>' + finish + ' · ' + duration +
+      '</p></div></div><h3 id="set-score">Set score · P1 ' + set.score[0] + ' – ' + set.score[1] + ' ' +
+      (world.mode === 'solo' ? 'CPU' : 'P2') + '</h3><ol class="set-history" aria-label="Game winners">' + history +
+      '</ol>' + next + (net ? '<p id="net-rematch-status" role="status"></p>' : cpuReadReport()) +
+      '<div class="dialog-actions"><button class="primary" data-set-next data-do="' + action + '">' + text +
+      '</button><button class="utility" data-do="' + (net ? 'online-leave">Online lobby' : 'lobby">Fighter select') +
+      '</button></div>', false);
+    if (net) updateVotes();
+    document.querySelector('[data-set-next]:not(:disabled), [data-do=online-leave]')?.focus();
+    announce(title + '. ' + name(winner) + ' wins. Set score ' + set.score.join(' to '));
   }
   function showResult() {
     const result = online.match?.confirmedWorld || world;
@@ -1630,6 +1688,8 @@
     const duration = Math.floor(elapsed / 60) + 'm ' + String(elapsed % 60).padStart(2, '0') + 's';
     const finish = result.endReason === 'time' ? 'Time expired · ' + result.dogs.map(d=>d.stocks).join('–') + ' stocks (P1–P2)' :
       result.endReason === 'sudden' ? 'Sudden Death KO' : stockLabel(f.stocks);
+    const set = online.series || localSet;
+    if (set) return showSetResult(result, set, finish, duration);
     if (online.match) {
       const title = result.end === online.side ? 'You win!' : 'Opponent wins';
       showDialog('online-result', title,
@@ -1661,9 +1721,17 @@
     announce(f.stats.name + ' wins the Golden Tennis Ball');
     document.querySelector('[data-do=rematch]').focus();
   }
-  $('start').onclick = () => startMatch();
+  $('start').onclick = () => startMatch(settings, undefined, undefined,
+    settings.mode !== 'training' && settings.bestOfThree ? new StockSet(settings.stage) : null);
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
+    const format = e.target.closest('[data-format]');
+    if (format) {
+      settings.bestOfThree = format.dataset.format === 'set';
+      save(); dismiss(); syncLobby();
+      $('rules-label').focus({preventScroll:true});
+      return;
+    }
     const rule = e.target.closest('[data-minutes]');
     if (rule && stockMinutes.includes(Number(rule.dataset.minutes))) {
       settings.minutes = Number(rule.dataset.minutes);
@@ -1717,6 +1785,13 @@
     }
     const stage = e.target.closest('[data-stage]');
     if (stage) {
+      if (dialogType === 'set-pick') {
+        if (online.series) {
+          showResult();
+          online.rematch(stage.dataset.stage);
+        } else startNextSetGame(stage.dataset.stage);
+        return;
+      }
       settings.stage = stage.dataset.stage;
       save();
       syncLobby();
@@ -1725,6 +1800,12 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if (action === 'set-pick') chooseArena(true);
+    if (action === 'cpu-counterpick') startNextSetGame(localSet.cpuPick(world.dogs[1].kind));
+    if (action === 'new-set') {
+      const stage = localSet.games[0].stage;
+      startMatch({...matchConfig, stage}, undefined, undefined, new StockSet(stage));
+    }
     if (action === 'online-rematch') online.rematch();
     if (action === 'online-leave') showOnline();
     if (action === 'fullscreen') toggleFullscreen();
@@ -1747,7 +1828,7 @@
     if (action === 'lobby') toLobby();
     if (action === 'cpu-level') showCpuLevels();
     if (action === 'shield-read-match') startShieldReadMatch();
-    if (action === 'rematch') startMatch(matchConfig, undefined, soloSeed);
+    if (action === 'rematch') startMatch(matchConfig, undefined, soloSeed, localSet);
     if (action === 'controls') showControls();
     if (action === 'moves') showMoves(world?.dogs[0].kind || settings.p1);
   });
@@ -3552,6 +3633,8 @@
   }
   const countMarks = (bits) => campaign.rooms.filter((_, i) => bits & (1 << i)).length;
   function menuScreen(id, keepRoom = false) {
+    localSet = null;
+    $('match-set').hidden = true;
     if (!keepRoom) leaveOnline();
     film?.score.silence();
     film = null;
@@ -4017,7 +4100,7 @@
     if (room && page === 'match') menuScreen('online-lobby', true);
     $('online-actions').hidden = busy;
     $('online-wait').hidden = !busy;
-    $('online-status').textContent = message;
+    $('online-status').textContent = (room && online.roomSet ? 'Best of three · ' : '') + message;
     $('online-connect-title').textContent = room ? 'Friend room' : phase === 'search' ? 'Quickplay' : 'Matchmaking';
     $('online-cancel').textContent = room ? 'Close room' : phase === 'search' ? 'Cancel search' : 'Cancel';
     $('online-invite').hidden = !room;
@@ -4057,15 +4140,22 @@
       if (request === onlineRequest) showOnline('Could not load online play. Please try again.', code);
       return;
     }
-    if (request === onlineRequest) online.start(action, onlineDog, code, $('online-stage').value);
+    if (request === onlineRequest) online.start(action, onlineDog, code, $('online-stage').value,
+      $('online-format').getAttribute('aria-pressed') === 'true');
   }
   function updateVotes() {
-    const button = document.querySelector('[data-do=online-rematch]');
+    const button = document.querySelector('[data-do=online-rematch], [data-set-next]');
     if (!button) return;
     button.disabled = online.myVote;
-    $('net-rematch-status').textContent = online.myVote ? 'Waiting for your opponent…' :
-      online.theirVote ? 'Your opponent wants a rematch.' : '';
+    const arena = online.nextStage && arenas[online.nextStage].name;
+    $('net-rematch-status').textContent = (arena ? arena + ' selected. ' : '') + (online.myVote ? 'Waiting for your opponent…' :
+      online.theirVote ? (online.series ? 'Your opponent is ready.' : 'Your opponent wants a rematch.') : '');
   }
+  $('online-format').onclick = () => {
+    const button = $('online-format'), on = button.getAttribute('aria-pressed') !== 'true';
+    button.setAttribute('aria-pressed', String(on));
+    button.textContent = 'Best of three · ' + (on ? 'On' : 'Off');
+  };
   $('home-online').onclick = () => { audioReady(); sound('menu'); showOnline(); };
   $('online-home').onclick = () => showHome();
   $('online-cancel').onclick = () => showOnline(online.phase === 'room' ? 'Room closed.' : 'Matchmaking canceled.');
@@ -4437,7 +4527,7 @@
       if (dialogType === 'pause' || dialogType === 'online-menu') dismiss();
       else if (page === 'match' && !dialogType) showPause();
       else if (page === 'dispatch-story' && !dialogType) toggleFilm();
-      else if (page === 'lobby' && !dialogType) startMatch();
+      else if (page === 'lobby' && !dialogType) $('start').click();
     } else if (page === 'match' && world?.mode === 'training' && !$('dialog').open &&
         (now.freeze && !oldPad.freeze || now.step && !oldPad.step)) {
       if (now.freeze && !oldPad.freeze) toggleFrames();
@@ -4566,7 +4656,7 @@
         updateHUD();
       } else {
         resultDelay -= dt;
-        if (resultDelay <= 0 && (online.match ? dialogType !== 'online-result' : !$('dialog').open)) showResult();
+        if (resultDelay <= 0 && (online.match ? !['online-result','set-pick'].includes(dialogType) : !$('dialog').open)) showResult();
       }
       if (world && (frameLab.mode !== 'frozen' || steppedFrame)) {
         const confirmed = online.match?.confirmedWorld;
@@ -4588,7 +4678,12 @@
   function openLink() {
     const hash = location.hash;
     const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
-    if (Object.hasOwn(openingStages, hash)) {
+    if (hash === '#solo/best-of-three') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings,p1:'pip',p2:'brisket',mode:'solo',stage:'picnic',cpuLevel:'rival',minutes:7,fetch:false},
+        undefined,42,new StockSet('picnic'));
+    } else if (Object.hasOwn(openingStages, hash)) {
       leaveOnline();
       afterStory = null;
       const stage = openingStages[hash];

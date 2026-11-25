@@ -1,8 +1,8 @@
 (() => {
   'use strict';
 
-  const prefix = 'dogfight3-cg-versus-v53-';
-  const channel = 'dogfight3-v53';
+  const prefix = 'dogfight3-cg-versus-v54-';
+  const channel = 'dogfight3-v54';
   const quickId = prefix + 'quickplay';
   const roomAlphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick', 'tiltMode', 'shortHop'];
@@ -195,16 +195,17 @@
       clearInterval(this.watch);
       this.phase = 'idle';
       this.disposePeer(true);
-      this.link = this.match = null;
+      this.link = this.match = this.series = null;
       if (message) this.events.closed(message);
     }
-    start(action, kind, code = '', openingStage = '') {
+    start(action, kind, code = '', openingStage = '', bestOfThree = false) {
       this.close();
       if (!fighter(kind) || !['create', 'join', 'quick'].includes(action)) return;
       if (action === 'join' && !validCode(code)) return this.events.closed('Enter the six-character room code.');
       if (!window.Peer || !window.RTCPeerConnection || navigator.onLine === false)
         return this.events.closed('Online play needs an internet connection and a browser with WebRTC.');
       this.action = action;
+      this.roomSet = action === 'create' && bestOfThree;
       this.openingStage = action === 'create' && Object.hasOwn(window.DogFight.arenas, openingStage) ? openingStage : '';
       this.kind = kind;
       this.code = action === 'create' ? roomCode() : code;
@@ -329,31 +330,42 @@
     opponentLeft(message) {
       if (this.action !== 'create' || !this.peer?.open) return this.close(message);
       const conn = this.link;
-      this.link = this.match = null;
+      this.link = this.match = this.series = null;
       this.round = 0;
       clearInterval(this.watch);
       if (conn) conn.close();
       this.status('room', message + ' Your room is open.');
     }
     validStart(msg) {
-      return msg.length === 6 && msg[1] === this.round + 1 && fighter(msg[2]) && msg[3] === this.kind &&
+      const series = msg.length === 7 && msg[6] === 2 && this.action !== 'quick';
+      if ((msg.length !== 6 && !series) || (this.round && series !== !!this.series)) return false;
+      if (this.series && (!this.finished || !this.theirVote ||
+          (this.series.champion === null && msg[4] !== this.nextStage))) return false;
+      return msg[1] === this.round + 1 && fighter(msg[2]) && msg[3] === this.kind &&
         typeof msg[4] === 'string' && Object.hasOwn(window.DogFight.arenas, msg[4]) &&
         Number.isInteger(msg[5]) && msg[5] >= 0 && msg[5] <= 0xffffffff;
     }
     hostRound() {
       const seed = randomInt();
       const stages = Object.keys(window.DogFight.arenas);
-      const stage = this.round ? stages[(stages.indexOf(this.stage) + 1) % stages.length]
-        : this.openingStage || stages[seed % stages.length];
+      const opener = this.openingStage || stages[seed % stages.length];
+      const stage = this.series ? (this.series.champion === null ? this.nextStage : opener) :
+        this.round ? stages[(stages.indexOf(this.stage) + 1) % stages.length] : opener;
       const data = ['start', this.round + 1, this.kind, this.remoteKind, stage, seed];
+      if (this.roomSet) data.push(2);
       this.send(data);
       this.beginRound(data);
     }
-    beginRound([, round, p1, p2, stage, seed]) {
+    beginRound([, round, p1, p2, stage, seed, firstTo]) {
+      if (firstTo === 2) {
+        if (!this.series || this.series.champion !== null) this.series = new window.DogFight.StockSet(stage);
+        else if (!this.series.advance(stage)) return;
+      }
       this.round = round;
       this.stage = stage;
       this.myVote = this.theirVote = this.finished = false;
       this.myResult = this.theirResult = null;
+      this.nextStage = this.earlyVote = undefined;
       this.phase = 'playing';
       const config = { mode: 'local', p1, p2, stage, fetch: true };
       this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed);
@@ -375,6 +387,15 @@
           return this.close('The match results did not agree. Find another match.');
       }
       if (msg[0] === 'rematch') {
+        if (this.theirVote || msg.length < 2 || msg.length > 3) return;
+        if (this.series && !this.finished) {
+          // Ordered peers can reach the same confirmed finish on different render frames.
+          if (this.theirResult === 0 || this.theirResult === 1) this.earlyVote = msg;
+          return;
+        }
+        if (this.series && this.theirResult !== this.myResult) return;
+        if (!this.validVote(1-this.side, msg[2])) return;
+        if (msg[2] !== undefined) this.nextStage = msg[2];
         this.theirVote = true;
         this.events.votes();
         if (!this.side && this.myVote) this.hostRound();
@@ -384,14 +405,25 @@
       if (this.finished) return;
       this.finished = true;
       this.myResult = winner;
-      this.send(['result', this.round, winner]);
       if (this.theirResult !== null && this.theirResult !== winner)
-        this.close('The match results did not agree. Find another match.');
+        return this.close('The match results did not agree. Find another match.');
+      this.series?.finish(winner);
+      this.send(['result', this.round, winner]);
+      if (this.earlyVote) {
+        const msg = this.earlyVote;
+        this.earlyVote = undefined;
+        this.receive(msg);
+      }
     }
-    rematch() {
-      if (!this.match || !this.finished || this.myVote) return;
+    validVote(side, stage) {
+      return this.series?.picker === side ? typeof stage === 'string' && Object.hasOwn(window.DogFight.arenas, stage)
+        : stage === undefined;
+    }
+    rematch(stage) {
+      if (!this.match || !this.finished || this.myVote || !this.validVote(this.side, stage)) return;
+      if (stage !== undefined) this.nextStage = stage;
       this.myVote = true;
-      this.send(['rematch', this.round]);
+      this.send(stage === undefined ? ['rematch', this.round] : ['rematch', this.round, stage]);
       this.events.votes();
       if (!this.side && this.theirVote) this.hostRound();
     }
