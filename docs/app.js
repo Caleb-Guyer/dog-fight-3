@@ -2189,6 +2189,11 @@
     if (world.mode !== 'solo' || world.cpuLevel !== 'rival') return '';
     const {spotReads, spotPunishes, rollReads, rollPunishes, shieldHabit} = world.bot;
     let report = '';
+    if(world.bot.ledgeRollReads){
+      const reads=world.bot.ledgeRollReads, catches=world.bot.ledgeRollCatches || 0;
+      report+='<p>Rival covered your ledge roll '+reads+(reads===1?' time':' times')+' and grabbed you during '+catches+
+        (catches===1?' roll.':' rolls.')+' A jump or a delayed get-up can leave that grab empty.</p>';
+    }
     if (spotReads) report += '<p>Rival expected a spot-dodge ' + spotReads + (spotReads === 1 ? ' time' : ' times') +
       ' and caught ' + (spotPunishes || 0) + ' with a delayed down tilt.</p>';
     if (rollReads) report += '<p>Rival predicted ' + rollReads + (rollReads === 1 ? ' shield roll' : ' shield rolls') +
@@ -4458,6 +4463,20 @@
   }
   function rollFeedback(name, e) {
     const result = $('roll-status');
+    const drill=world.rollPractice;
+    if(drill.pattern==='scout'){
+      const count=drill.rollHabit?.count || 0;
+      const words={observed:'Roll observed',caught:'Caught by the grab',baited:'Grab missed',hit:'Guard landed a hit',
+        counter:'You hit the guard',clear:'Exchange ended'};
+      result.dataset.result=name==='ledgeRoll'?'active':e.outcome;
+      result.textContent=(name==='ledgeRoll'?'Rolling':words[e.outcome])+' · '+count+'/2 rolls';
+      if(name!=='ledgeRoll'){
+        $('recovery-tip').textContent=drill.rollForecast?'The guard committed to your usual timing. Choose Next catch to try a different exit.':
+          count===2?'The guard has seen two rolls. Choose Next catch and watch where the guard faces.':'Choose Next catch. Roll twice in a row to teach the guard your timing.';
+        $('roll-fight').hidden=count!==2 || !!practiceFight;
+      }
+      return;
+    }
     if (name === 'ledgeRoll') {
       result.dataset.result = 'active';
       result.textContent = world.rollPractice.pattern === 'read' ? 'Watch for the grab' : 'Swing at the lip';
@@ -4944,12 +4963,15 @@
           (practiceSide === 'left' ? 'right' : 'left') +
           ' or use your recovery to take it.';
     } else if (roll) {
-      const read = pattern === 'read';
+      const read = pattern === 'read', scout=pattern==='scout';
       $('roll-status').dataset.result = 'ready';
-      $('roll-status').textContent = practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
-      $('roll-guard').setAttribute('aria-pressed', String(!read));
+      $('roll-status').textContent = scout?'Tap Attack · '+(world.rollPractice.rollHabit?.count || 0)+'/2 rolls':practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
+      $('roll-guard').setAttribute('aria-pressed', String(!read && !scout));
       $('roll-read').setAttribute('aria-pressed', String(read));
-      message = read
+      $('roll-scout').setAttribute('aria-pressed',String(scout));
+      $('roll-scout').textContent=scout?'Next catch':'Teach the guard';
+      $('roll-fight').hidden=!scout || world.rollPractice.rollHabit?.count!==2 || !!practiceFight;
+      message = scout?'Tap Attack to cue the guard. Tap Shield to roll, then choose Next catch. After two rolls, try jumping or waiting out the grab.':read
         ? 'The guard is waiting where your roll ends. Tap Shield to test the read, or jump from the ledge.'
         : 'Tap Shield to roll through the guard’s swing. As your dog turns back, tap Attack.';
     } else if (air) {
@@ -5119,7 +5141,7 @@
     ['Recovery','Edgeguarding','edge',['lip','shortCatch','longCatch','tip','deep','corner','inside']],
     ['Recovery','Ledge recovery','ledge',['training','right','attack-training']],
     ['Recovery','Ledge timing','climb',['escape','trap','rise','coverRise','patience']],
-    ['Recovery','Ledge roll','roll',['guard','read']],
+    ['Recovery','Ledge roll','roll',['guard','read','scout']],
     ['Recovery','Contested ledge','trump',['take','defend']],
     ['Recovery','Stage techs & wall jumps','wall',['training','impact','ceiling','pip','noodle']],
     ['Movement','Free practice','',['reset-training','partner-training']],
@@ -5146,7 +5168,7 @@
     'partner-training':'local two players sparring', 'reset-training':'free training dummy',
     'wall-ceiling':'ceiling tech under stage recovery Noodle Pip',
   };
-  const practiceTitles = {'reset-training':'Free training', 'shield-drop':'Punish Brisket’s Belly Drop',
+  const practiceTitles = {'roll-scout':'Teach the guard your ledge roll','reset-training':'Free training', 'shield-drop':'Punish Brisket’s Belly Drop',
     'shield-strike':'Parry or roll through a strike', 'shield-grab':'Dodge an incoming grab', 'wall-impact':'Tech a heavy impact'};
   function searchWords(value) {
     return value.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
@@ -5411,6 +5433,14 @@
   };
   $('roll-guard').onclick = () => drill('roll', false, 'guard');
   $('roll-read').onclick = () => drill('roll', false, 'read');
+  $('roll-scout').onclick = () => drill('roll',false,'scout');
+  $('roll-fight').onclick=()=>{
+    const d=world.rollPractice;
+    if(d?.pattern!=='scout' || d.rollHabit?.count!==2 || practiceFight)return;
+    const [p1,p2]=world.dogs.map(f=>f.kind),coats=world.dogs.map((_,i)=>world.coatFor(i));
+    startMatch({...settings,p1,p2,coats,stage:world.stage,form:world.form,mode:'solo',cpuLevel:'rival',fetch:false,stockCount:3,
+      timeBattle:false,minutes:7,scoutedRoll:{side:d.side,delay:d.rollHabit.delay}});
+  };
   $('roll-side').onclick = () => {
     practiceSide = practiceSide === 'left' ? 'right' : 'left';
     drill('roll', false, world.rollPractice.pattern);
@@ -7770,6 +7800,10 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'clover', p2:'brisket', stage:'nightmail', fetch:false });
       drill('shield', false, 'counterGrab');
+    } else if (hash === '#training/roll-habit') {
+      leaveOnline();afterStory=null;practiceSide='left';
+      startMatch({...settings,mode:'training',p1:'pip',p2:'brisket',stage:'picnic',fetch:false});
+      drill('roll',false,'scout');
     } else if (hash === '#training/ledge-patience') {
       leaveOnline();
       afterStory = null;
