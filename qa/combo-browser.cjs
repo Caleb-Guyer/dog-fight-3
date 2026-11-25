@@ -1276,6 +1276,63 @@ async function testHaymaker(page,mobile) {
   assert(await status.isHidden());
 }
 
+async function testDefendTakes(page,mobile) {
+  await page.goto(root+'?defense-test#training/read-the-hop');
+  const summary=page.locator('#combo-summary'),latest=page.locator('#combo-latest');
+  const {hold,press}=await trainingControls(page,mobile,summary);
+  await page.evaluate(()=>{
+    const proto=window.DogFight.Battle.prototype,step=proto.step;
+    proto.step=function(...args){
+      const result=step.apply(this,args), d=this.comboPractice;
+      if(d)window.defenseFrame={phase:d.phase,tick:d.tick};
+      return result;
+    };
+  });
+  async function waitForPhase(phase,tick=0){
+    for(let i=0;i<240;i++){
+      if(await page.evaluate(([p,n])=>window.defenseFrame?.phase===p && window.defenseFrame.tick>=n,[phase,tick]))return;
+      await page.clock.runFor(tick?16:48);
+    }
+    assert.fail('Expected '+phase+' at '+tick+'; '+await latest.textContent());
+  }
+  async function startGuard() {
+    await hold(['attack']);await page.clock.runFor(64);await hold(['shield']);
+    await waitForPhase('active');
+  }
+  assert.match(await latest.textContent(),/You are Brisket/);
+  assert.deepEqual(await page.locator('.hud-name small').allTextContents(),['REPLAY','YOU']);
+  assert(await page.locator('#dummy-damage').isVisible());
+  assert.equal(await page.locator('#dummy-damage').getAttribute('aria-label'),'Your starting damage');
+  await press('combo-slow');
+  await startGuard();
+  assert.match(await summary.textContent(),/^Mix A and B/);
+  await waitForPhase('done');
+  assert.match(await summary.textContent(),/^Take (A · Falling aerial|B · Landing grab)/);
+  await hold([]);
+  await press('combo-defend');await startGuard();await waitForPhase('done');
+  assert.match(await latest.textContent(),/Spin · blocked/);
+  await hold([]);await page.selectOption('#combo-slot','1');
+  await startGuard();await waitForPhase('done');
+  assert.match(await latest.textContent(),/Kickoff/);assert.match(await summary.textContent(),/7%/);
+  await hold([]);await press('combo-defend');
+  await startGuard();await waitForPhase('active',32);
+  await hold(['shield','down']);await page.clock.runFor(32);await hold(['shield']);
+  await waitForPhase('active',51);await hold(['attack']);await page.clock.runFor(32);await hold([]);
+  await waitForPhase('done');
+  assert.match(await latest.textContent(),/Your Body Check connected/);
+  assert.match(await summary.textContent(),/Took 0 hits · 0%/);
+  await page.selectOption('#combo-slot','0');await press('combo-record');
+  await hold(['attack']);await page.clock.runFor(32);await hold([]);await page.clock.runFor(240);
+  assert.equal(await page.locator('#combo-slot option:checked').textContent(),'A · Your recording');
+  await press('combo-defend');await startGuard();await waitForPhase('done');
+  assert.match(await latest.textContent(),/Quick Paw · blocked/);
+  await hold([]);await press('reset-training');await press('combo-training');
+  assert(await page.locator('#combo-replay').isEnabled());
+  await press('combo-restore');
+  assert.equal(await page.locator('#combo-slot option:checked').textContent(),'A · Falling aerial');
+  assert(await page.locator('#combo-replay').isDisabled());
+}
+
 async function testDiscReflect(page,mobile) {
   await page.goto(root+'?disc-matchup#training/disc-reflect');
   const status=page.locator('#footwork-status');
@@ -1709,6 +1766,7 @@ async function testDevice(browser, mobile) {
     await testDiscReflect(page, mobile);
     await testDashShield(page, mobile);
     await testHaymaker(page, mobile);
+    await testDefendTakes(page, mobile);
     assert.deepEqual(errors, []);
   } catch (error) {
     const panel = await page.locator('.training-readouts output:visible').allTextContents();

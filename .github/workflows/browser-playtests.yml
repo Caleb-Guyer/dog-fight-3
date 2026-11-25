@@ -14,7 +14,7 @@ jobs:
           persist-credentials: false
       - name: Test the candidate in desktop and phone Chromium
         run: |
-          node --test qa/haymaker.cjs
+          node --test qa/haymaker.cjs qa/defend-takes.cjs
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
           python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/game-server.log" 2>&1 &
           server_pid=$!
