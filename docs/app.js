@@ -2456,8 +2456,9 @@
       status.textContent = {cancelNow:pivot ? 'Reverse + Grab' : 'Tap Grab now',
         boostCatch:'Boost grab caught the shield', boostPivotCatch:'Caught behind', regularCatch:'Regular grab',
         shortReach:world.footworkPractice.closestGap > 0 ? 'Grab fell short by ' + Math.ceil(world.footworkPractice.closestGap) + ' px' : 'Missed the grab',
-        guardedDash:'Dash attack blocked', groundHit:'Ground hit'}[state];
-      $('recovery-tip').textContent = state === 'cancelNow' ? (pivot ? 'Press back and tap Grab.' : 'Tap Grab during the windup.') :
+        guardedDash:'Dash attack blocked', swingMiss:'Dash attack missed', groundHit:'Ground hit'}[state];
+      $('recovery-tip').textContent = state === 'cancelNow' ? (pivot ? 'Press back and tap Grab.' : 'Tap Grab during the windup.') +
+        (world.footworkPractice.pauseOnWindup ? ' Tap Attack again to finish the swing.' : '') :
         state === 'boostCatch' || state === 'boostPivotCatch' || state === 'regularCatch' ?
           'You have the collar. Tap Attack to pummel or choose a direction to throw.' :
           'Retry with Attack first. Tap Grab in the first two frames of the dash attack.';
