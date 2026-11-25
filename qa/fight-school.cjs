@@ -6,6 +6,42 @@ require('../docs/fight-school.js');
 const {Battle,idleInput}=window.DogFight;
 const {Lesson,lessons}=window.FightSchool;
 
+function cornerFight(){
+  const world=new Battle({mode:'solo',stage:'picnic',p1:'pip',p2:'brisket',fetch:false,minutes:7});
+  const coach=new window.FightSchool.Corner(),[pip,brisket]=world.dogs,floor=world.terrain[0];
+  return {world,coach,pip,brisket,floor,read:()=>coach.read(world)};
+}
+test('ringside recovery uses the actual ledge, remaining air jump and both Fence Hopper leaps',()=>{
+  for(const side of ['left','right']){
+    const {world,coach,pip,floor,read}=cornerFight(), inward=side==='left'?'right':'left';
+    Object.assign(pip,{ground:-1,x:side==='left'?floor.x1-55:floor.x2+55,jumps:1});
+    assert.equal(read(),'jump/'+inward);
+    pip.jumps=0;assert.equal(read(),'rise/'+inward);
+    pip.usedUp=true;pip.hopWindow=.6;assert.equal(read(),'hop/'+inward);
+    pip.hopWindow=0;assert.equal(read(),'drift/'+inward);
+    pip.ledge={left:side==='left'};assert.equal(read(),'hang/'+inward);
+    assert.equal(coach.lesson,'return');
+    const [title,line]=window.FightSchool.cornerLine(read(),a=>'['+a+']');
+    assert.equal(title,'Ledge caught');assert(line.includes('['+inward+']'));
+    world.end=1;assert.equal(read(),'');
+  }
+});
+test('ringside tips read a close shield and an outward finish, leave quiet time, and reset on a new stock',()=>{
+  const {world,coach,pip,brisket,floor,read}=cornerFight();
+  Object.assign(pip,{x:floor.x2-100,y:floor.y,ground:0});
+  Object.assign(brisket,{x:floor.x2-50,y:floor.y,ground:0});
+  assert.equal(read(),'opening');world.matchFrames+=211;assert.equal(read(),'');
+  brisket.shield=true;assert.equal(read(),'grab');assert.equal(coach.lesson,'throw');
+  brisket.shield=false;assert.equal(read(),'');
+  brisket.damage=112;assert.equal(read(),'finish/right');assert.equal(coach.lesson,'stock');
+  pip.x=floor.x1+100;brisket.x=floor.x1+50;assert.equal(read(),'finish/left');
+  brisket.damage=0;world.matchCard.players[1].hits=2;assert.equal(read(),'guard');
+  world.matchCard.players[0].blocks=1;assert.equal(read(),'');
+  pip.stocks--;pip.stockLift={ready:true};assert.equal(read(),'');
+  pip.stockLift=null;brisket.shield=true;assert.equal(read(),'grab');
+  world.suddenDeath={round:1};assert.equal(read(),'');
+});
+
 test('older lesson saves resume the next uncleared skill and distinguish dismissing the welcome',()=>{
   const {readProgress,unfinished}=window.FightSchool;
   assert.equal(readProgress({seen:true,lesson:'move',passed:[]}).started,false);

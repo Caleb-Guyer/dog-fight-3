@@ -70,6 +70,10 @@ async function playCourse(browser,mobile) {
     assert.match(await page.locator('#match-mode').textContent(),/solo.*rookie/i);
     assert.equal(await page.locator('#hud .lives[aria-label="3 stocks"]').count(),2);
     assert(await page.locator('#school-coach').isHidden());
+    await page.clock.runFor(2500);
+    assert.match(await page.locator('#corner-line').textContent(),mobile?/tap Attack/:/tap J/);
+    const tip=await page.locator('#corner-tip').boundingBox(),pause=await page.locator('#pause').boundingBox();
+    assert(tip && tip.x>=0 && tip.x+tip.width<=page.viewportSize().width && tip.y>=pause.y+pause.height,'first-fight cue fits below the match controls');
     const record=await page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.school')));
     assert.equal(record.passed.length,10);assert.deepEqual(errors,[]);
     await page.goto(current+'?return');
@@ -81,11 +85,74 @@ async function playCourse(browser,mobile) {
     const menu=page.locator('#dialog [data-do="home"]');
     if (mobile) await menu.tap(); else await menu.click();
     await press('home-adventure'); await press('dispatch-start'); await press('story-skip');
-    await page.locator('#dispatch-hud').waitFor();assert(await page.locator('#match').isVisible());assert(await page.locator('#school-coach').isHidden());
+    await page.locator('#dispatch-hud').waitFor();assert(await page.locator('#match').isVisible());assert(await page.locator('#school-coach').isHidden());assert(await page.locator('#corner-tip').isHidden());
     assert.deepEqual(errors,[]);
   } finally {await context.close();}
 }
 
+async function ringside(browser){
+  const ctx=await browser.newContext(),page=await ctx.newPage(),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.addInitScript(()=>{
+      localStorage.setItem('dog-fight-3.controls',JSON.stringify({keyboard:[{attack:'KeyQ'}]}));
+    });
+    await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+    await page.clock.pauseAt(new Date('2030-01-01T00:00:03Z'));
+    await page.goto(current+'#tutorial/first-match');
+    await page.evaluate(()=>{
+      const old=DogFight.Battle.prototype.step;
+      window.stateOf=w=>({frame:w.matchFrames,clock:w.clockFrames,dogs:w.dogs.map(f=>[f.x,f.y,f.vx,f.vy,f.damage,f.stocks,f.jumps]),card:structuredClone(w.matchCard)});
+      DogFight.Battle.prototype.step=function(...args){
+        if(this.mode==='solo' && !window.original)window.original=this;
+        if(this===window.original && window.watchResume && !window.resumed)window.resumed=stateOf(this);
+        return old.apply(this,args);
+      };
+    });
+    await page.clock.runFor(2510);
+    const line=page.locator('#corner-line'),tip=page.locator('#corner-tip');
+    assert.match(await line.textContent(),/tap Q/);
+    await page.evaluate(()=>{
+      window.ringPad={index:0,id:'Ringside pad',buttons:Array.from({length:17},()=>({pressed:false})),axes:[0,0,0,0]};
+      Object.defineProperty(navigator,'getGamepads',{value:()=>[ringPad]});
+      ringPad.buttons[4].pressed=true;
+    });
+    await page.clock.runFor(40);assert.match(await line.textContent(),/tap X/);
+    await page.keyboard.press('w');await page.clock.runFor(40);assert.match(await line.textContent(),/tap Q/);
+    await page.evaluate(()=>{ringPad.buttons[5].pressed=true;});
+    await page.clock.runFor(40);assert.match(await line.textContent(),/tap X/);
+    await page.evaluate(()=>{ringPad.buttons[4].pressed=ringPad.buttons[5].pressed=false;});
+    await page.keyboard.down('a');
+    for(let n=0;n<100 && !(await tip.getAttribute('data-cue'))?.startsWith('jump/right');n++)await page.clock.runFor(32);
+    await page.keyboard.up('a');
+    assert.match(await line.textContent(),/Steer D.*Space/);
+    await page.locator('#pause').click();
+    const parked=await page.evaluate(()=>stateOf(original));
+    const practice=page.locator('[data-do=corner-practice]');
+    assert.match(await practice.textContent(),/Recover/);await practice.click();
+    assert.equal(await page.locator('#school-count').textContent(),'First fight practice');
+    await page.locator('#school-example').click();
+    await page.locator('#school-coach[data-state=example]').waitFor();
+    await page.locator('#school-next').click();await page.locator('#school-retry').click();
+    await page.keyboard.down('w');await page.keyboard.down('k');await page.clock.runFor(80);
+    await page.keyboard.up('k');await page.keyboard.up('w');await page.keyboard.down('d');await page.clock.runFor(1650);await page.keyboard.up('d');
+    assert.equal(await page.locator('#school-next').textContent(),'Return to fight');
+    assert(await page.locator('#school-next').isVisible());
+    assert.deepEqual(await page.evaluate(()=>stateOf(original)),parked);
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.school')).passed),[]);
+    await page.evaluate(()=>{window.watchResume=true;});
+    await page.locator('#school-next').click();await page.clock.runFor(48);
+    assert.deepEqual(await page.evaluate(()=>window.resumed),parked);
+    await page.locator('#pause').click();await page.locator('[data-do=corner-toggle]').click();
+    await page.locator('[data-do=resume]').click();await page.clock.runFor(50);assert(await tip.isHidden());
+    await page.reload();await page.clock.runFor(2500);assert(await tip.isHidden());
+    await page.locator('#pause').click();
+    assert.equal(await page.locator('[data-do=corner-toggle]').getAttribute('aria-pressed'),'false');
+    await page.locator('[data-do=corner-toggle]').click();await page.locator('[data-do=resume]').click();
+    await page.clock.runFor(32);assert(await tip.isVisible());
+    assert.deepEqual(errors,[]);
+  }finally{await ctx.close();}
+}
 async function benchmark(browser,url,phone=false) {
   const context=await browser.newContext(phone?{viewport:{width:390,height:844},hasTouch:true,isMobile:true}:
     {viewport:{width:1366,height:768}});
@@ -130,7 +197,7 @@ async function benchmark(browser,url,phone=false) {
 async function main() {
   const browser=await chromium.launch({executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim(),headless:true});
   try {
-    await playCourse(browser,false); await playCourse(browser,true);
+    await playCourse(browser,false); await playCourse(browser,true);await ringside(browser);
     const rows={baseline:[],candidate:[]};
     for(const n of [0,1,2]) for(const k of n===1?['candidate','baseline']:['baseline','candidate'])
       rows[k].push(await benchmark(browser,k==='baseline'?baseline:current));
