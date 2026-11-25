@@ -1310,7 +1310,7 @@ async function testDefendTakes(page,mobile) {
   assert.match(await summary.textContent(),/^Take (A · Falling aerial|B · Landing grab)/);
   await hold([]);
   await press('combo-defend');await startGuard();await waitForPhase('done');
-  assert.match(await latest.textContent(),/Spin · blocked/);
+  assert.match(await latest.textContent(),/Scramble · blocked/);
   await hold([]);await page.selectOption('#combo-slot','1');
   await startGuard();await waitForPhase('done');
   assert.match(await latest.textContent(),/Kickoff/);assert.match(await summary.textContent(),/7%/);
