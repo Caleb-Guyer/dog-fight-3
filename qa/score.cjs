@@ -5,7 +5,7 @@ const {scores,playStep,Player}=window.YardScore;
 const {arenas,kits}=window.DogFight;
 
 test('all arenas have full metered scores, a last-stock arrangement and a unique melody',()=>{
-  assert.deepEqual(Object.keys(scores).sort(),['menu',...Object.keys(arenas),...Object.keys(kits).map(k=>'win-'+k)].sort());
+  assert.deepEqual(Object.keys(scores).sort(),['menu','deadletter',...Object.keys(arenas),...Object.keys(kits).map(k=>'win-'+k)].sort());
   const melodies=new Set();
   for(const s of Object.values(scores)){
     assert(s.form.every(n=>s.bars[n]));

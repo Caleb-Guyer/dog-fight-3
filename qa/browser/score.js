@@ -26,7 +26,7 @@ async function renderScores(page){
     }
     return levels;
   });
-  assert.equal(levels.length,10);
+  assert.equal(levels.length,11);
   for(const [id,peak,rms,tail] of levels){
     assert(peak>.04 && peak<.94 && rms>.009 && tail<.0001,[id,peak,rms,tail].join('/'));
   }
@@ -55,7 +55,7 @@ async function playtest(browser,mobile){
   const playing=id=>page.waitForFunction(key=>window.band?.track===key && band.bus && band.step>0,id);
   try {
     await page.goto(root+'#sound-test');
-    assert.equal(await page.locator('#audition-track option').count(),10);
+    assert.equal(await page.locator('#audition-track option').count(),11);
     assert.equal(await page.evaluate(()=>!!window.band),false);
     if(!mobile)await renderScores(page);
     await press('audition-play'); await playing('picnic');
