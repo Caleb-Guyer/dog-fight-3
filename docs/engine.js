@@ -3220,7 +3220,7 @@
       if (source === 'replay' && !tape?.length) source = 'record';
       const prior = previous && (previous.phase === 'done' || previous.contacts.length) ? { source: previous.source, reply: previous.reply,
         slot:previous.playSlot ?? previous.slot, hits: previous.hits, damage: previous.damage, baseline: previous.baseline } : previous?.prior;
-      this.comboPractice = { source, reply, slow, markTime, slot, defending, originalDogs, phase: source === 'record' || flurry || defending ? 'ready' : 'active',
+      this.comboPractice = { source, reply, slow, markTime, slot, defending, originalDogs, phase: source === 'record' || source === 'throwChase' || flurry || defending ? 'ready' : 'active',
         tape: source === 'replay' ? tape : [], saved: tape, baseline: this.trainingDamage, prior,
         tick: 0, clock: 0, contacts: [], hits: 0, damage: 0, firstFree: null, shifts: 0, dodges: 0 };
     }
@@ -3228,11 +3228,24 @@
       const d = this.comboPractice;
       if (d.phase === 'done') return null;
       if (d.phase === 'ready') {
+        if(d.source==='throwChase'){
+          if(!input.attack && !input.tapped?.attack)return null;
+          d.consumeAttack=true;
+        }
         if (!input.x && !input.y && !['attack','special','grab','jump','shortHop','shield','smash','aimStick']
             .some(key => input[key] || input.tapped?.[key])) return null;
         d.phase = 'active';
       }
       const tick = d.tick++;
+      if(d.source==='throwChase'){
+        if(tick>=210){d.phase='done';return null;}
+        if(d.consumeAttack){
+          d.consumeAttack=!!input.attack;
+          input={...input,attack:false,tapped:{...input.tapped,attack:false}};
+        }
+        if(d.thrown)return input;
+        return {...idleInput,grab:tick===0,y:this.grapple?.phase==='hold'?-1:0};
+      }
       const length = d.defending ? d.tape.length || 80 : d.source === 'record' || d.source === 'flurry' ? 150 : d.source === 'replay' ? d.tape.length : 55;
       if (tick >= length + 60) { d.phase = 'done'; return null; }
       if (tick >= length) return idleInput;
@@ -3269,6 +3282,12 @@
       if (!d || d.phase !== 'active' || target.index !== 1) return;
       const gap = !d.contacts.length ? null : d.firstFree === null ? 0 : d.clock - d.firstFree + 1;
       d.contacts.push({ kind, moveId, damage, gap });
+      if(d.source==='throwChase'){
+        if(kind==='throw')d.thrown=true;
+        else if(d.thrown && kind==='hit' && target.ground<0 && !d.outcome){
+          d.outcome='caught';d.followup=moveId;d.phase='done';
+        }
+      }
       d.firstFree = null;
       if (kind !== 'grab' && kind !== 'block' && kind !== 'parry') { d.hits++; d.damage += damage; }
     }
@@ -5428,7 +5447,14 @@
     }
     releaseLaunch(f, input) {
       const raw = { x: f.vx, y: f.vy };
-      const aim = f.index === 0 && this.survivalPractice?.lockedAim;
+      let aim = f.index === 0 && this.survivalPractice?.lockedAim;
+      const combo=this.comboPractice;
+      if(f.index===1 && combo && !combo.defending && ['diIn','diOut','diMix'].includes(combo.reply)){
+        const inward=combo.reply==='diMix'?this.random()<.5:combo.reply==='diIn';
+        const away=Math.sign(f.x-this.dogs[0].x) || this.dogs[0].face;
+        aim={x:inward?-away:away,y:0};
+        combo.launchRead=inward?'in':'out';
+      }
       const v = launchInfluence(f.vx, f.vy, aim || input);
       f.vx = v.x;
       f.vy = v.y;
@@ -5549,6 +5575,13 @@
       }
       let combo = this.comboPractice;
       if (combo) {
+        if(combo.source==='throwChase'){
+          if(combo.phase==='done' && (input1.tapped?.attack || (input1.attack && !combo.chaseHeld))){
+            this.resetComboPractice(combo.source,combo.reply,combo.slow,combo.slot);
+            combo=this.comboPractice;
+          }
+          combo.chaseHeld=!!input1.attack;
+        }
         if (combo.defending) {
           const tap = input1.tapped?.attack || (input1.attack && !combo.attackHeld);
           combo.attackHeld = !!input1.attack;
@@ -6036,6 +6069,12 @@
         this.updateBall(dt);
       const inset = this.blastInset();
       const out = this.dogs.filter(f => !f.absent && blastZone(f.x, f.y, this.stageWidth, inset));
+      if(combo?.source==='throwChase' && combo.thrown && !combo.outcome){
+        const rival=this.dogs[1];
+        if(out.length || rival.ground>=0 || rival.ledge){
+          combo.outcome=out.length?'ringOut':'landed';combo.phase='done';
+        }
+      }
       if (out.includes(this.dogs[0]) && (this.airPractice?.pattern === 'interrupted' || this.airPractice?.pattern === 'highReturn'))
         this.finishAirPractice('miss');
       const carryDrill = this.escapePractice;

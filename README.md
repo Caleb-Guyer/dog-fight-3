@@ -4,6 +4,8 @@ A cartoon platform fighter for one or two players. Play **The Last Dispatch** st
 
 ## Play
 
+In **Training → Find a drill → Chase the up throw**, tap Attack to grab and throw with the selected dog. You control the chase as soon as the throw releases. Try **Launch DI in** and **Launch DI out** to see both flight paths, then choose **Mix launch DI** and read the rival in the air. Land a follow-up before they touch down. A fresh Attack after the result starts another attempt. The same three rival responses work with your recorded combos. [Try Brisket against Pip at 60%](https://caleb-guyer.github.io/dog-fight-3/#training/throw-chase)
+
 In **KO replays** or **Watch finish**, open **Recorded inputs** to inspect the steering and buttons on the displayed frame. Use **Previous change** and **Next change** to find a shield release, a jump tap, or the direction of a strike. Solo records your controls. Local and online fights let you switch between P1 and P2, and online replays use confirmed inputs. [Try it after a last-stock fight](https://caleb-guyer.github.io/dog-fight-3/#solo/last-stock)
 
 Choose **Random dog** at fighter select to draw a dog for the highlighted player or CPU. The starting dog and the first three draws cover the whole roster. Open **Local versus → Pick together** and each player can shuffle with their Grab key, controller X, or the on-screen button. You can still choose a coat before pressing Ready. Between games of a set, the player who lost can draw a new challenger. [Pick together](https://caleb-guyer.github.io/dog-fight-3/#local/pick-together)
