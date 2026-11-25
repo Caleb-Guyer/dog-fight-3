@@ -2,6 +2,27 @@ const test=require('node:test'),assert=require('node:assert/strict');
 global.window={};global.document={currentScript:{src:'https://example.test/finish-tools.js'}};
 require('../docs/engine.js');require('../docs/finish-tools.js');
 const {Battle,FinishTape,idleInput,seededRandom}=window.DogFight;
+test('recorded sticks, holds, releases and between-tick taps line up with the displayed frame',()=>{
+  const world=new Battle({mode:'local',p1:'clover',p2:'noodle',stage:'picnic',fetch:false},undefined,seededRandom(2));
+  const tape=new FinishTape(),read=(n,i=0)=>window.FinishTools.inputFrame(tape,n,i);
+  for(let n=1;n<=383;n++){
+    const a={...idleInput,x:n>=141 && n<=147?-.5:0,shield:n>=143 && n<=145,
+      tapped:{special:n===147,attack:n===150 || n===151},attack:n>=150 && n<=153};
+    const b={...idleInput,aimStick:n===151,smashX:1,smashY:-.25,jump:n===156,shortHop:n===156};
+    tape.record(world,a,b);world.step(1/60,a,b);
+  }
+  // This rolling window starts after tick 143, with Shield already held.
+  assert.equal(read(0).movement,'Left 50%');assert.deepEqual(read(0).actions,['Shield held']);
+  assert.equal(read(0).changed,false);assert.equal(read(1).changed,false);
+  assert.deepEqual(read(3).actions,['Shield released']);assert.deepEqual(read(4).actions,['Special tapped']);
+  assert.equal(read(5).movement,'Center');assert(read(5).changed);
+  assert.deepEqual(read(7).actions,['Attack pressed']);assert.deepEqual(read(8).actions,['Attack pressed']);
+  assert.deepEqual(read(9).actions,['Attack held']);assert.equal(read(9).changed,false);
+  assert.deepEqual(read(11).actions,['Attack released']);
+  assert.equal(read(8,1).aim,'Right 100% + Up 25%');
+  assert.deepEqual(read(13,1).actions,['Short hop pressed']);
+  assert.deepEqual(read(14,1).actions,['Short hop released']);
+});
 function play(action,length){
   const world=new Battle({mode:'local',p1:'pip',p2:'brisket',stage:'picnic',minutes:0},undefined,seededRandom(5));
   const [f,r]=world.dogs,tape=new FinishTape(),ground=world.terrain[0].y;

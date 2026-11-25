@@ -29,6 +29,10 @@ test('both delayed peers can revisit the same confirmed non-final knockout after
   const [a,b]=tapes.map(t=>t.knockouts[0]);
   assert.deepEqual(a.losses,b.losses);assert.equal(a.losses[0].remaining,2);
   assert(a.tape.count<tapes[0].count-240);
+  for(let n=1;n<=a.tape.length;n++){
+    for(const slot of [0,1])assert.deepEqual(a.tape.controlsAt(n,slot),b.tape.controlsAt(n,slot));
+  }
+  assert(Array.from({length:a.tape.length},(_,i)=>a.tape.controlsAt(i+1,0).x).includes(-1));
   for(const offset of [0,8,a.tape.length])assert.deepEqual(state(a.tape.playback(offset).battle),state(b.tape.playback(offset).battle));
   const live=peers.map(p=>structuredClone(state(p.confirmedWorld)));
   for(const c of [a,b]){

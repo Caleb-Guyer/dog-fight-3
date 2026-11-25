@@ -12,6 +12,9 @@ async function exportFinish(page,press,mobile){
   const selected=await page.locator('#clip-frame').textContent();
   assert(selected.startsWith('Frame '+n+' / '));
   assert.match(await page.locator('#clip-scores').textContent(),/Pip 125% · 0 stocks/);
+  await press('#clip-inputs summary');assert.equal(await page.locator('.clip-input-seats').textContent(),'P1 inputs');
+  assert.match(await page.locator('.clip-stick').textContent(),/Left/);
+  await press('#clip-inputs summary');
   assert.equal(await page.evaluate(()=>performance.getEntriesByType('resource').some(r=>r.name.includes('finish-gif.js'))),false);
   if(!mobile){
     await page.route('**/finish-gif.js*',route=>route.abort(),{times:1});
@@ -75,10 +78,24 @@ async function reviewMidMatch(page,mobile,press){
     await move(false);
     assert.equal(await page.evaluate(()=>liveFight.matchCard.losses.length),count);
   }
+  await page.keyboard.down('/');await page.clock.runFor(120);await page.keyboard.up('/');await page.clock.runFor(80);
   await fall(1);await page.clock.runFor(4500);await press('#pause');
   const original=await page.evaluate(()=>position(liveFight));
   await press('[data-do=ko-replays]');await press('[data-ko="0"]');
   await page.getByText(/Before leaving the stage · frame/).waitFor();
+  await press('#clip-inputs summary');
+  await page.locator('#clip-seek').press('End');await page.locator('#clip-seek').press('Home');
+  await press('[data-input-seat="1"]');await press('[data-input-next]');
+  assert.match(await page.locator('.clip-buttons').textContent(),/Shield pressed/);
+  const shieldStart=await page.locator('#clip-frame').textContent();
+  await press('#clip-step');assert.match(await page.locator('.clip-buttons').textContent(),/Shield held/);
+  await press('[data-input-next]');assert.match(await page.locator('.clip-buttons').textContent(),/Shield released/);
+  await press('[data-input-prev]');assert.equal(await page.locator('#clip-frame').textContent(),shieldStart);
+  await press('[data-input-seat="0"]');await press('[data-input-next]');
+  assert.match(await page.locator('.clip-stick').textContent(),/Left/);
+  assert.equal(await page.locator('#clip-toggle').textContent(),'Play');
+  assert.equal(await page.locator('#clip-inputs').evaluate(e=>e.scrollWidth<=e.clientWidth+1),true);
+  await press('#clip-inputs summary');
   await press('#clip-escape');await page.clock.runFor(5100);
   assert.equal(await page.locator('#dialog-title').textContent(),'Exchange complete');
   assert.match(await page.locator('#dialog-body').textContent(),/You survived the original knockout/);
