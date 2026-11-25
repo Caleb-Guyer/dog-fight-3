@@ -85,6 +85,29 @@ async function leaveThreeStocks(device,slot) {
 }
 async function soloAndLocal(browser){
   const d=await device(browser,false,'#solo'),{page,press}=d;
+  const lips=await page.evaluate(()=>{
+    const canvas=document.createElement('canvas');
+    canvas.width=1200;canvas.height=675;
+    const ctx=canvas.getContext('2d',{willReadFrequently:true}), result=[];
+    const color=(x,y)=>[...ctx.getImageData(x,y,1,1).data.slice(0,3)].map(n=>n.toString(16).padStart(2,'0')).join('');
+    for(const stage of Object.keys(DogFight.arenas)) for(const form of ['flat','trio']){
+      const floors=DogFight.platforms(DogFight.stageGeometry(stage,form),0);
+      ArenaArt.draw(ctx,stage,1.7,undefined,form);
+      for(const f of floors) result.push([stage,form,color(f.x1+1,f.y),color(f.x2-2,f.y)]);
+    }
+    return result;
+  });
+  const colors={picnic:'ffe3ab',laundry:'e8b5aa',canal:'ffe09a',nightmail:'f1c182',bandstand:'ffdfa0'};
+  for(const [stage,form,left,right] of lips){
+    const expected=stage==='nightmail' && form==='flat'?'ffe3a6':colors[stage];
+    assert.deepEqual([left,right],[expected,expected],stage+' '+form+' art lines up with both collision edges');
+  }
+  await press('[data-mode=local]');await press('#choose-stage');
+  await press('[data-stage-form=trio]');await press('[data-stage=laundry]');
+  await press('#choose-stage');await press('[data-stage-form=flat]');await page.keyboard.press('Escape');
+  assert.match(await page.locator('#stage-title').textContent(),/Laundry Line · Three platforms/);
+  await page.reload();await observe(page);
+  assert.match(await page.locator('#stage-title').textContent(),/Laundry Line · Three platforms/);
   await press('[data-mode=local]');await press('#rules-label');await press('[data-format=set]');
   assert.match(await page.locator('#start').textContent(),/Start set/);
   await press('#start');await fresh(d,1,'0–0');
@@ -92,12 +115,18 @@ async function soloAndLocal(browser){
   await page.waitForFunction(()=>!!window.firstControl);
   assert.deepEqual(await page.evaluate(()=>window.firstControl),{x:1,grab:false,grabTap:false});
   await page.keyboard.up('d');
+  await page.evaluate(()=>window.observedBattle=null);
   await press('#pause');await press('[data-do=rematch]');await fresh(d,1,'0–0');
+  await page.waitForFunction(()=>window.observedBattle?.matchFrames>2);
+  await page.keyboard.down('Space');
+  await page.waitForFunction(()=>window.observedBattle.dogs[0].ground===1);
+  await page.keyboard.up('Space');
   await leaveThreeStocks(d,0);
   assert.match(await page.locator('#set-score').textContent(),/P1 0 – 1 P2/);
   await press('[data-do=set-pick]');await page.keyboard.press('Escape');
   assert.equal(await page.locator('.set-history li').count(),1);
   await press('[data-do=set-pick]');await press('[data-stage=canal]');await fresh(d,2,'0–1');
+  assert.equal(await page.locator('#match-stage').textContent(),'Canal Lock · Three platforms');
   await press('#pause');await press('[data-do=rematch]');await fresh(d,2,'0–1');
   await page.goto(root+'?solo-set#solo/best-of-three');await observe(page);await fresh(d,1,'0–0');
   // Feed the solo CPU a controlled walk-off, preserving all three stock and respawn transitions.
@@ -213,12 +242,14 @@ async function onlineSet(browser,phoneBrowser) {
     await d.press('[data-key="jump"]');await d.page.keyboard.press(key);
     await d.page.goto(root+'?custom-key#online');await observe(d.page);
   }
-  await host.press('#online-format');await a.selectOption('#online-stage','nightmail');await host.press('#online-create');
+  await host.press('#online-format');await a.selectOption('#online-stage','laundry');await a.selectOption('#online-form','flat');
+  await host.press('#online-create');
   await a.locator('#online-invite').waitFor();await b.locator('#online-code').fill(await a.locator('#online-room-code').textContent());
   await guest.press('#online-join');
   for(const d of [host,guest])await fresh(d,1,'0–0');
   for(const d of [host,guest]){
     await d.page.waitForFunction(()=>window.observedBattle?.matchFrames>12);
+    assert.deepEqual(await d.page.evaluate(()=>[window.observedBattle.stage,window.observedBattle.form,window.observedBattle.terrain.length]),['laundry','flat',1]);
     await d.page.evaluate(()=>{window.watchJumps=[false,false];});
   }
   await a.keyboard.down('q');await b.keyboard.down('v');
@@ -239,7 +270,7 @@ async function onlineSet(browser,phoneBrowser) {
       assert.match(await d.page.locator('.card-stage').textContent(),new RegExp('Game '+(i+1)));
       if(i===2){
         await d.press('[data-card-game="0"]');
-        assert.match(await d.page.locator('.card-stage').textContent(),/Game 1 · Night Mail/);
+        assert.match(await d.page.locator('.card-stage').textContent(),/Game 1 · Laundry Line · Flat/);
       }
       const rows=await d.page.locator('.card-timeline li').allTextContents();
       assert.equal(rows.length,3);
@@ -258,7 +289,7 @@ async function onlineSet(browser,phoneBrowser) {
     }else{
       assert.match(await a.locator('#set-score').textContent(),/P1 2 – 1 P2/);
       await guest.press('[data-do=online-rematch]');await host.press('[data-do=online-rematch]');
-      for(const d of [host,guest]){await fresh(d,1,'0–0');assert.equal(await d.page.locator('#match-stage').textContent(),'Night Mail');}
+      for(const d of [host,guest]){await fresh(d,1,'0–0');assert.equal(await d.page.locator('#match-stage').textContent(),'Laundry Line · Flat');}
     }
   }
   await b.close();await a.close();console.log('Desktop host and phone guest completed a 2–1 WebRTC set and started another.');
