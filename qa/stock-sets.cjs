@@ -335,6 +335,13 @@ async function onlineSet(browser,phoneBrowser) {
         await d.press('[data-do=clip-back]');
       }
       assert.equal(scores[0],scores[1]);
+      await guest.press('[data-do=practice-finish]');
+      await guest.press('[data-finish-slot="1"]');
+      await b.getByRole('heading',{name:'Exchange complete'}).waitFor();
+      assert.equal(await b.locator('.finish-comparison tbody tr').count(),2);
+      assert(await a.locator('[data-do=match-card]').isVisible());
+      await guest.press('[data-do=trial-results]');
+      assert(await b.locator('[data-do=match-card]').isVisible());
     }
     if(i<2){
       await loser.press('[data-do=set-pick]');

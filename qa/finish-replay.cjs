@@ -74,10 +74,59 @@ test('two rollback peers keep only confirmed ticks after delayed corrections',()
   for(const [i,match] of peers.entries()){deliver(i);match.confirm(worlds[i]);}
   assert.equal(tapes[0].count,tapes[1].count);
   const final=state(peers[0].confirmedWorld);
+  const branches=tapes.map(t=>t.playback(90,undefined,1));
+  for(const branch of branches)while(branch.step({...idleInput,x:-1,shield:true})){}
+  assert.deepEqual(state(branches[0].battle),state(branches[1].battle));
+  assert.notDeepEqual(state(branches[0].battle),final);
   for(const [i,tape] of tapes.entries()){
     const player=tape.playback();
     while(player.step()) {}
     assert.deepEqual(state(player.battle),final);
     assert.deepEqual(state(peers[i].confirmedWorld),final);
   }
+});
+
+for(const slot of [0,1])test('P'+(slot+1)+' can save a stock and retry both exact input streams',()=>{
+  const original=new Battle({mode:'local',p1:'clover',p2:'pip',stage:'picnic',fetch:false},undefined,seededRandom(68));
+  const tape=new FinishTape(), deck=original.terrain[0], dog=original.dogs[slot];
+  Object.assign(dog,{x:deck.x1+70,y:deck.y,ground:0,stocks:1});
+  Object.assign(original.dogs[1-slot],{x:deck.x2-170,y:deck.y,ground:0,stocks:1});
+  const controls=[];
+  for(let i=0;i<230 && original.end===null;i++){
+    const pair=[idleInput,idleInput];
+    pair[slot]={...idleInput,x:-1,y:dog.ground<0?1:0};
+    pair[1-slot]={...idleInput,x:i%80<40?-.35:.35,jump:i===12,attack:i===50};
+    controls.push(pair);tape.record(original,...pair);original.step(dt,...pair);
+  }
+  assert.equal(original.end,1-slot);
+  const baseline=structuredClone(state(original));
+  const offset=5;
+  function run(repeatFall){
+    const p=tape.playback(offset,undefined,slot);
+    while(p.frame<p.length)p.step(repeatFall?controls[p.frame][slot]:idleInput);
+    return p.battle;
+  }
+  assert.deepEqual(state(run(true)),baseline);
+  const saved=run(false);assert.equal(saved.dogs[slot].stocks,1);assert.equal(saved.end,null);
+  assert.deepEqual(state(run(false)),state(saved));
+  assert.deepEqual(state(original),baseline);
+  const film=tape.playback();while(film.step()){}assert.deepEqual(state(film.battle),baseline);
+});
+
+test('taking over the Solo CPU preserves its position and accepts human controls during hitstop',()=>{
+  const world=new Battle({mode:'solo',p1:'brisket',p2:'noodle',stage:'canal',fetch:false},undefined,seededRandom(72));
+  const tape=new FinishTape();
+  for(let i=0;i<150;i++){
+    const input={...idleInput,x:i%20<9?.4:0,shield:i%15<3};
+    tape.record(world,input,idleInput);world.step(dt,input,idleInput);
+  }
+  const normal=tape.playback(29), branch=tape.playback(29,undefined,1);
+  assert.deepEqual(branch.battle.dogs,normal.battle.dogs);assert.equal(normal.battle.mode,'solo');
+  assert.equal(branch.battle.mode,'local');assert.equal(branch.battle.hasSecondPlayer,true);
+  const sample={...idleInput,x:.83,jump:true,tapped:{attack:true}},seen=[];
+  const capture=branch.battle.captureInput;
+  branch.battle.captureInput=function(f,input){seen[f.index]=input;return capture.call(this,f,input);};
+  branch.battle.hitStop=.1;branch.step(sample);assert.equal(seen[1],sample);
+  assert.equal(seen[0].x,0);assert.equal(seen[0].jump,false);
+  const p1=tape.playback(29,undefined,0);assert.equal(p1.battle.mode,'solo');
 });

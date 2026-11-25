@@ -118,6 +118,37 @@ async function play(browser,mobile) {
     assert(await page.locator('#dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('.winner h3').textContent(),result);
+    await press('[data-do=practice-finish]');await press('[data-finish-slot="1"]');
+    assert.match(await page.locator('#match-mode').textContent(),/P2 Brisket/);
+    await page.clock.runFor(850);await press('#pause');
+    assert.equal(await page.locator('#dialog-title').textContent(),'Practice paused');
+    await page.evaluate(()=>{
+      const playback=DogFight.FinishTape.prototype.playback;
+      DogFight.FinishTape.prototype.playback=function(frame,emit,slot){
+        const p=playback.apply(this,arguments),step=p.step;
+        p.step=function(input){if(slot===1 && input?.x<-.5)window.droveP2=true;return step.apply(this,arguments);};
+        return p;
+      };
+    });
+    await press('[data-do=trial-retry]');
+    if(mobile){
+      const cdp=await page.context().newCDPSession(page),r=await page.locator('[data-touch=left]').boundingBox();
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:r.x+r.width/2,y:r.y+r.height/2,id:1}]});
+      await page.clock.runFor(3500);
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await cdp.detach();
+    }else{await page.keyboard.down('a');await page.clock.runFor(3500);await page.keyboard.up('a');}
+    assert(await page.evaluate(()=>window.droveP2));
+    assert.equal(await page.locator('#dialog-title').textContent(),'Exchange complete');
+    assert.equal(await page.locator('.finish-comparison tbody tr').count(),2);
+    await press('[data-do=trial-replay]');
+    assert.equal(await page.locator('#clip-toggle').textContent(),'Play');
+    await page.locator('#clip-seek').press('Home');await press('#clip-exchange');await press('[data-finish-slot="0"]');
+    await page.clock.runFor(5300);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Exchange complete');
+    const pip=page.locator('.finish-comparison tbody tr').first();
+    assert.match(await pip.locator('td').first().textContent(),/0 stocks/);
+    assert.match(await pip.locator('td').last().textContent(),/1 stock/);
+    await press('[data-do=trial-results]');assert.equal(await page.locator('.winner h3').textContent(),result);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
