@@ -9517,7 +9517,8 @@
       if (landingNear || f.impactLag > 0 || f.shieldStun > 0 ||
           (sameSwing && swing.second && swing.time < swing.second.start + swing.second.active)) return guarding;
       const back = moves[f.kit.air.back], startup = jumpSquatTime + back.start;
-      if (foe.ground === f.ground && (foe.x-f.x)*f.face < -foe.stats.width/2 && startup <= recovery+1e-8) {
+      // On the last landing frame the attacker can already raise Shield before hit detection.
+      if (foe.ground === f.ground && (foe.x-f.x)*f.face < -foe.stats.width/2 && startup < recovery-1e-8) {
         const [x,y,rx,ry] = back.box, height = bodyHeight(foe);
         const gap = (foe.x + foe.vx*Math.min(.05,startup) - f.x - f.vx*jumpSquatTime)*f.face;
         const rise = f.stats.jump*.6*back.start - .5*1540*f.kit.gravity*back.start*back.start;
