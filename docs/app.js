@@ -5147,7 +5147,7 @@
     const rows=actions.map(a=>{
       const label=controls.names[a];
       const binding=testing?'<kbd>'+value(a)+'</kbd>':keyboard?
-        '<button type="button" class="utility" data-key="'+a+'" aria-label="Change '+label+' key">'+(mode==='capture' && edit.action===a?'Press a key…':value(a))+'</button>':
+        '<button type="button" class="utility" data-key="'+a+'" aria-label="Change '+label+' key, currently '+value(a)+'">'+(mode==='capture' && edit.action===a?'Press a key…':value(a))+'</button>':
         '<select data-pad="'+a+'" aria-label="'+label+' button">'+controls.buttons.map((text,n)=>'<option value="'+n+'"'+(n===map[a]?' selected':'')+'>'+text+'</option>').join('')+'</select>';
       return '<div data-action="'+a+'"><span>'+label+'</span>'+binding+'</div>';
     }).join('');
