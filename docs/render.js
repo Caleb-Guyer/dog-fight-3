@@ -1586,6 +1586,7 @@
         arc(ctx, f.x, f.y - 34, r, r, spin + (i * Math.PI) / 2, spin + (i * Math.PI) / 2 + 0.4, gold);
     }
     const [state, phase] = pose(f, world.end, f.grip ? world.dogs[f.grip.owner] : null);
+    const gripFrames = state === 'ledge' ? window.DogFight.gripFramesLeft(f) : Infinity;
     let face = f.face,
       spriteTime = time + f.index * 0.42;
     if (state === 'teeter' && reduced.matches) spriteTime = 0;
@@ -1639,6 +1640,10 @@
     )
       ctx.globalAlpha = 0.53;
     const grip = f.grip;
+    if (gripFrames <= window.DogFight.gripWarningFrames) {
+      const sag = gripFrames <= 15 ? 4 : 2;
+      ctx.translate(0, reduced.matches || Math.floor(gripFrames / 6) % 2 ? sag : 0);
+    }
     if (grip?.target === f.index && grip.phase !== 'throw' && grip.struggleFlash > 0 && !reduced.matches) {
       const pull = grip.struggleFlash * 60 / 6;
       const side = grip.struggles % 2 ? 1 : -1;
@@ -1689,7 +1694,14 @@
       pixelLine(ctx,x,y,x+side*5,y-4,cream,2,2);
       pixelLine(ctx,x+side,y+4,x+side*7,y+4,gold,2,2);
     }
-    if (state === 'ledge' && f.invuln > 0 && f.ledge.guardFrames) {
+    if (gripFrames <= window.DogFight.gripWarningFrames) {
+      const outward = f.ledge.left ? -1 : 1, marks = Math.ceil(gripFrames / 15);
+      for (let i = 0; i < marks; i++) {
+        const x = f.ledge.x + outward * (8 + i * 8), y = f.ledge.y - 8;
+        pixelLine(ctx, x, y, x + outward * 3, y - 5, ink, 6, 2);
+        pixelLine(ctx, x, y, x + outward * 3, y - 5, marks === 1 ? '#ff865d' : gold, 3, 2);
+      }
+    } else if (state === 'ledge' && f.invuln > 0 && f.ledge.guardFrames) {
       // Chalk grip marks underneath the lip stay legible with reduced motion.
       const remaining = Math.ceil(f.invuln * 60), marks = Math.ceil(remaining / 12);
       const inward = f.ledge.left ? 1 : -1, y = snap(f.ledge.y + 7, 2);
@@ -2374,7 +2386,7 @@
           wall: e.wall,
         });
       }
-      if (name === 'ledgeRelease')
+      if (name === 'ledgeRelease' || name === 'ledgeSlip')
         this.add('lipDust',e.edge.x,e.edge.y,'#c9aa86',.13,12,e.edge.left ? 1 : -1,{behind:true});
       if (name === 'ledgeRoll' || name === 'ledgeRollPlant' || name === 'ledgeClimb' || name === 'ledgeClimbPlant') {
         const plant = name.endsWith('Plant');

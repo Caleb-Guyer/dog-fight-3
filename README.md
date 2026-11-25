@@ -497,6 +497,12 @@ Choose **Training → Practice ledge attack** to start hanging with the dummy in
 
 ## Ledge climbs
 
+Your first catch lasts four seconds at 0% and two at 120% or higher. Each regrab takes another 18 frames off the clock, down to a minimum of 75 frames. Three amber marks at the lip count down the last three quarters of a second. If you stay put, your paws slip and you fall with an air jump available. After six catches, you need to land or take a hit to catch again.
+
+In **Ledge timing → Wait out Haymaker**, Brisket charges just beyond the lip. Climb early to see how he catches your paws. On the retry, wait until the punch starts moving, tap Shield to roll, then aim inward and tap Attack. The drill lets you switch ledges or slow the fight down. [Practice the timing](https://caleb-guyer.github.io/dog-fight-3/#training/ledge-patience)
+
+Try the same read in a three-stock match. Pip starts on the left ledge at 120%. Brisket watches for an early get-up, and keeps fighting after the first exchange. [Play the ledge trap](https://caleb-guyer.github.io/dog-fight-3/#solo/ledge-trap)
+
 **Attack from below.** While hanging, tap Down or away to let go. Tap Jump on that beat or just after to spend your air jump and rise from below the lip. You can release Jump immediately and still reach full height. Release Down, steer inward and tap Attack for your forward aerial, then keep steering to land onstage. Jump alone springs from the top of the lip and leaves your air jump available. If you drifted into the catch holding away, center the stick before flicking away to release.
 
 In **Ledge timing → Attack from below**, the guard tries to check the lip with a low tilt. Land your rising aerial and get both paws back onstage. Choose **Cover the return** to defend against the same route. Hold Shield once, then retry and release just before the swing to parry. Rival can also attack from below when it sees you charging or recovering from a missed swing near the edge. [Play the ledge return](https://caleb-guyer.github.io/dog-fight-3/#training/ledge-return)
