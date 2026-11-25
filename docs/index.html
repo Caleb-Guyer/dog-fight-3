@@ -13,20 +13,20 @@
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="./style.css?v=online-warmup-1" />
     <link rel="stylesheet" href="./dispatch.css?v=first-menu-1" />
-    <link rel="stylesheet" href="./screen.css?v=pack-relay-1" />
+    <link rel="stylesheet" href="./screen.css?v=ringside-1" />
     <link rel="stylesheet" href="./online.css?v=time-battle-1" />
     <script defer src="./fighters-art.js?v=fast-cels-1"></script>
     <script defer src="./arena-art.js?v=stage-forms-1"></script>
     <script defer src="./engine.js?v=pack-relay-1"></script>
     <script defer src="./fight-records.js?v=pack-relay-1"></script>
-    <script defer src="./fight-school.js?v=continue-1"></script>
+    <script defer src="./fight-school.js?v=ringside-1"></script>
     <script defer src="./arcade.js?v=continue-1"></script>
     <script defer src="./controls.js?v=menu-directions-1"></script>
     <script defer src="./score.js?v=yard-band-1"></script>
     <script defer src="./render.js?v=online-warmup-1"></script>
     <script defer src="./dispatch-script.js?v=night-mail-1"></script>
     <script defer src="./online.js?v=time-battle-1"></script>
-    <script defer src="./app.js?v=pack-relay-1"></script>
+    <script defer src="./app.js?v=ringside-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -320,6 +320,9 @@
           <canvas id="blast-radar" width="160" height="108" role="img"
             aria-label="Blast radar. Square marks player one, diamond marks player two. The border is the knockout boundary." hidden></canvas>
           <div id="hud" class="hud"></div>
+          <aside id="corner-tip" role="status" aria-atomic="true" hidden>
+            <strong id="corner-title"></strong><span id="corner-line"></span>
+          </aside>
           <section id="school-coach" hidden aria-labelledby="school-title">
             <small id="school-count"></small>
             <h2 id="school-title"></h2>
