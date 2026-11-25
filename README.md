@@ -347,6 +347,12 @@ In **Training → Combo escape**, tap Attack to cue Clover’s Rim Rattle. **At 
 
 **Wall tech.** When you tumble into a solid stage wall, tap Shield in the last 11 frames before impact to brace against it. Hold Jump at contact to spring up and away. Both recoveries preserve the air jump and Up Special you have left. A missed tech bounces you back into open air, still tumbling. Wall and landing techs share the same 28-frame lockout.
 
+**Recovering under a stage.** The Picnic Table, train car, canal gate, bandstand, and Laundry Line roofs have solid undersides. Clear the lip before aiming a rising recovery inward. You can still jump through the thin platforms and the moving basket or ferry. If a hit launches you upward into a solid underside, tap Shield within 11 frames of contact to brace against it. A missed tech sends you back down. A ceiling tech keeps your remaining air jump and Up Special and shares the floor and wall tech lockout.
+
+In **Wall tech practice → Tech the underside**, tap Attack to cue Pip’s Flip Kick. Let it bounce Noodle off the tabletop once. Retry and tap Shield at the hit spark. After the brace, drift past the lip and use Up + Special to hook it with Ledge Lasso. **Switch wall** mirrors the exchange. [Try the ceiling tech](https://caleb-guyer.github.io/dog-fight-3/#training/ceiling-tech)
+
+In **Under the Table**, Noodle starts at 90% beneath the left lip with three stocks. Pip guards the deck. Try going straight up, then restart and drift left until your head clears the edge before using Up + Special. You can compare both routes from the same frame with **Pause → Practice this position**. [Play the stock match](https://caleb-guyer.github.io/dog-fight-3/#solo/under-the-table)
+
 A red split flash marks an impact too hard to tech. While you are still stunned, a launch that drives you straight into a wall or floor at 900 px/s or more forces a rebound. Speed along the surface is safe. So is the speed you pick up from gravity on the way back down. Steer during the hit freeze to change how steeply you strike the surface.
 
 In **Wall tech practice → Heavy impact**, Noodle takes Pip’s Back Heel at 185%. Tap Shield with the stick centered, then choose **Retry kick**. This time hold Up when the kick connects and tap Shield again. Compare the impact speeds and try a wall-tech jump on the other roof. [Play Heavy impact](https://caleb-guyer.github.io/dog-fight-3/#training/impact-tech)

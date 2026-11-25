@@ -2007,8 +2007,7 @@
       platform(805, 935, 310, true),
     ];
   }
-  // Thin platforms have no vertical collision faces.
-  function stageWalls(stage) {
+  function stageHull(stage) {
     const bands =
       stage === 'laundry'
         ? [
@@ -2024,21 +2023,21 @@
             [12, 22, 27],
             [18, 27, 30],
           ];
-    return platforms(stage, 0).flatMap((p, index) =>
-      p.thin
-        ? []
-        : bands.flatMap(([inset, top, bottom]) =>
-            [true, false].map((left) => ({
-              x: left ? p.x1 + inset : p.x2 - inset,
-              top: p.y + top,
-              bottom: p.y + bottom,
-              index,
-              left,
-            })),
-          ),
-    );
+    const walls = [], ceilings = [];
+    for (const [index, p] of platforms(stage, 0).entries()) {
+      if (p.thin) continue;
+      for (const [i, [inset, top, bottom]] of bands.entries()) {
+        const x1 = p.x1 + inset, x2 = p.x2 - inset, y = p.y + bottom;
+        for (const left of [true,false]) walls.push({x:left ? x1 : x2, top:p.y+top, bottom:y, index, left});
+        // A narrower band leaves a short exposed underside at each shoulder of the hull.
+        const next = bands[i+1];
+        if (next) ceilings.push({x1,x2:p.x1+next[0],y,index}, {x1:p.x2-next[0],x2,y,index});
+        else ceilings.push({x1,x2,y,index});
+      }
+    }
+    return {walls, ceilings};
   }
-  const solidWalls = Object.fromEntries(Object.keys(arenas).map(stage => [stage, stageWalls(stage)]));
+  const stageHulls = Object.fromEntries(Object.keys(arenas).map(stage => [stage, stageHull(stage)]));
   function newFighter(kind, index) {
     return {
       kind,
@@ -2724,6 +2723,11 @@
       else for (const f of this.dogs) {
         this.spawn(f, false);
         if (versus && config.lastStockStart) { f.stocks = 1; f.damage = 125; }
+      }
+      if (config.underTableStart && this.mode === 'solo' && this.stage === 'picnic') {
+        const [hero, guard] = this.dogs, floor = this.terrain[0];
+        Object.assign(hero, {x:floor.x1+23, y:floor.y+40+hero.stats.height, ground:-1, jumps:1, damage:90, face:-1});
+        Object.assign(guard, {x:floor.x1+65, y:floor.y, ground:0, face:-1});
       }
     }
     resetCpu() {
@@ -4318,14 +4322,25 @@
     resetWallPractice(side = 'left', runner = '', heavy = false) {
       this.resetTraining();
       const original = { stage: this.stage, dogs: this.dogs };
-      this.stage = 'laundry';
+      this.stage = runner === 'ceiling' ? 'picnic' : 'laundry';
       this.terrain = platforms(this.stage, this.time);
+      if (runner === 'ceiling') {
+        const dir = side === 'left' ? 1 : -1, floor = this.terrain[0];
+        const x = (dir > 0 ? floor.x1 : floor.x2) + dir * 30;
+        this.dogs = [newFighter('noodle',0), newFighter('pip',1)];
+        const [noodle,pip] = this.dogs;
+        const feet = floor.y + 30 + noodle.stats.height + 35;
+        Object.assign(noodle, {x,y:feet,ground:-1,face:-dir,jumps:1,damage:90});
+        Object.assign(pip, {x:x+dir*14,y:feet+58,ground:-1,face:-dir,jumps:1});
+        this.wallPractice = {phase:'ready', side, inward:dir, ceiling:true, original};
+        return;
+      }
       const inward = side === 'right' ? 1 : -1;
       const roof = this.terrain[inward === 1 ? 1 : 0];
       const lip = inward === 1 ? roof.x1 : roof.x2;
       if (runner === 'pip' || runner === 'noodle') {
         const hero = newFighter(runner,0), rival = newFighter(original.dogs[1].kind,1);
-        const wall = solidWalls.laundry.find(w => w.index === (inward === 1 ? 1 : 0) &&
+        const wall = stageHulls.laundry.walls.find(w => w.index === (inward === 1 ? 1 : 0) &&
           w.left === (inward === 1) && w.top <= roof.y + 65 && w.bottom >= roof.y + 65);
         Object.assign(hero, { x:wall.x - inward*hero.stats.width, y:roof.y+65+hero.stats.height*.52,
           ground:-1, face:inward, jumps:1, vy:85 });
@@ -4916,9 +4931,10 @@
         if (points) points.push({x:path.x, y:path.y});
         path.drop = Math.max(0, path.drop - dt);
         const terrain = !this.layout && arenas[this.stage]?.movingPlatform != null ? platforms(this.stage, time) : this.terrain;
-        if (this.wallContact(f, x, y, path.x, path.y)) {
-          path.contact = 'wall';
-          path.hardImpact = Math.abs(vx) >= maxTechSpeed;
+        const solid = this.solidContact(f, x, y, path.x, path.y);
+        if (solid) {
+          path.contact = solid.ceiling ? 'ceiling' : 'wall';
+          path.hardImpact = Math.abs(solid.ceiling ? vy : vx) >= maxTechSpeed;
           break;
         }
         if (vy >= 0 && this.landingSurface(path, y, x, f.tumble?.meteor ? dt : 0, terrain, time) >= 0) {
@@ -4931,7 +4947,7 @@
         if (!path.dodgeFrame && (f.tumble?.pending || f.tumble?.fromHit) && !f.tumble.meteor && !f.usedDodge && !f.throwBounce &&
             fadeWindow(f.tumble.time+n*dt,Math.hypot(vx,vy),f.stun-n*dt,false)) {
           const future={...f,...path,vx,vy};
-          if (this.floorAhead(future,techWindow+dt)<0 && !this.wallAhead(future,techWindow+dt)) path.dodgeFrame=n+1;
+          if (this.floorAhead(future,techWindow+dt)<0 && !this.solidAhead(future,techWindow+dt)) path.dodgeFrame=n+1;
         }
       }
       return path;
@@ -5375,9 +5391,13 @@
         if (Math.abs(input1.x) < .28 && !input1.jump && !input1.tapped?.jump && !input1.special && !input1.tapped?.special) return;
         wallDrill.phase = 'return';
       } else if (wallDrill?.phase === 'ready') {
-        wallDrill.time += dt;
         this.dogs[0].prev = { ...input1 };
-        if (wallDrill.time + 1e-8 < 0.75) return;
+        if (wallDrill.ceiling) {
+          if (!input1.attack && !input1.tapped?.attack) return;
+        } else {
+          wallDrill.time += dt;
+          if (wallDrill.time + 1e-8 < 0.75) return;
+        }
         wallDrill.phase = 'swing';
         this.emit('wallCue', { f: this.dogs[0] });
       }
@@ -5446,7 +5466,7 @@
         ...(Array.isArray(second) ? second : [second]),
       ];
       if (settingUpWallHit && !wallDrill.swung) {
-        inputs[1] = { ...idleInput, x: wallDrill.inward, attack: true };
+        inputs[1] = wallDrill.ceiling ? {...idleInput, y:-1, attack:true} : {...idleInput, x:wallDrill.inward, attack:true};
         wallDrill.swung = true;
       }
       for (const f of this.dogs) {
@@ -5808,7 +5828,7 @@
           if (
             f.stun + 1e-8 >= inputWindow ||
             this.floorAhead(f, techWindow + 1 / 60) >= 0 ||
-            this.wallAhead(f, techWindow + 1 / 60)
+            this.solidAhead(f, techWindow + 1 / 60)
           )
             f.guardBuffer = 0;
         }
@@ -5932,7 +5952,7 @@
           f.floorAction || f.ledge || f.ground >= 0 || f.impactLag || f.attack || f.ledgeTrump ||
           (!aerial && f.usedDodge) || (f.encounter && f.encounter.kind !== f.kind)) return false;
       return fadeWindow(t.time,Math.hypot(f.vx,f.vy),f.stun,aerial) &&
-        this.floorAhead(f,techWindow+1/60)<0 && !this.wallAhead(f,techWindow+1/60);
+        this.floorAhead(f,techWindow+1/60)<0 && !this.solidAhead(f,techWindow+1/60);
     }
     floorAhead(f, horizon) {
       if (f.vy < 0) return -1;
@@ -5991,8 +6011,9 @@
         const floor = this.terrain[shift.ground];
         nextX = clamp(nextX, Math.min(x, floor.x1), Math.max(x, floor.x2));
       }
-      const wall = this.wallContact(f, x, y, nextX, nextY);
-      if (wall) nextX = clamp(wall.x, Math.min(x, nextX), Math.max(x, nextX));
+      const solid = this.solidContact(f, x, y, nextX, nextY);
+      if (solid?.ceiling) nextY = solid.feet;
+      else if (solid) nextX = clamp(solid.x, Math.min(x, nextX), Math.max(x, nextX));
       if (nextY > y) {
         const travelY = nextY - y;
         for (const [i, floor] of this.terrain.entries()) {
@@ -6009,16 +6030,16 @@
       this.emit('hitShift', { f, point: { x, y: y - f.stats.height * 0.52 }, dx: nextX - x, dy: nextY - y });
       if (this.escapePractice?.phase === 'follow' && f.index === 0) this.escapePractice.outward += x - nextX;
     }
-    wallContact(f, x, y, nextX, nextY) {
+    wallContact(f, x, y, nextX, nextY, head = false) {
       const dx = nextX - x;
       if (Math.abs(dx) < 1e-8) return null;
       const dir = -Math.sign(dx),
         dy = nextY - y,
-        chest = y - f.stats.height * 0.52;
+        offset = f.stats.height * (head ? 1 : .52), chest = y - offset;
       let first = null;
-      for (const wall of this.layout?.walls || solidWalls[this.stage]) {
+      for (const wall of this.layout?.walls || stageHulls[this.stage].walls) {
         if ((wall.left ? -1 : 1) !== dir || (x - wall.x) * dir < -1e-8) continue;
-        const contactX = wall.x + dir * f.stats.width;
+        const contactX = wall.x + dir * f.stats.width * (head ? .45 : 1);
         let enter = Math.max(0, (contactX - x) / dx);
         let leave = Math.min(1, (wall.x - x) / dx);
         if (Math.abs(dy) > 1e-8) {
@@ -6028,13 +6049,35 @@
           leave = Math.min(leave, Math.max(top, bottom));
         } else if (chest < wall.top || chest > wall.bottom) continue;
         if (enter > leave + 1e-8 || (first && enter >= first.t)) continue;
-        first = { wall, dir, x: contactX, feet: y + dy * enter, t: enter };
+        const feet = y + dy * enter;
+        if (head && feet - f.stats.height * .52 <= wall.bottom) continue;
+        first = { wall, dir, x:contactX, feet, pointY:feet-offset, t:enter };
+      }
+      return first;
+    }
+    solidContact(f, x, y, nextX, nextY) {
+      let first = this.wallContact(f, x, y, nextX, nextY);
+      if (nextY >= y) return first;
+      const head = y - f.stats.height, radius = f.stats.width * .45;
+      const ceilings = this.layout ? this.layout.ceilings || [] : stageHulls[this.stage].ceilings;
+      // A rising head can meet the side of the bottom band before the chest reaches it.
+      if (ceilings.length && x !== nextX) {
+        const side = this.wallContact(f, x, y, nextX, nextY, true);
+        if (side && (!first || side.t < first.t)) first = side;
+      }
+      for (const ceiling of ceilings) {
+        if (head < ceiling.y - 1e-8 || nextY - f.stats.height > ceiling.y) continue;
+        const t = clamp((head - ceiling.y) / (y - nextY), 0, 1);
+        if (first && first.t <= t) continue;
+        const atX = x + (nextX - x) * t;
+        if (atX + radius <= ceiling.x1 || atX - radius >= ceiling.x2) continue;
+        first = {ceiling, t, x:atX, feet:ceiling.y + f.stats.height};
       }
       return first;
     }
     wallForKick(f, dir) {
       const chest = f.y - f.stats.height * .52;
-      return (this.layout?.walls || solidWalls[this.stage]).find(wall =>
+      return (this.layout?.walls || stageHulls[this.stage].walls).find(wall =>
         (wall.left ? -1 : 1) === dir && chest >= wall.top && chest <= wall.bottom &&
         Math.abs((f.x - wall.x) * dir - f.stats.width) <= 7);
     }
@@ -6054,7 +6097,7 @@
         this.bot.wallReturn = { platform:wall.index, inward:-dir, until:this.time + .95 };
       this.emit('wallKick', { f, dir, wall, point:{x:wall.x, y:f.y - f.stats.height*.52} });
     }
-    wallAhead(f, horizon) {
+    solidAhead(f, horizon) {
       let { x, y, vx, vy } = f;
       // Sample the tumbling arc a frame at a time so a shallow plank is as hittable as a brick wall.
       for (let elapsed = 0; elapsed + 1e-8 < horizon; elapsed += 1 / 60) {
@@ -6065,15 +6108,47 @@
         vy = Math.min(vy + 1540 * f.kit.gravity * dt, 970);
         const nextX = x + vx * dt,
           nextY = y + vy * dt;
-        const contact = this.wallContact(f, x, y, nextX, nextY);
+        const contact = this.solidContact(f, x, y, nextX, nextY);
         if (contact) {
-          contact.hard = !free && Math.abs(vx) >= maxTechSpeed;
+          contact.hard = !free && Math.abs(contact.ceiling ? vy : vx) >= maxTechSpeed;
           return contact;
         }
         x = nextX;
         y = nextY;
       }
       return null;
+    }
+    hitCeiling(f, contact, oldY) {
+      const {ceiling, feet} = contact, speed = -f.vy;
+      const point = {x:clamp(contact.x, ceiling.x1, ceiling.x2), y:ceiling.y};
+      f.y = feet;
+      f.vy = 0;
+      if (!f.tumble) {
+        if (speed > 180 && oldY > feet + .1) this.emit('ceilingBump', {f,point});
+        return;
+      }
+      const hard = f.stun > 0 && speed >= maxTechSpeed;
+      const tech = !hard && f.techBuffer > 1e-8;
+      if (tech) {
+        this.clearTumble(f, 'Ceiling tech');
+        f.reaction = f.command = f.throwBounce = null;
+        f.stun = f.jumpBuffer = f.guardBuffer = f.coyote = 0;
+        f.cutJump = false;
+        f.invuln = Math.max(f.invuln, 10/60);
+        f.wallAction = {type:'ceilingTech', time:0, duration:7/60, dir:f.face};
+      } else {
+        f.vy = speed * .72;
+        f.vx *= .82;
+        f.tumble.downLaunch = f.vy;
+        f.tumble.meteor = f.tumble.cancel = null;
+      }
+      f.techBuffer = 0;
+      const name = tech ? 'ceilingTech' : 'ceilingBounce';
+      if (this.wallPractice?.ceiling && f.index === 0 && this.wallPractice.phase === 'flight') {
+        this.wallPractice.phase = 'done';
+        this.wallPractice.outcome = name;
+      }
+      this.emit(name, {f, point, speed, hard});
     }
     hitWall(f, contact, jump) {
       const { wall, dir, feet } = contact;
@@ -6103,7 +6178,7 @@
         this.wallPractice.outcome = hard ? 'hardImpact' : type;
         this.wallPractice.speed = speed;
       }
-      this.emit(type, { f, wall, dir, hard, speed, point: { x: wall.x, y: feet - f.stats.height * 0.52 } });
+      this.emit(type, { f, wall, dir, hard, speed, point: { x:wall.x, y:contact.pointY } });
     }
     clearTumble(f, option) {
       if (f.tumble && f.index === 0 && this.launchPractice?.phase === 'flight' && this.launchPractice.pattern !== 'juggle') {
@@ -6558,7 +6633,7 @@
         const action = f.wallAction;
         action.time += dt;
         if (action.time + 1e-8 >= action.duration) f.wallAction = null;
-        else if (action.type === 'wallTech') return;
+        else if (action.type === 'wallTech' || action.type === 'ceilingTech') return;
       }
       const floorAction = f.floorAction;
       const spotCounter = floorAction?.type === 'spotDodge' && !jumpTap &&
@@ -6715,7 +6790,7 @@
       const dogMovement = !f.encounter || f.encounter.kind === f.kind;
       const stanceFree = canStand && dogMovement && f.charge < 0;
       const canJump = jumpTap && !f.smashCharge && (f.jumps > 0 || f.coyote > 0) &&
-        !(f.tumble && f.techBuffer > 1e-8 && this.wallAhead(f, f.techBuffer));
+        !(f.tumble && f.techBuffer > 1e-8 && this.solidAhead(f, f.techBuffer));
       // Up Smash and Up Special can replace the three grounded takeoff frames. An aim-stick aerial stays an aerial.
       const up = f.command;
       const cancelTakeoff = canJump && free && grounded && !jumpingFromLedge && dogMovement &&
@@ -7026,8 +7101,11 @@
           } else if (f.fastFallBuffer) f.fastFallBuffer--;
         } else f.fastFallBuffer = 0;
         f.y += f.vy * dt;
-        const contact = this.wallContact(f, oldX, oldY, f.x, f.y);
-        if (contact) {
+        const contact = this.solidContact(f, oldX, oldY, f.x, f.y);
+        if (contact?.ceiling) {
+          this.hitCeiling(f, contact, oldY);
+          return;
+        } else if (contact) {
           if (f.tumble) {
             this.hitWall(f, contact, input.jump);
             return;
@@ -8520,7 +8598,7 @@
           target.reaction.duration = target.stun;
         }
       }
-      if (this.wallPractice?.phase === 'swing' && target.index === 0 && moveId === 'pipBackKick')
+      if (this.wallPractice?.phase === 'swing' && target.index === 0 && moveId === (this.wallPractice.ceiling ? 'pipFlip' : 'pipBackKick'))
         this.wallPractice.phase = 'flight';
       if (moveId === 'brisketPress' && this.cpuControlled(owner) && target.tumble && owner.ground >= 0) {
         const chase = !!this.bot.lastDrift;
@@ -10121,11 +10199,11 @@
         }
         return result;
       }
-      const wall = f.tumble && this.wallAhead(f, 7 / 60);
-      if (wall) {
+      const solidImpact = f.tumble && this.solidAhead(f, 7 / 60);
+      if (solidImpact) {
         result.x = 0;
-        if (this.cpuLevel === 'rival' && wall.hard) return result;
-        result.jump = f.tumble.willTech && f.y > wall.wall.top + f.stats.height;
+        if (this.cpuLevel === 'rival' && solidImpact.hard) return result;
+        result.jump = !solidImpact.ceiling && f.tumble.willTech && f.y > solidImpact.wall.top + f.stats.height;
         if (f.tumble.willTech && f.techLock <= 1e-8) {
           result.shield = true;
           result.tapped = { shield: true };
@@ -10295,6 +10373,13 @@
         return result;
       }
       if (unsafe) {
+        if (this.cpuLevel === 'rival' && !f.tumble && !f.stun && !f.attack && !f.wallAction && !f.airDodge &&
+            f.y - f.stats.height > closest.y + 4) {
+          const outward = f.x < (closest.x1 + closest.x2)/2 ? -1 : 1;
+          const lip = outward < 0 ? closest.x1 : closest.x2;
+          if ((f.x - lip) * outward < f.stats.width * .45 + 2)
+            return {...idleInput, x:outward};
+        }
         if (this.cpuLevel === 'rival' && f.kit.wallKick && !f.usedWallKick && !f.jumps && !f.attack &&
             !f.tumble && !f.stun && !f.wallAction && !f.airDodge && f.y > closest.y + 78) {
           const away = f.x < (closest.x1 + closest.x2)/2 ? -1 : 1;
