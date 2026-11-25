@@ -40,13 +40,19 @@
   }
   const moments=tape=>analyze(tape).marks;
   const buttons={jump:'Jump',shortHop:'Short hop',attack:'Attack',special:'Special',smash:'Smash',shield:'Shield',grab:'Grab',aimStick:'Strike stick'};
+  function controlsAt(tape,frame,slot){
+    // Frame n shows the result of tick n. A rolling clip can already have held controls at frame zero.
+    const tick=tape.count-tape.length+frame-1;
+    const block=tape.blocks.findLast(b=>b.start<=tick);
+    return block?.inputs[tick-block.start]?.[slot] || window.DogFight.idleInput;
+  }
   function stick(x=0,y=0){
     const horizontal=Math.round(x*100),vertical=Math.round(y*100);
     return [horizontal && (horizontal<0?'Left ':'Right ')+Math.abs(horizontal)+'%',
       vertical && (vertical<0?'Up ':'Down ')+Math.abs(vertical)+'%'].filter(Boolean).join(' + ') || 'Center';
   }
   function inputFrame(tape,frame,slot){
-    const input=tape.controlsAt(frame,slot),previous=frame?tape.controlsAt(frame-1,slot):input;
+    const input=controlsAt(tape,frame,slot),previous=frame?controlsAt(tape,frame-1,slot):input;
     const movement=stick(input.x,input.y);
     const strike=sample=>sample.aimStick || sample.tapped?.aimStick || sample.smash || sample.tapped?.smash ?
       stick(sample.smashX??sample.x,sample.smashY??sample.y):'';

@@ -897,7 +897,7 @@
   const dialogPresses=new Set();
   let movePreview=null;
   function showDialog(kind, title, html, close = true) {
-    if((kind.startsWith('finish-') || kind==='match-card' || kind==='record-card') && !$('replay-sheet')){
+    if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
       link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=1';
       link.onerror=()=>link.remove();document.head.append(link);

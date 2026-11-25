@@ -11505,12 +11505,6 @@
   class FinishTape {
     constructor() { this.blocks=[]; this.count=0; this.knockouts=[]; this.observedLosses=null; }
     get length() { return Math.min(240,this.count); }
-    // Frame n shows the result of tick n. Zero can still have held controls at a rolling clip boundary.
-    controlsAt(frame,slot) {
-      const tick=this.count-this.length+frame-1;
-      const block=this.blocks.findLast(b=>b.start<=tick);
-      return block?.inputs[tick-block.start]?.[slot] || idleInput;
-    }
     copy(source) {
       const battle=Object.create(Battle.prototype);
       battle.emit=()=>{};
