@@ -143,7 +143,10 @@
       this.future.length=0;
     }
     restart(){
-      this.stop();this.step=0;this.finished=false;this.urgent=false;this.endAt=0;
+      this.stop();this.step=0;this.finished=false;this.urgent=false;this.endAt=0;this.duckUntil=0;
+    }
+    duck(seconds){
+      if(this.bus)this.duckUntil=Math.max(this.duckUntil,this.context.currentTime+seconds);
     }
     voice(kind,pitch,time,length,level) {
       const c=this.context, noise=kind==='s'||kind==='h';
@@ -175,8 +178,9 @@
         this.bus=c.createGain();this.bus.gain.value=0;this.bus.connect(c.destination);
         this.volume=-1;this.nextAt=now+.018;
       }
-      if(volume!==this.volume){
-        this.bus.gain.setTargetAtTime(volume,now,.016);this.volume=volume;
+      const ducking=now<this.duckUntil, mix=ducking ? volume*.43 : volume;
+      if(mix!==this.volume){
+        this.bus.gain.setTargetAtTime(mix,now,ducking ? .009 : .045);this.volume=mix;
       }
       while(this.future.length && this.future[0].time<=now)this.future.shift();
       if(this.nextAt<now)this.nextAt=now+.012;
