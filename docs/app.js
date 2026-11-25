@@ -986,6 +986,12 @@
       return;
     }
     if (dialogType === 'set-pick' && roomDraft) return showRoomFighters();
+    if (dialogType === 'room-fighters' && online.canRepick) {
+      roomDraft=null;
+      showResult();
+      document.querySelector('[data-do=rematch-fighters]')?.focus();
+      return;
+    }
     if (dialogType === 'set-pick' || dialogType==='room-fighters') return showResult();
     if (dialogType === 'result' || dialogType === 'dispatch-fall' || dialogType === 'online-result') return;
     if (['controls','moves','cpu-level','practice'].includes(dialogType) && backToPause) {
@@ -2966,7 +2972,7 @@
       (world.mode === 'solo' ? 'CPU' : 'P2') + '</h3><ol class="set-history" aria-label="Game winners">' + history +
       '</ol>' + stageLog + next + (net ? '<p id="net-rematch-status" role="status"></p>' : cpuReadReport()) +
       '<div class="dialog-actions"><button class="primary" data-set-next data-do="' + action + '">' + text +
-      '</button><button class="utility" data-do="' + (net ? 'online-leave">Online lobby' : 'lobby">Fighter select') +
+      '</button>' + (net ? rematchFighterButton() : '') + '<button class="utility" data-do="' + (net ? 'online-leave">Online lobby' : 'lobby">Fighter select') +
       '</button>' + cardButton + '</div>', false);
     if (net) updateVotes();
     document.querySelector('[data-set-next]:not(:disabled), [data-do=online-leave]')?.focus();
@@ -3008,11 +3014,13 @@
       return;
     }
     if (online.match) {
+      roomDraft=null;
       const title = result.end === online.side ? 'You win!' : 'Opponent wins';
       showDialog('online-result', title,
         '<div class="winner"><img alt="" src="' + portrait(f.kind,result.coatFor(f.index)) + '"><div><h3>' + f.stats.name +
         ' wins!</h3><p>' + finish + ' · ' + duration + '</p></div></div><p id="net-rematch-status" role="status"></p>' +
-        '<div class="dialog-actions"><button class="primary" data-do="online-rematch">Rematch</button><button class="utility" data-do="online-leave">Online lobby</button>' + cardButton + '</div>', false);
+        '<div class="dialog-actions"><button class="primary" data-do="online-rematch">Rematch</button>'+rematchFighterButton()+
+        '<button class="utility" data-do="online-leave">Online lobby</button>' + cardButton + '</div>', false);
       updateVotes();
       document.querySelector('[data-do=online-rematch]').focus();
       announce(title);
@@ -3207,6 +3215,13 @@
       return chooseArena(true);
     }
     if(action==='room-stage')return chooseArena(true);
+    if(action==='rematch-fighters')return showRoomFighters();
+    if(action==='ready-fighter' && roomDraft && online.canRepick && !online.myVote) {
+      const {kind,coat}=roomDraft;
+      showResult();
+      online.rematch(undefined,kind,coat);
+      return;
+    }
     if(action==='room-fighter-back')return showRoomFighters();
     const roomDog=e.target.closest('[data-room-dog]'), roomCoat=e.target.closest('[data-room-coat]');
     if(roomDraft && (roomDog || roomCoat)) {
@@ -3214,7 +3229,7 @@
         const kind=roomDog.dataset.roomDog, rival=online.roster[1-online.side];
         const color=roomDraft.colors[kind] ?? savedCoat(0,kind);
         roomDraft.kind=kind;
-        roomDraft.coat=kind===rival.kind && color===rival.coat ? (color+1)%4 : color;
+        roomDraft.coat=!online.canRepick && kind===rival.kind && color===rival.coat ? (color+1)%4 : color;
       } else roomDraft.coat=Number(roomCoat.dataset.roomCoat);
       roomDraft.colors[roomDraft.kind]=roomDraft.coat;
       sound('menu');return showRoomFighters(roomDog?'dog':'coat');
@@ -6810,8 +6825,12 @@
       $('online-format').getAttribute('aria-pressed') === 'true', $('online-form').value, savedCoat(0,onlineDog), Number($('online-rules').value),
       action==='create' && customSetup?readRoomSetup():null);
   }
+  function rematchFighterButton() {
+    return online.canRepick ? '<button class="utility" data-do="rematch-fighters">Change fighter</button>' : '';
+  }
   function showRoomFighters(focus='next') {
-    if(!online.fighterPicks || online.series?.picker!==online.side || online.myVote)return;
+    const free=online.canRepick;
+    if(online.myVote || !free && (!online.fighterPicks || online.series?.picker!==online.side))return;
     if(!roomDraft) {
       const dog=online.roster[online.side];
       roomDraft={...dog,colors:{[dog.kind]:dog.coat}};
@@ -6819,23 +6838,26 @@
     const {kind,coat,colors}=roomDraft, rival=online.roster[1-online.side];
     const roster=Object.entries(fighters).map(([id,f])=>{
       const chosen=colors[id]??savedCoat(0,id);
-      const color=id===rival.kind && chosen===rival.coat?(chosen+1)%4:chosen;
+      const color=!free && id===rival.kind && chosen===rival.coat?(chosen+1)%4:chosen;
       return '<button type="button" class="coat-option" data-room-dog="'+id+'" aria-pressed="'+(kind===id)+'"><img alt="" src="'+
         portrait(id,color)+'"><strong>'+f.name+'</strong><small>'+f.style+'</small></button>';
     }).join('');
     const coats=coatNames[kind].map((name,i)=>{
-      const taken=kind===rival.kind && i===rival.coat;
+      const taken=!free && kind===rival.kind && i===rival.coat;
       return '<button class="utility" data-room-coat="'+i+'" aria-pressed="'+(coat===i)+'"'+(taken?' disabled':'')+'>'+
         name+(taken?' · Opponent':'')+'</button>';
     }).join('');
-    showDialog('room-fighters','Counterpick · Game '+(online.series.games.length+1),
-      '<p>Your opponent keeps '+coatNames[rival.kind][rival.coat]+' '+fighters[rival.kind].name+'.</p>'+
+    const action=free?'ready-fighter':'room-stage';
+    showDialog('room-fighters',free?'Choose your next fighter':'Counterpick · Game '+(online.series.games.length+1),
+      (free?'<p>Both players pick independently. If you pick the same dog and coat, P2 wears the next color.</p>':
+        '<p>Your opponent keeps '+coatNames[rival.kind][rival.coat]+' '+fighters[rival.kind].name+'.</p>')+
       '<div class="coat-grid" role="group" aria-label="Choose your fighter">'+roster+'</div>'+
       '<h3 class="card-stage">'+fighters[kind].name+' · Coat</h3><div class="form-choices room-coats" role="group" aria-label="Choose coat">'+coats+'</div>'+
-      '<p id="net-pick-ready" role="status"></p><div class="dialog-actions"><button class="primary" data-do="room-stage">Choose arena</button>'+
+      '<p id="net-pick-ready" role="status"></p><div class="dialog-actions"><button class="primary" data-do="'+action+'">'+
+      (free?'Ready as '+fighters[kind].name:'Choose arena')+'</button>'+
       '<button class="utility" data-do="card-back">Back to results</button></div>');
     updateVotes();
-    document.querySelector(focus==='dog'?'[data-room-dog][aria-pressed=true]':focus==='coat'?'[data-room-coat][aria-pressed=true]':'[data-do=room-stage]').focus({preventScroll:true});
+    document.querySelector(focus==='dog'?'[data-room-dog][aria-pressed=true]':focus==='coat'?'[data-room-coat][aria-pressed=true]':'[data-do='+action+']').focus({preventScroll:true});
   }
   function updateVotes() {
     const ready=$('net-pick-ready');
@@ -6843,8 +6865,10 @@
     const button = document.querySelector('[data-do=online-rematch], [data-set-next]');
     if (!button) return;
     button.disabled = online.myVote;
+    const change=document.querySelector('[data-do=rematch-fighters]');
+    if(change)change.disabled=online.myVote;
     const arena = online.nextStage && arenas[online.nextStage].name;
-    const pick=online.nextPick;
+    const pick=online.canRepick ? online.readyPicks[online.side] : online.nextPick;
     const fighter=pick ? coatNames[pick.kind][pick.coat]+' '+fighters[pick.kind].name+' · ' : '';
     $('net-rematch-status').textContent = fighter + (arena ? arena + ' selected. ' : '') + (online.myVote ? 'Waiting for your opponent…' :
       online.theirVote ? (online.series ? 'Your opponent is ready.' : 'Your opponent wants a rematch.') : '');

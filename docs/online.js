@@ -6,6 +6,7 @@
   const counterpickFeature = 'fighter-counterpick';
   const timeFeature = 'time-score-1';
   const roomFeature='room-rules-1';
+  const rematchFeature='rematch-fighters-1';
   function readRoomRules(msg){
     if(msg.length!==13 || msg[8]!==roomFeature || !['stock','time'].includes(msg[9]) ||
       !window.DogFight.validStockCount(msg[10]) || !window.DogFight.stockMinutes.includes(msg[11]) ||
@@ -225,6 +226,7 @@
       this.coat = window.DogFight.validCoat(coat) ? coat : 0;
       this.remoteCoat = 0;
       this.fighterPicks = false;
+      this.rematchPicks = false;
       this.code = action === 'create' ? roomCode() : code;
       this.attempts = 0;
       this.round = 0;
@@ -298,7 +300,8 @@
       };
       conn.on('open', () => {
         if (!current()) return conn.close();
-        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature] : ['join',this.kind,this.coat]);
+        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature,rematchFeature] :
+          ['join',this.kind,this.coat,rematchFeature]);
       });
       conn.on('data', (data) => {
         if (!current() || !Array.isArray(data)) return;
@@ -317,14 +320,21 @@
           this.remoteKind = data[1];
           this.remoteCoat = window.DogFight.validCoat(data[2]) ? data[2] : 0;
           this.fighterPicks = this.roomSet && data[3] === counterpickFeature && window.DogFight.validCoat(data[2]);
+          this.rematchPicks = data[this.action === 'quick' ? 3 : 6] === rematchFeature && window.DogFight.validCoat(data[2]);
           // Ordered delivery puts both players' colors in the opening match configuration.
-          if (window.DogFight.validCoat(data[2])) conn.send(this.fighterPicks ? ['coat',this.coat,counterpickFeature] : ['coat',this.coat]);
+          if (window.DogFight.validCoat(data[2])) {
+            const reply=['coat',this.coat];
+            if (this.fighterPicks) reply.push(counterpickFeature);
+            if (this.rematchPicks) reply.push(rematchFeature);
+            conn.send(reply);
+          }
           this.attach(conn);
           this.hostRound(this.customRound);
           if (this.action === 'quick') peer.disconnect();
         } else if (!host && !this.round && data[0] === 'coat' && window.DogFight.validCoat(data[1])) {
           this.remoteCoat = data[1];
           this.fighterPicks = this.action === 'join' && data[2] === counterpickFeature;
+          this.rematchPicks = data.at(-1) === rematchFeature;
         } else if (!host && this.action==='join' && !this.round && data[0]==='room-offer' && readRoomRules(data) && this.validStart(data)){
           this.remoteKind=data[2];this.offer=['start',...data.slice(1)];this.attach(conn);
           this.status('review','Review the host’s rules before starting.');
@@ -375,8 +385,12 @@
       if (conn) conn.close();
       this.status('room', message + ' Your room is open.');
     }
+    get canRepick() {
+      return !!this.rematchPicks && this.finished && (!this.series || this.series.champion !== null);
+    }
     nextLineup() {
       if (!this.round || !this.roster) return null;
+      if (this.canRepick) return this.roster.map((dog,i)=>this.readyPicks[i] || dog);
       if (!this.nextPick) return this.roster;
       return this.roster.map((dog,i)=>i===this.series?.picker ? this.nextPick : dog);
     }
@@ -393,6 +407,7 @@
             typeof msg[7] !== 'string' || !Object.hasOwn(window.DogFight.stageForms,form)) return false;
       } else if (msg.length !== 6 && !(msg.length === 7 && msg[6] === 2)) return false;
       const series = msg[6] === 2;
+      if (this.round && this.rematchPicks && (!this.finished || !this.myVote || !this.theirVote)) return false;
       if ((this.action === 'quick' && series) || (this.round && (series !== !!this.series || form !== this.roomForm))) return false;
       if (this.series && (!this.finished || !this.theirVote ||
           (this.series.champion === null && msg[4] !== this.nextStage))) return false;
@@ -448,6 +463,7 @@
       if(rules)this.roomRules=rules;
       this.timeMinutes = rules ? (rules.timed?rules.minutes:0) : feature === timeFeature && validTime(minutes) ? minutes : 0;
       this.myVote = this.theirVote = this.finished = false;
+      this.readyPicks = [null,null];
       this.myResult = this.theirResult = null;
       this.nextStage = this.nextPick = this.earlyVote = undefined;
       this.phase = 'playing';
@@ -479,15 +495,18 @@
           return this.close('The match results did not agree. Find another match.');
       }
       if (msg[0] === 'rematch') {
-        if (this.theirVote || ![2,3,5].includes(msg.length)) return;
-        if (this.series && !this.finished) {
+        if (this.theirVote || ![2,3,4,5].includes(msg.length)) return;
+        if ((this.series || this.rematchPicks) && !this.finished) {
           // Ordered peers can reach the same confirmed finish on different render frames.
           if (this.theirResult === 0 || this.theirResult === 1) this.earlyVote = msg;
           return;
         }
-        if (this.series && this.theirResult !== this.myResult) return;
-        if (!this.validVote(1-this.side,msg[2],msg[3],msg[4])) return;
-        this.keepPick(msg[2],msg[3],msg[4]);
+        if ((this.series || this.rematchPicks) && this.theirResult !== this.myResult) return;
+        const repick = msg.length === 4;
+        if (repick && !this.canRepick) return;
+        const stage = repick ? undefined : msg[2], kind = repick ? msg[2] : msg[3], coat = repick ? msg[3] : msg[4];
+        if (!this.validVote(1-this.side,stage,kind,coat)) return;
+        this.keepPick(1-this.side,stage,kind,coat);
         this.theirVote = true;
         this.events.votes();
         if (!this.side && this.myVote) this.hostRound();
@@ -508,19 +527,25 @@
       }
     }
     validVote(side, stage, kind, coat) {
+      if (this.canRepick) return stage===undefined && ((kind===undefined && coat===undefined) ||
+        (fighter(kind) && window.DogFight.validCoat(coat)));
       if(this.series?.picker!==side)return stage===undefined && kind===undefined && coat===undefined;
       if(typeof stage!=='string' || !Object.hasOwn(window.DogFight.arenas,stage))return false;
       if(kind===undefined && coat===undefined)return true;
       const winner=this.roster[1-side];
       return this.fighterPicks && fighter(kind) && window.DogFight.validCoat(coat) && (kind!==winner.kind || coat!==winner.coat);
     }
-    keepPick(stage,kind,coat) {
+    keepPick(side,stage,kind,coat) {
+      if (this.canRepick) {
+        if (kind!==undefined) this.readyPicks[side]={kind,coat};
+        return;
+      }
       if (stage !== undefined) this.nextStage = stage;
       if (kind !== undefined) this.nextPick = {kind,coat};
     }
     rematch(stage,kind,coat) {
       if (!this.match || !this.finished || this.myVote || !this.validVote(this.side,stage,kind,coat)) return;
-      this.keepPick(stage,kind,coat);
+      this.keepPick(this.side,stage,kind,coat);
       this.myVote = true;
       const vote=['rematch',this.round];
       if(stage!==undefined)vote.push(stage);
