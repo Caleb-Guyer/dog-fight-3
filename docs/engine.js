@@ -11195,6 +11195,47 @@
       return result;
     }
   }
+  // Keep four seconds of controls plus the checkpoint that precedes their first tick.
+  // A checkpoint owns its random generator and the complete shared graph of dogs and grabs.
+  class FinishTape {
+    constructor() { this.blocks=[]; this.count=0; }
+    get length() { return Math.min(240,this.count); }
+    copy(source) {
+      const battle=Object.create(Battle.prototype);
+      battle.emit=()=>{};
+      battle.random=seededRandom(0);
+      battle.copyFightFrom(source);
+      return battle;
+    }
+    record(battle,first,second) {
+      if (this.count%120===0) {
+        this.blocks.push({start:this.count,battle:this.copy(battle),inputs:[]});
+        if (this.blocks.length>3) this.blocks.shift();
+      }
+      this.blocks.at(-1).inputs.push([this.input(first),this.input(second)]);
+      this.count++;
+    }
+    input(value) {
+      if (!value || value===idleInput) return idleInput;
+      return value.tapped ? {...value,tapped:{...value.tapped}} : {...value};
+    }
+    playback(offset=0,emit=()=>{}) {
+      if (!this.length) return null;
+      const frame=clamp(Math.trunc(offset),0,this.length), start=this.count-this.length;
+      const block=this.blocks.findLast(b=>b.start<=start+frame);
+      const battle=this.copy(block.battle);
+      const inputs=this.blocks.filter(b=>b.start>=block.start).flatMap(b=>b.inputs);
+      let index=0;
+      while (index<start+frame-block.start) battle.step(1/60,...inputs[index++]);
+      battle.emit=emit;
+      return {battle,frame,length:this.length,step(){
+        if (this.frame>=this.length) return false;
+        battle.step(1/60,...inputs[index++]);
+        this.frame++;
+        return true;
+      }};
+    }
+  }
   window.DogFight = {
     cpuLevels,
     stockMinutes,
@@ -11222,6 +11263,7 @@
     bottomBlastY,
     blastSideMargin,
     Battle,
+    FinishTape,
     StockSet,
     idleInput,
     applyFlickJump,

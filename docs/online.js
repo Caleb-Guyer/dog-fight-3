@@ -72,7 +72,9 @@
       try {
         const first = this.side === 0 ? mine : other;
         const second = this.side === 0 ? other : mine;
-        world.step(1 / 60, unpack(first), unpack(second));
+        const a=unpack(first), b=unpack(second);
+        if (world===this.confirmedWorld) this.onConfirmedInput?.(world,a,b);
+        world.step(1 / 60, a, b);
       } finally {
         world.emit = previous;
       }
