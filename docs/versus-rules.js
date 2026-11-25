@@ -66,8 +66,13 @@
     function choices(id){
       choice.replaceChildren();add(choice,'current','Current match rules');
       if(shared)add(choice,'shared','Shared ruleset');
-      presets.forEach((card,i)=>add(choice,'preset-'+i,card.name));
-      for(const [id,card] of [...cards].sort((a,b)=>a[1].name.localeCompare(b[1].name)))add(choice,id,card.name);
+      const group=label=>{const el=document.createElement('optgroup');el.label=label;choice.append(el);return el;};
+      const builtIn=group('Game rulesets');
+      presets.forEach((card,i)=>builtIn.append(new Option(card.name,'preset-'+i)));
+      if(cards.size){
+        const saved=group('Your saved rulesets');
+        for(const [id,card] of [...cards].sort((a,b)=>a[1].name.localeCompare(b[1].name)))saved.append(new Option(card.name,id));
+      }
       choice.value=id;
       $('update').hidden=$('remove').hidden=!cards.has(id);
     }

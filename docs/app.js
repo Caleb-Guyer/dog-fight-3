@@ -2101,7 +2101,7 @@
     if(!window.VersusRulebook)return waitForDispatch('Versus rulesets',()=>loadDispatch('VersusRulebook'),()=>openRulebook(hash),backFromRulebook);
     showDialog('rulebook','Versus rulesets','');
     window.VersusRulebook.open($('dialog-body'),settings,{storage,hash,back:backFromRulebook,apply(rules){
-      Object.assign(settings,rules);save();dismiss();syncFetch();syncLobby();$('start').focus();sound('menu');
+      Object.assign(settings,rules);save();dismiss();syncLobby();$('start').focus();sound('menu');
     }});
   }
   function startShieldReadMatch(series = false) {
