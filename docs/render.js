@@ -2127,6 +2127,15 @@
       }
       return;
     }
+    if (e.type === 'discReflect') {
+      const spread = reduced.matches ? 8 : 3 + snap(p * 16, 2);
+      for (const offset of [0, 8]) {
+        const x = e.x + e.face * (spread - offset);
+        pixelLine(ctx, x - e.face * 6, e.y - 10, x, e.y, offset ? cream : mint, 3, 2);
+        pixelLine(ctx, x, e.y, x - e.face * 6, e.y + 10, offset ? cream : mint, 3, 2);
+      }
+      return;
+    }
     if (e.type === 'attackClash') {
       const spread = reduced.matches ? 3 : snap(p * 13, 2);
       const reach = p > 0.65 ? 5 : 10;
@@ -2294,6 +2303,7 @@
         0.16, f.stats.width, e.turn === 'turnaround' ? e.face : Math.sign(e.vx) || e.face, { wave: e.turn === 'wavebounce' });
       if (name === 'meteorBounce' || name === 'meteorCancel')
         this.add(name, e.point.x, e.point.y, name === 'meteorBounce' ? '#ec946a' : mint, 0.22, 20);
+      if (name === 'discReflect') this.add(name, e.point.x, e.point.y, mint, .18, 16, e.face);
       if (name === 'attackClash') this.add(name, e.point.x, e.point.y, cream, 0.17, 14, e.face,
         { breakthrough: e.winner !== null, projectile: e.projectile });
       if (name === 'platformDrop') this.add(name, e.point.x, e.point.y, cream, e.fromShield ? 11 / 60 : 8 / 60,
@@ -2956,6 +2966,16 @@
   }
   const moveThumbnails = new Map();
   function drawItem(ctx, d) {
+    if (d.reflected) {
+      const dir = Math.sign(d.vx) || 1;
+      for (const offset of [24, 33]) {
+        const x = d.x - dir * offset;
+        for (const side of [-1, 1]) {
+          pixelLine(ctx, x - dir * 7, d.y + side * 7, x, d.y, ink, 5, 2);
+          pixelLine(ctx, x - dir * 7, d.y + side * 7, x, d.y, mint, 3, 2);
+        }
+      }
+    }
     if (d.type === 'drive') {
       const direction = Math.sign(d.vx) || 1;
       const power = clamp(d.power || 0, 0, 1);

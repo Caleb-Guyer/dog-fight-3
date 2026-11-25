@@ -428,6 +428,9 @@
     } else if (name === 'throwBounce') {
       const heavy = detail.moveId === 'brisketSitSlam';
       tone(heavy ? 109 : 430, heavy ? 45 : 650, 0.1, 0, 'triangle', heavy ? 0.14 : 0.065);
+    } else if (name === 'discReflect') {
+      tone(330, 650, .055, 0, 'triangle', .085);
+      tone(640, 1150, .09, .04, 'sine', .09);
     } else if (name === 'attackClash') {
       const pitch = detail.projectile ? 1130 : 880;
       tone(pitch, pitch * 0.72, 0.055, 0, 'square', 0.035);
@@ -2231,6 +2234,21 @@
     const state = e.outcome || e.phase;
     status.dataset.result = state;
     const pattern = world.footworkPractice.pattern;
+    if (world.footworkPractice.discRole) {
+      const pip = pattern === 'reflect';
+      status.textContent = {
+        cast:pip ? 'Bark now!' : 'Round Trip is away',
+        reflected:pip ? 'Disc sent back!' : 'Incoming · shield now!',
+        returnedHit:'Round Trip hit Clover', returnGuard:'Clover guarded the return',
+        returnParry:'Clover parried the return', castParry:'Pip parried the cast',
+        discHit:'Round Trip hit Pip', castGuard:'Pip guarded the cast',
+        returnMiss:'The return missed', missedSwing:'No disc contact', otherHit:'Close-range hit',
+      }[state];
+      if (e.outcome) $('recovery-tip').textContent = pip
+        ? 'Retry and compare holding Shield with tapping neutral Special just as Clover lets go of the disc.'
+        : 'Retry and hold Shield when the mint streak points back at Clover. Switch sides to mirror the throw.';
+      return;
+    }
     if (pattern === 'cancelDash' || pattern === 'cancelTurn') {
       const practice = world.footworkPractice, player = world.dogs[0], dash = pattern === 'cancelDash';
       const aim = dash ? 'Up' : practice.dir > 0 ? 'Right' : 'Left';
@@ -3100,7 +3118,7 @@
         'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
     } else if (footwork) {
       const practice = world.footworkPractice;
-      for (const id of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
+      for (const id of ['bait', 'match', 'power', 'disc', 'reflect', 'returnFire', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
         $('footwork-' + id).setAttribute('aria-pressed', String(practice.pattern === id));
       $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
       $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
@@ -3112,6 +3130,7 @@
         angleHigh: 'Tag the hop', angleLow: 'Clip the recovery',
         cancelDash:'Catch the hop from a run', cancelTurn:'Turn away, then swing back',
         bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
+        reflect:'Pip · tap Attack to start', returnFire:'Clover · tap neutral Special',
       }[pattern];
       const discInput = player.kind === 'noodle' ? 'aim toward Clover and tap Attack' : 'tap Attack';
       const diagonal = (pattern === 'angleLow' ? 'down-' : 'up-') + (practice.dir > 0 ? 'right' : 'left');
@@ -3130,6 +3149,8 @@
         match: 'Tap Attack to start the count. On the third chalk light, tap Attack again to meet the other dog’s jab.',
         power: 'You’re Pip. Tap Attack to start and immediately hold Smash. Release on the third light to kick through Brisket’s Body Check.',
         disc: 'Tap Attack to start. Clover throws Round Trip. On the third light, ' + discInput + ' to bat the disc away.',
+        reflect:'Tap Attack to call for the throw. When Clover releases Round Trip, tap Special with the directions released. Catch the disc on the second bark.',
+        returnFire:'Tap Special with the directions released. Pip is watching your throw. Hold Shield when you hear the second bark send the disc back.',
       }[pattern];
     } else if (wall) {
       const d = world.wallPractice;
@@ -3314,7 +3335,7 @@
     $('game').focus({ preventScroll: true });
   };
   $('footwork-training').onclick = () => drill('footwork', false, world.footworkPractice?.pattern || 'bait');
-  for (const pattern of ['bait', 'match', 'power', 'disc', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
+  for (const pattern of ['bait', 'match', 'power', 'disc', 'reflect', 'returnFire', 'brake', 'pivot', 'antiAir', 'angleHigh', 'angleLow', 'cancelDash', 'cancelTurn'])
     $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
   $('footwork-side').onclick = () => drill('footwork', false, world.footworkPractice.pattern, -world.footworkPractice.dir);
   $('footwork-pause').onclick = () => {
@@ -4566,6 +4587,11 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/disc-reflect' || hash === '#training/disc-return') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, mode:'training', p1:'pip', p2:'clover', stage:'nightmail', fetch:false});
+      drill('footwork',false,hash === '#training/disc-reflect' ? 'reflect' : 'returnFire');
     } else if (hash === '#training/shoulder-carry') {
       leaveOnline();
       afterStory = null;
