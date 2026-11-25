@@ -3675,7 +3675,7 @@
       drill.time += dt;
       if (drill.pattern === 'airPower') {
         if (f.ground < 0) drill.airborne = true;
-        if (f.ground < 0 && !f.jumps || (f.attack && f.attack.moveId !== f.kit.air.neutral))
+        if ((f.ground < 0 && !f.jumps) || (f.attack && f.attack.moveId !== f.kit.air.neutral))
           return this.finishSpacingPractice('other');
         if (!drill.cued && !f.attack && f.ground < 0 && f.vy > 0 && f.y >= drill.cueY) {
           drill.cued = true;
@@ -5325,7 +5325,18 @@
         chase.consumeAttack = !!input1.attack;
         input1 = { ...input1, attack: false, tapped: { ...input1.tapped, attack: false } };
       }
-      const spacing = this.spacingPractice;
+      let spacing = this.spacingPractice;
+      if (spacing?.pattern === 'airPower' && spacing.phase === 'done') {
+        const f = this.dogs[0];
+        const retry = input1.tapped?.jump || input1.tapped?.shortHop || (input1.jump && !f.prev.jump);
+        if (!retry) {
+          f.prev = {...input1};
+          return;
+        }
+        this.resetSpacingPractice('airPower', spacing.dir, spacing.slow);
+        spacing = this.spacingPractice;
+        this.emit('spacingRetry',{f:this.dogs[0]});
+      }
       if (spacing?.pattern === 'fastfall' && spacing.phase === 'active') {
         const f = this.dogs[0];
         if (!spacing.apex && f.ground < 0 && framesToApex(f) <= fastFallBufferFrames) {
