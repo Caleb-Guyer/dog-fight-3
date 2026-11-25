@@ -106,13 +106,15 @@
       this.score = [0, 0];
     }
     get current() { return this.games[this.games.length - 1]; }
+    get openingRead() { return this.games[this.games.length - 2]?.rivalRead ?? null; }
     get champion() { return this.score.includes(2) ? this.score.indexOf(2) : null; }
     get picker() {
       return this.current.winner !== null && this.champion === null ? 1 - this.current.winner : null;
     }
-    finish(winner) {
+    finish(winner, rivalRead) {
       if (this.current.winner !== null || (winner !== 0 && winner !== 1)) return false;
       this.current.winner = winner;
+      if (rivalRead) this.current.rivalRead = {...rivalRead};
       this.score[winner]++;
       return true;
     }
@@ -172,11 +174,15 @@
   const spotCounterLead = 4 / 60;
   // One second spent outside a dodge restores one level. Store game time so rollback and half speed agree.
   const dodgeWear = f => Math.ceil(Math.max(0, (f.dodgeFatigue || 0) - 1e-8));
-  function spendDodge(f, frames, extra = 0) {
+  function dodgeTiming(f, frames, extra = 0) {
     const wear = dodgeWear(f), [total, first, last] = frames;
-    f.dodgeFatigue = Math.min(3, wear + 1);
     return { wear, duration:(total + extra + 2*wear)/60, safeFrom:(first + wear)/60,
       safeUntil:(last + 1 - wear)/60 };
+  }
+  function spendDodge(f, frames, extra = 0) {
+    const timing = dodgeTiming(f, frames, extra);
+    f.dodgeFatigue = Math.min(3, timing.wear + 1);
+    return timing;
   }
   const landingGrabFrames = 4;
   const landingCancelWindow = 7 / 60;
@@ -2655,6 +2661,7 @@
       this.hitStop = 0;
       this.finalHitHold = 0;
       this.resetCpu();
+      if (this.cpuLevel === 'rival' && config.rivalRead) this.bot.shieldHabit = {...config.rivalRead};
       if (this.mode === 'training') this.resetTraining();
       else if (versus && config.suddenStart) this.startSuddenDeath();
       else for (const f of this.dogs) {
@@ -2665,7 +2672,7 @@
     resetCpu() {
       const memory = this.bot;
       this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
-      if (memory) for (const key of ['spotStreak','spotDelay','spotReads','spotBaits','spotPunishes'])
+      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes'])
         if (memory[key] !== undefined) this.bot[key] = memory[key];
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
@@ -7026,6 +7033,10 @@
       return !!edge;
     }
     catchRival(owner, target, attack) {
+      const pressure = this.bot.pressure;
+      if (owner.index === 1 && target.index === 0 && pressure?.roll && pressure.strike === attack &&
+          target.floorAction?.type === 'shieldRoll' && target.floorAction.dir === pressure.roll.dir)
+        this.bot.rollPunishes = (this.bot.rollPunishes || 0) + 1;
       this.comboContact(target, 'grab', attack.moveId);
       const spec = grabs[attack.moveId];
       this.gradeFootwork(target);
@@ -7999,10 +8010,23 @@
           owner.ground >= 0 && owner.ground === target.ground && !broken) {
         const brain = this.bot, previous = brain.pressure;
         // A multi-hit move gives the defender one chance to respond after the last hit.
-        if (previous && previous.swing !== use && !previous.observed) brain.spotStreak = 0;
-        if (brain.spotStreak >= 2 && previous?.swing !== use) brain.spotReads = (brain.spotReads || 0) + 1;
+        const sameSwing = previous && previous.swing === use;
+        if (previous && !sameSwing && !previous.observed) brain.shieldHabit = null;
+        const read = sameSwing ? previous.read : brain.shieldHabit?.count >= 2 ? brain.shieldHabit : null;
+        if (read && !sameSwing) {
+          const key = read.escape === 'spot' ? 'spotReads' : 'rollReads';
+          brain[key] = (brain[key] || 0) + 1;
+        }
+        let roll = null;
+        if (read && read.escape !== 'spot') {
+          const floor = this.terrain[target.ground], dir = read.escape === 'away' ? away : -away;
+          const back = target.face !== dir, timing = dodgeTiming(target, target.kit.defense.roll, back ? 2 : 0);
+          const landing = target.x + dir * target.kit.defense.rollDistance * (back ? .9 : 1);
+          roll = {dir, mark:clamp(landing, floor.x1 + 2, floor.x2 - 2) - floor.x1,
+            catchAt:read.delay + timing.safeUntil + 2/60, expires:read.delay + timing.duration + .12};
+        }
         brain.pressure = { swing: use, opens: this.time + (impactFrames + stunFrames) / 60, x: target.x,
-          ground: owner.ground, face: away, delay: brain.spotStreak >= 2 ? brain.spotDelay : null,
+          ground: owner.ground, face: away, read, roll, observed:sameSwing && previous.observed,
           expectedSafeEnd: target.kit.defense.spot[2] - dodgeWear(target) };
       }
       if (broken) this.breakShield(target);
@@ -9410,31 +9434,53 @@
     readShieldEscape(f, foe) {
       const brain = this.bot, p = brain.pressure;
       if (!p) return null;
-      if (p.sent && !p.strike && f.attack?.moveId === f.kit.tilts.down) p.strike = f.attack;
+      if (p.sent && !p.strike && (p.roll ? f.attack?.grabAttempt && this.time - p.sentAt <= inputWindow :
+          f.attack?.moveId === f.kit.tilts.down))
+        p.strike = f.attack;
       const elapsed = this.time - p.opens;
-      if (f.stun || f.grip || f.floorAction || f.ground !== p.ground || elapsed > .55) {
-        if (!p.observed) brain.spotStreak = 0;
+      if (f.stun || f.grip || f.floorAction || f.ground !== p.ground || elapsed > (p.roll?.expires ?? .55)) {
+        if (!p.observed) brain.shieldHabit = null;
         brain.pressure = null;
         return null;
       }
       if (!p.observed && elapsed >= -1e-8) {
-        if (foe.floorAction?.type === 'spotDodge') {
-          const delay = Math.max(0, elapsed - foe.floorAction.time);
-          brain.spotDelay = brain.spotStreak ? (brain.spotDelay + delay) / 2 : delay;
-          brain.spotStreak = (brain.spotStreak || 0) + 1;
+        const action = foe.floorAction;
+        if (action?.type === 'spotDodge' || action?.type === 'shieldRoll') {
+          const escape = action.dir === 0 ? 'spot' : action.dir === p.face ? 'away' : 'through';
+          const delay = Math.max(0, elapsed - action.time);
+          const last = brain.shieldHabit;
+          brain.shieldHabit = last?.escape === escape ? {escape, count:2, delay:(last.delay + delay) / 2} :
+            {escape, count:1, delay};
           p.observed = true;
         } else if (foe.floorAction || foe.jumpSquat || foe.ground < 0 || foe.attack || elapsed > .32) {
-          brain.spotStreak = 0;
+          brain.shieldHabit = null;
           p.observed = true;
         }
       }
-      if (p.delay === null || p.sent) return null;
+      if (!p.read || p.sent) return null;
       // Commit to the timing learned from earlier blocks, even if this time the defender jumps away.
       if (f.attack || f.impactLag || f.landingLag || f.command || f.charge >= 0) return idleInput;
+      if (p.roll) {
+        // The defender can make this grab miss. Chase the predicted place on the platform.
+        const gap = this.terrain[p.ground].x1 + p.roll.mark - f.x;
+        const dir = Math.sign(gap) || f.face;
+        const running = f.run?.face === dir && !f.run.turned && f.vx * dir >= f.stats.speed * .4;
+        const grab = grabs[running ? f.kit.dashGrab : f.kit.grab];
+        const speed = running ? Math.abs(f.vx) * grab.carry : 0;
+        const slide = running ? Math.min(grab.start, speed / grab.brake) : 0;
+        const travel = running ? (speed - grab.brake * slide / 2) * slide : 0;
+        const reach = grab.box[0] + grab.box[2] + foe.stats.width - 9 + travel;
+        if (Math.abs(gap) > reach) return {...idleInput, x:dir};
+        if (f.face !== dir) return {...idleInput, x:dir * .5};
+        if (elapsed + grab.start < p.roll.catchAt) return idleInput;
+        p.sent = true;
+        p.sentAt = this.time;
+        return {...idleInput, x:running ? dir : 0, tapped:{grab:true}};
+      }
       const low = moves[f.kit.tilts.down], gap = (p.x - f.x) * p.face;
       const reach = low.box[0] + low.box[2] + foe.stats.width - 9;
       if (gap > reach) return { ...idleInput, x: p.face * .5 };
-      if (elapsed + low.start < p.delay + ((p.expectedSafeEnd ?? foe.kit.defense.spot[2]) + 2) / 60)
+      if (elapsed + low.start < p.read.delay + (p.expectedSafeEnd + 2) / 60)
         return f.face === p.face ? idleInput : { ...idleInput, x:p.face*.5 };
       p.sent = true;
       brain.spotBaits = (brain.spotBaits || 0) + 1;
@@ -9527,7 +9573,7 @@
         brain.jumpIn = null;
         brain.ledgeReturn = null;
         if (brain.pressure) {
-          if (!brain.pressure.observed) brain.spotStreak = 0;
+          if (!brain.pressure.observed) brain.shieldHabit = null;
           brain.pressure = null;
         }
         result.jump = false;

@@ -1431,7 +1431,9 @@
     showDialog('cpu-level', restart ? 'Replay the opening' : 'CPU opponent',
       (restart ? '<p>Choose an opponent to replay this match from the same opening.</p>' : '') +
       '<div class="cpu-choices">' + choices + '</div>' + (restart ? '' :
-        '<div class="dialog-actions"><button class="utility" data-do="shield-read-match">Try Rival · Pip vs. Noodle</button></div>'));
+        '<p>Rival watches how you leave shield. In a set, it remembers between games.</p>' +
+        '<div class="dialog-actions"><button class="utility" data-do="shield-read-match">Try Rival · Pip vs. Noodle</button>' +
+        '<button class="utility" data-do="shield-read-set">Play a Rival set · Pip vs. Noodle</button></div>'));
     document.querySelector('[data-cpu="' + level + '"]').focus({preventScroll:true});
   }
   $('cpu-level').onclick = showCpuLevels;
@@ -1450,17 +1452,26 @@
       '<div class="dialog-actions"><button class="utility" data-do="sudden-start">Play Sudden Death</button></div>');
     document.querySelector('[data-minutes="' + settings.minutes + '"]').focus({preventScroll:true});
   };
-  function startShieldReadMatch() {
+  function startShieldReadMatch(series = false) {
     leaveOnline();
     afterStory = null;
     startMatch({ ...settings, p1:'pip', p2:'noodle', mode:'solo', cpuLevel:'rival', stage:'picnic', fetch:false },
-      undefined, 42);
+      undefined, 42, series ? new StockSet('picnic') : null);
   }
   function cpuReadReport() {
-    const tries = world.bot.spotReads;
-    if (world.mode !== 'solo' || world.cpuLevel !== 'rival' || !tries) return '';
-    return '<p>Rival expected a spot-dodge ' + tries + (tries === 1 ? ' time' : ' times') +
-      ' and caught ' + (world.bot.spotPunishes || 0) + ' with a delayed down tilt.</p>';
+    if (world.mode !== 'solo' || world.cpuLevel !== 'rival') return '';
+    const {spotReads, spotPunishes, rollReads, rollPunishes, shieldHabit} = world.bot;
+    let report = '';
+    if (spotReads) report += '<p>Rival expected a spot-dodge ' + spotReads + (spotReads === 1 ? ' time' : ' times') +
+      ' and caught ' + (spotPunishes || 0) + ' with a delayed down tilt.</p>';
+    if (rollReads) report += '<p>Rival predicted ' + rollReads + (rollReads === 1 ? ' shield roll' : ' shield rolls') +
+      ' and grabbed you during roll recovery ' + (rollPunishes || 0) + (rollPunishes === 1 ? ' time.' : ' times.') + '</p>';
+    if (localSet && shieldHabit && localSet.champion === null) {
+      const answer = {spot:'spot-dodge', away:'roll away', through:'roll toward Rival'}[shieldHabit.escape];
+      report += '<p>Rival saw you ' + answer + (shieldHabit.count === 1 ? ' after a block.' : ' after consecutive blocks.') +
+        (world.end !== null ? ' It will remember that in the next game.' : '') + '</p>';
+    }
+    return report;
   }
   function startMatch(config = settings, random = Math.random, opening, series = null) {
     localSet = series;
@@ -1504,7 +1515,7 @@
     view = new FightView($('blast-radar'));
     showContactBoxes(false);
     view.shakeEnabled = settings.shake;
-    world = new Battle(config, (name, e) => {
+    world = new Battle({...config, rivalRead:series?.openingRead}, (name, e) => {
       view.event(name, e);
       sound(name, e);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
@@ -1647,7 +1658,7 @@
   }
   function showSetResult(result, set, finish, duration) {
     const net = !!online.match;
-    if (!net) set.finish(result.end);
+    if (!net) set.finish(result.end, result.cpuLevel === 'rival' ? result.bot.shieldHabit : null);
     const champion = set.champion, picker = set.picker;
     const name = i => labelFor(i) + ' ' + result.dogs[i].stats.name;
     const title = champion === null ? 'Game ' + set.games.length + ' result' : 'Set complete';
@@ -1828,6 +1839,7 @@
     if (action === 'lobby') toLobby();
     if (action === 'cpu-level') showCpuLevels();
     if (action === 'shield-read-match') startShieldReadMatch();
+    if (action === 'shield-read-set') startShieldReadMatch(true);
     if (action === 'rematch') startMatch(matchConfig, undefined, soloSeed, localSet);
     if (action === 'controls') showControls();
     if (action === 'moves') showMoves(world?.dogs[0].kind || settings.p1);
@@ -4757,7 +4769,8 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'brisket', p2:'pip', stage:'picnic', fetch:false });
       setFrameMode('armed');
-    } else if (hash === '#solo/shield-read') startShieldReadMatch();
+    } else if (hash === '#solo/shield-read-set') startShieldReadMatch(true);
+    else if (hash === '#solo/shield-read') startShieldReadMatch();
     else if (hash === '#solo') {
       settings.mode = 'solo';
       editing = 0;
