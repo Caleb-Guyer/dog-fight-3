@@ -393,11 +393,67 @@ async function onlineSet(browser,phoneBrowser) {
   }
   await b.close();await a.close();console.log('Desktop and mobile peers agreed on fighter counterpicks, coats, records, set rematch and Quickplay.');
 }
+async function timedBattles(browser,phone){
+  const local=await device(browser,false,'#solo');
+  await local.press('[data-mode=local]');
+  await local.press('#rules-label');await local.press('[data-scoring=time]');
+  assert.equal(await local.page.locator('[data-minutes="0"]').count(),0);
+  await local.press('[data-minutes="1"]');
+  await local.page.reload();await observe(local.page);
+  assert.match(await local.page.locator('#rules-label').innerText(),/Time Battle · 1 min/);
+  await local.press('[data-mode=local]');await local.press('#start');
+  async function expectHud(d,points){
+    await d.page.waitForFunction(values=>{
+      const lives=[...document.querySelectorAll('#hud .lives')];
+      return lives.length===2 && lives.every((e,i)=>e.textContent===values[i]);
+    },points);
+  }
+  const zero=['0 points','0 points'], behind=['-1 point','0 points'];
+  await expectHud(local,zero);
+  await local.page.keyboard.down('a');
+  try{await expectHud(local,behind);}finally{await local.page.keyboard.up('a');}
+  await local.page.goto(root+'?solo-direct#solo/time-battle');
+  await expectHud(local,zero);
+  assert.match(await local.page.locator('#match-mode').textContent(),/Solo.*Time Battle/);
+  await local.page.close();
+
+  const host=await device(browser,false,'#online'), guest=await device(phone,true,'#online');
+  await host.page.selectOption('#online-rules','1');await host.page.selectOption('#online-stage','picnic');
+  await host.press('#online-create');await host.page.locator('#online-invite').waitFor();
+  assert.match(await host.page.locator('#online-rules-summary').textContent(),/Time Battle · 1 min/);
+  const code=await host.page.locator('#online-room-code').textContent();
+  await guest.press('#open-code-pad');
+  for(const letter of code)await guest.press('[data-letter="'+letter+'"]');
+  await guest.press('#code-join');
+  for(const d of [host,guest])await expectHud(d,zero);
+  await host.page.keyboard.down('a');
+  try{await expectHud(host,behind);}finally{await host.page.keyboard.up('a');}
+  await expectHud(guest,behind);
+  for(const d of [host,guest]){
+    await d.page.locator('[data-do=online-rematch]').waitFor({timeout:105000});
+    assert.match(await d.page.locator('#dialog-body').innerText(),/P1 -1 point \/ P2 0 points/);
+    await d.press('[data-do=match-card]');
+    assert.match(await d.page.locator('.card-stats').innerText(),/Regulation points/);
+    assert.match(await d.page.locator('.card-timeline').innerText(),/Self-destruct/);
+    await d.press('[data-do=card-back]');
+  }
+  await host.press('[data-do=online-rematch]');await guest.press('[data-do=online-rematch]');
+  for(const d of [host,guest]){
+    await expectHud(d,zero);
+    assert.match(await d.page.locator('#match-mode').textContent(),/Time Battle/);
+  }
+  console.log('Solo, saved local rules, private WebRTC scoring, two result cards and rematch passed.');
+}
 async function main(){
   const options={executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim(),
     headless:true,args:['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']};
   const browser=await chromium.launch(options);
   try{
+    if(process.argv.includes('--time-battle')){
+      const phone=await chromium.launch(options);
+      try{await timedBattles(browser,phone);assert.deepEqual(errors,[]);}finally{await phone.close();}
+      return;
+    }
     await rivalSet(browser);
     await soloAndLocal(browser);
     const phone=await chromium.launch(options);

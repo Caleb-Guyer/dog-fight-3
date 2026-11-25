@@ -14,13 +14,14 @@ const previous=process.env.DF3_LEGACY_ONLINE ? fs.readFileSync(process.env.DF3_L
 
 // Deliver the released clients' real handshake and round messages in order. Timeouts
 // are idle in this transport, which never registers a browser or a public room.
-function room(sources) {
+function room(sources,timeMinutes=0) {
   const queue=[], links=[new EventEmitter(),new EventEmitter()];
   const peers=sources.map((source,side)=>{
     const context={window:{DogFight:window.DogFight},crypto,performance,setInterval:()=>0,setTimeout:()=>0,clearInterval(){},clearTimeout(){}};
     vm.runInNewContext(source,context);
     const s=new context.window.DogOnline.OnlineSession({start(){},status(){},votes(){},closed:message=>assert.fail(message)});
     Object.assign(s,{side,round:0,kind:'pip',coat:2,roomSet:side===0,action:side?'join':'create',openingStage:'picnic',roomForm:'flat',peer:{}});
+    if(!side)s.timeMinutes=timeMinutes;
     return s;
   });
   function deliver(){
@@ -37,6 +38,23 @@ function lineup(s) {
   const w=s.match.confirmedWorld;
   return w.dogs.map((dog,i)=>[dog.kind,w.coatFor(i)]);
 }
+test('Time Battle rooms agree on match rules across rematches and wait for a compatible guest',()=>{
+  const legacy=room([current,previous],1).peers;
+  assert(legacy.every(s=>!s.match));
+  const {peers,deliver}=room([current,current],3);
+  for(const s of peers){
+    assert.equal(s.timeMinutes,3);assert.equal(s.match.confirmedWorld.clockFrames,10800);
+    assert.deepEqual(s.match.confirmedWorld.matchCard.points,[0,0]);
+    s.finish(0);
+  }
+  deliver();
+  peers[1].rematch('canal','clover',1);peers[0].rematch();deliver();
+  for(const s of peers){
+    assert.equal(s.round,2);assert.equal(s.match.confirmedWorld.stage,'canal');
+    assert.equal(s.match.confirmedWorld.clockFrames,10800);
+    assert.deepEqual(s.match.confirmedWorld.matchCard.points,[0,0]);
+  }
+});
 for(const legacy of [0,1])test('the previous release can '+(legacy?'join':'host')+' a new client and counterpick its arena',()=>{
   const {peers,deliver}=room(legacy?[current,previous]:[previous,current]);
   const modern=peers[1-legacy];

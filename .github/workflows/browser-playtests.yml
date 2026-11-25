@@ -174,3 +174,21 @@ jobs:
           peer_pid=$!
           trap 'kill "$http_pid" "$peer_pid"' EXIT
           node qa/stock-sets.cjs
+  time-battle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Play a full timed room on desktop and touch
+        run: |
+          node --test qa/time-battle.cjs
+          npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1 peer@1.0.2
+          export NODE_PATH="$RUNNER_TEMP/df3/node_modules"
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/time-http.log" 2>&1 &
+          http_pid=$!
+          node -e "require('peer').PeerServer({host:'127.0.0.1',port:9001,path:'/df3'})" > "$RUNNER_TEMP/time-peer.log" 2>&1 &
+          peer_pid=$!
+          trap 'kill "$http_pid" "$peer_pid"' EXIT
+          node qa/stock-sets.cjs --time-battle
