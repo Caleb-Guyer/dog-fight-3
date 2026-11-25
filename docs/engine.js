@@ -100,6 +100,36 @@
     shield: false,
     grab: false,
   });
+  class StockSet {
+    constructor(stage) {
+      this.games = [{stage, winner:null}];
+      this.score = [0, 0];
+    }
+    get current() { return this.games[this.games.length - 1]; }
+    get champion() { return this.score.includes(2) ? this.score.indexOf(2) : null; }
+    get picker() {
+      return this.current.winner !== null && this.champion === null ? 1 - this.current.winner : null;
+    }
+    finish(winner) {
+      if (this.current.winner !== null || (winner !== 0 && winner !== 1)) return false;
+      this.current.winner = winner;
+      this.score[winner]++;
+      return true;
+    }
+    advance(stage) {
+      if (this.picker === null || !Object.hasOwn(arenas, stage)) return false;
+      this.games.push({stage, winner:null});
+      return true;
+    }
+    cpuPick(kind) {
+      const choices = {
+        pip:['bandstand','laundry'], brisket:['nightmail','picnic'],
+        noodle:['laundry','canal'], clover:['nightmail','canal'],
+      }[kind];
+      return choices.find(stage => !this.games.some(game => game.stage === stage)) ||
+        choices.find(stage => stage !== this.current.stage);
+    }
+  }
   const clamp = (n, low, high) => Math.max(low, Math.min(high, n));
   const topBlastY = -172;
   const floorCrossing = (from, to, floor) => to === from ? 1 : clamp((floor - from) / (to - from), 0, 1);
@@ -10145,6 +10175,7 @@
     bottomBlastY,
     blastSideMargin,
     Battle,
+    StockSet,
     idleInput,
     applyFlickJump,
     rageScale,

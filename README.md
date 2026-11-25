@@ -10,6 +10,8 @@ From the main menu, choose **Adventure**, **Solo fight**, **Local versus**, **On
 
 Each dog starts with three stocks. Dealing damage makes the next hit launch a rival farther. Knock a dog beyond the arena boundary to take a stock. When a hard hit sends you tumbling, you can bend the launch and choose how to land. A midair jump and **Up + Special** can bring you back to the ledge.
 
+For a **best-of-three set**, open **Rules** on Fighter select, choose **Best of three**, then **Start set**. Both dogs get three fresh stocks each game. First to two wins takes the set. The loser picks the next arena and can ask for the same stage again. If you lose to Brisket on Picnic Table, try the same matchup on Moonbell Bandstand and use the low platforms to escape his grab. A solo CPU makes its own counterpick after a loss. The scorecard keeps each game's arena and winner. [Play Pip vs. Rival Brisket in a best-of-three](https://caleb-guyer.github.io/dog-fight-3/#solo/best-of-three)
+
 After a knockout, your next stock arrives on an airmail lift. When its lamps turn mint, tap **Down** to drop, a **side** to step off, or **Jump** to spring away with an air jump in reserve. An aerial attack, Special or air dodge can also take you off the lift. Four mail tags show how much protection you carry. Leave as it docks for up to 96 frames of protection. Wait the full two seconds and it drops you with 24 frames. Both players can see the last tag go out.
 
 In **Training → Launch practice → Take the lift**, tap Attack to start. Drop immediately and watch the rival’s grab pass through. Retry, ride until the lift releases you, and see if the same grab catches your landing. In **Catch the return**, play the waiting dog and time the grab yourself. Both drills use your chosen dogs, with mirrored landings and a half-speed toggle.
@@ -48,7 +50,9 @@ In **Try Rival · Pip vs. Noodle**, close the distance until Noodle can reach yo
 
 Pick your dog and select **Quickplay** to fight the next available player on a random arena. To play a friend, choose an **Opening arena**, select **Create room**, and share the six-character code or invite link. Your friend picks a dog and selects **Join room**. The fight starts when both players connect. [Open Online versus](https://caleb-guyer.github.io/dog-fight-3/#online)
 
-Each device uses the P1 keyboard, controller, or touch controls. The HUD marks your fighter with **YOU**. Both dogs start with three stocks. When both players select **Rematch**, the arena advances through Picnic Table, Laundry Line, Moonbell Bandstand, Night Mail, and Canal Lock in that order, then repeats. If the guest leaves, the next opponent can join the same code and play the host’s chosen opener.
+Each device uses the P1 keyboard, controller, or touch controls. The HUD marks your fighter with **YOU**. Both dogs start with three stocks. In Quickplay and single-game rooms, when both players select **Rematch**, the arena advances through Picnic Table, Laundry Line, Moonbell Bandstand, Night Mail, and Canal Lock in that order, then repeats. If the guest leaves, the next opponent can join the same code and play the host’s chosen opener.
+
+For a friend-room set, turn on **Best of three** before creating the room. After a game, the loser selects an arena and the winner presses **Ready**. Either player can go first. Both screens use the confirmed result for the set score. After the final game, both players can choose **Play another set** to start at 0–0.
 
 Your dog responds on the next simulation frame. Both browsers predict the opponent’s held controls for up to eight frames and replay the fight when a late input changes what happened. The damage counter, stock count, and match result use confirmed inputs. A longer interruption briefly pauses the fight until the connection catches up.
 
