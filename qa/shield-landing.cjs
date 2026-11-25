@@ -87,6 +87,19 @@ test('Rival reads three-stock landings across the roster and stages and declines
     }
 });
 
+test('a real landing cancel makes Rival Brisket choose his faster up smash while the other back airs still punish', () => {
+  for (const dog of Object.keys(kits)) for (const dir of [-1,1]) {
+    const events=[];
+    const w=new Battle({...config,p1:'brisket',p2:dog,mode:'solo',cpuLevel:'rival',shieldLanding:{dir,cross:true}},
+      (name,e)=>events.push([name,e.moveId]),seededRandom(42));
+    for (let n=0;n<22;n++) w.step(dt,{...idleInput,x:n<13?-dir:0,shield:n>=7});
+    assert(events.some(([name,id])=>name==='landingCancel' && id===kits.brisket.air.down));
+    const expected=dog==='brisket'?kits.brisket.smashes.up:kits[dog].air.back;
+    assert(events.some(([name,id])=>name==='hit' && id===expected));
+    assert(!events.some(([name])=>name==='block'));
+  }
+});
+
 test('eight-frame rollback corrects predicted shield grabs and back airs in either player slot', () => {
   const stamp=w=>[w.hitStop,...w.dogs.map(f=>[f.x,f.y,f.vx,f.vy,f.face,f.ground,f.damage,f.shield,
     f.shieldStun,f.landingLag,f.grip?.owner,f.grip?.phase,f.attack?.moveId,f.attack?.time])];
