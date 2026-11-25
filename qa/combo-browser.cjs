@@ -1572,6 +1572,37 @@ async function testDodgeTiming(page,mobile) {
   assert(await status.isHidden());
 }
 
+async function testGetUpAttacks(page,mobile) {
+  await page.goto(root+'?wake-up#training/get-up');
+  const status=page.locator('#launch-status');
+  const {hold,press,waitFor}=await trainingControls(page,mobile,status);
+  for (const [behind,answer] of [[false,'take'],[true,'take'],[true,'hold'],[false,'grab']]) {
+    await press('launch-bait');
+    if ((await page.locator('#launch-behind').getAttribute('aria-pressed')==='true') !== behind)
+      await press('launch-behind');
+    if (answer==='grab') await press('launch-side');
+    await hold(['attack']);
+    await waitFor('fall');
+    await hold(answer==='take'?[]:['shield']);
+    await waitFor(answer==='take'?'sweep':'sweepBlock');
+    assert.match(await status.textContent(),behind?/Reverse Rim.*frame 8 behind/:/Reverse Rim.*frame 15 in front/);
+    if (answer==='hold') await waitFor('heldGuard');
+    if (answer==='grab') {
+      await hold(['shield','grab']);
+      await waitFor('grabPunish');
+      await hold([]);
+      await page.clock.runFor(100);
+      await hold(['up']);
+      await page.clock.runFor(1500);
+      assert(parseInt(await page.locator('#hud .percentage').nth(1).textContent(),10)>0);
+    }
+    await hold([]);
+  }
+  await press('reset-training');
+  assert(await status.isHidden());
+  console.log((mobile?'Touch':'Keyboard')+' played both sides of Reverse Rim, held shield, and grabbed the recovery into an up throw.');
+}
+
 async function testBoostGrabs(page,mobile) {
   await page.goto(root+'?running-catches#training/boost-grab');
   const status=page.locator('#footwork-status');
@@ -1870,6 +1901,7 @@ async function testDevice(browser, mobile) {
     console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed examples, recording, replay, reply changes and free-training reset.');
     await testDefendTakes(page, mobile);
     await testShieldPunish(page, mobile);
+    await testGetUpAttacks(page, mobile);
     await testBoostGrabs(page, mobile);
     await testPartnerTraining(page, mobile);
     await testEdges(page, mobile);
