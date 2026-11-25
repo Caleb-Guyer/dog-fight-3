@@ -22,5 +22,7 @@ test('pad swaps are per player; an invalid saved keyboard cannot disable a worki
   const restored=load(l);
   assert.deepEqual(restored.keyboard,load().keyboard);
   assert.deepEqual(restored.pad,l.pad);
+  l.pad[0].grab=-1;
+  assert.deepEqual(load(l).pad,[load().pad[0],l.pad[1]]);
   assert.deepEqual(load({keyboard:'old format',pad:[{jump:-1}]}),load());
 });

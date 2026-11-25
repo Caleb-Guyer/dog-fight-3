@@ -29,6 +29,7 @@ async function observe(page) {
     const proto=DogFight.Battle.prototype,step=proto.step,cpu=proto.cpu;
     proto.step=function(...args){
       window.observedBattle=this;
+      if(window.watchJumps) for(const i of [0,1]) if(args[i+1]?.jump)window.watchJumps[i]=true;
       if(!window.firstControl)window.firstControl={x:args[1].x,grab:args[1].grab,grabTap:!!args[1].tapped?.grab};
       return step.apply(this,args);
     };
@@ -188,12 +189,23 @@ async function rivalSet(browser) {
   console.log('Noodle caught the repeated keyboard roll and remembered it after a three-stock counterpick and restart.');
 }
 async function onlineSet(browser,phoneBrowser) {
-  const host=await device(browser,false,'#online'), guest=await device(phoneBrowser,true,'#online');
+  const host=await device(browser,false,'#controls'), guest=await device(phoneBrowser,true,'#controls');
   const {page:a}=host,{page:b}=guest;
+  for(const [d,key] of [[host,'q'],[guest,'v']]){
+    await d.press('[data-key="jump"]');await d.page.keyboard.press(key);
+    await d.page.goto(root+'?custom-key#online');await observe(d.page);
+  }
   await host.press('#online-format');await a.selectOption('#online-stage','nightmail');await host.press('#online-create');
   await a.locator('#online-invite').waitFor();await b.locator('#online-code').fill(await a.locator('#online-room-code').textContent());
   await guest.press('#online-join');
   for(const d of [host,guest])await fresh(d,1,'0–0');
+  for(const d of [host,guest]){
+    await d.page.waitForFunction(()=>window.observedBattle?.matchFrames>12);
+    await d.page.evaluate(()=>{window.watchJumps=[false,false];});
+  }
+  await a.keyboard.down('q');await b.keyboard.down('v');
+  for(const d of [host,guest])await d.page.waitForFunction(()=>window.watchJumps.every(Boolean));
+  await a.keyboard.up('q');await b.keyboard.up('v');
   for(const [i,loser] of [guest,host,guest].entries()){
     const winner=loser===host?guest:host,slot=loser===host?0:1;
     await leaveThreeStocks(loser,slot);
