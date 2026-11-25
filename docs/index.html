@@ -13,7 +13,7 @@
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="./style.css?v=shield-landing-1" />
     <link rel="stylesheet" href="./dispatch.css?v=first-menu-1" />
-    <link rel="stylesheet" href="./screen.css?v=rotation-1" />
+    <link rel="stylesheet" href="./screen.css?v=menu-directions-1" />
     <link rel="stylesheet" href="./online.css?v=room-counterpick-1" />
     <script defer src="./fighters-art.js?v=fast-cels-1"></script>
     <script defer src="./arena-art.js?v=stage-forms-1"></script>
@@ -21,12 +21,12 @@
     <script defer src="./fight-records.js?v=records-1"></script>
     <script defer src="./fight-school.js?v=continue-1"></script>
     <script defer src="./arcade.js?v=continue-1"></script>
-    <script defer src="./controls.js?v=counterpick-1"></script>
+    <script defer src="./controls.js?v=menu-directions-1"></script>
     <script defer src="./score.js?v=yard-band-1"></script>
     <script defer src="./render.js?v=bell-yard-1"></script>
     <script defer src="./dispatch-script.js?v=night-mail-1"></script>
     <script defer src="./online.js?v=room-counterpick-1"></script>
-    <script defer src="./app.js?v=night-mail-1"></script>
+    <script defer src="./app.js?v=menu-directions-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -120,7 +120,7 @@
             ><button type="button" id="home-records">Fight Records</button
             ><button type="button" id="home-options">Options</button>
           </div>
-          <span class="menu-hint">↑ ↓ Choose &nbsp; Enter Select</span>
+          <span class="menu-hint"><span class="key-legend">Arrow keys · Choose &nbsp; Enter · Select</span><span class="pad-legend">D-pad · Choose &nbsp; A · Select &nbsp; B · Back</span></span>
         </div>
       </section>
       <section id="online-lobby" class="dispatch-board" aria-labelledby="online-title" hidden>

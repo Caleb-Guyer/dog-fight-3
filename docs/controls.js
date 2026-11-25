@@ -62,5 +62,53 @@
     }
     get(i,pads) { return pads.find(p=>p.index===this.ids[i]); }
   }
-  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,Seats};
+  // Follow the lane where the player entered a wide card, such as the Adventure cover.
+  function menuNeighbor(rects, current, direction, lane) {
+    const horizontal=direction==='left' || direction==='right';
+    const low=horizontal?'left':'top', high=horizontal?'right':'bottom';
+    const crossLow=horizontal?'top':'left', crossHigh=horizontal?'bottom':'right';
+    const start=rects[current], forward=direction==='right' || direction==='down';
+    const origin=Math.max(start[crossLow],Math.min(start[crossHigh],lane));
+    let best=current, bestCost=Infinity;
+    for(const [i,r] of rects.entries()){
+      if(i===current)continue;
+      const gap=forward?r[low]-start[high]:start[low]-r[high];
+      if(gap < -2)continue;
+      const offset=Math.max(0,r[crossLow]-origin,origin-r[crossHigh]);
+      const center=Math.abs((r[crossLow]+r[crossHigh])/2-origin);
+      const cost=Math.max(0,gap)+offset*3+center*.12;
+      if(cost<bestCost){best=i;bestCost=cost;}
+    }
+    return best;
+  }
+  function menuDirection(pad, previous) {
+    const pressed=i=>pad.buttons[i]?.pressed;
+    const dx=Number(!!pressed(15))-Number(!!pressed(14)), dy=Number(!!pressed(13))-Number(!!pressed(12));
+    let x=dx, y=dy;
+    if(!dx && !dy){
+      x=pad.axes[0]||0; y=pad.axes[1]||0;
+      if(Math.max(Math.abs(x),Math.abs(y))<(previous ? .42 : .65))return '';
+    }
+    const horizontal=previous==='left' || previous==='right';
+    const vertical=previous==='up' || previous==='down';
+    if(Math.abs(x)+(horizontal ? .15 : 0)>=Math.abs(y)+(vertical ? .15 : 0))return x<0?'left':'right';
+    return y<0?'up':'down';
+  }
+  class MenuRepeat {
+    constructor(){this.direction='';this.scope='';this.next=0;}
+    poll(direction,scope,time){
+      const changed=direction!==this.direction;
+      const crossed=scope!==this.scope;
+      this.scope=scope;this.direction=direction;
+      if(changed || !direction || !scope || crossed){
+        // A held direction that opened a new screen must be released or turned first.
+        this.next=changed && direction && scope ? time+.38 : Infinity;
+        return !!(changed && direction && scope);
+      }
+      if(time<this.next)return false;
+      this.next=time+.12;
+      return true;
+    }
+  }
+  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,Seats,menuNeighbor,menuDirection,MenuRepeat};
 })();
