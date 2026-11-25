@@ -262,10 +262,11 @@ async function onlineSet(browser,phoneBrowser) {
   const {page:a}=host,{page:b}=guest;
   for(const [d,key] of [[host,'q'],[guest,'v']]){
     await d.press('[data-key="jump"]');await d.page.keyboard.press(key);
-    await d.page.goto(root+'?custom-key#online');await observe(d.page);
+    await d.page.goto(root+'?custom-key'+(d===host?'#online/best-of-three':'#online'));await observe(d.page);
     await d.press('#online-coat');await d.press('[data-coat="2"]');
   }
-  await host.press('#online-format');await a.selectOption('#online-stage','laundry');await a.selectOption('#online-form','flat');
+  assert.equal(await a.locator('#online-format').getAttribute('aria-pressed'),'true');
+  await a.selectOption('#online-stage','laundry');await a.selectOption('#online-form','flat');
   await host.press('#online-create');
   await a.locator('#online-invite').waitFor();await b.locator('#online-code').fill(await a.locator('#online-room-code').textContent());
   await guest.press('#online-join');
@@ -279,12 +280,17 @@ async function onlineSet(browser,phoneBrowser) {
   await a.keyboard.down('q');await b.keyboard.down('v');
   for(const d of [host,guest])await d.page.waitForFunction(()=>window.watchJumps.every(Boolean));
   await a.keyboard.up('q');await b.keyboard.up('v');
+  const lineups=[
+    [{kind:'pip',coat:2},{kind:'pip',coat:3}],
+    [{kind:'pip',coat:2},{kind:'noodle',coat:1}],
+    [{kind:'noodle',coat:3},{kind:'noodle',coat:1}],
+  ];
   for(const [i,loser] of [guest,host,guest].entries()){
     const winner=loser===host?guest:host,slot=loser===host?0:1;
     await leaveThreeStocks(loser,slot);
     for(const d of [loser,winner]){
       await d.page.locator('#set-score').waitFor();
-      assert.deepEqual(await d.page.evaluate(()=>window.lastPodium),{kind:'pip',coat:slot===0?3:2});
+      assert.deepEqual(await d.page.evaluate(()=>window.lastPodium),lineups[i][1-slot]);
       await d.page.waitForFunction(winningSlot=>window.observedScore?.track==='win-'+window.observedBattle?.dogs[winningSlot].kind,1-slot);
     }
     assert.equal(await a.locator('#set-score').textContent(),await b.locator('#set-score').textContent());
@@ -295,6 +301,7 @@ async function onlineSet(browser,phoneBrowser) {
       assert.equal(archive.length,i+1);
       assert.deepEqual([archive[0].round,archive[0].winner,archive[0].side],[i+1,1-slot,d===host?0:1]);
       assert.equal(archive[0].card.losses.length,3);
+      assert.deepEqual(archive[0].card.players.map(({kind,coat})=>({kind,coat})),lineups[i]);
       await d.press('[data-do=match-card]');
       assert.equal(await d.page.locator('[data-record-drill]').count(),0);
       assert.match(await d.page.locator('.card-stage').textContent(),new RegExp('Game '+(i+1)));
@@ -303,8 +310,8 @@ async function onlineSet(browser,phoneBrowser) {
         assert.match(await d.page.locator('.card-stage').textContent(),/Game 1 · Laundry Line · Flat/);
       }
       const rows=await d.page.locator('.card-timeline li').allTextContents();
-      assert(await d.page.locator('.card-stats thead img').evaluateAll(els=>els.length===2 &&
-        els.every((el,i)=>el.src===DogArt.portrait('pip',i+2))));
+      assert(await d.page.locator('.card-stats thead img').evaluateAll((els,lineup)=>els.length===2 &&
+        els.every((el,i)=>el.src===DogArt.portrait(lineup[i].kind,lineup[i].coat)),lineups[i===2?0:i]));
       assert.equal(rows.length,3);
       assert(rows.every(s=>s.includes('blast line') && s.includes('No hits taken')));
       const stats=await d.page.locator('.card-stats tbody').innerText();
@@ -326,14 +333,31 @@ async function onlineSet(browser,phoneBrowser) {
       assert.equal(scores[0],scores[1]);
     }
     if(i<2){
-      if(i===0)await winner.press('[data-do=online-rematch]');
-      await loser.press('[data-do=set-pick]');await loser.press(i===0?'[data-stage=bandstand]':'[data-stage=nightmail]');
-      if(i===1)await winner.press('[data-do=online-rematch]');
+      await loser.press('[data-do=set-pick]');
+      if(i===0){
+        await winner.press('[data-do=online-rematch]');
+        await loser.page.getByText('Your opponent is ready.',{exact:true}).waitFor();
+        assert(await loser.page.locator('[data-room-coat="2"]').isDisabled());
+      }
+      await loser.press('[data-room-dog=noodle]');
+      if(i===1)assert(await loser.page.locator('[data-room-coat="1"]').isDisabled());
+      assert(await loser.page.locator('#dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+      const chosenCoat=i===0?1:3;
+      await loser.press('[data-room-coat="'+chosenCoat+'"]');await loser.press('[data-do=room-stage]');
+      await loser.press('[data-do=room-fighter-back]');
+      assert.equal(await loser.page.locator('[data-room-coat][aria-pressed=true]').getAttribute('data-room-coat'),String(chosenCoat));
+      await loser.press('[data-do=room-stage]');await loser.press(i===0?'[data-stage=bandstand]':'[data-stage=nightmail]');
+      if(i===1){
+        await winner.page.waitForFunction(()=>document.querySelector('#net-rematch-status')?.textContent.includes('Noodle · Night Mail'));
+        await winner.press('[data-do=online-rematch]');
+      }
       for(const d of [host,guest])await fresh(d,i+2,i===0?'1–0':'1–1');
     }else{
       assert.match(await a.locator('#set-score').textContent(),/P1 2 – 1 P2/);
       await guest.press('[data-do=online-rematch]');await host.press('[data-do=online-rematch]');
       for(const d of [host,guest]){await fresh(d,1,'0–0');assert.equal(await d.page.locator('#match-stage').textContent(),'Laundry Line · Flat');}
+      for(const d of [host,guest])await d.page.waitForFunction(()=>observedBattle?.stage==='laundry' &&
+        observedBattle.dogs.every(f=>f.kind==='noodle') && observedBattle.coatFor(0)===3 && observedBattle.coatFor(1)===1);
     }
   }
   for(const d of [host,guest]){
@@ -356,7 +380,7 @@ async function onlineSet(browser,phoneBrowser) {
     const own=d===host?3:1;
     assert.deepEqual(await d.page.evaluate(i=>[observedBattle.coatFor(i),observedBattle.coatFor(1-i)],side),[own,4-own]);
   }
-  await b.close();await a.close();console.log('Two peers kept their coats through a room set, rematch and Quickplay.');
+  await b.close();await a.close();console.log('Desktop and mobile peers agreed on fighter counterpicks, coats, records, set rematch and Quickplay.');
 }
 async function main(){
   const options={executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim(),

@@ -86,9 +86,16 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 223d9cd62d50343de027055a5b01d164e574a840
+          path: previous
+          sparse-checkout: docs/online.js
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
       - name: Play solo and WebRTC sets on the hosted runner
         run: |
-          node --test qa/match-cards.cjs qa/stage-forms.cjs
+          DF3_LEGACY_ONLINE=previous/docs/online.js node --test qa/match-cards.cjs qa/stage-forms.cjs qa/room-counterpicks.cjs
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1 peer@1.0.2
           export NODE_PATH="$RUNNER_TEMP/df3/node_modules"
           python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/set-http.log" 2>&1 &
