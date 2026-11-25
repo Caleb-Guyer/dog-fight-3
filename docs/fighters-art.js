@@ -31,11 +31,14 @@
   const colors = ['.', ...Object.keys(palette)];
   const index = Object.fromEntries(colors.map((color, i) => [color, i]));
   function makeTable(overrides = {}) {
-    return colors.map(color => {
-    if (color === '.') return [0, 0, 0, 0];
-    const number = Number.parseInt((overrides[color] || palette[color]).slice(1), 16);
-    return [number >>> 16, (number >>> 8) & 255, number & 255, 255];
+    const rgba = new Uint8Array(colors.length * 4);
+    colors.forEach((color,i) => {
+      if (i === 0) return;
+      const rgb = Number.parseInt((overrides[color] || palette[color]).slice(1), 16);
+      rgba.set([rgb >>> 16, (rgb >>> 8) & 255, rgb & 255, 255], 4*i);
     });
+    // Read the RGBA bytes as native words so writing a coat takes one store per pixel.
+    return new Uint32Array(rgba.buffer);
   }
   const coats = {
     pip: [
@@ -63,7 +66,7 @@
   const colorTables = Object.fromEntries(Object.entries(coats).map(([kind,styles])=>[kind,styles.map(s=>makeTable(s[1]))]));
 
   // A dot is transparent. Leading dots position clusters within the drawn tile.
-  const tile = (drawing) => drawing.trim().split(/\s+/);
+  const tile = drawing => drawing.trim().split(/\s+/).map(row=>Uint8Array.from(row,code=>index[code]));
   const fighters = {
     pip: {
       headAt: [-10, -33],
@@ -622,6 +625,7 @@
   const frames = new Map();
   const portraits = new Map();
   const turnScratch = new Uint8Array(W * H);
+  const bodyScratch = new Uint8Array(W * H), tumbleScratch = new Uint8Array(W * H);
 
   function ink(buffer, x, y, code) {
     x += originX;
@@ -632,14 +636,17 @@
   // Shift entire pixel rows by integer steps to lean a head or a torso during a strike.
   function stamp(buffer, art, x, y, lean = 0, backShade = false) {
     const height = art.length;
+    x += originX;
+    y += originY;
     for (let row = 0; row < height; row++) {
-      const dx = Math.round(lean * (1 - row / Math.max(1, height - 1)));
+      const py = y + row;
+      if (py < 0 || py >= H) continue;
+      const left = x + Math.round(lean * (1 - row / Math.max(1, height - 1)));
       const run = art[row];
-      for (let col = 0; col < run.length; col++) {
-        let color = run[col];
-        if (color === '.') continue;
-        if (backShade) color = rearColors[color] || color;
-        ink(buffer, x + dx + col, y + row, color);
+      const start = Math.max(0,-left), end = Math.min(run.length,W-left), base = py*W+left;
+      for (let col = start; col < end; col++) {
+        const color = run[col];
+        if (color) buffer[base+col] = backShade ? rearInk[color] : color;
       }
     }
   }
@@ -658,6 +665,7 @@
     k: 'k',
     p: 'k',
   };
+  const rearInk = Uint8Array.from(colors,color=>index[rearColors[color] || color]);
 
   // Rotate an assembled pixel part as a unit so the eyes, muzzle, and outline stay together.
   function turned(buffer, pivotX, pivotY, radius, degrees, paint, mirrorX = false) {
@@ -687,17 +695,16 @@
   function link(buffer, points, width, fill) {
     const dot = (x, y, diameter, color) => {
       const radius = Math.floor(diameter / 2);
-      for (let dy = 0; dy < diameter; dy++) {
-        for (let dx = 0; dx < diameter; dx++) {
-          if (diameter > 3 && (dx === 0 || dx === diameter - 1) && (dy === 0 || dy === diameter - 1))
-            continue;
-          ink(buffer, x - radius + dx, y - radius + dy, color);
-        }
+      const left=x-radius+originX, top=y-radius+originY;
+      for (let dy=Math.max(0,-top); dy<diameter && top+dy<H; dy++) {
+        const inset=diameter>3 && (dy===0 || dy===diameter-1)?1:0;
+        const row=(top+dy)*W, end=row+Math.min(W,left+diameter-inset);
+        for(let p=row+Math.max(0,left+inset);p<end;p++)buffer[p]=color;
       }
     };
     const thickness = Array.isArray(width) ? width : points.map(() => width);
     for (const border of [2, 0]) {
-      const color = border ? '#' : fill;
+      const color = index[border ? '#' : fill];
       for (let j = 1; j < points.length; j++) {
         const [ax, ay] = points[j - 1];
         const [bx, by] = points[j];
@@ -5584,7 +5591,8 @@
 
   function tumble(pixels, s) {
     if (s.roll % 360 === 0 && s.rollWidth === 1 && s.rollHeight === 1 && !s.wholeY && !s.floorRoll) return pixels;
-    const output = new Uint8Array(W * H);
+    const output = tumbleScratch;
+    output.fill(0);
     const cx = originX;
     const cy = originY - 18;
     const dstY = cy + s.wholeY;
@@ -5619,7 +5627,8 @@
 
   function compose(name, s) {
     const d = fighters[name];
-    const buffer = new Uint8Array(W * H);
+    const buffer = bodyScratch;
+    buffer.fill(0);
     const resting = s.lowBody ? restingBodies[name] : null;
     const bodyAt = resting ? resting.at : d.bodyAt;
     const bodyX = bodyAt[0] + s.bodyX;
@@ -5803,13 +5812,13 @@
       right = 0,
       bottom = 0;
     for (let y = 0; y < H; y++) {
-      for (let x = 0; x < W; x++) {
-        if (!pixels[y * W + x]) continue;
-        left = Math.min(left, x);
-        right = Math.max(right, x);
-        top = Math.min(top, y);
-        bottom = Math.max(bottom, y);
-      }
+      const row = y*W;
+      let first=0, last=W-1;
+      while(first<W && !pixels[row+first])first++;
+      if(first===W)continue;
+      while(!pixels[row+last])last--;
+      left=Math.min(left,first);right=Math.max(right,last);
+      top=Math.min(top,y);bottom=y;
     }
     const width = right - left + 1, height = bottom - top + 1;
     const indices = new Uint8Array(width*height);
@@ -5843,10 +5852,8 @@
     canvas.height = frame.height;
     const ctx = canvas.getContext('2d'), image = ctx.createImageData(frame.width,frame.height);
     const table = colorTables[name][coat];
-    for (let i=0;i<frame.indices.length;i++) {
-      const ink = frame.indices[i];
-      if (ink) image.data.set(table[ink],4*i);
-    }
+    const words = new Uint32Array(image.data.buffer,image.data.byteOffset,frame.indices.length);
+    for (let i=0;i<words.length;i++) words[i]=table[frame.indices[i]];
     ctx.putImageData(image,0,0);
     frame.canvases[coat] = canvas;
     return canvas;
