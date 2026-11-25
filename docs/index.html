@@ -14,19 +14,19 @@
     <link rel="stylesheet" href="./style.css?v=shield-landing-1" />
     <link rel="stylesheet" href="./dispatch.css?v=first-menu-1" />
     <link rel="stylesheet" href="./screen.css?v=finish-practice-1" />
-    <link rel="stylesheet" href="./online.css?v=room-pad-1" />
+    <link rel="stylesheet" href="./online.css?v=time-battle-1" />
     <script defer src="./fighters-art.js?v=fast-cels-1"></script>
     <script defer src="./arena-art.js?v=stage-forms-1"></script>
-    <script defer src="./engine.js?v=finish-practice-1"></script>
-    <script defer src="./fight-records.js?v=records-1"></script>
+    <script defer src="./engine.js?v=time-battle-1"></script>
+    <script defer src="./fight-records.js?v=time-battle-1"></script>
     <script defer src="./fight-school.js?v=continue-1"></script>
     <script defer src="./arcade.js?v=continue-1"></script>
     <script defer src="./controls.js?v=menu-directions-1"></script>
     <script defer src="./score.js?v=yard-band-1"></script>
     <script defer src="./render.js?v=bell-yard-1"></script>
     <script defer src="./dispatch-script.js?v=night-mail-1"></script>
-    <script defer src="./online.js?v=room-pad-1"></script>
-    <script defer src="./app.js?v=finish-practice-1"></script>
+    <script defer src="./online.js?v=time-battle-1"></script>
+    <script defer src="./app.js?v=time-battle-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -141,6 +141,8 @@
               <button id="online-quick" class="net-action net-primary" type="button"><i data-icon="signal"></i>Quickplay</button>
               <div class="room-setup">
                 <button id="online-format" class="utility" type="button" aria-pressed="false">Best of three · Off</button>
+                <label for="online-rules">Room rules</label>
+                <select id="online-rules"><option value="0">Stock · 3 stocks · 7 min</option><option value="1">Time Battle · 1 min</option><option value="3">Time Battle · 3 min</option><option value="7">Time Battle · 7 min</option></select>
                 <label for="online-stage">Opening arena</label>
                 <select id="online-stage"><option value="">Random arena</option></select>
                 <label for="online-form">Stage form</label>
@@ -167,7 +169,7 @@
             </div>
           </section>
         </div>
-        <div class="board-foot"><span class="menu-hint">1 vs 1 · 3 stocks · 7 min</span><span class="menu-hint">P1 controls on each device</span></div>
+        <div class="board-foot"><span class="menu-hint" id="online-rules-summary">Quickplay · 3 stocks · 7 min</span><span class="menu-hint">P1 controls on each device</span></div>
       </section>
       <section id="dispatch-route" class="dispatch-board" aria-labelledby="route-title" hidden>
         <div class="board-heading">

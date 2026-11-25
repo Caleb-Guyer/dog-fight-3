@@ -242,6 +242,7 @@
     mode: 'solo',
     cpuLevel: 'arcade',
     minutes: 7,
+    timed: false,
     bestOfThree: false,
     p1: 'pip',
     p2: 'brisket',
@@ -267,6 +268,8 @@
     if (Object.hasOwn(modes, s.mode)) settings.mode = s.mode;
     if (Object.hasOwn(cpuLevels, s.cpuLevel)) settings.cpuLevel = s.cpuLevel;
     if (stockMinutes.includes(s.minutes)) settings.minutes = s.minutes;
+    settings.timed=s.timed===true;
+    if(settings.timed && !settings.minutes)settings.minutes=3;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
     for (const key of ['fetch', 'sound', 'shake', 'tiltStick','flickJump1','flickJump2','quickAttack1','quickAttack2','bestOfThree']) if (typeof s[key] === 'boolean') settings[key] = s[key];
     if (Number.isFinite(s.volume)) settings.volume = Math.max(0, Math.min(100, s.volume));
@@ -336,7 +339,7 @@
         id=dialogType && fight.endReason!=='fall' && fight.dogs[fight.end] ? 'win-'+fight.dogs[fight.end].kind : null;
       } else {
         id=fight.stage;playing=playing && !paused && countdown<=0;
-        urgent=!world.lesson && fight.mode!=='training' && (fight.suddenDeath ||
+        urgent=!world.lesson && fight.mode!=='training' && (fight.suddenDeath || fight.matchCard?.points && fight.clockFrames<=600 ||
           (fight.dogs[0].stocks===1 && fight.dogs[1].stocks===1));
         if(world.lesson || fight.mode==='training') gain*=.55;
       }
@@ -676,14 +679,14 @@
         if(pair){
           rotation.remember(pick.dogs,pick.colors);rotationPads=seats;saveRotation();
           rotationPicking=false;
-          startMatch({...config,p1:pick.dogs[0],p2:pick.dogs[1],stage,form:lobbyForm(),coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats},
+          startMatch({...config,timeBattle:config.timed,p1:pick.dogs[0],p2:pick.dogs[1],stage,form:lobbyForm(),coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats},
             undefined,undefined,config.bestOfThree?new StockSet(stage):null);return;
         }
         [settings.p1,settings.p2]=pick.dogs;
         settings.stage=stage;
         for(const [i,kind] of pick.dogs.entries())settings.coatBook[i][kind]=pick.colors[i];
         save();
-        startMatch({...settings,stage,form:lobbyForm(),coats:pick.colors.slice(),couchSeats:seats},undefined,undefined,
+        startMatch({...settings,timeBattle:settings.timed,stage,form:lobbyForm(),coats:pick.colors.slice(),couchSeats:seats},undefined,undefined,
           settings.bestOfThree?new StockSet(stage):null);
       },
     });
@@ -716,7 +719,7 @@
     const training = settings.mode === 'training';
     $('rules-label').disabled = training;
     $('rules-label').innerHTML = icon('paw') + (training ? 'Unlimited' :
-      (settings.bestOfThree ? 'Best of three' : 'Rules') + ' · 3 stocks · ' + (settings.minutes ? settings.minutes + ' min' : 'No clock') + ' ▾');
+      (settings.bestOfThree ? 'Best of three' : 'Rules') + (settings.timed?' · Time Battle · ':' · 3 stocks · ') + (settings.minutes ? settings.minutes + ' min' : 'No clock') + ' ▾');
     $('start').innerHTML =
       icon('play') + '<span>' + (training ? 'Start training' : settings.bestOfThree ? 'Start set' : 'Start fight') + '</span>';
     syncFetch();
@@ -1401,6 +1404,8 @@
     if (!e.repeat) toggleFullscreen();
   });
   const stockLabel = (n) => n + (n === 1 ? ' stock' : ' stocks');
+  const pointLabel=n=>n+(Math.abs(n)===1?' point':' points');
+  const fighterScore=(battle,slot)=>battle.matchCard?.points ? pointLabel(battle.matchCard.points[slot]) : stockLabel(battle.dogs[slot].stocks);
   const airResources = ['Jump', 'Up Sp.', 'Dodge'];
   function offstageOptions(f, terrain) {
     if (f.ground >= 0 || f.ledge || f.stockLift || f.respawning || !f.stocks || f.floorAction ||
@@ -1424,19 +1429,20 @@
     return fraction ? whole + '<small>.' + fraction + '</small>' : whole;
   }
   const hudCards=[];
-  function updateFighterCard(f,slot,coat,alert,recovery,label=labelFor(slot)){
+  function updateFighterCard(f,slot,coat,alert,recovery,label=labelFor(slot),points=null){
     const training=world.mode==='training';
+    const scored=points!==null;
     let card=hudCards[slot];
-    if(!card || card.kind!==f.kind || card.coat!==coat || card.label!==label || card.training!==training){
+    if(!card || card.kind!==f.kind || card.coat!==coat || card.label!==label || card.training!==training || card.scored!==scored){
       const root=document.createElement('div');
       root.className='hud-card'+(slot?' two':'');
       root.innerHTML='<span class="hud-portrait"><img alt=""></span><div><span class="hud-name"><small></small></span>'+
-        '<strong class="percentage"></strong><span class="lives">'+(training?'∞':stockPaws(3))+'</span></div>';
+        '<strong class="percentage"></strong><span class="lives">'+(scored?'':training?'∞':stockPaws(3))+'</span></div>';
       const picture=root.querySelector('.hud-portrait'), name=root.querySelector('.hud-name');
       picture.firstChild.src=portrait(f.kind,coat);
       name.firstChild.textContent=label;name.append(f.stats.name);
       if(card)card.root.replaceWith(root);else $('hud').append(root);
-      card=hudCards[slot]={root,picture,kind:f.kind,coat,label,training,lives:root.querySelector('.lives'),
+      card=hudCards[slot]={root,picture,kind:f.kind,coat,label,training,scored,lives:root.querySelector('.lives'),
         percent:root.querySelector('.percentage'),alert:'',recovery:null,rage:0};
     }
     if(card.damage!==f.damage){
@@ -1456,7 +1462,10 @@
         }else{card.meter.remove();card.meter=null;}
       }
     }
-    if(card.stocks!==f.stocks){
+    if(scored && card.points!==points){
+      card.points=points;card.lives.textContent=pointLabel(points);
+      card.lives.setAttribute('aria-label',pointLabel(points));
+    }else if(!scored && card.stocks!==f.stocks){
       card.stocks=f.stocks;
       Array.from(card.lives.children).forEach((paw,i)=>paw.classList.toggle('lost',i>=f.stocks));
       card.lives.setAttribute('aria-label',training?'Unlimited stocks':stockLabel(f.stocks));
@@ -1611,7 +1620,7 @@
     const call = $('countdown'), tiebreak = confirmed.suddenDeath;
     call.classList.toggle('sudden', !!tiebreak?.intro);
     if (tiebreak?.intro) {
-      const caption = tiebreak.cause === 'time' ? 'Time! Stocks tied' :
+      const caption = tiebreak.cause === 'time' ? (confirmed.matchCard?.points?'Time! Points tied':'Time! Stocks tied') :
         tiebreak.cause === 'double' ? 'Double knockout' : 'One stock each';
       if (call.dataset.caption !== caption) call.dataset.caption = caption;
     }
@@ -1676,7 +1685,7 @@
     const recovery = scores.map(f => offstageOptions(f, confirmed.terrain));
     const key =
       scores.map((f, i) => f.kind + ':' + f.damage + ':' + f.stocks + returns[i] + '/' + recovery[i]).join('|') +
-      world.mode +
+      world.mode + (confirmed.matchCard?.points?.join(',') || '') +
       '/' +
       combo.hits +
       '/' +
@@ -1704,7 +1713,7 @@
         (world.trainingPartner || combo.target === 0 ? 'P' + ((combo.target ?? 1)+1) + ' took ' : '') +
         combo.hits + (combo.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(combo.damage) + '% damage';
     }
-    scores.forEach((f,i)=>updateFighterCard(f,i,confirmed.coatFor(i),returns[i],recovery[i]));
+    scores.forEach((f,i)=>updateFighterCard(f,i,confirmed.coatFor(i),returns[i],recovery[i],labelFor(i),confirmed.matchCard?.points?.[i]??null));
   }
   let matchConfig, soloSeed, localSet = null, practiceFight = null;
   let finishTape=null, clipScreen=null, victoryShot=null, finishTrial=null;
@@ -2042,10 +2051,13 @@
   }
   $('cpu-level').onclick = showCpuLevels;
   $('rules-label').onclick = () => {
-    const choices = stockMinutes.map(n => '<button type="button" class="utility" data-minutes="' + n +
+    const choices = stockMinutes.filter(n=>n || !settings.timed).map(n => '<button type="button" class="utility" data-minutes="' + n +
       '" aria-pressed="' + (settings.minutes === n) + '">' + (n ? n + ' min' : 'No clock') + '</button>').join('');
-    showDialog('stock-rules', 'Stock match rules',
-      '<p>Three stocks each. When time runs out, the dog with more stocks wins. Tied stocks or a double final knockout start Sudden Death.</p>' +
+    showDialog('stock-rules', settings.timed?'Time Battle rules':'Stock match rules',
+      '<h3>Battle rules</h3><div class="dialog-actions"><button class="utility" data-scoring="stock" aria-pressed="'+!settings.timed+'">Stock</button>'+
+      '<button class="utility" data-scoring="time" aria-pressed="'+settings.timed+'">Time Battle</button></div>'+
+      (settings.timed?'<p>Respawn until time expires. Earn one point if a rival falls within ten seconds of your hit. Lose one point whenever you fall. A tie starts Sudden Death.</p>':
+      '<p>Three stocks each. When time runs out, the dog with more stocks wins. Tied stocks or a double final knockout start Sudden Death.</p>') +
       '<h3>Match format</h3><div class="dialog-actions"><button class="utility" data-format="single" aria-pressed="' + !settings.bestOfThree +
       '">Single game</button><button class="utility" data-format="set" aria-pressed="' + settings.bestOfThree + '">Best of three</button></div>' +
       '<p>In a set, the loser picks the next arena. First to two wins takes the set.</p>' +
@@ -2236,7 +2248,7 @@
       (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : world.bells ? 'Bell Break' : modes[config.mode];
     $('match-mode').textContent = cupAttempt ? 'Arcade Cup · Round '+(cupAttempt.round+1)+'/4' :
       config.rotationRound?'Bout '+config.rotationRound+' · P1 '+config.rotationTags[0]+' / P2 '+config.rotationTags[1]:
-      world.lesson ? 'Fight School' : matchName + (config.lastStockStart ? ' · Last stock' : '');
+      world.lesson ? 'Fight School' : matchName + (world.matchCard?.points?' · Time Battle':config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = stageName(config.stage,world.form);
     const set = online.series || localSet;
     $('match-set').hidden = !set;
@@ -2479,7 +2491,7 @@
     if ($('clip-practice')) $('clip-practice').disabled=end || player.battle.end!==null;
     $('clip-seek').value=player.frame;
     $('clip-frame').textContent='Frame '+player.frame+' / '+player.length;
-    const scores=player.battle.dogs.map(d=>d.stats.name+' '+tenth(d.damage)+'% · '+stockLabel(d.stocks)).join('  /  ');
+    const scores=player.battle.dogs.map(d=>d.stats.name+' '+tenth(d.damage)+'% · '+fighterScore(player.battle,d.index)).join('  /  ');
     if ($('clip-scores').textContent!==scores) $('clip-scores').textContent=scores;
   }
   function paintClip(dt) {
@@ -2545,7 +2557,7 @@
   function drawFinishTrial(dt){
     const {player,camera,slot}=finishTrial,battle=player.battle;
     camera.draw($('game'),battle,dt,battle.time);
-    for(const [i,f] of battle.dogs.entries())updateFighterCard(f,i,battle.coatFor(i),'',offstageOptions(f,battle.terrain),i===slot?'YOU':'RIVAL');
+    for(const [i,f] of battle.dogs.entries())updateFighterCard(f,i,battle.coatFor(i),'',offstageOptions(f,battle.terrain),i===slot?'YOU':'RIVAL',battle.matchCard?.points?.[i]??null);
     const clock=$('match-clock'),text=((player.length-player.frame)/60).toFixed(1)+'s';
     if(clock.textContent!==text)clock.textContent=text;
     const grip=battle.grapple, prompt=$('grapple-prompt');
@@ -2591,11 +2603,12 @@
   }
   function showTrialComparison(){
     const {player,original,slot}=finishTrial;
-    const score=f=>stockLabel(f.stocks)+' · '+tenth(f.damage)+'%';
+    const score=(battle,i)=>fighterScore(battle,i)+' · '+tenth(battle.dogs[i].damage)+'%';
     const rows=original.dogs.map((f,i)=>'<tr><th scope="row">'+(i===slot?'You · ':'P'+(i+1)+' · ')+f.stats.name+
-      '</th><td>'+score(f)+'</td><td>'+score(player.battle.dogs[i])+'</td></tr>').join('');
+      '</th><td>'+score(original,i)+'</td><td>'+score(player.battle,i)+'</td></tr>').join('');
     const difference=player.battle.dogs[slot].stocks-original.dogs[slot].stocks;
-    const line=difference>0?'You kept '+stockLabel(difference)+' more.':difference<0?'You lost '+stockLabel(-difference)+' more.':
+    const line=original.matchCard?.points?'Your score was '+fighterScore(original,slot)+'. This attempt ended at '+fighterScore(player.battle,slot)+'.':
+      difference>0?'You kept '+stockLabel(difference)+' more.':difference<0?'You lost '+stockLabel(-difference)+' more.':
       'You finished with the same number of stocks.';
     showDialog('finish-comparison','Exchange complete','<p>'+line+'</p><table class="finish-comparison"><thead><tr>'+
       '<th>Fighter</th><th>Original</th><th>This attempt</th></tr></thead><tbody>'+rows+'</tbody></table>'+trialActions(),false);
@@ -2628,13 +2641,13 @@
       const date=new Date(entry.time).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
       return '<button data-record-id="'+id+'"><img alt="" src="'+portrait(winner.kind,winner.coat)+'"><span><strong>'+
         fighters[dogs[0].kind].name+' vs. '+fighters[dogs[1].kind].name+'</strong><small>'+recordModes[entry.mode]+
-        (entry.round?' · Game '+entry.round:'')+' · '+arenas[entry.stage].name+' · '+date+'</small></span><b>'+
+        (entry.card.points?' · Time Battle':'')+(entry.round?' · Game '+entry.round:'')+' · '+arenas[entry.stage].name+' · '+date+'</small></span><b>'+
         fighters[winner.kind].name+' wins</b></button>';
     }).join('');
     showDialog('records','Fight Records',rows.length?
-      '<p>Last '+window.FightRecords.limit+' completed stock fights on this device.</p><div class="saved-games">'+buttons+'</div>'+
+      '<p>Last '+window.FightRecords.limit+' completed fights on this device.</p><div class="saved-games">'+buttons+'</div>'+
       (rows.some(r=>records.transient.has(r.id))?'<p>Storage is unavailable. Recent games are kept in this tab.</p>':''):
-      '<p>Your next completed stock fight will appear here with both fighters’ stats and a stock-by-stock recap.</p>'+
+      '<p>Your next completed fight will appear here with both fighters’ stats and a knockout recap.</p>'+
       '<div class="dialog-actions"><button class="primary" data-do="record-solo">Play a solo fight</button></div>');
     (Array.from(document.querySelectorAll('[data-record-id]')).find(b=>b.dataset.recordId===focusId) ||
       document.querySelector('[data-record-id],[data-do=record-solo]')).focus({preventScroll:true});
@@ -2646,7 +2659,8 @@
     index ??= games.length - 1;
     const game = games[index];
     if (!game?.card) return;
-    const {players, losses, frames, reason} = game.card;
+    const card = game.card;
+    const {players, losses, frames, reason} = card;
     const mode=archived?.mode || recordMode(), side=archived?.side ?? (online.match ? online.side : 0);
     const form=archived?.form || result.form;
     const slot = i => i===1 && ['solo','school','cup'].includes(mode) ? 'CPU' : 'P'+(i+1);
@@ -2660,16 +2674,18 @@
     const stats = row('Damage dealt', p => tenth(p.damage) + '%') + row('Hits landed', p => p.hits) +
       row('Hits blocked', p => p.blocks) + row('Parries', p => p.parries) + row('Shield breaks suffered',p=>p.shieldBreaks) +
       row('Landing techs',p=>p.techs) + row('Knockdowns taken',p=>p.knockdowns) +
-      row('Stocks lost', (_,i) => losses.filter(loss => loss.slot === i).length);
+      (card.points?row('Regulation points',(_,i)=>card.points[i])+row('Credited KOs',(_,i)=>losses.filter(l=>l.slot!==i && l.credited).length)+
+        row('Falls',(_,i)=>losses.filter(l=>l.slot===i && !l.suddenRound).length):row('Stocks lost', (_,i) => losses.filter(loss => loss.slot === i).length));
     const timeline = losses.map(loss => {
       const hit = loss.lastHit, id = hit?.id;
       const move = (moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id])?.label;
       const last = hit ? 'Last hit at ' + cardTime(hit.frame) + ' · ' + (move || (id === 'ball' ? 'Tennis ball' : 'Hit')) :
-        'No hits taken this stock';
+        (loss.points?'No hits since respawn':'No hits taken this stock');
       return '<li><time>' + cardTime(loss.frame) + '</time><div><strong>' + slot(loss.slot) + ' ' + name(loss.slot) +
         ' out at ' + tenth(loss.damage) + '%</strong><span>' +
         (loss.suddenRound ? 'Sudden Death ' + loss.suddenRound + ' · ' : '') +
-        (loss.zone ? loss.zone + ' blast line · ' : '') + stockLabel(loss.remaining) + ' left</span><span>' + last + '</span></div></li>';
+        (loss.zone ? loss.zone + ' blast line · ' : '') + (loss.points?(loss.credited?'KO for '+name(1-loss.slot):'Self-destruct')+
+          ' · P1 '+loss.points[0]+' / P2 '+loss.points[1]:stockLabel(loss.remaining)+' left')+'</span><span>' + last + '</span></div></li>';
     }).join('');
     const tabs = games.length > 1 ? '<nav class="card-games" aria-label="Game stats">' + games.map((g,i) =>
       '<button class="utility" data-card-game="' + i + '" aria-pressed="' + (i === index) + '">Game ' + (i+1) + '</button>'
@@ -2687,8 +2703,8 @@
       (reason === 'time' ? 'Time expired' : reason === 'sudden' ? 'Sudden Death' : 'Knockout') + ' · ' + cardTime(frames) + '</p>' +
       '<table class="card-stats" aria-label="Fighter stats"><thead><tr><td></td>' + headings +
       '</tr></thead><tbody>' + stats + '</tbody></table>'+
-      (tips?'<h3 class="card-timeline-title">Corner practice</h3>'+tips:'')+'<h3 class="card-timeline-title">Stock timeline</h3>' +
-      (timeline ? '<ol class="card-timeline">' + timeline + '</ol>' : '<p>Both fighters kept all their stocks.</p>') +
+      (tips?'<h3 class="card-timeline-title">Corner practice</h3>'+tips:'')+'<h3 class="card-timeline-title">'+(card.points?'Scoring timeline':'Stock timeline')+'</h3>' +
+      (timeline ? '<ol class="card-timeline">' + timeline + '</ol>' : card.points?'<p>No falls during regulation.</p>':'<p>Both fighters kept all their stocks.</p>') +
       '<div class="dialog-actions"><button class="primary" data-do="card-back">'+(archived?'Back to Fight Records':'Back to results')+'</button></div>');
     (document.querySelector('[data-card-game][aria-pressed=true]') || $('dialog-close')).focus();
   }
@@ -2738,7 +2754,8 @@
     if (cupAttempt) return cupResult(result.mode==='adventure' ? result.finished==='exit' : result.end===0);
     const f = result.dogs[result.end], elapsed = Math.floor(result.matchFrames / 60);
     const duration = Math.floor(elapsed / 60) + 'm ' + String(elapsed % 60).padStart(2, '0') + 's';
-    const finish = result.endReason === 'time' ? 'Time expired · ' + result.dogs.map(d=>d.stocks).join('–') + ' stocks (P1–P2)' :
+    const finish = result.matchCard?.points?(result.suddenDeath?'Sudden Death KO':'Time expired')+' · P1 '+pointLabel(result.matchCard.points[0])+' / P2 '+pointLabel(result.matchCard.points[1]):
+      result.endReason === 'time' ? 'Time expired · ' + result.dogs.map(d=>d.stocks).join('–') + ' stocks (P1–P2)' :
       result.endReason === 'sudden' ? 'Sudden Death KO' : stockLabel(f.stocks);
     if (practiceFight && world.mode === 'solo') {
       showDialog('result', 'Practice finished', '<p>' + f.stats.name + ' wins this attempt. Your fight is paused.</p>' +
@@ -2800,7 +2817,7 @@
     announce(f.stats.name + ' wins the Golden Tennis Ball');
     document.querySelector('#dialog-body .primary').focus();
   }
-  $('start').onclick = () => startMatch({...settings,form:lobbyForm(),coats:lobbyCoats}, undefined, undefined,
+  $('start').onclick = () => startMatch({...settings,timeBattle:settings.timed,form:lobbyForm(),coats:lobbyCoats}, undefined, undefined,
     settings.mode !== 'training' && settings.bestOfThree ? new StockSet(settings.stage) : null);
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
@@ -2817,6 +2834,14 @@
     if (exercise && ['record-card','match-card'].includes(dialogType) && !online.match)
       return practiceFromCard(Number(exercise.dataset.recordDrill));
     const format = e.target.closest('[data-format]');
+    const scoring=e.target.closest('[data-scoring]');
+    if(scoring){
+      settings.timed=scoring.dataset.scoring==='time';
+      if(settings.timed && !settings.minutes)settings.minutes=3;
+      save();syncLobby();$('rules-label').onclick();
+      document.querySelector('[data-scoring="'+scoring.dataset.scoring+'"]').focus();
+      return;
+    }
     if (format) {
       settings.bestOfThree = format.dataset.format === 'set';
       save(); dismiss(); syncLobby();
@@ -5259,8 +5284,8 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
-    WinnerStays:'winner-stays.js?v=rotation-1', CouchSelect:'couch-select.js?v=rotation-1',
-    FinishTools:'finish-tools.js?v=finish-gif-1',
+    WinnerStays:'winner-stays.js?v=rotation-1', CouchSelect:'couch-select.js?v=time-battle-1',
+    FinishTools:'finish-tools.js?v=time-battle-1',
     FighterSchool:'fighter-lessons.js?v=fighter-school-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=night-mail-1',
@@ -6223,6 +6248,7 @@
     $('online-actions').hidden = busy;
     $('online-wait').hidden = !busy;
     $('online-status').textContent = (room && online.roomSet ? 'Best of three · ' : '') + message;
+    $('online-rules-summary').textContent = room ? (online.timeMinutes?'Time Battle · '+online.timeMinutes+' min':'Room · 3 stocks · 7 min') : 'Quickplay · 3 stocks · 7 min';
     $('online-connect-title').textContent = room ? 'Friend room' : phase === 'search' ? 'Quickplay' : 'Matchmaking';
     $('online-cancel').textContent = room ? 'Close room' : phase === 'search' ? 'Cancel search' : 'Cancel';
     $('online-invite').hidden = !room;
@@ -6270,7 +6296,7 @@
       return;
     }
     if (request === onlineRequest) online.start(action, onlineDog, code, $('online-stage').value,
-      $('online-format').getAttribute('aria-pressed') === 'true', $('online-form').value, savedCoat(0,onlineDog));
+      $('online-format').getAttribute('aria-pressed') === 'true', $('online-form').value, savedCoat(0,onlineDog), Number($('online-rules').value));
   }
   function showRoomFighters(focus='next') {
     if(!online.fighterPicks || online.series?.picker!==online.side || online.myVote)return;
@@ -7153,6 +7179,10 @@
       afterStory = null;
       startMatch({...settings, p1:'brisket', p2:'pip', mode:'solo', stage:'picnic', cpuLevel:'rival',
         minutes:7, fetch:false}, undefined, 75);
+    } else if (hash === '#solo/time-battle') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings,p1:'pip',p2:'brisket',mode:'solo',stage:'picnic',cpuLevel:'rival',minutes:1,fetch:false,timeBattle:true},undefined,42);
     } else if (hash === '#solo/last-stock') {
       leaveOnline();
       afterStory = null;

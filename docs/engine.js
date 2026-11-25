@@ -2744,7 +2744,8 @@
       this.matchFrames = 0;
       this.suddenDeath = null;
       const versus = this.mode === 'solo' || this.mode === 'local';
-      const minutes = stockMinutes.includes(config.minutes) ? config.minutes : 7;
+      const timed=versus && config.timeBattle===true && config.lesson===undefined && !config.lastStockStart && !config.suddenStart;
+      const minutes = timed && !config.minutes ? 3 : stockMinutes.includes(config.minutes) ? config.minutes : 7;
       this.clockFrames = versus && minutes ? minutes * 3600 : null;
       this.emit = event;
       this.random = this.mode === 'training' && random === Math.random
@@ -2823,6 +2824,7 @@
         players:this.dogs.map(f => ({kind:f.kind, coat:this.coatFor(f.index), damage:0, hits:0, blocks:0, parries:0,
           techs:0, knockdowns:0, shieldBreaks:0, lastHit:null})),
         losses:[],
+        ...(timed ? {points:[0,0],minutes} : {}),
       } : null;
     }
     get geometryStage() { return stageGeometry(this.stage, this.form); }
@@ -5376,9 +5378,9 @@
       if (this.clockFrames === null || holdingFinish) return;
       this.clockFrames = Math.max(0, this.clockFrames - frames);
       if (this.clockFrames > 1e-8 || this.end !== null) return;
-      const [p,q] = this.dogs;
-      if (p.stocks === q.stocks) this.startSuddenDeath('time');
-      else this.finishMatch(p.stocks > q.stocks ? 0 : 1, 'time');
+      const [first,second] = this.matchCard?.points || this.dogs.map(f=>f.stocks);
+      if (first === second) this.startSuddenDeath('time');
+      else this.finishMatch(first > second ? 0 : 1, 'time');
     }
     stepFighters(dt, input1, input2) {
       const breakaway = this.launchPractice?.pattern === 'breakaway' && this.launchPractice;
@@ -9503,9 +9505,16 @@
     }
     loseStock(f) {
       if (f.grip) this.breakGrapple(false);
-      if (this.mode !== 'training') f.stocks--;
+      const points=this.suddenDeath ? null : this.matchCard?.points;
+      const hit=this.matchCard?.players[f.index].lastHit;
+      const credited=!!hit && this.matchFrames-hit.frame<=600;
+      if(points){
+        points[f.index]--;
+        if(credited)points[1-f.index]++;
+      }else if (this.mode !== 'training') f.stocks--;
       if (this.matchCard) this.matchCard.losses.push({
-        slot:f.index, frame:this.matchFrames, damage:f.damage, remaining:f.stocks,
+        slot:f.index, frame:this.matchFrames, damage:f.damage,
+        ...(points ? {credited,points:points.slice()} : {remaining:f.stocks}),
         zone:blastZone(f.x, f.y, this.stageWidth, this.blastInset()),
         suddenRound:this.suddenDeath?.round || 0, lastHit:this.matchCard.players[f.index].lastHit,
       });

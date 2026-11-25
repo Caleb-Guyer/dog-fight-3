@@ -48,9 +48,11 @@ In **Platform practice → Defend the ferry**, Brisket rides and Pip jumps to me
 
 Try the same opening on two stages. You play Pip against Rival Brisket, with three stocks, seven minutes, and the Fetch Ball off. Jump straight up from your starting spot and let Pip fall. On the train you return to the roof. On the table you can land on the left platform, then drop through or jump again. [Play Night Mail](https://caleb-guyer.github.io/dog-fight-3/#solo/night-mail) · [Play Picnic Table](https://caleb-guyer.github.io/dog-fight-3/#solo/picnic-table)
 
-## Stock match rules
+## Stock and Time Battle rules
 
-Solo and local versus start with three stocks and a seven-minute clock. Open **Rules** on the matchup preview to choose one, three, or seven minutes, or **No clock**. Online rooms and Quickplay use seven minutes. When time expires, the dog with more stocks wins.
+Solo and local versus start with three stocks and a seven-minute clock. Open **Rules** on the matchup preview to choose one, three, or seven minutes, or **No clock**. Quickplay uses three stocks and seven minutes. When a stock match runs out of time, the dog with more stocks wins.
+
+Choose **Time Battle** to keep both fighters in play for one, three, or seven minutes. Every fall costs one point. Knocking an opponent out within ten seconds of your last hit earns one point. The higher score wins at the bell, and tied points trigger Sudden Death. The host can choose the same rules under **Room rules** for private online matches. In **Match stats**, the scoring timeline shows credited KOs, self-destructs, and the score after each fall. [Play a one-minute Time Battle as Pip against Brisket](https://caleb-guyer.github.io/dog-fight-3/#solo/time-battle)
 
 Tied stocks at time or a simultaneous final knockout send both dogs to **Sudden Death**. Each starts on one stock at 300%. After five seconds the striped side boundaries move toward center. Crossing either boundary costs the stock. The Fetch Ball sits out the tiebreak. A second double knockout restarts Sudden Death. Choose **Play Sudden Death** in Rules to try it with your selected matchup, or play Pip against Brisket. [Start the Pip–Brisket tiebreak](https://caleb-guyer.github.io/dog-fight-3/#solo/sudden-death)
 
