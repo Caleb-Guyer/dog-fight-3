@@ -1281,10 +1281,16 @@ async function testDefendTakes(page,mobile) {
   const summary=page.locator('#combo-summary'),latest=page.locator('#combo-latest');
   const {hold,press}=await trainingControls(page,mobile,summary);
   await page.evaluate(()=>{
+    window.defenseClicks=[];
+    document.addEventListener('click',e=>{
+      if(e.target.closest('#training-tools'))window.defenseClicks.push([e.target.id,e.detail]);
+    },true);
     const proto=window.DogFight.Battle.prototype,step=proto.step;
     proto.step=function(...args){
       const result=step.apply(this,args), d=this.comboPractice;
-      if(d)window.defenseFrame={phase:d.phase,tick:d.tick};
+      if(d)window.defenseFrame={phase:d.phase,tick:d.tick,source:d.source,slot:d.slot,
+        saved:d.saved?.length,first:d.saved?.[0] && {
+          attack:d.saved[0].attack,jump:d.saved[0].jump,tapped:d.saved[0].tapped}};
       return result;
     };
   });
@@ -1324,8 +1330,13 @@ async function testDefendTakes(page,mobile) {
   await page.selectOption('#combo-slot','0');await press('combo-record');
   await hold(['attack']);await page.clock.runFor(32);await hold([]);await page.clock.runFor(240);
   assert.equal(await page.locator('#combo-slot option:checked').textContent(),'A · Your recording');
-  await press('combo-defend');await startGuard();await waitForPhase('done');
-  assert.match(await latest.textContent(),/Quick Paw · blocked/);
+  assert.match(await latest.textContent(),/Quick Paw/,JSON.stringify(await page.evaluate(()=>window.defenseFrame)));
+  await press('combo-defend');
+  assert.match(await summary.textContent(),/Defend A · Your recording/,
+    JSON.stringify(await page.evaluate(()=>window.defenseClicks.slice(-6))));
+  await startGuard();await waitForPhase('done');
+  assert.match(await latest.textContent(),/Quick Paw · blocked/,
+    JSON.stringify(await page.evaluate(()=>({frame:window.defenseFrame,clicks:window.defenseClicks.slice(-6)}))));
   await hold([]);await press('reset-training');await press('combo-training');
   assert(await page.locator('#combo-replay').isEnabled());
   await press('combo-restore');
