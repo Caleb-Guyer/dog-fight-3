@@ -763,7 +763,7 @@
       table +
         '<p>Flick a side to dash. Reverse in the first few steps to dash-dance. After a full run your dog plants its paws to turn. On touch, slide from the center dot onto a side arrow to walk, or tap a side arrow to dash.</p>' +
         '<p>In a running jump, tap the opposite direction with Jump to turn your dog while carrying your speed. Steer back toward the rival and hit them with your back air. In the air you can aim a strike independently with the right stick, the aim keys, or a swipe out from Smash on touch.</p>' +
-        '<p>On a raised platform, flick Down to drop through with an air jump in reserve. Tap Attack as you fall to swing. Press Down and Attack together to keep your grounded down tilt. For a low crouch, ease the stick down, hold Walk + Down on a keyboard, or slide from the center dot onto Down on touch. Try both heights in Training → Platform practice.</p>' +
+        '<p>On a raised platform, flick Down to drop through with an air jump in reserve. Tap Attack as you fall to swing. Press Down and Attack together for a grounded down tilt. In the air, hold Down as you fall to pass through a perch. Release Down to land on the next one, or swing once your paws clear it. Try Pick your landing in Platform practice. For a low crouch, ease the stick down, hold Walk + Down on a keyboard, or slide from the center dot onto Down on touch.</p>' +
         '<p>Hold Down before a hit to crouch cancel. You take the damage with less knockback. A light, low hit can leave your paws planted. Tap Attack at the spark to answer with a down tilt. Try a stronger launcher or a grab against a crouching rival.</p>' +
         '<p>On the ground, hold Shield and tap Left or Right to roll, or tap Down to spot-dodge in place. Release a raised Shield just before a strike or projectile lands to parry. A melee parry gives you time for a counterattack. Grabs beat a shield release. Try these in Training → Shield practice.</p>' +
         '<p>Holding Shield or blocking a hit shrinks the bubble. An attack can clip an exposed paw or ear. To cover it, ease the stick toward the hit, or hold both bumpers and aim freely. On keyboard, hold Walk while aiming with Shield. On touch, hold Shield and drag from the center dot toward the hit.</p>' +
@@ -1651,7 +1651,8 @@
           (name === 'ledgeClimbPlant' && world.climbPractice.role !== 'patience' && world.climbPractice.phase === 'active')))
         climbFeedback(name, e);
       if (name === 'platformResult' || name === 'platformClimb' || name === 'platformBlock' ||
-          (name === 'platformDrop' && world?.platformPractice && e.f.index === 0))
+          (name === 'platformDrop' && world?.platformPractice && e.f.index === 0) ||
+          (name === 'airPlatformPass' && world?.platformPractice?.pattern === 'layers' && e.f.index === 0))
         platformFeedback(name, e);
       if (name === 'airStart' || name === 'airCue' || name === 'airResult') airFeedback(name, e);
       if (world?.rollPractice && e.f?.index === 0 && (name === 'ledgeRoll' || name === 'rollResult'))
@@ -2289,6 +2290,27 @@
     const label = moves[e.moveId]?.label;
     const below = world.platformPractice.pattern === 'below';
     const status = $('platform-status'), tip = $('recovery-tip');
+    if (world.platformPractice.pattern === 'layers') {
+      const drill = world.platformPractice;
+      if (name === 'platformDrop' || (drill.phase === 'done' && name !== 'platformResult')) return;
+      const feedback = {
+        apex:['At the apex','Tap Down and release to land on top. Hold it to pass through.'],
+        belowTop:['Through the top','Release Down to land on the side perch. Hold it to go through both.'],
+        fall:['Through both perches',world.dogs[0].kind === 'brisket' ? 'Keep Down held and tap Attack for Belly Drop.' : 'Release Down and tap Attack to catch the rival on the deck.'],
+        top:['Top perch','Next time hold Down from the apex until your paws clear the top.'],
+        wing:['Side perch','You passed the top and caught the next perch. Keep Down held longer to reach the deck.'],
+        deck:['Landed on the deck','Try an aerial as soon as you clear the side perch.'],
+        aerial:[label + ' hit the rival','You passed both perches and attacked on the way down.'],
+        other:['Hit from another angle','Try a falling aerial after passing both perches.'],
+        missed:['Left the perches','Jump straight up from the chalk to try all three landings.'],
+      }[e.outcome || drill.phase];
+      if (feedback) {
+        status.dataset.result = e.outcome || drill.phase;
+        status.textContent = feedback[0];
+        tip.textContent = feedback[1] + (e.outcome ? ' Choose Pick your landing to retry.' : '');
+      }
+      return;
+    }
     if (world.platformPractice.pattern === 'shield-drop') {
       if (name === 'platformBlock') {
         status.dataset.result = 'guarded';
@@ -3486,12 +3508,14 @@
     } else if (platform) {
       const below = pattern === 'below', hold = pattern === 'hold';
       const drop = pattern === 'shield-drop', ferry = pattern === 'ferry';
-      for (const id of ['below','top','hold','shield-drop','ferry']) $('platform-' + id).setAttribute('aria-pressed', String(pattern === id));
-      $('platform-slow').hidden = !(drop || ferry);
+      const layers = pattern === 'layers';
+      for (const id of ['below','top','hold','shield-drop','ferry','layers']) $('platform-' + id).setAttribute('aria-pressed', String(pattern === id));
+      $('platform-slow').hidden = !(drop || ferry || layers);
       $('platform-slow').setAttribute('aria-pressed', String(!!world.platformPractice.slow));
       $('platform-status').dataset.result = 'ready';
-      $('platform-status').textContent = ferry ? 'Challenger on the gate' : drop ? 'Hold Shield to start' : hold ? 'Defend the high platform' : below ? 'Rival below' : 'Rival on top';
-      message = ferry ? 'Tap Attack to send the ferry left. Watch the challenger jump from the gate. Block the rising aerial or drop through and strike first.'
+      $('platform-status').textContent = layers ? 'Jump from the chalk' : ferry ? 'Challenger on the gate' : drop ? 'Hold Shield to start' : hold ? 'Defend the high platform' : below ? 'Rival below' : 'Rival on top';
+      message = layers ? 'Jump straight up. At the apex, tap Down and release to land on top, or hold it to pass through. Watch for the second perch below.'
+        : ferry ? 'Tap Attack to send the ferry left. Watch the challenger jump from the gate. Block the rising aerial or drop through and strike first.'
         : drop ? 'Hold Shield. When the rising aerial hits your shield, keep holding it, flick down-right and tap Attack for ' + moves[player.kit.air.down].label + '.'
         : hold ? 'Tap Attack to start. Watch the right wing. Shield the rising aerial or intercept the second jump.'
         : below
@@ -3713,7 +3737,7 @@
   const practiceGroups = [
     ['Movement','Footwork','footwork', footworkPatterns],
     ['Movement','Wavedash','wave',['back','platform']],
-    ['Movement','Platforms','platform',['below','top','hold','ferry','shield-drop']],
+    ['Movement','Platforms','platform',['below','top','hold','ferry','shield-drop','layers']],
     ['Attack','Combo practice','combo',['example','late','record','defend','mix']],
     ['Attack','Aerial spacing','spacing',['approach','retreat','landing','airPower','fastfall','sweet','cancel','footstool','footstoolTech','reverse','wavebounce']],
     ['Attack','Knockdowns','launch',['lock','bait','floor-spike','edge-spike']],
@@ -3737,6 +3761,7 @@
     'footwork-armor':'Brisket Haymaker armor', 'footwork-armorGrab':'Brisket armor grab',
     'footwork-cancelDash':'attack cancel', 'footwork-cancelTurn':'attack cancel',
     'spacing-landing':'short hop full jump flick', 'spacing-fastfall':'fast fall shield',
+    'platform-layers':'fall through platform drop fast fall aerial landing',
     'escape-tip':'SDI smash directional influence', 'escape-close':'SDI smash directional influence',
     'launch-survival':'directional influence DI knockout', 'launch-breakaway':'hitstun cancel tumble combo escape',
     'launch-escape':'jab lock tech', 'launch-bait':'getup attack tech chase',
@@ -3960,6 +3985,7 @@
   $('platform-top').onclick = () => drill('platform', false, 'top');
   $('platform-hold').onclick = () => drill('platform', false, 'hold');
   $('platform-ferry').onclick = () => drill('platform', false, 'ferry');
+  $('platform-layers').onclick = () => drill('platform', false, 'layers');
   $('platform-shield-drop').onclick = () => drill('platform', false, 'shield-drop');
   $('platform-slow').onclick = () => {
     const practice = world.platformPractice;
@@ -5423,6 +5449,12 @@
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'brisket', p2:'pip', stage:'canal', fetch:false });
       drill('platform', false, 'ferry');
+    }
+    else if (hash === '#training/pick-your-landing') {
+      menuScreen('match');
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'bandstand', fetch:false });
+      drill('platform', false, 'layers');
     }
     else if (hash === '#training/shield-drop') {
       menuScreen('match');
