@@ -604,27 +604,28 @@ async function testAngledTilts(page, mobile) {
     const box = await page.locator('[data-touch="'+key+'"]').boundingBox();
     return {x:box.x+box.width/2,y:box.y+box.height/2,id};
   }
-  for (const [low,angle] of [[false,false],[false,true],[true,true]]) {
+  for (const [low,angle,quick] of [[false,false,false],[false,true,false],[true,true,false],[true,true,true]]) {
     await press('footwork-'+(low?'angleLow':'angleHigh'));
-    if (low) await press('footwork-side');
+    if (low && !quick) await press('footwork-side');
     const side = low?'left':'right', vertical = low?'down':'up';
     if (mobile) {
       const aim = await point(angle ? vertical+'-'+side : side,1);
       await touch('touchStart',[await point('neutral',1)]);
       await touch('touchMove',[aim]);
       await touch('touchStart',[aim,await point('attack',2)]);
-      await page.clock.runFor(45);
+      if (!quick) await page.clock.runFor(45);
       await touch('touchEnd',[]);
     } else {
       await page.keyboard.down('ShiftLeft');
       await page.keyboard.down(low?'a':'d');
       if (angle) await page.keyboard.down(low?'s':'w');
       await page.keyboard.down('j');
-      await page.clock.runFor(45);
+      if (!quick) await page.clock.runFor(45);
       for (const key of ['j','w','s','a','d','ShiftLeft']) await page.keyboard.up(key);
     }
     await page.clock.runFor(1200);
-    assert.equal(await status.getAttribute('data-result'), angle?'angledHit':'missedAngle', await status.innerText());
+    assert.equal(await status.getAttribute('data-result'), angle?'angledHit':'missedAngle',
+      [low?'low':'high',quick?'released immediately':'held',await status.innerText()].join(' · '));
   }
   const distinct = await page.evaluate(() => {
     const canvas = document.createElement('canvas'); canvas.width=260; canvas.height=190;
