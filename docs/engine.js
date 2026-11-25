@@ -3208,7 +3208,7 @@
       Object.assign(this,structuredClone(moment.state));
       if (moment.seed !== undefined) this.random.state = moment.seed;
     }
-    resetComboPractice(source = 'record', reply = 'stand', slow = true, slot = this.comboPractice?.slot ?? 0) {
+    resetComboPractice(source = 'record', reply = 'stand', slow = true, slot = this.comboPractice?.slot ?? 0, advance = false) {
       const previous = this.comboPractice;
       this.comboTakes ??= [null,null];
       const tape = this.comboTakes[slot];
@@ -3231,10 +3231,12 @@
       this.comboPractice = { source, reply, slow, markTime, slot, defending, originalDogs, phase: source === 'record' || source === 'throwChase' || flurry || defending ? 'ready' : 'active',
         tape: source === 'replay' ? tape : [], saved: tape, baseline: this.trainingDamage, prior,
         tick: 0, clock: 0, contacts: [], hits: 0, damage: 0, firstFree: null, shifts: 0, dodges: 0 };
+      if(source==='confirm')window.ComboLab.startConfirm(this,advance?previous?.series:null);
     }
     comboPlayerInput(input) {
       const d = this.comboPractice;
       if (d.phase === 'done') return null;
+      if(d.source==='confirm')return window.ComboLab.confirmInput(this,input);
       if (d.phase === 'ready') {
         if(d.source==='throwChase'){
           if(!input.attack && !input.tapped?.attack)return null;
@@ -3268,6 +3270,7 @@
     }
     comboRivalInput(dt, frozen) {
       const d = this.comboPractice, rival = this.dogs[1];
+      if(d.source==='confirm')return d.guard && (this.dogs[0].attack || d.opening)?{...idleInput,shield:true}:idleInput;
       if (d.reply === 'punish') {
         if (rival.grip?.owner === rival.index && rival.grip.phase === 'hold')
           return {...idleInput, x:rival.face, grabX:rival.face};
@@ -3290,6 +3293,7 @@
       if (!d || d.phase !== 'active' || target.index !== 1) return;
       const gap = !d.contacts.length ? null : d.firstFree === null ? 0 : d.clock - d.firstFree + 1;
       d.contacts.push({ kind, moveId, damage, gap });
+      if(d.source==='confirm')window.ComboLab.confirmContact(this,kind,moveId);
       if(d.source==='throwChase'){
         if(kind==='throw')d.thrown=true;
         else if(d.thrown && kind==='hit' && target.ground<0 && !d.outcome){
@@ -5583,9 +5587,9 @@
       }
       let combo = this.comboPractice;
       if (combo) {
-        if(combo.source==='throwChase'){
+        if(combo.source==='throwChase' || combo.source==='confirm'){
           if(combo.phase==='done' && (input1.tapped?.attack || (input1.attack && !combo.chaseHeld))){
-            this.resetComboPractice(combo.source,combo.reply,combo.slow,combo.slot);
+            this.resetComboPractice(combo.source,combo.reply,combo.slow,combo.slot,true);
             combo=this.comboPractice;
           }
           combo.chaseHeld=!!input1.attack;
@@ -9737,7 +9741,8 @@
     knockouts(out) {
       if (this.wallPractice?.runner && out.includes(this.dogs[0])) this.finishWallReturn(this.dogs[0], 'out');
       if (this.edgePractice?.timeCatch) this.finishEdgePractice('missed');
-      if (this.comboPractice) this.comboPractice.phase = 'done';
+      if (this.comboPractice?.source==='confirm')window.ComboLab.finishConfirm(this.comboPractice,'A dog left the stage before the follow-up.');
+      else if (this.comboPractice) this.comboPractice.phase = 'done';
       if (this.survivalPractice && out.includes(this.dogs[0])) {
         this.loseStock(this.dogs[0]);
         this.finishSurvivalPractice('ko');
