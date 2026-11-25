@@ -256,6 +256,7 @@
     shake: true,
     cornerTips: true,
     tiltStick: false,
+    tiltStick2: false,
     quickAttack1: true,
     quickAttack2: true,
     flickJump1: false,
@@ -278,6 +279,7 @@
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
     for (const key of ['fetch', 'sound', 'shake', 'tiltStick','flickJump1','flickJump2','quickAttack1','quickAttack2','bestOfThree','cornerTips']) if (typeof s[key] === 'boolean') settings[key] = s[key];
     if (Number.isFinite(s.volume)) settings.volume = Math.max(0, Math.min(100, s.volume));
+    settings.tiltStick2=typeof s.tiltStick2==='boolean'?s.tiltStick2:settings.tiltStick;
     if (Number.isFinite(s.musicVolume)) settings.musicVolume = Math.max(0, Math.min(100, s.musicVolume));
   } catch {
     /* Settings are optional in private browsing. */
@@ -886,6 +888,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='profiles')return $('profile-back').click();
     if(dialogType==='rulebook')return backFromRulebook();
     if(dialogType==='pack-relay')return backFromRelay();
     if(dialogType==='finish-picker')return $('finish-picker-back').click();
@@ -1008,7 +1011,7 @@
       row('Walk',i=>keyboard(i,'walk')+' + '+keyboard(i,'left')+' / '+keyboard(i,'right'),'Tilt left stick gently'),
       row('Jump',i=>keyboard(i,'jump')+(settings['flickJump'+(i+1)]?' / '+keyboard(i,'up'):''),i=>padFor(i,'jump')+' / flick Up if enabled'),
       simple('Short hop','hop'),simple('Attack','attack'),row('Aim strike ← / → / ↑ / ↓',strikeKeys,'Right stick'),
-      row('Smash / charge',i=>keyboard(i,'smash'),i=>padFor(i,'smash')+(settings.tiltStick?'':' / right stick')),
+      row('Smash / charge',i=>keyboard(i,'smash'),i=>padFor(i,'smash')+(settings[i?'tiltStick2':'tiltStick']?'':' / right stick')),
       simple('Special','special'),row('Shield / air dodge / tech',i=>keyboard(i,'shield'),i=>padFor(i,'shield')+' / '+padFor(i,'shieldAlt')),
       row('Tilt shield',i=>keyboard(i,'shield')+' + '+keyboard(i,'walk')+' + direction',i=>'Gentle stick / '+padFor(i,'shield')+' + '+padFor(i,'shieldAlt')+' + stick'),
       simple('Grab / throw','grab'),[networkGame ? 'Match menu' : 'Pause','Esc','Esc','Start'],
@@ -1727,7 +1730,11 @@
         (world.trainingPartner || combo.target === 0 ? 'P' + ((combo.target ?? 1)+1) + ' took ' : '') +
         combo.hits + (combo.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(combo.damage) + '% damage';
     }
-    scores.forEach((f,i)=>updateFighterCard(f,i,confirmed.coatFor(i),returns[i],recovery[i],labelFor(i),confirmed.matchCard?.points?.[i]??null,confirmed));
+    scores.forEach((f,i)=>{
+      const label=labelFor(i);
+      const tag=!online.match && !world.lesson && (world.mode==='local' || world.mode==='solo') && label==='P'+(i+1) && profileTags[i];
+      updateFighterCard(f,i,confirmed.coatFor(i),returns[i],recovery[i],tag?label+' · '+tag:label,confirmed.matchCard?.points?.[i]??null,confirmed);
+    });
   }
   let matchConfig, soloSeed, localSet = null, practiceFight = null, corner=null;
   let finishTape=null, clipScreen=null, victoryShot=null, finishTrial=null;
@@ -3060,9 +3067,13 @@
     if (action === 'route') showRoute();
     if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.atCheckpoint);
     if (action === 'dispatch-rematch') beginRun(world.roomIndex, 0);
-    if (['option-sound', 'option-shake', 'option-tiltStick','option-flickJump1','option-flickJump2','option-quickAttack1','option-quickAttack2'].includes(action)) {
+    if (['option-sound', 'option-shake', 'option-tiltStick','option-tiltStick2','option-flickJump1','option-flickJump2','option-quickAttack1','option-quickAttack2'].includes(action)) {
       const key = action.slice('option-'.length);
       settings[key] = !settings[key];
+      if(key!=='sound' && key!=='shake'){
+        profileTags[key.endsWith('2')?1:0]='';
+        applyLayouts(true);
+      }
       if (key === 'flickJump1' || key === 'flickJump2') flickJumpStates[key === 'flickJump1' ? 0 : 1] = {};
       save();
       updateAudio();
@@ -5360,6 +5371,7 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
+    PlayerProfiles:'player-profiles.js?v=1',
     VersusRulebook:'versus-rules.js?v=room-rules-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=rulesets-1',
@@ -6026,9 +6038,8 @@
         settings.shake +
         '">Camera shake <b>' +
         (settings.shake ? 'On' : 'Off') +
-        '</b></button><button type="button" data-do="option-tiltStick" aria-pressed="' + settings.tiltStick +
-        '">Grounded aim stick <b>' + (settings.tiltStick ? 'Tilt' : 'Smash') +
-        '</b></button><p>Also applies to the aim keys and a swipe from Smash on touch.</p>' +
+        '</b></button>'+['tiltStick','tiltStick2'].map((key,i)=>'<button type="button" data-do="option-'+key+'" aria-pressed="'+settings[key]+'">P'+(i+1)+
+          ' grounded aim stick <b>'+(settings[key]?'Tilt':'Smash')+'</b></button>').join('')+'<p>Also applies to the aim keys and a swipe from Smash on touch.</p>' +
         [1,2].map(slot => {
           const quick = settings['quickAttack'+slot];
           return '<button type="button" data-do="option-quickAttack'+slot+'" aria-pressed="'+quick+'">P'+slot+
@@ -6645,8 +6656,19 @@
   });
   const controls=window.FightControls;
   const layoutStore='dog-fight-3.controls';
+  const prefKeys=i=>['quickAttack'+(i+1),'flickJump'+(i+1),i?'tiltStick2':'tiltStick'];
+  const seatPrefs=i=>prefKeys(i).map(key=>settings[key]);
+  let profileTags=['',''];
   let layout=controls.load();
-  try { layout=controls.load(JSON.parse(localStorage.getItem(layoutStore))); } catch {}
+  function readLayouts(){
+    const raw=JSON.parse(localStorage.getItem(layoutStore));
+    layout=controls.load(raw);
+    profileTags=[0,1].map(i=>typeof raw?.tags?.[i]==='string'?raw.tags[i].slice(0,16):'');
+    for(const i of [0,1])prefKeys(i).forEach((key,n)=>{
+      if(typeof raw?.prefs?.[i]?.[n]==='boolean')settings[key]=raw.prefs[i][n];
+    });
+  }
+  try { readLayouts(); } catch {}
   let keys=layout.keyboard;
   let matchKeys=new Set(keys.flatMap(map=>Object.values(map)));
   const keyFor=(i,action)=>controls.keyName(keys[i][action]);
@@ -6660,8 +6682,30 @@
     clearInput();
     delete $('school-coach').dataset.key;
     delete $('corner-tip').dataset.cue;
-    if(persist)try {localStorage.setItem(layoutStore,JSON.stringify(layout));} catch {}
+    hudKey='';
+    if(persist)try {localStorage.setItem(layoutStore,JSON.stringify({...layout,tags:profileTags,prefs:[seatPrefs(0),seatPrefs(1)]}));} catch {return false;}
+    return true;
   }
+  function openProfiles(source,slot){
+    const back=()=>{
+      if(source==='bindings'){drawLayouts();$('layout-profiles').focus();return;}
+      dismiss();$('lobby-profiles').focus({preventScroll:true});
+    };
+    if(!window.PlayerProfiles)return waitForDispatch('Player profiles',()=>loadDispatch('PlayerProfiles'),()=>openProfiles(source,slot),back);
+    showDialog('profiles','Player profiles','');
+    window.PlayerProfiles.open($('dialog-body'),{
+      storage,slot,back,layout:()=>layout,prefs:seatPrefs,tags:()=>profileTags,
+      apply(i,next,prefs,tag,displaced){
+        layout=next;profileTags[i]=tag;
+        if(displaced)profileTags[1-i]='';
+        prefKeys(i).forEach((key,n)=>{settings[key]=prefs[n];});
+        flickJumpStates[i]={};
+        return applyLayouts(true);
+      },
+      edit(i){edit.slot=i;openLayouts(source==='bindings'?edit.source:'lobby');}
+    });
+  }
+  $('lobby-profiles').onclick=()=>openProfiles('lobby',settings.mode==='local'?editing:0);
   function openLayouts(source) {
     edit.source=source;edit.mode='idle';edit.down.clear();
     drawLayouts();
@@ -6672,9 +6716,13 @@
     }
     if(edit.source==='controls') showControls();
     else if(edit.source==='options') showOptions();
+    else if(edit.source==='lobby')openProfiles('lobby',edit.slot);
     else dismiss();
   }
   function assignControl() {
+    const other=controls.occupant(layout,edit.device,edit.slot,edit.value);
+    if(other)profileTags[other.slot]='';
+    profileTags[edit.slot]='';
     controls.assign(layout,edit.device,edit.slot,edit.action,edit.value);
     applyLayouts(true);edit.mode='idle';
     drawLayouts(controls.names[edit.action]+' saved.');
@@ -6721,8 +6769,11 @@
       '<p id="layout-status" role="status">'+(message || (mode==='capture'?'Press a key for '+controls.names[edit.action]+'. Escape cancels.':
         mode==='reset'?keyboard?'Restore both keyboard layouts to their defaults?':'Restore the P'+(slot+1)+' controller defaults?':'Online uses your P1 layout.'))+'</p>'+
       '<div id="layout-grid"'+(pending?' hidden':'')+'>'+rows+'</div>'+
+      (mode==='idle'?'<div class="layout-playstyle" role="group" aria-label="P'+(slot+1)+' fight controls">'+
+        prefKeys(slot).map((key,n)=>'<button type="button" class="utility" data-playstyle="'+key+'" aria-pressed="'+settings[key]+'">'+
+          ['Ground Attack','Flick jump','Aim stick'][n]+' · '+[settings[key]?'On press':'Hold to smash',settings[key]?'On':'Off',settings[key]?'Tilt':'Smash'][n]+'</button>').join('')+'</div>':'')+
       '<div class="dialog-actions">'+(pending?'<button type="button" class="primary" id="layout-confirm">'+(mode==='swap'?'Swap assignments':'Restore defaults')+'</button>':'')+
-      (mode==='idle'?'<button type="button" class="primary" id="layout-test">Test layout</button><button type="button" class="utility" id="layout-reset">'+(keyboard?'Restore keyboards':'Restore controller')+'</button>':'')+
+      (mode==='idle'?'<button type="button" class="primary" id="layout-test">Test layout</button><button type="button" class="utility" id="layout-profiles">Player profiles</button><button type="button" class="utility" id="layout-reset">'+(keyboard?'Restore keyboards':'Restore controller')+'</button>':'')+
       '<button type="button" class="utility" id="layout-back">'+(pending||mode==='capture'?'Cancel':testing?'Done testing':'Done')+'</button></div>');
     $('layout-slot').value=String(slot);$('layout-device').value=device;
     $('layout-slot').onchange=e=>{edit.slot=Number(e.target.value);edit.mode='idle';drawLayouts();$('layout-slot').focus();};
@@ -6734,6 +6785,14 @@
     $('layout-grid').onchange=e=>{if(e.target.dataset.pad)chooseBinding(e.target.dataset.pad,Number(e.target.value));};
     $('layout-back').onclick=leaveLayouts;
     if(mode==='idle'){
+      for(const b of $('dialog-body').querySelectorAll('[data-playstyle]'))b.onclick=()=>{
+        const key=b.dataset.playstyle;
+        settings[key]=!settings[key];profileTags[slot]='';
+        const stored=applyLayouts(true);
+        drawLayouts(stored?'P'+(slot+1)+' controls saved.':'Controls updated for this visit.');
+        $('dialog-body').querySelector('[data-playstyle="'+key+'"]').focus();
+      };
+      $('layout-profiles').onclick=()=>openProfiles('bindings',edit.slot);
       $('layout-test').onclick=()=>{edit.mode='test';edit.down.clear();edit.last=null;drawLayouts();showTestInputs(getPads());};
       $('layout-reset').onclick=()=>{edit.mode='reset';drawLayouts();};
     }
@@ -6741,6 +6800,7 @@
       if(mode==='swap')return assignControl();
       if(keyboard) layout.keyboard=controls.defaults('keyboard');
       else layout.pad[slot]=controls.defaults('pad')[slot];
+      if(keyboard)profileTags=['',''];else profileTags[slot]='';
       applyLayouts(true);edit.mode='idle';drawLayouts('Default assignments restored.');
     };
     const row=$('layout-grid').querySelector('[data-action="'+edit.action+'"] button, [data-action="'+edit.action+'"] select');
@@ -6768,7 +6828,7 @@
   });
   window.addEventListener('storage',e=>{
     if(e.key!==layoutStore && e.key!==null)return;
-    try{layout=controls.load(JSON.parse(localStorage.getItem(layoutStore)));}catch{return;}
+    try{readLayouts();}catch{return;}
     applyLayouts(false);
     if(dialogType==='bindings'){edit.mode='idle';drawLayouts('Layout updated from another tab.');}
   });
@@ -7076,7 +7136,7 @@
       quickAttack: settings[i === 0 ? 'quickAttack1' : 'quickAttack2'],
       smash: held.has(map.smash) || tapped('smash') || touchSmash || mapped('smash'),
       aimStick,
-      tiltMode: settings.tiltStick && aimStick,
+      tiltMode: settings[i?'tiltStick2':'tiltStick'] && aimStick,
       smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : x || axis(0) || savedSmash?.rawX || 0,
       smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : y || axis(1) || savedSmash?.y || 0,
       special: key('special') || mapped('special'),
@@ -7456,6 +7516,8 @@
       showHome(false);showSoundTest();
     } else if (hash === '#controls') {
       showHome(false);openLayouts('home');
+    } else if (hash === '#local/profiles') {
+      leaveOnline();settings.mode='local';editing=0;toLobby();openProfiles('lobby',0);
     } else if (hash === '#tutorial/first-match') {
       startFirstFight();
     } else if (hash === '#tutorial') {

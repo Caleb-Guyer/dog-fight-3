@@ -6,6 +6,8 @@ A cartoon platform fighter for one or two players. Play **The Last Dispatch** st
 
 **[Play Dog Fight 3](https://caleb-guyer.github.io/dog-fight-3/)**
 
+At fighter select, open **Player profiles** to bring your controls to either seat. Choose P1 or P2, customize the keys, controller buttons, ground Attack, flick jump and aim stick, then save under a name. When a friend takes the other seat, choose their name and **Use for P2**. If keys overlap, review the exact swaps or choose **Keep both keyboards** to bring over the controller and play settings alone. Profiles stay on this browser. [Open player profiles](https://caleb-guyer.github.io/dog-fight-3/#local/profiles)
+
 On your first visit, choose **Play tutorial** to enter Fight School as Pip. Ten playable lessons cover movement, platforms, jabs, tilts, aerials, blocking, throws, specials, recovery, and taking a stock with a charged smash. Each lesson waits for you to do it in the arena. Choose **Retry** to reset the situation or **Lessons** to jump to any lesson. The last knockout leads into a three-stock match against Rookie Brisket. Your cleared lessons are saved on this device. Reopen **Fight School** from the main menu at any time. [Enter Fight School](https://caleb-guyer.github.io/dog-fight-3/#tutorial)
 
 Choose **Fighter lessons** in Fight School to practice as any dog. Pip can bounce twice on one rival. Brisket can counter a charged smash, Noodle can reel someone into a jab, and Clover can chase her own disc. Each dog also starts offstage for a recovery lesson. Clear each lesson by performing the move, then take the same dog into an Arcade Cup. Fighter checkmarks are saved separately from Pip’s basic course. [Try fighter lessons](https://caleb-guyer.github.io/dog-fight-3/#fighters)
