@@ -644,6 +644,27 @@ async function testAngledTilts(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
 }
 
+async function testJumpPower(page, mobile) {
+  await page.goto(root+'?jump-power#training/jump-in-damage');
+  const status=page.locator('#spacing-status');
+  const {hold,waitFor}=await trainingControls(page,mobile,status);
+  const percent=page.locator('#hud .percentage').nth(1);
+  for(const [button,height,damage,frames] of [['hop','Short hop','5.1%',39],['jump','Full jump','6%',61]]) {
+    await hold([button]);
+    await waitFor('swing');
+    await hold(['attack']);
+    await waitFor('landed');
+    await hold([]);
+    assert.equal(await status.textContent(),height+' · 1 hit · '+damage+' · ready on frame '+frames);
+    assert.equal(await percent.textContent(),damage);
+    if(button==='hop')assert.equal(await percent.locator('small').textContent(),'.1');
+    else {
+      assert.equal(await percent.locator('small').count(),0);
+      assert.match(await page.locator('#recovery-tip').textContent(),/Last time you got Short hop.*5\.1%/);
+    }
+  }
+}
+
 async function testAttackPress(page, mobile) {
   const {hold,press}=await trainingControls(page,mobile);
   const activate=loc=>mobile?loc.tap():loc.click();
@@ -664,7 +685,7 @@ async function testAttackPress(page, mobile) {
     if(pad)await page.evaluate(()=>{delete navigator.getGamepads;});
     else await hold([]);
     const after=await page.locator('#hud .percentage').allTextContents();
-    assert.deepEqual(after,quick?['0%','5%']:['9%','0%']);
+    assert.deepEqual(after,quick?['0%','5%']:['7.7%','0%']);
     assert.equal(await page.locator('#hud .lives[aria-label="3 stocks"]').count(),2);
   }
   await page.goto(challenge); await opening(true);
@@ -1336,7 +1357,7 @@ async function testJumpIns(page,mobile) {
 async function trainingControls(page,mobile,status) {
   const press=id=>mobile?page.locator('#'+id).tap():page.locator('#'+id).click();
   const cdp=mobile && await page.context().newCDPSession(page);
-  const keys={down:'s',up:'w',jump:'Space',attack:'j',special:'k',grab:'u',smash:'i',left:'a',right:'d',shield:'l'};
+  const keys={down:'s',up:'w',jump:'Space',hop:'e',attack:'j',special:'k',grab:'u',smash:'i',left:'a',right:'d',shield:'l'};
   let held=[];
   async function hold(names) {
     if(mobile) {
@@ -2156,18 +2177,19 @@ async function testDevice(browser, mobile) {
   try {
     await page.clock.install({ time: new Date('2030-01-01T00:00:00Z') });
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+    await testJumpPower(page, mobile);
     await testAttackPress(page, mobile);
     await page.goto(root + '#training/combos');
     const text = id => page.locator('#' + id).innerText();
     const activate = id => mobile ? page.locator('#' + id).tap() : page.locator('#' + id).click();
     const ticks = ms => page.clock.runFor(ms);
     await ticks(4100);
-    assert.match(await text('combo-summary'), /4 hits · 19%/);
+    assert.match(await text('combo-summary'), /4 hits · 17\.7%/);
     await activate('combo-slow');
     await page.selectOption('#combo-reply','away');
     await ticks(2100);
     assert.match(await text('combo-summary'), /2 hits · 10%/);
-    assert.match(await text('combo-previous'), /Standing at 0% · 4 hits · 19%/);
+    assert.match(await text('combo-previous'), /Standing at 0% · 4 hits · 17\.7%/);
     assert.match(await text('combo-latest'), /2 shifts/);
     await page.selectOption('#combo-reply','guard');
     await activate('combo-late');

@@ -53,11 +53,11 @@ test('releasing, holding, buffering through landing recovery and using the dedic
   assert.equal(f.attack?.moveId,f.kit.smashes.up);assert(f.lastSmashPower>.5);
 });
 test('the live Rival opening gives Pip a clean intercept and rewards tap timing in both control styles', () => {
-  for(const [quick,held,pip,clover] of [[true,30,0,5],[false,30,9,0],[false,1,0,5]]) {
+  for(const [quick,held,pip,clover] of [[true,30,0,5],[false,30,7.7,0],[false,1,0,5]]) {
     const w=new Battle({...cfg,mode:'solo',p2:'clover',cpuLevel:'rival'},undefined,seededRandom(7));
     for(let i=0;i<49;i++)act(w);
     for(let i=0;i<21;i++)act(w,{x:1,attack:i<held,quickAttack:quick});
-    assert.deepEqual(w.dogs.map(f=>f.damage),[pip,clover]);
+    assert.deepEqual(w.dogs.map(f=>Math.round(f.damage*10)/10),[pip,clover]);
     assert.deepEqual(w.dogs.map(f=>f.stocks),[3,3]);
   }
 });

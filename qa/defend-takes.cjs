@@ -180,8 +180,10 @@ test('a landing cancel changes the answer to the same blocked aerial, and an emp
   const orbit=i=>({jump:i===0,shortHop:i===0,attack:i===16});
   const twoHits=pressureTrial('pip',orbit,0,'clover');
   assert.deepEqual(twoHits.w.comboPractice.contacts.map(c=>[c.kind,c.moveId]),[['block','cloverOrbit'],['block','cloverOrbit']]);
-  assert.equal(twoHits.counter,'pipScissors');
-  assert.equal(pressureTrial('pip',i=>({...orbit(i),shield:i>=30}),0,'clover').counter,undefined);
+  assert.equal(twoHits.counter,'pipCollarTag');
+  const lateGuard=pressureTrial('pip',i=>({...orbit(i),shield:i>=30}),0,'clover');
+  assert(lateGuard.events.some(([type,move])=>type==='landingCancel' && move==='cloverOrbit'));
+  assert(lateGuard.events.some(([type,move])=>type==='grabCatch' && move==='pipCollarTag'));
 });
 
 test('ordinary three-stock Rival Pip punishes an approaching Brisket from spawn',()=>{
