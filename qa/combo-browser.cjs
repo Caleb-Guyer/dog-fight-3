@@ -1344,6 +1344,24 @@ async function testDefendTakes(page,mobile) {
   assert(await page.locator('#combo-replay').isDisabled());
 }
 
+async function testShieldPunish(page,mobile) {
+  await page.goto(root+'?pressure-test#training/shield-punish');
+  const latest=page.locator('#combo-latest');
+  const {hold,press}=await trainingControls(page,mobile,latest);
+  assert.equal(await page.locator('#combo-reply').inputValue(),'punish');
+  await press('combo-slow');
+  await hold(['smash']);await page.clock.runFor(48);await hold([]);
+  await page.clock.runFor(3700);
+  const result=await latest.innerText();
+  assert.match(result,/Haymaker · blocked .*Pip punished with Collar Tag/);
+  await page.selectOption('#combo-reply','stand');
+  await page.clock.runFor(3700);
+  assert.match(await latest.innerText(),/Haymaker · [\d.]+%/);
+  await page.selectOption('#combo-reply','punish');
+  await page.clock.runFor(3700);
+  assert.equal(await latest.innerText(),result);
+}
+
 async function testDiscReflect(page,mobile) {
   await page.goto(root+'?disc-matchup#training/disc-reflect');
   const status=page.locator('#footwork-status');
@@ -1747,6 +1765,7 @@ async function testDevice(browser, mobile) {
     assert.equal(await page.locator('#combo-slot option:checked').textContent(),'A · Your recording');
     console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed examples, recording, replay, reply changes and free-training reset.');
     await testDefendTakes(page, mobile);
+    await testShieldPunish(page, mobile);
     await testEdges(page, mobile);
     await testTumble(page, mobile);
     await testBraking(page, mobile);

@@ -130,3 +130,96 @@ test('two independently recorded takes survive other drills and use real defende
     assert.deepEqual(w.comboTakes,recordings);
   }
 });
+
+function pressureTrial(p2, controls, damage=0, p1='brisket') {
+  const c=config(p1,p2), events=[], tape=[];
+  const w=new Battle(c,(kind,e)=>events.push([kind,e.moveId]),seededRandom(seed));
+  w.resetComboPractice('record','punish',false);
+  w.dogs[0].damage=damage;
+  const decide=w.comboRivalInput.bind(w);
+  w.comboRivalInput=(dt,frozen)=>{
+    const answer=decide(dt,frozen);
+    tape.push([player,answer]);
+    return answer;
+  };
+  let player;
+  for(let i=0;i<120;i++){
+    player=input(controls(i));
+    w.step(dt,player);
+  }
+  return {w,tape,events,counter:w.comboPractice.counter?.moveId};
+}
+const haymaker=i=>({smash:i===0});
+const spaced=i=>({x:i<9?-1:0,smash:i===11,smashX:1});
+
+test('a Rival can grab an unsafe smash, launch at high damage or decline an out-of-range punish',()=>{
+  for(const [kind,kit] of Object.entries(kits)){
+    const close=pressureTrial(kind,haymaker);
+    assert.equal(close.counter,kit.grab);
+    assert(close.events.some(([type,move])=>type==='hit' && move===kit.throws.forward));
+    assert.equal(pressureTrial(kind,haymaker,80).counter,kit.smashes.up);
+    const tip=pressureTrial(kind,spaced);
+    assert(tip.events.some(([type,move])=>type==='block' && move==='brisketHaymaker'));
+    assert.equal(tip.counter,kind==='noodle'?kit.grab:undefined);
+    if(kind!=='noodle')assert(tip.tape.every(([,reply])=>!reply.tapped?.grab && !reply.tapped?.smash));
+  }
+});
+
+test('a landing cancel changes the answer to the same blocked aerial, and an empty hop beats guard',()=>{
+  const barrel=i=>({jump:i===0,shortHop:i===0,attack:i===18});
+  const unsafe=pressureTrial('pip',barrel);
+  assert.equal(unsafe.counter,'pipCollarTag');
+  const safe=pressureTrial('pip',i=>({...barrel(i),shield:i>=21}));
+  assert(safe.events.some(([type,move])=>type==='block' && move==='brisketCurl'));
+  assert(safe.events.some(([type])=>type==='landingCancel'));
+  assert.equal(safe.counter,undefined);
+  const empty=pressureTrial('pip',i=>({jump:i===0,shortHop:i===0,grab:i===25,x:i===53?1:0,grabX:i===53?1:0}));
+  assert.deepEqual(empty.w.comboPractice.contacts.map(c=>c.kind),['grab','throw']);
+  assert.equal(empty.w.dogs[0].damage,0);
+  assert.equal(empty.w.dogs[1].damage,12);
+  const orbit=i=>({jump:i===0,shortHop:i===0,attack:i===16});
+  const twoHits=pressureTrial('pip',orbit,0,'clover');
+  assert.deepEqual(twoHits.w.comboPractice.contacts.map(c=>[c.kind,c.moveId]),[['block','cloverOrbit'],['block','cloverOrbit']]);
+  assert.equal(twoHits.counter,'pipScissors');
+  assert.equal(pressureTrial('pip',i=>({...orbit(i),shield:i>=30}),0,'clover').counter,undefined);
+});
+
+test('ordinary three-stock Rival Pip punishes an approaching Brisket from spawn',()=>{
+  const events=[];
+  const w=new Battle({...config('brisket','pip','picnic'),mode:'solo',cpuLevel:'rival',fetch:false},
+    (kind,e)=>{if(kind==='grabCatch'||kind==='block')events.push([kind,e.moveId,e.f.index]);},seededRandom(75));
+  for(let i=0;i<110;i++){
+    const [a,b]=w.dogs,dx=b.x-a.x;
+    w.step(dt,input({x:Math.abs(dx)>60?Math.sign(dx):0,smash:Math.abs(dx)<76 && i%22===0,smashX:Math.sign(dx)}));
+  }
+  assert.deepEqual(w.dogs.map(f=>f.stocks),[3,3]);
+  assert.deepEqual(events.slice(0,2),[['block','brisketHaymaker',1],['grabCatch','pipCollarTag',1]]);
+});
+
+test('shield counters replay as ordinary local inputs on two delayed rollback peers',()=>{
+  const c=config('brisket','pip');
+  for(const damage of [0,80]){
+    const trial=pressureTrial('pip',haymaker,damage);
+    const ref=new Battle({...c,mode:'local'},()=>{},seededRandom(seed)), peers=[peer(0,c),peer(1,c)];
+    for(const w of [ref,...peers.flatMap(p=>[p.world,p.net.confirmedWorld])]){
+      w.resetTraining();w.dogs[0].damage=damage;
+    }
+    const history=[combat(ref)];
+    for(const [i,pair] of trial.tape.entries()){
+      ref.step(dt,...pair);
+      history.push(combat(ref));
+      for(const [side,p] of peers.entries()){
+        if(i>=6)assert(p.net.receive(i-6,peers[1-side].packets[i-6]));
+        p.net.tick(()=>pair[side],p.world);
+        assert.deepEqual(combat(p.net.confirmedWorld),history[p.net.confirmed]);
+      }
+    }
+    assert.deepEqual(combat(ref),combat(trial.w));
+    for(const [side,p] of peers.entries()){
+      const other=peers[1-side].packets;
+      for(let i=p.net.received;i<other.length;i++)assert(p.net.receive(i,other[i]));
+      p.net.confirm(p.world);
+      assert.deepEqual(combat(p.world),combat(ref));
+    }
+  }
+});
