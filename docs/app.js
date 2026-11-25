@@ -979,7 +979,7 @@
         .map(([key, input, label, hint]) => guideMoveRow({ label, hint }, input, key, 'defense'))
         .join('');
       contents =
-        '<p class="recovery-note">Shield is L for P1, Slash for P2, either bumper on a gamepad, or Shield on touch.</p><h3 class="guide-section">On the ground</h3><p>Keep Shield held and press Jump, Grab, Up + Smash, or Up + Special. You can tap during impact. A grab immediately after a block needs four extra startup frames.</p><p>In <strong>Training → Shield practice</strong>, use Clover’s Disc Hook against Pip’s spaced kick and Brisket’s Belly Drop. Choose Strike or Grab to practice a parry or dodge with your own dog.</p><ul class="move-rows guide-shield">' +
+        '<p class="recovery-note">Shield is L for P1, Slash for P2, either bumper on a gamepad, or Shield on touch.</p><h3 class="guide-section">On the ground</h3><p>Keep Shield held and press Jump, Grab, Up + Smash, or Up + Special. Tapping Attack while shielding also grabs straight ahead. If a falling opponent crosses behind you, aim back and tap Jump + Attack together for a back air. You can tap during impact. A grab immediately after a block needs four extra startup frames.</p><p>In <strong>Training → Shield practice</strong>, use Clover’s Disc Hook against Pip’s spaced kick and Brisket’s Belly Drop. Choose Strike or Grab to practice a parry or dodge with your own dog.</p><ul class="move-rows guide-shield">' +
         groundRows +
         '</ul><h3 class="guide-section">On a platform</h3><ul class="move-rows">' +
         guideMoveRow({ label: 'Shield drop', hint: 'Raise Shield, then tap either lower diagonal. Tap Attack with it for ' +
@@ -2740,6 +2740,35 @@
   function shieldFeedback(name, e) {
     const result = $('shield-status');
     const tip = $('recovery-tip');
+    if (e.pattern === 'crossup') {
+      const kit = world.dogs[0].kit;
+      const phase = e.outcome || e.phase;
+      const back = world.shieldPractice.dir > 0 ? 'Left' : 'Right';
+      const timing = ' · ' + e.landingFrames + 'f to spare';
+      const feedback = {
+        counter:['Blocked · watch Brisket’s paws', 'Keep your facing and watch which side he lands on.'],
+        front:['In front · tap Attack', 'Keep holding Shield and tap Attack to grab him.'],
+        behind:['Behind · jump and attack ' + back.toLowerCase(), 'Aim ' + back + ' and press Jump + Attack for ' + moves[kit.air.back].label + '. On touch, hold the direction and slide from Jump to Attack.'],
+        punish:[grabs[kit.grab].label + timing, 'Tap Attack again to pummel, or choose a direction to throw.'],
+        rearPunish:[moves[kit.air.back].label + timing, 'Your back air hit before Brisket could raise his shield.'],
+        lateCatch:['Grab after recovery', 'Tap Attack as his front landing touches down.'],
+        lateAir:['Back air after recovery', 'Jump and attack toward his rear landing a little sooner.'],
+        whiffGrab:['Grab missed', 'A shield grab reaches ahead. Jump and strike back when Brisket crosses you.'],
+        counterBlocked:['Brisket blocked', 'He had time to shield. Start your counter closer to touchdown.'],
+        counterHit:['Counter connected', 'Try a shield grab in front or a back air behind.'],
+        waited:['Brisket recovered', 'Retry and watch his landing before choosing your counter.'],
+        parry:['Parried Belly Drop', 'Hold Shield through impact to practice the landing read.'],
+        hit:['Belly Drop connected', 'Keep Shield raised until the hit lands.'],
+        poked:['Shield poked', 'Hold a centered shield through the drop.'],
+        break:['Shield broken', 'Retry with a fresh shield.'],
+        interrupted:['Dive interrupted', 'Let the dive reach your shield to practice the counter.'],
+      }[phase];
+      if (feedback) {
+        result.dataset.result = phase;
+        [result.textContent,tip.textContent] = feedback;
+      }
+      return;
+    }
     if (e.pattern === 'breakEscape' || e.pattern === 'breakPunish') {
       const defend = e.pattern === 'breakEscape';
       const finish = e.moveId && (smashes[e.moveId] || moves[e.moveId] || specials[e.moveId] || grabs[e.moveId])?.label;
@@ -3404,7 +3433,7 @@
     else if (escape) world.resetEscapePractice(pattern, world.escapePractice?.slow ?? true, world.escapePractice?.baseline);
     else if (platform) world.resetPlatformPractice(pattern, world.platformPractice?.slow ?? true);
     else if (wall) world.resetWallPractice(pattern, direction === 'impact' ? '' : direction, direction === 'impact');
-    else if (shield) world.resetShieldPractice(pattern, direction ?? world.shieldPractice?.worn ?? true);
+    else if (shield) world.resetShieldPractice(pattern, direction ?? world.shieldPractice?.worn ?? true, study?.choice, study?.dir);
     else if (air) world.resetAirPractice(pattern, practiceSide,
       pattern === 'lastDodge' && (direction ?? world.airPractice?.wide ?? false),
       study ?? (world.airPractice?.pattern === 'interrupted' ? world.dogs[0].kind : undefined));
@@ -3749,6 +3778,11 @@
       $('shield-strength').hidden = !guard.coverage;
       $('shield-strength').setAttribute('aria-pressed', String(!!guard.coverage && !guard.worn));
       $('jump-in-options').hidden = !guard.jumpIn;
+      $('shield-landing-options').hidden = pattern !== 'crossup';
+      if (pattern === 'crossup') {
+        $('shield-landing-choice').value = guard.landingChoice;
+        $('shield-landing-speed').setAttribute('aria-pressed',String(guard.slow));
+      }
       for (const button of $('shield-patterns').querySelectorAll(':scope > button:not(#shield-strength)'))
         button.setAttribute('aria-pressed', String(button.id === 'shield-' + (guard.jumpIn ? 'jumpIn' : pattern)));
       if (guard.jumpIn) {
@@ -3758,6 +3792,7 @@
       }
       message = {
         yourHop: 'Hold Hop or Jump beside the rival. Tap Grab as your paws touch down, then choose a throw.',
+        crossup: 'Block Belly Drop. If Brisket lands in front, tap Attack to grab. If he crosses behind, jump and attack back.',
         emptyHop: 'Hold Shield to start. Let the empty hop grab you once. Retry and tap Down as the rival reaches for you.',
         fallingAir: 'Hold Shield to start. Watch the falling swing, then hold your ground or release Shield to parry.',
         mixHop: 'Hold Shield to start. Watch for a swing on the way down or a grab after touchdown.',
@@ -3838,7 +3873,7 @@
     ['Attack','Knockdowns','launch',['lock','bait','floor-spike','edge-spike']],
     ['Attack','Move freshness','freshness',['training','ko','rage','drive']],
     ['Defense','Combo escape','escape',['tip','close','counter','break','gripEscape','gripThrow','carry']],
-    ['Defense','Shield pressure','shield',['kick','drop','strike','grab','counterGrab','dodgeTiming','breakEscape','breakPunish','jumpIn','low','high','poke']],
+    ['Defense','Shield pressure','shield',['kick','drop','crossup','strike','grab','counterGrab','dodgeTiming','breakEscape','breakPunish','jumpIn','low','high','poke']],
     ['Defense','Launch & survival','launch',['throw','juggle','breakaway','survival','last-stock','escape','stock-return','stock-catch']],
     ['Defense','Air dodge','air',['neutral','edge','lastDodge','interrupted']],
     ['Recovery','Edgeguarding','edge',['lip','shortCatch','longCatch','tip','deep','corner','inside']],
@@ -3863,6 +3898,7 @@
     'launch-stock-return':'respawn invincibility angel platform', 'launch-stock-catch':'respawn invincibility angel platform',
     'shield-kick':'Clover Disc Hook out of shield counter', 'shield-drop':'Clover Disc Hook out of shield counter',
     'shield-grab':'spot dodge roll', 'shield-strike':'perfect shield release',
+    'shield-crossup':'shield grab back air out of shield cross up landing punish',
     'shield-jumpIn':'empty hop falling aerial grab', 'freshness-training':'stale moves staling',
     'freshness-drive':'launch height angle ground slide ledge side smash back air',
     'air-lastDodge':'recovery low wide directional air dodge edgeguard',
@@ -4191,6 +4227,22 @@
   for (const button of $('shield-patterns').querySelectorAll(':scope > button:not(#shield-strength)'))
     button.onclick = () => drill('shield', false, button.id === 'shield-jumpIn' ? $('jump-in-choice').value : button.id.slice('shield-'.length));
   $('jump-in-choice').onchange = () => drill('shield', false, $('jump-in-choice').value);
+  $('shield-landing-choice').onchange = e => drill('shield',false,'crossup',undefined,{choice:e.target.value});
+  $('shield-landing-side').onclick = () => drill('shield',false,'crossup',undefined,{dir:-world.shieldPractice.dir});
+  $('shield-landing-speed').onclick = () => {
+    const practice = world.shieldPractice;
+    practice.slow = !practice.slow;
+    $('shield-landing-speed').setAttribute('aria-pressed',String(practice.slow));
+    $('game').focus({preventScroll:true});
+  };
+  $('shield-landing-fight').onclick = () => {
+    const {cross,dir} = world.shieldPractice;
+    const defender = world.dogs[0].kind;
+    leaveOnline();
+    afterStory = null;
+    startMatch({...settings,mode:'solo',p1:'brisket',p2:defender,stage:world.stage,cpuLevel:'rival',
+      fetch:false,minutes:7,shieldLanding:{dir,cross}},undefined,42);
+  };
   $('jump-in-speed').onclick = () => {
     const practice = world.shieldPractice;
     practice.slow = !practice.slow;
@@ -4951,9 +5003,11 @@
       });
     if (el.dataset.touch === 'jump')
       el.addEventListener('pointermove', e => {
-        if (touchPointers.get(e.pointerId) !== el || !touches.has('up')) return;
+        if (touchPointers.get(e.pointerId) !== el) return;
         const next = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-touch]');
-        if (next?.dataset.touch !== 'smash' && next?.dataset.touch !== 'special') return;
+        const action = next?.dataset.touch;
+        const sideAttack = action === 'attack' && (touches.has('left') || touches.has('right'));
+        if (!sideAttack && !(touches.has('up') && (action === 'smash' || action === 'special'))) return;
         const freshJump = touchTaps.has('jump');
         setTouch(e.pointerId, next);
         if (freshJump) touchTaps.add('jump');
@@ -5404,6 +5458,11 @@
       afterStory = null;
       startMatch({...settings, mode:'training', p1:'pip', p2:'brisket', stage:'nightmail', fetch:false});
       drill('partner');
+    } else if (/^#training\/read-the-landing(?:\/(pip|brisket|noodle|clover))?$/.test(hash)) {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings,mode:'training',p1:hash.split('/')[2] || 'pip',p2:'brisket',stage:'nightmail',fetch:false});
+      drill('shield',false,'crossup',undefined,{choice:'front',dir:1});
     } else if (hash === '#training/shield-punish') {
       leaveOnline();
       afterStory = null;

@@ -245,6 +245,8 @@ In **Training → Wavedash**, **Dodge the grab** starts you inside the rival's g
 
 Hold **Shield** on the ground to block. On a touchscreen, keep one thumb on Shield and use the other on the direction pad.
 
+Tap **Attack** while shielding to grab in the direction your dog faces. In **Read the landing**, block Brisket’s Belly Drop and watch his paws. Grab if he lands in front. If he crosses behind, press **Jump + Attack** and aim back. The result shows how many frames of landing recovery Brisket had left. Choose **Mix both** to practice the read, or **Dive at Rival** to play as Brisket from that same block in a three-stock match. [Play Read the landing](https://caleb-guyer.github.io/dog-fight-3/#training/read-the-landing)
+
 - **Shield + Left or Right** rolls in that direction, even through a rival. A forward roll turns you around to face the dog you passed. A backward roll keeps your facing, travels a little less, and takes two extra frames to recover.
 - **Shield + Down** spot-dodges in place. Time the duck to slip a grab and stay close enough to answer. Both dodges have a brief invincible stretch between their vulnerable start and recovery. Keep holding Shield after the dodge to block again.
 - **Release Shield just before a strike** to parry. The first five frames of the release can catch the hit. A melee parry interrupts the attacker and gives you an opening to counter. A projectile parry absorbs the impact at your position. Grabs can catch a blocking dog or a dog trying to parry.
