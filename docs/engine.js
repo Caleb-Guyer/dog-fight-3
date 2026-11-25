@@ -2898,6 +2898,7 @@
         this.bot.passRead = null;
         this.bot.rollChase = null;
         this.bot.lastRoll = 0;
+        this.bot.punishedTech = null;
         this.bot.climbRead = null;
         this.bot.guardRead = null;
         this.bot.airRead = null;
@@ -3570,7 +3571,8 @@
       else if (f.attack) drill.swing = true;
       else if (drill.swing) this.finishPlatformPractice('stayed');
     }
-    resetChasePractice(role = 'attack', dir = 1, slow = true) {
+    resetChasePractice(role = 'attack', dir = 1, slow = true, response) {
+      const last=role==='readTech' && this.chasePractice?.role===role ? this.chasePractice : null;
       this.resetTraining();
       const bait = role === 'bait' || role === 'baitBack';
       const slot = role === 'defend' ? 0 : 1;
@@ -3585,12 +3587,21 @@
       if (role === 'baitBack') target.face = dir;
       this.startTumble(target, false);
       this.chasePractice = { role, slot, dir, ground, mark, slow, bait, phase: 'ready', time: 0, locks: 0, outcome: '' };
+      if(role==='readTech'){
+        Object.assign(this.chasePractice,{response:response ?? last?.response ?? 'mix',caught:last?.caught || 0,tries:last?.tries || 0});
+        this.bot.punishedTech=last?.punished || null;
+        this.chasePractice.punished=this.bot.punishedTech;
+      }
     }
     finishChase(outcome) {
       const drill = this.chasePractice;
       if (drill.phase === 'done') return;
       drill.phase = 'done';
       drill.outcome = outcome;
+      if(drill.role==='readTech' && drill.response==='mix'){
+        drill.tries++;
+        if(outcome==='caught' || outcome==='grabPunish')drill.caught++;
+      }
       this.emit('chaseResult', { f: this.dogs[drill.slot], outcome });
     }
     chaseHit(target, moveId, previousLocks, locks) {
@@ -3598,6 +3609,10 @@
       if (drill.phase === 'done') return;
       if (target.index !== drill.slot) {
         if (moves[moveId]?.floorAttack) this.finishChase('sweep');
+        return;
+      }
+      if(drill.role==='readTech'){
+        this.finishChase(drill.phase==='getup'?'escaped':'early');
         return;
       }
       if (drill.bait) {
@@ -3617,6 +3632,13 @@
       const d = this.chasePractice, target = this.dogs[d.slot], striker = this.dogs[1 - d.slot];
       if (d.phase === 'done') return idleInput;
       const floor = target.floorAction;
+      if(d.role==='readTech'){
+        if(!target.tumble)return idleInput;
+        if(target.techBuffer>0)return {...idleInput,x:target.tumble.rollDir};
+        if(target.techLock>1e-8 || this.floorAhead(target,7/60)<0)return idleInput;
+        const x=this.chooseLandingTech(target,striker,this.terrain[d.ground],d.response);
+        return {...idleInput,x,shield:true,tapped:{shield:true}};
+      }
       if (d.bait) {
         if (floor?.type === 'downed') return {...idleInput, attack: floor.time >= 8 / 60};
         return idleInput;
@@ -3638,12 +3660,16 @@
       const d = this.chasePractice, target = this.dogs[d.slot];
       if (d.phase === 'done') return;
       d.time += dt;
+      if(d.role==='readTech' && d.phase==='getup' && !d.opened && target.floorAction && !protectionTime(target)){
+        d.opened=true;
+        this.emit('chaseCue',{f:target,phase:'opening'});
+      }
       if (d.bait && d.phase === 'getup' && !target.floorAction && target.stun <= 1e-8) {
         const chaser = this.dogs[1 - d.slot];
         const lateGrab = chaser.attack?.grabAttempt || chaser.command?.type === 'grab';
         this.finishChase(d.guarded ? lateGrab ? 'lateGrab' : 'heldGuard' : 'escaped');
       }
-      else if (d.phase === 'getup' && !target.floorAction && (d.role === 'attack' || d.punish))
+      else if (d.phase === 'getup' && !target.floorAction && (d.role === 'attack' || d.role==='readTech' || d.punish))
         this.finishChase('escaped');
       else if (d.time > 4 || target.ledge || target.respawning || this.dogs[1 - d.slot].respawning)
         this.finishChase('away');
@@ -6650,6 +6676,7 @@
     }
     beginFloorAction(f, type, dir = 0) {
       const [total, safe] = floorFrames[type];
+      const read=f.tumble?.techChoice;
       const skid = type === 'downed' && (!f.encounter || f.encounter.kind === f.kind)
         ? clamp(f.vx * 0.57, -265, 265) : 0;
       f.tumble = f.reaction = f.attack = f.command = f.run = null;
@@ -6659,6 +6686,7 @@
       f.invuln = safe / 60;
       const duration = type === 'floorAttack' ? moves[f.kit.floorAttack].end : total / 60;
       f.floorAction = { type, time: 0, duration, dir };
+      if(read && (type==='tech' || type==='techRoll'))f.floorAction.techChoice=read;
       if (type === 'floorAttack') beginAttack(f, 'floorAttack', 0, 0, f.kit.floorAttack);
       const event =
         type === 'downed' ? 'knockdown' : type === 'tech' || type === 'techRoll' ? 'tech' : 'getup';
@@ -6668,7 +6696,11 @@
       this.emit(event, { f, type, dir, point: { x: f.x, y: f.y } });
       const chase = this.chasePractice;
       if (chase && chase.phase !== 'done' && f.index === chase.slot) {
-        if (event === 'tech') this.finishChase(type);
+        if(chase.role==='readTech' && event==='tech'){
+          chase.choice=read;
+          chase.phase='getup';
+          this.emit('chaseCue',{f,phase:'getup',type});
+        }else if (event === 'tech') this.finishChase(type);
         else {
           chase.phase = type === 'downed' ? 'down' : 'getup';
           this.emit('chaseCue', { f, phase: chase.phase, type });
@@ -7793,6 +7825,9 @@
       return !!edge;
     }
     catchRival(owner, target, attack) {
+      this.rememberTechPunish(target);
+      if(this.chasePractice?.role==='readTech' && target.index===1 && this.chasePractice.phase!=='done')
+        this.finishChase(target.floorAction?.techChoice?'grabPunish':this.chasePractice.phase==='getup'?'escaped':'early');
       if (this.climbPractice?.role === 'patience' && owner.index === 0)
         this.finishClimbPractice(this.climbPractice.passed ? 'grabbed' : 'interrupted');
       if (this.chasePractice?.bait && target.index === 1 && this.chasePractice.phase !== 'done')
@@ -8970,6 +9005,8 @@
       target.heldRecoveryJump = false;
       this.gradeFootwork(target,projectile);
       const floorAtHit = target.floorAction;
+      this.rememberTechPunish(target);
+      if(chase?.role==='readTech' && target.index===chase.slot && floorAtHit?.techChoice)this.finishChase('caught');
       const landingAtHit = target.landingLag;
       const downed = floorAtHit?.type === 'downed' ? floorAtHit : null;
       const previousLocks = downed?.locks || 0;
@@ -9815,6 +9852,35 @@
       if (down.locks >= 2) return { ...idleInput, smashY: 1, tapped: { smash: true } };
       return { ...idleInput, tapped: { attack: true } };
     }
+    rememberTechPunish(f){
+      const choice=f.floorAction?.techChoice;
+      if(!choice)return;
+      this.bot.punishedTech=choice;
+      if(this.chasePractice?.role==='readTech')this.chasePractice.punished=choice;
+    }
+    chooseLandingTech(f,foe,floor,response='mix'){
+      const away=Math.sign(f.x-foe.x) || -f.face;
+      const travel=rollDistance(f,{type:'techRoll'});
+      const landingX=clamp(f.x+f.vx*4/60,floor.x1+2,floor.x2-2);
+      // Read visible pursuit and room at the lip when pressing Shield. Keep that choice through contact.
+      const closing=foe.vx*away>foe.kit.footwork.walk*.75;
+      const far=Math.abs(foe.x-landingX)>travel+45;
+      const weights={away:far?1:closing?2:6,stay:far?9:2,through:far?1:closing?7:2};
+      for(const [choice,dir] of [['away',away],['through',-away]]){
+        const end=landingX+dir*travel;
+        if(end<floor.x1+8 || end>floor.x2-8)weights[choice]=0;
+      }
+      const last=this.bot.punishedTech;
+      if(last)weights[last]*=.2;
+      let choice=response;
+      if(response==='mix'){
+        const pick=this.random()*(weights.away+weights.stay+weights.through);
+        choice=pick<weights.away?'away':pick<weights.away+weights.stay?'stay':'through';
+      }
+      f.tumble.techChoice=choice;
+      f.tumble.rollDir=choice==='away'?away:choice==='through'?-away:0;
+      return f.tumble.rollDir;
+    }
     cpuRollChaseInput(f, foe) {
       const roll = foe.floorAction, brain = this.bot;
       if (roll?.type !== 'techRoll' && roll?.type !== 'getupRoll') {
@@ -10556,6 +10622,7 @@
         if (f.attack?.dashAttack && cancelableWindup(f)) return {...idleInput,x:dir,grab:true};
       }
       if (f.stockLift) return this.cpuLiftExit(f, foe);
+      if(f.tumble?.techChoice && f.techBuffer>0)return {...idleInput,x:f.tumble.rollDir};
       if (f.shieldBreak) {
         if (f.shieldBreak.phase === 'pop' || this.cpuLevel === 'rookie') return idleInput;
         const beat = Math.floor((f.shieldBreak.time * 60 + 1e-8) / (this.cpuLevel === 'rival' ? 6 : 12));
@@ -10879,7 +10946,8 @@
               this.projectLaunch(f, f.vx, f.vy).hardImpact) return result;
           const p = this.terrain[landing];
           const away = -Math.sign(dx);
-          result.x = far < 140 && f.x + 95 * away > p.x1 && f.x + 95 * away < p.x2 ? away : 0;
+          result.x = this.cpuLevel==='rival' ? this.chooseLandingTech(f,foe,p) :
+            far < 140 && f.x + 95 * away > p.x1 && f.x + 95 * away < p.x2 ? away : 0;
           result.shield = true;
           result.tapped = { shield: true };
           f.tumble.rollDir = result.x;

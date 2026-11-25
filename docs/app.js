@@ -4016,8 +4016,29 @@
     if (d.heavy && name === 'hit') $('recovery-tip').textContent = 'Hold Up through the hit freeze to soften the impact. Tap Shield before the wall.';
     if (d.heavy && d.phase === 'done') status.textContent += ' · ' + Math.round(event.speed) + ' px/s';
   }
+  const techResponses={mix:'Rival mix',stay:'In place',away:'Roll away',through:'Roll through'};
   function chaseFeedback(name, e) {
     const d = world.chasePractice, status = $('launch-status'), tip = $('recovery-tip');
+    if(d.role==='readTech'){
+      const state=e.outcome || e.phase;
+      const notes={
+        fall:['Watch the landing','Stay near the landing spot. Read the direction at contact.'],
+        getup:[techResponses[d.choice],'Move to where their paws will settle. Start your attack before the roll ends.'],
+        opening:['Recovery open','A quick low hit or a grab can catch them now.'],
+        caught:['Hit the recovery','Your hit landed before the rival could act.'],
+        grabPunish:['Grabbed the recovery','You caught their landing. Choose a direction to throw.'],
+        early:['Caught them airborne','Let them touch down to practice a grounded punish.'],
+        escaped:['Rival recovered','Try starting your swing earlier, or turning to cover the other side.'],
+        away:['Left the landing','Stay near the rival as they touch down.']
+      };
+      const note=notes[state];
+      if(!note)return;
+      status.dataset.result=state;
+      const tally=d.phase==='done' && d.response==='mix'?' · '+d.caught+'/'+d.tries+' reads':'';
+      status.textContent=note[0]+tally;
+      tip.textContent=note[1]+(d.phase==='done'?' Choose Read the tech to retry.':'');
+      return;
+    }
     const attack = d.role === 'attack';
     if (d.bait) {
       const rival = world.dogs[d.slot], move = moves[rival.kit.floorAttack];
@@ -4438,7 +4459,8 @@
     const breakaway = launch && pattern === 'breakaway';
     const juggle = launch && pattern === 'juggle';
     const baitSweep = launch && (pattern === 'bait' || pattern === 'baitBack');
-    const chase = launch && (pattern === 'attack' || pattern === 'defend' || baitSweep);
+    const readTech=launch && pattern==='readTech';
+    const chase = launch && (pattern === 'attack' || pattern === 'defend' || baitSweep || readTech);
     const stock = launch && (pattern === 'stockReturn' || pattern === 'stockCatch');
     const survival = launch && (pattern === 'survival' || pattern === 'lastStock');
     const meteor = launch && (pattern === 'spikeFloor' || pattern === 'spikeEdge');
@@ -4462,7 +4484,7 @@
     if (drillSide) practiceSide = drillSide;
     view = new FightView($('blast-radar'));
     view.shakeEnabled = settings.shake;
-    if (chase) world.resetChasePractice(pattern, direction ?? world.chasePractice?.dir ?? 1, world.chasePractice?.slow ?? true);
+    if (chase) world.resetChasePractice(pattern, direction ?? world.chasePractice?.dir ?? 1, world.chasePractice?.slow ?? true,readTech?study:undefined);
     else if (meteor) world.resetMeteorPractice(pattern, direction ?? world.meteorPractice?.dir ?? 1,
       world.meteorPractice?.slow ?? true, study === 'impact' ? 185 : world.meteorPractice?.baseline ?? 100);
     else if (stock) world.resetStockPractice(pattern, direction ?? world.stockPractice?.dir ?? 1, world.stockPractice?.slow ?? true);
@@ -4556,6 +4578,9 @@
       $('launch-lock').setAttribute('aria-pressed', String(chase && pattern === 'attack'));
       $('launch-escape').setAttribute('aria-pressed', String(chase && pattern === 'defend'));
       $('launch-bait').setAttribute('aria-pressed', String(baitSweep));
+      $('launch-read').setAttribute('aria-pressed',String(readTech));
+      $('launch-response').hidden=!readTech;
+      if(readTech)$('launch-response').textContent='Response · '+techResponses[world.chasePractice.response];
       $('launch-behind').hidden = !baitSweep;
       $('launch-behind').setAttribute('aria-pressed', String(pattern === 'baitBack'));
       if (launchOptions) $('launch-slow').setAttribute('aria-pressed', String(launchOptions.slow));
@@ -4891,7 +4916,8 @@
     } else if (chase) {
       result.dataset.result = 'ready';
       result.textContent = 'Tap Attack to begin';
-      message = baitSweep ? 'Tap Attack to start. Try waiting beside the rival, then retry and block their get-up attack. Tap Grab at the shield spark.' :
+      message = readTech ? 'Tap Attack to cue the fall. Chase the roll or cover the landing spot, then hit or grab as protection ends. Change Response to rehearse one option.' :
+        baitSweep ? 'Tap Attack to start. Try waiting beside the rival, then retry and block their get-up attack. Tap Grab at the shield spark.' :
         pattern === 'attack' ? 'Tap Attack to start the fall. As the rival lands, tap neutral Attack. You can jab twice, then tap Down + Smash.'
         : 'Tap Attack to start the fall. Tap Shield just before you land. If you miss, try rolling away or sweeping as the second jab settles.';
     } else if (breakaway) {
@@ -4962,7 +4988,7 @@
     ['Movement','Platforms','platform',['below','top','hold','ferry','shield-drop','layers']],
     ['Attack','Combo practice','combo',['example','late','record','defend','mix','flurry','escapeFlurry']],
     ['Attack','Aerial spacing','spacing',['approach','retreat','landing','airPower','fastfall','sweet','cancel','footstool','footstoolTech','reverse','wavebounce']],
-    ['Attack','Knockdowns','launch',['lock','bait','floor-spike','edge-spike']],
+    ['Attack','Knockdowns','launch',['lock','bait','read','floor-spike','edge-spike']],
     ['Attack','Move freshness','freshness',['training','ko','rage','drive']],
     ['Defense','Combo escape','escape',['tip','close','counter','break','gripEscape','gripThrow','carry']],
     ['Defense','Shield pressure','shield',['kick','drop','crossup','strike','grab','counterGrab','dodgeTiming','breakEscape','breakPunish','jumpIn','low','high','poke']],
@@ -4986,7 +5012,7 @@
     'platform-layers':'fall through platform drop fast fall aerial landing',
     'escape-tip':'SDI smash directional influence', 'escape-close':'SDI smash directional influence',
     'launch-survival':'directional influence DI knockout', 'launch-breakaway':'hitstun cancel tumble combo escape',
-    'launch-escape':'jab lock tech', 'launch-bait':'getup attack tech chase',
+    'launch-escape':'jab lock tech', 'launch-bait':'getup attack tech chase', 'launch-read':'tech chase roll reaction read mixup landing grab punish',
     'launch-stock-return':'respawn invincibility angel platform', 'launch-stock-catch':'respawn invincibility angel platform',
     'shield-kick':'Clover Disc Hook out of shield counter', 'shield-drop':'Clover Disc Hook out of shield counter',
     'shield-grab':'spot dodge roll', 'shield-strike':'perfect shield release',
@@ -5286,6 +5312,11 @@
     drill('launch', false, 'juggle');
   };
   $('launch-lock').onclick = () => drill('launch', false, 'attack');
+  $('launch-read').onclick=()=>drill('launch',false,'readTech');
+  $('launch-response').onclick=()=>{
+    const options=Object.keys(techResponses),d=world.chasePractice;
+    drill('launch',false,'readTech',d.dir,options[(options.indexOf(d.response)+1)%options.length]);
+  };
   $('launch-escape').onclick = () => drill('launch', false, 'defend');
   $('launch-bait').onclick = () => drill('launch', false, world.chasePractice?.role === 'baitBack' ? 'baitBack' : 'bait');
   $('launch-behind').onclick = () => drill('launch', false, world.chasePractice.role === 'bait' ? 'baitBack' : 'bait');
@@ -7479,6 +7510,10 @@
       afterStory = null;
       startMatch({...settings, p1:'brisket', p2:'clover', mode:'solo', stage:'picnic',
         cpuLevel:'rival', minutes:7, fetch:false}, undefined, 4);
+    } else if (hash === '#solo/tech-chase') {
+      leaveOnline();afterStory=null;
+      startMatch({...settings,p1:'brisket',p2:'clover',mode:'solo',stage:'picnic',form:'original',
+        cpuLevel:'rival',lives:3,stockCount:3,timeBattle:false,minutes:7,fetch:false},undefined,61);
     } else if (hash === '#solo/shield-punish') {
       leaveOnline();
       afterStory = null;
@@ -7651,6 +7686,11 @@
       afterStory = null;
       startMatch({...settings, p1:'noodle', p2:'clover', stage:'picnic', mode:'training', fetch:false});
       drill('footwork',false,'crawl');
+    }
+    else if (hash === '#training/read-the-tech') {
+      leaveOnline();afterStory=null;
+      startMatch({...settings,mode:'training',p1:'pip',p2:'clover',stage:'picnic',fetch:false});
+      drill('launch',false,'readTech');
     }
     else if (hash === '#training/get-up') {
       leaveOnline();
