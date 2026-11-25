@@ -620,6 +620,42 @@
   const lobbyForm = () => settings.mode === 'training' ? 'original' : settings.stageForm;
   const savedCoat = (slot,kind) => settings.coatBook[slot][kind] ?? 0;
   let lobbyCoats = [0,0];
+  let couchPanel=null,couchLoad=null;
+  async function pickTogether() {
+    if(page!=='lobby' || settings.mode!=='local')return;
+    if(!window.CouchSelect){
+      showDialog('couch-load','Pick together','<p role="status">Opening fighter select…</p>');
+      if(!couchLoad)couchLoad=new Promise((resolve,reject)=>{
+        const script=document.createElement('script');script.src='./couch-select.js?v=couch-1';
+        script.onload=()=>window.CouchSelect?resolve():reject();
+        script.onerror=reject;document.head.append(script);
+      }).finally(()=>{couchLoad=null;});
+      try {await couchLoad;}
+      catch {
+        if(dialogType==='couch-load'){
+          showDialog('couch-load','Pick together','<p>Fighter select could not load.</p><button id="couch-retry" class="primary">Try again</button>');
+          $('couch-retry').onclick=pickTogether;
+        }
+        return;
+      }
+      if(dialogType!=='couch-load')return;
+    }
+    showDialog('couch','Pick together','');
+    couchPanel=window.CouchSelect.panel($('dialog-body'),settings,keys,getPads(),{
+      sound,announce,drawStageTile,leave:exitDialog,
+      start(pick,seats) {
+        const stage=pick.winner;
+        if(!stage)return;
+        [settings.p1,settings.p2]=pick.dogs;
+        settings.stage=stage;
+        for(const [i,kind] of pick.dogs.entries())settings.coatBook[i][kind]=pick.colors[i];
+        save();
+        startMatch({...settings,stage,form:lobbyForm(),coats:pick.colors.slice(),couchSeats:seats},undefined,undefined,
+          settings.bestOfThree?new StockSet(stage):null);
+      },
+    });
+  }
+  $('pick-together').onclick=pickTogether;
   const lobbyCoat = slot => window.DogFight.coatFor(slot,settings.p1,settings.p2,lobbyCoats);
   const stageName = (stage, form) => arenas[stage].name + (form && form !== 'original' ? ' · ' + stageForms[form].name : '');
   function drawStageTile(canvas, stage, form) {
@@ -636,6 +672,7 @@
     $('lobby-coat').setAttribute('aria-label','Choose coat for ' + labelFor(editing) + ' ' + fighters[chosen].name +
       ', currently ' + coatNames[chosen][lobbyCoat(editing)]);
     $('cpu-level').hidden = settings.mode !== 'solo';
+    $('pick-together').hidden=settings.mode!=='local';
     $('cpu-level').textContent = 'CPU · ' + cpuLevels[settings.cpuLevel].name;
     document
       .querySelectorAll('[data-mode]')
@@ -787,6 +824,7 @@
     if (kind==='result' || kind==='online-result') presentWinner();
   }
   function dismiss() {
+    couchPanel=null;
     clipScreen = null;
     victoryShot = null;
     if ($('dialog').open) $('dialog').close();
@@ -799,6 +837,9 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if (dialogType==='couch' || dialogType==='couch-load'){
+      dismiss();$('pick-together').focus({preventScroll:true});return;
+    }
     if (dialogType==='record-card') return showRecords(reviewCard.id);
     if (dialogType==='records') {
       dismiss(); $('home-records').focus({preventScroll:true}); return;
@@ -2138,7 +2179,7 @@
     $('match').hidden = true;
     $('countdown').textContent = '';
     syncLobby();
-    $('start').focus({ preventScroll: true });
+    $(settings.mode==='local'?'pick-together':'start').focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }
   function showPause() {
@@ -5881,6 +5922,7 @@
   const edit={slot:0,device:'keyboard',mode:'idle',source:'home',action:'',value:null,down:new Set(),last:''};
   function applyLayouts(persist) {
     keys=layout.keyboard;
+    couchPanel?.bindings(keys);
     matchKeys=new Set(keys.flatMap(map=>Object.values(map)));
     clearInput();
     delete $('school-coach').dataset.key;
@@ -6194,6 +6236,7 @@
       if (!e.repeat) toggleFilm();
       return;
     }
+    if (dialogType==='couch' && couchPanel?.keyboard(e)) return;
     if (e.code === 'Escape' && !$('dialog').open) {
       e.preventDefault();
       menuBack();
@@ -6208,7 +6251,8 @@
     const map = keys[i];
     const tapped = (action) => taps.has(map[action]) || (!i && touchTaps.has(action));
     const key = (action) => held.has(map[action]) || (!i && touches.has(action)) || tapped(action);
-    const pad = world.hasSecondPlayer && !world.lesson && !online.match && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
+    const pad = matchConfig?.couchSeats && world.mode==='local' ? matchConfig.couchSeats.get(i,pads) :
+      world.hasSecondPlayer && !world.lesson && !online.match && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
     const mapped=action=>{
       const n=layout.pad[i][action];
       return down(pad,n) && !(menuPadButtons.get(pad.index) & (1<<n));
@@ -6334,6 +6378,7 @@
       next: any(13) || any(15) || pads.some((p) => (p.axes[0] || 0) > 0.65 || (p.axes[1] || 0) > 0.65),
       prev: any(12) || any(14) || pads.some((p) => (p.axes[0] || 0) < -0.65 || (p.axes[1] || 0) < -0.65),
     };
+    if(dialogType==='couch'){oldPad=now;return;}
     if(dialogType==='bindings' && edit.mode==='test' && edit.device==='pad'){
       if(now.pause && !oldPad.pause)leaveLayouts();
       oldPad=now;return;
@@ -6409,6 +6454,8 @@
     before = now;
     const pads = getPads();
     padMenu(pads);
+    if(dialogType==='couch' && !document.hidden)couchPanel?.poll(pads,now);
+    if(page==='match' && world?.mode==='local')matchConfig?.couchSeats?.sync(pads);
     if (clipScreen) tickClip(dt);
     else if (victoryShot) { if (!document.hidden) drawVictory(dt); }
     else if (page === 'dispatch-story' && film && !document.hidden && !$('dialog').open) {
@@ -6519,7 +6566,9 @@
     const hash = location.hash;
     const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
     const [,arena,form] = hash.split('/');
-    if (hash==='#records') {
+    if (hash==='#local/pick-together') {
+      settings.mode='local';editing=0;toLobby();pickTogether();
+    } else if (hash==='#records') {
       showHome(false);
       showRecords();
     } else if (hash==='#bells' || (hash==='#bells/'+arena && Object.hasOwn(fighters,arena))) {
