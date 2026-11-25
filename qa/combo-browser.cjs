@@ -644,6 +644,35 @@ async function testAngledTilts(page, mobile) {
   console.log((mobile?'Phone touch':'Desktop keyboard')+' hit the jumper and the low recovery, whiffed level, and painted all angled poses.');
 }
 
+async function testInterruptedReturn(page,mobile) {
+  await page.goto(root+'?return-hit#training/interrupted-return');
+  const status = page.locator('#air-status');
+  const {hold,press,waitFor} = await trainingControls(page,mobile,status);
+  const resources = page.locator('#hud .hud-card').first().locator('.air-resources');
+  assert.match(await resources.getAttribute('aria-label'),/Remaining: Up Special$/);
+  await hold(['up','right','special']); await page.clock.runFor(50); await hold(['right']);
+  await waitFor('clipped');
+  assert.match(await resources.getAttribute('aria-label'),/Remaining: Up Special$/);
+  await waitFor('cast');
+  await hold(['up','right','special']); await waitFor('return'); await hold(['right']);
+  await waitFor('saved'); await hold([]);
+  assert.equal(await resources.count(),0);
+  await page.locator('#air-dog').selectOption('clover');
+  await press('air-side');
+  assert.equal(await status.textContent(),'Clover · right ledge');
+  await press('air-speed'); assert.equal(await page.locator('#air-speed').getAttribute('aria-pressed'),'false');
+  await press('air-fight');
+  assert.deepEqual(await page.locator('#hud .hud-name').allTextContents(),['P1Noodle','CPUClover']);
+  assert.deepEqual(await page.locator('#hud .percentage').allTextContents(),['0%','5%']);
+  assert.equal(await page.locator('#hud .lives[aria-label="3 stocks"]').count(),2);
+  await page.goto(root+'?interrupted-stock#training/interrupted-return/pip');
+  await press('air-return-fight');
+  assert.deepEqual(await page.locator('#hud .hud-name').allTextContents(),['P1Pip','CPUNoodle']);
+  assert.deepEqual(await page.locator('#hud .percentage').allTextContents(),['5%','0%']);
+  assert.match(await page.locator('#match-mode').textContent(),/solo.*rival/i);
+  assert.equal(await page.locator('#match-clock').textContent(),'7:00');
+}
+
 async function testLastDodge(page,mobile) {
   await page.goto(root+'?last-dodge#training/last-dodge');
   const status = page.locator('#air-status');
@@ -2283,6 +2312,7 @@ async function testDevice(browser, mobile) {
     await testRapidJab(page,mobile);
     await testLaunchHeight(page,mobile);
     await testLastDodge(page,mobile);
+    await testInterruptedReturn(page,mobile);
     await testPlatformLayers(page,mobile);
     await testJumpPower(page, mobile);
     await testAttackPress(page, mobile);
