@@ -111,9 +111,10 @@
     get picker() {
       return this.current.winner !== null && this.champion === null ? 1 - this.current.winner : null;
     }
-    finish(winner, rivalRead) {
+    finish(winner, rivalRead, matchCard) {
       if (this.current.winner !== null || (winner !== 0 && winner !== 1)) return false;
       this.current.winner = winner;
+      if (matchCard) this.current.card = structuredClone(matchCard);
       if (rivalRead) this.current.rivalRead = {...rivalRead};
       this.score[winner]++;
       return true;
@@ -2803,6 +2804,10 @@
         opening.matchFrames = 0;
         this.copyFightFrom(opening);
       }
+      this.matchCard = versus && config.lesson === undefined ? {
+        players:this.dogs.map(f => ({kind:f.kind, damage:0, hits:0, blocks:0, parries:0, lastHit:null})),
+        losses:[],
+      } : null;
     }
     resetCpu() {
       const memory = this.bot;
@@ -2811,6 +2816,7 @@
         if (memory[key] !== undefined) this.bot[key] = memory[key];
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
+      if (this.matchCard) this.matchCard.players[f.index].lastHit = null;
       if (fromKO && this.mode === 'solo') {
         this.bot.pressure = null;
         this.bot.ledgeReturn = null;
@@ -5328,6 +5334,10 @@
     finishMatch(winner, reason) {
       this.end = winner;
       this.endReason = reason;
+      if (this.matchCard) {
+        this.matchCard.frames = this.matchFrames;
+        this.matchCard.reason = reason;
+      }
       this.emit('win', { f:this.dogs[winner] });
     }
     step(dt, input1 = idleInput, input2 = idleInput) {
@@ -7867,7 +7877,7 @@
         attack.connected = true;
         const power = moveFreshness(owner, attack.moveId, attack);
         rememberMove(owner, attack.moveId, attack, power, false);
-        const damage = this.dealDamage(target, scaledDamage(attack.dmg, power), grip.comboLink);
+        const damage = this.dealDamage(target, scaledDamage(attack.dmg, power), grip.comboLink, attack.moveId);
         this.comboContact(target, 'pummel', attack.moveId, damage);
         this.sampleFreshness(owner, attack, attack.moveId, power, damage, 0);
         grip.comboLink = true;
@@ -8637,13 +8647,19 @@
       }
       this.emit('shieldCue', { f, phase, pattern:d.pattern, frames, struggles, moveId });
     }
-    dealDamage(target, damage, preserveCombo) {
+    dealDamage(target, damage, preserveCombo, hitId) {
       if (damage > 0) {
         target.shortHopFlight = false;
         target.ledgeProtectionReady = true;
         target.ledgeCatches = 0;
       }
       const applied = Math.min(damage, 999 - target.damage);
+      if (this.matchCard && hitId && damage > 0) {
+        const attacker = this.matchCard.players[1 - target.index];
+        attacker.hits++;
+        attacker.damage += applied;
+        this.matchCard.players[target.index].lastHit = {id:hitId, frame:this.matchFrames};
+      }
       if (this.mode === 'training' && (target.index === 1 || this.trainingPartner)) {
         if ((target.stun <= 0 && !preserveCombo) || (this.trainingPartner && this.lastCombo.target !== target.index))
           this.lastCombo = { hits: 0, damage: 0 };
@@ -8655,6 +8671,7 @@
       return applied;
     }
     parry(target, owner, face, point, projectile) {
+      if (this.matchCard) this.matchCard.players[target.index].parries++;
       if (this.chasePractice?.bait && this.chasePractice.phase === 'getup' && target.index === 0 && owner.attack?.floorAttack) {
         this.chasePractice.guarded = true;
         this.emit('chaseCue', {f:owner, phase:'sweepParry'});
@@ -8706,6 +8723,7 @@
         this.finishPlatformPractice('parried');
     }
     block(target, owner, damage, name, face, point, projectile, moveId, use, power) {
+      if (this.matchCard) this.matchCard.players[target.index].blocks++;
       if (this.chasePractice?.bait && this.chasePractice.phase === 'getup' && target.index === 0 && moves[moveId]?.floorAttack) {
         this.chasePractice.guarded = true;
         this.emit('chaseCue', {f:owner, phase:'sweepBlock'});
@@ -8866,7 +8884,7 @@
       if (armor && damage > 0 && damage <= armor.limit && !grab && !move?.pull && !move?.bounce &&
           name !== 'snare' && name !== 'rope') {
         stance.armorSpent = true;
-        const applied = this.dealDamage(target, damage);
+        const applied = this.dealDamage(target, damage, false, moveId || name);
         this.comboContact(target, 'hit', moveId || name, applied);
         this.sampleFreshness(owner, use, moveId, power, applied, 0);
         this.hitStop = Math.max(this.hitStop, 3/60);
@@ -8895,7 +8913,7 @@
       const previousLocks = downed?.locks || 0;
       if (downed && target.ground >= 0 && owner.ground >= 0 && move?.lockFrames && previousLocks < 2 &&
           (!target.encounter || target.encounter.kind === target.kind) && (!owner.encounter || owner.encounter.kind === owner.kind)) {
-        const applied = this.dealDamage(target, damage, previousLocks > 0);
+        const applied = this.dealDamage(target, damage, previousLocks > 0, moveId || name);
         this.comboContact(target, 'lock', moveId, applied);
         this.sampleFreshness(owner, use, moveId, power, applied, 0);
         downed.locks = previousLocks + 1;
@@ -8926,7 +8944,7 @@
       target.impactLag = target.shieldStun = target.shieldGrabWindow = 0;
       target.shieldDrop = target.parryFlash = 0;
       target.techBuffer = target.dodge = 0;
-      const applied = this.dealDamage(target, damage, previousLocks > 0 || move?.preserveCombo);
+      const applied = this.dealDamage(target, damage, previousLocks > 0 || move?.preserveCombo, moveId || name);
       const comparison = this.spacingPractice;
       if (comparison?.pattern === 'airPower' && comparison.phase === 'active' && owner.index === 0 &&
           moveId === owner.kit.air.neutral) {
@@ -9462,6 +9480,11 @@
     loseStock(f) {
       if (f.grip) this.breakGrapple(false);
       if (this.mode !== 'training') f.stocks--;
+      if (this.matchCard) this.matchCard.losses.push({
+        slot:f.index, frame:this.matchFrames, damage:f.damage, remaining:f.stocks,
+        zone:blastZone(f.x, f.y, this.stageWidth, this.blastInset()),
+        suddenRound:this.suddenDeath?.round || 0, lastHit:this.matchCard.players[f.index].lastHit,
+      });
       this.projectiles = this.projectiles.filter((d) => d.owner !== f.index);
       this.emit('ko', { f, x: f.x, y: f.y, stageWidth: this.stageWidth, remaining: f.stocks });
     }

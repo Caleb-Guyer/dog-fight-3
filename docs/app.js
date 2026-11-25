@@ -739,6 +739,11 @@
   }
   function exitDialog() {
     if (dialogType==='bindings') return leaveLayouts();
+    if (dialogType === 'match-card') {
+      showResult();
+      document.querySelector('[data-do=match-card]')?.focus();
+      return;
+    }
     if (dialogType === 'set-pick') return showResult();
     if (dialogType === 'result' || dialogType === 'dispatch-fall' || dialogType === 'online-result') return;
     if (['controls','moves','cpu-level','practice'].includes(dialogType) && backToPause) {
@@ -1775,6 +1780,7 @@
       if (config.openingFrames) {
         opener.matchFrames = 0;
         opener.clockFrames = world.clockFrames;
+        opener.matchCard = world.matchCard;
       }
       world.copyFightFrom(opener);
     }
@@ -1877,9 +1883,54 @@
   function startNextSetGame(stage) {
     if (localSet?.advance(stage)) startMatch({...matchConfig, stage}, undefined, undefined, localSet);
   }
+  const cardButton = '<button class="utility" data-do="match-card">Match stats</button>';
+  function cardTime(frame) {
+    const seconds = Math.floor(frame / 60);
+    return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2,'0');
+  }
+  function showMatchCard(index) {
+    const result = online.match?.confirmedWorld || world;
+    const set = online.series || localSet;
+    const games = set?.games || [{stage:result.stage, winner:result.end, card:result.matchCard}];
+    index ??= games.length - 1;
+    const game = games[index];
+    if (!game?.card) return;
+    const {players, losses, frames, reason} = game.card;
+    const slot = i => i === 1 && result.mode === 'solo' ? 'CPU' : 'P' + (i + 1);
+    const name = i => fighters[players[i].kind].name;
+    const headings = players.map((p,i) => '<th scope="col"><img alt="" src="' + portrait(p.kind) +
+      '"><small>' + labelFor(i) + '</small>' + name(i) + '</th>').join('');
+    const row = (label, value) => '<tr><th scope="row">' + label + '</th>' +
+      players.map((p,i) => '<td>' + value(p,i) + '</td>').join('') + '</tr>';
+    const stats = row('Damage dealt', p => tenth(p.damage) + '%') + row('Hits landed', p => p.hits) +
+      row('Hits blocked', p => p.blocks) + row('Parries', p => p.parries) +
+      row('Stocks lost', (_,i) => losses.filter(loss => loss.slot === i).length);
+    const timeline = losses.map(loss => {
+      const hit = loss.lastHit, id = hit?.id;
+      const move = (moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id])?.label;
+      const last = hit ? 'Last hit at ' + cardTime(hit.frame) + ' · ' + (move || (id === 'ball' ? 'Tennis ball' : 'Hit')) :
+        'No hits taken this stock';
+      return '<li><time>' + cardTime(loss.frame) + '</time><div><strong>' + slot(loss.slot) + ' ' + name(loss.slot) +
+        ' out at ' + tenth(loss.damage) + '%</strong><span>' +
+        (loss.suddenRound ? 'Sudden Death ' + loss.suddenRound + ' · ' : '') +
+        (loss.zone ? loss.zone + ' blast line · ' : '') + stockLabel(loss.remaining) + ' left</span><span>' + last + '</span></div></li>';
+    }).join('');
+    const tabs = games.length > 1 ? '<nav class="card-games" aria-label="Game stats">' + games.map((g,i) =>
+      '<button class="utility" data-card-game="' + i + '" aria-pressed="' + (i === index) + '">Game ' + (i+1) + '</button>'
+    ).join('') + '</nav>' : '';
+    showDialog('match-card', 'Match stats', tabs + '<h3 class="card-stage">' +
+      (set ? 'Game ' + (index+1) + ' · ' : '') + arenas[game.stage].name + '</h3><p class="card-finish">' +
+      slot(game.winner) + ' ' + name(game.winner) + ' wins · ' +
+      (reason === 'time' ? 'Time expired' : reason === 'sudden' ? 'Sudden Death' : 'Knockout') + ' · ' + cardTime(frames) + '</p>' +
+      '<table class="card-stats" aria-label="Fighter stats"><thead><tr><td></td>' + headings +
+      '</tr></thead><tbody>' + stats + '</tbody></table><h3 class="card-timeline-title">Stock timeline</h3>' +
+      (timeline ? '<ol class="card-timeline">' + timeline + '</ol>' : '<p>Both fighters kept all their stocks.</p>') +
+      '<div class="dialog-actions"><button class="primary" data-do="card-back">Back to results</button></div>');
+    (document.querySelector('[data-card-game][aria-pressed=true]') || $('dialog-close')).focus();
+  }
   function showSetResult(result, set, finish, duration) {
     const net = !!online.match;
-    if (!net) set.finish(result.end, result.cpuLevel === 'rival' ? result.bot.shieldHabit : null);
+    if (!net) set.finish(result.end, result.cpuLevel === 'rival' ? result.bot.shieldHabit : null, result.matchCard);
     const champion = set.champion, picker = set.picker;
     const name = i => labelFor(i) + ' ' + result.dogs[i].stats.name;
     const title = champion === null ? 'Game ' + set.games.length + ' result' : 'Set complete';
@@ -1909,7 +1960,7 @@
       '</ol>' + next + (net ? '<p id="net-rematch-status" role="status"></p>' : cpuReadReport()) +
       '<div class="dialog-actions"><button class="primary" data-set-next data-do="' + action + '">' + text +
       '</button><button class="utility" data-do="' + (net ? 'online-leave">Online lobby' : 'lobby">Fighter select') +
-      '</button></div>', false);
+      '</button>' + cardButton + '</div>', false);
     if (net) updateVotes();
     document.querySelector('[data-set-next]:not(:disabled), [data-do=online-leave]')?.focus();
     announce(title + '. ' + name(winner) + ' wins. Set score ' + set.score.join(' to '));
@@ -1934,7 +1985,7 @@
       showDialog('online-result', title,
         '<div class="winner"><img alt="" src="' + portrait(f.kind) + '"><div><h3>' + f.stats.name +
         ' wins!</h3><p>' + finish + ' · ' + duration + '</p></div></div><p id="net-rematch-status" role="status"></p>' +
-        '<div class="dialog-actions"><button class="primary" data-do="online-rematch">Rematch</button><button class="utility" data-do="online-leave">Online lobby</button></div>', false);
+        '<div class="dialog-actions"><button class="primary" data-do="online-rematch">Rematch</button><button class="utility" data-do="online-leave">Online lobby</button>' + cardButton + '</div>', false);
       updateVotes();
       document.querySelector('[data-do=online-rematch]').focus();
       announce(title);
@@ -1954,7 +2005,7 @@
         duration +
         '</p></div></div>' + cpuReadReport() + '<div class="dialog-actions"><button class="primary" data-do="rematch">' +
         icon('reset') +
-        'Rematch</button><button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
+        'Rematch</button><button class="utility" data-do="lobby">Fighter select</button>' + cardButton + '<button class="utility" data-do="home">Main menu</button></div>',
       false,
     );
     announce(f.stats.name + ' wins the Golden Tennis Ball');
@@ -1964,6 +2015,8 @@
     settings.mode !== 'training' && settings.bestOfThree ? new StockSet(settings.stage) : null);
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
+    const game = e.target.closest('[data-card-game]');
+    if (game) return showMatchCard(Number(game.dataset.cardGame));
     const format = e.target.closest('[data-format]');
     if (format) {
       settings.bestOfThree = format.dataset.format === 'set';
@@ -2039,6 +2092,8 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if (action === 'match-card') return showMatchCard();
+    if (action === 'card-back') return exitDialog();
     if (action==='bindings') openLayouts(dialogType);
     if (action === 'practice') showPractice();
     if (action === 'rehearse') rehearsePosition();
@@ -5702,7 +5757,7 @@
         updateHUD();
       } else {
         resultDelay -= dt;
-        if (resultDelay <= 0 && (online.match ? !['online-result','set-pick'].includes(dialogType) : !$('dialog').open)) showResult();
+        if (resultDelay <= 0 && (online.match ? !['online-result','set-pick','match-card'].includes(dialogType) : !$('dialog').open)) showResult();
       }
       if (world && (frameLab.mode !== 'frozen' || steppedFrame)) {
         const confirmed = online.match?.confirmedWorld;
