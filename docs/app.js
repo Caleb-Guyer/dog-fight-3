@@ -877,7 +877,8 @@
       document.querySelector('[data-do=match-card]')?.focus();
       return;
     }
-    if (dialogType === 'set-pick') return showResult();
+    if (dialogType === 'set-pick' && roomDraft) return showRoomFighters();
+    if (dialogType === 'set-pick' || dialogType==='room-fighters') return showResult();
     if (dialogType === 'result' || dialogType === 'dispatch-fall' || dialogType === 'online-result') return;
     if (['controls','moves','cpu-level','practice'].includes(dialogType) && backToPause) {
       backToPause = false;
@@ -916,9 +917,13 @@
         '"><canvas width="300" height="169" aria-hidden="true"></canvas><span><strong>' +
         a.name + '</strong>' + (description ? '' : '<small>' + a.description + '</small>') + '</span></button>',
     );
+    const room=picking && roomDraft;
+    const choice=room?'<p>'+coatNames[room.kind][room.coat]+' '+fighters[room.kind].name+' · Choose an arena to lock in.</p>':'';
     showDialog(picking ? 'set-pick' : 'arenas', picking ? 'Pick the next arena' : 'Choose arena',
-      forms + (description ? '<p>' + (picking ? stageForms[form].name + ' · ' : '') + description + '</p>' : '') +
-      '<div class="stage-options" data-form="' + form + '">' + rows.join('') + '</div>');
+      choice + forms + (description ? '<p>' + (picking ? stageForms[form].name + ' · ' : '') + description + '</p>' : '') +
+      '<div class="stage-options" data-form="' + form + '">' + rows.join('') + '</div>'+
+      (room?'<p id="net-pick-ready" role="status"></p><button class="utility" data-do="room-fighter-back">Change fighter</button>':''));
+    if(room)updateVotes();
     document.querySelectorAll('.stage-option').forEach((el) => {
       drawStageTile(el.querySelector('canvas'), el.dataset.stage,form);
     });
@@ -2000,6 +2005,7 @@
     return report;
   }
   function startMatch(config = settings, random = Math.random, opening, series = null, {visit, resume, leadInFrames = 0, cupRound = null} = {}) {
+    roomDraft=null;
     cupAttempt = cupRound;
     music?.restart();
     practiceFight = visit || null;
@@ -2462,6 +2468,7 @@
     (document.querySelector('[data-card-game][aria-pressed=true]') || $('dialog-close')).focus();
   }
   function showSetResult(result, set, finish, duration) {
+    roomDraft=null;
     const net = !!online.match;
     if (!net) set.finish(result.end, result.cpuLevel === 'rival' ? result.bot.shieldHabit : null, result.matchCard);
     const champion = set.champion, picker = set.picker;
@@ -2479,11 +2486,11 @@
       action = 'cpu-counterpick';
       text = 'Play game ' + (set.games.length+1);
     } else {
-      const localCounter=!net && world.mode==='local';
-      next = '<p>' + name(picker) + (localCounter?' can change fighters and choose the next arena.':' picks the next arena.')+'</p>';
+      const canSwitch=net ? online.fighterPicks : world.mode==='local';
+      next = '<p>' + name(picker) + (canSwitch?' can change fighters and choose the next arena.':' picks the next arena.')+'</p>';
       const chooses = !net || online.side === picker;
       action = chooses ? 'set-pick' : 'online-rematch';
-      text = localCounter?'Counterpick for game '+(set.games.length+1):chooses ? 'Pick arena' : 'Ready for game ' + (set.games.length+1);
+      text = chooses && canSwitch?'Counterpick for game '+(set.games.length+1):chooses ? 'Pick arena' : 'Ready for game ' + (set.games.length+1);
     }
     const winner = champion ?? result.end;
     showDialog(net ? 'online-result' : 'result', title,
@@ -2651,8 +2658,9 @@
     if (stage) {
       if (dialogType === 'set-pick') {
         if (online.series) {
+          const draft=roomDraft;
           showResult();
-          online.rematch(stage.dataset.stage);
+          online.rematch(stage.dataset.stage,draft?.kind,draft?.coat);
         } else startNextSetGame(stage.dataset.stage);
         return;
       }
@@ -2697,7 +2705,24 @@
     if (action === 'practice') showPractice();
     if (action === 'rehearse') rehearsePosition();
     if (action === 'return-fight') returnToFight();
-    if (action === 'set-pick') return !online.match && world.mode==='local'?pickTogether():chooseArena(true);
+    if (action === 'set-pick') {
+      if(!online.match && world.mode==='local')return pickTogether();
+      if(online.match && online.fighterPicks)return showRoomFighters();
+      return chooseArena(true);
+    }
+    if(action==='room-stage')return chooseArena(true);
+    if(action==='room-fighter-back')return showRoomFighters();
+    const roomDog=e.target.closest('[data-room-dog]'), roomCoat=e.target.closest('[data-room-coat]');
+    if(roomDraft && (roomDog || roomCoat)) {
+      if(roomDog) {
+        const kind=roomDog.dataset.roomDog, rival=online.roster[1-online.side];
+        const color=roomDraft.colors[kind] ?? savedCoat(0,kind);
+        roomDraft.kind=kind;
+        roomDraft.coat=kind===rival.kind && color===rival.coat ? (color+1)%4 : color;
+      } else roomDraft.coat=Number(roomCoat.dataset.roomCoat);
+      roomDraft.colors[roomDraft.kind]=roomDraft.coat;
+      sound('menu');return showRoomFighters(roomDog?'dog':'coat');
+    }
     if (action === 'cpu-counterpick') startNextSetGame(localSet.cpuPick(world.dogs[1].kind));
     if (action === 'new-set') {
       const stage = localSet.games[0].stage;
@@ -5790,7 +5815,7 @@
     enterStop(progress.room, progress.checkpoint);
   }
   $('dispatch-start').onclick = continueAdventure;
-  let onlineDog = settings.p1, peerLibrary = null, onlineRequest = 0;
+  let onlineDog = settings.p1, peerLibrary = null, onlineRequest = 0, roomDraft=null;
   const online = new window.DogOnline.OnlineSession({
     status: onlineStatus, start: startMatch, votes: updateVotes,
     closed: (message) => showOnline(message, online.action === 'join' ? online.code : ''),
@@ -5800,6 +5825,7 @@
     online.close();
   }
   function showOnline(message = '', invite = '') {
+    roomDraft=null;
     menuScreen('online-lobby');
     afterStory = null;
     $('online-code').value = invite;
@@ -5821,7 +5847,7 @@
   }
   function onlineStatus(phase, message, code) {
     const busy = phase !== 'idle', room = phase === 'room';
-    if (room && page === 'match') menuScreen('online-lobby', true);
+    if (room && page === 'match') { roomDraft=null;menuScreen('online-lobby', true); }
     $('online-actions').hidden = busy;
     $('online-wait').hidden = !busy;
     $('online-status').textContent = (room && online.roomSet ? 'Best of three · ' : '') + message;
@@ -5874,12 +5900,43 @@
     if (request === onlineRequest) online.start(action, onlineDog, code, $('online-stage').value,
       $('online-format').getAttribute('aria-pressed') === 'true', $('online-form').value, savedCoat(0,onlineDog));
   }
+  function showRoomFighters(focus='next') {
+    if(!online.fighterPicks || online.series?.picker!==online.side || online.myVote)return;
+    if(!roomDraft) {
+      const dog=online.roster[online.side];
+      roomDraft={...dog,colors:{[dog.kind]:dog.coat}};
+    }
+    const {kind,coat,colors}=roomDraft, rival=online.roster[1-online.side];
+    const roster=Object.entries(fighters).map(([id,f])=>{
+      const chosen=colors[id]??savedCoat(0,id);
+      const color=id===rival.kind && chosen===rival.coat?(chosen+1)%4:chosen;
+      return '<button type="button" class="coat-option" data-room-dog="'+id+'" aria-pressed="'+(kind===id)+'"><img alt="" src="'+
+        portrait(id,color)+'"><strong>'+f.name+'</strong><small>'+f.style+'</small></button>';
+    }).join('');
+    const coats=coatNames[kind].map((name,i)=>{
+      const taken=kind===rival.kind && i===rival.coat;
+      return '<button class="utility" data-room-coat="'+i+'" aria-pressed="'+(coat===i)+'"'+(taken?' disabled':'')+'>'+
+        name+(taken?' · Opponent':'')+'</button>';
+    }).join('');
+    showDialog('room-fighters','Counterpick · Game '+(online.series.games.length+1),
+      '<p>Your opponent keeps '+coatNames[rival.kind][rival.coat]+' '+fighters[rival.kind].name+'.</p>'+
+      '<div class="coat-grid" role="group" aria-label="Choose your fighter">'+roster+'</div>'+
+      '<h3 class="card-stage">'+fighters[kind].name+' · Coat</h3><div class="form-choices room-coats" role="group" aria-label="Choose coat">'+coats+'</div>'+
+      '<p id="net-pick-ready" role="status"></p><div class="dialog-actions"><button class="primary" data-do="room-stage">Choose arena</button>'+
+      '<button class="utility" data-do="card-back">Back to results</button></div>');
+    updateVotes();
+    document.querySelector(focus==='dog'?'[data-room-dog][aria-pressed=true]':focus==='coat'?'[data-room-coat][aria-pressed=true]':'[data-do=room-stage]').focus({preventScroll:true});
+  }
   function updateVotes() {
+    const ready=$('net-pick-ready');
+    if(ready)ready.textContent=online.theirVote?'Your opponent is ready.':'';
     const button = document.querySelector('[data-do=online-rematch], [data-set-next]');
     if (!button) return;
     button.disabled = online.myVote;
     const arena = online.nextStage && arenas[online.nextStage].name;
-    $('net-rematch-status').textContent = (arena ? arena + ' selected. ' : '') + (online.myVote ? 'Waiting for your opponent…' :
+    const pick=online.nextPick;
+    const fighter=pick ? coatNames[pick.kind][pick.coat]+' '+fighters[pick.kind].name+' · ' : '';
+    $('net-rematch-status').textContent = fighter + (arena ? arena + ' selected. ' : '') + (online.myVote ? 'Waiting for your opponent…' :
       online.theirVote ? (online.series ? 'Your opponent is ready.' : 'Your opponent wants a rematch.') : '');
   }
   $('online-format').onclick = () => {
@@ -6565,7 +6622,7 @@
         updateHUD();
       } else {
         resultDelay -= dt;
-        if (resultDelay <= 0 && (online.match ? !['online-result','set-pick','match-card'].includes(dialogType) : !$('dialog').open)) showResult();
+        if (resultDelay <= 0 && (online.match ? !['online-result','room-fighters','set-pick','match-card'].includes(dialogType) : !$('dialog').open)) showResult();
       }
       if (world && (frameLab.mode !== 'frozen' || steppedFrame)) {
         const confirmed = online.match?.confirmedWorld;
@@ -6774,7 +6831,13 @@
     }
     else if (hash === '#cutscenes') openFilmLibraryLink();
     else if (hash === '#adventure') showRoute();
-    else if (hash === '#online') showOnline();
+    else if (hash === '#online' || hash==='#online/best-of-three') {
+      showOnline();
+      if(hash==='#online/best-of-three'){
+        if($('online-format').getAttribute('aria-pressed')!=='true')$('online-format').click();
+        $('online-create').focus({preventScroll:true});
+      }
+    }
     else if (hash === '#training/corner-pressure') {
       menuScreen('match');
       afterStory = null;
