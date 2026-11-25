@@ -95,8 +95,8 @@
   };
   const stageGeometry = (stage, form) => stageForms[form]?.geometry || stage;
   const validCoat = value => Number.isInteger(value) && value >= 0 && value < 4;
-  const validRelayTeams=teams=>Array.isArray(teams) && teams.length===2 && teams.every(team=>
-    Array.isArray(team) && team.length===3 && new Set(team).size===3 && team.every(kind=>typeof kind==='string' && Object.hasOwn(fighters,kind)));
+  const validRelayTeams=teams=>Array.isArray(teams) && teams.length===2 && Array.from(teams).every(team=>
+    Array.isArray(team) && team.length===3 && new Set(team).size===3 && Array.from(team).every(kind=>typeof kind==='string' && Object.hasOwn(fighters,kind)));
   function relayCoats(teams,book){
     const coats=teams.map((team,i)=>team.map(kind=>validCoat(book?.[i]?.[kind])?book[i][kind]:0));
     teams[1].forEach((kind,k)=>{
@@ -2841,7 +2841,7 @@
         players:this.dogs.map(f => ({kind:f.kind, coat:this.coatFor(f.index), damage:0, hits:0, blocks:0, parries:0,
           techs:0, knockdowns:0, shieldBreaks:0, lastHit:null})),
         losses:[],
-        ...(this.relayTeams ? {relayTeams:this.relayTeams} : {}),
+        ...(this.relayTeams ? {relayTeams:this.relayTeams,relayDamage:[[0,0,0],[0,0,0]]} : {}),
         ...(timed ? {points:[0,0],minutes} : {}),
       } : null;
     }
@@ -8704,6 +8704,10 @@
         const attacker = this.matchCard.players[1 - target.index];
         attacker.hits++;
         attacker.damage += applied;
+        if(this.relayTeams){
+          const seat=1-target.index,member=this.relayTeams[seat].indexOf(this.dogs[seat].kind);
+          this.matchCard.relayDamage[seat][member]+=applied;
+        }
         this.matchCard.players[target.index].lastHit = {id:hitId, frame:this.matchFrames};
       }
       if (this.mode === 'training' && (target.index === 1 || this.trainingPartner)) {

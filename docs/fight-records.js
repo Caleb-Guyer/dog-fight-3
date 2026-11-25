@@ -17,7 +17,8 @@
       ['hits','blocks','parries','techs','knockdowns','shieldBreaks'].every(k=>count(p[k]))) &&
       count(c.frames) && ['time','ko','sudden'].includes(c.reason) && Array.isArray(c.losses) &&
       (c.points===undefined || (scores(c.points) && [1,3,7].includes(c.minutes))) &&
-      (c.relayTeams===undefined || (validRelayTeams(c.relayTeams) && c.players.every((p,i)=>c.relayTeams[i].includes(p.kind)))) &&
+      (c.relayTeams===undefined || (validRelayTeams(c.relayTeams) && c.players.every((p,i)=>c.relayTeams[i].includes(p.kind) &&
+        Array.isArray(c.relayDamage?.[i]) && c.relayDamage[i].length===3 && c.relayDamage[i].every(number)))) &&
       c.losses.every(l=>l && slot(l.slot) && count(l.frame) && number(l.damage) &&
         (!c.relayTeams || (c.relayTeams[l.slot].includes(l.kind) && validCoat(l.coat))) &&
         (c.points && !l.suddenRound ? scores(l.points) && typeof l.credited==='boolean' : count(l.remaining)) &&
