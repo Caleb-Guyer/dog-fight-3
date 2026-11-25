@@ -20,6 +20,8 @@ jobs:
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/menu-navigation.js
+          node --test qa/ledge-scout.cjs
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/ledge-scout.js
   night-mail:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
