@@ -34,6 +34,7 @@ async function savedRoutes(browser) {
   assert.deepEqual(await rows.evaluateAll(els=>els.map(el=>el.dataset.resumeId)),['noodle','clover','adventure','school']);
   assert.match(await rows.nth(1).textContent(),/Retry round/);
   await tap('[data-resume-id=adventure]');
+  await page.locator('#dispatch-hud').waitFor();
   assert.equal(await page.locator('#match-stage').textContent(),'Freight Exchange');
   assert.match(await page.locator('#runner-lives').getAttribute('aria-label'),/2 stocks/);
   assert.equal(await page.locator('#runner-percent').textContent(),'53.5%');

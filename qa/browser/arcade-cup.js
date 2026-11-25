@@ -103,6 +103,7 @@ async function mobileAndFilms(browser){
   assert(await page.locator('#school-coach').isVisible());
   assert.deepEqual(scripts,[]);
   await page.goto(root+'?film#cutscenes');
+  await page.locator('[data-reel=opening]').waitFor();
   assert.equal(await page.locator('[data-reel]:enabled').count(),1);
   await page.route('**/film-opening.js*',route=>route.abort(),{times:1});
   await page.locator('[data-reel=opening]').tap();
@@ -115,6 +116,7 @@ async function mobileAndFilms(browser){
   assert.equal(scripts.length,2);
   await page.locator('#dialog-close').tap();
   await page.locator('#dispatch-start').tap(); await page.locator('#story-skip').tap();
+  await page.locator('#dispatch-hud').waitFor();
   assert.equal(await page.locator('#runner-name').textContent(),'Pip');
   await page.close();
 }

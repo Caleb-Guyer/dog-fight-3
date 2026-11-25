@@ -69,11 +69,30 @@ async function recovery(browser,url){
     await page.locator('[data-reel=opening]').click();await page.locator('#story-next:enabled').waitFor();
     assert(await page.evaluate(()=>!!window.DispatchFilm && !window.DispatchRun));
     await page.locator('#story-map').click();await page.keyboard.press('Escape');
-    await page.route('**/yard-art.js*',route=>route.abort(),{times:1});
+    const yard='**/yard-art.js*';
+    await page.route(yard,route=>route.abort());
     await page.locator('#dispatch-start').click();await page.locator('#story-skip').click();
-    await page.locator('#dispatch-load-retry').waitFor();await page.locator('#dispatch-load-retry').click();
+    await page.locator('#dispatch-load-retry').waitFor();await page.unroute(yard);await page.locator('#dispatch-load-retry').click();
     await page.locator('#dispatch-hud').waitFor();assert.equal(await page.locator('#match-stage').textContent(),'Parcel Alley');
     assert(await page.evaluate(()=>!!window.DispatchActors && !!window.DispatchView));
+    // A download failure before the Cup finale must not count as starting or retrying the boss.
+    const cupKey='dog-fight-3.cup.pip';
+    await page.evaluate(key=>{
+      let entry=YardCup.read(null);
+      for(let round=0;round<3;round++){
+        entry=YardCup.begin(entry,'route-save',2);
+        entry=YardCup.finish(entry,{id:'route-save',retries:0,round},true,3,2200);
+      }
+      localStorage.setItem(key,JSON.stringify(entry));
+    },cupKey);
+    await page.goto(url+'?cup-final#arcade/pip');await page.route(yard,route=>route.abort(),{times:1});
+    await page.locator('[data-do=cup-start]').click();
+    await page.getByRole('button',{name:'Retry loading Bell Depot'}).waitFor();
+    const run=()=>page.evaluate(key=>JSON.parse(localStorage.getItem(key)).active,cupKey);
+    assert.equal((await run()).started,false);assert.equal((await run()).retries,0);
+    await page.locator('[data-do=cup-start]').click();await page.locator('#dispatch-hud').waitFor();
+    assert.equal((await run()).started,true);assert.equal((await run()).retries,0);
+    assert.match(await page.locator('#match-mode').textContent(),/Final boss/);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
