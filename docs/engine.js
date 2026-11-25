@@ -2220,6 +2220,7 @@
     const [first, last] = kit.travel;
     return smoothStep((time * 60 - first + 1) / (last - first + 1));
   }
+  const dodgeCatch = {reach:31, above:-16, below:78};
   const slideCarry = 1.25, slideFriction = 0.4;
   function beginAttack(f, name, aim, power, moveId) {
     cancelCharge(f);
@@ -2778,6 +2779,7 @@
         this.setLedgeTrap({index:0, left:true, x:floor.x1, y:floor.y});
       }
       if (config.driveOpening && this.mode === 'solo') this.placeDriveFighters(config.driveOpening.edge, config.driveOpening.damage);
+      if (config.dodgeReturn && this.mode === 'solo') this.placeLastDodge(config.dodgeReturn.side, config.dodgeReturn.wide, 1);
     }
     resetCpu() {
       const memory = this.bot;
@@ -4762,14 +4764,24 @@
       }
       return idleInput;
     }
-    resetAirPractice(pattern = 'neutral', side = 'left') {
+    placeLastDodge(side, wide, slot) {
+      const f = this.dogs[slot], guard = this.dogs[1-slot], solid = this.terrain.filter(p => !p.thin);
+      const inward = side === 'left' ? 1 : -1, floor = inward > 0 ? solid[0] : solid.at(-1);
+      const lip = inward > 0 ? floor.x1 : floor.x2;
+      const gap = wide ? f.kit.airDodge.distance + 17 : 61;
+      Object.assign(f, {x:lip - inward*gap, y:floor.y + (wide ? 22 : 117), ground:-1, face:inward,
+        vx:-inward*120, vy:240, jumps:0, usedUp:true, usedDodge:false});
+      Object.assign(guard, {x:lip + inward*46, y:floor.y, ground:this.terrain.indexOf(floor), face:-inward});
+    }
+    resetAirPractice(pattern = 'neutral', side = 'left', wide = false) {
       this.resetTraining();
       const [f, dummy] = this.dogs;
       const solid = this.terrain.filter((p) => !p.thin);
       const platform = side === 'left' ? solid[0] : solid[solid.length - 1];
       const inward = side === 'left' ? 1 : -1;
       const edge = inward > 0 ? platform.x1 : platform.x2;
-      if (pattern === 'edge') {
+      if (pattern === 'lastDodge') this.placeLastDodge(side, wide, 0);
+      else if (pattern === 'edge') {
         Object.assign(f, {
           x: edge - inward * 72,
           y: platform.y + 40,
@@ -4785,7 +4797,7 @@
           face: -inward,
         });
       }
-      this.airPractice = { pattern, side, phase: 'ready', time: 0, evaded: '', outcome: '' };
+      this.airPractice = { pattern, side, wide, phase: 'ready', time: 0, evaded: '', outcome: '' };
     }
     finishAirPractice(outcome) {
       const drill = this.airPractice;
@@ -4798,6 +4810,12 @@
       const drill = this.airPractice;
       if (drill.phase === 'done') return idleInput;
       const [f, dummy] = this.dogs;
+      if (drill.pattern === 'lastDodge') {
+        if (f.ledge) this.finishAirPractice('ledge');
+        else if (f.ground >= 0) this.finishAirPractice('land');
+        else if (f.y > dummy.y + 220) this.finishAirPractice('miss');
+        return idleInput;
+      }
       const edge = drill.pattern === 'edge';
       const strike = dummy.kit.tilts[edge ? 'forward' : 'up'];
       drill.time += dt;
@@ -7474,7 +7492,7 @@
         if (f.ground < 0 && !f.ledgeLock && !f.stun && input.y < 0.55) {
           const a = f.airDodge;
           if (a && a.y < 0.5 && a.time + 1e-8 >= f.kit.airDodge.ledgeFrame / 60) {
-            const edge = this.nearestLedge(f, 31, -16, 78);
+            const edge = this.nearestLedge(f, dodgeCatch.reach, dodgeCatch.above, dodgeCatch.below);
             if (edge && a.x * (edge.left ? 1 : -1) >= 0) this.ledgeClaims.push({ f, edge });
           } else if (!a && !f.dodge && f.vy > -125) this.tryLedge(f, 33, 80);
         }
@@ -9469,6 +9487,36 @@
         x: destination > p.x1 + 5 && destination < p.x2 - 5 ? away : -away,
       };
     }
+    lastDodgeInput(f, platform) {
+      if (f.jumps || !f.usedUp || f.hopWindow > 0 || f.usedDodge || f.dodge || f.attack || f.stun ||
+          f.impactLag || f.grip || f.wallAction || f.ledgeTrump || f.ledgeCatches >= maxLedgeCatches) return null;
+      const inward = f.x < platform.x1 ? 1 : f.x > platform.x2 ? -1 : 0;
+      if (!inward) return null;
+      const lip = inward > 0 ? platform.x1 : platform.x2;
+      const gap = (lip-f.x)*inward, depth = f.y-platform.y, kit = f.kit.airDodge;
+      if (gap > kit.distance + dodgeCatch.reach || depth < dodgeCatch.above || depth > kit.distance + dodgeCatch.below) return null;
+      // Save the dodge if steering alone can catch this lip.
+      let x = f.x, y = f.y, vx = f.vx, vy = f.vy;
+      for (let frame=1; frame<=kit.travel[1] && y<=platform.y+80; frame++) {
+        vx = airVelocity(f,vx,inward,1/60);
+        vy = fallVelocity(f,vy,1/60,!f.tumble);
+        x += vx/60; y += vy/60;
+        const remaining = (lip-x)*inward;
+        if (remaining >= -2 && remaining <= 33 && y >= platform.y+5 && y <= platform.y+80 &&
+            vy > -125 && f.ledgeLock <= frame/60) return null;
+      }
+      // Only spend it if the dog's actual eased path enters the catch window on a legal frame.
+      for (let frame=kit.ledgeFrame; frame<=kit.travel[1]; frame++) {
+        if (f.ledgeLock > frame/60) continue;
+        const travel = kit.distance*dodgeProgress(kit,frame/60);
+        for (const [across,up] of [[1,0],[diagonal,diagonal],[0,1]]) {
+          const remaining = gap-across*travel, height = depth-up*travel;
+          if (remaining >= -2 && remaining <= dodgeCatch.reach && height >= dodgeCatch.above && height <= dodgeCatch.below)
+            return {...idleInput,x:across*inward,y:-up,shield:true,tapped:{shield:true}};
+        }
+      }
+      return null;
+    }
     cpuAirEvade(f, foe, platform, offstage) {
       const attack = foe.attack;
       if (
@@ -10675,7 +10723,8 @@
         }
       } else if (climb?.type !== 'ledgeClimb') brain.climbRead = null;
       const inside = clamp(f.x, closest.x1 + 52, closest.x2 - 52);
-      const airDefense = this.cpuAirEvade(f, foe, closest, unsafe);
+      const airDefense = (unsafe && this.cpuLevel === 'rival' && this.lastDodgeInput(f, closest)) ||
+        this.cpuAirEvade(f, foe, closest, unsafe);
       if (airDefense) {
         brain.platformRoute = null;
         brain.ascent = null;

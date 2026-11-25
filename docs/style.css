@@ -823,6 +823,22 @@ body.playing .tools .utility,
   border-color: var(--gold);
   color: var(--gold);
 }
+.air-resources {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 2px 4px;
+  background: #211e2c;
+  color: var(--aqua);
+  border-top: 1px solid #514555;
+  font: 400 clamp(9px, 1vw, 12px)/1 var(--pixel);
+  white-space: nowrap;
+}
+.air-resources .spent {
+  color: #a396a4;
+  text-decoration: line-through;
+}
 .hud-card img {
   display: block;
   align-self: center;

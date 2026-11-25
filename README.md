@@ -294,6 +294,10 @@ A directional dodge commits you to its original angle. From outside the stage, a
 
 Choose **Training → Air-dodge practice → In place**. Jump and tap Shield as the dummy tries to catch your landing with an up tilt. Choose **At the ledge** to recover past its forward tilt. **Switch ledge** mirrors the approach. **Move list → Defense** illustrates both options for each fighter.
 
+Offstage, each fighter’s HUD shows the air jump, Up Special and air dodge. Spent options are crossed out. Pip’s Up Special stays lit while he can take his second hop. The strip disappears when the fighter catches the ledge or gets back over a floor.
+
+In **Last dodge**, you have already spent your jump and Up Special. From the low mark, aim diagonally up toward the ledge and tap Shield. Choose **Start wide** and try the diagonal again, then retry with a horizontal dodge for full reach. **Guard against Rival · 3 stocks** swaps the roles. Rival starts at your mark with the same resources and can dodge to the ledge even if you wait at the lip. [Play Last dodge](https://caleb-guyer.github.io/dog-fight-3/#training/last-dodge)
+
 ## Launch defense
 
 **Crouch cancel.** Hold Down before a grounded hit connects. Your dog takes the full damage with two-thirds of the usual launch speed. A light, low hit can leave all four paws on the floor. You slide back for a few vulnerable frames, then you can act. Keep Down held and tap Attack at the hit spark to buffer your dog's down tilt. Heavier dogs can stand their ground at higher percentages. A rising or powerful hit can still lift a crouching dog with reduced hitstun. Grabs, throws and lead pulls catch a crouch. On raised platforms, ease the stick down, hold Walk + Down on a keyboard, or slide from the center dot onto Down on touch to crouch.
