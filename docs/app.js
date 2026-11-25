@@ -23,6 +23,7 @@
     isSweetPractice,
     cpuLevels,
     stockMinutes,
+    warmupPartners,
     seededRandom,
     clamp,
   } = window.DogFight;
@@ -595,6 +596,7 @@
   const labelFor = (i) => {
     if (world?.lesson) return i ? 'COACH' : 'P1';
     if (online.match) return 'P' + (i + 1) + (i === online.side ? ' · YOU' : '');
+    if(world?.warmupPartner)return i ? warmupPartners[world.warmupPartner].tag : 'YOU';
     if (page === 'match' && world?.comboPractice?.defending) return i === 0 ? 'REPLAY' : 'YOU';
     if (page === 'match' && world?.hasSecondPlayer && world.mode === 'training') {
       if (i === 1) return 'P2';
@@ -2154,7 +2156,7 @@
     $('trump-status').hidden = $('trump-patterns').hidden = true;
     $('recovery-tip').hidden = true;
     document.body.classList.add('playing');
-    document.body.classList.toggle('training-active', config.mode === 'training');
+    document.body.classList.toggle('training-active', config.mode === 'training' && !config.warmupPartner);
     $('lobby').hidden = true;
     $('match').hidden = false;
     view = resume?.view || new FightView($('blast-radar'));
@@ -2238,13 +2240,13 @@
       const {cx, cy, zoom, leftFighter} = visit.view;
       Object.assign(view, {cx, cy, zoom, leftFighter});
     }
-    $('training-tools').hidden = config.mode !== 'training';
+    $('training-tools').hidden = config.mode !== 'training' || !!world.warmupPartner;
     $('return-fight').hidden = !visit;
     $('return-fight').textContent=visit?.review?'Back to match stats':visit?.returnResult?'Back to results':'Back to fight';
     setFrameMode('live');
     $('dummy-damage').value = '0';
     $('damage-output').textContent = '0%';
-    const matchName = online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
+    const matchName = world.warmupPartner ? 'Online warm-up' : online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
       (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : world.bells ? 'Bell Break' : modes[config.mode];
     $('match-mode').textContent = cupAttempt ? 'Arcade Cup · Round '+(cupAttempt.round+1)+'/4' :
       config.rotationRound?'Bout '+config.rotationRound+' · P1 '+config.rotationTags[0]+' / P2 '+config.rotationTags[1]:
@@ -2252,6 +2254,12 @@
     $('match-stage').textContent = stageName(config.stage,world.form);
     const set = online.series || localSet;
     $('match-set').hidden = !set;
+    if(world.warmupPartner){
+      const badge=$('match-set');
+      badge.hidden=false;
+      badge.textContent=online.phase==='room'?'Room '+online.code:'Quickplay · Searching';
+      badge.setAttribute('aria-label',badge.textContent);
+    }
     if (world.bells) {
       $('match-stage').textContent=world.course.name;
       $('match-set').hidden=$('match-clock').hidden=false;
@@ -2265,7 +2273,7 @@
       $('match-set').textContent = 'Game ' + set.games.length + ' · ' + set.score.join('–');
       $('match-set').setAttribute('aria-label', 'Best of three, game ' + set.games.length + ', P1 ' + set.score[0] + ', P2 ' + set.score[1]);
     }
-    $('pause-label').textContent = online.match ? 'Match menu' : 'Pause';
+    $('pause-label').textContent = world.warmupPartner ? 'Warm-up menu' : online.match ? 'Match menu' : 'Pause';
     const position = rehearsal ? visit : resume;
     countdown = position ? position.countdown : world.lesson || config.mode === 'training' || world.suddenDeath || leadInFrames ? 0 : 2.4;
     lastCount = position?.lastCount || 0;
@@ -2273,7 +2281,7 @@
     hudKey = '';
     accumulator = 0;
     $('countdown').textContent = position ? position.call : countdown ? '3' : '';
-    $('countdown').classList.remove('net-lag');
+    $('countdown').classList.remove('net-lag','opponent-found');
     clearInput();
     updateHUD();
     view.draw($('game'), world, 0, 0);
@@ -2307,6 +2315,7 @@
   function showPause() {
     if(finishTrial)return showTrialPause();
     if (page !== 'match' || !world || world.end !== null) return;
+    if(world.warmupPartner)return showWarmupMenu();
     if (world.bells) {
       showDialog('pause',world.course.name+' paused','<p>'+world.cleared+' of six bells · '+window.BellBreak.formatTime(world.matchFrames)+
         '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button>'+
@@ -6241,7 +6250,16 @@
   $('dispatch-start').onclick = continueAdventure;
   let onlineDog = settings.p1, peerLibrary = null, onlineRequest = 0, roomDraft=null;
   const online = new window.DogOnline.OnlineSession({
-    status: onlineStatus, start: startMatch, votes: updateVotes,
+    status: onlineStatus, start(config,random){
+      const warmedUp=!!world?.warmupPartner;
+      startMatch(config,random);
+      if(warmedUp){
+        $('countdown').dataset.caption='Opponent found';
+        $('countdown').classList.add('opponent-found');
+        tone(523,659,.11);tone(659,880,.16,.11);
+        announce('Opponent found. You are P'+(online.side+1)+' on '+stageName(config.stage,config.form)+'.');
+      }
+    }, votes: updateVotes,
     closed: (message) => showOnline(message, online.action === 'join' ? online.code : ''),
   });
   function leaveOnline() {
@@ -6271,9 +6289,11 @@
   }
   function onlineStatus(phase, message, code) {
     const busy = phase !== 'idle', room = phase === 'room';
-    if (room && page === 'match') { roomDraft=null;menuScreen('online-lobby', true); }
+    const warming=page==='match' && !!world?.warmupPartner;
+    if (room && page === 'match' && !warming) { roomDraft=null;menuScreen('online-lobby', true); }
     $('online-actions').hidden = busy;
     $('online-wait').hidden = !busy;
+    $('online-warmup').hidden=!(room || phase==='search');
     $('online-status').textContent = (room && online.roomSet ? 'Best of three · ' : '') + message;
     $('online-rules-summary').textContent = room ? (online.timeMinutes?'Time Battle · '+online.timeMinutes+' min':'Room · 3 stocks · 7 min') : 'Quickplay · 3 stocks · 7 min';
     $('online-connect-title').textContent = room ? 'Friend room' : phase === 'search' ? 'Quickplay' : 'Matchmaking';
@@ -6293,7 +6313,41 @@
       button.disabled = busy;
       button.setAttribute('aria-pressed', String(button.dataset.dog === onlineDog));
     }
-    if (busy && !$('online-wait').contains(document.activeElement)) $('online-cancel').focus({ preventScroll: true });
+    if(warming){
+      if($('warmup-status'))$('warmup-status').textContent=$('online-status').textContent;
+    }else if (busy && !$('online-wait').contains(document.activeElement)) {
+      $(room || phase==='search'?'online-warmup':'online-cancel').focus({preventScroll:true});
+    }
+  }
+  function startWarmup(partner='stand'){
+    if(online.match || !['room','search'].includes(online.phase))return;
+    const p1=online.kind,p2=p1==='brisket'?'pip':'brisket';
+    startMatch({mode:'training',p1,p2,stage:online.openingStage || 'picnic',form:online.roomForm,
+      coats:[online.coat,0],fetch:false,warmupPartner:partner});
+  }
+  function showWarmupMenu(){
+    const buttons=Object.entries(warmupPartners).map(([id,partner])=>'<button class="utility" type="button" data-warmup-partner="'+id+
+      '" aria-pressed="'+(world.warmupPartner===id)+'">'+partner.title+'</button>').join('');
+    showDialog('pause','Online warm-up','<p id="warmup-status"></p><p>Your match starts as soon as an opponent connects.</p>'+
+      '<h3>Practice partner · '+world.dogs[1].stats.name+'</h3><div class="dialog-actions">'+buttons+'</div>'+
+      '<div class="dialog-actions"><button class="primary" data-do="resume">Resume warm-up</button>'+
+      '<button class="utility" id="warmup-reset">Reset positions</button></div>'+
+      '<div class="dialog-actions"><button class="utility" id="warmup-lobby">Waiting room</button>'+
+      '<button class="utility" id="warmup-cancel">'+(online.phase==='room'?'Close room':'Cancel search')+'</button></div>');
+    $('warmup-status').textContent=$('online-status').textContent;
+    for(const button of $('dialog-body').querySelectorAll('[data-warmup-partner]'))button.onclick=()=>{
+      if(!world?.warmupPartner)return;
+      world.warmupPartner=button.dataset.warmupPartner;
+      hudKey='';dismiss();updateHUD();
+    };
+    $('warmup-reset').onclick=()=>{if(world?.warmupPartner)startWarmup(world.warmupPartner);};
+    $('warmup-lobby').onclick=()=>{
+      if(!world?.warmupPartner)return;
+      menuScreen('online-lobby',true);
+      $('online-warmup').focus({preventScroll:true});
+    };
+    $('warmup-cancel').onclick=()=>{if(world?.warmupPartner)cancelMatchmaking();};
+    $('dialog-body').querySelector('[data-do=resume]').focus();
   }
   function loadPeer() {
     if (window.Peer) return Promise.resolve();
@@ -6371,8 +6425,10 @@
   };
   $('home-online').onclick = () => { audioReady(); sound('menu'); showOnline(); };
   $('online-home').onclick = returnToHome;
-  $('online-cancel').onclick = () => showOnline(online.phase === 'room' ? 'Room closed.' : 'Matchmaking canceled.');
+  function cancelMatchmaking(){showOnline(online.phase==='room'?'Room closed.':'Matchmaking canceled.');}
+  $('online-cancel').onclick = cancelMatchmaking;
   $('online-quick').onclick = () => seekOpponent('quick');
+  $('online-warmup').onclick=()=>startWarmup();
   function showCodePad(){
     const {roomAlphabet,validCode}=window.DogOnline;
     const field=$('online-code');
@@ -6438,7 +6494,7 @@
   };
   let returnToOnline = false;
   window.addEventListener('pagehide', () => {
-    returnToOnline = !!online.match || page === 'online-lobby';
+    returnToOnline = !!online.match || !!world?.warmupPartner || page === 'online-lobby';
     leaveOnline();
   });
   window.addEventListener('pageshow', (e) => {
@@ -6592,13 +6648,13 @@
       return;
     }
     if (e.target instanceof HTMLSelectElement) return;
-    if (!matchKeys.has(e.code) && world?.mode === 'training' && !$('moment-save').hidden && (e.code === 'Digit1' || e.code === 'Digit2')) {
+    if (!matchKeys.has(e.code) && world?.mode === 'training' && !world.warmupPartner && !$('moment-save').hidden && (e.code === 'Digit1' || e.code === 'Digit2')) {
       if (e.altKey || e.ctrlKey || e.metaKey || e.target instanceof HTMLInputElement) return;
       e.preventDefault();
       if (!e.repeat) $(e.code === 'Digit1' ? 'moment-save' : 'moment-retry').click();
       return;
     }
-    if (!matchKeys.has(e.code) && world?.mode === 'training' && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
+    if (!matchKeys.has(e.code) && world?.mode === 'training' && !world.warmupPartner && (e.code === 'BracketLeft' || e.code === 'BracketRight')) {
       e.preventDefault();
       if (!e.repeat) (e.code === 'BracketLeft' ? toggleFrames : stepTrainingFrame)();
       return;
@@ -6959,7 +7015,7 @@
     } else if ((world?.lesson?.done || world?.lesson?.example) && !menuOpen && now.confirm && !oldPad.confirm) {
       for (const pad of pads) if (down(pad,0)) menuPadButtons.set(pad.index,1);
       nextLesson();
-    } else if (page === 'match' && world?.mode === 'training' && !$('dialog').open &&
+    } else if (page === 'match' && world?.mode === 'training' && !world.warmupPartner && !$('dialog').open &&
         (now.freeze && !oldPad.freeze || now.step && !oldPad.step)) {
       if (now.freeze && !oldPad.freeze) toggleFrames();
       else stepTrainingFrame();
@@ -7050,6 +7106,7 @@
         const caption=String(number || 'GO!');
         if($('countdown').textContent!==caption)$('countdown').textContent=caption;
         if (!number) {
+          $('countdown').classList.remove('opponent-found');
           // Discard released countdown taps. Held keyboard and touch controls start with the stick on GO.
           taps.clear();
           touchTaps.clear();

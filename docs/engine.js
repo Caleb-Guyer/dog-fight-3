@@ -225,6 +225,7 @@
   const maxDI = (18 * Math.PI) / 180;
   const verticalLaunch = Math.sin(65 * Math.PI / 180);
   const stockMinutes = [1, 3, 7, 0];
+  const warmupPartners={stand:{title:'Stand still',tag:'DUMMY'},shield:{title:'Hold shield',tag:'SHIELD'},spar:{title:'Spar with CPU',tag:'CPU'}};
   const blastSideMargin = 115, bottomBlastY = 765;
   const blastZone = (x, y, width, inset = 0) => x < -blastSideMargin + inset ? 'left' : x > width + blastSideMargin - inset ? 'right' :
     y < topBlastY ? 'top' : y > bottomBlastY ? 'bottom' : '';
@@ -2731,7 +2732,8 @@
     constructor(config, event = () => {}, random = Math.random) {
       this.stage = config.stage;
       this.coats = [0,1].map(i => validCoat(config.coats?.[i]) ? config.coats[i] : 0);
-      this.form = (config.mode === 'solo' || config.mode === 'local') && config.lesson === undefined &&
+      if(config.mode==='training' && Object.hasOwn(warmupPartners,config.warmupPartner))this.warmupPartner=config.warmupPartner;
+      this.form = (config.mode === 'solo' || config.mode === 'local' || this.warmupPartner) && config.lesson === undefined &&
         Object.hasOwn(stageForms, config.form) ? config.form : 'original';
       this.layout = config.layout || null;
       this.stageWidth = this.layout?.length || 1200;
@@ -2839,7 +2841,7 @@
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
       if (this.matchCard) this.matchCard.players[f.index].lastHit = null;
-      if (fromKO && this.mode === 'solo') {
+      if (fromKO && (this.mode === 'solo' || this.warmupPartner==='spar')) {
         this.bot.pressure = null;
         this.bot.ledgeReturn = null;
         this.bot.ledgeTrap = null;
@@ -5919,6 +5921,8 @@
       if (out.length) this.knockouts(out);
     }
     trainingRivalInput(dt, player) {
+      if(this.warmupPartner==='spar')return this.cpu(dt);
+      if(this.warmupPartner==='shield')return {...idleInput,shield:this.dogs[1].ground>=0};
       if (this.platformPractice?.pattern === 'layers') return idleInput;
       if (this.edgePractice) return this.edgeRivalInput();
       if (this.survivalPractice) return this.survivalInput();
@@ -8369,7 +8373,7 @@
       };
     }
     cpuControlled(f) {
-      return this.mode === 'solo' && f.index === 1;
+      return (this.mode === 'solo' || this.warmupPartner==='spar') && f.index === 1;
     }
     opponents(f) {
       return [this.dogs[1 - f.index]];
@@ -11254,6 +11258,7 @@
   window.DogFight = {
     cpuLevels,
     stockMinutes,
+    warmupPartners,
     seededRandom,
     fighters,
     kits,

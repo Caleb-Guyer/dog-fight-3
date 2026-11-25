@@ -248,7 +248,7 @@ i[data-icon] svg {
 }
 #match-clock.urgent { color: #ffca70; border-color: #b36539; }
 #countdown.sudden { font-size: clamp(24px, 7vw, 76px); white-space: nowrap; }
-#countdown.sudden::after {
+#countdown.sudden::after, #countdown.opponent-found::after {
   content: attr(data-caption);
   justify-self: center;
   margin-top: 8px;
