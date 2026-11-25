@@ -61,7 +61,30 @@ body .topbar .wordmark {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
-#home.has-welcome { grid-template-rows:auto auto minmax(0,1fr) auto; }
+#home.has-welcome, #home.has-saves { grid-template-rows:auto auto minmax(0,1fr) auto; }
+#home-saves:not([hidden]) {
+  display:flex; align-items:center; gap:8px; padding:4px var(--right-edge) 4px var(--left-edge);
+  background:#26383a; border-bottom:2px solid #87bdb1;
+}
+#home-continue, .saved-games button {
+  display:flex; align-items:center; gap:10px; color:var(--cream); text-align:left;
+}
+#home-continue { flex:1; min-width:0; background:transparent; padding:3px 6px; }
+#home-continue img, .saved-games img { image-rendering:pixelated; object-fit:contain; flex:none; width:44px; height:40px; }
+#home-continue span, .saved-games span { flex:1; min-width:0; }
+#home-continue strong, .saved-games strong { display:block; font:18px/1.2 var(--pixel); }
+#home-continue small, .saved-games small { display:block; font:14px/1.2 var(--body); }
+#home-continue b, .saved-games b { color:#b8e8cf; font:15px/1.15 var(--pixel); }
+.saved-games { display:grid; gap:6px; }
+.saved-games button { background:#303947; padding:7px 9px; border:2px solid var(--ink); }
+@media(max-width:540px){
+  #home-saves { gap:4px; }
+  #home-continue, .saved-games button { gap:6px; }
+  #home-continue img { width:32px; height:34px; }
+  #home-continue strong { font-size:15px; }
+  #home-continue small { font-size:12px; }
+  #other-saves { max-width:80px; padding:5px; }
+}
 #school-welcome:not([hidden]) {
   display:flex; align-items:center; gap:10px; color:var(--cream); background:var(--ink);
   border-block:2px solid var(--gold); padding:7px max(14px,2vw);
