@@ -14,7 +14,7 @@
   }
   function decode(hash){
     const parts=hash.split('/');
-    if(parts.length!==8 || !['#solo','#local'].includes(parts[0]) || parts[1]!=='rules')return null;
+    if(parts.length!==8 || !['#solo','#local','#online'].includes(parts[0]) || parts[1]!=='rules')return null;
     const [type,lives,minutes,format,stageForm,items]=parts.slice(2);
     if(!['stock','time'].includes(type) || !/^[1-5]$/.test(lives) || !['0','1','3','7'].includes(minutes) ||
       type==='time' && minutes==='0' || !['single','set'].includes(format) || !Object.hasOwn(stageForms,stageForm) ||

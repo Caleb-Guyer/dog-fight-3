@@ -2095,12 +2095,20 @@
     document.querySelector('[data-minutes="' + settings.minutes + '"]').focus({preventScroll:true});
   };
   function backFromRulebook(){
+    if(page==='online-lobby'){dismiss();$('online-rulebook').focus();return;}
     $('rules-label').onclick();$('dialog-body').querySelector('[data-do="rulebook"]').focus();
   }
   function openRulebook(hash){
     if(!window.VersusRulebook)return waitForDispatch('Versus rulesets',()=>loadDispatch('VersusRulebook'),()=>openRulebook(hash),backFromRulebook);
-    showDialog('rulebook','Versus rulesets','');
-    window.VersusRulebook.open($('dialog-body'),settings,{storage,hash,back:backFromRulebook,apply(rules){
+    const room=page==='online-lobby';
+    showDialog('rulebook',room?'Friend room rulesets':'Versus rulesets','');
+    window.VersusRulebook.open($('dialog-body'),room?{...readRoomSetup(),mode:'online'}:settings,{storage,hash,back:backFromRulebook,apply(rules){
+      if(room){
+        customSetup=rules;
+        $('online-rules').options[0].textContent='Stock · '+stockLabel(rules.lives)+' · '+clockLabel(rules.timed?7:rules.minutes);
+        $('online-rules').value=String(rules.timed?rules.minutes:0);$('online-form').value=rules.stageForm;
+        setRoomFormat(rules.bestOfThree);updateRoomSetup();dismiss();$('online-create').focus();sound('menu');return;
+      }
       Object.assign(settings,rules);save();dismiss();syncLobby();$('start').focus();sound('menu');
     }});
   }
@@ -5352,7 +5360,7 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
-    VersusRulebook:'versus-rules.js?v=1',
+    VersusRulebook:'versus-rules.js?v=room-rules-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=rulesets-1',
     FinishTools:'finish-tools.js?v=time-battle-1',
@@ -6348,6 +6356,22 @@
   }
   $('dispatch-start').onclick = continueAdventure;
   let onlineDog = settings.p1, peerLibrary = null, onlineRequest = 0, roomDraft=null;
+  let customSetup=null;
+  const clockLabel=minutes=>minutes?minutes+' min':'No clock';
+  function roomRuleLabel(rules){
+    return [rules.timed?'Time Battle':stockLabel(rules.lives),clockLabel(rules.minutes),
+      rules.bestOfThree?'Best of three':'Single game','Fetch Ball '+(rules.fetch?'on':'off')].join(' · ');
+  }
+  function readRoomSetup(){
+    const time=Number($('online-rules').value);
+    return {timed:!!time,minutes:time || (customSetup && !customSetup.timed?customSetup.minutes:7),
+      lives:customSetup?.lives ?? 3,fetch:customSetup?.fetch ?? true,stageForm:$('online-form').value,
+      bestOfThree:$('online-format').getAttribute('aria-pressed')==='true'};
+  }
+  function updateRoomSetup(){
+    $('online-custom-rules').hidden=!customSetup;
+    if(customSetup)$('online-custom-rules').textContent=roomRuleLabel(readRoomSetup());
+  }
   const online = new window.DogOnline.OnlineSession({
     status: onlineStatus, start(config,random){
       const warmedUp=!!world?.warmupPartner;
@@ -6394,8 +6418,22 @@
     $('online-wait').hidden = !busy;
     $('online-warmup').hidden=!(room || phase==='search');
     $('online-status').textContent = (room && online.roomSet ? 'Best of three · ' : '') + message;
-    $('online-rules-summary').textContent = room ? (online.timeMinutes?'Time Battle · '+online.timeMinutes+' min':'Room · 3 stocks · 7 min') : 'Quickplay · 3 stocks · 7 min';
-    $('online-connect-title').textContent = room ? 'Friend room' : phase === 'search' ? 'Quickplay' : 'Matchmaking';
+    const preview=online.preview, reviewing=phase==='review' || phase==='ready';
+    $('online-rules-summary').textContent = preview && (room || reviewing)?'Room '+code+' · You are P'+(online.side+1):
+      room && online.roomRules?roomRuleLabel(online.roomRules):
+      room ? (online.timeMinutes?'Time Battle · '+online.timeMinutes+' min':'Room · 3 stocks · 7 min') : 'Quickplay · 3 stocks · 7 min';
+    $('online-review').hidden=!(preview && (room || reviewing));
+    if(!$('online-review').hidden){
+      const {p1,p2,stage,rules}=preview, host=online.side===0;
+      const coats=host?[online.coat,online.remoteCoat]:[online.remoteCoat,online.coat];
+      $('room-p1').src=portrait(p1,window.DogFight.coatFor(0,p1,p2,coats));
+      $('room-p2').src=portrait(p2,window.DogFight.coatFor(1,p1,p2,coats));
+      $('room-pair').textContent=fighters[p1].name+' vs. '+fighters[p2].name;
+      $('room-arena').textContent=stageName(stage,rules.stageForm);
+      $('room-terms').textContent=roomRuleLabel(rules);
+      $('room-ready').hidden=host;$('room-ready').disabled=phase==='ready';
+    }
+    $('online-connect-title').textContent = reviewing ? 'Match preview' : room ? 'Friend room' : phase === 'search' ? 'Quickplay' : 'Matchmaking';
     $('online-cancel').textContent = room ? 'Close room' : phase === 'search' ? 'Cancel search' : 'Cancel';
     $('online-invite').hidden = !room;
     $('online-invite-url').hidden = true;
@@ -6414,7 +6452,8 @@
     }
     if(warming){
       if($('warmup-status'))$('warmup-status').textContent=$('online-status').textContent;
-    }else if (busy && !$('online-wait').contains(document.activeElement)) {
+    }else if(phase==='review')$('room-ready').focus({preventScroll:true});
+    else if (busy && !$('online-wait').contains(document.activeElement)) {
       $(room || phase==='search'?'online-warmup':'online-cancel').focus({preventScroll:true});
     }
   }
@@ -6427,7 +6466,7 @@
   function showWarmupMenu(){
     const buttons=Object.entries(warmupPartners).map(([id,partner])=>'<button class="utility" type="button" data-warmup-partner="'+id+
       '" aria-pressed="'+(world.warmupPartner===id)+'">'+partner.title+'</button>').join('');
-    showDialog('pause','Online warm-up','<p id="warmup-status"></p><p>Your match starts as soon as an opponent connects.</p>'+
+    showDialog('pause','Online warm-up','<p id="warmup-status"></p><p>'+(online.roomRules?'Your match starts when your opponent is ready.':'Your match starts as soon as an opponent connects.')+'</p>'+
       '<h3>Practice partner · '+world.dogs[1].stats.name+'</h3><div class="dialog-actions">'+buttons+'</div>'+
       '<div class="dialog-actions"><button class="primary" data-do="resume">Resume warm-up</button>'+
       '<button class="utility" id="warmup-reset">Reset positions</button></div>'+
@@ -6476,7 +6515,8 @@
       return;
     }
     if (request === onlineRequest) online.start(action, onlineDog, code, $('online-stage').value,
-      $('online-format').getAttribute('aria-pressed') === 'true', $('online-form').value, savedCoat(0,onlineDog), Number($('online-rules').value));
+      $('online-format').getAttribute('aria-pressed') === 'true', $('online-form').value, savedCoat(0,onlineDog), Number($('online-rules').value),
+      action==='create' && customSetup?readRoomSetup():null);
   }
   function showRoomFighters(focus='next') {
     if(!online.fighterPicks || online.series?.picker!==online.side || online.myVote)return;
@@ -6517,11 +6557,15 @@
     $('net-rematch-status').textContent = fighter + (arena ? arena + ' selected. ' : '') + (online.myVote ? 'Waiting for your opponent…' :
       online.theirVote ? (online.series ? 'Your opponent is ready.' : 'Your opponent wants a rematch.') : '');
   }
-  $('online-format').onclick = () => {
-    const button = $('online-format'), on = button.getAttribute('aria-pressed') !== 'true';
+  function setRoomFormat(on){
+    const button=$('online-format');
     button.setAttribute('aria-pressed', String(on));
     button.textContent = 'Best of three · ' + (on ? 'On' : 'Off');
-  };
+  }
+  $('online-format').onclick=()=>{setRoomFormat($('online-format').getAttribute('aria-pressed')!=='true');updateRoomSetup();};
+  $('online-rules').onchange=updateRoomSetup;
+  $('online-rulebook').onclick=()=>openRulebook();
+  $('room-ready').onclick=()=>online.acceptRules();
   $('home-online').onclick = () => { audioReady(); sound('menu'); showOnline(); };
   $('online-home').onclick = returnToHome;
   function cancelMatchmaking(){showOnline(online.phase==='room'?'Room closed.':'Matchmaking canceled.');}
@@ -7296,7 +7340,9 @@
     const hash = location.hash;
     const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
     const [,arena,form] = hash.split('/');
-    if(/^#(local|solo)\/rules(?:\/|$)/.test(hash)){
+    if(/^#online\/rules(?:\/|$)/.test(hash)){
+      showOnline();openRulebook(hash);
+    }else if(/^#(local|solo)\/rules(?:\/|$)/.test(hash)){
       settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();openRulebook(hash);
     }else if(hash==='#local/pack-relay' || hash==='#solo/pack-relay'){
       settings.mode=hash.startsWith('#local')?'local':'solo';

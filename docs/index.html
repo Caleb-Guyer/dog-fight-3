@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="./style.css?v=online-warmup-1" />
     <link rel="stylesheet" href="./dispatch.css?v=first-menu-1" />
     <link rel="stylesheet" href="./screen.css?v=rulesets-1" />
-    <link rel="stylesheet" href="./online.css?v=time-battle-1" />
+    <link rel="stylesheet" href="./online.css?v=room-rules-1" />
     <script defer src="./fighters-art.js?v=fast-cels-1"></script>
     <script defer src="./arena-art.js?v=stage-forms-1"></script>
     <script defer src="./engine.js?v=rulesets-1"></script>
@@ -25,8 +25,8 @@
     <script defer src="./score.js?v=yard-band-1"></script>
     <script defer src="./render.js?v=online-warmup-1"></script>
     <script defer src="./dispatch-script.js?v=night-mail-1"></script>
-    <script defer src="./online.js?v=time-battle-1"></script>
-    <script defer src="./app.js?v=rulesets-1"></script>
+    <script defer src="./online.js?v=room-rules-1"></script>
+    <script defer src="./app.js?v=room-rules-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -143,6 +143,8 @@
                 <button id="online-format" class="utility" type="button" aria-pressed="false">Best of three · Off</button>
                 <label for="online-rules">Room rules</label>
                 <select id="online-rules"><option value="0">Stock · 3 stocks · 7 min</option><option value="1">Time Battle · 1 min</option><option value="3">Time Battle · 3 min</option><option value="7">Time Battle · 7 min</option></select>
+                <button id="online-rulebook" class="utility" type="button">Saved rulesets</button>
+                <p id="online-custom-rules" hidden></p>
                 <label for="online-stage">Opening arena</label>
                 <select id="online-stage"><option value="">Random arena</option></select>
                 <label for="online-form">Stage form</label>
@@ -159,6 +161,11 @@
               </form>
             </div>
             <div id="online-wait" hidden>
+              <section id="online-review" aria-label="Match preview" hidden>
+                <div class="room-lineup"><img id="room-p1" alt=""><strong id="room-pair"></strong><img id="room-p2" alt=""></div>
+                <b id="room-arena"></b><p id="room-terms"></p>
+                <button type="button" class="net-action net-primary" id="room-ready">Ready to fight</button>
+              </section>
               <div id="online-invite" hidden>
                 <span>Room code</span>
                 <strong id="online-room-code"></strong>
