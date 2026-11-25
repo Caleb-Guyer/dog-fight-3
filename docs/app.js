@@ -535,6 +535,7 @@
     lastPreview = -1,
     hudKey = '';
   const labelFor = (i) => {
+    if (world?.lesson) return i ? 'COACH' : 'P1';
     if (online.match) return 'P' + (i + 1) + (i === online.side ? ' · YOU' : '');
     if (page === 'match' && world?.comboPractice?.defending) return i === 0 ? 'REPLAY' : 'YOU';
     if (page === 'match' && world?.hasSecondPlayer && world.mode === 'training') {
@@ -1299,7 +1300,8 @@
     const confirmed = online.match?.confirmedWorld || world;
     const scores = confirmed.dogs;
     const clock = $('match-clock'), seconds = Math.ceil((confirmed.clockFrames || 0) / 60);
-    clock.hidden = confirmed.clockFrames === null && !confirmed.suddenDeath;
+    const hideClock = confirmed.clockFrames === null && !confirmed.suddenDeath;
+    if (clock.hidden !== hideClock) clock.hidden = hideClock;
     const clockText = confirmed.suddenDeath ? 'SD' : Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2,'0');
     if (clock.textContent !== clockText) clock.textContent = clockText;
     clock.classList.toggle('urgent', !!confirmed.suddenDeath || seconds <= 10);
@@ -1315,7 +1317,8 @@
     const combo = world.lastCombo;
     const grip = world.grapple;
     const prompt = $('grapple-prompt');
-    prompt.hidden = !grip || grip.phase === 'throw' || !!world.launchPractice || !!world.stockPractice || !!world.survivalPractice;
+    const hideGrip = !grip || grip.phase === 'throw' || !!world.launchPractice || !!world.stockPractice || !!world.survivalPractice;
+    if (prompt.hidden !== hideGrip) prompt.hidden = hideGrip;
     if (!prompt.hidden) {
       const holder = world.dogs[grip.owner].stats.name;
       const captive = world.dogs[grip.target].stats.name;
@@ -1621,6 +1624,7 @@
     $('partner-training').setAttribute('aria-pressed','false');
     localSet = series;
     matchConfig = { ...config };
+    $('school-coach').hidden = config.lesson === undefined;
     if (config.mode === 'solo') {
       soloSeed = opening ?? crypto.getRandomValues(new Uint32Array(1))[0];
       random = seededRandom(soloSeed);
@@ -1661,6 +1665,7 @@
     showContactBoxes(false);
     view.shakeEnabled = settings.shake;
     world = resume?.battle || new Battle({...config, rivalRead:series?.openingRead}, (name, e) => {
+      world?.lesson?.contact(name,e);
       view.event(name, e);
       sound(name, e);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
@@ -1716,6 +1721,7 @@
       }
       if (name === 'win') resultDelay = 0.7;
     }, random);
+    if (config.lesson !== undefined) world.lesson = new window.FightSchool.Lesson(config.lesson,world);
     const openingFrames = leadInFrames || (config.mode === 'solo' && config.openingFrames);
     if (openingFrames && !resume && !rehearsal) {
       const opener = new Battle(config, undefined, seededRandom(soloSeed));
@@ -1738,7 +1744,7 @@
     $('damage-output').textContent = '0%';
     const matchName = online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
       (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : modes[config.mode];
-    $('match-mode').textContent = matchName + (config.lastStockStart ? ' · Last stock' : '');
+    $('match-mode').textContent = world.lesson ? 'Fight School' : matchName + (config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = arenas[config.stage].name;
     const set = online.series || localSet;
     $('match-set').hidden = !set;
@@ -1748,7 +1754,7 @@
     }
     $('pause-label').textContent = online.match ? 'Match menu' : 'Pause';
     const position = rehearsal ? visit : resume;
-    countdown = position ? position.countdown : config.mode === 'training' || world.suddenDeath || leadInFrames ? 0 : 2.4;
+    countdown = position ? position.countdown : world.lesson || config.mode === 'training' || world.suddenDeath || leadInFrames ? 0 : 2.4;
     lastCount = position?.lastCount || 0;
     resultDelay = 0;
     hudKey = '';
@@ -1782,6 +1788,7 @@
   }
   function showPause() {
     if (page !== 'match' || !world || world.end !== null) return;
+    if (world.lesson) return schoolList();
     if (online.match) {
       showDialog('online-menu', 'Match menu',
         '<p>The online fight is still running.</p><div class="dialog-actions"><button class="primary" data-do="resume">Return to fight</button><button class="utility" data-do="online-leave">Leave match</button></div>');
@@ -4332,8 +4339,10 @@
   function showHome(focus = true) {
     menuScreen('home');
     afterStory = null;
+    $('school-welcome').hidden = schoolSave.seen;
+    $('home').classList.toggle('has-welcome',!schoolSave.seen);
     window.DispatchCovers.draw($('title-cover'), 'title');
-    if (focus) $('home-adventure').focus({ preventScroll: true });
+    if (focus) $(schoolSave.seen?'home-adventure':'welcome-play').focus({ preventScroll: true });
   }
   function showRoute() {
     menuScreen('dispatch-route');
@@ -4735,6 +4744,83 @@
     sound('menu');
     toLobby();
   };
+  const schoolLessons=window.FightSchool.lessons;
+  const schoolSave={seen:false,index:0,passed:[]};
+  try {
+    const record=JSON.parse(localStorage.getItem('dog-fight-3.school') || '{}');
+    schoolSave.seen=record.seen===true;
+    const index=schoolLessons.findIndex(l=>l.id===record.lesson);
+    if (index>=0) schoolSave.index=index;
+    if (Array.isArray(record.passed)) schoolSave.passed=schoolLessons.filter(l=>record.passed.includes(l.id)).map(l=>l.id);
+  } catch { /* The course also works without storage. */ }
+  function saveSchool() {
+    schoolSave.seen=true;
+    try { localStorage.setItem('dog-fight-3.school',JSON.stringify({seen:true,lesson:schoolLessons[schoolSave.index].id,passed:schoolSave.passed})); } catch {}
+  }
+  const schoolHints={
+    move:['D','Left stick right','Right on the D-pad'],
+    platform:['Space','A','Jump'],
+    jab:['J','X','Attack'],
+    tilt:['S + J','Stick down + X','Down + Attack'],
+    air:['Space + J','A + X','Jump + Attack'],
+    guard:['L','LB','Shield'],
+    throw:['U, then D','Y, then stick right','Grab, then Right'],
+    special:['D + K','Stick right + B','Right + Special'],
+    return:['D + W + K, then D','Stick up-right + B, then right','Up + Special, then Right'],
+    stock:['D + I, release I','Stick right + RT, release RT','Right + Smash, release Smash'],
+  };
+  function renderSchool(pads) {
+    const lesson=world.lesson, info=schoolLessons[lesson.index];
+    const device=pads.length?1:matchMedia('(pointer:coarse)').matches?2:0;
+    const state=lesson.missed?'retry':lesson.done?'passed':'playing';
+    const key=lesson.id+'/'+state+'/'+device;
+    if ($('school-coach').dataset.key===key) return;
+    $('school-coach').dataset.key=key;
+    $('school-coach').dataset.state=state;
+    $('school-count').textContent='Fight School · '+(lesson.index+1)+' / '+schoolLessons.length;
+    $('school-title').textContent=info.title;
+    $('school-task').textContent=lesson.missed?'The stock ended. Retry to return to the starting position.':lesson.done?info.success:info.task;
+    $('school-bindings').textContent=lesson.done ? (device===1?'A to continue':device===0?'Enter to continue':'') :
+      lesson.missed?'':schoolHints[info.id][device];
+    $('school-next').hidden=!lesson.done;
+    $('school-next').textContent=lesson.index===schoolLessons.length-1?'Play first match':'Next lesson';
+    if (lesson.done && !schoolSave.passed.includes(lesson.id)) {
+      schoolSave.passed.push(lesson.id);
+      schoolSave.index=Math.min(lesson.index+1,schoolLessons.length-1);
+      saveSchool();
+    }
+  }
+  function startLesson(index) {
+    leaveOnline();
+    afterStory=null;
+    schoolSave.index=index;
+    saveSchool();
+    startMatch({...settings,mode:'local',stage:schoolLessons[index].id==='platform'?'picnic':'nightmail',
+      p1:'pip',p2:'brisket',fetch:false,minutes:0,lesson:index});
+    delete $('school-coach').dataset.key;
+    renderSchool(getPads());
+  }
+  function nextLesson() {
+    const next=world.lesson.index+1;
+    if (next<schoolLessons.length) startLesson(next);
+    else startMatch({...settings,mode:'solo',p1:'pip',p2:'brisket',cpuLevel:'rookie',stage:'picnic',fetch:false,minutes:7});
+  }
+  function schoolList() {
+    showDialog('school','Fight School',
+      '<p>'+schoolSave.passed.length+' of '+schoolLessons.length+' lessons cleared. Choose a lesson to play as Pip.</p><div id="school-syllabus">'+
+      schoolLessons.map((l,i)=>'<button type="button" class="utility" data-lesson="'+i+'">'+(i+1)+'. '+l.title+
+        (schoolSave.passed.includes(l.id)?' ✓':'')+'</button>').join('')+'</div><div class="dialog-actions"><button class="primary" id="school-resume">'+
+      (world?.lesson?'Back to lesson':schoolSave.passed.length?'Continue course':'Start course')+'</button><button class="utility" data-do="home">Main menu</button></div>');
+    $('school-syllabus').onclick=e=>{const button=e.target.closest('[data-lesson]');if(button) startLesson(Number(button.dataset.lesson));};
+    $('school-resume').onclick=()=>world?.lesson?dismiss():startLesson(schoolSave.index);
+    $('school-resume').focus({preventScroll:true});
+  }
+  $('welcome-play').onclick=()=>startLesson(schoolSave.index);
+  $('welcome-dismiss').onclick=()=>{saveSchool();showHome();};
+  $('home-school').onclick=schoolList;
+  $('school-next').onclick=nextLesson;
+  $('school-retry').onclick=()=>startLesson(world.lesson.index);
+  $('school-list').onclick=schoolList;
   $('home-guide').onclick = () => showMoves(settings.p1);
   $('home-options').onclick = showOptions;
   $('lobby-home').onclick = $('route-home').onclick = () => showHome();
@@ -4927,6 +5013,9 @@
   }
   window.addEventListener('keydown', (e) => {
     if (page !== 'match' || $('dialog').open) return;
+    if (world?.lesson?.done && e.code==='Enter' && !e.repeat && e.target=== $('game')) {
+      e.preventDefault(); nextLesson(); return;
+    }
     if (e.target instanceof HTMLSelectElement) return;
     if (world?.mode === 'training' && !$('moment-save').hidden && (e.code === 'Digit1' || e.code === 'Digit2')) {
       if (e.altKey || e.ctrlKey || e.metaKey || e.target instanceof HTMLInputElement) return;
@@ -5205,9 +5294,14 @@
     }
     return input;
   }
-  let oldPad = {};
+  const idlePad={};
+  let oldPad = idlePad;
   const menuPadButtons = new Map();
   function padMenu(pads) {
+    if (!pads.length) {
+      if (oldPad!==idlePad) { oldPad=idlePad; menuPadButtons.clear(); }
+      return;
+    }
     // A and B also fight. Consume menu presses until that particular pad releases them.
     const menuOpen = page !== 'match' || $('dialog').open;
     for (const pad of pads) {
@@ -5237,11 +5331,15 @@
       else if (page === 'match' && !dialogType) showPause();
       else if (page === 'dispatch-story' && !dialogType) toggleFilm();
       else if (page === 'lobby' && !dialogType) $('start').click();
+    } else if (world?.lesson?.done && !menuOpen && now.confirm && !oldPad.confirm) {
+      for (const pad of pads) if (down(pad,0)) menuPadButtons.set(pad.index,1);
+      nextLesson();
     } else if (page === 'match' && world?.mode === 'training' && !$('dialog').open &&
         (now.freeze && !oldPad.freeze || now.step && !oldPad.step)) {
       if (now.freeze && !oldPad.freeze) toggleFrames();
       else stepTrainingFrame();
-    } else if (page !== 'match' || $('dialog').open) {
+    } else if (menuOpen && (now.horizontal!==oldPad.horizontal || now.back&&!oldPad.back ||
+        now.next&&!oldPad.next || now.prev&&!oldPad.prev || now.confirm&&!oldPad.confirm)) {
       const items = menuButtons();
       const n = items.indexOf(document.activeElement);
       if (n >= 0 && items[n].type === 'range' && now.horizontal && now.horizontal !== oldPad.horizontal) {
@@ -5259,6 +5357,7 @@
     oldPad = now;
   }
   function roundCall(w) {
+    if (w.lesson) return '';
     if (w.endReason === 'time') return 'Time!';
     if (w.suddenDeath) return w.suddenDeath.intro > 0 ? 'Sudden Death' : w.suddenDeath.frames < 22 ? 'GO!' : '';
     return w.time < 0.37 && w.mode !== 'training' ? 'GO!' : '';
@@ -5279,7 +5378,8 @@
     const ended = match.confirmedWorld.end !== null;
     $('countdown').classList.toggle('net-lag', !ended && waiting > 850);
     if (!ended && waiting > 22000) return online.opponentLeft('The other player stopped responding.');
-    $('countdown').textContent = !ended && waiting > 850 ? 'Waiting for opponent…' : roundCall(match.confirmedWorld);
+    const call = !ended && waiting > 850 ? 'Waiting for opponent…' : roundCall(match.confirmedWorld);
+    if ($('countdown').textContent!==call) $('countdown').textContent=call;
     updateHUD();
     if (ended) online.finish(match.confirmedWorld.end);
   }
@@ -5318,7 +5418,8 @@
       } else if (online.match && !online.finished) {
         runOnline(dt, pads);
       } else if (world.end === null) {
-        $('countdown').textContent = roundCall(world);
+        const call=roundCall(world);
+        if ($('countdown').textContent!==call) $('countdown').textContent=call;
         if (frameLab.mode === 'frozen') {
           accumulator = frameLab.pending > 0 ? 1 / 60 : 0;
           if (frameLab.pending > 0) frameLab.pending--;
@@ -5341,9 +5442,10 @@
               if (!player.ledge) $('recovery-tip').textContent = player.kit.recovery;
             }
           }
-          if (!drillWaiting) {
+          if (!drillWaiting && (!world.lesson || world.lesson.canStep(input))) {
             const airborne = player.ground < 0;
-            world.step(1 / 60, input, world.hasSecondPlayer ? playerInput(1, pads) : idleInput);
+            world.step(1 / 60, input, world.lesson ? world.lesson.partner(input) : world.hasSecondPlayer ? playerInput(1, pads) : idleInput);
+            if (world.lesson) world.lesson.afterStep(world);
             if (frameLab.mode === 'frozen') {
               frameLab.count++;
               frameLab.renderTime += 1/60;
@@ -5365,6 +5467,7 @@
           accumulator = Math.max(0, accumulator - 1 / 60);
         }
         if (world.endReason === 'time') $('countdown').textContent = 'Time!';
+        if (world.lesson) renderSchool(pads);
         updateHUD();
       } else {
         resultDelay -= dt;
@@ -5382,7 +5485,6 @@
     requestAnimationFrame(frame);
   }
   updateAudio();
-  syncLobby();
   function openFilmLibraryLink() {
     showRoute();
     showReels();
@@ -5463,6 +5565,8 @@
       afterStory = null;
       startMatch({...settings,mode:'training',p1:hash.split('/')[2] || 'pip',p2:'brisket',stage:'nightmail',fetch:false});
       drill('shield',false,'crossup',undefined,{choice:'front',dir:1});
+    } else if (hash === '#tutorial') {
+      startLesson(schoolSave.index);
     } else if (hash === '#training/shield-punish') {
       leaveOnline();
       afterStory = null;

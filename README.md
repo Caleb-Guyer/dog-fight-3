@@ -6,6 +6,8 @@ A cartoon platform fighter for one or two players. Play **The Last Dispatch** st
 
 **[Play Dog Fight 3](https://caleb-guyer.github.io/dog-fight-3/)**
 
+On your first visit, choose **Play tutorial** to enter Fight School as Pip. Ten playable lessons cover movement, platforms, jabs, tilts, aerials, blocking, throws, specials, recovery, and taking a stock with a charged smash. Each lesson waits for you to do it in the arena. Choose **Retry** to reset the situation or **Lessons** to jump to any lesson. The last knockout leads into a three-stock match against Rookie Brisket. Your cleared lessons are saved on this device. Reopen **Fight School** from the main menu at any time. [Enter Fight School](https://caleb-guyer.github.io/dog-fight-3/#tutorial)
+
 From the main menu, choose **Adventure**, **Solo fight**, **Local versus**, **Online versus**, or **Training**. For a solo or local match, choose your dog and select **Start fight**. To play offline, download or clone the repository, extract it if necessary, and open `docs/index.html` in a modern browser. The game, artwork, typeface, and sound effects work locally. A keyboard is enough for both solo and local versus. Touch controls appear on touchscreen devices.
 
 Each dog starts with three stocks. Dealing damage makes the next hit launch a rival farther. Knock a dog beyond the arena boundary to take a stock. When a hard hit sends you tumbling, you can bend the launch and choose how to land. A midair jump and **Up + Special** can bring you back to the ledge.
