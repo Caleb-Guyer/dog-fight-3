@@ -1231,11 +1231,12 @@
     if (!prompt.hidden) {
       const holder = world.dogs[grip.owner].stats.name;
       const captive = world.dogs[grip.target].stats.name;
+      const holdTip = grappleControls(world,grip);
       const text =
         world.mode === 'local'
-          ? holder + ' · Tap Attack to pummel, aim to throw / ' + captive + ' · Tap buttons to escape'
+          ? holder + ' · ' + holdTip + ' / ' + captive + ' · Tap buttons to escape'
           : grip.owner === 0
-            ? 'Tap Attack to pummel · Aim to throw'
+            ? holdTip
             : 'Grabbed · Tap action buttons to escape';
       if (prompt.textContent !== text) prompt.textContent = text;
     }
@@ -2070,6 +2071,11 @@
     }[e.outcome];
     tip.textContent = result + ' Choose ' + (below ? 'Rival below' : 'Rival on top') + ' to retry.';
   }
+  function grappleControls(match,grip) {
+    if (grip.carry) return 'Move or jump · Aim + Grab to throw';
+    const basic = 'Tap Attack to pummel · Aim to throw';
+    return match.dogs[grip.owner].kit.shoulderCarry ? basic + ' · Special to carry' : basic;
+  }
   function crouchCounterPrompt() {
     const player = world.dogs[0];
     $('escape-status').dataset.result = 'ready';
@@ -2080,6 +2086,26 @@
     const status = $('escape-status'), tip = $('recovery-tip');
     status.dataset.result = e.outcome || e.phase;
     const drill = world.escapePractice;
+    if (drill.spacing === 'carry') {
+      const release = (throws[drill.moveId]?.label || 'Throw') + ' · ' + (drill.distance || 0) + ' units carried';
+      const feedback = {
+        ready:['Pip at 85%','Tap Grab. Throw right from here, then try again with a shoulder carry.'],
+        approach:['Bear Hug','When the grab connects, tap Special to lift Pip.'],
+        gripped:['Lift or throw','Tap Right for an immediate throw. For a carry, tap Special and walk right to the gold stripe.'],
+        carrying:['Pip on your shoulder','Hold Right. Tap Grab at the stripe to throw before Pip wriggles free.'],
+        atMark:['At the stripe','Keep holding Right and tap Grab for Yard Heave.'],
+        flight:[release,'Watch whether Pip can dodge back to the roof.'],
+        returned:['Pip got back · ' + release,'Try carrying nearer the stripe before you throw.'],
+        ringOut:['Ring-out · ' + release,'Retry with an immediate throw to compare Pip’s return.'],
+        brokeFree:['Pip wriggled free','Watch the grip meter. Throw while there is still time.'],
+        fell:['Lost your footing','Throw before you fall past the car.'],
+        pummel:['Bear Squeeze','The hold timer keeps running. Tap Special to hoist or choose your throw.'],
+        missedGrab:['Grab missed','Choose Shoulder carry and tap Grab from the starting mark.'],
+        wrongGrip:['Pip got the grab','Choose Shoulder carry to reset.'],
+      };
+      [status.textContent,tip.textContent] = feedback[e.outcome || e.phase];
+      return;
+    }
     if (drill.gripDrill) {
       const holder = drill.spacing === 'gripThrow', captive = world.dogs[holder ? 1 : 0].stats.name;
       const throwName = throws[drill.moveId]?.label || 'Throw';
@@ -2898,7 +2924,7 @@
     const counterDrill = escape && (pattern === 'counter' || pattern === 'gripEscape');
     showDamageControl(counterDrill || meteor || survival, freshness && world.freshnessPractice.koTest,
       meteor || survival ? 'launch-side' : world.edgePractice?.timeCatch ? 'edge-side' : undefined);
-    $('damage-control').hidden = stock || juggle || breakaway;
+    $('damage-control').hidden = stock || juggle || breakaway || (escape && pattern === 'carry');
     $('dummy-damage').value = survival ? world.survivalPractice.baseline : meteor ? world.meteorPractice.baseline : counterDrill ? world.escapePractice.baseline : world.trainingDamage;
     $('damage-output').textContent = $('dummy-damage').value + '%';
     $('match-stage').textContent = arenas[world.stage].name;
@@ -3045,7 +3071,7 @@
         ? 'Tap Down to drop. As your paws pass the platform, aim down and tap Attack for ' + moves[player.kit.air.down].label + '.'
         : 'Press Down and Attack together for ' + moves[player.kit.tilts.down].label + '. Keep both paws on the platform.';
     } else if (escape) {
-      for (const id of ['tip','close','counter','break','gripEscape','gripThrow']) $('escape-' + id).setAttribute('aria-pressed', String(id === pattern));
+      for (const id of ['tip','close','counter','break','gripEscape','gripThrow','carry']) $('escape-' + id).setAttribute('aria-pressed', String(id === pattern));
       $('escape-slow').setAttribute('aria-pressed', String(world.escapePractice.slow));
       $('escape-status').dataset.result = 'ready';
       if (world.escapePractice.gripDrill) {
@@ -3354,7 +3380,7 @@
     $('game').focus({ preventScroll: true });
   };
   $('escape-training').onclick = () => drill('escape', false, world.escapePractice?.spacing || 'tip');
-  for (const pattern of ['tip','close','counter','break','gripEscape','gripThrow'])
+  for (const pattern of ['tip','close','counter','break','gripEscape','gripThrow','carry'])
     $('escape-' + pattern).onclick = () => drill('escape', false, pattern);
   $('escape-slow').onclick = () => {
     const drill = world.escapePractice;
@@ -3765,7 +3791,7 @@
     const boss = world.layout.rules === 'boss', horde = world.layout.rules === 'horde';
     const grip = world.grapple;
     const order = !grip || grip.phase === 'throw' ? world.objective : grip.owner === 0
-      ? 'Tap Attack to pummel · Aim to throw' : 'Grabbed · Tap action buttons to escape';
+      ? grappleControls(world,grip) : 'Grabbed · Tap action buttons to escape';
     const key = [world.roomIndex, world.wave, hero.stocks, Math.floor(hero.damage), world.stamps, order,
       ...foes.flatMap((e) => [e.f.stocks, Math.floor(e.f.damage), e.hp])].join('|');
     if (key === adventureKey) return;
@@ -4540,6 +4566,11 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/shoulder-carry') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({ ...settings, mode:'training', p1:'brisket', p2:'pip', stage:'nightmail', fetch:false });
+      drill('escape',false,'carry');
     } else if (hash === '#training/grab-escape') {
       leaveOnline();
       afterStory = null;

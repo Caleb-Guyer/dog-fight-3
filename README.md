@@ -380,6 +380,10 @@ When caught, alternate movement directions, rotate the stick through distinct di
 
 In **Combo escape → Escape a grab**, let the rival land two pummels and throw. Retry and alternate Left and Right from the catch. The bar above the captive shows the remaining hold. Under **Pummel or throw**, you hold the resisting rival. Try throwing after one pummel, then see what happens when you wait for another. [Play the grab escape drill](https://caleb-guyer.github.io/dog-fight-3/#training/grab-escape)
 
+**Brisket’s Shoulder Carry.** After a catch, tap Special to lift the rival onto Brisket’s shoulder. Walk forward or backward, or jump onto a platform with them. Brisket keeps his facing. Tap Attack to squeeze, or hold a direction and tap Grab for one of his four throws. The rival can struggle throughout the lift and walk. A pummel costs you some of the time you could spend carrying them toward the lip.
+
+In **Combo escape → Shoulder carry**, grab Pip at 85% on Night Mail. Throw right immediately and Pip can air-dodge back to the roof. Retry, tap Special, walk right to the gold stripe, then tap Grab while holding Right. The same Yard Heave can now take the stock. Wait too long and Pip wriggles free. [Try the shoulder carry](https://caleb-guyer.github.io/dog-fight-3/#training/shoulder-carry)
+
 For a **dash grab**, hold a direction until your dog is running, then press Grab while moving toward the rival. For a **pivot grab**, run in one direction and press the opposite direction together with Grab, or press Grab just as you turn. If you're running right, **D + U** catches ahead and **A + U** catches behind. On touch, slide your movement thumb onto the opposite arrow as you tap Grab with your other thumb.
 
 | Dog | Dash grab | Pivot grab |

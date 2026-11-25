@@ -332,6 +332,7 @@
         tip: 'Brisket takes longer to tuck his shoulder, then stays untouchable the longest.',
       },
       grab: 'brisketBearHug',
+      shoulderCarry: { lift:8/60, rest:[-8,-77], walk:177, air:118, hop:582 },
       dashGrab: 'brisketFreightHug',
       pivotGrab: 'brisketGateSwing',
       pummel: 'brisketBearSqueeze',
@@ -1578,7 +1579,7 @@
     },
     brisketBearHug: {
       label: 'Bear Hug',
-      hint: 'Wrap both paws around a nearby rival and lift them off their feet. Holds longest.',
+      hint: 'Wrap both paws around a nearby rival. Tap Special to shoulder them, walk or hop, then aim and tap Grab to throw.',
       frames: [6, 6, 22],
       box: [32, -43, 28, 34],
       grip: [29, -63],
@@ -3569,6 +3570,19 @@
       this.resetTraining();
       const originalDogs = this.dogs, player = originalDogs[0];
       const floor = this.terrain[0];
+      if (spacing === 'carry') {
+        this.practiceHomeStage = this.stage;
+        this.stage = 'nightmail';
+        this.terrain = platforms(this.stage,this.time);
+        const gate = this.terrain[0], start = gate.x2 - 174;
+        const brisket = newFighter('brisket',0), pip = newFighter('pip',1);
+        this.dogs = [brisket,pip];
+        Object.assign(brisket,{x:start,y:gate.y,ground:0,face:1});
+        Object.assign(pip,{x:start+58,y:gate.y,ground:0,face:-1,damage:85});
+        this.escapePractice = { originalDogs,spacing,slow,gripDrill:true,phase:'ready',time:0,
+          start,mark:start+100,baseline:85 };
+        return;
+      }
       if (spacing === 'gripEscape' || spacing === 'gripThrow') {
         const rival = originalDogs[1], middle = (floor.x1 + floor.x2)/2;
         const gap = player.stats.width + rival.stats.width + 4;
@@ -3618,7 +3632,14 @@
     }
     gripPracticeInput(drill, dt) {
       if (drill.phase === 'done' || drill.phase === 'ready') return idleInput;
-      const grip = this.grapple, holder = drill.spacing === 'gripThrow';
+      const grip = this.grapple, holder = drill.spacing !== 'gripEscape';
+      if (drill.phase === 'flight') {
+        const rival = this.dogs[1], floor = this.terrain[0];
+        const x = rival.x > floor.x2-16 ? -1 : rival.x < floor.x1+16 ? 1 : 0;
+        const dodge = x && !rival.stun && !rival.airDodge && !rival.usedDodge;
+        return { ...idleInput, x, shield:!!dodge, tapped:{shield:!!dodge},
+          jump:!!x && !rival.airDodge && rival.usedDodge && rival.y>floor.y-55 && rival.jumps>0 };
+      }
       if (grip) {
         if (grip.owner !== (holder ? 0 : 1)) {
           this.finishEscapePractice('wrongGrip');
@@ -3630,7 +3651,7 @@
         }
         if (grip.phase === 'throw') return idleInput;
         if (holder) {
-          const beat = Math.floor((grip.elapsed*60 + 1e-8)/6);
+          const beat = Math.floor((grip.elapsed*60 + 1e-8)/(drill.spacing === 'carry' ? 9 : 6));
           return { ...idleInput, x:beat ? (beat%2 ? 1 : -1) : 0 };
         }
         if (grip.phase === 'hold' && grip.pummelCount < 2) return { ...idleInput, tapped:{attack:true} };
@@ -3650,6 +3671,12 @@
       d.struggles = grip.struggles;
       d.pummels = grip.pummelCount;
       d.moveId = grip.throwId;
+      if (d.spacing === 'carry' && thrown) {
+        d.phase = 'flight';
+        d.distance = Math.round(this.dogs[0].x-d.start);
+        this.emit('escapeCue',{f:this.dogs[0],phase:'flight'});
+        return;
+      }
       this.finishEscapePractice(thrown ? 'throwLanded' : 'brokeFree');
     }
     crouchPracticeInput(dt) {
@@ -4969,7 +4996,7 @@
       if (this.escapePractice?.gripDrill) {
         const d = this.escapePractice;
         if (d.phase === 'ready') {
-          const key = d.spacing === 'gripThrow' ? 'grab' : 'attack';
+          const key = d.spacing === 'gripEscape' ? 'attack' : 'grab';
           if (!input1.tapped?.[key] && !(input1[key] && !this.dogs[0].prev[key])) return;
           d.phase = 'approach';
           d.consumeAttack = key === 'attack';
@@ -5111,6 +5138,7 @@
       const settingUpWallHit = wallDrill?.phase === 'swing';
       const inputs = [
         this.launchPractice?.phase === 'ready' || (this.survivalPractice && !this.survivalPractice.released) ||
+          (this.escapePractice?.spacing === 'carry' && this.escapePractice.phase === 'flight') ||
           settingUpWallHit ? idleInput : input1,
         ...(Array.isArray(second) ? second : [second]),
       ];
@@ -5199,6 +5227,14 @@
         this.updateBall(dt);
       const inset = this.blastInset();
       const out = this.dogs.filter(f => !f.absent && blastZone(f.x, f.y, this.stageWidth, inset));
+      const carryDrill = this.escapePractice;
+      if (carryDrill?.spacing === 'carry' && carryDrill.phase !== 'done') {
+        const rival = this.dogs[1];
+        if (out.includes(this.dogs[0])) this.finishEscapePractice('fell');
+        else if (out.includes(rival)) this.finishEscapePractice('ringOut');
+        else if (carryDrill.phase === 'flight' && (rival.ground >= 0 || rival.ledge))
+          this.finishEscapePractice('returned');
+      }
       if (this.freshnessPractice) this.traceFreshness(out.includes(this.dogs[1]));
       if (out.length) this.knockouts(out);
     }
@@ -5392,7 +5428,14 @@
           if (grip.phase !== 'throw') {
             if (f.index === grip.owner) {
               // One tap can be buffered. A throw always takes priority over another pummel.
-              if ((!grip.pending || grip.pending === 'pummel') && (changed || pressed('grab'))) {
+              if (grip.carry || grip.pending === 'hoist') {
+                if (pressed('grab') && grip.carry) grip.pending = direction === 'neutral' ? 'forward' : direction;
+                else if (grip.carry && !grip.pending && pressed('attack')) grip.pending = 'pummel';
+                if (grip.carry && f.ground >= 0 && grip.phase !== 'pummel' &&
+                    (pressed('jump') || pressed('shortHop'))) grip.carry.hop = true;
+              } else if (!grip.pending && f.kit.shoulderCarry && pressed('special')) {
+                grip.pending = 'hoist';
+              } else if ((!grip.pending || grip.pending === 'pummel') && (changed || pressed('grab'))) {
                 grip.pending = changed ? direction : 'forward';
               } else if (!grip.pending && pressed('attack')) grip.pending = 'pummel';
             } else {
@@ -7034,22 +7077,54 @@
       grip.phase = 'hold';
       grip.time = 0;
     }
+    moveShoulderCarry(grip, owner, dt) {
+      const spec = owner.kit.shoulderCarry, carry = grip.carry;
+      const walking = grip.phase === 'hold' && !grip.pending;
+      const axis = walking ? owner.prev.x : 0;
+      const ground = this.terrain[owner.ground];
+      const speed = ground ? spec.walk : spec.air;
+      owner.vx = toward(owner.vx, axis * speed, (ground ? 1450 : 820) * dt);
+      if (walking && carry.hop && ground) {
+        owner.ground = -1;
+        owner.jumps = 1;
+        owner.vy = -spec.hop;
+        this.emit('jump',{f:owner});
+      }
+      if (grip.phase !== 'hoist') carry.hop = false;
+      const nextX = owner.x + owner.vx * dt;
+      const wall = owner.ground < 0 && this.wallContact(owner,owner.x,owner.y,nextX,owner.y);
+      if (wall) owner.vx = 0;
+      owner.x = wall ? wall.x : nextX;
+      if (owner.ground >= 0 && (owner.x < ground.x1-5 || owner.x > ground.x2+5)) {
+        owner.ground = -1;
+        owner.jumps = 1;
+      }
+      carry.steps += Math.abs(owner.vx)*dt;
+      const drill = this.escapePractice;
+      if (drill?.spacing === 'carry' && walking && !drill.atMark && owner.x >= drill.mark) {
+        drill.atMark = true;
+        this.emit('escapeCue',{f:owner,phase:'atMark'});
+      }
+    }
     advanceGrapple(dt) {
       const grip = this.grapple;
       const owner = this.dogs[grip.owner],
         target = this.dogs[grip.target];
       const grab = grabs[grip.grabId];
+      const oldX = owner.x;
+      const rest = grip.carry ? owner.kit.shoulderCarry.rest : grab.grip;
       grip.time += dt;
       grip.elapsed += dt;
       grip.struggleFlash = Math.max(0, grip.struggleFlash - dt);
       owner.invuln = Math.max(0, owner.invuln - dt);
       owner.drop = Math.max(0, owner.drop - dt);
+      if (grip.carry) this.moveShoulderCarry(grip,owner,dt);
       // An airborne catch still falls, with both dogs riding the same platform on landing.
       if (owner.ground < 0) {
         const oldY = owner.y;
         owner.vy = Math.min(970, owner.vy + 1540 * owner.kit.gravity * dt);
         owner.y += owner.vy * dt;
-        const landing = owner.vy >= 0 ? this.landingSurface(owner, oldY) : -1;
+        const landing = owner.vy >= 0 ? this.landingSurface(owner, oldY, oldX, dt) : -1;
         if (landing >= 0) {
           owner.ground = landing;
           owner.y = this.terrain[landing].y;
@@ -7067,13 +7142,30 @@
         grip.remaining -= dt;
         if (grip.remaining <= 0) return this.breakGrapple(true);
       }
+      if (grip.phase === 'hoist') {
+        this.positionCaptive(grip,grip.carry.from,rest,grip.time/owner.kit.shoulderCarry.lift);
+        if (grip.time + 1e-8 < owner.kit.shoulderCarry.lift) return;
+        grip.phase = 'hold';
+        grip.time = 0;
+      }
       if (grip.phase === 'pummel') {
-        this.advancePummel(grip, owner, target, grab.grip);
+        this.advancePummel(grip, owner, target, rest);
         if (grip.phase === 'pummel') return;
       }
       if (grip.phase === 'hold') {
-        if (!grip.throwFrom) this.positionCaptive(grip, grab.grip, grab.grip, 1);
+        if (!grip.throwFrom) this.positionCaptive(grip, rest, rest, 1);
         if (!grip.pending) return;
+        if (grip.pending === 'hoist') {
+          grip.carry = { from:grip.throwFrom || grab.grip, steps:0, hop:false };
+          grip.throwFrom = null;
+          grip.phase = 'hoist';
+          grip.pending = null;
+          grip.time = 0;
+          owner.lastMove = 'Shoulder Carry';
+          this.emit('shoulderCarry',{f:owner,target,point:{...grip.anchor}});
+          if (this.escapePractice?.spacing === 'carry') this.emit('escapeCue',{f:owner,phase:'carrying'});
+          return;
+        }
         if (grip.pending === 'pummel') {
           grip.phase = 'pummel';
           grip.time = 0;
@@ -7081,7 +7173,7 @@
           beginAttack(owner, 'pummel', 0, 0, owner.kit.pummel);
           const attack = owner.attack;
           attack.pummel = true;
-          attack.contact = [grab.grip[0] + attack.recoil[0], grab.grip[1] + attack.recoil[1]];
+          attack.contact = [rest[0] + attack.recoil[0], rest[1] + attack.recoil[1]];
           return;
         }
         grip.phase = 'throw';
@@ -7100,7 +7192,7 @@
       const attack = owner.attack;
       attack.time = grip.time;
       const t = attack.time / attack.start;
-      if (t < 0.5) this.positionCaptive(grip, grip.throwFrom || grab.grip, attack.via, t * 2);
+      if (t < 0.5) this.positionCaptive(grip, grip.throwFrom || rest, attack.via, t * 2);
       else this.positionCaptive(grip, attack.via, attack.release, t * 2 - 1);
       if (attack.time + 1e-8 < attack.start) return;
       this.clearGrapple();
@@ -9258,6 +9350,12 @@
             const beat = Math.floor((grip.elapsed*60 + 1e-8)/6);
             if (beat > 0) result.x = beat%2 ? 1 : -1;
           } else result.attack = Math.floor(this.time * 6) % 2 === 0;
+        } else if (grip.carry) {
+          if (grip.phase !== 'hold') return result;
+          const floor = this.terrain[f.ground], solid = this.terrain.filter(p=>!p.thin);
+          const dir = f.x-solid[0].x1 < solid[solid.length-1].x2-f.x ? -1 : 1;
+          const room = !floor ? 0 : dir > 0 ? floor.x2 - f.x : f.x - floor.x1;
+          return { ...idleInput, x:dir, grab:room <= 28 || grip.remaining <= .34 };
         } else if (
           grip.phase === 'hold' &&
           !grip.pending &&
@@ -9265,6 +9363,14 @@
         ) {
           const floor = this.terrain[f.ground];
           const edge = floor && Math.min(f.x - floor.x1, floor.x2 - f.x) < 145;
+          if (this.cpuLevel === 'rival' && f.kit.shoulderCarry && floor && !floor.thin &&
+              foe.damage >= 60 && grip.remaining > .78) {
+            const solid = this.terrain.filter(p=>!p.thin);
+            const left = floor === solid[0] ? f.x-floor.x1 : Infinity;
+            const right = floor === solid[solid.length-1] ? floor.x2-f.x : Infinity;
+            const distance = Math.min(left,right);
+            if (distance >= 60 && distance <= 165) return {...idleInput,special:true};
+          }
           if (edge && foe.damage >= 40) result.x = f.x - floor.x1 < floor.x2 - f.x ? -1 : 1;
           else if (
             grip.pummelCount < (foe.damage >= 35 ? 2 : 1) &&

@@ -228,6 +228,9 @@
       const grip = f.grip;
       const phase = reduced.matches ? 0.25 : (grip.time / 0.64) % 1;
       if (f.index === grip.target) {
+        if (grip.carry && grip.phase !== 'throw' &&
+            (grip.phase !== 'hoist' || grip.high))
+          return ['shouldered',phase];
         if (grip.phase === 'pummel' && holder?.attack?.pummel) {
           const impact = attackPhase(holder.attack);
           if (impact >= 0.4 && impact < 0.95)
@@ -236,6 +239,13 @@
         return [grip.high ? 'grappledHigh' : 'grappled', phase];
       }
       if (f.index === grip.owner) {
+        if (grip.carry && grip.phase !== 'throw') {
+          if (grip.phase === 'hoist') return ['brisketShoulderLift',grip.time/f.kit.shoulderCarry.lift];
+          if (grip.phase === 'pummel') return ['brisketCarrySqueeze',attackPhase(f.attack)];
+          const walking = f.ground >= 0 && Math.abs(f.vx)>5;
+          return walking ? ['brisketCarryWalk',reduced.matches ? .25 : grip.carry.steps/45 % 1] :
+            ['brisketShoulderCarry',phase];
+        }
         if ((grip.phase === 'throw' || grip.phase === 'pummel') && f.attack)
           return [attackPose(f), attackPhase(f.attack)];
         const canonical = f.kit?.grab || window.DogFight.kits[f.kind]?.grab || grip.grabId;
@@ -2603,14 +2613,12 @@
       }
       if (world.escapePractice) {
         const drill = world.escapePractice, floor = world.terrain[0].y;
-        const grip = world.grapple;
-        if (drill.gripDrill && grip && grip.phase !== 'throw') {
-          const captive = world.dogs[grip.target], x = snap(captive.x,2)-24;
-          const y = snap(captive.y-captive.stats.height-22,2);
-          ctx.fillStyle = ink;
-          ctx.fillRect(x-2,y-2,52,8);
-          ctx.fillStyle = grip.struggleFlash > 0 ? cream : gold;
-          ctx.fillRect(x,y,Math.max(0,Math.round(48*grip.remaining/grip.capacity)),4);
+        if (drill.spacing === 'carry') {
+          const x=drill.mark;
+          for (const [color,w] of [[ink,6],[gold,3]]) {
+            pixelLine(ctx,x-9,floor+10,x,floor+2,color,w,2);
+            pixelLine(ctx,x,floor+2,x+9,floor+10,color,w,2);
+          }
         }
         // Three chalk ticks count in the swing. The arrow draws at the defender's feet on contact.
         if (drill.phase === 'windup' || drill.phase === 'swing') {
@@ -2817,6 +2825,13 @@
         drawFighter(ctx, captive, world, poseTime);
         drawFighter(ctx, holder, world, poseTime);
         gripLead(ctx, holder, grip);
+        if (grip.phase !== 'throw' && (grip.carry || world.escapePractice?.gripDrill)) {
+          const x = snap(captive.x,2)-24, y = snap(captive.y-captive.stats.height-22,2);
+          ctx.fillStyle = ink;
+          ctx.fillRect(x-2,y-2,52,8);
+          ctx.fillStyle = grip.struggleFlash > 0 ? cream : grip.remaining < .35 ? '#ff9076' : gold;
+          ctx.fillRect(x,y,Math.round(48*clamp(grip.remaining/grip.capacity,0,1)),4);
+        }
       } else {
         // Keep the hands that actually hold the lip visible for either player slot.
         const order = a.ledge && b.ledgeTrump ? [b, a] : world.dogs;
