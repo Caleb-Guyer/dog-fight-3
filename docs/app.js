@@ -819,6 +819,7 @@
   function showDialog(kind, title, html, close = true) {
     if (page === 'dispatch-story' && film) setFilmPaused(true);
     couchPanel = null;
+    clipScreen?.lifetime.abort();
     clipScreen = null;
     victoryShot = null;
     dialogType = kind;
@@ -835,6 +836,7 @@
   }
   function dismiss() {
     couchPanel=null;
+    clipScreen?.lifetime.abort();
     clipScreen = null;
     victoryShot = null;
     if ($('dialog').open) $('dialog').close();
@@ -2321,11 +2323,33 @@
       '</p><canvas id="clip-arena" width="640" height="360" role="img" aria-label="Replay of the final exchange"></canvas>'+
       '<div class="clip-status"><span id="clip-scores"></span><output id="clip-frame" aria-live="off"></output></div>'+
       '<input id="clip-seek" type="range" min="0" max="'+finishTape.length+'" value="0" aria-label="Replay frame">'+
+      '<div id="clip-moments" class="dialog-actions" role="group" aria-label="Jump to a replay moment" hidden></div>'+
       '<div class="dialog-actions"><button class="primary" id="clip-toggle">Pause</button>'+
       '<button class="utility" id="clip-step">Step 1 frame</button><button class="utility" id="clip-speed">Speed · ½×</button></div>'+
       '<div class="dialog-actions">'+(result.mode==='solo'?'<button class="utility" id="clip-practice">Play from here</button>':'')+
-      '<button class="utility" data-do="clip-back">Back to results</button></div>');
-    clipScreen={playing:!reducedReplays.matches,rate:.5,carry:0};
+      '<button class="utility" id="clip-export">Make GIF</button><button class="utility" data-do="clip-back">Back to results</button></div>'+
+      '<output id="clip-export-status" aria-live="polite"></output>');
+    clipScreen={playing:!reducedReplays.matches,rate:.5,carry:0,lifetime:new AbortController()};
+    const {signal}=clipScreen.lifetime, tape=finishTape;
+    const prepare=async()=>{
+      const button=$('clip-export');
+      button.disabled=true;
+      try{
+        await loadDispatch('FinishTools');
+        if(signal.aborted)return;
+        window.FinishTools.install({tape,signal,stage:stageName(result.stage,result.form),shake:settings.shake,root:$('dialog-body'),
+          filename:'dog-fight-3-'+result.dogs.map(d=>d.kind).join('-vs-')+'-'+result.stage+'.gif',
+          jump:frame=>{clipScreen.playing=false;seekClip(frame);}});
+        button.textContent='Make GIF';
+        $('clip-export-status').textContent='';
+      }catch{
+        if(signal.aborted)return;
+        button.textContent='Retry replay tools';
+        $('clip-export-status').textContent='Replay tools could not load.';
+      }finally{if(!signal.aborted)button.disabled=false;}
+    };
+    $('clip-export').onclick=prepare;
+    prepare();
     seekClip(0);
     $('clip-toggle').onclick=()=>{
       if (clipScreen.player.frame===clipScreen.player.length) seekClip(0);
@@ -2372,7 +2396,8 @@
     const view=new FightView();
     view.shakeEnabled=settings.shake;
     clipScreen.view=view;
-    clipScreen.player=finishTape.playback(frame,(name,event)=>view.event(name,event));
+    clipScreen.player=finishTape.playback(Math.max(0,frame-1),(name,event)=>view.event(name,event));
+    if(frame>0)clipScreen.player.step();
     clipScreen.carry=0;
     paintClip(0);
     updateClip();
@@ -5042,6 +5067,7 @@
   };
   const campaign = window.DispatchScript;
   const dispatchSources={
+    FinishTools:'finish-tools.js?v=finish-gif-1',
     FighterSchool:'fighter-lessons.js?v=fighter-school-1',
     DispatchCovers:'dispatch-covers.js?v=missions-1', DispatchFilm:'dispatch-film.js?v=widefilm-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=stocks-1',
