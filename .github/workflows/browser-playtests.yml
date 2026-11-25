@@ -43,6 +43,8 @@ jobs:
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/night-mail.js
+          node --test qa/suspend-mission.cjs
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/suspend-mission.js
           node --test qa/dead-letter-lift.cjs
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/dead-letter-lift.js
   fight-render:
