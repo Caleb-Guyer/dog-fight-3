@@ -13,11 +13,12 @@
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="./style.css?v=shield-landing-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
-    <link rel="stylesheet" href="./screen.css?v=practice-room-1" />
+    <link rel="stylesheet" href="./screen.css?v=first-fight-1" />
     <link rel="stylesheet" href="./online.css?v=bandstand-1" />
     <script defer src="./fighters-art.js?v=rapid-jab-1"></script>
     <script defer src="./arena-art.js?v=canal-lock-1"></script>
     <script defer src="./engine.js?v=shield-landing-1"></script>
+    <script defer src="./fight-school.js?v=first-fight-1"></script>
     <script defer src="./render.js?v=interrupted-return-1"></script>
     <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
@@ -32,7 +33,7 @@
     <script defer src="./dispatch-run.js?v=stock-return-1"></script>
     <script defer src="./dispatch-view.js?v=blast-radar-1"></script>
     <script defer src="./online.js?v=shield-landing-1"></script>
-    <script defer src="./app.js?v=shield-landing-1"></script>
+    <script defer src="./app.js?v=first-fight-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -70,6 +71,11 @@
           <h1 id="home-heading">Main menu</h1>
           <span class="rail-rule" aria-hidden="true"></span>
         </div>
+        <aside id="school-welcome" hidden aria-labelledby="welcome-title">
+          <div><strong id="welcome-title">Your first fight</strong><span>Learn with Pip, then take on Brisket.</span></div>
+          <button class="dispatch-primary" id="welcome-play" type="button">Play tutorial</button>
+          <button class="board-back" id="welcome-dismiss" type="button">Skip for now</button>
+        </aside>
         <div class="home-grid">
           <button
             type="button"
@@ -102,7 +108,8 @@
         </div>
         <div class="board-foot">
           <div class="ticket-tools">
-            <button type="button" id="home-guide">Move list</button
+            <button type="button" id="home-school">Fight School</button
+            ><button type="button" id="home-guide">Move list</button
             ><button type="button" id="home-options">Options</button>
           </div>
           <span class="menu-hint">↑ ↓ Choose &nbsp; Enter Select</span>
@@ -294,6 +301,15 @@
           <canvas id="blast-radar" width="160" height="108" role="img"
             aria-label="Blast radar. Square marks player one, diamond marks player two. The border is the knockout boundary." hidden></canvas>
           <div id="hud" class="hud"></div>
+          <section id="school-coach" hidden aria-labelledby="school-title">
+            <small id="school-count"></small>
+            <h2 id="school-title"></h2>
+            <p id="school-task" aria-live="polite"></p>
+            <p id="school-bindings"></p>
+            <div><button id="school-next" class="dispatch-primary" type="button" hidden>Next lesson</button>
+              <button id="school-retry" class="board-back" type="button">Retry</button>
+              <button id="school-list" class="board-back" type="button">Lessons</button></div>
+          </section>
           <div id="dispatch-hud" class="dispatch-hud" hidden>
             <div class="runner-meter">
               <img id="runner-portrait" alt="" />

@@ -61,6 +61,36 @@ body .topbar .wordmark {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
+#home.has-welcome { grid-template-rows:auto auto minmax(0,1fr) auto; }
+#school-welcome:not([hidden]) {
+  display:flex; align-items:center; gap:10px; color:var(--cream); background:var(--ink);
+  border-block:2px solid var(--gold); padding:7px max(14px,2vw);
+}
+#school-welcome div { flex:1; display:grid; gap:3px; }
+#school-welcome strong, #school-count { color:var(--gold); }
+#school-welcome span, #school-bindings { font-size:.83em; }
+#school-coach {
+  position:absolute; z-index:4; top:50px; left:50%; transform:translateX(-50%);
+  width:min(520px,94%); box-sizing:border-box; padding:8px 13px;
+  background:#26233a; color:#fff2d0; border:2px solid #f2cc73; box-shadow:3px 3px 0 #161629;
+}
+#school-coach h2 { margin:2px 0; font-size:clamp(15px,2vh,22px); }
+#school-coach p { margin:3px 0; line-height:1.25; }
+#school-coach button, #school-welcome button { padding:5px 9px; min-height:28px; }
+#school-coach div { display:flex; gap:7px; margin-top:5px; }
+#school-bindings { color:#aadcd8; }
+#school-syllabus { display:grid; gap:5px; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); }
+#school-syllabus button { text-align:left; }
+@media (max-height:520px) and (orientation:landscape) {
+  #school-coach { top:4px; left:4px; transform:none; width:34%; font-size:11px; padding:4px 7px; }
+  #school-coach h2 { font-size:13px; }
+  #school-coach button { font-size:11px; padding:2px 5px; }
+}
+@media (max-width:600px) {
+  #school-welcome { flex-wrap:wrap; font-size:13px; }
+  #school-welcome div { min-width:116px; }
+  #school-coach { top:7px; font-size:13px; }
+}
 .board-heading,
 .board-foot,
 .selection-bar,
