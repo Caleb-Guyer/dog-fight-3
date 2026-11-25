@@ -686,7 +686,7 @@
   function exitDialog() {
     if (dialogType === 'set-pick') return showResult();
     if (dialogType === 'result' || dialogType === 'dispatch-fall' || dialogType === 'online-result') return;
-    if ((dialogType === 'controls' || dialogType === 'moves' || dialogType === 'cpu-level') && backToPause) {
+    if (['controls','moves','cpu-level','practice'].includes(dialogType) && backToPause) {
       backToPause = false;
       showPause();
       return;
@@ -1382,7 +1382,7 @@
       })
       .join('');
   }
-  let matchConfig, soloSeed, localSet = null;
+  let matchConfig, soloSeed, localSet = null, practiceFight = null;
   const frameLab = {mode:'live', count:0, pending:0, renderTime:0};
   let trainingMoment = null;
   function frameState(f) {
@@ -1553,7 +1553,9 @@
     }
     return report;
   }
-  function startMatch(config = settings, random = Math.random, opening, series = null) {
+  function startMatch(config = settings, random = Math.random, opening, series = null, {visit, resume} = {}) {
+    practiceFight = visit || null;
+    const rehearsal = !!visit && config.mode === 'solo';
     trainingMoment = null;
     $('moment-retry').disabled = true;
     $('moment-save').hidden = $('moment-retry').hidden = false;
@@ -1596,10 +1598,10 @@
     document.body.classList.toggle('training-active', config.mode === 'training');
     $('lobby').hidden = true;
     $('match').hidden = false;
-    view = new FightView($('blast-radar'));
+    view = resume?.view || new FightView($('blast-radar'));
     showContactBoxes(false);
     view.shakeEnabled = settings.shake;
-    world = new Battle({...config, rivalRead:series?.openingRead}, (name, e) => {
+    world = resume?.battle || new Battle({...config, rivalRead:series?.openingRead}, (name, e) => {
       view.event(name, e);
       sound(name, e);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
@@ -1654,12 +1656,18 @@
       }
       if (name === 'win') resultDelay = 0.7;
     }, random);
+    if (rehearsal) {
+      world.copyFightFrom(visit.battle);
+      const {cx, cy, zoom, leftFighter} = visit.view;
+      Object.assign(view, {cx, cy, zoom, leftFighter});
+    }
     $('training-tools').hidden = config.mode !== 'training';
+    $('return-fight').hidden = !visit;
     setFrameMode('live');
     $('dummy-damage').value = '0';
     $('damage-output').textContent = '0%';
     const matchName = online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
-      'Solo · ' + cpuLevels[world.cpuLevel].name + ' CPU' : modes[config.mode];
+      (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : modes[config.mode];
     $('match-mode').textContent = matchName + (config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = arenas[config.stage].name;
     const set = online.series || localSet;
@@ -1669,12 +1677,13 @@
       $('match-set').setAttribute('aria-label', 'Best of three, game ' + set.games.length + ', P1 ' + set.score[0] + ', P2 ' + set.score[1]);
     }
     $('pause-label').textContent = online.match ? 'Match menu' : 'Pause';
-    countdown = config.mode === 'training' || world.suddenDeath ? 0 : 2.4;
-    lastCount = 0;
+    const position = rehearsal ? visit : resume;
+    countdown = position ? position.countdown : config.mode === 'training' || world.suddenDeath ? 0 : 2.4;
+    lastCount = position?.lastCount || 0;
     resultDelay = 0;
     hudKey = '';
     accumulator = 0;
-    $('countdown').textContent = countdown ? '3' : '';
+    $('countdown').textContent = position ? position.call : countdown ? '3' : '';
     $('countdown').classList.remove('net-lag');
     clearInput();
     updateHUD();
@@ -1686,6 +1695,7 @@
   function toLobby() {
     leaveOnline();
     localSet = null;
+    practiceFight = null;
     page = 'lobby';
     dismiss();
     world = null;
@@ -1730,10 +1740,14 @@
         'Resume</button><button class="utility" data-do="controls">' +
         icon('keyboard') +
         'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div>' +
-        cpuReadReport() + '<div class="dialog-actions">' + (world.mode === 'solo' && !localSet ?
-          '<button class="utility" data-do="cpu-level">Replay with another CPU</button>' : '') + '<button class="utility" data-do="rematch">' +
-        icon('reset') +
-        'Restart match</button><button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
+        (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
+          (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight ? 'Retry position' : 'Practice this position') + '</button>' : '') +
+          '<button class="utility" data-do="practice">Find a drill</button>' +
+          (practiceFight ? '<button class="utility" data-do="return-fight">Back to fight</button>' : '') + '</div>' : '') +
+        cpuReadReport() + '<div class="dialog-actions">' + (world.mode === 'solo' && !localSet && !practiceFight ?
+          '<button class="utility" data-do="cpu-level">Replay with another CPU</button>' : '') +
+        (practiceFight ? '' : '<button class="utility" data-do="rematch">' + icon('reset') + 'Restart match</button>') +
+        '<button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
     );
     document.querySelector('[data-do=resume]').focus();
   }
@@ -1783,6 +1797,13 @@
     const duration = Math.floor(elapsed / 60) + 'm ' + String(elapsed % 60).padStart(2, '0') + 's';
     const finish = result.endReason === 'time' ? 'Time expired · ' + result.dogs.map(d=>d.stocks).join('–') + ' stocks (P1–P2)' :
       result.endReason === 'sudden' ? 'Sudden Death KO' : stockLabel(f.stocks);
+    if (practiceFight && world.mode === 'solo') {
+      showDialog('result', 'Practice finished', '<p>' + f.stats.name + ' wins this attempt. Your fight is paused.</p>' +
+        '<div class="dialog-actions"><button class="primary" data-do="rehearse">Retry position</button>' +
+        '<button class="utility" data-do="return-fight">Back to fight</button></div>', false);
+      document.querySelector('[data-do=rehearse]').focus();
+      return;
+    }
     const set = online.series || localSet;
     if (set) return showSetResult(result, set, finish, duration);
     if (online.match) {
@@ -1895,6 +1916,9 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if (action === 'practice') showPractice();
+    if (action === 'rehearse') rehearsePosition();
+    if (action === 'return-fight') returnToFight();
     if (action === 'set-pick') chooseArena(true);
     if (action === 'cpu-counterpick') startNextSetGame(localSet.cpuPick(world.dogs[1].kind));
     if (action === 'new-set') {
@@ -3564,6 +3588,135 @@
     $('game').focus({ preventScroll: true });
     announce(message);
   }
+  // The original world is never stepped during a practice visit. Its CPU, shared grabs,
+  // clock and best-of-three stay at the pause frame even if the practice fight ends.
+  function pausedFight() {
+    return practiceFight || {battle:world, view, config:matchConfig, seed:soloSeed, series:localSet,
+      countdown, lastCount, call:$('countdown').textContent};
+  }
+  function rehearsePosition() {
+    const visit = pausedFight();
+    startMatch(visit.config, undefined, visit.seed, null, {visit});
+  }
+  function returnToFight() {
+    const resume = practiceFight;
+    if (resume) startMatch(resume.config, undefined, resume.seed, resume.series, {resume});
+  }
+  const practiceGroups = [
+    ['Movement','Footwork','footwork', footworkPatterns],
+    ['Movement','Wavedash','wave',['back','platform']],
+    ['Movement','Platforms','platform',['below','top','hold','ferry','shield-drop']],
+    ['Attack','Combo practice','combo',['example','late','record','defend','mix']],
+    ['Attack','Aerial spacing','spacing',['approach','retreat','landing','fastfall','sweet','cancel','footstool','footstoolTech','reverse','wavebounce']],
+    ['Attack','Knockdowns','launch',['lock','bait','floor-spike','edge-spike']],
+    ['Attack','Move freshness','freshness',['training','ko','rage']],
+    ['Defense','Combo escape','escape',['tip','close','counter','break','gripEscape','gripThrow','carry']],
+    ['Defense','Shield pressure','shield',['kick','drop','strike','grab','counterGrab','dodgeTiming','breakEscape','breakPunish','jumpIn','low','high','poke']],
+    ['Defense','Launch & survival','launch',['throw','juggle','breakaway','survival','last-stock','escape','stock-return','stock-catch']],
+    ['Defense','Air dodge','air',['neutral','edge']],
+    ['Recovery','Edgeguarding','edge',['lip','shortCatch','longCatch','tip','deep','corner','inside']],
+    ['Recovery','Ledge recovery','ledge',['training','right','attack-training']],
+    ['Recovery','Ledge timing','climb',['escape','trap','rise','coverRise']],
+    ['Recovery','Ledge roll','roll',['guard','read']],
+    ['Recovery','Contested ledge','trump',['take','defend']],
+    ['Recovery','Wall tech & wall jump','wall',['training','impact','pip','noodle']],
+    ['Movement','Free practice','',['reset-training','partner-training']],
+  ];
+  const practiceAliases = {
+    'footwork-crawl':'Noodle Clover duck boomerang projectile skip serve', 'footwork-antiAir':'anti-air',
+    'footwork-angleHigh':'up angled forward tilt', 'footwork-angleLow':'down angled forward tilt',
+    'footwork-reflect':'Pip bark projectile Clover', 'footwork-returnFire':'Clover Pip projectile reflect',
+    'footwork-armor':'Brisket Haymaker armor', 'footwork-armorGrab':'Brisket armor grab',
+    'footwork-cancelDash':'attack cancel', 'footwork-cancelTurn':'attack cancel',
+    'spacing-landing':'short hop full jump flick', 'spacing-fastfall':'fast fall shield',
+    'escape-tip':'SDI smash directional influence', 'escape-close':'SDI smash directional influence',
+    'launch-survival':'directional influence DI knockout', 'launch-breakaway':'hitstun cancel tumble combo escape',
+    'launch-escape':'jab lock tech', 'launch-bait':'getup attack tech chase',
+    'launch-stock-return':'respawn invincibility angel platform', 'launch-stock-catch':'respawn invincibility angel platform',
+    'shield-kick':'parry out of shield counter', 'shield-drop':'parry out of shield counter',
+    'shield-jumpIn':'empty hop falling aerial grab', 'freshness-training':'stale moves staling',
+    'partner-training':'local two players sparring', 'reset-training':'free training dummy',
+  };
+  const practiceTitles = {'reset-training':'Free training', 'shield-drop':'Block Brisket’s Belly Drop',
+    'shield-strike':'Block a strike', 'shield-grab':'Catch a shield grab', 'wall-impact':'Tech a heavy impact'};
+  function searchWords(value) {
+    return value.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  }
+  function startExercise(id) {
+    if (world.mode === 'solo') {
+      const visit = pausedFight();
+      startMatch({...visit.config, mode:'training', lastStockStart:false, suddenStart:false, fetch:false}, undefined, undefined, null, {visit});
+    } else dismiss();
+    if (id === 'reset-training' || id === 'partner-training') drill(id === 'partner-training' ? 'partner' : false);
+    else if (['wall-impact','wall-pip','wall-noodle'].includes(id)) drill('wall', false, world.wallPractice?.side || 'left', id.slice(5));
+    else {
+      // Freshness toolbar buttons toggle comparisons. A directory selection always starts the named test.
+      if (id.startsWith('freshness-') && world.freshnessPractice) world.resetTraining();
+      $(id).click();
+    }
+  }
+  function showPractice() {
+    backToPause = dialogType === 'pause';
+    const lanes = ['All', ...new Set(practiceGroups.map(group => group[0]))];
+    showDialog('practice', 'Find a drill',
+      '<label class="practice-search">Search drills<input id="practice-query" type="search" placeholder="Try jab lock, crawl, or parry" autocomplete="off"></label>' +
+      '<div class="practice-lanes" aria-label="Drill categories" role="group">' +
+      lanes.map(lane => '<button type="button" class="utility" data-lane="' + lane + '">' + lane + '</button>').join('') +
+      '</div><div id="practice-count" role="status"></div><div id="practice-results"></div>');
+    const query = $('practice-query'), results = $('practice-results');
+    let lane = 'All';
+    function refresh() {
+      const words = searchWords(query.value).split(' ').filter(Boolean);
+      let count = 0;
+      results.replaceChildren();
+      for (const [category, family, prefix, names] of practiceGroups) {
+        if (lane !== 'All' && lane !== category) continue;
+        const section = document.createElement('section');
+        const title = document.createElement('h3');
+        title.textContent = family;
+        section.append(title);
+        for (const name of names) {
+          const id = prefix ? prefix + '-' + name : name;
+          const label = practiceTitles[id] || $(id).textContent.trim();
+          const searchable = searchWords([category, family, label, practiceAliases[id] || '', id].join(' '));
+          if (!words.every(word => searchable.includes(word))) continue;
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.dataset.exercise = id;
+          button.textContent = label;
+          section.append(button);
+          count++;
+        }
+        if (section.children.length > 1) results.append(section);
+      }
+      $('practice-count').textContent = count ? count + (count === 1 ? ' drill' : ' drills') : 'No drills found.';
+      if (!count) {
+        const reset = document.createElement('button');
+        reset.className = 'utility'; reset.textContent = 'Show all drills';
+        reset.onclick = () => { lane = 'All'; query.value = ''; refresh(); document.querySelector('[data-lane="All"]').focus(); };
+        results.append(reset);
+      }
+      for (const button of document.querySelectorAll('[data-lane]')) button.setAttribute('aria-pressed', String(lane === button.dataset.lane));
+      results.scrollTop = 0;
+    }
+    query.oninput = refresh;
+    query.onkeydown = e => {
+      if (e.isComposing || !['ArrowDown','Enter'].includes(e.key)) return;
+      e.preventDefault();
+      const first = results.querySelector('button');
+      if (e.key === 'ArrowDown') first?.focus();
+      else first?.click();
+    };
+    for (const button of document.querySelectorAll('[data-lane]')) button.onclick = () => { lane = button.dataset.lane; refresh(); };
+    results.onclick = e => {
+      const entry = e.target.closest('[data-exercise]');
+      if (entry) startExercise(entry.dataset.exercise);
+    };
+    refresh();
+    document.querySelector('[data-lane="All"]').focus();
+  }
+  $('practice-menu').onclick = showPractice;
+  $('return-fight').onclick = returnToFight;
   $('reset-training').onclick = () => drill(world.trainingPartner ? 'partner' : false);
   $('partner-training').onclick = () => drill(world.trainingPartner ? false : 'partner');
   // Chromium can omit click on a training button after two thumbs release the fight controls.
@@ -3842,6 +3995,7 @@
   const countMarks = (bits) => campaign.rooms.filter((_, i) => bits & (1 << i)).length;
   function menuScreen(id, keepRoom = false) {
     localSet = null;
+    practiceFight = null;
     $('match-set').hidden = true;
     if (!keepRoom) leaveOnline();
     film?.score.silence();
@@ -4934,6 +5088,11 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (hash === '#training/practice') {
+      leaveOnline();
+      afterStory = null;
+      startMatch({...settings, mode:'training', fetch:false});
+      showPractice();
     } else if (hash === '#training/sparring') {
       leaveOnline();
       afterStory = null;
