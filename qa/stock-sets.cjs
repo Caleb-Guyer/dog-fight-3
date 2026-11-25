@@ -109,6 +109,16 @@ async function soloAndLocal(browser){
   assert.match(await page.locator('#set-score').textContent(),/P1 2 – 0 CPU/);
   await press('[data-do=new-set]');await fresh(d,1,'0–0');
   assert.equal(await page.locator('#match-stage').textContent(),'Picnic Table');
+  await page.goto(root+'?card#solo/last-stock');await observe(page);
+  await page.evaluate(()=>window.runCpuOff=true);
+  await page.getByRole('button',{name:'Match stats'}).waitFor({timeout:30000});
+  await press('[data-do=match-card]');
+  assert.match(await page.locator('.card-timeline').textContent(),/CPU Brisket out at 125%/);
+  assert.equal(await page.locator('.card-stats tr').filter({hasText:'Damage dealt'}).locator('td').first().textContent(),'0%');
+  assert.equal(await page.locator('[data-card-game]').count(),0);
+  await press('[data-do=card-back]');await press('[data-do=rematch]');
+  await page.waitForFunction(()=>window.observedBattle?.end===null && window.observedBattle.matchFrames>0);
+  assert.equal(await page.evaluate(()=>window.observedBattle.matchCard.losses.length),0);
   await page.close();console.log('Couch counterpick, game-two restart and solo CPU counterpick passed.');
 }
 async function rivalSet(browser) {
@@ -173,6 +183,14 @@ async function rivalSet(browser) {
   await hold([]);
   await page.clock.runFor(1600);
   assert.match(await page.locator('#dialog-body').textContent(),/roll away after consecutive blocks.*remember/);
+  await page.getByRole('button',{name:'Match stats'}).click();
+  assert.match(await page.locator('.card-stage').textContent(),/Game 1/);
+  assert.match(await page.getByRole('table',{name:'Fighter stats'}).textContent(),/CPU.*Noodle/);
+  assert((await page.locator('.card-timeline li').count())>=3);
+  assert.match(await page.locator('.card-timeline').textContent(),/Last hit at/);
+  assert((await page.getByRole('row',{name:/Hits blocked/}).locator('td').first().textContent())>0);
+  await page.keyboard.press('Escape');
+  assert(await page.getByRole('button',{name:'Match stats'}).evaluate(el=>el===document.activeElement));
   await page.locator('[data-do=set-pick]').click();
   await page.locator('[data-stage=canal]').click();
   await page.clock.runFor(3200);
@@ -215,6 +233,23 @@ async function onlineSet(browser,phoneBrowser) {
     }
     assert.equal(await a.locator('#set-score').textContent(),await b.locator('#set-score').textContent());
     assert.equal(await b.locator('.set-history li').count(),i+1);
+    const cards=[];
+    for(const d of [host,guest]){
+      await d.press('[data-do=match-card]');
+      assert.match(await d.page.locator('.card-stage').textContent(),new RegExp('Game '+(i+1)));
+      if(i===2){
+        await d.press('[data-card-game="0"]');
+        assert.match(await d.page.locator('.card-stage').textContent(),/Game 1 · Night Mail/);
+      }
+      const rows=await d.page.locator('.card-timeline li').allTextContents();
+      assert.equal(rows.length,3);
+      assert(rows.every(s=>s.includes('blast line') && s.includes('No hits taken')));
+      const stats=await d.page.locator('.card-stats tbody').innerText();
+      cards.push({rows,stats});
+      assert(await d.page.locator('#dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+      await d.press('[data-do=card-back]');
+    }
+    assert.deepEqual(cards[0],cards[1]);
     if(i<2){
       if(i===0)await winner.press('[data-do=online-rematch]');
       await loser.press('[data-do=set-pick]');await loser.press(i===0?'[data-stage=bandstand]':'[data-stage=nightmail]');
