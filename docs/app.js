@@ -2010,7 +2010,8 @@
     $('partner-training').setAttribute('aria-pressed','false');
     localSet = series;
     matchConfig = { ...config };
-    if(config.mode==='local' && !online.match && !matchConfig.couchSeats)matchConfig.couchSeats=new window.FightControls.Seats(getPads());
+    if(series && config.mode==='local' && !online.match && config.lesson===undefined && !matchConfig.couchSeats)
+      matchConfig.couchSeats=new window.FightControls.Seats(getPads());
     $('school-coach').hidden = config.lesson === undefined;
     if (config.mode === 'solo') {
       soloSeed = opening ?? crypto.getRandomValues(new Uint32Array(1))[0];
