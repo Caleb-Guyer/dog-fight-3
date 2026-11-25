@@ -5349,6 +5349,8 @@
       }, finishStory, filmArea,
     );
     updateFilmButton();
+    // A story film leads straight into its mission. Library screenings end on the reel shelf.
+    if(!fromLibrary && !scene.completesChapter && !missionReady())loadMission().catch(()=>{});
     $(film.paused && fromLibrary ? 'film-pause' : 'story-next').focus({ preventScroll: true });
   }
   function showStoryPage(key, part) {
