@@ -249,6 +249,7 @@
   const parryWindow = 5 / 60;
   const shieldGrabPenalty = 4 / 60;
   const jumpSquatTime = 3 / 60;
+  const shortHopDamage = .85;
   const fastFallBufferFrames = 3;
   const liftArrival = 24 / 60, liftWait = 120 / 60;
   const liftReserve = time => clamp(96 - Math.round(Math.max(0, time - liftArrival) * 36), 24, 96);
@@ -2140,6 +2141,7 @@
       landingLag: 0,
       waveSlide: 0,
       takeoffWindow: 0,
+      shortHopFlight: false,
       command: null,
       guardBuffer: 0,
       chainNext: 0,
@@ -2448,6 +2450,7 @@
     f.face = command.facing;
     beginAttack(f, 'aerial', side === 'up' ? -1 : side === 'down' ? 1 : 0, 0, f.kit.air[side]);
     f.attack.airSide = side;
+    if (f.shortHopFlight) f.attack.shortHop = true;
     if (command.fromWindup) f.attack.fromWindup = command.fromWindup;
     if (f.attack.plunge) {
       f.fastFall = false;
@@ -2482,7 +2485,8 @@
     }
     return (1000 - deduction) / 1000;
   }
-  function staleDamage(damage, power) {
+  function scaledDamage(damage, power, use) {
+    if (use?.shortHop) power *= shortHopDamage;
     return power === 1 ? damage : Math.round(damage * power * 10) / 10;
   }
   function rememberMove(f, moveId, use, power, shieldOnly) {
@@ -2575,7 +2579,7 @@
   }
   function clashDamage({ f, attack, beat }, point) {
     const damage = (beat.dmg + (sweetSpotAt(f, beat, point.x, point.y)?.bonus || 0)) * strikeStrength(attack);
-    return staleDamage(damage, moveFreshness(f, attack.moveId, attack));
+    return scaledDamage(damage, moveFreshness(f, attack.moveId, attack), attack);
   }
   const clashMargin = 9;
   function recoilFromClash({ f, attack }, damage, away) {
@@ -2587,6 +2591,7 @@
     if (attack.plunge) f.fastFall = false;
   }
   function restoreAir(f) {
+    f.shortHopFlight = false;
     f.ledgeDropJump = false;
     f.usedWallKick = false;
     f.wallKickDir = 0;
@@ -3495,6 +3500,23 @@
       const previous = this.spacingPractice;
       this.resetTraining();
       const [f, guard] = this.dogs;
+      if (pattern === 'airPower') {
+        // A flat roof lets the same standing target receive both jumps without a platform intervening.
+        if (this.stage !== 'nightmail') {
+          this.practiceHomeStage = this.stage;
+          this.stage = 'nightmail';
+          this.terrain = platforms(this.stage, this.time);
+        }
+        const floor = this.terrain[0], mid = (floor.x1+floor.x2)/2;
+        const gap = f.stats.width + guard.stats.width;
+        Object.assign(f,{x:mid-dir*gap/2, y:floor.y, ground:0, face:dir});
+        Object.assign(guard,{x:mid+dir*gap/2, y:floor.y, ground:0, face:-dir});
+        this.spacingPractice = {pattern, dir, slow, phase:'ready', ground:0, mark:f.x, cueY:floor.y-guard.stats.height,
+          frames:0, time:0, hits:0, damage:0, baseline:guard.damage,
+          previous:previous?.pattern === pattern && previous.dir === dir && previous.baseline === guard.damage
+            ? previous.result || previous.previous : null};
+        return;
+      }
       let ground = this.stage === 'laundry' && dir < 0 ? 1 : 0;
       if (pattern === 'footstoolTech') {
         // Give the jumper a clear approach above the landing, including on stacked platforms.
@@ -3509,7 +3531,7 @@
         this.dogs = [f,pip];
         const middle = (floor.x1+floor.x2)/2;
         Object.assign(pip,{x:middle+dir*27.5,y:floor.y,ground,face:-dir,shield:true,damage:this.trainingDamage});
-        Object.assign(f,{x:middle-dir*27.5,y:floor.y,ground:-1,face:dir,vy:-f.stats.jump*.6,jumps:1});
+        Object.assign(f,{x:middle-dir*27.5,y:floor.y,ground:-1,face:dir,vy:-f.stats.jump*.6,jumps:1,shortHopFlight:true});
         // Start on this dog's short-hop arc with time for its neutral aerial to come out.
         const lead = f.kind === 'brisket' ? 7 : 5;
         while (framesToApex(f) > lead) {
@@ -3599,7 +3621,7 @@
     }
     spacingPracticeInput() {
       const drill = this.spacingPractice, guard = this.dogs[1];
-      if (drill.phase === 'done' || isSweetPractice(drill)) return idleInput;
+      if (drill.phase === 'done' || isSweetPractice(drill) || drill.pattern === 'airPower') return idleInput;
       if (drill.pattern === 'fastfall') {
         if (drill.blockAt !== null && !drill.reply) {
           drill.reply = true;
@@ -3651,6 +3673,20 @@
       const drill = this.spacingPractice, [f, guard] = this.dogs;
       if (drill.phase !== 'active') return;
       drill.time += dt;
+      if (drill.pattern === 'airPower') {
+        if (f.ground < 0) drill.airborne = true;
+        if (f.ground < 0 && !f.jumps || (f.attack && f.attack.moveId !== f.kit.air.neutral))
+          return this.finishSpacingPractice('other');
+        if (!drill.cued && !f.attack && f.ground < 0 && f.vy > 0 && f.y >= drill.cueY) {
+          drill.cued = true;
+          this.emit('airPowerCue',{f});
+        }
+        if (drill.airborne && f.ground >= 0 && !f.attack && f.landingLag <= 1e-8) {
+          if (drill.hits) drill.result = {short:drill.short, hits:drill.hits, damage:drill.damage, frames:drill.frames};
+          this.finishSpacingPractice(drill.hits ? 'landed' : 'miss');
+        } else if (drill.time > 4) this.finishSpacingPractice('miss');
+        return;
+      }
       if (drill.pattern === 'fastfall') {
         if (f.ground >= 0 && drill.landing === null) drill.landing = this.time;
         if (drill.parried && guard.stun <= 0) this.finishSpacingPractice('parried');
@@ -5339,6 +5375,7 @@
         spacing.consumeAttack = !!input1.attack;
         input1 = { ...input1, attack:false, tapped:{ ...input1.tapped, attack:false } };
       }
+      if (spacing?.pattern === 'airPower' && spacing.phase === 'active') spacing.frames++;
       if (isSweetPractice(spacing) && spacing.phase === 'done' && !this.hitStop) {
         if (spacing.flightFrames >= 24) return;
         spacing.flightFrames = (spacing.flightFrames || 0) + 1;
@@ -6139,6 +6176,7 @@
       f.ledgeDropJump = false;
       f.wallAction = { type:'wallKick', time:0, duration:kick.frames/60, wall, dir };
       f.usedWallKick = true;
+      f.shortHopFlight = false;
       f.x = wall.x + dir * f.stats.width;
       f.face = dir;
       f.vx = dir * kick.push;
@@ -6261,6 +6299,7 @@
     }
     footstool(f, target) {
       const head = target.y - bodyHeight(target), airborne = target.ground < 0;
+      f.shortHopFlight = false;
       f.ledgeDropJump = false;
       this.clearTumble(f, 'Footstool');
       f.y = Math.min(f.y, head);
@@ -6277,6 +6316,7 @@
       const guarding = target.shield || (target.prev.shield && !target.attack && !target.stun && !target.landingLag &&
         !target.jumpSquat && target.charge < 0 && !target.shieldDrop);
       if (airborne || !guarding) {
+        target.shortHopFlight = false;
         target.ledgeDropJump = false;
         target.attack = target.command = target.run = target.jumpSquat = target.reaction = null;
         target.jumpBuffer = target.guardBuffer = target.coyote = target.hopWindow = target.chainWindow = 0;
@@ -6506,7 +6546,9 @@
         return false;
       }
       f.vy = -f.stats.jump * (squat.short ? 0.60 : 1);
+      f.shortHopFlight = !!squat.short;
       const drill = this.spacingPractice;
+      if (f.index === 0 && drill?.pattern === 'airPower') drill.short = f.shortHopFlight;
       if (f.index === 0 && drill?.pattern === 'landing' && !drill.airborne) {
         drill.peak = { short: squat.short, floorY: f.y, x: f.x, y: f.y, complete: false };
       }
@@ -6895,6 +6937,7 @@
           if (groundJump) {
             if (!this.advanceJumpSquat(f, input, dt)) return;
           } else {
+            f.shortHopFlight = false;
             if (f.coyote > 0) f.jumps = 2;
             f.vy = -f.stats.jump * (f.jumps === 2 ? 1 : 0.91);
             if (this.cpuControlled(f)) this.bot.jumpHold = this.bot.hop && f.kind !== 'brisket' ? 0.07 : 0.34;
@@ -7443,6 +7486,7 @@
         comboLink: target.stun > 0,
       };
       this.grapple = owner.grip = target.grip = grip;
+      target.shortHopFlight = false;
       if (target.shieldBreak) this.endShieldBreak(target, 'grabbed', attack.moveId);
       for (const f of [owner, target]) {
         f.ledgeDropJump = false;
@@ -7541,7 +7585,7 @@
         attack.connected = true;
         const power = moveFreshness(owner, attack.moveId, attack);
         rememberMove(owner, attack.moveId, attack, power, false);
-        const damage = this.dealDamage(target, staleDamage(attack.dmg, power), grip.comboLink);
+        const damage = this.dealDamage(target, scaledDamage(attack.dmg, power), grip.comboLink);
         this.comboContact(target, 'pummel', attack.moveId, damage);
         this.sampleFreshness(owner, attack, attack.moveId, power, damage, 0);
         grip.comboLink = true;
@@ -8307,6 +8351,7 @@
     }
     dealDamage(target, damage, preserveCombo) {
       if (damage > 0) {
+        target.shortHopFlight = false;
         target.ledgeProtectionReady = true;
         target.ledgeCatches = 0;
       }
@@ -8501,7 +8546,7 @@
         return false;
       }
       const power = moveId ? moveFreshness(owner, moveId, use) : 1;
-      damage = staleDamage(damage, power);
+      damage = scaledDamage(damage, power, use);
       const stance = target.attack;
       if (
         !grab &&
@@ -8593,6 +8638,12 @@
       target.shieldDrop = target.parryFlash = 0;
       target.techBuffer = target.dodge = 0;
       const applied = this.dealDamage(target, damage, previousLocks > 0 || move?.preserveCombo);
+      const comparison = this.spacingPractice;
+      if (comparison?.pattern === 'airPower' && comparison.phase === 'active' && owner.index === 0 &&
+          moveId === owner.kit.air.neutral) {
+        comparison.hits++;
+        comparison.damage = Math.round((comparison.damage + applied) * 10) / 10;
+      }
       this.comboContact(target, name === 'throw' ? 'throw' : 'hit', moveId || name, applied);
       const finish = finishingLaunch(move, name);
       const rage = finish && growth > 0 && name !== 'ball' ? rageScale(ownerDamage) : 1;
@@ -8897,7 +8948,7 @@
           point.x = clamp(point.x, a.x - a.rx, a.x + a.rx);
           point.y = clamp(point.y, a.y - a.ry, a.y + a.ry);
           const power = clashDamage(swing, point);
-          const discDamage = staleDamage(damage, moveFreshness(owner, d.moveId, d));
+          const discDamage = scaledDamage(damage, moveFreshness(owner, d.moveId, d));
           const winner = discDamage >= power + clashMargin ? owner : power >= discDamage + clashMargin ? f : null;
           if (winner !== f && (f.ground >= 0 || winner === owner))
             recoilFromClash(swing, power, Math.sign(dx) || -f.face);

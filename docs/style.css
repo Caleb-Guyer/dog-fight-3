@@ -858,6 +858,9 @@ body.playing .tools .utility,
 .percentage.high {
   color: var(--gold);
 }
+.percentage small {
+  font-size: .65em;
+}
 .percentage.danger {
   color: var(--tomato);
 }

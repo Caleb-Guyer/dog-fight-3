@@ -2714,7 +2714,14 @@
       if (world.spacingPractice && !window.DogFight.isSweetPractice(world.spacingPractice)) {
         const drill = world.spacingPractice, floor = world.terrain[drill.ground];
         const x = snap(drill.mark, 2), y = floor.y + 5;
-        if (window.DogFight.isFootstoolPractice(drill)) {
+        if (drill.pattern === 'airPower') {
+          const high = snap(drill.cueY,2), tint = drill.cued ? mint : gold;
+          for (const side of [-1,1]) {
+            const at = x + side*(a.stats.width+10);
+            pixelLine(ctx,at,high,at+side*12,high,ink,6,2);
+            pixelLine(ctx,at,high,at+side*12,high,tint,3,2);
+          }
+        } else if (window.DogFight.isFootstoolPractice(drill)) {
           const rescue = drill.pattern === 'footstool', dog = rescue ? b : a;
           const y = snap(drill.stepped && !rescue ? floor.y : dog.y - dog.stats.height, 2);
           const x = snap(dog.x, 2), lit = drill.stepped || drill.cue;
