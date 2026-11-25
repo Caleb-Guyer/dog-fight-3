@@ -1813,7 +1813,7 @@
         '</strong><small>'+venue+'</small></div><b>'+(i<round ? stockLabel(run.wins[i].stocks)+' kept' :
           i===round ? 'Up next' : dog ? cpuLevels[cup.levels[i]].name : 'Boss')+'</b></li>';
     }).join('');
-    const tip = course.bouts[round]?.[3] || campaign.rooms[campaign.lastRoom].objective;
+    const tip = course.bouts[round]?.[3] || yardChapter.rooms[yardChapter.lastRoom].objective;
     showDialog('cup','Arcade Cup','<div class="cup-dogs" role="group" aria-label="Choose a route">'+selectors.join('')+
       '</div><h3 class="card-stage">'+course.name+'</h3><ol class="cup-stops">'+stops+'</ol><p>'+tip+'</p>'+
       (unsavedCup.has(kind)?'<p>Progress lasts for this tab while storage is unavailable.</p>':'')+
@@ -1852,7 +1852,7 @@
     const run = entry.active, round = run.wins.length;
     const attempt = {kind,id:run.id,retries:run.retries,round,coat:run.coat};
     const bout = cup.courses[kind].bouts[round];
-    if (!bout) return beginRun(campaign.lastRoom,0,null,attempt);
+    if (!bout) return beginRun(yardChapter.lastRoom,0,null,attempt);
     const [p2,stage,form] = bout;
     startMatch({...settings,mode:'solo',p1:kind,p2,stage,form,coats:[run.coat,0],
       cpuLevel:cup.levels[round],fetch:false,minutes:7},undefined,17+round*31,null,{cupRound:attempt});
@@ -5131,14 +5131,15 @@
     practiceSide = practiceSide === 'left' ? 'right' : 'left';
     drill('air', false, world.airPractice.pattern);
   };
-  const campaign = window.DispatchScript;
+  const [yardChapter, nightChapter] = window.DispatchScript.chapters;
+  let campaign = yardChapter;
   const dispatchSources={
     WinnerStays:'winner-stays.js?v=rotation-1', CouchSelect:'couch-select.js?v=rotation-1',
     FinishTools:'finish-tools.js?v=finish-gif-1',
     FighterSchool:'fighter-lessons.js?v=fighter-school-1',
-    DispatchCovers:'dispatch-covers.js?v=missions-1', DispatchFilm:'dispatch-film.js?v=widefilm-1',
-    DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=stocks-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=yard-cup-1', DispatchView:'dispatch-view.js?v=blast-radar-1',
+    DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
+    DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=night-mail-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=night-mail-1', DispatchView:'dispatch-view.js?v=night-mail-1',
   };
   const dispatchLoads=new Map();
   function loadDispatch(part) {
@@ -5184,8 +5185,15 @@
     storage = window.localStorage;
   } catch {}
   const records=new window.FightRecords.Book(storage);
-  let progress = campaign.readSave(storage),
+  const chapterSaves = new Map(window.DispatchScript.chapters.map(book=>[book, book.readSave(storage)]));
+  const nightUnlocked = () => chapterSaves.get(yardChapter).complete && !chapterSaves.get(yardChapter).pending;
+  if (nightUnlocked()) campaign = nightChapter;
+  let progress = chapterSaves.get(campaign),
     stored = !!storage;
+  function selectChapter(book) {
+    campaign = book;
+    progress = chapterSaves.get(book);
+  }
   let film = null,
     afterStory = null,
     inLibrary = false,
@@ -5203,6 +5211,7 @@
       }
     }
     progress = {...campaign.record(progress, event),playedAt:Date.now()};
+    chapterSaves.set(campaign, progress);
     try {
       storage.setItem(campaign.saveKey, JSON.stringify(progress));
       stored = true;
@@ -5252,12 +5261,14 @@
         detail:final?'First stock match · Pip vs. Rookie Brisket':'Lesson '+(index+1)+' · '+schoolLessons[index].title,
         action:final?'Play match':'Continue'});
     }
-    if (progress.started && (!progress.complete || progress.pending==='ending')) {
-      const room=campaign.rooms[progress.room];
-      items.push({id:'adventure',title:'The Last Dispatch',kind:campaign.chapterFighter,playedAt:progress.playedAt,
-        detail:progress.pending ? 'Cutscene · '+campaign.scenes[progress.pending].title :
-          room.name+(progress.checkpoint?' · '+room.checkpoints[progress.checkpoint-1].name:' · '+room.type),
-        action:progress.pending?'Watch':'Continue'});
+    const book = nightUnlocked() ? nightChapter : yardChapter, saved = chapterSaves.get(book);
+    if ((saved.started || book===nightChapter) && (!saved.complete || saved.pending)) {
+      const room=book.rooms[saved.room];
+      items.push({id:'adventure',title:book===yardChapter?'The Last Dispatch':book.title,kind:book.chapterFighter,
+        playedAt:saved.playedAt || chapterSaves.get(yardChapter).playedAt,
+        detail:saved.pending ? 'Cutscene · '+book.scenes[saved.pending].title : !saved.started ? 'Chapter 02 · Play as Clover' :
+          room.name+(saved.checkpoint?' · '+room.checkpoints[saved.checkpoint-1].name:' · '+room.type),
+        action:saved.pending?'Watch':saved.started?'Continue':'Begin'});
     }
     for (const [kind,course] of Object.entries(cup.courses)) {
       const entry=cupEntry(kind), run=entry.active;
@@ -5270,6 +5281,7 @@
   }
   function refreshHomeSaves() {
     const games=savedGames(), item=games[0];
+    $('home-chapter').textContent=nightUnlocked()?'Chapter 02 · The Night Mail':'Chapter 01 · The Silent Yard';
     $('home-saves').hidden=!item;
     $('school-welcome').hidden=!!item || schoolSave.seen;
     $('home').classList.toggle('has-welcome',!$('school-welcome').hidden);
@@ -5293,7 +5305,7 @@
   function resumeSavedGame(id) {
     if (!savedGames().some(g=>g.id===id)) return showHome();
     if (id==='school') return unfinishedLesson()<0 ? startFirstFight() : resumeCourse();
-    if (id==='adventure') return continueAdventure();
+    if (id==='adventure') { selectChapter(nightUnlocked()?nightChapter:yardChapter); return continueAdventure(); }
     // Use the route card's checked transaction, including its cross-tab retry guard.
     cupSheet(id);
     startCupRound(id);
@@ -5304,7 +5316,13 @@
     menuScreen('dispatch-route');
     afterStory = null;
     if(!window.DispatchCovers)return waitForDispatch('Route map',()=>loadDispatch('DispatchCovers'),()=>showRoute(then),()=>showHome());
-    window.DispatchCovers.draw($('route-cover'), 'route', progress.room);
+    const night = campaign===nightChapter;
+    window.DispatchCovers.draw($('route-cover'), night?'eastRoute':'route', progress.room);
+    $('route-cover').setAttribute('aria-label','Rail map · '+campaign.rooms.map(r=>r.name).join(' to '));
+    $('route-number').textContent = 'Chapter 0'+campaign.number;
+    $('route-chapter').textContent = campaign.title;
+    $('route-switch').hidden = !nightUnlocked();
+    $('route-switch').textContent = night?'Chapter 01 · The Silent Yard':'Chapter 02 · The Night Mail';
     const stops = $('route-stops');
     stops.replaceChildren();
     for (const [i, r] of campaign.rooms.entries()) {
@@ -5335,14 +5353,14 @@
         ? (stored ? 'Saved at ' : 'This session · ') +
           campaign.rooms[progress.room].name +
           (progress.checkpoint ? ' · ' + campaign.rooms[progress.room].checkpoints[progress.checkpoint - 1].name : '')
-        : 'First stop · Parcel Alley';
+        : 'First stop · '+campaign.rooms[0].name;
     $('route-marks').textContent =
       'Postmarks ' +
       countMarks(progress.stamps) +
       ' / ' + campaign.rooms.length +
       (!stored ? ' · Progress lasts for this session' : '');
     $('dispatch-start').textContent =
-      progress.pending === 'ending'
+      campaign.scenes[progress.pending]?.completesChapter
         ? 'Watch ending'
         : progress.complete
           ? 'Replay chapter'
@@ -5358,7 +5376,7 @@
     if (!filmLoads.has(key)) {
       const task = new Promise((resolve,reject)=>{
         const script = document.createElement('script');
-        script.src = './film-'+key+'.js?v=widefilm-1';
+        script.src = Object.hasOwn(nightChapter.scenes,key) ? './film-night-mail.js?v=1' : './film-'+key+'.js?v=widefilm-1';
         script.onload = () => window.DispatchFilms[key] ? resolve() : reject(new Error('Missing animation'));
         script.onerror = () => reject(new Error('Animation unavailable'));
         document.head.append(script);
@@ -5367,12 +5385,13 @@
     }
     return filmLoads.get(key);
   }
-  function showReels(selected = 'opening') {
+  function showReels(selected = campaign.rooms[0].intro) {
     const locks = {
       opening: '',
       rescue: progress.room >= 1 ? '' : 'Finish Parcel Alley',
       boss: progress.room >= campaign.lastRoom ? '' : 'Cross Sorting Bridge',
       ending: progress.complete || progress.pending === 'ending' ? '' : 'Defeat the Copper Hound',
+      nightmail: '', firstlight: progress.complete || progress.pending === 'firstlight' ? '' : 'Win at East Signal Box',
     };
     const rows = Object.entries(campaign.scenes).map(([key, scene]) => {
       const locked = locks[key];
@@ -5486,16 +5505,23 @@
     showRoute(showChapterClear);
   }
   function showChapterClear() {
+    const night = campaign===nightChapter;
     showDialog(
       'dispatch-clear',
       'Chapter clear',
       '<div class="winner"><img alt="" src="' +
         portrait('clover') +
-        '"><div><span class="mode-label">The Last Dispatch</span><h3>The Silent Yard</h3><p>' +
+        '"><div><span class="mode-label">The Last Dispatch</span><h3>'+campaign.title+'</h3><p>' +
         countMarks(progress.stamps) +
-        ' of ' + campaign.rooms.length + ' postmarks collected.</p></div></div><p>The bell is back in service. Clover has the next dispatch.</p><div class="dialog-actions"><button class="primary" data-do="close">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
+        ' of ' + campaign.rooms.length + ' postmarks collected.</p></div></div><p>' +
+        (night?'The night mail is safe. Both chapters are open for replay.':'The bell is back in service. Clover has the next dispatch.') +
+        '</p><div class="dialog-actions">'+(night?'':'<button class="primary" id="next-chapter">Chapter 02 · The Night Mail</button>')+
+        '<button class="'+(night?'primary':'utility')+'" data-do="close">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
     );
-    document.querySelector('[data-do=close]').focus();
+    if (!night) {
+      $('next-chapter').onclick=()=>{selectChapter(nightChapter);showRoute();};
+      $('next-chapter').focus();
+    } else document.querySelector('[data-do=close]').focus();
   }
   function playScene(key) {
     const scene = campaign.scenes[key],
@@ -5514,7 +5540,8 @@
     else beginRun(index, checkpoint, checkpoint ? progress.atCheckpoint : null);
   }
   function beginRun(index, checkpoint, atCheckpoint = null, cupRound = null) {
-    if(!missionReady())return waitForDispatch(campaign.rooms[index].name,loadMission,
+    const book = cupRound ? yardChapter : campaign;
+    if(!missionReady())return waitForDispatch(book.rooms[index].name,loadMission,
       ()=>beginRun(index,checkpoint,atCheckpoint,cupRound),()=>cupRound?cupSheet(cupRound.kind):showRoute());
     finishTape=null;
     cupAttempt = cupRound;
@@ -5556,7 +5583,7 @@
     view.shakeEnabled = settings.shake;
     noticeUntil = 0;
     $('dispatch-notice').hidden = true;
-    world = new window.DispatchRun({ room: index, checkpoint, atCheckpoint, stamps: cupRound ? 0 : progress.stamps,
+    world = new window.DispatchRun({ chapter:book.number, room: index, checkpoint, atCheckpoint, stamps: cupRound ? 0 : progress.stamps,
       cupFighter:cupRound?.kind,coat:cupRound?.coat }, (name, e) => {
       view.event(name, e);
       if (name === 'dispatchCheckpoint') {
@@ -5574,7 +5601,7 @@
         dispatchNotice(e.name + ' raised');
       } else if (name === 'dispatchWave') {
         tone(420, 570, 0.12);
-        if (campaign.rooms[index].id === 'exchange') dispatchNotice('Wave ' + e.wave);
+        if (book.rooms[index].rules === 'horde') dispatchNotice('Wave ' + e.wave);
       } else if (name === 'ko') {
         sound(name, e);
         dispatchNotice(e.f.stats.name + (e.remaining ? ' · ' + stockLabel(e.remaining) + ' left' : ' out'));
@@ -5803,6 +5830,7 @@
   $('home-adventure').onclick = () => {
     audioReady();
     sound('menu');
+    selectChapter(nightUnlocked()?nightChapter:yardChapter);
     showRoute();
   };
   document.querySelector('.mode-rack').onclick = (e) => {
@@ -5966,12 +5994,17 @@
       showRecords(focused?.dataset.recordId);
       if(focused===$('dialog-close')) focused.focus({preventScroll:true});
     }
-    if (e.key!==null && e.key!==schoolKey && e.key!==campaign.saveKey && !e.key.startsWith('dog-fight-3.cup.')) return;
+    const changedBook = window.DispatchScript.chapters.find(book=>book.saveKey===e.key);
+    if (e.key!==null && e.key!==schoolKey && !changedBook && !e.key.startsWith('dog-fight-3.cup.')) return;
     if (!schoolUnsaved && (e.key===null || e.key===schoolKey)) {
       const disk=readSchool();
       if (page!=='match' || (!world?.lesson && !matchConfig?.schoolFinal)) Object.assign(schoolSave,disk);
     }
-    if ((e.key===null || e.key===campaign.saveKey) && stored) progress=campaign.readSave(storage);
+    if ((e.key===null || changedBook) && stored) {
+      for (const book of changedBook ? [changedBook] : window.DispatchScript.chapters) chapterSaves.set(book,book.readSave(storage));
+      progress=chapterSaves.get(campaign);
+      if(page==='dispatch-route' && !$('dialog').open) showRoute();
+    }
     if (page!=='home') return;
     const active=document.activeElement;
     refreshHomeSaves();
@@ -5992,6 +6025,11 @@
   $('home-options').onclick = showOptions;
   $('lobby-home').onclick = $('route-home').onclick = () => showHome();
   $('route-films').onclick = () => showReels();
+  $('route-switch').onclick = () => {
+    if (!nightUnlocked()) return;
+    selectChapter(campaign===yardChapter ? nightChapter : yardChapter);
+    showRoute();
+  };
   $('story-map').onclick = () => (inLibrary ? finishStory() : showRoute());
   $('film-pause').onclick = toggleFilm;
   $('story-skip').onclick = finishStory;
@@ -6003,7 +6041,7 @@
     audioReady();
     sound('menu');
     if (progress.pending) return playScene(progress.pending);
-    if (progress.complete) return playScene('opening');
+    if (progress.complete) return playScene(campaign.rooms[0].intro);
     enterStop(progress.room, progress.checkpoint);
   }
   $('dispatch-start').onclick = continueAdventure;

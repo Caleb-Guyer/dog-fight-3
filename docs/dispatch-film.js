@@ -3,9 +3,14 @@
   'use strict';
   const partSeconds = 8;
   const fps = 24;
-  const posters = { opening: [0.85, 6.7], rescue: [5.8, 3.4], boss: [2.3, 4.5], ending: [6.25, 6.25] };
+  const posters = { opening: [0.85, 6.7], rescue: [5.8, 3.4], boss: [2.3, 4.5], ending: [6.25, 6.25],
+    nightmail:[4.4,5.6], firstlight:[5.3,5.2] };
   // Cues use movie time. Nothing plays ahead of a cut, a seek or a pause.
   const tracks = {
+    nightmail:[[0.2,'rail'],[0.6,'rail'],[1.1,'rail'],[1.7,'whistle'],[3.4,'reed',196],[4.6,'step'],
+      [6.1,'metal'],[7.2,'metal'],[8.1,'reed',246.94],[9.6,'slide'],[10.4,'wind'],[11.7,'step'],[13.6,'rail'],[15,'pluck',293.66]],
+    firstlight:[[0.1,'slide'],[0.9,'latch'],[1.5,'rail'],[2.3,'creak'],[4.7,'reed',220],[6.3,'wind'],
+      [8.4,'bell',392],[9.1,'bell',392],[10.8,'paper'],[11.9,'metal'],[12.25,'chime',493.88],[12.55,'chime',587.33],[14.5,'reed',392]],
     opening: [
       [0.12, 'reed', 196],
       [0.26, 'rail'],

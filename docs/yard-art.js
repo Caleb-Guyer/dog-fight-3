@@ -2792,6 +2792,66 @@
     let x = -(((shift % span) + span) % span);
     for (; x < width; x += span) ctx.drawImage(bitmap, x, y, span, bitmap.height * cell);
   }
+  function nightLine(ctx,view) {
+    const {room,top,width,height,cameraX,time,terrain}=view;
+    const roof=room==='mailroof', drift=roof?time*58:0;
+    ctx.fillStyle=roof?'#1e293d':'#49475e';ctx.fillRect(0,top,width,height);
+    const horizon=piece(room+'-river',416,260,p=>{
+      const gloam=roof?'#34435d':'#7b6776',river=roof?'#2d4056':'#576176';
+      for(let i=0;i<72;i++)p.dot(i*97%416,i*i*19%78,roof?'#9e9ca4':'#b79f98');
+      p.r(0,78,416,66,gloam);
+      p.oval(302,49,13,13,roof?'#d2cdb0':'#e0ae88');p.oval(296,45,12,12,roof?'#1e293d':'#49475e');
+      for(let i=0;i<24;i++){
+        const x=i*19-9,h=i*11%29;
+        p.poly([[x,122],[x,96-h],[x+7,89-h],[x+17,94-h],[x+17,122]],roof?'#2b354c':'#555267');
+        for(let j=0;j<2;j++)p.r(x+4+5*j,99-h,2,3,(i+j)%4?gloam:'#c6a77f');
+      }
+      p.r(0,121,416,139,river);
+      for(let i=0;i<120;i++)p.r(i*103%416,124+i*i*7%135,3+i%11,1,roof?'#40556b':'#747887');
+      for(let x=0;x<416;x+=52){
+        p.line(x,121,x+26,99,'#353d50',2);p.line(x+26,99,x+51,121,'#353d50',2);
+        p.r(x,121,52,3,'#30384b');p.r(x+24,124,5,10,'#394456');
+      }
+    });
+    pan(ctx,horizon,cameraX*.35+drift*.45,1,width,-42);
+    const poles=piece(room+'-telegraph',268,119,p=>{
+      p.r(38,13,3,106,'#394050');p.r(30,20,18,2,'#394050');
+      for (const dx of [0,11]) {
+        p.r(32+dx,17,3,3,'#849394');
+        for(let x=0;x<268;x+=4){
+          const sag=Math.sin(Math.PI*((x-34-dx+268)%268)/268);
+          p.r(x,18+Math.round(sag*10),4,1,'#485366');
+        }
+      }
+    });
+    pan(ctx,poles,cameraX*.64+drift,1,width,103);
+    for(const [i,s] of terrain.entries()){
+      const w=Math.ceil((s.x2-s.x1)/cell),left=Math.round(s.x1-cameraX);
+      const slab=piece(room+'-deck-'+i,w,s.thin?9:72,p=>{
+        p.r(0,0,w,3,roof?'#cfba8d':'#dbc5a3');p.r(0,3,w,4,'#484856');
+        for(let x=4;x<w-2;x+=12)p.r(x,3,2,1,'#a69484');
+        if(s.thin){p.r(3,7,w-6,2,'#343a4a');return;}
+        p.r(3,7,w-6,37,roof?'#52676a':'#755c59');
+        p.r(7,8,w-14,2,roof?'#89918b':'#b1876e');
+        for(let x=11;x<w-17;x+=28) {
+          p.r(x,14,19,15,'#343a48');p.r(x+2,16,15,10,roof?'#39495a':'#ae9278');
+          p.r(x+4,16,2,9,roof?'#67757b':'#d4ae80');p.r(x+9,14,2,15,'#47505a');
+          p.r(x+20,11,2,28,roof?'#3f565b':'#604b50');
+        }
+        p.r(2,40,w-4,4,'#323544');p.r(4,37,w-8,1,'#b39b77');
+        for(const x of [22,w-46]){
+          if(roof){
+            p.r(x-8,44,39,5,'#444656');
+            for(const off of [0,19]){p.oval(x+off,51,7,7,'#282c3b');p.oval(x+off,51,4,4,'#697078');}
+          }else{
+            p.r(x,44,6,28,'#434555');p.line(x+5,61,x+21,44,'#54505c',3);
+          }
+        }
+        for(const x of [0,w-6]){p.r(x,0,6,4,'#eee0b0');p.r(x+1,5,4,2,'#bb815e');}
+      });
+      ctx.drawImage(slab,left,s.y,s.x2-s.x1,slab.height*cell);
+    }
+  }
   function drawSurfaces(ctx, terrain, room, cameraX, width, stockArena) {
     const mainDeck = stockArena && cornerMetals[room] ? terrain.find((platform) => !platform.thin) : null;
     terrain.forEach((platform, index) => {
@@ -2825,6 +2885,9 @@
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.imageSmoothingEnabled = false;
+    if(view.room==='mailroof' || view.room==='eastsignal'){
+      nightLine(ctx,view);ctx.restore();return;
+    }
     if (view.room === 'weighhouse' || view.room === 'exchange') {
       workingYard(ctx, view.room, cameraX, top, width, height, time);
       drawSurfaces(ctx, terrain, view.room, cameraX, width, view.stockArena);

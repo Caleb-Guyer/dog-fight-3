@@ -1203,6 +1203,7 @@
     H: [17, 17, 17, 31, 17, 17, 17],
     I: [14, 4, 4, 4, 4, 4, 14],
     L: [16, 16, 16, 16, 16, 16, 31],
+    M: [17, 27, 21, 21, 17, 17, 17],
     N: [17, 25, 25, 21, 19, 19, 17],
     O: [14, 17, 17, 17, 17, 17, 14],
     P: [30, 17, 17, 30, 16, 16, 16],
@@ -1462,13 +1463,39 @@
     }
   }
 
-  const painters = { title, opening, rescue, boss, ending, route };
+  function eastRoute(p, currentStop) {
+    routePaper(p);
+    // The old timetable has the river in blue ink and the missing span in red.
+    p.poly([139,0,167,0,146,47,170,84,155,127,171,180,142,180,124,126,143,85,122,49], '#739996');
+    for (let y=14; y<180; y+=19) {
+      const x=140+Math.round(9*Math.sin(y/14));
+      p.path([x-4,y,x,y-1,x+7,y],c.ice);
+    }
+    const rail=[15,112,75,105,120,95,162,85,212,71,273,71,303,59];
+    p.path(rail,c.brick,5); p.path(rail,c.wheat,2);
+    for(let i=0;i<3;i++){
+      const x=27+i*24,y=94-i*3;
+      p.rect(x,y,22,11,c.navy); p.rect(x+2,y-2,17,2,c.green);
+      p.rect(x+3,y+3,5,3,c.wheat); p.rect(x+11,y+3,7,3,c.teal);
+      p.oval(x+5,y+11,2,2,c.ink);p.oval(x+17,y+11,2,2,c.ink);
+    }
+    p.rect(224,49,16,20,c.brick);p.rect(222,47,20,3,c.navy);
+    p.rect(227,52,8,4,c.gold);p.rect(246,34,2,36,c.ink);
+    p.path([246,36,260,27],c.red,3);
+    for(const [i,x,y,first,second] of [[0,83,104,'NIGHT MAIL','ROOF'],[1,241,71,'EAST SIGNAL','BOX']]){
+      p.oval(x,y,8,8,c.ink);p.oval(x,y,6,6,currentStop===i?c.aqua:c.wheat);
+      routeText(p,String(i+1),x,y-3,c.ink);
+      routeText(p,first,x,y+12,c.ink);routeText(p,second,x,y+21,c.ink);
+    }
+  }
+  const painters = { title, opening, rescue, boss, ending, route, eastRoute, nightmail:ending, firstlight:eastRoute };
   function draw(canvas, scene, time = 0) {
     // Each card is a still. A resize only reblits its once-painted native canvas.
     const name = Object.hasOwn(painters, scene) ? scene : 'title';
     if (!canvas || canvas.width < 1 || canvas.height < 1) return;
-    const currentStop = name === 'route' && Number.isInteger(time) && time >= 0 && time < routeStops.length ? time : 0;
-    const key = name === 'route' ? name + currentStop : name;
+    const isMap = name==='route' || name==='eastRoute';
+    const currentStop = isMap && Number.isInteger(time) && time >= 0 && time < routeStops.length ? time : 0;
+    const key = isMap ? name + currentStop : name;
     let frame = scenes.get(key);
     if (!frame) {
       frame = surface(WIDTH, HEIGHT);

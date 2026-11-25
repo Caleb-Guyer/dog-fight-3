@@ -28,7 +28,7 @@
     const { f, kind, phase } = e;
     if (f.absent) return;
     ctx.save();
-    if (kind === 'brisket') {
+    if (Object.hasOwn(window.DogFight.fighters, kind)) {
       if (phase === 'defeat') ctx.globalAlpha = Math.max(0, 1 - e.time / e.duration);
       drawFighter(ctx, f, world, time);
     } else {
@@ -88,7 +88,7 @@
   class DispatchView extends FightView {
     drawEdgePortrait(ctx, f, x, y, time, world) {
       const kind = f.encounter?.kind;
-      if (!kind || kind === 'brisket') return super.drawEdgePortrait(ctx, f, x, y, time, world);
+      if (!kind || Object.hasOwn(window.DogFight.fighters, kind)) return super.drawEdgePortrait(ctx, f, x, y, time, world);
       ctx.translate(x, y + 14);
       const scale = kind === 'conductor' ? 0.33 : 0.46;
       ctx.scale(scale, scale);
