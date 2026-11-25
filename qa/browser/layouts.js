@@ -1,0 +1,76 @@
+const assert=require('node:assert/strict'),{execFileSync}=require('node:child_process');
+if(process.env.GITHUB_ACTIONS!=='true'||process.env.RUNNER_OS!=='Linux')throw new Error('Run input playtests on hosted Linux.');
+const {chromium}=require('playwright-core'),root='http://127.0.0.1:8080/';
+async function run(browser){
+  const page=await browser.newPage({viewport:{width:1080,height:720}}),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.addInitScript(()=>{
+    window.pads=[];
+    window.makePad=i=>({index:i,id:'Standard test controller '+i,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))});
+    Object.defineProperty(navigator,'getGamepads',{get:()=>()=>window.pads});
+  });
+  await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+  await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+  const click=id=>page.locator('#'+id).click();
+  const bind=async(action,key)=>{await page.locator('[data-key="'+action+'"]').click();await page.keyboard.press(key);};
+  const observe=()=>page.evaluate(()=>{
+    const p=DogFight.Battle.prototype,step=p.step;
+    window.samples=[];
+    p.step=function(dt,a,b){window.samples.push([a,b]);return step.apply(this,arguments);};
+  });
+  const pad=async(i,indices,axis=0,ms=50)=>{
+    await page.evaluate(([i,buttons,x])=>{
+      const p=window.pads[i] ||= window.makePad(i);p.axes[0]=x;
+      p.buttons.forEach((b,n)=>{b.pressed=buttons.includes(n);b.value=Number(b.pressed);});
+    },[i,indices,axis]);await page.clock.runFor(ms);
+  };
+  await page.goto(root+'#controls');
+  await bind('attack','f');assert.match(await page.locator('#layout-status').textContent(),/reserved/);
+  await page.keyboard.press('q');assert.equal(await page.locator('[data-key="attack"]').textContent(),'Q');
+  await bind('attack',',');assert.match(await page.locator('#layout-status').textContent(),/P2 Attack/);
+  await click('layout-back');assert.equal(await page.locator('[data-key="attack"]').textContent(),'Q');
+  await bind('attack',',');await click('layout-confirm');
+  await page.selectOption('#layout-slot','1');assert.equal(await page.locator('[data-key="attack"]').textContent(),'Q');
+  await click('layout-test');await page.keyboard.down('q');await page.keyboard.down('ShiftRight');
+  assert.match(await page.locator('#layout-status').textContent(),/Jump \+ Attack/);
+  await page.keyboard.up('q');await page.keyboard.up('ShiftRight');await click('layout-back');
+  await page.selectOption('#layout-slot','0');await page.selectOption('#layout-device','pad');
+  await page.selectOption('[data-pad="jump"]','2');await click('layout-confirm');await click('layout-test');
+  await pad(0,[2,4]);assert.match(await page.locator('#layout-status').textContent(),/Jump \+ Shield/);
+  await pad(0,[9]);await pad(0,[]);assert(await page.locator('#layout-test').isVisible());
+
+  await page.goto(root+'?course#tutorial');await observe();
+  await pad(0,[],1,1000);assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'passed');
+  // A is attack in this layout. The A that advances the lesson must be consumed until release.
+  await pad(0,[0],0,100);
+  assert.match(await page.locator('#school-title').textContent(),/platform/);
+  assert.equal(await page.locator('#school-bindings').textContent(),'X');
+  assert.equal(await page.evaluate(()=>samples.at(-1)[0].attack),false);
+  await pad(0,[]);await pad(0,[2],0,165);await pad(0,[],0,80);await pad(0,[2],0,1200);
+  assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'passed');
+  await pad(0,[]);await click('school-next');await page.keyboard.down(',');await page.clock.runFor(80);await page.keyboard.up(',');
+  assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'passed');
+  await click('school-next');await page.keyboard.press('s');await page.clock.runFor(35);
+  assert.equal(await page.locator('#school-bindings').textContent(),'S + ,');
+
+  await page.goto(root+'?couch#solo');await page.locator('[data-mode="local"]').click();await click('start');
+  await observe();await page.clock.runFor(2500);
+  await pad(0,[2]);let sample=await page.evaluate(()=>samples.at(-1));
+  assert(!sample[0].jump && !sample[0].attack && sample[1].attack && !sample[1].jump);
+  await pad(0,[]);await pad(1,[]);await pad(0,[2]);await pad(1,[2]);
+  sample=await page.evaluate(()=>samples.at(-1));assert(sample[0].jump && !sample[0].attack && sample[1].attack);
+  await pad(0,[]);await pad(1,[]);await page.keyboard.down(',');await page.keyboard.down('q');
+  await page.clock.runFor(35);sample=await page.evaluate(()=>samples.at(-1));assert(sample[0].attack && sample[1].attack);
+  await page.keyboard.up(',');await page.keyboard.up('q');
+  await page.keyboard.press('p');await page.locator('[data-do="controls"]').click();
+  assert.match(await page.locator('.control-table').textContent(),/P1 A · P2 X/);
+  await page.locator('[data-do="bindings"]').click();await click('layout-reset');await click('layout-confirm');
+  await click('layout-back');assert(await page.locator('.control-table').isVisible());
+  await page.locator('[data-do="close"]').click();assert(await page.locator('[data-do="resume"]').isVisible());
+  await page.goto(root+'?restore#controls');
+  assert.equal(await page.locator('[data-key="attack"]').textContent(),'J');
+  assert.deepEqual(errors,[]);await page.close();
+}
+(async()=>{const b=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
+  try{await run(b);}finally{await b.close();}
+})().catch(e=>{console.error(e);console.log('::error::'+e.stack.replaceAll('\n','%0A'));process.exitCode=1;});
