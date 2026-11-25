@@ -892,6 +892,7 @@
     if(dialogType==='rulebook')return backFromRulebook();
     if(dialogType==='pack-relay')return backFromRelay();
     if(dialogType==='finish-picker')return $('finish-picker-back').click();
+    if(dialogType==='ko-replays')return $('ko-list-back').click();
     if(dialogType==='finish-comparison')return leaveFinishTrial(true);
     if(dialogType==='finish-pause')return dismiss();
     if(dialogType==='code-pad'){
@@ -919,6 +920,14 @@
       return;
     }
     if (dialogType==='finish-replay') {
+      if(clipScreen?.review){
+        const r=clipScreen.review;
+        if(r.from==='card'){
+          showMatchCard();
+          $('dialog-body').querySelector('[data-card-ko="'+r.clip.first+'"][data-ko-slot="'+r.slot+'"]')?.focus();
+        }else showKnockouts(r.from,r.clip.first);
+        return;
+      }
       showResult();
       document.querySelector('[data-do=watch-finish]')?.focus();
       return;
@@ -2383,10 +2392,11 @@
       document.querySelector('[data-do="resume"]').focus();return;
     }
     if (world.lesson) return openLessonList();
+    const reviewButton=!online.match && knockoutClips(world).length ? knockoutButton : '';
     if (cupAttempt) {
       showDialog('pause','Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+(cupAttempt.round+1)+
         ' of 4. Leaving now restarts this round on your next attempt.</p><div class="dialog-actions">'+
-        '<button class="primary" data-do="resume">Resume</button><button class="utility" data-do="moves">Move list</button>'+
+        '<button class="primary" data-do="resume">Resume</button>'+reviewButton+'<button class="utility" data-do="moves">Move list</button>'+
         '<button class="utility" data-do="controls">Controls</button><button class="utility" data-do="cup-sheet">Leave to route card</button></div>');
       document.querySelector('[data-do=resume]').focus();
       return;
@@ -2425,7 +2435,7 @@
           (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight ? 'Retry position' : 'Practice this position') + '</button>' : '') +
           '<button class="utility" data-do="practice">Find a drill</button>' +
           (practiceFight ? '<button class="utility" data-do="return-fight">'+$('return-fight').textContent+'</button>' : '') + '</div>' : '') +
-        cpuReadReport() + '<div class="dialog-actions">' + (world.mode === 'solo' && !localSet && !practiceFight && !matchConfig.schoolFinal ?
+        cpuReadReport() + '<div class="dialog-actions">' + reviewButton + (world.mode === 'solo' && !localSet && !practiceFight && !matchConfig.schoolFinal ?
           '<button class="utility" data-do="cpu-level">Replay with another CPU</button>' : '') +
         (practiceFight ? '' : '<button class="utility" data-do="rematch">' + icon('reset') + 'Restart match</button>') +
         '<button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
@@ -2436,6 +2446,33 @@
     if (localSet?.advance(stage)) startMatch({...matchConfig, stage}, undefined, undefined, localSet);
   }
   const cardButton = '<button class="utility" data-do="match-card">Match stats</button>';
+  const knockoutButton='<button type="button" class="utility" data-do="ko-replays">KO replays</button>';
+  function knockoutClips(battle){
+    finishTape?.captureKnockouts(battle);
+    return finishTape?.knockouts || [];
+  }
+  function knockoutLabel(clip,battle){
+    return clip.losses.map(loss=>'P'+(loss.slot+1)+' '+fighters[loss.kind || battle.matchCard.players[loss.slot].kind].name+
+      ' at '+tenth(loss.damage)+'%').join(' & ');
+  }
+  function showKnockouts(from,focus){
+    const battle=online.match?.confirmedWorld || world;
+    const clips=knockoutClips(battle).slice().reverse();
+    const choices=clips.map(c=>'<button type="button" class="utility" data-ko="'+c.first+'">'+cardTime(c.losses[0].frame)+
+      ' · '+knockoutLabel(c,battle)+'</button>').join('');
+    showDialog('ko-replays','KO replays','<p>Choose a knockout to watch or play it from either side.</p>'+
+      '<div class="option-list">'+choices+'</div><div class="dialog-actions"><button class="utility" id="ko-list-back">'+
+      (from==='pause'?'Back to pause':'Back to results')+'</button></div>');
+    for(const b of $('dialog-body').querySelectorAll('[data-ko]')){
+      const clip=clips.find(c=>c.first===Number(b.dataset.ko));
+      b.onclick=()=>showFinishReplay(null,{clip,from});
+    }
+    $('ko-list-back').onclick=()=>{
+      if(from==='pause')showPause();else showResult();
+      $('dialog-body').querySelector('[data-do=ko-replays]')?.focus();
+    };
+    ($('dialog-body').querySelector('[data-ko="'+(focus ?? clips[0]?.first)+'"]') || $('ko-list-back')).focus();
+  }
   function presentWinner() {
     const photo=document.querySelector('#dialog-body .winner img');
     if (!photo || !world) return;
@@ -2468,6 +2505,7 @@
       }
     }
     if (finishTape?.length && stats) {
+      if(knockoutClips(result).length)stats.insertAdjacentHTML('beforebegin',knockoutButton);
       const button=document.createElement('button');
       button.className='utility';button.dataset.do='watch-finish';button.textContent='Watch finish';
       stats.before(button);
@@ -2485,26 +2523,32 @@
     shot.cel=cel;
     window.DogFightView.drawPodium(shot.canvas,shot.kind,shot.coat,cel);
   }
-  function showFinishReplay(atFrame=null) {
-    if (!finishTape?.length) return;
+  function showFinishReplay(atFrame=null,review=null) {
+    const tape=review?.clip.tape || finishTape;
+    if (!tape?.length) return;
     const result=online.match?.confirmedWorld || world;
-    const loss=result.matchCard.losses.findLast(l=>l.slot!==result.end);
+    const loss=(review && (review.clip.losses.find(l=>l.slot===review.slot) || review.clip.losses[0])) || result.matchCard.losses.findLast(l=>l.slot!==result.end);
     const id=loss?.lastHit?.id;
     const label=(moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id])?.label;
-    const detail=result.endReason==='time'?'Time expired':label?'Last hit · '+label:
+    const detail=!review && result.endReason==='time'?'Time expired':label?'Last hit · '+label:
       id==='ball'?'Last hit · Tennis ball':loss?.zone?'Knockout · '+loss.zone+' blast line':'Knockout';
-    showDialog('finish-replay','Finish replay','<p class="clip-caption">'+stageName(result.stage,result.form)+' · '+detail+
-      '</p><canvas id="clip-arena" width="640" height="360" role="img" aria-label="Replay of the final exchange"></canvas>'+
+    const caption=review?cardTime(loss.frame)+' · '+knockoutLabel(review.clip,result)+' · ':'';
+    showDialog('finish-replay',review?'KO replay':'Finish replay','<p class="clip-caption">'+caption+stageName(result.stage,result.form)+' · '+detail+
+      '</p><canvas id="clip-arena" width="640" height="360" role="img" aria-label="Replay of the exchange"></canvas>'+
       '<div class="clip-status"><span id="clip-scores"></span><output id="clip-frame" aria-live="off"></output></div>'+
-      '<input id="clip-seek" type="range" min="0" max="'+finishTape.length+'" value="0" aria-label="Replay frame">'+
+      '<input id="clip-seek" type="range" min="0" max="'+tape.length+'" value="0" aria-label="Replay frame">'+
       '<div id="clip-moments" class="dialog-actions" role="group" aria-label="Jump to a replay moment" hidden></div>'+
       '<div class="dialog-actions"><button class="primary" id="clip-toggle">Pause</button>'+
       '<button class="utility" id="clip-step">Step 1 frame</button><button class="utility" id="clip-speed">Speed · ½×</button></div>'+
-      '<div class="dialog-actions">'+(result.mode==='solo'?'<button class="utility" id="clip-practice">Play from here</button>':'')+
-      '<button class="utility" id="clip-exchange">Practice exchange</button><button class="utility" id="clip-export">Make GIF</button><button class="utility" data-do="clip-back">Back to results</button></div>'+
+      '<div class="dialog-actions">'+(result.mode==='solo' && !review?'<button class="utility" id="clip-practice">Play from here</button>':'')+
+      (review?'<button class="primary" id="clip-escape" aria-describedby="clip-escape-start">Try to save P'+(loss.slot+1)+'</button>':'')+
+      '<button class="utility" id="clip-exchange">Practice exchange</button><button class="utility" id="clip-export">Make GIF</button><button class="utility" data-do="clip-back">'+
+      (review?review.from==='card'?'Back to match stats':'Back to KO replays':'Back to results')+'</button></div>'+
+      (review?'<p id="clip-escape-start">Start before the knockout and try to keep that stock.</p>':'')+
       '<output id="clip-export-status" aria-live="polite"></output>');
-    clipScreen={playing:atFrame===null && !reducedReplays.matches,rate:.5,carry:0,lifetime:new AbortController()};
-    const {signal}=clipScreen.lifetime, tape=finishTape;
+    clipScreen={tape,review,playing:atFrame===null && !reducedReplays.matches,rate:.5,carry:0,lifetime:new AbortController()};
+    if(review)$('clip-escape').onclick=()=>startFinishTrial(Math.max(0,tape.length-90),loss.slot,review);
+    const {signal}=clipScreen.lifetime;
     const prepare=async()=>{
       const button=$('clip-export');
       button.disabled=true;
@@ -2512,7 +2556,11 @@
         await loadDispatch('FinishTools');
         if(signal.aborted)return;
         window.FinishTools.install({tape,signal,stage:stageName(result.stage,result.form),shake:settings.shake,root:$('dialog-body'),
-          filename:'dog-fight-3-'+result.dogs.map(d=>d.kind).join('-vs-')+'-'+result.stage+'.gif',
+          slot:review?loss.slot:undefined,escapeReady:review?mark=>{
+            $('clip-escape-start').textContent=mark.label+' · frame '+mark.frame;
+            $('clip-escape').onclick=()=>startFinishTrial(mark.frame,loss.slot,review);
+          }:undefined,
+          filename:'dog-fight-3-'+result.dogs.map(d=>d.kind).join('-vs-')+'-'+result.stage+(review?'-ko-'+(review.clip.first+1):'')+'.gif',
           jump:frame=>{clipScreen.playing=false;seekClip(frame);}});
         button.textContent='Make GIF';
         $('clip-export-status').textContent='';
@@ -2525,7 +2573,7 @@
     $('clip-export').onclick=prepare;
     prepare();
     seekClip(atFrame??0);
-    $('clip-exchange').onclick=()=>chooseFinishFighter(clipScreen.player.frame);
+    $('clip-exchange').onclick=()=>chooseFinishFighter(clipScreen.player.frame,review);
     $('clip-toggle').onclick=()=>{
       if (clipScreen.player.frame===clipScreen.player.length) seekClip(0);
       clipScreen.playing=!clipScreen.playing;
@@ -2571,7 +2619,7 @@
     const view=new FightView();
     view.shakeEnabled=settings.shake;
     clipScreen.view=view;
-    clipScreen.player=finishTape.playback(Math.max(0,frame-1),(name,event)=>view.event(name,event));
+    clipScreen.player=clipScreen.tape.playback(Math.max(0,frame-1),(name,event)=>view.event(name,event));
     if(frame>0)clipScreen.player.step();
     clipScreen.carry=0;
     paintClip(0);
@@ -2589,30 +2637,34 @@
     paintClip(steps/60);
     updateClip();
   }
-  function chooseFinishFighter(cursor=null) {
-    if(!finishTape?.length)return;
+  function chooseFinishFighter(cursor=null,review=null) {
+    const tape=review?.clip.tape || finishTape;
+    if(!tape?.length)return;
     const result=online.match?.confirmedWorld || world;
-    const start=cursor===null || cursor>=finishTape.length ? Math.max(0,finishTape.length-120) : cursor;
-    const opening=result.relayTeams?finishTape.playback(start).battle:result;
+    const start=cursor===null || cursor>=tape.length ? Math.max(0,tape.length-120) : cursor;
+    const opening=result.relayTeams?tape.playback(start).battle:result;
     const choices=opening.dogs.map((f,i)=>'<button type="button" class="coat-option" data-finish-slot="'+i+'">'+
       '<img alt="" src="'+portrait(f.kind,opening.coatFor(i))+'"><strong>P'+(i+1)+' · '+f.stats.name+'</strong><small>'+
       (result.mode==='solo' && i===0?'Against '+cpuLevels[result.cpuLevel].name+' CPU':'Against recorded inputs')+'</small></button>').join('');
-    showDialog('finish-picker','Practice the finish','<p>Take over a fighter with your P1 controls. Play from frame '+start+
-      ' to '+finishTape.length+', then compare the ending.</p><div class="coat-grid finish-picks">'+choices+
+    showDialog('finish-picker',review?'Practice the knockout':'Practice the finish','<p>Take over a fighter with your P1 controls. Play from frame '+start+
+      ' to '+tape.length+', then compare the ending.</p><div class="coat-grid finish-picks">'+choices+
       '</div><div class="dialog-actions"><button class="utility" id="finish-picker-back">'+(cursor===null?'Back to results':'Back to replay')+'</button></div>');
-    for(const button of document.querySelectorAll('[data-finish-slot]'))button.onclick=()=>startFinishTrial(start,Number(button.dataset.finishSlot));
-    $('finish-picker-back').onclick=()=>cursor===null?showResult():showFinishReplay(cursor);
-    document.querySelector('[data-finish-slot="'+(online.match?online.side:result.mode==='solo'?0:1-result.end)+'"]').focus();
+    for(const button of document.querySelectorAll('[data-finish-slot]'))button.onclick=()=>startFinishTrial(start,Number(button.dataset.finishSlot),review);
+    $('finish-picker-back').onclick=()=>cursor===null?showResult():showFinishReplay(cursor,review);
+    const slot=review?.slot ?? review?.clip.losses[0].slot ?? (online.match?online.side:result.mode==='solo'?0:1-result.end);
+    document.querySelector('[data-finish-slot="'+slot+'"]').focus();
   }
-  function startFinishTrial(start,slot) {
-    const original=online.match?.confirmedWorld || world;
+  function startFinishTrial(start,slot,review=null) {
+    const tape=review?.clip.tape || finishTape;
+    const original=review ? finishTrial?.original || tape.playback(tape.length).battle : online.match?.confirmedWorld || world;
     const camera=new FightView($('blast-radar'));camera.shakeEnabled=settings.shake;
-    const player=finishTape.playback(start,(name,e)=>{camera.event(name,e);sound(name,e);},slot);
+    const player=tape.playback(start,(name,e)=>{camera.event(name,e);sound(name,e);},slot);
     const saved=finishTrial?.saved || {mode:$('match-mode').textContent,pause:$('pause-label').textContent,
-      call:$('countdown').textContent,setHidden:$('match-set').hidden};
+      call:$('countdown').textContent,setHidden:$('match-set').hidden,cornerHidden:$('corner-tip').hidden};
     dismiss();
-    finishTrial={player,camera,start,slot,original,saved,carry:0,ready:.8};
-    $('match-mode').textContent='Finish practice · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
+    finishTrial={player,camera,start,slot,review,original,saved,carry:0,ready:.8};
+    $('corner-tip').hidden=true;
+    $('match-mode').textContent=(review?'KO practice':'Finish practice')+' · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
     $('match-set').hidden=$('grapple-prompt').hidden=true;
     $('match-clock').hidden=false;
     $('match-clock').setAttribute('aria-label','Practice time left');
@@ -2655,29 +2707,36 @@
     if(player.frame>=player.length || player.battle.end!==null)showTrialComparison();
   }
   function leaveFinishTrial(replay) {
-    const {saved,start}=finishTrial;
+    const {saved,start,review}=finishTrial;
     finishTrial=null;
     $('match-mode').textContent=saved.mode;$('match-set').hidden=saved.setHidden;
     $('pause-label').textContent=saved.pause;$('countdown').textContent=saved.call;
+    $('corner-tip').hidden=saved.cornerHidden;
     hudKey='';updateHUD();
     view.draw($('game'),online.match?.confirmedWorld || world,0,world.time);
-    if(replay)showFinishReplay(start);else showResult();
+    if(replay)showFinishReplay(start,review);
+    else if(review?.from==='pause')dismiss();
+    else if(review?.from==='card')showMatchCard();
+    else showResult();
   }
   function trialActions(){
     return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Retry exchange</button>'+
-      '<button class="utility" data-do="trial-replay">Choose another frame</button><button class="utility" data-do="trial-results">Back to results</button></div>';
+      '<button class="utility" data-do="trial-replay">Choose another frame</button><button class="utility" data-do="trial-results">'+
+      (finishTrial.review?.from==='pause'?'Back to fight':finishTrial.review?.from==='card'?'Back to match stats':'Back to results')+'</button></div>';
   }
   function showTrialPause(){
     showDialog('finish-pause','Practice paused','<div class="dialog-actions"><button class="primary" data-do="resume">Resume</button></div>'+trialActions());
     document.querySelector('[data-do=resume]').focus();
   }
   function showTrialComparison(){
-    const {player,original,slot}=finishTrial;
+    const {player,original,slot,review}=finishTrial;
     const score=(battle,i)=>fighterScore(battle,i)+' · '+tenth(battle.dogs[i].damage)+'%';
     const rows=original.dogs.map((f,i)=>'<tr><th scope="row">'+(i===slot?'You · ':'P'+(i+1)+' · ')+f.stats.name+
       '</th><td>'+score(original,i)+'</td><td>'+score(player.battle,i)+'</td></tr>').join('');
     const difference=player.battle.dogs[slot].stocks-original.dogs[slot].stocks;
-    const line=original.matchCard?.points?'Your score was '+fighterScore(original,slot)+'. This attempt ended at '+fighterScore(player.battle,slot)+'.':
+    const falls=battle=>battle.matchCard.losses.filter(l=>l.slot===slot).length;
+    const line=review && review.clip.losses.some(l=>l.slot===slot) && falls(player.battle)<falls(original)?
+      'You survived the original knockout.':original.matchCard?.points?'Your score was '+fighterScore(original,slot)+'. This attempt ended at '+fighterScore(player.battle,slot)+'.':
       difference>0?'You kept '+stockLabel(difference)+' more.':difference<0?'You lost '+stockLabel(-difference)+' more.':
       'You finished with the same number of stocks.';
     showDialog('finish-comparison','Exchange complete','<p>'+line+'</p><table class="finish-comparison"><thead><tr>'+
@@ -2748,7 +2807,9 @@
       row('Landing techs',p=>p.techs) + row('Knockdowns taken',p=>p.knockdowns) +
       (card.points?row('Regulation points',(_,i)=>card.points[i])+row('Credited KOs',(_,i)=>losses.filter(l=>l.slot!==i && l.credited).length)+
         row('Falls',(_,i)=>losses.filter(l=>l.slot===i && !l.suddenRound).length):row('Stocks lost', (_,i) => losses.filter(loss => loss.slot === i).length));
-    const timeline = losses.map(loss => {
+    const clips=!archived && index===games.length-1 ? knockoutClips(result) : [];
+    const timeline = losses.map((loss,n) => {
+      const clip=clips.find(c=>n>=c.first && n<c.first+c.losses.length);
       const hit = loss.lastHit, id = hit?.id;
       const move = (moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id])?.label;
       const last = hit ? 'Last hit at ' + cardTime(hit.frame) + ' · ' + (move || (id === 'ball' ? 'Tennis ball' : 'Hit')) :
@@ -2757,7 +2818,8 @@
         ' out at ' + tenth(loss.damage) + '%</strong><span>' +
         (loss.suddenRound ? 'Sudden Death ' + loss.suddenRound + ' · ' : '') +
         (loss.zone ? loss.zone + ' blast line · ' : '') + (loss.points?(loss.credited?'KO for '+name(1-loss.slot):'Self-destruct')+
-          ' · P1 '+loss.points[0]+' / P2 '+loss.points[1]:stockLabel(loss.remaining)+' left')+'</span><span>' + last + '</span></div></li>';
+          ' · P1 '+loss.points[0]+' / P2 '+loss.points[1]:stockLabel(loss.remaining)+' left')+'</span><span>' + last + '</span>'+
+          (clip?'<button class="utility" data-card-ko="'+clip.first+'" data-ko-slot="'+loss.slot+'" aria-label="Replay P'+(loss.slot+1)+' knockout at '+cardTime(loss.frame)+'">Replay KO</button>':'')+'</div></li>';
     }).join('');
     const tabs = games.length > 1 ? '<nav class="card-games" aria-label="Game stats">' + games.map((g,i) =>
       '<button class="utility" data-card-game="' + i + '" aria-pressed="' + (i === index) + '">Game ' + (i+1) + '</button>'
@@ -2898,6 +2960,11 @@
     if (coat && dialogType === 'coats') return chooseCoat(Number(coat.dataset.coat));
     const game = e.target.closest('[data-card-game]');
     if (game) return showMatchCard(Number(game.dataset.cardGame));
+    const ko=e.target.closest('[data-card-ko]');
+    if(ko && dialogType==='match-card'){
+      const clip=finishTape?.knockouts.find(c=>c.first===Number(ko.dataset.cardKo));
+      if(clip)return showFinishReplay(null,{clip,from:'card',slot:Number(ko.dataset.koSlot)});
+    }
     const record=e.target.closest('[data-record-id]');
     if (record && dialogType==='records') {
       const id=record.dataset.recordId, entry=records.get(id);
@@ -3001,7 +3068,7 @@
       renderCorner(getPads());showPause();$('dialog-body').querySelector('[data-do="corner-toggle"]').focus();return;
     }
     if(action==='pack-relay')return openRelay();
-    if(action==='trial-retry')return startFinishTrial(finishTrial.start,finishTrial.slot);
+    if(action==='trial-retry')return startFinishTrial(finishTrial.start,finishTrial.slot,finishTrial.review);
     if(action==='trial-replay' || action==='trial-results')return leaveFinishTrial(action==='trial-replay');
     if (action==='record-solo') {
       settings.mode='solo'; editing=0; save(); audioReady(); return toLobby();
@@ -3015,6 +3082,7 @@
     if (action==='bells-start') return startBells();
     if (action==='bells-sheet') return bellSheet();
     if (action==='watch-finish') return showFinishReplay();
+    if(action==='ko-replays')return showKnockouts(dialogType==='pause'?'pause':'result');
     if (action==='clip-back') return exitDialog();
     const review=e.target.closest('[data-school-review]');
     if (review && matchConfig?.schoolFinal) return startLesson(schoolLessons.findIndex(l=>l.id===review.dataset.schoolReview),true);
@@ -5406,7 +5474,7 @@
     VersusRulebook:'versus-rules.js?v=room-rules-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=rulesets-1',
-    FinishTools:'finish-tools.js?v=time-battle-1',
+    FinishTools:'finish-tools.js?v=stock-replay-1',
     FighterSchool:'fighter-lessons.js?v=school-examples-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=night-mail-1',
@@ -7409,7 +7477,7 @@
         updateHUD();
       } else {
         resultDelay -= dt;
-        if (resultDelay <= 0 && (online.match ? !['online-result','room-fighters','set-pick','match-card','finish-picker'].includes(dialogType) : !$('dialog').open)) showResult();
+        if (resultDelay <= 0 && (online.match ? !['online-result','room-fighters','set-pick','match-card','finish-picker','ko-replays'].includes(dialogType) : !$('dialog').open)) showResult();
       }
       if (world && (frameLab.mode !== 'frozen' || steppedFrame)) {
         const confirmed = online.match?.confirmedWorld;

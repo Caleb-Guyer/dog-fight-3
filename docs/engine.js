@@ -11326,7 +11326,7 @@
   // Keep four seconds of controls plus the checkpoint that precedes their first tick.
   // A checkpoint owns its random generator and the complete shared graph of dogs and grabs.
   class FinishTape {
-    constructor() { this.blocks=[]; this.count=0; }
+    constructor() { this.blocks=[]; this.count=0; this.knockouts=[]; this.observedLosses=null; }
     get length() { return Math.min(240,this.count); }
     copy(source) {
       const battle=Object.create(Battle.prototype);
@@ -11336,12 +11336,29 @@
       return battle;
     }
     record(battle,first,second) {
+      this.captureKnockouts(battle);
       if (this.count%120===0) {
         this.blocks.push({start:this.count,battle:this.copy(battle),inputs:[]});
         if (this.blocks.length>3) this.blocks.shift();
       }
       this.blocks.at(-1).inputs.push([this.input(first),this.input(second)]);
       this.count++;
+    }
+    captureKnockouts(battle) {
+      const losses=battle.matchCard?.losses;
+      if(!losses)return;
+      const first=this.observedLosses;
+      this.observedLosses=losses.length;
+      if(first===null || first>=losses.length || !this.count)return;
+      // Inputs are recorded before the tick. Seal the window after the knockout tick has resolved.
+      // Completed blocks stay immutable. Only the current block can still receive more inputs.
+      const clip=new FinishTape();
+      clip.count=this.count;
+      clip.blocks=this.blocks.slice();
+      const last=clip.blocks.length-1;
+      clip.blocks[last]={...clip.blocks[last],inputs:clip.blocks[last].inputs.slice()};
+      this.knockouts.push({first,losses:losses.slice(first),tape:clip});
+      if(this.knockouts.length>12)this.knockouts.shift();
     }
     input(value) {
       if (!value || value===idleInput) return idleInput;
