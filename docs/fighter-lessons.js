@@ -58,7 +58,7 @@
             else this.note='Bounce! Tap Side + Special again now.';
           }
           if(move==='brisketBrace')this.done=true;
-          if(move==='noodleTug'){this.pulled=this.ticks;this.note='Release Special and tap Attack as Brisket comes in.';}
+          if(move==='noodleTug'){this.pulled=this.ticks;this.note='Rope connected. Release Special while Noodle reels Brisket in.';}
           if(this.pulled && this.ticks-this.pulled<60 && move===e.owner.kit.ground[0])this.done=true;
         }
         if(name==='disc' && move==='cloverRound' && f?.index===0)this.note='Disc out! Aim right and tap Special again.';
@@ -83,7 +83,11 @@
           const beat=this.ticks%132;
           this.note=beat>=51 && beat<66?'Brace now! Use Down + Special.':beat>=12 && beat<51?'Pip is charging. Wait for the cue.':this.info.task;
         }else if(this.course==='pip' && !f.followPounce && !a?.secondPounce)this.note='';
-        else if(this.course==='noodle' && this.ticks-this.pulled>=60)this.note='';
+        else if(this.course==='noodle' && this.pulled){
+          const elapsed=this.ticks-this.pulled;
+          if(elapsed>=60)this.note='The opening closed. Retry for the original spacing.';
+          else if(elapsed>=21)this.note='Brisket is in reach. Tap Attack now.';
+        }
         else if(this.course==='clover' && !world.projectiles.length)this.note='';
         return;
       }
