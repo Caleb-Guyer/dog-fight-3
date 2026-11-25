@@ -788,6 +788,11 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if (dialogType==='saved-games') {
+      dismiss();
+      ($('other-saves').hidden ? $('home-continue') : $('other-saves')).focus({preventScroll:true});
+      return;
+    }
     if (dialogType==='bindings') return leaveLayouts();
     if (dialogType === 'match-card') {
       showResult();
@@ -1550,6 +1555,7 @@
     const commit = () => {
       const entry = cupEntry(kind), next = change(entry);
       if (next && next !== entry) {
+        next.playedAt = Date.now();
         try {
           localStorage.setItem(key,JSON.stringify(next));
           unsavedCup.delete(kind);
@@ -2047,7 +2053,7 @@
           (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight ? 'Retry position' : 'Practice this position') + '</button>' : '') +
           '<button class="utility" data-do="practice">Find a drill</button>' +
           (practiceFight ? '<button class="utility" data-do="return-fight">Back to fight</button>' : '') + '</div>' : '') +
-        cpuReadReport() + '<div class="dialog-actions">' + (world.mode === 'solo' && !localSet && !practiceFight ?
+        cpuReadReport() + '<div class="dialog-actions">' + (world.mode === 'solo' && !localSet && !practiceFight && !matchConfig.schoolFinal ?
           '<button class="utility" data-do="cpu-level">Replay with another CPU</button>' : '') +
         (practiceFight ? '' : '<button class="utility" data-do="rematch">' + icon('reset') + 'Restart match</button>') +
         '<button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
@@ -2155,6 +2161,25 @@
     }
     const set = online.series || localSet;
     if (set) return showSetResult(result, set, finish, duration);
+    if (matchConfig?.schoolFinal && !online.match) {
+      if (!schoolSave.firstFightDone) {
+        schoolSave.firstFightDone=true;
+        saveSchool();
+      }
+      const won=result.end===0;
+      const review=won ? null : window.FightSchool.rematchLesson(result.matchCard);
+      showDialog('result',won?'First fight won!':'First fight finished',
+        '<div class="winner"><img alt="" src="'+portrait(f.kind,result.coatFor(f.index))+'"><div><h3>'+f.stats.name+
+        ' wins!</h3><p>'+finish+' · '+duration+'</p></div></div><p>'+
+        (won?'Pip’s next opponent is Noodle on Picnic Table in the Arcade Cup.':review.reason)+
+        '</p><div class="dialog-actions"><button class="'+(won?'primary':'utility')+'" data-do="school-cup">Pip’s Arcade Cup</button>'+
+        '<button class="'+(won?'utility':'primary')+'" data-do="rematch">Rematch Brisket</button>'+
+        (review?'<button class="utility" data-school-review="'+review.id+'">'+review.button+'</button>':'')+cardButton+
+        '<button class="utility" data-do="home">Main menu</button></div>',false);
+      document.querySelector('#dialog-body .primary').focus();
+      announce(won?'First fight won!':'First fight finished');
+      return;
+    }
     if (online.match) {
       const title = result.end === online.side ? 'You win!' : 'Opponent wins';
       showDialog('online-result', title,
@@ -2276,6 +2301,11 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    const review=e.target.closest('[data-school-review]');
+    if (review && matchConfig?.schoolFinal) return startLesson(schoolLessons.findIndex(l=>l.id===review.dataset.schoolReview),true);
+    const saved = e.target.closest('[data-resume-id]');
+    if (saved && dialogType==='saved-games') return resumeSavedGame(saved.dataset.resumeId);
+    if (action==='school-cup') return cupSheet('pip');
     const cupDog = e.target.closest('[data-cup-dog]');
     if (cupDog) {
       cupSheet(cupDog.dataset.cupDog);
@@ -4600,7 +4630,7 @@
         if (score(disk) === score(progress) && disk.atCheckpoint) progress.atCheckpoint = disk.atCheckpoint;
       }
     }
-    progress = campaign.record(progress, event);
+    progress = {...campaign.record(progress, event),playedAt:Date.now()};
     try {
       storage.setItem(campaign.saveKey, JSON.stringify(progress));
       stored = true;
@@ -4633,11 +4663,71 @@
   function showHome(focus = true) {
     menuScreen('home');
     afterStory = null;
-    $('school-welcome').hidden = schoolSave.seen;
-    $('home').classList.toggle('has-welcome',!schoolSave.seen);
+    if (!schoolUnsaved) Object.assign(schoolSave,readSchool());
+    refreshHomeSaves();
     window.DispatchCovers.draw($('title-cover'), 'title');
-    if (focus) $(schoolSave.seen?'home-adventure':'welcome-play').focus({ preventScroll: true });
+    if (focus) focusHome();
   }
+  function focusHome() {
+    const id = !$('home-saves').hidden ? 'home-continue' : $('school-welcome').hidden ? 'home-adventure' : 'welcome-play';
+    $(id).focus({preventScroll:true});
+  }
+  function savedGames() {
+    const items=[];
+    if (schoolSave.started && (schoolSave.passed.length<schoolLessons.length || !schoolSave.firstFightDone)) {
+      const index=unfinishedLesson(), final=index<0;
+      items.push({id:'school',title:'Fight School',kind:'pip',playedAt:schoolSave.playedAt,
+        detail:final?'First stock match · Pip vs. Rookie Brisket':'Lesson '+(index+1)+' · '+schoolLessons[index].title,
+        action:final?'Play match':'Continue'});
+    }
+    if (progress.started && (!progress.complete || progress.pending==='ending')) {
+      const room=campaign.rooms[progress.room];
+      items.push({id:'adventure',title:'The Last Dispatch',kind:campaign.chapterFighter,playedAt:progress.playedAt,
+        detail:progress.pending ? 'Cutscene · '+campaign.scenes[progress.pending].title :
+          room.name+(progress.checkpoint?' · '+room.checkpoints[progress.checkpoint-1].name:' · '+room.type),
+        action:progress.pending?'Watch':'Continue'});
+    }
+    for (const [kind,course] of Object.entries(cup.courses)) {
+      const entry=cupEntry(kind), run=entry.active;
+      if (!run) continue;
+      const round=run.wins.length, opponent=course.bouts[round]?.[0];
+      items.push({id:kind,title:fighters[kind].name+'’s Arcade Cup',kind,coat:run.coat,playedAt:entry.playedAt,
+        detail:'Round '+(round+1)+' of 4 · '+(opponent?fighters[opponent].name:'Copper Hound'),action:run.started?'Retry round':'Continue'});
+    }
+    return items.sort((a,b)=>(b.playedAt||0)-(a.playedAt||0));
+  }
+  function refreshHomeSaves() {
+    const games=savedGames(), item=games[0];
+    $('home-saves').hidden=!item;
+    $('school-welcome').hidden=!!item || schoolSave.seen;
+    $('home').classList.toggle('has-welcome',!$('school-welcome').hidden);
+    $('home').classList.toggle('has-saves',!!item);
+    if (!item) return;
+    $('home-continue').dataset.save=item.id;
+    $('continue-dog').src=portrait(item.kind,item.coat);
+    $('continue-title').textContent=item.title;
+    $('continue-detail').textContent=item.detail;
+    $('continue-action').textContent=item.action;
+    $('other-saves').hidden=games.length<2;
+  }
+  function showSavedGames() {
+    const games=savedGames();
+    if (!games.length) return showHome();
+    showDialog('saved-games','Saved games','<div class="saved-games">'+games.map(g=>
+      '<button data-resume-id="'+g.id+'"><img alt="" src="'+portrait(g.kind,g.coat)+'"><span><strong>'+g.title+
+      '</strong><small>'+g.detail+'</small></span><b>'+g.action+'</b></button>').join('')+'</div>');
+    document.querySelector('[data-resume-id]').focus();
+  }
+  function resumeSavedGame(id) {
+    if (!savedGames().some(g=>g.id===id)) return showHome();
+    if (id==='school') return unfinishedLesson()<0 ? startFirstFight() : resumeCourse();
+    if (id==='adventure') return continueAdventure();
+    // Use the route card's checked transaction, including its cross-tab retry guard.
+    cupSheet(id);
+    startCupRound(id);
+  }
+  $('home-continue').onclick=()=>resumeSavedGame($('home-continue').dataset.save);
+  $('other-saves').onclick=showSavedGames;
   function showRoute() {
     menuScreen('dispatch-route');
     afterStory = null;
@@ -5137,17 +5227,27 @@
     toLobby();
   };
   const schoolLessons=window.FightSchool.lessons;
-  const schoolSave={seen:false,index:0,passed:[]};
-  try {
-    const record=JSON.parse(localStorage.getItem('dog-fight-3.school') || '{}');
-    schoolSave.seen=record.seen===true;
-    const index=schoolLessons.findIndex(l=>l.id===record.lesson);
-    if (index>=0) schoolSave.index=index;
-    if (Array.isArray(record.passed)) schoolSave.passed=schoolLessons.filter(l=>record.passed.includes(l.id)).map(l=>l.id);
-  } catch { /* The course also works without storage. */ }
+  const schoolKey='dog-fight-3.school';
+  function readSchool() {
+    let record;
+    try { record=JSON.parse(storage.getItem(schoolKey)); } catch {}
+    return window.FightSchool.readProgress(record);
+  }
+  const schoolSave=readSchool();
+  let schoolUnsaved=false;
+  const unfinishedLesson=()=>window.FightSchool.unfinished(schoolSave);
   function saveSchool() {
+    const disk=readSchool();
+    schoolSave.passed=schoolLessons.filter(l=>disk.passed.includes(l.id) || schoolSave.passed.includes(l.id)).map(l=>l.id);
+    schoolSave.firstFightDone ||= disk.firstFightDone;
+    schoolSave.started ||= disk.started;
     schoolSave.seen=true;
-    try { localStorage.setItem('dog-fight-3.school',JSON.stringify({seen:true,lesson:schoolLessons[schoolSave.index].id,passed:schoolSave.passed})); } catch {}
+    if (schoolSave.started) schoolSave.playedAt=Date.now();
+    try {
+      const {index,...saved}=schoolSave;
+      storage.setItem(schoolKey,JSON.stringify({...saved,lesson:schoolLessons[index].id}));
+      schoolUnsaved=false;
+    } catch { schoolUnsaved=true; }
   }
   function schoolHint(id,device) {
     const touch={move:'Right on the D-pad',platform:'Jump',jab:'Attack',tilt:'Down + Attack',air:'Jump + Attack',guard:'Shield',throw:'Grab, then Right',special:'Right + Special',return:'Up + Special, then Right',stock:'Right + Smash, release Smash'};
@@ -5186,37 +5286,50 @@
     $('school-bindings').textContent=lesson.done ? (device===1?'A to continue':device===0?'Enter to continue':'') :
       lesson.missed?'':schoolHint(info.id,device);
     $('school-next').hidden=!lesson.done;
-    $('school-next').textContent=lesson.index===schoolLessons.length-1?'Play first match':'Next lesson';
     if (lesson.done && !schoolSave.passed.includes(lesson.id)) {
       schoolSave.passed.push(lesson.id);
       schoolSave.index=Math.min(lesson.index+1,schoolLessons.length-1);
       saveSchool();
     }
+    $('school-next').textContent=matchConfig.schoolReview?'Rematch Brisket':
+      lesson.index===schoolLessons.length-1 && unfinishedLesson()<0?'Play first match':'Next lesson';
   }
-  function startLesson(index) {
+  function startLesson(index,schoolReview=false) {
     leaveOnline();
     afterStory=null;
     schoolSave.index=index;
+    schoolSave.started=true;
     saveSchool();
     startMatch({...settings,mode:'local',stage:schoolLessons[index].id==='platform'?'picnic':'nightmail',
-      p1:'pip',p2:'brisket',fetch:false,minutes:0,lesson:index});
+      p1:'pip',p2:'brisket',fetch:false,minutes:0,lesson:index,schoolReview});
     delete $('school-coach').dataset.key;
     renderSchool(getPads());
   }
   function nextLesson() {
+    if (matchConfig.schoolReview) return startFirstFight();
     const next=world.lesson.index+1;
     if (next<schoolLessons.length) startLesson(next);
-    else startMatch({...settings,mode:'solo',p1:'pip',p2:'brisket',cpuLevel:'rookie',stage:'picnic',fetch:false,minutes:7});
+    else if (unfinishedLesson()>=0) startLesson(unfinishedLesson());
+    else startFirstFight();
+  }
+  function startFirstFight() {
+    leaveOnline();
+    afterStory=null;
+    saveSchool();
+    startMatch({...settings,mode:'solo',schoolFinal:true,p1:'pip',p2:'brisket',cpuLevel:'rookie',stage:'picnic',fetch:false,minutes:7});
   }
   function resumeCourse() {
-    startLesson(schoolSave.passed.length===schoolLessons.length?0:schoolSave.index);
+    const index=unfinishedLesson();
+    if (index<0 && !schoolSave.firstFightDone) return startFirstFight();
+    startLesson(index<0?0:index);
   }
   function schoolList() {
     showDialog('school','Fight School',
       '<p>'+schoolSave.passed.length+' of '+schoolLessons.length+' lessons cleared. Choose a lesson to play as Pip.</p><div id="school-syllabus">'+
       schoolLessons.map((l,i)=>'<button type="button" class="utility" data-lesson="'+i+'">'+(i+1)+'. '+l.title+
         (schoolSave.passed.includes(l.id)?' ✓':'')+'</button>').join('')+'</div><div class="dialog-actions"><button class="primary" id="school-resume">'+
-      (world?.lesson?'Back to lesson':schoolSave.passed.length===schoolLessons.length?'Replay course':schoolSave.passed.length?'Continue course':'Start course')+'</button><button class="utility" data-do="home">Main menu</button></div>');
+      (world?.lesson?'Back to lesson':unfinishedLesson()<0?(schoolSave.firstFightDone?'Replay course':'Play first match'):
+        schoolSave.started?'Continue course':'Start course')+'</button><button class="utility" data-do="home">Main menu</button></div>');
     $('school-syllabus').onclick=e=>{const button=e.target.closest('[data-lesson]');if(button) startLesson(Number(button.dataset.lesson));};
     $('school-resume').onclick=()=>world?.lesson?dismiss():resumeCourse();
     $('school-resume').focus({preventScroll:true});
@@ -5228,11 +5341,28 @@
       $('home').classList.remove('has-welcome');
     }
   });
+  window.addEventListener('storage',e=>{
+    if (e.key!==null && e.key!==schoolKey && e.key!==campaign.saveKey && !e.key.startsWith('dog-fight-3.cup.')) return;
+    if (!schoolUnsaved && (e.key===null || e.key===schoolKey)) {
+      const disk=readSchool();
+      if (page!=='match' || (!world?.lesson && !matchConfig?.schoolFinal)) Object.assign(schoolSave,disk);
+    }
+    if ((e.key===null || e.key===campaign.saveKey) && stored) progress=campaign.readSave(storage);
+    if (page!=='home') return;
+    const active=document.activeElement;
+    refreshHomeSaves();
+    if (dialogType==='saved-games') {
+      const id=active?.dataset.resumeId;
+      showSavedGames();
+      if (id) document.querySelector('[data-resume-id="'+id+'"]')?.focus();
+    } else if (!$('dialog').open && (active===$('other-saves') && $('other-saves').hidden ||
+      active===$('home-continue') && $('home-saves').hidden || active===$('welcome-play') && $('school-welcome').hidden)) focusHome();
+  });
   $('welcome-play').onclick=resumeCourse;
   $('welcome-dismiss').onclick=()=>{saveSchool();showHome();};
   $('home-school').onclick=schoolList;
   $('school-next').onclick=nextLesson;
-  $('school-retry').onclick=()=>startLesson(world.lesson.index);
+  $('school-retry').onclick=()=>startLesson(world.lesson.index,matchConfig.schoolReview);
   $('school-list').onclick=schoolList;
   $('home-guide').onclick = () => showMoves(settings.p1);
   $('home-options').onclick = showOptions;
@@ -5245,13 +5375,14 @@
     const b = e.target.closest('[data-stop]');
     if (b && !b.disabled) enterStop(Number(b.dataset.stop));
   };
-  $('dispatch-start').onclick = () => {
+  function continueAdventure() {
     audioReady();
     sound('menu');
     if (progress.pending) return playScene(progress.pending);
     if (progress.complete) return playScene('opening');
     enterStop(progress.room, progress.checkpoint);
-  };
+  }
+  $('dispatch-start').onclick = continueAdventure;
   let onlineDog = settings.p1, peerLibrary = null, onlineRequest = 0;
   const online = new window.DogOnline.OnlineSession({
     status: onlineStatus, start: startMatch, votes: updateVotes,

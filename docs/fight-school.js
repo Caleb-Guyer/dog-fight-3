@@ -77,5 +77,27 @@
       }
     }
   }
-  window.FightSchool={lessons,Lesson};
+  function readProgress(raw) {
+    const passed=lessons.filter(l=>Array.isArray(raw?.passed) && raw.passed.includes(l.id)).map(l=>l.id);
+    const index=Math.max(0,lessons.findIndex(l=>l.id===raw?.lesson));
+    return {seen:raw?.seen===true,started:raw?.started===true || passed.length>0 || index>0,
+      firstFightDone:raw?.firstFightDone===true,playedAt:Number.isSafeInteger(raw?.playedAt) && raw.playedAt>0 ? raw.playedAt : 0,
+      index,passed};
+  }
+  function unfinished(progress) {
+    for (let n=0;n<lessons.length;n++) {
+      const i=(progress.index+n)%lessons.length;
+      if (!progress.passed.includes(lessons[i].id)) return i;
+    }
+    return -1;
+  }
+  function rematchLesson(card) {
+    const falls=card.losses.filter(loss=>loss.slot===0 && loss.zone==='bottom').length;
+    if (falls) return {id:'return',button:'Practice recovery',reason:'Pip lost '+falls+(falls===1?' stock':' stocks')+' below the stage. Try reaching the ledge with Up Special.'};
+    const [pip,brisket]=card.players;
+    if (brisket.hits && !pip.blocks && !pip.parries) return {id:'guard',button:'Practice blocking',reason:'Brisket landed '+brisket.hits+(brisket.hits===1?' hit':' hits')+'. Practice blocking his swing.'};
+    if (!pip.hits) return {id:'jab',button:'Practice jabs',reason:'Pip finished without landing a hit. Try a jab when Brisket is within paw’s reach.'};
+    return {id:'stock',button:'Practice knockouts',reason:'Practice charging a side smash to finish a stock near the edge.'};
+  }
+  window.FightSchool={lessons,Lesson,readProgress,unfinished,rematchLesson};
 })();

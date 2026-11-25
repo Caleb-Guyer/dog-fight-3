@@ -35,6 +35,7 @@
       best:validRun(raw?.best,n=>n===rounds) ? raw.best : null,
       last:validRun(raw?.last,n=>n===rounds) ? raw.last : null,
       clears:count(raw?.clears) ? raw.clears : 0,
+      ...(count(raw?.playedAt) ? {playedAt:raw.playedAt} : {}),
     };
   }
   const stocks = run => run.wins.reduce((n,w)=>n+w.stocks,0);

@@ -13,17 +13,17 @@
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="./style.css?v=shield-landing-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
-    <link rel="stylesheet" href="./screen.css?v=yard-cup-1" />
+    <link rel="stylesheet" href="./screen.css?v=continue-1" />
     <link rel="stylesheet" href="./online.css?v=stage-forms-1" />
     <script defer src="./fighters-art.js?v=fighter-coats-1"></script>
     <script defer src="./arena-art.js?v=stage-forms-1"></script>
     <script defer src="./engine.js?v=fighter-coats-1"></script>
-    <script defer src="./fight-school.js?v=first-fight-1"></script>
-    <script defer src="./arcade.js?v=yard-cup-1"></script>
+    <script defer src="./fight-school.js?v=continue-1"></script>
+    <script defer src="./arcade.js?v=continue-1"></script>
     <script defer src="./controls.js?v=layouts-1"></script>
     <script defer src="./score.js?v=yard-band-1"></script>
     <script defer src="./render.js?v=fighter-coats-1"></script>
-    <script defer src="./dispatch-script.js?v=move-freshness-1"></script>
+    <script defer src="./dispatch-script.js?v=continue-1"></script>
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
     <script defer src="./dispatch-covers.js?v=missions-1"></script>
@@ -32,7 +32,7 @@
     <script defer src="./dispatch-run.js?v=yard-cup-1"></script>
     <script defer src="./dispatch-view.js?v=blast-radar-1"></script>
     <script defer src="./online.js?v=fighter-coats-1"></script>
-    <script defer src="./app.js?v=yard-cup-1"></script>
+    <script defer src="./app.js?v=continue-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -75,6 +75,14 @@
           <button class="dispatch-primary" id="welcome-play" type="button">Play tutorial</button>
           <button class="board-back" id="welcome-dismiss" type="button">Skip for now</button>
         </aside>
+        <nav id="home-saves" hidden aria-label="Continue playing">
+          <button type="button" id="home-continue">
+            <img id="continue-dog" alt="" width="48" height="44" />
+            <span><strong id="continue-title"></strong><small id="continue-detail"></small></span>
+            <b id="continue-action">Continue</b>
+          </button>
+          <button type="button" class="board-back" id="other-saves">Other saves</button>
+        </nav>
         <div class="home-grid">
           <button
             type="button"

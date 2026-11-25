@@ -162,6 +162,7 @@
       atCheckpoint: checkpoint && rooms[room].rules ? checkpointFighter(raw.atCheckpoint) : null,
       stamps: Number.isInteger(raw.stamps) ? raw.stamps & ((1 << rooms.length) - 1) : 0,
       complete: room === lastRoom && raw.complete === true,
+      ...(Number.isSafeInteger(raw.playedAt) && raw.playedAt > 0 ? {playedAt:raw.playedAt} : {}),
     };
   }
   function record(progress, event) {
