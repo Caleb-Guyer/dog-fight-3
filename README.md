@@ -4,6 +4,8 @@ A cartoon platform fighter for one or two players. Play **The Last Dispatch** st
 
 ## Play
 
+In **Adventure**, pause a mission and choose **Suspend & quit** to save the fight on this device. Home shows the mission name, stocks, and damage. Choose **Resume mission**, then **Resume fight** when you’re ready. Fighters, grabs, moving platforms, and boss attacks resume on the saved frame. Each mission has its own slot. Suspending again replaces that mission’s save, and clearing the resumed mission retires it. [Open Adventure](https://caleb-guyer.github.io/dog-fight-3/#adventure)
+
 In **Training → Find a drill → Chase the up throw**, tap Attack to grab and throw with the selected dog. You control the chase as soon as the throw releases. Try **Launch DI in** and **Launch DI out** to see both flight paths, then choose **Mix launch DI** and read the rival in the air. Land a follow-up before they touch down. A fresh Attack after the result starts another attempt. The same three rival responses work with your recorded combos. [Try Brisket against Pip at 60%](https://caleb-guyer.github.io/dog-fight-3/#training/throw-chase)
 
 In **KO replays** or **Watch finish**, open **Recorded inputs** to inspect the steering and buttons on the displayed frame. Use **Previous change** and **Next change** to find a shield release, a jump tap, or the direction of a strike. Solo records your controls. Local and online fights let you switch between P1 and P2, and online replays use confirmed inputs. [Try it after a last-stock fight](https://caleb-guyer.github.io/dog-fight-3/#solo/last-stock)

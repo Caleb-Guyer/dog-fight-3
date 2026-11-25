@@ -937,6 +937,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='mission-saving')return;
     if(dialogType==='special-preview')return $('move-back').click();
     if(dialogType==='stage-strike')return strikeBack();
     if(dialogType==='profiles')return $('profile-back').click();
@@ -2450,7 +2451,7 @@
           world.layout.name +
           ' · ' +
           world.objective +
-          '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button><button class="utility" data-do="dispatch-retry">Retry</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div><div class="dialog-actions"><button class="utility" data-do="route">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
+          '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button><button class="utility" data-do="suspend-mission">Suspend &amp; quit</button><button class="utility" data-do="dispatch-retry">Retry</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div><div class="dialog-actions"><button class="utility" data-do="route">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
       );
       document.querySelector('[data-do=resume]').focus();
       return;
@@ -3193,6 +3194,7 @@
     if (action === 'home') showHome();
     if (action === 'route') showRoute();
     if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.atCheckpoint);
+    if (action === 'suspend-mission') return suspendMission();
     if (action === 'dispatch-rematch') beginRun(world.roomIndex, 0);
     if (['option-sound', 'option-shake', 'option-tiltStick','option-tiltStick2','option-flickJump1','option-flickJump2','option-quickAttack1','option-quickAttack2'].includes(action)) {
       const key = action.slice('option-'.length);
@@ -5567,7 +5569,8 @@
     FighterSchool:'fighter-lessons.js?v=special-studies-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=letter-lift-1', DispatchView:'dispatch-view.js?v=letter-lift-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=suspend-mission-1', DispatchView:'dispatch-view.js?v=letter-lift-1',
+    DispatchSuspend:'dispatch-suspend.js?v=1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -5690,11 +5693,48 @@
       $(screen).hidden = screen !== id;
     window.scrollTo(0, 0);
   }
+  let missionSaves=[],savesRead=0;
+  async function readMissionSaves(){
+    const read=++savesRead;
+    try{
+      if(!window.DispatchSuspend){
+        if(!window.indexedDB || (indexedDB.databases && !(await indexedDB.databases()).some(db=>db.name==='dog-fight-3.suspended')))return;
+        await loadDispatch('DispatchSuspend');
+      }
+      const rows=await window.DispatchSuspend.list();
+      if(read===savesRead){missionSaves=rows;if(page==='home')refreshHomeSaves();}
+    }catch{}
+  }
+  async function suspendMission(){
+    if(!window.DispatchSuspend)return waitForDispatch('Suspend mission',()=>loadDispatch('DispatchSuspend'),suspendMission,showPause);
+    const fight=world;
+    showDialog('mission-saving','Saving mission','<p role="status">Saving this fight…</p>',false);
+    try{
+      await window.DispatchSuspend.save(fight);
+    }catch{
+      showPause();
+      $('dialog-body').insertAdjacentHTML('afterbegin','<p role="alert">This browser could not save the fight. You can keep playing or try again.</p>');
+      return;
+    }
+    await readMissionSaves();
+    showHome();
+  }
+  function resumeMission(id){
+    let record;
+    waitForDispatch('Resume mission',async()=>{
+      [record]=await Promise.all([window.DispatchSuspend.load(id),loadMission()]);
+    },()=>{
+      const h=record.header;
+      selectChapter(window.DispatchScript.chapters[h.chapter-1]);
+      beginRun(h.room,record.state.checkpoint,record.state.atCheckpoint,null,record);
+    },showHome);
+  }
   function showHome(focus = true) {
     menuScreen('home');
     afterStory = null;
     if (!schoolUnsaved) Object.assign(schoolSave,readSchool());
     refreshHomeSaves();
+    readMissionSaves();
     if (focus) focusHome();
   }
   function focusHome() {
@@ -5702,7 +5742,7 @@
     $(id).focus({preventScroll:true});
   }
   function savedGames() {
-    const items=[];
+    const items=missionSaves.slice();
     if (schoolSave.started && (schoolSave.rematch || schoolSave.passed.length<schoolLessons.length || !schoolSave.firstFightDone)) {
       const index=unfinishedLesson(), final=index<0;
       const r=schoolSave.rematch;
@@ -5754,6 +5794,7 @@
   }
   function resumeSavedGame(id) {
     if (!savedGames().some(g=>g.id===id)) return showHome();
+    if (missionSaves.some(s=>s.id===id))return resumeMission(id);
     if (id==='school') return resumeCourse();
     if (id==='adventure') { selectChapter(nightUnlocked()?nightChapter:yardChapter); return continueAdventure(); }
     // Use the route card's checked transaction, including its cross-tab retry guard.
@@ -6008,13 +6049,13 @@
     $('lift-enter').onclick=()=>open?beginRun(bonus.id,0):progress.room>=bonus.stampRoom?enterStop(bonus.stampRoom,checkpoint):continueAdventure();
     $('lift-enter').focus();
   }
-  function beginRun(index, checkpoint, atCheckpoint = null, cupRound = null) {
+  function beginRun(index, checkpoint, atCheckpoint = null, cupRound = null, suspended = null) {
     corner=null;
     const book = cupRound ? yardChapter : campaign;
     const sideRoute=book.bonus?.id===index, mission=sideRoute?book.bonus:book.rooms[index];
-    if(sideRoute && !book.liftUnlocked(progress))return showRoute(()=>showLiftTicket());
+    if(sideRoute && !suspended && !book.liftUnlocked(progress))return showRoute(()=>showLiftTicket());
     if(!missionReady())return waitForDispatch(mission.name,loadMission,
-      ()=>beginRun(index,checkpoint,atCheckpoint,cupRound),()=>cupRound?cupSheet(cupRound.kind):showRoute());
+      ()=>beginRun(index,checkpoint,atCheckpoint,cupRound,suspended),()=>cupRound?cupSheet(cupRound.kind):showRoute());
     finishTape=null;
     cupAttempt = cupRound;
     music?.restart();
@@ -6050,7 +6091,7 @@
     document.body.classList.remove('menu-screen', 'training-active', 'cinema-active', 'with-drill-readout');
     $('freshness-readout').hidden = $('wave-readout').hidden = $('combo-readout').hidden = true;
     document.body.classList.add('playing', 'adventure-active');
-    if (!cupRound && !sideRoute) saveProgress({ room: index, checkpoint, pending: '' });
+    if (!cupRound && !sideRoute && !suspended) saveProgress({ room: index, checkpoint, pending: '' });
     $('blast-radar').hidden = true;
     view = new window.DispatchView();
     view.shakeEnabled = settings.shake;
@@ -6091,14 +6132,22 @@
       else sound(name, e);
     });
     $('match-mode').textContent = sideRoute?'Bonus dispatch · Relay':cupRound ? 'Arcade Cup · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
+    if(suspended){
+      window.DispatchSuspend.restore(world,suspended);
+      Object.defineProperty(world,'suspendHeader',{value:suspended.header});
+    }
     $('match-stage').textContent = world.layout.name;
     $('runner-portrait').src = portrait(world.dogs[0].kind,world.coatFor(0));
     $('runner-name').textContent = world.dogs[0].stats.name;
     updateDispatchHUD();
-    view.draw($('game'), world, 0, 0);
+    view.draw($('game'), world, 0, world.time);
     $('game').focus({ preventScroll: true });
     window.scrollTo(0, 0);
     announce((cupRound ? 'Arcade Cup final · ' : 'Adventure · ') + world.layout.name);
+    if(suspended){
+      showDialog('pause','Mission ready','<p>'+world.layout.name+' · '+stockLabel(world.dogs[0].stocks)+' · '+tenth(world.dogs[0].damage)+'%</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume fight</button></div>');
+      $('dialog-body').querySelector('[data-do=resume]').focus();
+    }
   }
   function dispatchNotice(message) {
     $('dispatch-notice').textContent = message;
@@ -6176,6 +6225,7 @@
     view.draw($('game'), world, dt, world.time);
     if (cupAttempt && world.finished) return cupResult(world.finished==='exit');
     if (world.finished === 'exit') {
+      if(world.suspendHeader)window.DispatchSuspend.clear(world.suspendHeader).then(readMissionSaves).catch(()=>{});
       if(world.sideRoute){
         const clear={stocks:world.dogs[0].stocks,frames:world.runFrames};
         liftBest=yardChapter.liftBest(storage,clear,liftBest);

@@ -28,6 +28,7 @@
         sideRoute ? {...script,terrain:script.terrain.map(p=>({...p}))} : script;
       const cupBoss = script.rules === 'boss' && Object.hasOwn(window.DogFight.fighters,cupFighter);
       super({ stage: 'dispatch', layout, mode: 'adventure', p1: cupBoss ? cupFighter : chapterFighter, p2: 'brisket', fetch: false }, emit);
+      this.random=window.DogFight.seededRandom(Math.floor(this.random()*0x100000000));
       this.cupCoat = cupBoss && window.DogFight.validCoat(coat) ? coat : 0;
       this.roomIndex = room;
       this.sideRoute=sideRoute;
