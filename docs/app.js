@@ -847,6 +847,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='fighter-school')return leaveFighterSheet();
     if(dialogType==='dispatch-load')return $('dispatch-load-back').click();
     if (dialogType==='couch' || dialogType==='couch-load'){
       if(page==='match')return showResult();
@@ -2132,7 +2133,8 @@
       }
       if (name === 'win') resultDelay = 0.7;
     }, random);
-    if (config.lesson !== undefined) world.lesson = new window.FightSchool.Lesson(config.lesson,world);
+    if (config.lesson !== undefined) world.lesson = config.fighterCourse ?
+      new window.FighterSchool.Trial(config.lesson,world) : new window.FightSchool.Lesson(config.lesson,world);
     const openingFrames = leadInFrames || (config.mode === 'solo' && config.openingFrames);
     if (openingFrames && !resume && !rehearsal) {
       const opener = new Battle(config, undefined, seededRandom(soloSeed));
@@ -2221,7 +2223,7 @@
       document.querySelector('[data-do=resume]').focus();
       return;
     }
-    if (world.lesson) return schoolList();
+    if (world.lesson) return openLessonList();
     if (cupAttempt) {
       showDialog('pause','Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+(cupAttempt.round+1)+
         ' of 4. Leaving now restarts this round on your next attempt.</p><div class="dialog-actions">'+
@@ -2548,6 +2550,7 @@
         '</p><div class="dialog-actions"><button class="'+(won?'primary':'utility')+'" data-do="school-cup">Pip’s Arcade Cup</button>'+
         '<button class="'+(won?'utility':'primary')+'" data-do="rematch">Rematch Brisket</button>'+
         (review?'<button class="utility" data-school-review="'+review.id+'">'+review.button+'</button>':'')+cardButton+
+        '<button class="utility" data-do="fighter-classes">Fighter lessons</button>'+
         '<button class="utility" data-do="home">Main menu</button></div>',false);
       document.querySelector('#dialog-body .primary').focus();
       announce(won?'First fight won!':'First fight finished');
@@ -2698,6 +2701,7 @@
     const saved = e.target.closest('[data-resume-id]');
     if (saved && dialogType==='saved-games') return resumeSavedGame(saved.dataset.resumeId);
     if (action==='school-cup') return cupSheet('pip');
+    if (action==='fighter-classes') return fighterSheet(world?.lesson?.course || settings.p1);
     const cupDog = e.target.closest('[data-cup-dog]');
     if (cupDog) {
       cupSheet(cupDog.dataset.cupDog);
@@ -5038,6 +5042,7 @@
   };
   const campaign = window.DispatchScript;
   const dispatchSources={
+    FighterSchool:'fighter-lessons.js?v=fighter-school-1',
     DispatchCovers:'dispatch-covers.js?v=missions-1', DispatchFilm:'dispatch-film.js?v=widefilm-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=stocks-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=yard-cup-1', DispatchView:'dispatch-view.js?v=blast-radar-1',
@@ -5759,23 +5764,30 @@
   }
   let schoolDevice=null, schoolPadActive=false;
   function renderSchool(pads) {
-    const lesson=world.lesson, info=schoolLessons[lesson.index];
+    const lesson=world.lesson, info=lesson.info || schoolLessons[lesson.index];
     const pad=pads[0], active=!!pad && (pad.buttons.some(b=>b.pressed) || pad.axes.some(a=>Math.abs(a)>.28));
     if(active && !schoolPadActive)schoolDevice=1;
     schoolPadActive=active;
     if(!pad && schoolDevice===1)schoolDevice=null;
     const device=schoolDevice ?? (pad?1:matchMedia('(pointer:coarse)').matches?2:0);
     const state=lesson.missed?'retry':lesson.done?'passed':'playing';
-    const key=lesson.id+'/'+state+'/'+device;
+    const key=lesson.id+'/'+state+'/'+device+'/'+(lesson.note || '');
     if ($('school-coach').dataset.key===key) return;
     $('school-coach').dataset.key=key;
     $('school-coach').dataset.state=state;
-    $('school-count').textContent='Fight School · '+(lesson.index+1)+' / '+schoolLessons.length;
+    const count=lesson.course?window.FighterSchool.courses[lesson.course].lessons.length:schoolLessons.length;
+    $('school-count').textContent=(lesson.course?fighters[lesson.course].name+' · Fighter lessons':'Fight School')+' · '+(lesson.index+1)+' / '+count;
     $('school-title').textContent=info.title;
-    $('school-task').textContent=lesson.missed?'The stock ended. Retry to return to the starting position.':lesson.done?info.success:info.task;
+    $('school-task').textContent=lesson.missed?(lesson.course?'Retry to practice the technique from the starting position.':'The stock ended. Retry to return to the starting position.'):
+      lesson.done?info.success:lesson.note || info.task;
     $('school-bindings').textContent=lesson.done ? (device===1?'A to continue':device===0?'Enter to continue':'') :
-      lesson.missed?'':schoolHint(info.id,device);
+      lesson.missed?'':lesson.course?window.FighterSchool.hint(info,device,keyFor,padFor):schoolHint(info.id,device);
     $('school-next').hidden=!lesson.done;
+    if(lesson.course){
+      if(lesson.done)window.FighterSchool.mark(storage,lesson.id);
+      $('school-next').textContent=lesson.index+1<count?'Next lesson':'Fighter card';
+      return;
+    }
     if (lesson.done && !schoolSave.passed.includes(lesson.id)) {
       schoolSave.passed.push(lesson.id);
       schoolSave.index=Math.min(lesson.index+1,schoolLessons.length-1);
@@ -5798,6 +5810,8 @@
   function nextLesson() {
     if (matchConfig.schoolReview) return startFirstFight();
     const next=world.lesson.index+1;
+    const kind=world.lesson.course;
+    if(kind)return next<window.FighterSchool.courses[kind].lessons.length?startFighterLesson(kind,next):fighterSheet(kind);
     if (next<schoolLessons.length) startLesson(next);
     else if (unfinishedLesson()>=0) startLesson(unfinishedLesson());
     else startFirstFight();
@@ -5819,11 +5833,32 @@
       schoolLessons.map((l,i)=>'<button type="button" class="utility" data-lesson="'+i+'">'+(i+1)+'. '+l.title+
         (schoolSave.passed.includes(l.id)?' ✓':'')+'</button>').join('')+'</div><div class="dialog-actions"><button class="primary" id="school-resume">'+
       (world?.lesson?'Back to lesson':unfinishedLesson()<0?(schoolSave.firstFightDone?'Replay course':'Play first match'):
-        schoolSave.started?'Continue course':'Start course')+'</button><button class="utility" data-do="home">Main menu</button></div>');
+        schoolSave.started?'Continue course':'Start course')+'</button><button class="utility" data-do="fighter-classes">Fighter lessons</button><button class="utility" data-do="home">Main menu</button></div>');
     $('school-syllabus').onclick=e=>{const button=e.target.closest('[data-lesson]');if(button) startLesson(Number(button.dataset.lesson));};
     $('school-resume').onclick=()=>world?.lesson?dismiss():resumeCourse();
     $('school-resume').focus({preventScroll:true});
   }
+  function leaveFighterSheet(){
+    if(page==='match' && matchConfig?.schoolFinal && world?.end!=null)return showResult();
+    if(page==='match' && world?.lesson?.course)return dismiss();
+    schoolList();
+  }
+  function fighterSheet(kind){
+    if(!window.FighterSchool)return waitForDispatch('Fighter lessons',()=>loadDispatch('FighterSchool'),()=>fighterSheet(kind),leaveFighterSheet);
+    window.FighterSchool.sheet(kind,{storage,fighters,portrait,savedCoat,showDialog,root:$('dialog-body'),
+      choose:fighterSheet,start:startFighterLesson,cup:cupSheet,back:leaveFighterSheet,
+      backLabel:page==='match' && world?.lesson?.course?'Back to lesson':matchConfig?.schoolFinal && page==='match'?'Back to results':'Fight School'});
+  }
+  function startFighterLesson(kind,index){
+    leaveOnline();
+    afterStory=null;
+    const course=window.FighterSchool.courses[kind];
+    startMatch({...settings,mode:'local',stage:course.stage,form:'original',p1:kind,p2:course.rival,
+      coats:[savedCoat(0,kind),0],fetch:false,minutes:0,lesson:index,fighterCourse:kind});
+    delete $('school-coach').dataset.key;
+    renderSchool(getPads());
+  }
+  function openLessonList(){return world?.lesson?.course?fighterSheet(world.lesson.course):schoolList();}
   $('home').addEventListener('click',e=>{
     if (!$('school-welcome').hidden && e.target.closest('button')) {
       if (!schoolSave.seen) saveSchool();
@@ -5857,8 +5892,8 @@
   $('welcome-dismiss').onclick=()=>{saveSchool();showHome();};
   $('home-school').onclick=schoolList;
   $('school-next').onclick=nextLesson;
-  $('school-retry').onclick=()=>startLesson(world.lesson.index,matchConfig.schoolReview);
-  $('school-list').onclick=schoolList;
+  $('school-retry').onclick=()=>world.lesson.course?startFighterLesson(world.lesson.course,world.lesson.index):startLesson(world.lesson.index,matchConfig.schoolReview);
+  $('school-list').onclick=openLessonList;
   $('home-guide').onclick = () => showMoves(settings.p1);
   $('home-options').onclick = showOptions;
   $('lobby-home').onclick = $('route-home').onclick = () => showHome();
@@ -6710,6 +6745,9 @@
     if (hash==='#local/pick-together' || hash==='#local/best-of-three') {
       if(hash==='#local/best-of-three')settings.bestOfThree=true;
       settings.mode='local';editing=0;toLobby();pickTogether();
+    } else if(hash==='#fighters' || (hash==='#fighters/'+arena && Object.hasOwn(fighters,arena))){
+      showHome(false);
+      fighterSheet(arena || 'pip');
     } else if (hash==='#records') {
       showHome(false);
       showRecords();
