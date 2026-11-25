@@ -13,12 +13,13 @@
     <link rel="preload" href="./assets/brawl-pixel.ttf" as="font" type="font/ttf" crossorigin />
     <link rel="stylesheet" href="./style.css?v=shield-landing-1" />
     <link rel="stylesheet" href="./dispatch.css?v=chapter-lead-1" />
-    <link rel="stylesheet" href="./screen.css?v=fighter-coats-1" />
+    <link rel="stylesheet" href="./screen.css?v=yard-cup-1" />
     <link rel="stylesheet" href="./online.css?v=stage-forms-1" />
     <script defer src="./fighters-art.js?v=fighter-coats-1"></script>
     <script defer src="./arena-art.js?v=stage-forms-1"></script>
     <script defer src="./engine.js?v=fighter-coats-1"></script>
     <script defer src="./fight-school.js?v=first-fight-1"></script>
+    <script defer src="./arcade.js?v=yard-cup-1"></script>
     <script defer src="./controls.js?v=layouts-1"></script>
     <script defer src="./score.js?v=yard-band-1"></script>
     <script defer src="./render.js?v=fighter-coats-1"></script>
@@ -26,16 +27,12 @@
     <script defer src="./dispatch-actors.js?v=missions-1"></script>
     <script defer src="./yard-art.js?v=stocks-1"></script>
     <script defer src="./dispatch-covers.js?v=missions-1"></script>
-    <script defer src="./film-opening.js?v=widefilm-1"></script>
-    <script defer src="./film-rescue.js?v=widefilm-1"></script>
-    <script defer src="./film-boss.js?v=widefilm-1"></script>
-    <script defer src="./film-ending.js?v=widefilm-1"></script>
     <script defer src="./dispatch-film.js?v=widefilm-1"></script>
     <script defer src="./dispatch-bridge.js?v=missions-1"></script>
-    <script defer src="./dispatch-run.js?v=stock-return-1"></script>
+    <script defer src="./dispatch-run.js?v=yard-cup-1"></script>
     <script defer src="./dispatch-view.js?v=blast-radar-1"></script>
     <script defer src="./online.js?v=fighter-coats-1"></script>
-    <script defer src="./app.js?v=fighter-coats-1"></script>
+    <script defer src="./app.js?v=yard-cup-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -93,6 +90,9 @@
             >
           </button>
           <nav class="mode-rack" aria-label="Game modes">
+            <button type="button" id="home-cup">
+              <i data-icon="versus"></i><span><b>Arcade Cup</b><small>Three rivals and a boss</small></span>
+            </button>
             <button type="button" data-enter-mode="solo">
               <i data-icon="paw"></i><span><b>Solo fight</b><small>Take on the CPU</small></span>
             </button>

@@ -8,7 +8,7 @@ A cartoon platform fighter for one or two players. Play **The Last Dispatch** st
 
 On your first visit, choose **Play tutorial** to enter Fight School as Pip. Ten playable lessons cover movement, platforms, jabs, tilts, aerials, blocking, throws, specials, recovery, and taking a stock with a charged smash. Each lesson waits for you to do it in the arena. Choose **Retry** to reset the situation or **Lessons** to jump to any lesson. The last knockout leads into a three-stock match against Rookie Brisket. Your cleared lessons are saved on this device. Reopen **Fight School** from the main menu at any time. [Enter Fight School](https://caleb-guyer.github.io/dog-fight-3/#tutorial)
 
-From the main menu, choose **Adventure**, **Solo fight**, **Local versus**, **Online versus**, or **Training**. For a solo or local match, choose your dog and select **Start fight**. To play offline, download or clone the repository, extract it if necessary, and open `docs/index.html` in a modern browser. The game, artwork, typeface, and sound effects work locally. A keyboard is enough for both solo and local versus. Touch controls appear on touchscreen devices.
+From the main menu, choose **Adventure**, **Arcade Cup**, **Solo fight**, **Local versus**, **Online versus**, or **Training**. For a solo or local match, choose your dog and select **Start fight**. To play offline, download or clone the repository, extract it if necessary, and open `docs/index.html` in a modern browser. The game, artwork, typeface, and sound effects work locally. A keyboard is enough for both solo and local versus. Touch controls appear on touchscreen devices.
 
 Each dog starts with three stocks. Dealing damage makes the next hit launch a rival farther. Knock a dog beyond the arena boundary to take a stock. When a hard hit sends you tumbling, you can bend the launch and choose how to land. A midair jump and **Up + Special** can bring you back to the ledge.
 
@@ -45,6 +45,10 @@ Tied stocks at time or a simultaneous final knockout send both dogs to **Sudden 
 In that opening, let Brisket approach once to see his Yard Buster. On the rematch, start charging Pip’s forward smash at **GO!** and release just before Brisket reaches you. A well-timed Bolt Kick can take the stock in one hit.
 
 ## Solo opponents
+
+**Arcade Cup** gives each dog a four-round route. Fight the other three dogs in three-stock matches, then take your chosen fighter and coat into Bell Depot against the Copper Hound. The rivals progress from Rookie through Arcade to Rival. Every round starts with three stocks. Cleared rounds save separately for each dog. Retrying a lost round or re-entering an unfinished one adds one retry.
+
+The route card keeps your clear count and personal best. Fewer retries ranks first, followed by more stocks kept and then less time spent in winning fights. To try a rooftop run, pick Noodle, fight Brisket across the laundry gap, and use the perches against Clover in round two. [Enter Noodle’s Arcade Cup](https://caleb-guyer.github.io/dog-fight-3/#arcade/noodle)
 
 Rival can punish a blocked smash or a heavy landing. At close range each dog can grab out of shield. At higher damage it looks for its own up smash. Remaining recovery frames, shield pushback and the reach of the move determine whether it commits. As Brisket, try Haymaker up close against Pip, then back up and make only the tip connect. [Play the three-stock match](https://caleb-guyer.github.io/dog-fight-3/#solo/shield-punish)
 
