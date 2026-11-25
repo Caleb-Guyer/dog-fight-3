@@ -362,6 +362,8 @@
     oscillator.stop(now + length + 0.014);
   }
   function sound(name, detail = {}) {
+    if(name==='ko' || name==='break') music?.duck(.33);
+    else if(name==='parry' || name==='hit' && detail.emphatic) music?.duck(.16);
     if (name === 'hit') {
       if (detail.armored) {
         tone(155, 92, .055, 0, 'triangle', .12);
