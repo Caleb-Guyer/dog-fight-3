@@ -74,8 +74,8 @@
     const prev=panel.querySelector('[data-input-prev]'),next=panel.querySelector('[data-input-next]');
     let slot=twoPlayers?initialSeat:0;
     const history=[];
-    function update(){
-      if(!panel.open || !panel.isConnected)return;
+    function update(opening=false){
+      if((!panel.open && !opening) || !panel.isConnected)return;
       if(!history[slot]){
         const rows=Array.from({length:tape.length+1},(_,n)=>inputFrame(tape,n,slot));
         history[slot]={rows,changes:rows.flatMap((r,n)=>r.changed?[n]:[])};
@@ -96,7 +96,8 @@
       if(n!==undefined)jump(n);
     }
     prev.onclick=()=>seekChange(-1);next.onclick=()=>seekChange(1);
-    panel.ontoggle=update;
+    panel.querySelector('summary').onclick=()=>{if(!panel.open)update(true);};
+    panel.ontoggle=()=>update();
     return update;
   }
   function buildGIF(tape,stage,shake,signal,progress){
