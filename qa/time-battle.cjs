@@ -100,3 +100,30 @@ test('an eight-frame input delay confirms the same scoring ring-out as an offlin
     assert.deepEqual(p.world.matchCard.points,reference.matchCard.points);
   }
 });
+
+test('a delayed two-stock room with no clock or Fetch confirms the same elimination as local play',()=>{
+  const config={mode:'local',p1:'pip',p2:'brisket',stage:'picnic',form:'flat',fetch:false,stockCount:2,minutes:0};
+  const reference=new Battle(config,undefined,window.DogFight.seededRandom(131));
+  const peers=[0,1].map(side=>{
+    const out=[];let world;
+    const room=new window.DogOnline.OnlineSession({start(c,r){world=new Battle(c,undefined,r);}});
+    room.side=side;room.send=msg=>{out[msg[2]]=msg[3];};
+    room.beginRound(['start',1,'pip','brisket','picnic',131,1,'flat','room-rules-1','stock',2,0,false]);
+    return {out,world,match:room.match};
+  });
+  for(let i=0;i<1200 && reference.end===null;i++){
+    const pair=[{...idleInput,x:-1},idleInput];reference.step(1/60,...pair);
+    for(const [side,p] of peers.entries()){
+      if(i>=8)p.match.receive(i-8,peers[1-side].out[i-8]);
+      p.match.tick(()=>pair[side],p.world);
+    }
+  }
+  assert.equal(reference.end,1);
+  for(const [side,p] of peers.entries()){
+    const other=peers[1-side].out;
+    for(let i=p.match.received;i<other.length;i++)p.match.receive(i,other[i]);
+    p.match.confirm(p.world);
+    assert.equal(p.world.end,1);assert.equal(p.world.fetch,false);assert.equal(p.world.clockFrames,null);
+    assert.deepEqual(p.match.confirmedWorld.matchCard,reference.matchCard);
+  }
+});

@@ -611,11 +611,67 @@ async function versusRules(browser){
   assert.equal(await q.locator('#hud .lives i').count(),10);assert.match(await q.locator('#match-set').textContent(),/Game 1/);
   await q.close();console.log('Named rules survived a reload, a complete two-stock fight, rematch, and transfer to a fresh touch/controller lobby.');
 }
+async function friendRules(browser,phone){
+  const host=await device(browser,false,'#local/rules/stock/2/0/single/flat/off'), a=host.page;
+  await a.locator('#rules-name').fill('Friday flat');await host.press('#rules-save');
+  const saved=await a.locator('#rules-choice').inputValue();
+  await a.goto(root+'?room#online');await observe(a);
+  await host.press('#online-rulebook');await a.selectOption('#rules-choice',saved);
+  await host.press('#rules-share');
+  assert.equal(new URL(await a.locator('#rules-link').inputValue()).hash,'#online/rules/stock/2/0/single/flat/off');
+  await host.press('#rules-use');await a.selectOption('#online-stage','picnic');
+  assert.equal(await a.locator('#online-custom-rules').textContent(),'2 stocks · No clock · Single game · Fetch Ball off');
+  await host.press('#online-create');await a.locator('#online-invite').waitFor();
+  const code=await a.locator('#online-room-code').textContent();
+  const guest=await device(phone,true,'#room/'+code), b=guest.page;
+  await guest.press('[data-dog=clover]');await guest.press('#online-join');
+  await b.locator('#room-ready').waitFor();
+  for(const p of [a,b]){
+    assert.equal(await p.locator('#room-terms').textContent(),'2 stocks · No clock · Single game · Fetch Ball off');
+    assert.match(await p.locator('#room-arena').textContent(),/Picnic Table · Flat/);
+    assert.match(await p.locator('#room-pair').textContent(),/Pip vs. Clover/);assert(await p.locator('#match').isHidden());
+  }
+  await guest.press('#online-cancel');
+  await a.waitForFunction(()=>document.querySelector('#online-review').hidden && document.querySelector('#online-invite').offsetWidth);
+  assert.equal(await a.locator('#online-room-code').textContent(),code);
+  await b.locator('#online-code').fill(code);await guest.press('#online-join');await b.locator('#room-ready').waitFor();
+  await host.press('#online-warmup');await a.waitForFunction(()=>window.observedBattle?.warmupPartner==='stand');
+  assert.equal(await b.evaluate(()=>document.activeElement.id),'room-ready');
+  await b.evaluate(()=>{
+    window.readyPad={index:0,id:'Ready controller',axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
+    Object.defineProperty(navigator,'getGamepads',{value:()=>[readyPad]});readyPad.buttons[0].pressed=true;
+  });
+  await b.locator('#countdown').waitFor();await b.evaluate(()=>{readyPad.buttons[0].pressed=false;});
+  for(const p of [a,b]){
+    await p.waitForFunction(()=>window.observedBattle?.mode==='local' && observedBattle.matchFrames>0);
+    assert.deepEqual(await p.evaluate(()=>[observedBattle.dogs.map(f=>f.stocks),observedBattle.fetch,observedBattle.clockFrames,observedBattle.form]),
+      [[2,2],false,null,'flat']);
+    assert.equal(await p.locator('#hud .lives i').count(),4);assert(await p.locator('#match-clock').isHidden());
+  }
+  await a.keyboard.down('a');
+  try{await a.locator('[data-do=online-rematch]').waitFor({timeout:30000});}finally{await a.keyboard.up('a');}
+  for(const d of [host,guest]){
+    await d.press('[data-do=match-card]');assert.equal(await d.page.locator('.card-timeline li').count(),2);
+    assert.match(await d.page.locator('.card-stats').textContent(),/Starting stocks22/);await d.press('[data-do=card-back]');
+  }
+  for(const d of [guest,host])await d.press('[data-do=online-rematch]');
+  for(const p of [a,b]){
+    await p.waitForFunction(()=>observedBattle?.stage!=='picnic' && observedBattle?.matchFrames>1);
+    assert.deepEqual(await p.evaluate(()=>[observedBattle.form,observedBattle.fetch,observedBattle.clockFrames,...observedBattle.dogs.map(f=>f.stocks)]),
+      ['flat',false,null,2,2]);
+  }
+  await b.close();await a.close();console.log('Private WebRTC rules, guest review and cancellation, an unchanged room code, warm-up, two KOs and a fresh rematch passed.');
+}
 async function main(){
   const options={executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim(),
     headless:true,args:['--disable-background-timer-throttling','--disable-renderer-backgrounding','--disable-backgrounding-occluded-windows']};
   const browser=await chromium.launch(options);
   try{
+    if(process.argv.includes('--friend-rules')){
+      const phone=await chromium.launch(options);
+      try{await friendRules(browser,phone);assert.deepEqual(errors,[]);}finally{await phone.close();}
+      return;
+    }
     if(process.argv.includes('--rulesets')){await versusRules(browser);assert.deepEqual(errors,[]);return;}
     if(process.argv.includes('--pack-relay')){await packRelay(browser);assert.deepEqual(errors,[]);return;}
     if(process.argv.includes('--time-battle')){

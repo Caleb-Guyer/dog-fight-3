@@ -14,14 +14,17 @@ const previous=process.env.DF3_LEGACY_ONLINE ? fs.readFileSync(process.env.DF3_L
 
 // Deliver the released clients' real handshake and round messages in order. Timeouts
 // are idle in this transport, which never registers a browser or a public room.
-function room(sources,timeMinutes=0) {
+function room(sources,timeMinutes=0,rules=null) {
   const queue=[], links=[new EventEmitter(),new EventEmitter()];
   const peers=sources.map((source,side)=>{
     const context={window:{DogFight:window.DogFight},crypto,performance,setInterval:()=>0,setTimeout:()=>0,clearInterval(){},clearTimeout(){}};
     vm.runInNewContext(source,context);
     const s=new context.window.DogOnline.OnlineSession({start(){},status(){},votes(){},closed:message=>assert.fail(message)});
     Object.assign(s,{side,round:0,kind:'pip',coat:2,roomSet:side===0,action:side?'join':'create',openingStage:'picnic',roomForm:'flat',peer:{}});
-    if(!side)s.timeMinutes=timeMinutes;
+    if(!side){
+      s.timeMinutes=timeMinutes;
+      if(rules)Object.assign(s,{roomRules:rules,roomForm:rules.stageForm,roomSet:rules.bestOfThree,timeMinutes:rules.timed?rules.minutes:0});
+    }
     return s;
   });
   function deliver(){
@@ -38,6 +41,47 @@ function lineup(s) {
   const w=s.match.confirmedWorld;
   return w.dogs.map((dog,i)=>[dog.kind,w.coatFor(i)]);
 }
+test('a friend previews the exact opening rules before both rollback worlds start and keep them through a set',()=>{
+  const rules={lives:2,minutes:0,fetch:false,timed:false,bestOfThree:true,stageForm:'flat'};
+  const {peers:[host,guest],deliver}=room([current,current],0,rules);
+  assert(!host.match && !guest.match);assert.equal(guest.phase,'review');assert.deepEqual({...guest.preview.rules},rules);
+  const start=Array.from(host.offer);guest.receive(start);assert(!guest.match);
+  host.receive(['room-ready',start[5]+1]);assert(!host.match);
+  guest.acceptRules();guest.acceptRules();
+  guest.receive([...start.slice(0,12),true]);assert(!guest.match);
+  deliver();
+  for(const peer of [host,guest]){
+    const world=peer.match.confirmedWorld;
+    assert.deepEqual(world.dogs.map(f=>f.stocks),[2,2]);assert.equal(world.clockFrames,null);
+    assert.equal(world.fetch,false);assert.equal(world.form,'flat');assert.equal(peer.offer,null);peer.finish(0);
+  }
+  deliver();guest.rematch('canal','clover',1);host.rematch();deliver();
+  for(const peer of [host,guest]){
+    const world=peer.match.confirmedWorld;
+    assert.equal(peer.round,2);assert.equal(world.stage,'canal');assert.equal(world.fetch,false);
+    assert.equal(world.clockFrames,null);assert.equal(world.dogs[1].kind,'clover');assert.equal(world.dogs[1].stocks,2);
+  }
+  guest.finish(0);host.finish(0);deliver();host.rematch();guest.rematch();deliver();
+  assert.equal(guest.round,3);assert.equal(guest.match.confirmedWorld.stockCount,2);assert.deepEqual(guest.series.score,[0,0]);
+});
+test('hosted Time Battle rules disable Fetch, score falls and preserve the timed clock',()=>{
+  const rules={lives:5,minutes:1,fetch:false,timed:true,bestOfThree:false,stageForm:'trio'};
+  const {peers,deliver}=room([current,current],0,rules);
+  peers[1].acceptRules();deliver();
+  for(const s of peers){
+    const w=s.match.confirmedWorld;assert.equal(w.clockFrames,3600);assert.equal(w.fetch,false);
+    w.knockouts([w.dogs[0]]);assert.deepEqual(w.matchCard.points,[-1,0]);assert.equal(w.dogs[0].stocks,3);
+  }
+});
+test('older guests can play representable stock rules and leave custom rooms available for updated guests',()=>{
+  const rules={lives:3,minutes:7,fetch:true,timed:false,bestOfThree:true,stageForm:'flat'};
+  const old=room([current,previous],0,rules).peers;
+  assert(old.every(s=>s.match));assert.equal(old[0].match.confirmedWorld.fetch,true);
+  for(const edit of [{lives:1},{minutes:0},{fetch:false}]){
+    const [host,guest]=room([current,previous],0,{...rules,...edit}).peers;
+    assert(!host.link && !host.match && !guest.match);assert.equal(host.phase,'room');
+  }
+});
 test('Time Battle rooms agree on match rules across rematches and wait for a compatible guest',()=>{
   const legacy=room([current,previous],1).peers;
   assert(legacy.every(s=>!s.match));
