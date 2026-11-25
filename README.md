@@ -56,6 +56,10 @@ Try the same opening on two stages. You play Pip against Rival Brisket, with thr
 
 ## Stock and Time Battle rules
 
+In Solo or Local versus, open **Rules → Choose or create a ruleset**. Pick one to five stocks per dog or play for points, then set the clock, single game or best of three, stage form, and Fetch items. **Save as new** keeps a named copy on this device. **Use these rules** returns to fighter select. You can also play the same rules through **Pick together** or start a **Winner stays** rotation with them. The first Fight School match still gives Pip and Brisket three stocks.
+
+**Share link** captures the displayed rules. Opening the link previews them in Solo or Local versus, and the recipient chooses whether to use or save them. Try a one-stock fight on a flat stage with Fetch off, then change the stock count to five and save a second version. [Preview the one-stock rules](https://caleb-guyer.github.io/dog-fight-3/#solo/rules/stock/1/3/single/flat/off) · [Open local rulesets](https://caleb-guyer.github.io/dog-fight-3/#local/rules)
+
 **Pack Relay** gives each side three dogs with one stock apiece. Open **Rules → Pack Relay** in Solo or Local versus. Select a spot in either lineup and pick its fighter. Picking a teammate already in the lineup swaps their positions. The two packs may share a breed. After a ring-out, the next dog enters at 0% while the survivor keeps their damage. The three portraits under each damage meter show who is left. A timeout counts remaining dogs, with the active pair fighting Sudden Death on a tie. Choose **Rematch** to keep both teams or **Change teams** to try a different order. [Play a solo Pack Relay](https://caleb-guyer.github.io/dog-fight-3/#solo/pack-relay) · [Set up a local Pack Relay](https://caleb-guyer.github.io/dog-fight-3/#local/pack-relay)
 
 Solo and local versus start with three stocks and a seven-minute clock. Open **Rules** on the matchup preview to choose one, three, or seven minutes, or **No clock**. Quickplay uses three stocks and seven minutes. When a stock match runs out of time, the dog with more stocks wins.
