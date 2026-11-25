@@ -60,6 +60,7 @@
         d.phase==='done'?'Time up.':d.thrown?'Chase the rival before they land.':'Grab into up throw';
     }
     if(d.launchRead)latest+=' · Rival steered '+d.launchRead;
+    else if(d.outcome==='landed' && d.reply.startsWith('di'))latest+=' · No tumble. Raise dummy damage to practice DI.';
     if(d.source==='throwChase' && d.phase==='done')latest+=' · Tap Attack to retry';
     $('combo-latest').textContent = latest;
     const prior = d.prior;
