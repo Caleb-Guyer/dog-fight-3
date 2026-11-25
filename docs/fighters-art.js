@@ -5332,14 +5332,29 @@
         s.ear = -2;
         break;
       case 'win':
-        s.bodyY = frame % 2 ? 0 : -1;
-        s.headY = -1;
-        s.fistX = 6 + (frame % 2 ? 0 : 1);
-        s.fistY = -13 - (frame % 2);
-        s.rearX = -6;
-        s.rearY = 1;
-        s.tail = [0, 3, 0, -2][frame];
         s.eye = happyEyes;
+        if (name==='pip') {
+          s.wholeY=[0,-3,-7,-2][frame];
+          s.scarf=[0,-2,-4,-1][frame];
+          s.fistY=[-5,-12,-17,-12][frame];
+          s.rightY=[0,-1,-6,-2][frame];
+          s.rearX=-5; s.barkJaw=frame===2?2:0;
+        } else if (name==='brisket') {
+          s.bodyY=[2,0,-2,-2][frame]; s.leftX=-3; s.rightX=3;
+          s.fistX=[0,3,7,8][frame]; s.rearX=[-2,-5,-9,-8][frame];
+          s.fistY=s.rearY=[0,-8,-15,-12][frame]; s.powerArm=true;
+          s.headTurn=[0,-6,-10,-6][frame];
+        } else if (name==='noodle') {
+          s.torsoTurn=[0,10,22,12][frame]; s.headTurn=[-3,7,15,5][frame];
+          s.headY=[-2,0,4,1][frame]; s.headX=[0,1,4,2][frame];
+          s.fistX=[2,5,8,4][frame]; s.fistY=[-5,-2,0,-3][frame];
+          s.heldItem='rope'; s.heldAngle=[-42,-16,18,-20][frame]; s.tailLift=-3;
+        } else {
+          s.heldItem='disc'; s.heldAngle=[-9,-58,-118,-36][frame];
+          s.fistX=[4,6,3,6][frame]; s.fistY=[-4,-9,-15,-10][frame];
+          s.headTurn=[-3,-9,-12,-6][frame]; s.rearX=-5; s.leftY=frame===2?-3:0;
+        }
+        s.tail = [0,3,1,-2][frame];
         break;
     }
     return s;

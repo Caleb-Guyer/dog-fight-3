@@ -376,6 +376,17 @@ dialog[data-view='cup'] { width: min(550px,calc(100% - 20px)); }
   .pick-title .move-link { padding-inline: 5px; }
 }
 dialog[data-view='match-card'] { width: min(540px, calc(100% - 20px)); }
+.winner .victory-shot { width:clamp(110px,26vw,176px); height:auto; aspect-ratio:152/104; border:3px solid var(--ink); image-rendering:pixelated; flex:none; }
+dialog[data-view='finish-replay'] { width:min(760px,calc(100% - 16px)); }
+#clip-arena { display:block; width:100%; aspect-ratio:16/9; height:auto; max-height:52dvh; border:2px solid var(--ink); image-rendering:pixelated; }
+.clip-status { display:flex; flex-wrap:wrap; justify-content:space-between; gap:3px 8px; font-size:13px; margin-top:5px; }
+#clip-seek { display:block; width:100%; margin:5px 0; accent-color:#6b4569; }
+@media(max-height:520px) {
+  dialog[data-view='finish-replay'] .dialog-inner { padding:8px 12px; }
+  dialog[data-view='finish-replay'] .dialog-heading, #dialog-body .clip-caption { margin:2px 0; padding-bottom:2px; }
+  dialog[data-view='finish-replay'] .dialog-actions { margin-top:4px; }
+  #clip-arena { max-height:37dvh; }
+}
 .card-games, .form-choices { display: flex; gap: 6px; margin-bottom: 12px; }
 .card-games button, .form-choices button { flex: 1; min-width: 0; }
 .card-games [aria-pressed='true'], .form-choices [aria-pressed='true'] { background: var(--gold); color: var(--ink); }

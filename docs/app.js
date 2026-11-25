@@ -766,6 +766,8 @@
   };
   function showDialog(kind, title, html, close = true) {
     if (page === 'dispatch-story' && film) setFilmPaused(true);
+    clipScreen = null;
+    victoryShot = null;
     dialogType = kind;
     $('dialog').dataset.view = kind;
     $('dialog-title').textContent = title;
@@ -776,8 +778,11 @@
       paused = !online.match;
       clearInput();
     }
+    if (kind==='result' || kind==='online-result') presentWinner();
   }
   function dismiss() {
+    clipScreen = null;
+    victoryShot = null;
     if ($('dialog').open) $('dialog').close();
     dialogType = '';
     backToPause = false;
@@ -788,6 +793,11 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if (dialogType==='finish-replay') {
+      showResult();
+      document.querySelector('[data-do=watch-finish]')?.focus();
+      return;
+    }
     if (dialogType==='saved-games') {
       dismiss();
       ($('other-saves').hidden ? $('home-continue') : $('other-saves')).focus({preventScroll:true});
@@ -1540,6 +1550,8 @@
       .join('');
   }
   let matchConfig, soloSeed, localSet = null, practiceFight = null;
+  let finishTape=null, clipScreen=null, victoryShot=null;
+  const reducedReplays=matchMedia('(prefers-reduced-motion: reduce)');
   const cup = window.YardCup, unsavedCup = new Map();
   let cupAttempt = null, cupChoice = settings.p1, cupShown;
   function cupEntry(kind) {
@@ -1849,7 +1861,11 @@
     if (config.mode === 'solo') {
       soloSeed = opening ?? crypto.getRandomValues(new Uint32Array(1))[0];
       random = seededRandom(soloSeed);
+    } else if (config.mode==='local' && config.lesson===undefined && random===Math.random) {
+      random=seededRandom(crypto.getRandomValues(new Uint32Array(1))[0]);
     }
+    finishTape=resume?.tape || (!visit && config.lesson===undefined && ['solo','local'].includes(config.mode) ? new window.DogFight.FinishTape() : null);
+    if (online.match) online.match.onConfirmedInput=(battle,a,b)=>finishTape?.record(battle,a,b);
     audioReady();
     dismiss();
     page = 'match';
@@ -1961,6 +1977,7 @@
     }
     $('training-tools').hidden = config.mode !== 'training';
     $('return-fight').hidden = !visit;
+    $('return-fight').textContent=visit?.returnResult?'Back to results':'Back to fight';
     setFrameMode('live');
     $('dummy-damage').value = '0';
     $('damage-output').textContent = '0%';
@@ -1992,6 +2009,7 @@
     announce(matchName + ' on ' + stageName(config.stage,world.form));
   }
   function toLobby() {
+    finishTape=null;
     cupAttempt = null;
     leaveOnline();
     localSet = null;
@@ -2052,7 +2070,7 @@
         (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
           (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight ? 'Retry position' : 'Practice this position') + '</button>' : '') +
           '<button class="utility" data-do="practice">Find a drill</button>' +
-          (practiceFight ? '<button class="utility" data-do="return-fight">Back to fight</button>' : '') + '</div>' : '') +
+          (practiceFight ? '<button class="utility" data-do="return-fight">'+(practiceFight.returnResult?'Back to results':'Back to fight')+'</button>' : '') + '</div>' : '') +
         cpuReadReport() + '<div class="dialog-actions">' + (world.mode === 'solo' && !localSet && !practiceFight && !matchConfig.schoolFinal ?
           '<button class="utility" data-do="cpu-level">Replay with another CPU</button>' : '') +
         (practiceFight ? '' : '<button class="utility" data-do="rematch">' + icon('reset') + 'Restart match</button>') +
@@ -2064,6 +2082,120 @@
     if (localSet?.advance(stage)) startMatch({...matchConfig, stage}, undefined, undefined, localSet);
   }
   const cardButton = '<button class="utility" data-do="match-card">Match stats</button>';
+  function presentWinner() {
+    const photo=document.querySelector('#dialog-body .winner img');
+    if (!photo || !world) return;
+    const result=online.match?.confirmedWorld || world;
+    const slot=result.mode==='adventure' ? (result.finished==='exit'?0:null) : result.end;
+    if (slot===null || !result.dogs[slot]) return;
+    const dog=result.dogs[slot], canvas=document.createElement('canvas');
+    canvas.width=152; canvas.height=104;
+    canvas.className='victory-shot';
+    canvas.setAttribute('role','img');
+    canvas.setAttribute('aria-label',dog.stats.name+' on the winner’s podium');
+    photo.replaceWith(canvas);
+    if (cupAttempt && !cupAttempt.saving && result.mode!=='adventure') {
+      const caption=document.createElement('small');
+      caption.className='mode-label'; caption.textContent=dog.stats.name+' wins';
+      canvas.nextElementSibling.prepend(caption);
+    }
+    victoryShot={canvas,kind:dog.kind,coat:result.coatFor(slot),elapsed:0,cel:-1};
+    drawVictory(0);
+    const stats=document.querySelector('#dialog-body [data-do=match-card]');
+    if (finishTape?.length && stats) {
+      const button=document.createElement('button');
+      button.className='utility';button.dataset.do='watch-finish';button.textContent='Watch finish';
+      stats.before(button);
+    }
+  }
+  function drawVictory(dt) {
+    const shot=victoryShot;
+    shot.elapsed=Math.min(2.8,shot.elapsed+dt);
+    const cel=reducedReplays.matches ? 28 : Math.floor(shot.elapsed*12);
+    if (cel===shot.cel) return;
+    shot.cel=cel;
+    window.DogFightView.drawPodium(shot.canvas,shot.kind,shot.coat,cel);
+  }
+  function showFinishReplay() {
+    if (!finishTape?.length) return;
+    const result=online.match?.confirmedWorld || world;
+    const loss=result.matchCard.losses.findLast(l=>l.slot!==result.end);
+    const id=loss?.lastHit?.id;
+    const label=(moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id])?.label;
+    const detail=result.endReason==='time'?'Time expired':label?'Last hit · '+label:
+      id==='ball'?'Last hit · Tennis ball':loss?.zone?'Knockout · '+loss.zone+' blast line':'Knockout';
+    showDialog('finish-replay','Finish replay','<p class="clip-caption">'+stageName(result.stage,result.form)+' · '+detail+
+      '</p><canvas id="clip-arena" width="640" height="360" role="img" aria-label="Replay of the final exchange"></canvas>'+
+      '<div class="clip-status"><span id="clip-scores"></span><output id="clip-frame" aria-live="off"></output></div>'+
+      '<input id="clip-seek" type="range" min="0" max="'+finishTape.length+'" value="0" aria-label="Replay frame">'+
+      '<div class="dialog-actions"><button class="primary" id="clip-toggle">Pause</button>'+
+      '<button class="utility" id="clip-step">Step 1 frame</button><button class="utility" id="clip-speed">Speed · ½×</button></div>'+
+      '<div class="dialog-actions">'+(result.mode==='solo'?'<button class="utility" id="clip-practice">Play from here</button>':'')+
+      '<button class="utility" data-do="clip-back">Back to results</button></div>');
+    clipScreen={playing:!reducedReplays.matches,rate:.5,carry:0};
+    seekClip(0);
+    $('clip-toggle').onclick=()=>{
+      if (clipScreen.player.frame===clipScreen.player.length) seekClip(0);
+      clipScreen.playing=!clipScreen.playing;
+      updateClip();
+    };
+    $('clip-step').onclick=()=>{
+      clipScreen.playing=false;
+      clipScreen.carry=0;
+      if (clipScreen.player.step()) paintClip(1/60);
+      updateClip();
+    };
+    $('clip-speed').onclick=()=>{
+      clipScreen.rate=clipScreen.rate===1 ? .5 : 1;
+      $('clip-speed').textContent='Speed · '+(clipScreen.rate===1?'1×':'½×');
+    };
+    $('clip-seek').oninput=()=>{
+      clipScreen.playing=false;
+      seekClip(Number($('clip-seek').value));
+    };
+    if ($('clip-practice')) $('clip-practice').onclick=()=>{
+      if (clipScreen.player.battle.end!==null) return;
+      const visit={battle:clipScreen.player.battle,view:clipScreen.view,config:matchConfig,seed:soloSeed,
+        countdown:0,lastCount:0,call:'',returnResult:pausedFight()};
+      startMatch(visit.config,undefined,visit.seed,null,{visit});
+    };
+    $('clip-toggle').focus();
+  }
+  function updateClip() {
+    const {player,playing}=clipScreen, end=player.frame===player.length;
+    $('clip-toggle').textContent=end?'Watch again':playing?'Pause':'Play';
+    $('clip-step').disabled=end;
+    if ($('clip-practice')) $('clip-practice').disabled=end || player.battle.end!==null;
+    $('clip-seek').value=player.frame;
+    $('clip-frame').textContent='Frame '+player.frame+' / '+player.length;
+    const scores=player.battle.dogs.map(d=>d.stats.name+' '+tenth(d.damage)+'% · '+stockLabel(d.stocks)).join('  /  ');
+    if ($('clip-scores').textContent!==scores) $('clip-scores').textContent=scores;
+  }
+  function paintClip(dt) {
+    const {view,player}=clipScreen;
+    view.draw($('clip-arena'),player.battle,dt,player.battle.time);
+  }
+  function seekClip(frame) {
+    const view=new FightView();
+    view.shakeEnabled=settings.shake;
+    clipScreen.view=view;
+    clipScreen.player=finishTape.playback(frame,(name,event)=>view.event(name,event));
+    clipScreen.carry=0;
+    paintClip(0);
+    updateClip();
+  }
+  function tickClip(dt) {
+    if (!clipScreen.playing || document.hidden) return;
+    const {player}=clipScreen;
+    clipScreen.carry+=dt*60*clipScreen.rate;
+    const steps=Math.min(Math.floor(clipScreen.carry),player.length-player.frame);
+    if (!steps) return;
+    for (let n=0;n<steps;n++) player.step();
+    clipScreen.carry-=steps;
+    if (player.frame===player.length) clipScreen.playing=false;
+    paintClip(steps/60);
+    updateClip();
+  }
   function cardTime(frame) {
     const seconds = Math.floor(frame / 60);
     return Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2,'0');
@@ -2155,7 +2287,7 @@
     if (practiceFight && world.mode === 'solo') {
       showDialog('result', 'Practice finished', '<p>' + f.stats.name + ' wins this attempt. Your fight is paused.</p>' +
         '<div class="dialog-actions"><button class="primary" data-do="rehearse">Retry position</button>' +
-        '<button class="utility" data-do="return-fight">Back to fight</button></div>', false);
+        '<button class="utility" data-do="return-fight">'+(practiceFight.returnResult?'Back to results':'Back to fight')+'</button></div>', false);
       document.querySelector('[data-do=rehearse]').focus();
       return;
     }
@@ -2301,6 +2433,8 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if (action==='watch-finish') return showFinishReplay();
+    if (action==='clip-back') return exitDialog();
     const review=e.target.closest('[data-school-review]');
     if (review && matchConfig?.schoolFinal) return startLesson(schoolLessons.findIndex(l=>l.id===review.dataset.schoolReview),true);
     const saved = e.target.closest('[data-resume-id]');
@@ -4184,7 +4318,7 @@
   // The original world is never stepped during a practice visit. Its CPU, shared grabs,
   // clock and best-of-three stay at the pause frame even if the practice fight ends.
   function pausedFight() {
-    return practiceFight || {battle:world, view, config:matchConfig, seed:soloSeed, series:localSet,
+    return practiceFight || {battle:world, view, config:matchConfig, seed:soloSeed, series:localSet, tape:finishTape,cupRound:cupAttempt,
       countdown, lastCount, call:$('countdown').textContent};
   }
   function rehearsePosition() {
@@ -4192,8 +4326,10 @@
     startMatch(visit.config, undefined, visit.seed, null, {visit});
   }
   function returnToFight() {
-    const resume = practiceFight;
-    if (resume) startMatch(resume.config, undefined, resume.seed, resume.series, {resume});
+    const finished=practiceFight?.returnResult, resume=finished || practiceFight;
+    if (!resume) return;
+    startMatch(resume.config, undefined, resume.seed, resume.series, {resume,cupRound:resume.cupRound});
+    if (finished) showResult();
   }
   const practiceGroups = [
     ['Movement','Footwork','footwork', footworkPatterns],
@@ -4640,6 +4776,7 @@
   }
   const countMarks = (bits) => campaign.rooms.filter((_, i) => bits & (1 << i)).length;
   function menuScreen(id, keepRoom = false) {
+    finishTape=null;
     cupAttempt = null;
     localSet = null;
     practiceFight = null;
@@ -4932,6 +5069,7 @@
     else beginRun(index, checkpoint, checkpoint ? progress.atCheckpoint : null);
   }
   function beginRun(index, checkpoint, atCheckpoint = null, cupRound = null) {
+    finishTape=null;
     cupAttempt = cupRound;
     music?.restart();
     dismiss();
@@ -6054,7 +6192,9 @@
     before = now;
     const pads = getPads();
     padMenu(pads);
-    if (page === 'dispatch-story' && film && !document.hidden && !$('dialog').open) {
+    if (clipScreen) tickClip(dt);
+    else if (victoryShot) { if (!document.hidden) drawVictory(dt); }
+    else if (page === 'dispatch-story' && film && !document.hidden && !$('dialog').open) {
       film.tick(dt);
     } else if (page === 'lobby') {
       if (now - lastPreview > 1 / 24 && !document.hidden && !$('dialog').open) {
@@ -6109,7 +6249,9 @@
           }
           if (!drillWaiting && (!world.lesson || world.lesson.canStep(input))) {
             const airborne = player.ground < 0;
-            world.step(1 / 60, input, world.lesson ? world.lesson.partner(input) : world.hasSecondPlayer ? playerInput(1, pads) : idleInput);
+            const second=world.lesson ? world.lesson.partner(input) : world.hasSecondPlayer ? playerInput(1,pads) : idleInput;
+            finishTape?.record(world,input,second);
+            world.step(1 / 60, input, second);
             if (world.lesson) world.lesson.afterStep(world);
             if (frameLab.mode === 'frozen') {
               frameLab.count++;

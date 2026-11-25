@@ -3534,7 +3534,36 @@
     thumbnail.getContext('2d').drawImage(canvas, 0, 0);
     moveThumbnails.set(cacheKey, thumbnail);
   }
+  function drawPodium(canvas,kind,coat,cel) {
+    const ctx=canvas.getContext('2d');
+    const accent=chargeColors[kind];
+    const rect=(x,y,w,h,color)=>{ctx.fillStyle=color;ctx.fillRect(x,y,w,h);};
+    rect(0,0,152,104,'#272b40');
+    // Raked stage lights and the yard's string of triangular pennants.
+    for(let y=0;y<84;y+=4) {
+      const spread=Math.floor(y*.27);
+      rect(37-spread,y,8+spread*2,4,'#39384a');
+      rect(108-spread,y,8+spread*2,4,'#39384a');
+    }
+    for(let x=0;x<152;x+=8){
+      const sag=Math.round(Math.sin(x/152*Math.PI)*8);
+      rect(x,5+sag,8,1,'#b9a98b');
+      if (x%24===8) for(let row=0;row<5;row++) rect(x+row,6+sag+row,9-row*2,1,accent);
+    }
+    rect(0,88,152,16,'#39313a');
+    rect(18,83,116,4,'#f6d58c');rect(20,87,112,12,'#ad754f');rect(24,90,104,7,'#5e4950');
+    for(const x of [26,124]) rect(x,92,2,2,'#f4c76a');
+    rect(56,80,43,3,'#483d48');
+    window.DogArt.draw(ctx,kind,78,82,{coat,face:1,scale:.8,pose:'win',time:cel/12});
+    // A brass tennis-ball trophy at the front of the rostrum.
+    rect(27,79,17,4,ink); rect(29,77,13,3,'#ebb665'); rect(33,73,5,5,'#b57848');
+    rect(30,61,11,13,'#805440');rect(28,64,15,7,'#805440');
+    rect(30,63,11,8,gold);rect(32,61,7,12,gold);
+    pixelLine(ctx,29,68,34,65,cream,1,1);pixelLine(ctx,34,65,36,62,cream,1,1);
+    if(cel%16<4){rect(39,59,1,5,cream);rect(37,61,5,1,cream);}
+  }
   window.DogFightView = {
+    drawPodium,
     FightView,
     drawPreview,
     drawMoveThumbnail,
