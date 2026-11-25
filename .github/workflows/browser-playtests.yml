@@ -76,12 +76,12 @@ jobs:
           python3 -m http.server 8081 --bind 127.0.0.1 --directory baseline/docs > "$RUNNER_TEMP/base-http.log" 2>&1 &
           base_pid=$!
           trap 'kill "$game_pid" "$base_pid"' EXIT
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/winner-stays.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/first-fight.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fighter-lessons.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/layouts.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/coats.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/couch-select.js
-          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/winner-stays.js
   combo-practice:
     runs-on: ubuntu-24.04
     timeout-minutes: 5

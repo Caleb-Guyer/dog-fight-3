@@ -17,7 +17,7 @@ async function couch(browser){
     const pad={index:2,id:'Shared seat',axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
     Object.defineProperty(navigator,'getGamepads',{value:()=>[null,null,pad]});
   });
-  const press=s=>page.locator(s).click(), label=s=>page.locator(s).innerText();
+  const press=s=>page.locator(s).click(), label=s=>page.locator(s).textContent();
   const walkOff=async(selector)=>{
     await page.keyboard.down('a');
     for(let i=0;i<23 && !await page.locator(selector).isVisible();i++)await page.clock.runFor(1900);
@@ -67,7 +67,7 @@ async function touch(browser){
     await page.keyboard.down('ArrowRight');
     for(let i=0;i<23 && !await page.locator('#rotation-handoff').isVisible();i++)await page.clock.runFor(1900);
     await page.keyboard.up('ArrowRight');
-    assert.match(await page.locator('#rotation-handoff').innerText(),/Maple keeps P1 · 1 win streak. Pass P2 to Fern/);
+    assert.match(await page.locator('#rotation-handoff').textContent(),/Maple keeps P1 · 1 win streak. Pass P2 to Fern/);
     await press('[data-do=rotation]');await press('#rotation-end');await press('#rotation-clear');
     assert.equal(await page.evaluate(()=>sessionStorage.getItem('dog-fight-3.winner-stays.1')),null);
     assert(await page.locator('#winner-stays').isVisible());assert.deepEqual(errors,[]);
