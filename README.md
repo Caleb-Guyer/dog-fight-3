@@ -499,6 +499,8 @@ Choose **Block and punish** under **Rival response** to test your shield pressur
 
 To practice your own mix-up, choose **Take A** or **Take B**, then **Record your combo**. The first gameplay input replaces just that take. Choose **Defend this take** at any point to try even a short recording. Both takes stay available when you reset positions or visit another drill in the same Training match. **Restore selected preset** brings back that slot’s original hop.
 
+**Hit confirm** gives you six exchanges with your chosen dog. Center your direction, tap Attack, and release. If the jab lands, tap Attack again to connect a follow-up. If the shield flashes, close the gap and grab. The rival shields three times in a shuffled order. Each new exchange starts at 0%. Tap Attack after a result to start the next jab. At the end, check how many hits you confirmed and how many shields you grabbed. Turn off **Half speed** to try the same decisions at match speed. [Play Hit confirm](https://caleb-guyer.github.io/dog-fight-3/#training/hit-confirm)
+
 ## Ground tilts
 
 All four forward tilts can hit high, level or low. Hold mostly sideways on a stick and add a little vertical aim, then tap Attack. On keyboard, hold Walk (P1 Left Shift, P2 Right Ctrl) and a diagonal as you tap Attack. On touch, slide from the center dot to a diagonal before tapping Attack. With Tilt stick enabled you can also hold Up or Down on the movement controls and flick the aim stick sideways. A high tilt reaches a jumper and launches them higher. A low tilt reaches under the lip and sends them farther sideways.

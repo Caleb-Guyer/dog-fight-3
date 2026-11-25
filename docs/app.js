@@ -608,7 +608,7 @@
     if (page === 'match' && world?.comboPractice?.defending) return i === 0 ? 'REPLAY' : 'YOU';
     if (page === 'match' && world?.hasSecondPlayer && world.mode === 'training') {
       if (i === 1) return 'P2';
-      return world.comboPractice && !['record','throwChase'].includes(world.comboPractice.source) ? 'REPLAY' : 'P1';
+      return world.comboPractice && !['record','throwChase','confirm'].includes(world.comboPractice.source) ? 'REPLAY' : 'P1';
     }
     const mode = page === 'match' && world ? world.mode : settings.mode;
     return i === 0 ? 'P1' : mode === 'local' ? 'P2' : mode === 'training' ? 'DUMMY' : 'CPU';
@@ -1644,7 +1644,7 @@
       return li;
     }));
   }
-  const comboSources=['example','late','record','replay','flurry','escapeFlurry','defend','mix','throwChase'];
+  const comboSources=['example','late','record','replay','flurry','escapeFlurry','defend','mix','throwChase','confirm'];
   function updateHUD() {
     if (world.bells) {
       const clock=$('match-clock'), count=$('match-set');
@@ -1687,7 +1687,7 @@
     const combo = world.lastCombo;
     const grip = world.grapple;
     const prompt = $('grapple-prompt');
-    const hideGrip = !grip || grip.phase === 'throw' || world.comboPractice?.source==='throwChase' || !!world.launchPractice || !!world.stockPractice || !!world.survivalPractice;
+    const hideGrip = !grip || grip.phase === 'throw' || world.comboPractice?.source==='throwChase' || world.comboPractice?.source==='confirm' || !!world.launchPractice || !!world.stockPractice || !!world.survivalPractice;
     if (prompt.hidden !== hideGrip) prompt.hidden = hideGrip;
     if (!prompt.hidden) {
       const holder = world.dogs[grip.owner].stats.name;
@@ -4694,7 +4694,7 @@
     const counterDrill = escape && (pattern === 'counter' || pattern === 'gripEscape');
     showDamageControl(counterDrill || meteor || survival || !!world.comboPractice?.defending, freshness && world.freshnessPractice.koTest,
       meteor || survival ? 'launch-side' : world.edgePractice?.timeCatch ? 'edge-side' : combo ? 'reset-training' : undefined, world.hasSecondPlayer);
-    $('damage-control').hidden = stock || juggle || breakaway || (escape && pattern === 'carry');
+    $('damage-control').hidden = stock || juggle || breakaway || (combo && pattern==='confirm') || (escape && pattern === 'carry');
     $('dummy-damage').value = survival ? world.survivalPractice.baseline : meteor ? world.meteorPractice.baseline : counterDrill ? world.escapePractice.baseline : world.trainingDamage;
     $('damage-output').textContent = $('dummy-damage').value + '%';
     $('match-stage').textContent = arenas[world.stage].name;
@@ -5119,7 +5119,7 @@
     ['Movement','Footwork','footwork', footworkPatterns],
     ['Movement','Wavedash','wave',['back','platform']],
     ['Movement','Platforms','platform',['below','top','hold','ferry','shield-drop','layers']],
-    ['Attack','Combo practice','combo',['example','throwChase','late','record','defend','mix','flurry','escapeFlurry']],
+    ['Attack','Combo practice','combo',['example','confirm','throwChase','late','record','defend','mix','flurry','escapeFlurry']],
     ['Attack','Aerial spacing','spacing',['approach','retreat','landing','airPower','fastfall','sweet','cancel','footstool','footstoolTech','reverse','wavebounce']],
     ['Attack','Knockdowns','launch',['lock','bait','read','floor-spike','edge-spike']],
     ['Attack','Move freshness','freshness',['training','ko','rage','drive']],
@@ -5554,7 +5554,7 @@
     VersusRulebook:'versus-rules.js?v=handicap-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=rulesets-1', CouchSelect:'couch-select.js?v=handicap-1',StageStrike:'stage-strike.js?v=2',
-    ComboLab:'combo-lab.js?v=1', FinishTools:'finish-tools.js?v=replay-inputs-1',
+    ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=replay-inputs-1',
     FighterSchool:'fighter-lessons.js?v=special-studies-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
@@ -7838,6 +7838,10 @@
       startFirstFight();
     } else if (hash === '#tutorial') {
       resumeCourse();
+    } else if(hash==='#training/hit-confirm'){
+      leaveOnline();afterStory=null;
+      startMatch({...settings,mode:'training',stage:'nightmail',fetch:false});
+      drill('combo',false,'confirm');
     } else if(hash==='#training/throw-chase'){
       leaveOnline();afterStory=null;
       startMatch({...settings,mode:'training',p1:'brisket',p2:'pip',stage:'nightmail',fetch:false});
