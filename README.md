@@ -48,6 +48,8 @@ In **Try Rival · Pip vs. Noodle**, close the distance until Noodle can reach yo
 
 **Restart match** and **Rematch** replay the same opening. **Pause → Replay with another CPU** restarts with the same dogs, arena and random seed at the level you choose. Starting a fresh solo match from Fighter select draws a new seed.
 
+In **CPU → Play a Rival set**, approach Noodle as Pip. Hold Shield until his lead hits it, then tap away to roll. Close the distance, block and roll away again. On the next block Noodle can chase with Running Loop. Roll toward him twice and he can turn to grab where you finish. Try jumping and tapping Attack on the third block to catch him reaching for the roll. The scorecard counts grabs that landed during your roll recovery. Rival carries the last repeated escape and its timing into the next game of the set. Even one observed escape can start the pattern for game two. A new set gives both dogs a fresh start. [Play the Pip–Noodle set](https://caleb-guyer.github.io/dog-fight-3/#solo/shield-read-set)
+
 ## Online versus
 
 Pick your dog and select **Quickplay** to fight the next available player on a random arena. To play a friend, choose an **Opening arena**, select **Create room**, and share the six-character code or invite link. Your friend picks a dog and selects **Join room**. The fight starts when both players connect. [Open Online versus](https://caleb-guyer.github.io/dog-fight-3/#online)
