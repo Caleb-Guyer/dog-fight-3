@@ -1,6 +1,24 @@
 (() => {
   'use strict';
   const {Battle,FinishTape,seededRandom,fighters,moves,specials,smashes,pummels,throws}=window.DogFight;
+  function recordList(records,recordModes,portrait,showDialog,focusId){
+    const rows=records.list();
+    const buttons=rows.map(({id,entry})=>{
+      const dogs=entry.card.players, winner=dogs[entry.winner];
+      const date=new Date(entry.time).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+      return '<button data-record-id="'+id+'"><img alt="" src="'+portrait(winner.kind,winner.coat)+'"><span><strong>'+
+        (entry.card.relayTeams?'Pack Relay':fighters[dogs[0].kind].name+' vs. '+fighters[dogs[1].kind].name)+'</strong><small>'+recordModes[entry.mode]+
+        (entry.card.points?' · Time Battle':'')+(entry.round?' · Game '+entry.round:'')+' · '+window.DogFight.arenas[entry.stage].name+' · '+date+'</small></span><b>'+
+        (entry.card.relayTeams?(entry.winner===0?'P1':entry.mode==='solo'?'CPU':'P2')+'’s pack':fighters[winner.kind].name)+' wins</b></button>';
+    }).join('');
+    showDialog('records','Fight Records',rows.length?
+      '<p>Last '+window.FightRecords.limit+' completed fights on this device.</p><div class="saved-games">'+buttons+'</div>'+
+      (rows.some(r=>records.transient.has(r.id))?'<p>Storage is unavailable. Recent games are kept in this tab.</p>':''):
+      '<p>Your next completed fight will appear here with both fighters’ stats and a knockout recap.</p>'+
+      '<div class="dialog-actions"><button class="primary" data-do="record-solo">Play a solo fight</button></div>');
+    (Array.from(document.querySelectorAll('[data-record-id]')).find(b=>b.dataset.recordId===focusId) ||
+      document.querySelector('[data-record-id],[data-do=record-solo]')).focus({preventScroll:true});
+  }
   function cardHTML({games,index,mode,side,form,set,archived,clips,inRoom,recordModes,stageName,cardTime,tenth,portrait,stockLabel}) {
     const game=games[index],card=game.card;
     const {players, losses, frames, reason} = card;
@@ -69,7 +87,53 @@
       if(c.returnTape?.length)result.follow=span(c.returnTape);
       return result;
     });
-    return {catalog:{version:1,knockouts,finish:span(tape)},blocks};
+    const film=tape.fullMatch();
+    return {catalog:{version:1,knockouts,finish:span(tape),whole:!!film},blocks,film};
+  }
+  class MatchFilm {
+    constructor(data){
+      const {count,parts,falls}=data;
+      if(!Number.isSafeInteger(count) || count<=0 || !Array.isArray(parts) || parts.length!==Math.ceil(count/120) ||
+        !Array.isArray(falls))throw Error('Incomplete match replay');
+      if(falls.some(f=>!Number.isSafeInteger(f?.at) || f.at<1 || f.at>count || !Array.isArray(f.slots) ||
+        !f.slots.length || f.slots.some(slot=>slot!==0 && slot!==1)))throw Error('Invalid knockout timeline');
+      for(const [i,part] of parts.entries()){
+        const limit=Math.min(120,count-i*120);
+        if(!part || !Array.isArray(part.runs) || part.runs[0]?.[0]!==0 ||
+          (i%3===0 && (!['solo','local'].includes(part.state?.mode) || !Number.isInteger(part.seed))))throw Error('Missing replay checkpoint');
+        let last=-1;
+        for(const run of part.runs){
+          if(!Array.isArray(run) || !Number.isInteger(run[0]) || run[0]<=last || run[0]>=limit || !run[1] || !run[2])
+            throw Error('Invalid recorded controls');
+          last=run[0];
+        }
+      }
+      this.data=data;this.length=count;
+    }
+    playback(target=0,emit=()=>{}){
+      const stop=Math.max(0,Math.min(this.length,Math.trunc(target)));
+      const checkpoint=Math.floor(Math.min(stop,this.length-1)/360)*3;
+      const {parts}=this.data,part=parts[checkpoint],length=this.length;
+      const battle=Object.assign(Object.create(Battle.prototype),structuredClone(part.state));
+      battle.random=seededRandom(0);battle.random.state=part.seed;battle.emit=()=>{};
+      let run=0;
+      const player={frame:checkpoint*120,length,battle,step(record){
+        if(this.frame>=length)return false;
+        const at=this.frame%120,runs=parts[Math.floor(this.frame/120)].runs;
+        if(!at)run=0;
+        else if(runs[run+1]?.[0]===at)run++;
+        const [,a,b]=runs[run];
+        if(record)record.record(battle,a,b);
+        battle.step(1/60,a,b);this.frame++;return true;
+      }};
+      while(player.frame<stop)player.step();
+      battle.emit=emit;return player;
+    }
+    exchange(frame){
+      const player=this.playback(frame),tape=new FinishTape();
+      for(let i=0;i<240 && player.frame<player.length;i++)player.step(tape);
+      return {tape,result:player.battle};
+    }
   }
   function restore(span,blocks) {
     const tape=new FinishTape();
@@ -93,7 +157,7 @@
     return tape;
   }
   function resumeTape(packed,losses,returning){
-    if(!packed)return new FinishTape();
+    if(!packed)return new FinishTape(true);
     const {catalog,blocks}=packed;
     const read=span=>{
       const length=Math.ceil((span.count-span.start)/120);
@@ -101,6 +165,13 @@
       return restore(span,Array.from({length},(_,i)=>blocks.get(span.start+120*i)));
     };
     const tape=read(catalog.finish);
+    if(catalog.whole && packed.film?.count===tape.count){
+      try{
+        const film=new MatchFilm(packed.film);
+        tape.reel=film.data.parts.slice(0,tape.blocks[0].start/120);
+        tape.fallFrames=film.data.falls.slice();
+      }catch{/* An unavailable film should not cost the player their suspended fight. */}
+    }
     tape.observedLosses=losses.length;
     tape.knockouts=catalog.knockouts.map(span=>{
       const clip={first:span.first,losses:losses.slice(span.first,span.first+span.losses),tape:read(span)};
@@ -123,12 +194,13 @@
     const db=await request(opening); db.onversionchange=()=>db.close(); return db;
   }
   async function save(id,tape) {
-    const {catalog,blocks}=pack(tape),db=await database();
-    try {
+    const {catalog,blocks,film}=pack(tape),db=await database();
+    async function write(whole){
       const tx=db.transaction(['games','blocks'],'readwrite'),games=tx.objectStore('games'),data=tx.objectStore('blocks');
       const done=new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error || Error('Save cancelled'));});
       try{
-        games.put(catalog,id);
+        games.put({...catalog,whole},id);
+        if(whole)data.put(film,[id,-1]);
         for(const [n,b] of blocks)data.put(b,[id,n]);
         let keep=window.FightRecords.limit;
         games.openKeyCursor(null,'prev').onsuccess=e=>{
@@ -136,12 +208,15 @@
           if(!c)return;
           if(keep--<=0){
             games.delete(c.key);
-            data.delete(IDBKeyRange.bound([c.key,0],[c.key,Number.MAX_SAFE_INTEGER]));
+            data.delete(IDBKeyRange.bound([c.key,-1],[c.key,Number.MAX_SAFE_INTEGER]));
           }
           c.continue();
         };
       }catch(e){tx.abort();await done.catch(()=>{});throw e;}
       await done;
+    }
+    try{
+      try{await write(!!film);}catch(error){if(!film || error.name!=='QuotaExceededError')throw error;await write(false);}
     }finally{db.close();}
   }
   async function catalog(id) {
@@ -159,8 +234,79 @@
       return restore(span,blocks);
     }finally{db.close();}
   }
+  function watchFilm(film,{showDialog,stageName,back,practice,shake},at=null){
+    const time=n=>Math.floor(n/3600)+':'+String(Math.floor(n/60)%60).padStart(2,'0');
+    showDialog('finish-film','Full match replay',
+      '<p id="film-stage" class="clip-caption"></p><canvas id="clip-arena" width="640" height="360" role="img" aria-label="Full match replay"></canvas>'+
+      '<div class="clip-status"><span id="clip-scores"></span><output id="film-time"></output></div>'+
+      '<input id="clip-seek" type="range" min="0" max="'+film.length+'" aria-label="Match timeline">'+
+      '<div class="dialog-actions"><button class="primary" id="film-play"></button><button class="utility" id="film-speed">Speed · 1×</button>'+
+      '<button class="utility" id="film-rewind">Back 5 seconds</button><button class="utility" id="film-step">Step 1 frame</button></div>'+
+      '<div id="film-marks" class="dialog-actions"></div><div class="dialog-actions"><button class="utility" id="film-p1"></button>'+
+      '<button class="utility" id="film-p2"></button><button class="utility" id="film-back">Back</button></div>',false);
+    const el=id=>document.getElementById(id),canvas=el('clip-arena'),seek=el('clip-seek');
+    let player,view,raf=0,previous=null,carry=0,rate=1;
+    let playing=at===null && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+    function paint(dt){
+      const fight=player.battle,frame=player.frame,end=frame===film.length;
+      view.draw(canvas,fight,dt,fight.time);
+      const write=(id,s)=>{const node=el(id);if(node.textContent!==s)node.textContent=s;};
+      write('film-play',end?'Watch again':playing?'Pause':'Play');
+      write('clip-scores',fight.dogs.map((f,i)=>'P'+(i+1)+' '+f.stats.name+' '+Math.round(f.damage)+'% · '+
+        (fight.matchCard?.points?fight.matchCard.points[i]+' pts':f.stocks+' stock'+(f.stocks===1?'':'s'))).join(' / '));
+      write('film-time',time(frame)+' / '+time(film.length)+' · Frame '+frame);
+      seek.value=frame;seek.setAttribute('aria-valuetext',time(frame)+', frame '+frame);
+      el('film-step').disabled=end;el('film-rewind').disabled=!frame;
+      for(const i of [0,1]){
+        const id='film-p'+(i+1);
+        write(id,'Practice as P'+(i+1)+' '+fight.dogs[i].stats.name);el(id).disabled=end;
+      }
+    }
+    function jump(frame){
+      view=new window.DogFightView.FightView();view.shakeEnabled=shake;
+      player=film.playback(frame,(name,e)=>view.event(name,e));carry=0;previous=null;paint(0);
+    }
+    function tick(now){
+      raf=0;if(!canvas.isConnected || !playing)return;
+      if(document.hidden)previous=null;
+      else{
+        if(previous!==null)carry+=Math.min(.1,(now-previous)/1000)*60*rate;
+        previous=now;let steps=0;
+        while(carry>=1 && player.frame<player.length){player.step();carry--;steps++;}
+        if(player.frame===player.length)playing=false;
+        if(steps)paint(steps/60);
+      }
+      if(playing)raf=requestAnimationFrame(tick);
+    }
+    const stop=()=>{playing=false;cancelAnimationFrame(raf);raf=0;previous=null;carry=0;};
+    const pauseAt=frame=>{stop();jump(frame);};
+    jump(at??0);
+    el('film-stage').textContent=stageName(player.battle.stage,player.battle.form);
+    seek.oninput=()=>pauseAt(Number(seek.value));
+    el('film-rewind').onclick=()=>pauseAt(Math.max(0,player.frame-300));
+    el('film-step').onclick=()=>{stop();if(player.step())paint(1/60);};
+    el('film-play').onclick=()=>{
+      if(playing)stop();
+      else{if(player.frame===player.length)jump(0);playing=true;previous=null;raf=requestAnimationFrame(tick);}
+      paint(0);
+    };
+    el('film-speed').onclick=e=>{rate=rate===1?2:rate===2?.5:1;e.currentTarget.textContent='Speed · '+(rate===.5?'½':rate)+'×';};
+    const marks=el('film-marks');
+    if(film.data.falls.length){
+      const details=document.createElement('details'),heading=document.createElement('summary');
+      heading.textContent='Knockout lead-ins';details.append(heading);marks.append(details);
+      for(const [i,fall] of film.data.falls.entries()){
+        const b=document.createElement('button');b.type='button';b.className='utility';
+        b.textContent='KO '+(i+1)+' · '+fall.slots.map(n=>'P'+(n+1)).join(' & ')+' · '+time(fall.at);
+        b.onclick=()=>{pauseAt(Math.max(0,fall.at-120));el('film-play').focus();};details.append(b);
+      }
+    }
+    for(const i of [0,1])el('film-p'+(i+1)).onclick=()=>{stop();practice(player.frame,i);};
+    el('film-back').onclick=()=>{stop();back();};el('film-play').focus({preventScroll:true});
+    if(playing)raf=requestAnimationFrame(tick);
+  }
   // Bind only to this render of the card. A slow disk read must never reopen a closed record.
-  async function attach(id,entry,pending,open,focus) {
+  async function attach(id,entry,pending,open,focus,openFilm) {
     const card=document.querySelector('.card-stats'),root=card.parentNode, status=document.createElement('p');
     status.setAttribute('role','status');status.textContent='Loading saved replays…';card.after(status);
     try{
@@ -196,6 +342,23 @@
       };
       const actions=document.createElement('div');actions.className='dialog-actions';status.before(actions);
       button(actions,'Watch saved finish',c.finish,entry.side,true);
+      if(c.whole && openFilm){
+        const b=document.createElement('button');b.type='button';b.className='utility';b.textContent='Watch full match';
+        b.dataset.savedClip='full';actions.append(b);
+        if(focus?.first==='full')b.focus({preventScroll:true});
+        b.onclick=async()=>{
+          b.disabled=true;
+          try{
+            const db=await database();let data;
+            try{data=await request(db.transaction('blocks').objectStore('blocks').get([id,-1]));}finally{db.close();}
+            const film=new MatchFilm(data),last=film.playback(film.length).battle;
+            if(last.stage!==entry.stage || last.form!==entry.form || last.end!==entry.winner || last.matchCard.frames!==entry.card.frames)
+              throw Error('Replay differs from its scorecard');
+            if(b.isConnected)openFilm(film);
+          }catch{if(b.isConnected){status.hidden=false;status.textContent='The full replay could not be opened.';}}
+          finally{b.disabled=false;}
+        };
+      }
       const rows=root.querySelectorAll('.card-timeline li');
       for(const span of c.knockouts)for(let i=0;i<span.losses;i++){
         const row=rows[span.first+i],loss=entry.card.losses[span.first+i];
@@ -204,5 +367,5 @@
       status.hidden=true;status.textContent='';
     }catch{if(card.isConnected)status.textContent='The replay is unavailable on this device. Your match stats are saved.';}
   }
-  window.MatchReview={cardHTML,save,attach,pack,restore,resumeTape};
+  window.MatchReview={recordList,cardHTML,save,attach,pack,restore,resumeTape,MatchFilm,watchFilm};
 })();

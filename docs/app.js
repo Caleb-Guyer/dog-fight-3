@@ -930,7 +930,7 @@
   function showDialog(kind, title, html, close = true) {
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=defend-contact-1';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=match-film-1';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
@@ -978,6 +978,7 @@
     if(dialogType==='pack-relay')return backFromRelay();
     if(dialogType==='finish-picker')return $('finish-picker-back').click();
     if(dialogType==='ko-replays')return $('ko-list-back').click();
+    if(dialogType==='finish-film')return $('film-back').click();
     if(dialogType==='finish-comparison')return leaveFinishTrial(true);
     if(dialogType==='finish-pause')return dismiss();
     if(dialogType==='code-pad'){
@@ -1959,7 +1960,7 @@
     } else if (config.mode==='local' && config.lesson===undefined && random===Math.random) {
       random=seededRandom(crypto.getRandomValues(new Uint32Array(1))[0]);
     }
-    finishTape=resume?.tape || (!visit && config.lesson===undefined && ['solo','local'].includes(config.mode) ? new window.DogFight.FinishTape() : null);
+    finishTape=resume?.tape || (!visit && config.lesson===undefined && ['solo','local'].includes(config.mode) ? new window.DogFight.FinishTape(true) : null);
     if(finishTape)for(const part of ['MatchReview','StockCall'])loadDispatch(part).catch(()=>{});
     if (online.match) online.match.onConfirmedInput=(battle,a,b)=>finishTape?.record(battle,a,b);
     audioReady();
@@ -2304,6 +2305,7 @@
       }
     }
     if (finishTape?.length && stats) {
+      if(finishTape.reel)stats.insertAdjacentHTML('beforebegin','<button class="utility" data-do="watch-match">Watch full match</button>');
       if(knockoutClips(result).length)stats.insertAdjacentHTML('beforebegin',knockoutButton);
       const button=document.createElement('button');
       button.className='utility';button.dataset.do='watch-finish';
@@ -2326,6 +2328,22 @@
     window.DogFightView.drawPodium(shot.canvas,shot.kind,shot.coat,cel);
   }
   function replayTape(review){return review?.returning?review.clip.returnTape:review?.clip.tape || finishTape;}
+  function watchMatch(context,at=null){
+    if(!window.MatchReview)return waitForDispatch('Match replay',()=>loadDispatch('MatchReview'),()=>watchMatch(context,at),showResult);
+    if(!context){
+      const data=finishTape?.fullMatch();if(!data)return;
+      context={film:new window.MatchReview.MatchFilm(data)};
+    }
+    const {film,entry,id}=context;
+    window.MatchReview.watchFilm(film,{stageName,showDialog,shake:settings.shake,back:()=>{
+      if(entry)return showMatchCard(0,entry,id,{first:'full'});
+      showResult();document.querySelector('[data-do=watch-match]')?.focus();
+    },practice:(frame,slot)=>{
+      const {tape,result}=film.exchange(frame);
+      if(tape.length)startFinishTrial(0,slot,{film:context,frame,entry,id,slot,finish:true,result,
+        from:entry?'archive':'result',clip:{tape,losses:[]}});
+    }},at);
+  }
   function showFinishReplay(atFrame=null,review=null) {
     const tape=replayTape(review);
     if (!tape?.length) return;
@@ -2488,7 +2506,7 @@
     dismiss();
     finishTrial={player,camera,start,slot,review,original,saved,trace,returnNames:trace && player.battle.dogs.map(f=>f.stats.name),carry:0,ready:.8};
     $('corner-tip').hidden=true;
-    $('match-mode').textContent=(trace?'Stock return':review && !review.finish?'KO practice':'Finish practice')+' · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
+    $('match-mode').textContent=(trace?'Stock return':review?.film?'Match replay practice':review && !review.finish?'KO practice':'Finish practice')+' · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
     $('match-set').hidden=$('grapple-prompt').hidden=true;
     $('match-clock').hidden=false;
     $('match-clock').setAttribute('aria-label','Practice time left');
@@ -2535,6 +2553,7 @@
     finishTrial=null;
     if(review?.from==='archive'){
       showHome(false);
+      if(review.film)return replay?watchMatch(review.film,review.frame):showMatchCard(0,review.entry,review.id,{first:'full'});
       return replay?showFinishReplay(start,review):backToSavedCard(review);
     }
     $('match-mode').textContent=saved.mode;$('match-set').hidden=saved.setHidden;
@@ -2542,14 +2561,15 @@
     $('corner-tip').hidden=saved.cornerHidden;
     hudKey='';updateHUD();
     view.draw($('game'),online.match?.confirmedWorld || world,0,world.time);
-    if(replay)showFinishReplay(start,review);
+    if(replay && review?.film)watchMatch(review.film,review.frame);
+    else if(replay)showFinishReplay(start,review);
     else if(review?.from==='pause')dismiss();
     else if(review?.from==='card')showMatchCard();
     else showResult();
   }
   function trialActions(){
     return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">'+(finishTrial.trace?'Retry return':'Retry exchange')+'</button>'+
-      '<button class="utility" data-do="trial-replay">'+(finishTrial.trace?'Back to return replay':'Choose another frame')+'</button><button class="utility" data-do="trial-results">'+
+      '<button class="utility" data-do="trial-replay">'+(finishTrial.review?.film?'Back to full match':finishTrial.trace?'Back to return replay':'Choose another frame')+'</button><button class="utility" data-do="trial-results">'+
       (finishTrial.review?.from==='pause'?'Back to fight':['card','archive'].includes(finishTrial.review?.from)?'Back to match stats':'Back to results')+'</button></div>';
   }
   function showTrialPause(){
@@ -2616,22 +2636,8 @@
   }
   function showRecords(focusId) {
     if (page!=='home') showHome(false);
-    const rows=records.list();
-    const buttons=rows.map(({id,entry})=>{
-      const dogs=entry.card.players, winner=dogs[entry.winner];
-      const date=new Date(entry.time).toLocaleString(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
-      return '<button data-record-id="'+id+'"><img alt="" src="'+portrait(winner.kind,winner.coat)+'"><span><strong>'+
-        (entry.card.relayTeams?'Pack Relay':fighters[dogs[0].kind].name+' vs. '+fighters[dogs[1].kind].name)+'</strong><small>'+recordModes[entry.mode]+
-        (entry.card.points?' · Time Battle':'')+(entry.round?' · Game '+entry.round:'')+' · '+arenas[entry.stage].name+' · '+date+'</small></span><b>'+
-        (entry.card.relayTeams?(entry.winner===0?'P1':entry.mode==='solo'?'CPU':'P2')+'’s pack':fighters[winner.kind].name)+' wins</b></button>';
-    }).join('');
-    showDialog('records','Fight Records',rows.length?
-      '<p>Last '+window.FightRecords.limit+' completed fights on this device.</p><div class="saved-games">'+buttons+'</div>'+
-      (rows.some(r=>records.transient.has(r.id))?'<p>Storage is unavailable. Recent games are kept in this tab.</p>':''):
-      '<p>Your next completed fight will appear here with both fighters’ stats and a knockout recap.</p>'+
-      '<div class="dialog-actions"><button class="primary" data-do="record-solo">Play a solo fight</button></div>');
-    (Array.from(document.querySelectorAll('[data-record-id]')).find(b=>b.dataset.recordId===focusId) ||
-      document.querySelector('[data-record-id],[data-do=record-solo]')).focus({preventScroll:true});
+    if(!window.MatchReview)return waitForDispatch('Fight Records',()=>loadDispatch('MatchReview'),()=>showRecords(focusId),()=>$('home-records').focus());
+    window.MatchReview.recordList(records,recordModes,portrait,showDialog,focusId);
   }
   function backToSavedCard(review){
     return showMatchCard(0,review.entry,review.id,{first:review.finish?'finish':String(review.clip.first),slot:review.slot});
@@ -2652,7 +2658,7 @@
     const html=window.MatchReview.cardHTML({games,index,mode,side,form,set,archived,clips,inRoom:!!online.match,
       recordModes,stageName,cardTime,tenth,portrait,stockLabel});
     showDialog(archived?'record-card':'match-card','Match stats',html);
-    if (archived?.replay) window.MatchReview.attach(id,archived,replayWrites.get(id),r=>showFinishReplay(null,r),focus);
+    if (archived?.replay) window.MatchReview.attach(id,archived,replayWrites.get(id),r=>showFinishReplay(null,r),focus,film=>watchMatch({film,entry:archived,id}));
     (document.querySelector('[data-card-game][aria-pressed=true]') || $('dialog-close')).focus();
   }
   function showSetResult(result, set, finish, duration) {
@@ -2916,6 +2922,7 @@
     if (action==='bells-sheet') return bellSheet();
     if (action==='watch-finish') return showFinishReplay();
     if(action==='ko-replays')return showKnockouts(dialogType==='pause'?'pause':'result');
+    if(action==='watch-match')return watchMatch();
     if (action==='clip-back') return exitDialog();
     const review=e.target.closest('[data-school-review]');
     if (review && matchConfig?.schoolFinal) return startLesson(schoolLessons.findIndex(l=>l.id===review.dataset.schoolReview),true);
@@ -5298,7 +5305,7 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
-    MatchReview:'match-review.js?v=first-stock-1',
+    MatchReview:'match-review.js?v=match-film-1',
     StockCall:'stock-call.js?v=1',
     FightCamera:'fight-camera.js?v=1',
     FighterEntrances:'fighter-entrances.js?v=1',
@@ -7576,7 +7583,7 @@
         updateHUD();
       } else {
         resultDelay -= dt;
-        if (resultDelay <= 0 && (online.match ? !['online-result','room-fighters','set-pick','match-card','finish-picker','ko-replays'].includes(dialogType) : !$('dialog').open)) showResult();
+        if (resultDelay <= 0 && (online.match ? !['online-result','room-fighters','set-pick','match-card','finish-picker','finish-film','ko-replays'].includes(dialogType) : !$('dialog').open)) showResult();
       }
       if (world && (frameLab.mode !== 'frozen' || steppedFrame)) {
         const confirmed = online.match?.confirmedWorld;
