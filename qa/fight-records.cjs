@@ -60,6 +60,10 @@ test('practice is attributed to the right dog, using its own match counters',()=
   assert.equal(coaching(entry.card,1).id,'shield-strike');
   entry.card.players[1].blocks=2;assert.equal(coaching(entry.card,1).id,'shield-crossup');
   assert.equal(coaching(entry.card,0).id,'spacing-approach');
+  entry.card.players[1].blocks=6;
+  assert.equal(coaching(entry.card,0).id,'combo-confirm');
+  assert.match(coaching(entry.card,0).why,/blocked 6 hits/);
+  assert.equal(coaching(entry.card,1).id,'shield-crossup');
 });
 test('late tech input corrects both the predicted knockdown and the resulting advice',()=>{
   const cfg={mode:'local',stage:'picnic',p1:'pip',p2:'brisket',fetch:false};

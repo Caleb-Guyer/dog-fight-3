@@ -49,6 +49,19 @@ async function run(browser,mobile) {
     await press('[data-record-id]');assert.deepEqual(await timelineFacts(),timeline);
     await page.keyboard.press('Escape');await page.keyboard.press('Escape');
     assert.equal(await page.evaluate(()=>document.activeElement.id),'home-records');
+    const guarded=await page.evaluate(()=>{
+      const book=new FightRecords.Book(localStorage),entry=book.list()[0].entry;
+      entry.mode='local';entry.time++;entry.card.players[0].blocks=6;
+      entry.card.players[1].hits=1;entry.card.players[1].knockdowns=entry.card.players[1].shieldBreaks=0;
+      return book.add(entry);
+    });
+    await press('#home-records');await press('[data-record-id="'+guarded+'"]');
+    assert.equal(await page.locator('[data-record-drill="1"]').textContent(),'Practice hit confirms');
+    await press('[data-record-drill="1"]');await page.locator('#combo-confirm[aria-pressed=true]').waitFor();
+    assert.match(await page.locator('#hud .hud-name').first().textContent(),/Brisket/);
+    await press('#return-fight');
+    assert.equal(await page.locator('#dialog').getAttribute('data-view'),'record-card');
+    assert.match(await page.locator('.record-tip').last().textContent(),/blocked 6 hits/);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
