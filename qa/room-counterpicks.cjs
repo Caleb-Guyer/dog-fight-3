@@ -177,13 +177,18 @@ test('the losing seat can switch while an early vote, a mirror, or a new set pre
   }
 });
 
-test('friend rooms and quickplay enable air drops only when the other seat advertises support',()=>{
+test('friend rooms and quickplay negotiate air drops and closing boundaries across rematches',()=>{
   for(const format of ['single','quick'])for(const old of [null,0,1]){
     const versions=[current,current];if(old!==null)versions[old]=previous;
     const {peers,deliver}=room(versions,0,null,format);
     for(let round=1;round<=2;round++){
       for(const [i,peer] of peers.entries()){
-        if(old!==i)assert.equal(peer.match.confirmedWorld.itemDrops,old===null);
+        if(old!==i){
+          const world=peer.match.confirmedWorld;
+          assert.equal(world.itemDrops,old===null);
+          world.startSuddenDeath();
+          assert.equal(world.blastBounds(1500).bottom<765,old===null);
+        }
         assert.equal(peer.round,round);peer.finish(0);
       }
       if(round===1){deliver();peers.forEach(p=>p.rematch());deliver();}

@@ -8,7 +8,7 @@ async function play(browser,device) {
   const page=await browser.newPage({viewport:touch?{width:390,height:844}:{width:1280,height:720},isMobile:touch,hasTouch:touch});
   const errors=[]; page.on('pageerror',e=>errors.push(e.message));
   const choose=selector=>touch?page.locator(selector).tap():page.locator(selector).click();
-  const keys={left:'a',right:'d',attack:'j',smash:'i',shield:'l'};
+  const keys={left:'a',right:'d',attack:'j',smash:'i',shield:'l',jump:'Space',hop:'e'};
   const fingers=new Map();
   try {
     if(pad) await page.addInitScript(()=>{
@@ -17,7 +17,7 @@ async function play(browser,device) {
       Object.defineProperty(navigator,'getGamepads',{value:()=>[gamepad]});
       window.padInput=(action,on)=>{
         if(action==='left'||action==='right') gamepad.axes[0]=on?(action==='left'?-1:1):0;
-        else Object.assign(gamepad.buttons[{attack:2,smash:7,shield:4}[action]],{pressed:on,value:Number(on)});
+        else Object.assign(gamepad.buttons[{attack:2,smash:7,shield:4,jump:0,hop:6}[action]],{pressed:on,value:Number(on)});
       };
     });
     const client=touch && await page.context().newCDPSession(page);
@@ -89,6 +89,39 @@ async function play(browser,device) {
     assert.deepEqual(await page.evaluate(()=>contacts[0]),await page.evaluate(()=>['grabCatch',live.dogs[1].kit.grab]),device+' early shield');
     await page.goto('http://127.0.0.1:8080/?return#solo/stock-return/noodle');
     assert.match(await page.locator('#match-mode').textContent(),/Rival/);
+    await page.goto('http://127.0.0.1:8080/?closing#solo/sudden-death/perch');
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(...inputs){if(this.suddenDeath)window.live=this;return step.apply(this,inputs);};
+    });
+    async function reachGo(){
+      await page.clock.runFor(1300);
+      for(let i=0;i<65 && await page.evaluate(()=>!window.live || live.suddenDeath.intro>0);i++)await page.clock.runFor(16);
+      assert.equal(await page.evaluate(()=>live.suddenDeath.intro),0);
+      assert.equal(await page.locator('#countdown').textContent(),'GO!');
+      assert.match(await page.locator('#match-clock').getAttribute('aria-label'),/final positions/);
+    }
+    await reachGo();
+    await hold('hop',true);await page.clock.runFor(64);await hold('hop',false);
+    assert(await page.evaluate(()=>live.dogs[0].ground<0 || live.dogs[0].jumpSquat));
+    await page.clock.runFor(590);
+    assert.deepEqual(await page.evaluate(()=>[live.end,live.dogs[0].ground]),[null,3]);
+    await choose('#pause');await choose('[data-do=lobby]');await choose('#rules-label');
+    await choose('[data-sudden-opening=gap]');await reachGo();
+    assert.match(await page.locator('#blast-radar').getAttribute('aria-label'),/P1 .+ near the bottom boundary/);
+    const pixel=await page.evaluate(()=>{
+      const c=document.getElementById('blast-radar'),b=live.blastBounds(),g=DogFight;
+      const scale=Math.min((c.width-12)/(live.stageWidth+2*g.blastSideMargin),(c.height-12)/(g.bottomBlastY-g.topBlastY));
+      const y=Math.round(c.height/2+(b.top-(g.bottomBlastY+g.topBlastY)/2)*scale);
+      return Array.from(c.getContext('2d').getImageData(Math.floor(c.width/2),y,1,1).data);
+    });
+    assert.deepEqual(pixel,[237,150,121,255],device+' radar draws the current ceiling');
+    await hold('left',true);await hold('jump',true);await page.clock.runFor(260);
+    await hold('left',false);await hold('jump',false);await page.clock.runFor(505);
+    assert.deepEqual(await page.evaluate(()=>[live.end,live.dogs[0].ground]),[null,0],device+' saved the stock');
+    await choose('#pause');await choose('[data-do=rematch]');await page.clock.runFor(3000);
+    assert.equal(await page.locator('#dialog').getAttribute('data-view'),'result');
+    assert.equal(await page.evaluate(()=>live.matchCard.losses[0].zone),'bottom');
     assert.deepEqual(errors,[]);
   } finally { await page.close(); }
 }
