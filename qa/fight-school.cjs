@@ -70,6 +70,15 @@ function cornerFight(){
   const coach=new window.FightSchool.Corner(),[pip,brisket]=world.dogs,floor=world.terrain[0];
   return {world,coach,pip,brisket,floor,read:()=>coach.read(world)};
 }
+test('Fight School reads the shield below Pip and shows the matching controls and practice',()=>{
+  const {world,coach,pip,brisket,read}=cornerFight(),bench=world.terrain[1];
+  Object.assign(pip,{ground:1,x:410,y:bench.y});brisket.x=pip.x+20;
+  assert.equal(read(),'perch');assert.equal(coach.practice,'platform-below');
+  assert.match(window.FightSchool.cornerLine('perch',a=>'['+a+']')[1],/\[down\].*\[attack\]/);
+  brisket.shield=true;assert.equal(read(),'perchGrab');assert.equal(coach.practice,'throw');
+  assert.match(window.FightSchool.cornerLine('perchGrab',a=>'['+a+']')[1],/\[grab\]/);
+  brisket.x+=200;assert.notEqual(read(),'perchGrab');
+});
 test('ringside recovery uses the actual ledge, remaining air jump and both Fence Hopper leaps',()=>{
   for(const side of ['left','right']){
     const {world,coach,pip,floor,read}=cornerFight(), inward=side==='left'?'right':'left';

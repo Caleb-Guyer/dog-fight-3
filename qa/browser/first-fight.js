@@ -143,6 +143,22 @@ async function ringside(browser){
     await page.evaluate(()=>{window.watchResume=true;});
     await page.locator('#school-next').click();await page.clock.runFor(48);
     assert.deepEqual(await page.evaluate(()=>window.resumed),parked);
+    await page.evaluate(()=>{
+      const [pip,brisket]=original.dogs,bench=original.terrain[1];
+      for(const dog of original.dogs)original.spawn(dog,false);
+      Object.assign(pip,{x:(bench.x1+bench.x2)/2,y:bench.y,ground:1,face:1});
+      Object.assign(brisket,{x:pip.x+25,y:original.terrain[0].y,ground:0,face:-1});
+    });
+    await page.clock.runFor(32);
+    assert.match(await tip.getAttribute('data-cue'),/^perch\//);assert.match(await line.textContent(),/tap Q/i);
+    await page.locator('#pause').click();const benchMark=await page.evaluate(()=>stateOf(original));
+    await practice.click();await page.locator('#platform-below:visible').waitFor();
+    assert.equal(await page.locator('#platform-below').getAttribute('aria-pressed'),'true');
+    await page.keyboard.press('s');await page.clock.runFor(350);await page.keyboard.press('q');await page.clock.runFor(500);
+    assert.deepEqual(await page.evaluate(()=>stateOf(original)),benchMark);
+    await page.evaluate(()=>{window.resumed=null;});
+    await page.locator('#return-fight').click();await page.clock.runFor(48);
+    assert.deepEqual(await page.evaluate(()=>window.resumed),benchMark);
     await page.locator('#pause').click();await page.locator('[data-do=corner-toggle]').click();
     await page.locator('[data-do=resume]').click();await page.clock.runFor(50);assert(await tip.isHidden());
     await page.reload();await page.clock.runFor(2500);assert(await tip.isHidden());

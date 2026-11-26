@@ -8,6 +8,50 @@ function fight(kind,extra={}){
     stockCount:3,fetch:false,liftOpening:true,...extra},(name,e)=>events.push({name,id:e.moveId}),seededRandom(42));
   return {w,events};
 }
+test('all sixteen matchups can block the platform aerial or jump free of the committed landing grab',()=>{
+  for(const p1 of Object.keys(kits))for(const p2 of Object.keys(kits))for(const choice of ['wait','late','early','jump']){
+    const {w,events}=fight(p2,{p1,liftOpening:false,perchApproach:true,form:'original'});
+    let dropped=false,buffered=false,jumped=false;
+    for(let n=0;n<58;n++){
+      const shield=choice==='early' || choice==='jump' || (choice==='late' && dropped);
+      tick(w,{shield,jump:choice==='jump' && dropped});
+      dropped ||= events.some(e=>e.name==='platformDrop');
+      buffered ||= !!w.dogs[1].attack?.landingGrab;
+      jumped ||= w.dogs[0].ground<0;
+    }
+    const label=[p1,p2,choice].join('/');
+    assert(dropped,label);assert.deepEqual(w.dogs.map(f=>f.stocks),[3,3]);
+    const caught=choice==='early',clear=choice==='jump';
+    const expected=clear?undefined:caught?{name:'grabCatch',id:kits[p2].grab}:
+      {name:choice==='late'?'block':'hit',id:kits[p2].air.down};
+    assert.deepEqual(first(events),expected,label);
+    assert.equal(buffered,caught || clear,label);if(clear)assert(jumped,label);
+  }
+});
+test('a second shelf, the opposite facing, protected feet and older recordings rule out the empty drop',()=>{
+  for(const reason of ['clear','shelf','facing','protected','legacy','rookie']){
+    const {w}=fight('pip',{liftOpening:false,stage:'bandstand',form:'original',cpuLevel:reason==='rookie'?'rookie':'rival'});
+    const [foe,f]=w.dogs,ground=reason==='shelf'?3:1,x=reason==='shelf'?504:408;
+    Object.assign(f,{ground,x,y:w.terrain[ground].y,face:reason==='facing'?-1:1});
+    Object.assign(foe,{x:x+38,ground:0,y:w.terrain[0].y,shield:true,stockGuard:reason==='protected'?1:0});
+    if(reason==='legacy')delete w.bot.readPlatforms;
+    w.cpu(1/60);assert.equal(!!w.bot.perchGrab,reason==='clear',reason);
+  }
+});
+test('a replay of the platform grab retains the original aim after the defender jumps',()=>{
+  const {w}=fight('noodle',{liftOpening:false,perchApproach:true,form:'original'});
+  const tape=new FinishTape(true),states=[];
+  const state=b=>[b.random.state,structuredClone(b.bot.perchGrab),b.dogs.map(f=>[f.x,f.y,f.ground,f.damage,f.attack?.moveId])];
+  for(let i=0;i<70;i++){
+    const input={...idleInput,shield:true,jump:i>=16 && i<38};
+    states.push(state(w));tape.record(w,input,idleInput);tick(w,input);
+  }
+  assert(states.some(s=>s[1]?.airborne));
+  for(const frame of [0,10,19,37,51]){
+    const run=tape.playback(frame);assert.deepEqual(state(run.battle),states[frame]);
+    while(run.step()){}assert.deepEqual(state(run.battle),state(w));
+  }
+});
 const tick=(w,p={})=>w.step(1/60,{...idleInput,...p},idleInput);
 const first=events=>events.find(e=>['hit','block','grabCatch'].includes(e.name));
 function perch(rival,returner='pip',extra={}){

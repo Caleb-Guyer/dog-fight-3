@@ -97,6 +97,24 @@ async function play(browser,device) {
     await choose('[data-do=rematch]');await page.clock.runFor(5400);
     assert.equal(await page.evaluate(()=>live.bot.challengedReturn),true);
     assert((await damage())[0]>0);
+    await choose('#pause');await choose('[data-do=lobby]');await choose('#cpu-level');await choose('[data-do=perch-fight]');
+    for(const choice of ['late','early','jump']){
+      if(choice!=='late'){await choose('#pause');await choose('[data-do=rematch]');}
+      await page.evaluate(()=>{window.live=null;});await page.clock.runFor(2050);await advanceTo(2);
+      if(choice!=='late')await hold('shield',true);
+      for(let i=0;i<55 && await page.evaluate(()=>live.dogs[1].ground===1);i++)await page.clock.runFor(16);
+      assert(await page.evaluate(()=>live.dogs[1].ground<0),'Rival dropped from bench');
+      if(choice==='late')await hold('shield',true);
+      if(choice==='jump')await hold('jump',true);
+      await advanceTo(54);
+      const first=await page.evaluate(()=>contacts[0]??null);
+      const kit=await page.evaluate(()=>live.dogs[1].kit);
+      assert.deepEqual(first,choice==='jump'?null:choice==='late'?['block',kit.air.down]:['grabCatch',kit.grab],device+' '+choice);
+      if(choice==='jump')await hold('jump',false);
+      await hold('shield',false);assert.deepEqual(await page.evaluate(()=>live.dogs.map(f=>f.stocks)),[3,3]);
+    }
+    await page.goto('http://127.0.0.1:8080/?perch#solo/platform-read/clover');
+    assert.match(await page.locator('#match-mode').textContent(),/Rival/);
     await page.goto('http://127.0.0.1:8080/?return#solo/stock-return/noodle');
     assert.match(await page.locator('#match-mode').textContent(),/Rival/);
     await page.goto('http://127.0.0.1:8080/?closing#solo/sudden-death/perch');
