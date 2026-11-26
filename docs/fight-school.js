@@ -26,7 +26,7 @@
       this.counterGrab=review && this.id==='jab';
       if(this.counterGrab)this.info={...lessons[index],title:'Interrupt the grab',
         task:'Tap Attack to jab as Brisket reaches. Try holding Shield to see what his grab catches.',
-        miss:'Bear Hug caught Pip. Retry and tap Attack with your direction centered.',
+        miss:'Retry with your direction centered. Tap Attack as Brisket reaches.',
         success:'Your jab interrupted Bear Hug before Brisket could grab Pip.'};
       const [pip,brisket] = world.dogs, floor = world.terrain[0];
       let x = 560, rivalX = x + 58;
@@ -79,6 +79,10 @@
     afterStep(world) {
       if(!this.example)this.guide?.advance(world);
       const f=world.dogs[0];
+      if(this.counterGrab && !this.done){
+        const reach=world.dogs[1].attack;
+        if(!reach?.grabAttempt || reach.time>=reach.start+reach.active)this.missed=true;
+      }
       if (this.id==='move' && f.x>=600 && f.ground===0) this.done=true;
       if (this.id==='platform' && f.ground===1) this.done=true;
       if (this.id==='return') {
