@@ -122,6 +122,24 @@ async function play(browser,device) {
     await choose('#pause');await choose('[data-do=rematch]');await page.clock.runFor(3000);
     assert.equal(await page.locator('#dialog').getAttribute('data-view'),'result');
     assert.equal(await page.evaluate(()=>live.matchCard.losses[0].zone),'bottom');
+    await page.goto('http://127.0.0.1:8080/?footwork#training/brace');
+    const result=page.locator('#footwork-status');
+    await result.waitFor();
+    const rush=async(guard)=>{
+      if(guard)await hold('shield',true);
+      await hold('attack',true);await page.clock.runFor(120);await hold('attack',false);
+      await page.clock.runFor(2200);
+      if(guard)await hold('shield',false);
+      return result.textContent();
+    };
+    assert.match(await rush(false),/Pushed past the chalk · 48 px/);
+    await choose('#footwork-brace');
+    assert.match(await rush(true),/Held the chalk · 22 px/);
+    await choose('#footwork-worn');assert.equal(await page.locator('#footwork-worn').getAttribute('aria-pressed'),'true');
+    await choose('#footwork-side');
+    assert.match(await rush(true),/Pushed past the chalk · 36 px/);
+    await choose('#footwork-center');await hold('left',true);await page.clock.runFor(1600);await hold('left',false);
+    assert.equal(await result.textContent(),'Took ground');
     assert.deepEqual(errors,[]);
   } finally { await page.close(); }
 }
