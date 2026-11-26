@@ -1,5 +1,7 @@
 # Dog Fight 3
 
+On the same platform, grounded dogs can push each other backward. Brisket gives up less ground than Pip, and holding Shield helps either dog stand firm. Jump over a rival or roll through them to change sides. In **Training → Footwork practice → Hold the line**, keep the approaching dog off your chalk, then retry and land behind them. **Switch side** mirrors the exercise. [Play Pip against Brisket](https://caleb-guyer.github.io/dog-fight-3/#training/hold-center)
+
 Choose **Controls → Check controller** or open it from the Fight School lesson list. Press Jump and Attack together to see both buttons light up. Move either stick to see its direction. Fight School, move guides and the controls table show the buttons assigned to the current player. Recognized standard Switch Pro, DualShock 4 and DualSense controllers use their own names. If an adapter reports a different layout, choose **Button labels** for that seat. You can also choose **Button positions** to see names such as *Bottom* and *Left bumper*. [Check your controller](https://caleb-guyer.github.io/dog-fight-3/#controls/controller)
 
 Try **Fight School → Guide my inputs → Attack in the air**. On touch, the gold outlines mark Jump and Attack. When the outlines turn dashed mint, release both buttons and watch Pip connect. On a controller, use your assigned Jump and Attack buttons. Menus keep their own physical confirm button when you remap combat controls. [Practice Pip’s short-hop aerial](https://caleb-guyer.github.io/dog-fight-3/#tutorial/guided/air)

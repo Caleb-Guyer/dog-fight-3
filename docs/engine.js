@@ -2676,6 +2676,7 @@
       this.itemDrops=config.itemDrops!==false;
       if(config.shieldPogo!==false)this.shieldPogo=true;
       if(config.aimedDrive!==false)this.aimedDrive=true;
+      if(config.groundSpace!==false)this.groundSpace=true;
       this.time = 0;
       this.end = null;
       this.endReason = '';
@@ -3206,6 +3207,7 @@
       if (!('itemDrops' in state)) delete this.itemDrops;
       if (!('shieldPogo' in state)) delete this.shieldPogo;
       if (!('aimedDrive' in state)) delete this.aimedDrive;
+      if (!('groundSpace' in state)) delete this.groundSpace;
       if (!('closingHeight' in state)) delete this.closingHeight;
       this.random.state = random.state;
     }
@@ -4330,7 +4332,7 @@
       const playerKind = {crawl:'noodle', returnFire:'clover', reflect:'pip', power:'pip', armor:'brisket', armorGrab:'pip'}[pattern];
       const player = playerKind ? newFighter(playerKind, 0) : originalDogs[0];
       const kind = { bait: 'brisket', match: player.kind, power: 'brisket', disc: 'clover', brake: 'pip',
-        pivot: player.kind, antiAir: originalDogs[1].kind, angleHigh: originalDogs[1].kind,
+        center: originalDogs[1].kind, pivot: player.kind, antiAir: originalDogs[1].kind, angleHigh: originalDogs[1].kind,
         angleLow: originalDogs[1].kind, cancelDash: originalDogs[1].kind, cancelTurn: originalDogs[1].kind,
         crawl:'clover', reflect:'clover', returnFire:'pip', dashShield:'brisket', armor:'pip', armorGrab:'brisket' }[pattern];
       const dummy = newFighter(boost ? originalDogs[1].kind : kind, 1);
@@ -4342,6 +4344,10 @@
       let mark = pattern === 'bait' ? dummy.x - box[0] - box[2] - player.stats.width + 5 : center;
       player.x = pattern === 'bait' ? mark - 27 : center - dir * gap / 2;
       if (pattern === 'crawl') mark = player.x + dir * 45;
+      if (pattern === 'center') {
+        player.x=center-dir*43;dummy.x=center+dir*43;
+        mark=center-dir*50;
+      }
       player.face = dir;
       dummy.face = -dir;
       dummy.ground = player.ground = 0;
@@ -4410,6 +4416,15 @@
     }
     footworkInput(dt) {
       const drill = this.footworkPractice, [player, dummy] = this.dogs;
+      if (drill.pattern === 'center') {
+        if (drill.phase === 'done') return idleInput;
+        const forward=x=>(x-drill.mark)*drill.dir;
+        if (player.ground===dummy.ground && player.ground>=0 && !player.floorAction && forward(player.x)>forward(dummy.x)+6)
+          this.finishFootwork('crossed');
+        else if (forward(dummy.x)>108) this.finishFootwork('tookGround');
+        else if (forward(dummy.x)<=0) this.finishFootwork('lostGround');
+        return drill.phase==='done'?idleInput:{...idleInput,x:-.48*drill.dir};
+      }
       if (drill.pattern === 'crawl') {
         if (drill.phase === 'done' || drill.phase === 'ready') return idleInput;
         drill.tell += dt;
@@ -5754,6 +5769,10 @@
         this.freshnessPractice.waiting = false;
       }
       const footwork = this.footworkPractice;
+      if (footwork?.pattern==='center' && footwork.phase==='ready') {
+        if (!input1.x && !input1.shield && !input1.jump && !input1.shortHop) return;
+        footwork.phase='approach';
+      }
       if (footwork && footwork.pauseOnWindup !== undefined) {
         const attack = input1.attack || input1.tapped?.attack || input1.aimStick || input1.tapped?.aimStick;
         const grab = input1.grab || input1.tapped?.grab;
@@ -6120,6 +6139,8 @@
           if (target) this.footstool(f, target);
         }
       }
+      const [first,secondDog]=this.dogs;
+      const standingGap=this.groundSpace && first.ground>=0 && first.ground===secondDog.ground ? secondDog.x-first.x : 0;
       for (const f of this.dogs) {
         if (f.impactLag > 1e-8) f.impactLag = f.impactLag <= dt + 1e-8 ? 0 : f.impactLag - dt;
         else {
@@ -6131,6 +6152,7 @@
         f.techBuffer = Math.max(0, f.techBuffer - dt);
         f.techLock = Math.max(0, f.techLock - dt);
       }
+      if (standingGap) this.resolveGroundSpace(first,secondDog,standingGap);
       if (settingUpWallHit) this.dogs[0].prev = { ...input1 };
       // All attacks that connect this frame read the same pre-contact damage, including a disc trading with a paw.
       const damageAtContact = this.dogs.map(f => f.damage);
@@ -6203,6 +6225,23 @@
       }
       if (this.freshnessPractice) this.traceFreshness(out.includes(this.dogs[1]));
       if (out.length) this.knockouts(out);
+    }
+    resolveGroundSpace(a,b,oldGap) {
+      if (a.ground<0 || a.ground!==b.ground) return;
+      const left=oldGap>0?a:b, right=oldGap>0?b:a;
+      const width=(left.stats.width+right.stats.width)*.6;
+      // Only undo new overlap. Landing and rolling can legitimately leave two dogs close together.
+      const overlap=Math.min(width,Math.abs(oldGap))-(right.x-left.x);
+      if (overlap<=0) return;
+      const yieldsSpace=f=>f.absent || (f.encounter && f.encounter.kind!==f.kind) || f.attack || f.charge>=0 || f.grip || f.floorAction ||
+        f.dodge || f.airDodge || f.jumpSquat || f.stun || f.shieldStun || f.impactLag || f.ledge ||
+        f.tumble || f.reaction || f.shieldBreak || f.clashRecoil || f.waveSlide || f.stockLift || protectionTime(f);
+      if (yieldsSpace(left) || yieldsSpace(right)) return;
+      const mass=f=>f.stats.weight*(f.shield?2:1);
+      const floor=this.terrain[left.ground];
+      const leftRoom=Math.max(0,left.x-floor.x1),rightRoom=Math.max(0,floor.x2-right.x);
+      const back=Math.min(leftRoom,Math.max(overlap-rightRoom,overlap*mass(right)/(mass(left)+mass(right))));
+      left.x-=back;right.x+=Math.min(rightRoom,overlap-back);
     }
     trainingRivalInput(dt, player) {
       if(this.warmupPartner==='spar')return this.cpu(dt);
