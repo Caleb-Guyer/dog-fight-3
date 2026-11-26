@@ -96,9 +96,9 @@
     if(!packed)return new FinishTape();
     const {catalog,blocks}=packed;
     const read=span=>{
-      const selected=[];
-      for(let start=span.start;start<span.count;start+=120)selected.push(blocks.get(start));
-      return restore(span,selected);
+      const length=Math.ceil((span.count-span.start)/120);
+      if(!Number.isInteger(length) || length<1 || length>3)throw Error('Invalid saved replay');
+      return restore(span,Array.from({length},(_,i)=>blocks.get(span.start+120*i)));
     };
     const tape=read(catalog.finish);
     tape.observedLosses=losses.length;

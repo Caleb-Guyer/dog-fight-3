@@ -71,6 +71,10 @@
         return;
       }
       slot.previous=record?.header || null;
+      try{
+        if(record)window.localStorage.setItem('dog-fight-3.stock-ready','1');
+        else window.localStorage.removeItem('dog-fight-3.stock-ready');
+      }catch{}
     });
     slot.writes=write.catch(()=>{});
     return write;
