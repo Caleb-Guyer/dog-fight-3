@@ -6,7 +6,7 @@
     return book && (book.bonus?.id===room?book.bonus:Number.isInteger(room)?book.rooms[room]:null);
   }
   function capture(run){
-    if(run.mode!=='adventure' || run.finished || !mission(run.chapter,run.roomIndex))throw Error('Mission unavailable');
+    if(run.mode!=='adventure' || run.finished || run.bossLesson || !mission(run.chapter,run.roomIndex))throw Error('Mission unavailable');
     const {emit,random,...state}=run;
     const dog=run.dogs[0],id='suspend-'+run.chapter+'-'+run.roomIndex;
     const header={format,id,token:crypto.randomUUID(),chapter:run.chapter,room:run.roomIndex,playedAt:Date.now(),stocks:dog.stocks,damage:dog.damage};

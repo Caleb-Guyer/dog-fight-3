@@ -2,6 +2,14 @@
   'use strict';
   const { FightView, drawFighter, drawItem, drawEffect, gripLead } = window.DogFightView;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const patterns = {
+    stamp: {name:'Paw stamp', hint:'When the front paw rises, shield or back up. Step in and tap Attack as the lamp opens.'},
+    charge: {name:'Rail charge', hint:'Jump over the rush or block it. Follow the Hound and turn toward the open lamp before you attack.'},
+    bell: {name:'Floor bell', hint:'The bell sends a brass wave along the floor. Jump the crest or block it, then close in and hit the open lamp.'},
+  };
+  function patternButton(move) {
+    return '<button class="utility" data-boss-pattern="'+move+'">'+patterns[move].name+'</button>';
+  }
   function postmark(ctx, x, y, time) {
     const rise = reduced.matches ? 0 : Math.round(Math.sin(time * 3) * 3);
     ctx.save();
@@ -158,10 +166,29 @@
           Math.floor(world.atCheckpoint?.damage || 0) + '%.') +
           '</p><div class="dialog-actions"><button class="primary" data-do="dispatch-retry">Retry</button>' +
           (!world.bridge && world.checkpoint ? '<button class="utility" data-do="dispatch-rematch">Restart mission</button>' : '') +
-          '<button class="utility" data-do="route">Route map</button></div>',
+          '<button class="utility" data-do="route">Route map</button></div>'+this.patternChoices(world),
         false,
       );
       document.querySelector('[data-do=dispatch-retry]').focus();
+    }
+    static patternChoices(world) {
+      if (world.layout.rules !== 'boss') return '';
+      const last = world.lastBossHit;
+      return '<h3>Practice a boss attack</h3>'+
+        (last && patterns[last]?'<p>Last hit · '+patterns[last].name+'. '+patterns[last].hint+'</p>':'')+
+        '<div class="dialog-actions">'+Object.keys(patterns).map(patternButton).join('')+'</div>';
+    }
+    static lessonPanel(world, parked, showDialog) {
+      const move = world.bossLesson.move, outcome = world.finished;
+      const titles = {caught:'That one connected', missed:'The lamp closed', fell:'Pip went offstage', countered:'Clean counter'};
+      const advice = outcome === 'countered' ? 'You avoided the hit and struck the open lamp.' : patterns[move].hint;
+      const others = Object.keys(patterns).filter(id=>id!==move);
+      showDialog(outcome?'boss-result':'pause', outcome?titles[outcome]:'Boss practice paused',
+        '<p><strong>'+patterns[move].name+'</strong> · '+advice+'</p><div class="dialog-actions">'+
+        (outcome?'':'<button class="primary" data-do="resume">Resume practice</button>')+
+        '<button class="'+(outcome?'primary':'utility')+'" data-do="boss-return">'+(parked.finished?'Retry Bell Depot':'Resume Bell Depot')+'</button>'+
+        '<button class="utility" data-boss-pattern="'+move+'">Try again</button>'+others.map(patternButton).join('')+'</div>', !outcome);
+      document.querySelector(outcome?'[data-do=boss-return]':'[data-do=resume]').focus();
     }
     static updateScoreboard(world,recovery,order,marks,{$,tenth,showPercent,showStocks,recoveryStrip}) {
       const hero=world.dogs[0], foes=world.foes, lead=foes[0];

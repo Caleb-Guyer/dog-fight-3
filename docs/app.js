@@ -1063,7 +1063,7 @@
       return;
     }
     if (dialogType === 'set-pick' || dialogType==='room-fighters') return showResult();
-    if (dialogType === 'result' || dialogType === 'dispatch-fall' || dialogType === 'online-result') return;
+    if (dialogType === 'result' || dialogType === 'dispatch-fall' || dialogType === 'boss-result' || dialogType === 'online-result') return;
     if (['controls','moves','cpu-level','practice'].includes(dialogType) && backToPause) {
       backToPause = false;
       showPause();
@@ -2265,6 +2265,7 @@
   function showPause(autosave=true) {
     if(finishTrial)return showTrialPause();
     if (page !== 'match' || !world || world.end !== null) return;
+    if (world.bossLesson) return window.DispatchView.lessonPanel(world, view.parkedBoss.world, showDialog);
     if(world.warmupPartner)return showWarmupMenu();
     if(world.mode==='parcel'){
       window.ParcelPunt.pause(world,showDialog);return;
@@ -2308,7 +2309,7 @@
           world.layout.name +
           ' · ' +
           world.objective +
-          '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button><button class="utility" data-do="suspend-mission">Suspend &amp; quit</button><button class="utility" data-do="dispatch-retry">Retry</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div><div class="dialog-actions"><button class="utility" data-do="route">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
+          '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button><button class="utility" data-do="suspend-mission">Suspend &amp; quit</button><button class="utility" data-do="dispatch-retry">Retry</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div><div class="dialog-actions"><button class="utility" data-do="route">Route map</button><button class="utility" data-do="home">Main menu</button></div>'+window.DispatchView.patternChoices(world),
       );
       document.querySelector('[data-do=resume]').focus();
       return;
@@ -3207,6 +3208,9 @@
     if (action === 'fullscreen') toggleFullscreen();
     if (action === 'home') showHome();
     if (action === 'route') showRoute();
+    const pattern = e.target.closest('[data-boss-pattern]')?.dataset.bossPattern;
+    if (pattern) return startBossPractice(pattern);
+    if (action === 'boss-return') return leaveBossPractice();
     if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.atCheckpoint);
     if (action === 'suspend-mission') return suspendMission();
     if (action === 'school-suspend') return suspendFirstFight();
@@ -5394,8 +5398,8 @@
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=disc-range-1',
-    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=ground-space-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-practice-1', DispatchView:'dispatch-view.js?v=depot-practice-1',
+    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=ground-space-1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -5899,6 +5903,41 @@
       $('dialog-body').querySelector('[data-do=resume]').focus();
     }
   }
+  function startBossPractice(move) {
+    if (world?.layout?.rules !== 'boss' || cupAttempt) return;
+    const parked = view.parkedBoss || {world, view, noticeUntil, notice:$('dispatch-notice').textContent, mode:$('match-mode').textContent};
+    const lessonView = new window.DispatchView();
+    const lesson = parked.world.rehearseBoss(move, lessonView.missionCues({tone,sound,dispatchNotice,stockLabel,mission:world.layout}));
+    if (!lesson) return;
+    world = lesson;
+    view = lessonView;
+    view.parkedBoss = parked;
+    view.shakeEnabled = settings.shake;
+    $('match-mode').textContent = 'Bell Depot · Boss practice';
+    $('dispatch-notice').hidden = true;
+    noticeUntil = 0;
+    adventureKey = '';
+    dismiss();
+    updateDispatchHUD();
+    view.draw($('game'), world, 0);
+    announce('Boss practice · '+world.objective);
+  }
+  function leaveBossPractice() {
+    const parked = view?.parkedBoss;
+    if (!parked) return;
+    world = parked.world;
+    view = parked.view;
+    if (world.finished) return beginRun(world.roomIndex, world.checkpoint, world.atCheckpoint);
+    $('match-mode').textContent = parked.mode;
+    $('dispatch-notice').textContent = parked.notice;
+    noticeUntil = parked.noticeUntil;
+    $('dispatch-notice').hidden = !noticeUntil;
+    adventureKey = '';
+    dismiss();
+    updateDispatchHUD();
+    view.draw($('game'), world, 0);
+    announce('Bell Depot resumed');
+  }
   function dispatchNotice(message) {
     $('dispatch-notice').textContent = message;
     $('dispatch-notice').hidden = false;
@@ -5919,7 +5958,7 @@
       ...foes.flatMap((e) => [e.f.stocks, tenth(e.f.damage), e.hp])].join('|');
     if (key === adventureKey) return;
     adventureKey = key;
-    const marks=world.sideRoute?'Noodle / Brisket / Clover':cupAttempt ? 'Arcade Cup · Round 4 / 4' :
+    const marks=world.bossLesson?'Practice · Avoid the hit, then counter':world.sideRoute?'Noodle / Brisket / Clover':cupAttempt ? 'Arcade Cup · Round 4 / 4' :
       'Postmarks ' + countMarks(world.stamps) + ' / ' + campaign.rooms.length;
     window.DispatchView.updateScoreboard(world,recovery,order,marks,{$,tenth,showPercent,showStocks,recoveryStrip});
   }
@@ -5947,6 +5986,7 @@
     }
     updateDispatchHUD();
     view.draw($('game'), world, dt, world.time);
+    if (world.bossLesson && world.finished) return window.DispatchView.lessonPanel(world,view.parkedBoss.world,showDialog);
     if (cupAttempt && world.finished) return cupResult(world.finished==='exit');
     if (world.finished === 'exit') {
       if(world.suspendHeader)window.DispatchSuspend.clear(world.suspendHeader).then(readMissionSaves).catch(()=>{});
