@@ -193,11 +193,11 @@
   }
   function defenseChoices(dog) {
     return dog.ground>=0
-      ? [['guard','Hold Shield'],['spot','Spot-dodge'],['jump','Jump'],['attack','Tap Attack']]
+      ? [['guard','Hold Shield'],['parry','Tap Shield'],['spot','Spot-dodge'],['jump','Jump'],['attack','Tap Attack']]
       : [['guard','Air dodge'],['jump','Jump'],['attack','Tap Attack']];
   }
   function defenseInput(action,tick) {
-    if(action==='guard')return {...idleInput,shield:true,tapped:tick===0?{shield:true}:undefined};
+    if(action==='guard' || action==='parry' && tick===0)return {...idleInput,shield:true,tapped:tick===0?{shield:true}:undefined};
     if(action==='jump')return {...idleInput,jump:true,tapped:tick===0?{jump:true}:undefined};
     if(tick>0)return idleInput;
     if(action==='spot')return {...idleInput,y:1,shield:true,tapped:{shield:true}};
@@ -214,6 +214,10 @@
       if(name==='hit')events.push({frame,text:e.owner.stats.name+' hit '+e.f.stats.name+' with '+moveName(e.moveId,e.name)});
       if(name==='block')events.push({frame,text:e.f.stats.name+' blocked '+moveName(e.moveId,e.attackName)});
       if(name==='parry')events.push({frame,text:e.f.stats.name+' parried'});
+      if(name==='attackClash')events.push({frame,text:'The attacks clashed'});
+      if(name==='grabClash')events.push({frame,text:'The grabs clashed'});
+      if(name==='break')events.push({frame,text:e.f.stats.name+' lost their shield'});
+      if(name==='footstool')events.push({frame,text:e.f.stats.name+' jumped off '+e.target.stats.name});
       if(name==='ko')events.push({frame,text:e.f.stats.name+' lost a stock'});
     }
     player=tape.playback(start,observe,action==='recorded'?null:slot);
@@ -250,9 +254,16 @@
       function draw(dt){view.draw(canvas,player.battle,dt,player.battle.time);}
       function report(){
         info.textContent=reply.events.length?reply.events.slice(0,3).map(e=>e.text+' · frame '+e.frame).join('. '):
-          'No contact through frame '+player.frame+'.';
+          'No hit or grab through frame '+player.frame+'.';
       }
-      if(!animate){while(reply.step()){}draw(0);report();return;}
+      if(!animate){
+        let frozen=false;
+        while(reply.step()){
+          if(!frozen && reply.events.length){draw(0);frozen=true;}
+        }
+        if(!frozen)draw(0);
+        report();return;
+      }
       info.textContent='Playing from frame '+reply.start+'.';
       draw(0);let last=null,carry=0;
       function tick(now){
