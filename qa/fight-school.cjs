@@ -6,6 +6,30 @@ require('../docs/fight-school.js');
 require('../docs/lesson-guide.js');
 const {Battle,idleInput}=window.DogFight;
 const {Lesson,lessons}=window.FightSchool;
+require('../docs/fight-records.js');
+test('after repeated throw KOs the lesson rehearses interrupting the real grab, and a held shield is caught',()=>{
+  for(const shield of [true,false])for(const quickAttack of [false,true]){
+    let lesson;
+    const w=new Battle({mode:'local',stage:'nightmail',p1:'pip',p2:'brisket',fetch:false},(n,e)=>lesson?.contact(n,e));
+    const loss={slot:0,zone:'left',frame:130,lastHit:{id:w.dogs[1].kit.throws.back,frame:97}};
+    w.matchCard.losses=[loss,{...loss,frame:420,lastHit:{...loss.lastHit,frame:390}}];
+    assert.equal(window.FightSchool.rematchLesson(w.matchCard).id,'jab');
+    assert.equal(window.FightRecords.coaching(w.matchCard,0).id,'escape-gripEscape');
+    w.matchCard.losses[0].frame=700;
+    assert.equal(window.FightRecords.throwLosses(w.matchCard,0),1);
+    lesson=new Lesson(lessons.findIndex(l=>l.id==='jab'),w,true);
+    assert.equal(lesson.canStep(idleInput),false);
+    for(let i=0;i<60 && !lesson.done && !lesson.missed;i++){
+      const input={...idleInput,quickAttack,shield,attack:!shield && i===0};
+      if(lesson.canStep(input)){w.step(1/60,input,lesson.partner(input));lesson.afterStep(w);}
+    }
+    assert.equal(lesson.done,!shield);assert.equal(lesson.missed,shield);
+    if(shield){
+      const corner=new window.FightSchool.Corner();
+      assert.equal(corner.read(w),'caught');assert.equal(corner.practice,'escape-gripEscape');
+    }
+  }
+});
 function guided(id){
   let lesson;
   const events=[],w=new Battle({mode:'local',p1:'pip',p2:'brisket',form:'original',fetch:false,minutes:0,

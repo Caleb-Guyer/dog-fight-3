@@ -203,12 +203,50 @@ test('double KOs share a clip and long Time Battles retain the latest twelve dis
     assert.deepEqual(after.losses.at(-1),w.matchCard.losses[c.first+c.losses.length-1]);
   }
 });
+test('a recorded grab can be escaped from either seat before a late throw, including a clip starting inside the hold',()=>{
+  const tools=window.FinishTools;
+  for(const slot of [0,1]){
+    const w=new Battle({mode:'local',p1:slot?'brisket':'pip',p2:slot?'pip':'brisket',stage:'nightmail',fetch:false});
+    w.resetTraining();
+    const tape=new FinishTape(),partial=new FinishTape(),short=new FinishTape();
+    let thrown=0;
+    w.emit=(name)=>{if(name==='throwRelease')thrown++;};
+    for(let n=0;n<110;n++){
+      const inputs=[idleInput,idleInput];
+      inputs[1-slot]={...idleInput,grab:n===1,attack:n===18,y:n===52?-1:0};
+      tape.record(w,...inputs);
+      if(n>=20)partial.record(w,...inputs);
+      if(n<20)short.record(w,...inputs);
+      w.step(1/60,...inputs);
+    }
+    assert.equal(thrown,1);
+    const saved=structuredClone(w.matchCard);
+    for(const recording of [tape,partial]){
+      const [hold]=tools.analyze(recording).holds;
+      assert.equal(hold.slot,slot);assert.equal(hold.frame===0,recording===partial);
+      const original=tools.holdPreview(recording,hold,'recorded');
+      assert.match(original.text,/Throw committed/);assert.equal(original.inputs,0);
+      const held=tools.holdPreview(recording,hold,'held');
+      assert.equal(held.inputs,1);
+      for(const action of ['alternate','stick']){
+        const result=tools.holdPreview(recording,hold,action);
+        assert.equal(result.text,'Escaped the grab');assert(result.frames<original.frames);assert(result.inputs>1);
+      }
+    }
+    const clip=tools.holdPreview(short,tools.analyze(short).holds[0],'recorded');
+    assert.equal(clip.text,'Still held at the end of the clip');
+    assert.deepEqual(w.matchCard,saved);
+  }
+});
 for(const [opening,slot] of [['edge',0],['perch',0],['perch',1]]){
   test('rewinding the throw on '+opening+' gives P'+(slot+1)+' control before the actual grab',()=>{
     const {clip}=launchRecording(opening,slot),f=window.FinishTools;
     const saved=clip.playback(clip.length).battle.matchCard;
     const {escape,contact}=f.analyze(clip,slot);
     assert.equal(contact.kind,'grab');assert.equal(contact.move,'Bear Hug');
+    const [hold]=f.analyze(clip).holds;
+    assert.equal(hold.frame,contact.frame);
+    assert.match(f.holdPreview(clip,hold,'alternate').text,/Throw committed/);
     assert.equal(escape.label,'Before Bear Hug');assert(escape.frame<contact.frame);
     assert.equal(clip.playback(escape.frame).battle.grapple,null);
     const run=(key,lead)=>{

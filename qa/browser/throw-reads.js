@@ -80,6 +80,23 @@ async function play(browser, device) {
         }else await page.keyboard.press('Enter');
       }
     };
+    await select('#clip-grip summary');
+    await page.locator('[data-grip-original]').filter({hasText:/Throw committed/}).waitFor();
+    await page.selectOption('[data-grip-action]','held');
+    assert.match(await page.locator('[data-grip-result]').textContent(),/1 escape input\./);
+    await select('[data-grip-play]');await page.clock.runFor(1200);
+    assert.equal(await page.locator('#countdown').textContent(),'Your move');
+    assert.match(await page.locator('#match-clock').textContent(),/Grip.*%/);
+    if(pad)await page.evaluate(()=>attackButton(true));
+    else if(touch)await page.locator('[data-touch=attack]').tap();
+    else await page.keyboard.down('j');
+    await page.clock.runFor(900);
+    if(pad)await page.evaluate(()=>attackButton(false));
+    else if(!touch)await page.keyboard.up('j');
+    assert.match(await page.locator('#dialog-body').textContent(),/This attempt · Throw committed.*1 escape input\./);
+    assert(await page.evaluate(()=>JSON.stringify(liveStock.matchCard)===beforeStudy));
+    await press('[data-do=trial-replay]');
+    await page.locator('#clip-grip[open]').waitFor();
     await select('#clip-defense summary');
     await page.locator('.defense-result').filter({hasText:/Brisket caught Pip with Bear Hug/}).waitFor();
     await select('[data-reply=guard]');

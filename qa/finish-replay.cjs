@@ -71,6 +71,32 @@ test('both delayed peers can revisit the same confirmed non-final knockout after
   peers.forEach((p,i)=>assert.deepEqual(state(p.confirmedWorld),live[i]));
 });
 
+test('both delayed peers can replay a pummel, escape the hold early, and reopen the same grab from the archive',()=>{
+  const peers=[0,1].map(side=>{
+    const tape=new FinishTape(),packets=[];let world;
+    const s=new window.DogOnline.OnlineSession({start(c,r){world=new Battle(c,undefined,r);}});
+    s.side=side;s.send=p=>{if(p[0]==='input')packets[p[2]]=p[3];};
+    s.beginRound(['start',1,'pip','brisket','nightmail',7]);
+    for(const w of [world,s.match.confirmedWorld])w.resetTraining();
+    s.match.onConfirmedInput=(w,a,b)=>tape.record(w,a,b);
+    return {tape,world,net:s.match,packets};
+  });
+  for(let n=0;n<90;n++)for(const [side,p] of peers.entries()){
+    if(n>=6)assert(p.net.receive(n-6,peers[1-side].packets[n-6]));
+    p.net.tick(()=>side?{...idleInput,grab:n===1,attack:n===18,y:n===52?-1:0}:idleInput,p.world);
+  }
+  const review=peers.map((p,side)=>{
+    for(let n=p.net.received;n<peers[1-side].packets.length;n++)assert(p.net.receive(n,peers[1-side].packets[n]));
+    p.net.confirm(p.world);
+    const saved=archive(p.tape),restored=saved.restore(saved.catalog.finish),tools=window.FinishTools;
+    const [hold]=tools.analyze(restored).holds;assert.equal(hold.slot,0);
+    const replies=['recorded','alternate'].map(action=>tools.holdPreview(restored,hold,action));
+    assert.match(replies[0].text,/Throw committed/);assert.equal(replies[1].text,'Escaped the grab');
+    assert.deepEqual(restored.playback(restored.length).battle.dogs,p.net.confirmedWorld.dogs);
+    return {hold,replies};
+  });
+  assert.deepEqual(review[0],review[1]);
+});
 test('the return begins on the knockout frame and every saved checkpoint reproduces both dogs',()=>{
   const w=new Battle({mode:'solo',p1:'pip',p2:'brisket',stage:'nightmail',form:'trio',cpuLevel:'rival',throwOpening:'perch'},undefined,seededRandom(42));
   const t=new FinishTape(),frames=[];
