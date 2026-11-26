@@ -78,6 +78,7 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fight-render.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/stock-calls.js
       - name: Keep knockout playtest frames
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: knockout-frames

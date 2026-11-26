@@ -27,20 +27,20 @@ async function run(browser,phone){
         }
         return print.call(this,txt,x,y,...rest);
       };
-      DogArt.draw=function(ctx,kind,x,y,opts){
+      window.DogArt={...DogArt,draw(ctx,kind,x,y,opts){
         if(sample)sample.dogs.push([kind,opts.pose,opts.coat]);
         return dog.call(this,ctx,kind,x,y,opts);
-      };
+      }};
     });
     await page.keyboard.press('Shift'); // Unlock audio without steering the launch.
     for(let i=0;i<60 && !await page.evaluate(()=>calls.some(c=>c.canvas==='game' && c.age>=7));i++)await page.clock.runFor(90);
     const call=await page.evaluate(()=>calls.filter(c=>c.canvas==='game').at(-1));
+    await page.screenshot({path:'stock-calls-'+(phone?'phone':'desktop')+'.png'});
     assert(call);assert.equal(call.steady,phone);
     assert.deepEqual(call.labels,['STOCKS','2','P1','3','CPU']);
     assert.deepEqual(call.dogs,phone?[]:[['pip','tumble',0]]);
     assert.match(await page.locator('#announce').textContent(),/Pip out at the top blast line.*P1 2, P2 3/);
     assert.deepEqual(await page.evaluate(()=>[...new Set(ramps)]),[1460,1760]);
-    await page.screenshot({path:'stock-calls-'+(phone?'phone':'desktop')+'.png'});
     await page.clock.runFor(1400);
     await page.locator('#pause').click();await page.locator('[data-do=ko-replays]').click();await page.locator('[data-ko="0"]').click();
     await page.locator('#clip-seek').press('End');
