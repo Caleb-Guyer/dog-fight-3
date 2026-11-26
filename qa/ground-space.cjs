@@ -13,7 +13,7 @@ function exercise(kind,dir,pattern,plan,worn=false){
     const [a,b]=w.dogs;
     if(near===null && Math.abs(b.x-a.x)<a.stats.width+b.stats.width+14)near=n;
     const brace=pattern==='brace';
-    const x=brace?(plan==='roll' && near!==null && n>near?dir:0):dir;
+    const x=plan==='retreat'?-dir:brace?(plan==='roll' && near!==null && n>near?dir:0):dir;
     w.step(dt,{...idleInput,x,attack:brace && n===0,shield:plan==='guard' || plan==='roll' && near!==null,
       jump:plan==='hop' && n>=5 && n<21,grab:plan==='grab' && n===near});
   }
@@ -27,6 +27,7 @@ test('a fresh shield holds the chalk in both directions for each dog and worn sh
     assert(fresh.distance<worn.distance && worn.distance<still.distance);
     assert.deepEqual(fresh.damage,[0,0]);
     assert.equal(play('roll').outcome,'crossed');assert.equal(play('grab').outcome,'caughtRunner');
+    assert.equal(play('retreat').outcome,'gaveRoom');
     assert.equal(exercise(kind,dir,'center','push').outcome,'tookGround');
     assert.equal(exercise(kind,dir,'center','hop').outcome,'crossed');
   }

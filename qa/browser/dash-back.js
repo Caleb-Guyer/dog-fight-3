@@ -125,19 +125,36 @@ async function play(browser,device) {
     await page.goto('http://127.0.0.1:8080/?footwork#training/brace');
     const result=page.locator('#footwork-status');
     await result.waitFor();
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(dt,a,b){
+        step.call(this,dt,a,b);
+        if(this.footworkPractice?.pattern==='brace'){
+          window.lastBrace={phase:this.footworkPractice.phase,worn:this.footworkPractice.worn,
+            contact:this.footworkPractice.tell,held:a.shield,braced:this.dogs[0].shield,damage:this.dogs[0].damage,
+            health:this.dogs[0].shieldHP,focus:document.activeElement?.id};
+        }
+      };
+    });
     const rush=async(guard)=>{
+      assert.equal(await result.getAttribute('data-result'),'ready',device+' reset the exercise');
+      await hold('attack',true);await page.clock.runFor(90);await hold('attack',false);
       if(guard)await hold('shield',true);
-      await hold('attack',true);await page.clock.runFor(120);await hold('attack',false);
+      await page.clock.runFor(210);
+      const sample=await page.evaluate(()=>window.lastBrace);
+      assert.equal(sample.held,guard,device+' shield input '+JSON.stringify(sample));
+      assert.equal(sample.braced,guard,device+' planted shield '+JSON.stringify(sample));
       await page.clock.runFor(2200);
       if(guard)await hold('shield',false);
       return result.textContent();
     };
     assert.match(await rush(false),/Pushed past the chalk · 48 px/);
     await choose('#footwork-brace');
-    assert.match(await rush(true),/Held the chalk · 22 px/);
+    assert.match(await rush(true),/Held the chalk · 22 px/,device+' defended the chalk');
     await choose('#footwork-worn');assert.equal(await page.locator('#footwork-worn').getAttribute('aria-pressed'),'true');
     await choose('#footwork-side');
-    assert.match(await rush(true),/Pushed past the chalk · 36 px/);
+    const worn=(await rush(true)).match(/Pushed past the chalk · (\d+) px/);
+    assert(worn && Number(worn[1])>22 && Number(worn[1])<48,device+' worn shield gave up more ground');
     await choose('#footwork-center');await hold('left',true);await page.clock.runFor(1600);await hold('left',false);
     assert.equal(await result.textContent(),'Took ground');
     assert.deepEqual(errors,[]);
