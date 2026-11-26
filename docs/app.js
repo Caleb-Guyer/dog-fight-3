@@ -2031,6 +2031,10 @@
     }
     finishTape=resume?.tape || (!visit && config.lesson===undefined && ['solo','local'].includes(config.mode) ? new window.DogFight.FinishTape(true) : null);
     if(finishTape)for(const part of ['MatchReview','StockCall'])loadDispatch(part).catch(()=>{});
+    // These modes let the player switch straight from the current exchange into a drill.
+    if(config.schoolFinal || (config.mode==='training' && !config.warmupPartner)){
+      loadDispatch('PracticeFeedback').catch(()=>{});
+    }
     if (online.match) online.match.onConfirmedInput=(battle,a,b)=>finishTape?.record(battle,a,b);
     audioReady();
     dismiss();
@@ -5069,7 +5073,10 @@
     }
     if(corner.practice==='launch-escape' && world.matchFrames-corner.landingAt<finishTape?.length)
       return showFinishReplay(null,{instant:true,finish:true,landingFocus:true,from:'pause',result:world,clip:{tape:finishTape,losses:[]}});
-    if(corner.practice.startsWith('launch-'))return startExercise(corner.practice);
+    if(corner.practice.startsWith('launch-')){
+      if(!window.PracticeFeedback)return waitForDispatch('Practice instructions',()=>loadDispatch('PracticeFeedback'),startCornerLesson,showPause);
+      return startExercise(corner.practice);
+    }
     const visit=pausedFight(), index=schoolLessons.findIndex(l=>l.id===corner.practice);
     startMatch({...settings,mode:'local',stage:'nightmail',form:'original',p1:'pip',p2:'brisket',fetch:false,minutes:0,
       lesson:index,cornerLesson:true},undefined,undefined,null,{visit});
