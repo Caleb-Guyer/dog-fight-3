@@ -156,7 +156,7 @@
     }
     path(recorded.points,true);path(attempt.points,false);
   }
-  function launchPanel(nav,tape,launch,jump,practice) {
+  function launchPanel(nav,tape,launch,jump,practice,signal) {
     const choices=[
       ['Up-left','↖',-1,-1],['Up','↑',0,-1],['Up-right','↗',1,-1],
       ['Left','←',-1,0],['Center','•',0,0],['Right','→',1,0],
@@ -187,7 +187,7 @@
       key.textContent=before;info.textContent=after;
       canvas.setAttribute('aria-label','Dashed recorded path and solid '+name.toLowerCase()+' path. '+before+'. '+after+'.');
     }
-    panel.ontoggle=()=>{if(panel.isConnected && panel.open){jump(launch.frame-1);compare(selected);}};
+    panel.addEventListener('toggle',()=>{if(panel.isConnected && panel.open){jump(launch.frame-1);compare(selected);}}, {signal});
     pad.forEach((b,i)=>b.onclick=()=>compare(i));
     panel.querySelector('[data-fly]').onclick=()=>practice(launch.frame-1,launch.slot);
   }
@@ -298,7 +298,7 @@
       preview(false);
     }
     for(const frames of timings)button(timing,frames+' frames before','lead',String(frames),()=>{lead=frames;show();});
-    panel.ontoggle=()=>panel.open && panel.isConnected?show():stop();
+    panel.addEventListener('toggle',()=>panel.open && panel.isConnected?show():stop(),{signal});
     panel.querySelector('[data-play-defense]').onclick=()=>practice(start,contact.slot);
     panel.querySelector('[data-watch-reply]').onclick=()=>preview(true);
     signal.addEventListener('abort',stop,{once:true});
@@ -320,7 +320,7 @@
     }
     return {movement,aim,actions,changed:!!frame && changed};
   }
-  function inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump}){
+  function inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump,signal}){
     const panel=document.createElement('details');
     panel.id='clip-inputs';
     panel.innerHTML='<summary>Recorded inputs</summary><div class="clip-input-seats" role="group" aria-label="Recorded player">'+
@@ -355,7 +355,7 @@
     }
     prev.onclick=()=>seekChange(-1);next.onclick=()=>seekChange(1);
     panel.querySelector('summary').onclick=()=>{if(!panel.open)update(true);};
-    panel.ontoggle=()=>update();
+    panel.addEventListener('toggle',()=>update(),{signal});
     return update;
   }
   function buildGIF(tape,stage,shake,signal,progress){
@@ -408,7 +408,7 @@
     const {marks,escape,launch,contact}=analyze(tape,slot,follow);
     escapeReady?.(escape);
     if(contact && practiceLaunch)defensePanel(nav,tape,contact,jump,practiceLaunch,signal);
-    if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch);
+    if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch,signal);
     for(const {frame,label} of marks){
       const b=document.createElement('button');b.type='button';b.className='utility';
       b.textContent=label;b.dataset.clipMoment=frame;b.title='Jump to frame '+frame;
@@ -440,7 +440,7 @@
         status.textContent=e.name==='AbortError'?'GIF cancelled.':'Could not make the GIF. Try again.';
       }finally{active=null;}
     };
-    return inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump});
+    return inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump,signal});
   }
   window.FinishTools={install,moments,analyze,inputFrame,launchFlight,defenseReply,returnTrace,returnComparison};
 })();
