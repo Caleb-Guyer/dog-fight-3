@@ -31,7 +31,7 @@
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
   const $ = (id) => document.getElementById(id);
   const footworkPatterns = ['bait','match','power','armor','armorGrab','disc','reflect','returnFire','crawl',
-    'brake','dashShield','pivot','antiAir','angleHigh','angleLow','cancelDash','cancelTurn','boostGrab','boostPivot'];
+    'center','brace','brake','dashShield','pivot','antiAir','angleHigh','angleLow','cancelDash','cancelTurn','boostGrab','boostPivot'];
   const glyphs = {
     paw: [
       '...##.##....',
@@ -2087,7 +2087,7 @@
           (world.edgePractice.corner && (name === 'cornerCue' || (name === 'shieldSlip' && e.f.index === 0))) ||
           name === 'edgeOpen' || (world.edgePractice.timeCatch && name === 'ledge' && e.f.index === 1) ||
           ((name === 'teeter' || name === 'edgeCancel') && e.f.index === 0))) edgeFeedback(name, e);
-      if (name === 'footworkCue' || name === 'footworkResult') footworkFeedback(e);
+      if (name === 'footworkCue' || name === 'footworkResult') window.PracticeDirectory?.footworkFeedback(world,e);
       if (name === 'waveContact' || name === 'waveResult') waveFeedback();
       if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingJab' ||
           name === 'spacingCancelStart' || name === 'spacingCancelCue' || name === 'footstoolCue' || name === 'apexCue' ||
@@ -3786,171 +3786,6 @@
         'Compare Land at the tip and Land deeper with the same neutral aerial.';
     }
   }
-  function footworkFeedback(e) {
-    const status = $('footwork-status');
-    const state = e.outcome || e.phase;
-    status.dataset.result = state;
-    const pattern = world.footworkPractice.pattern;
-    if (pattern === 'crawl') {
-      const feedback = {
-        castHigh:['Round Trip away', 'Get low and crawl toward Clover.'],
-        under:['First pass clear', 'Keep low and move past the chalk as the disc comes back.'],
-        inside:['Inside the chalk', 'Clover is lining up Skip Serve. Shield, or reach her with a tilt.'],
-        castLow:['Skip Serve away', 'This shot bounces low. Hold Shield.'],
-        shortCrawl:['Both passes clear · short of the chalk', 'Add a side while holding Down to gain ground under the disc.'],
-        castHit:['Hit on the way out', 'Hold Down and move toward Clover.'],
-        returnHit:['Clipped on the return', 'Stay low until the disc passes your ears a second time.'],
-        highGuard:['Blocked the high disc', 'Try holding Down and crawling forward while the disc passes overhead.'],
-        lowHit:['Skip Serve hit low', 'The bouncing serve reaches the floor. Shield it or interrupt Clover.'],
-        lowGuard:['Blocked Skip Serve', 'You took ground under Round Trip and blocked the low follow-up.'],
-        caughtServe:['Caught Clover', 'You reached Clover before Skip Serve could stop you.'],
-        earlyHit:['Hit before the return', 'Let Round Trip pass overhead twice to practice the full approach.'],
-        avoided:['Disc avoided', 'Try crawling under both passes and reaching the chalk.'],
-      }[state];
-      if (feedback) [status.textContent,$('recovery-tip').textContent] = feedback;
-      return;
-    }
-    if (pattern === 'armor' || pattern === 'armorGrab') {
-      const punch = pattern === 'armor';
-      status.textContent = {count:'Beat ' + e.beat, go:punch ? 'Release Smash!' : 'Grab now!',
-        caughtArmor:'Grabbed the planted shoulder', ordinaryGrab:'Grab landed outside the armor window',
-        armoredPunch:'Jab absorbed · Haymaker landed', cleanPunch:'Haymaker landed clean',
-        interruptedPunch:'Punch interrupted', blockedPunch:'Blocked Haymaker', parriedPunch:'Parried Haymaker',
-        missedSwing:'No clean hit'}[state];
-      if (e.outcome) $('recovery-tip').textContent = punch ?
-        'Try again. Holding Smash through the jab leaves Brisket open. Release on the third light to punch through it.' :
-        'Retry with Attack on the third light, then try Grab on that same beat. A catch leaves you free to pummel or throw.';
-      return;
-    }
-    if (pattern === 'dashShield') {
-      status.textContent = {
-        atMark:'Hold Shield now', dashBlocked:'Dash shield · tap Grab', standingBlock:'Blocked · tap Grab',
-        caughtCounter:'Caught Brisket', jumpedClear:'Brisket jumped clear', parriedApproach:'Parried Gate Check',
-        ranIntoSwing:'Gate Check hit you', shortStop:'Stopped short of the chalk',
-        intercepted:'You caught Brisket first', avoided:'Gate Check missed',
-      }[state];
-      if (state === 'dashBlocked' || state === 'standingBlock')
-        $('recovery-tip').textContent = 'Keep Shield held and tap Grab during the block. Brisket will jump as soon as his swing ends.';
-      else if (e.outcome) $('recovery-tip').textContent = state === 'caughtCounter'
-        ? 'You have the grab. Choose a throw, or tap Run up and shield to retry on the same mark.'
-        : 'Run to the chalk. Keep forward held and add Shield as Brisket swings. Tap Grab when his paw hits the shield.';
-      return;
-    }
-    if (world.footworkPractice.discRole) {
-      const pip = pattern === 'reflect';
-      status.textContent = {
-        cast:pip ? 'Bark now!' : 'Round Trip is away',
-        reflected:pip ? 'Disc sent back!' : 'Incoming · shield now!',
-        returnedHit:'Round Trip hit Clover', returnGuard:'Clover guarded the return',
-        returnParry:'Clover parried the return', castParry:'Pip parried the cast',
-        discHit:'Round Trip hit Pip', castGuard:'Pip guarded the cast',
-        returnMiss:'The return missed', missedSwing:'No disc contact', otherHit:'Close-range hit',
-      }[state];
-      if (e.outcome) $('recovery-tip').textContent = pip
-        ? 'Retry and compare holding Shield with tapping neutral Special just as Clover lets go of the disc.'
-        : 'Retry and hold Shield when the mint streak points back at Clover. Switch sides to mirror the throw.';
-      return;
-    }
-    if (world.footworkPractice.boost) {
-      const pivot = pattern === 'boostPivot';
-      status.textContent = {cancelNow:pivot ? 'Reverse + Grab' : 'Tap Grab now',
-        boostCatch:'Boost grab caught the shield', boostPivotCatch:'Caught behind', regularCatch:'Regular grab',
-        shortReach:world.footworkPractice.closestGap > 0 ? 'Grab fell short by ' + Math.ceil(world.footworkPractice.closestGap) + ' px' : 'Missed the grab',
-        guardedDash:'Dash attack blocked', swingMiss:'Dash attack missed', groundHit:'Ground hit'}[state];
-      $('recovery-tip').textContent = state === 'cancelNow' ? (pivot ? 'Press back and tap Grab.' : 'Tap Grab during the windup.') +
-        (world.footworkPractice.pauseOnWindup ? ' Tap Attack again to finish the swing.' : '') :
-        state === 'boostCatch' || state === 'boostPivotCatch' || state === 'regularCatch' ?
-          'You have the collar. Tap Attack to pummel or choose a direction to throw.' :
-          'Retry with Attack first. Tap Grab in the first two frames of the dash attack.';
-      return;
-    }
-    if (pattern === 'cancelDash' || pattern === 'cancelTurn') {
-      const practice = world.footworkPractice, player = world.dogs[0], dash = pattern === 'cancelDash';
-      const aim = dash ? 'Up' : practice.dir > 0 ? 'Right' : 'Left';
-      if (state === 'cancelNow') {
-        status.textContent = moves[e.moveId].label + ' · windup';
-        $('recovery-tip').textContent = 'Press ' + aim + ' + Jump to switch to a rising aerial.' +
-          (practice.pauseOnWindup ? ' Or release Attack and tap it again to finish the ground swing.' : '');
-      } else {
-        status.textContent = {risingCatch:player.lastMove + ' · caught the hop',
-          backCatch:player.lastMove + ' · back air connected', otherHit:player.lastMove + ' · hit',
-          airMiss:'Aerial missed', groundMiss:'Ground swing missed'}[state];
-        $('recovery-tip').textContent = state === 'groundMiss' ? 'The rival cleared the swing. Retry and jump during the windup.' :
-          'Turn off Pause at windup and Half speed to practice at match speed. Switch sides to mirror the opening.';
-      }
-      return;
-    }
-    if (pattern === 'angleHigh' || pattern === 'angleLow') {
-      const move = world.dogs[0].lastMove;
-      status.textContent = state === 'missedAngle' ? 'Miss · ' + (move || 'no swing') :
-        move + (state === 'angledHit' ? (pattern === 'angleLow' ? ' · caught the recovery' : ' · caught the hop') : ' · hit');
-      return;
-    }
-    if (pattern === 'antiAir') {
-      const move = world.dogs[0].lastMove;
-      status.textContent = {
-        atMark:'Jump + Up Smash', slideCatch:move + ' · caught the landing',
-        specialCatch:move + ' · jump-cancel special', otherCatch:move + ' · hit',
-        caughtShield:'The rival landed and blocked', overshot:'Missed the landing',
-      }[state];
-      if (e.outcome) $('recovery-tip').textContent = {
-        slideCatch:'Your up smash carried your run under the falling dog. Retry and hold Smash to see when their shield comes up.',
-        specialCatch:'Your up special started during jump squat and intercepted the rival.',
-        otherCatch:'You landed a hit. To slide underneath, run to the chalk and tap Jump and Up + Smash together.',
-        caughtShield:'Your swing reached the shield. Retry and release Smash sooner.',
-        overshot:'Retry. Run to the chalk, hold Up, then tap Jump and Smash together as the rival falls.',
-      }[state];
-      return;
-    }
-    if (pattern === 'brake' || pattern === 'pivot') {
-      const move = world.dogs[0].lastMove;
-      status.textContent = {
-        atMark: pattern === 'brake' ? 'Brake now' : 'Turn and strike',
-        slidingHit: move + (pattern === 'brake' ? ' · sliding hit' : ' · caught the chase'),
-        dashHit: move + ' · dash attack', plantedHit: move + ' · planted hit', overshot: 'Missed the opening',
-      }[state];
-      if (e.outcome) $('recovery-tip').textContent = {
-        slidingHit: 'Your tilt connected while carrying the run into its windup. Switch sides to try it the other way.',
-        dashHit: 'That was your dash attack. Retry and let go of forward for a beat before aiming and tapping Attack.',
-        plantedHit: 'You connected after planting your paws. Tap Attack earlier in the skid to carry speed into the swing.',
-        overshot: 'Retry and start your tilt as your lead paw reaches the chalk.',
-      }[state];
-      return;
-    }
-    if (pattern !== 'bait') {
-      status.textContent = {
-        count: 'Beat ' + e.beat, go: pattern === 'power' ? 'Release!' : 'Swing!',
-        matched: 'Paws clashed', brokeThrough: 'Breakthrough', overpowered: 'Swing beaten',
-        batted: 'Disc batted away', hitTaken: 'Rival hit first', hitFirst: 'You hit first', missedSwing: 'No contact',
-      }[state];
-      if (e.outcome) {
-        const result = {
-          matched: pattern === 'power' ? 'Both swings recoiled. Start charging before the first beat.' :
-            'Both dogs recoiled at the point of contact. Neither took damage.',
-          brokeThrough: 'Your swing beat the rival’s and carried on.',
-          overpowered: 'The stronger attack broke through your swing.',
-          batted: 'Your swing knocked Clover’s disc out of play.',
-          hitTaken: 'Their attack reached your dog first. Watch the chalk lights and take your swing sooner.',
-          hitFirst: 'You landed a clean hit before the attacks met.',
-          missedSwing: 'The attacks missed each other. Hold your ground and time your swing to the third light.',
-        }[state];
-        $('recovery-tip').textContent = result + ' Choose the exercise again to retry.';
-      }
-      return;
-    }
-    status.textContent = {
-      tell: 'Bear Hug coming', opening: 'Grab missed · attack', caught: 'Caught',
-      early: 'Hit first', late: 'Brisket recovered', clash: 'Grabs clashed', punish: 'Whiff punish',
-    }[state];
-    if (e.outcome)
-      $('recovery-tip').textContent = {
-        caught: 'Brisket caught you. Retry and reverse as your lead paw crosses the chalk.',
-        early: 'You beat the grab to the punch. Retry and let his paws close on empty air.',
-        late: 'You cleared Bear Hug. Turn back sooner and attack while his paws are still out.',
-        clash: 'Both grabs met. Retry and let Bear Hug miss before you counter.',
-        punish: 'You caught Brisket with ' + e.remaining + (e.remaining === 1 ? ' frame' : ' frames') + ' left in his recovery.',
-      }[state];
-  }
   function shieldFeedback(name, e) {
     const result = $('shield-status');
     const tip = $('recovery-tip');
@@ -4649,6 +4484,8 @@
   }
   function drill(ledge, fromHang = false, pattern = 'strike', direction, study) {
     if (!world) return;
+    if(ledge==='footwork' && !window.PracticeDirectory)return waitForDispatch('Footwork practice',()=>loadDispatch('PracticeDirectory'),
+      ()=>drill(ledge,fromHang,pattern,direction,study),()=>$('game').focus());
     if(ledge==='combo' && !window.ComboLab)return waitForDispatch('Combo practice',()=>loadDispatch('ComboLab'),
       ()=>drill(ledge,fromHang,pattern,direction,study),()=>$('game').focus());
     setFrameMode('live');
@@ -4712,7 +4549,7 @@
         pattern === 'ko' ? !lab?.koTest : lab?.koTest ?? false);
     }
     else if (footwork) world.resetFootworkPractice(pattern, pattern === 'bait' ? 1 : direction ?? world.footworkPractice?.dir ?? 1,
-      world.footworkPractice?.pattern !== 'bait' ? world.footworkPractice?.slow ?? true : true);
+      world.footworkPractice?.pattern !== 'bait' ? world.footworkPractice?.slow ?? true : true,study ?? world.footworkPractice?.worn ?? false);
     else if (spacing) {
       if ((pattern === 'sweet' || pattern === 'sweetAligned') && !isSweetPractice(world.spacingPractice)) showContactBoxes(true);
       world.resetSpacingPractice(pattern, direction ?? world.spacingPractice?.dir ?? 1,
@@ -4934,11 +4771,13 @@
       $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
       $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
       $('footwork-pause').hidden = practice.pauseOnWindup === undefined;
+      $('footwork-worn').hidden = pattern!=='brace';
+      $('footwork-worn').setAttribute('aria-pressed',String(!!practice.worn));
       $('footwork-pause').setAttribute('aria-pressed', String(!!practice.pauseOnWindup));
       $('footwork-status').dataset.result = 'ready';
       $('footwork-status').textContent = {
         brake: 'Brake at the chalk', pivot: 'Catch the chase', antiAir: 'Catch the landing',
-        dashShield:'Run to the chalk',
+        center:'Take ground',brace:'Brace at the chalk',dashShield:'Run to the chalk',
         angleHigh: 'Tag the hop', angleLow: 'Clip the recovery',
         cancelDash:'Catch the hop from a run', cancelTurn:'Turn away, then swing back',
         boostGrab:'Shield just beyond dash-grab range', boostPivot:'Rival behind your run',
@@ -4956,6 +4795,8 @@
           ' and tap Attack for a dash attack. Immediately press Up + Jump to catch the rival above you.',
         cancelTurn:'Tap ' + (practice.dir > 0 ? 'Left' : 'Right') + ' + Attack to start a tilt facing away. Immediately press ' +
           (practice.dir > 0 ? 'Right' : 'Left') + ' + Jump to swing a back air toward the rival.',
+        center:'Run toward the other dog to push them back, or jump or roll past and land behind them. Keep their paws off your chalk.',
+        brace:'Tap Attack to start the run. Stand still once, then retry holding Shield. Compare how far their shoulder pushes you.',
         angleHigh: angleTip, angleLow: angleTip,
         boostGrab:'You’re running. Tap Grab once to test its reach. Retry with Attack, then tap Grab as the windup begins.',
         boostPivot:'You’re running away from the rival. Tap Attack, then press back and tap Grab to reach behind you.',
@@ -5228,7 +5069,7 @@
     if(active && !world.comboPractice)drill('combo',false,'example');
     window.ComboLab.shelf(hash,active?world:null,showDialog,back,(card,source,slot)=>{
       leaveOnline();afterStory=null;
-      startMatch({...settings,...card.config,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
+      startMatch({...settings,...card.config,groundSpace:!!card.config.groundSpace,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
       window.ComboLab.restore(world,card);
       drill('combo',false,source,'stand',slot);
       if(world.comboPractice.slow!==card.slow)$('combo-slow').click();
@@ -5274,6 +5115,7 @@
   for (const pattern of footworkPatterns)
     $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
   $('footwork-side').onclick = () => drill('footwork', false, world.footworkPractice.pattern, -world.footworkPractice.dir);
+  $('footwork-worn').onclick = () => drill('footwork',false,'brace',world.footworkPractice.dir,!world.footworkPractice.worn);
   $('footwork-pause').onclick = () => {
     const d = world.footworkPractice;
     d.pauseOnWindup = !d.pauseOnWindup;
@@ -5521,12 +5363,12 @@
     VersusRulebook:'versus-rules.js?v=button-check-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=button-check-1',StageStrike:'stage-strike.js?v=button-check-1',
-    ComboLab:'combo-lab.js?v=disc-range-1', FinishTools:'finish-tools.js?v=defensive-moments-1',
+    ComboLab:'combo-lab.js?v=ground-space-1', FinishTools:'finish-tools.js?v=defensive-moments-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=disc-range-1',
-    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=tapes-1',
+    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=ground-space-1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -7759,11 +7601,11 @@
       afterStory = null;
       startMatch({...settings, mode:'training', p1:'brisket', p2:'pip', stage:'nightmail', fetch:false});
       drill('footwork', false, hash === '#training/haymaker' ? 'armor' : 'armorGrab');
-    } else if (hash === '#training/dash-shield') {
+    } else if (hash === '#training/dash-shield' || hash === '#training/hold-center' || hash === '#training/brace') {
       leaveOnline();
       afterStory = null;
       startMatch({...settings, mode:'training', p1:'pip', p2:'brisket', stage:'nightmail', fetch:false});
-      drill('footwork',false,'dashShield');
+      drill('footwork',false,hash==='#training/brace'?'brace':hash==='#training/hold-center'?'center':'dashShield');
     } else if (hash === '#training/disc-reflect' || hash === '#training/disc-return') {
       leaveOnline();
       afterStory = null;

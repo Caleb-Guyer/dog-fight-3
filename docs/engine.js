@@ -2676,6 +2676,7 @@
       this.itemDrops=config.itemDrops!==false;
       if(config.shieldPogo!==false)this.shieldPogo=true;
       if(config.aimedDrive!==false)this.aimedDrive=true;
+      if(config.groundSpace!==false)this.groundSpace=true;
       this.time = 0;
       this.end = null;
       this.endReason = '';
@@ -3206,6 +3207,7 @@
       if (!('itemDrops' in state)) delete this.itemDrops;
       if (!('shieldPogo' in state)) delete this.shieldPogo;
       if (!('aimedDrive' in state)) delete this.aimedDrive;
+      if (!('groundSpace' in state)) delete this.groundSpace;
       if (!('closingHeight' in state)) delete this.closingHeight;
       this.random.state = random.state;
     }
@@ -4321,7 +4323,7 @@
         lab.trace.push([target.x, y]);
       if (report.outcome) lab.revision++;
     }
-    resetFootworkPractice(pattern = 'bait', dir = 1, slow = true) {
+    resetFootworkPractice(pattern = 'bait', dir = 1, slow = true, worn = false) {
       const pauseOnWindup = this.footworkPractice?.pauseOnWindup ?? true;
       this.resetTraining();
       const originalDogs = this.dogs;
@@ -4330,7 +4332,7 @@
       const playerKind = {crawl:'noodle', returnFire:'clover', reflect:'pip', power:'pip', armor:'brisket', armorGrab:'pip'}[pattern];
       const player = playerKind ? newFighter(playerKind, 0) : originalDogs[0];
       const kind = { bait: 'brisket', match: player.kind, power: 'brisket', disc: 'clover', brake: 'pip',
-        pivot: player.kind, antiAir: originalDogs[1].kind, angleHigh: originalDogs[1].kind,
+        center: originalDogs[1].kind, brace: originalDogs[1].kind, pivot: player.kind, antiAir: originalDogs[1].kind, angleHigh: originalDogs[1].kind,
         angleLow: originalDogs[1].kind, cancelDash: originalDogs[1].kind, cancelTurn: originalDogs[1].kind,
         crawl:'clover', reflect:'clover', returnFire:'pip', dashShield:'brisket', armor:'pip', armorGrab:'brisket' }[pattern];
       const dummy = newFighter(boost ? originalDogs[1].kind : kind, 1);
@@ -4342,6 +4344,15 @@
       let mark = pattern === 'bait' ? dummy.x - box[0] - box[2] - player.stats.width + 5 : center;
       player.x = pattern === 'bait' ? mark - 27 : center - dir * gap / 2;
       if (pattern === 'crawl') mark = player.x + dir * 45;
+      if (pattern === 'center') {
+        player.x=center-dir*43;dummy.x=center+dir*43;
+        mark=center-dir*50;
+      }
+      if (pattern==='brace') {
+        player.x=center;
+        dummy.x=center+dir*(player.stats.width+dummy.stats.width+50);
+        mark=center-dir*30;
+      }
       player.face = dir;
       dummy.face = -dir;
       dummy.ground = player.ground = 0;
@@ -4405,11 +4416,34 @@
       this.footworkPractice = { phase: 'ready', pattern, dir, slow: pattern !== 'bait' && slow,
         mark, originalDogs, tell: 0, beat: 0, sent: false, sendAt, outcome: '' };
       if (discRole) this.footworkPractice.discRole = discRole;
+      if (pattern==='brace') {
+        this.footworkPractice.startX=player.x;
+        this.footworkPractice.worn=worn;
+        player.shieldHP=worn ? .3 : 1;
+      }
       if (boost) this.footworkPractice.boost = true;
       if (boost || pattern === 'cancelDash' || pattern === 'cancelTurn') this.footworkPractice.pauseOnWindup = pauseOnWindup;
     }
     footworkInput(dt) {
       const drill = this.footworkPractice, [player, dummy] = this.dogs;
+      if (drill.pattern === 'center' || drill.pattern === 'brace') {
+        if (drill.phase === 'done') return idleInput;
+        const forward=x=>(x-drill.mark)*drill.dir;
+        if (player.ground===dummy.ground && player.ground>=0 && !player.floorAction && forward(player.x)>forward(dummy.x)+6)
+          this.finishFootwork('crossed');
+        else if (drill.pattern==='brace') {
+          // Count one short drive from first body contact, even if the defender then leaves the ground.
+          if (drill.tell || Math.abs(dummy.x-player.x)<=player.stats.width+dummy.stats.width+1) drill.tell++;
+          if (drill.tell>=18 && player.ground>=0 && !player.floorAction) {
+            const distance=Math.max(0,Math.round((drill.startX-player.x)*drill.dir));
+            drill.distance=distance;
+            this.finishFootwork(forward(player.x)>=0?'heldLine':'lostLine');
+          }
+          return drill.phase==='done' || drill.tell>=18?idleInput:{...idleInput,x:-drill.dir};
+        } else if (forward(dummy.x)>108) this.finishFootwork('tookGround');
+        else if (forward(dummy.x)<=0) this.finishFootwork('lostGround');
+        return drill.phase==='done'?idleInput:{...idleInput,x:-.48*drill.dir};
+      }
       if (drill.pattern === 'crawl') {
         if (drill.phase === 'done' || drill.phase === 'ready') return idleInput;
         drill.tell += dt;
@@ -4561,6 +4595,10 @@
     gradeFootwork(target, projectile = false) {
       const drill = this.footworkPractice;
       if (!drill || drill.phase === 'done') return;
+      if (drill.pattern==='brace' || drill.pattern==='center') {
+        this.finishFootwork(this.dogs[0].attack?.grabAttempt?'caughtRunner':'hitFirst');
+        return;
+      }
       if (drill.pattern === 'crawl') {
         if (target.index === 1 && !projectile) this.finishFootwork(drill.phase === 'inside' ? 'caughtServe' : 'earlyHit');
         return;
@@ -5754,6 +5792,18 @@
         this.freshnessPractice.waiting = false;
       }
       const footwork = this.footworkPractice;
+      if (footwork?.pattern==='brace' && footwork.phase==='ready') {
+        if (!input1.attack && !input1.tapped?.attack) return;
+        footwork.phase='approach';footwork.consumeAttack=true;
+      }
+      if (footwork?.pattern==='brace' && footwork.consumeAttack) {
+        footwork.consumeAttack=!!input1.attack;
+        input1={...input1,attack:false,tapped:{...input1.tapped,attack:false}};
+      }
+      if (footwork?.pattern==='center' && footwork.phase==='ready') {
+        if (!input1.x && !input1.shield && !input1.jump && !input1.shortHop) return;
+        footwork.phase='approach';
+      }
       if (footwork && footwork.pauseOnWindup !== undefined) {
         const attack = input1.attack || input1.tapped?.attack || input1.aimStick || input1.tapped?.aimStick;
         const grab = input1.grab || input1.tapped?.grab;
@@ -6254,7 +6304,13 @@
       const aIsLeft = climber ? (climber.floorAction.dir === 1) === (climber === a) : a.x <= b.x;
       const [left, right] = aIsLeft ? [a, b] : [b, a];
       const surface = this.terrain[left.ground];
-      const share = right.stats.weight / (left.stats.weight + right.stats.weight);
+      // A planted, healthy shield resists a body push. Shield stun and running slides use the usual weight.
+      const pushing=(this.groundSpace || this.footworkPractice?.pattern==='brace') && !climber &&
+        !left.attack && !right.attack && !left.grip && !right.grip;
+      const weight=f=>pushing && f.shield && !f.brakingShield && !f.shieldStun && !f.impactLag ?
+        f.stats.weight*(1+3*f.shieldHP) : f.stats.weight;
+      const rightWeight=weight(right);
+      const share = rightWeight / (weight(left) + rightWeight);
       left.x = clamp(left.x - (spacing + left.x - right.x) * share, surface.x1 - 3, surface.x2 - spacing + 3);
       right.x = left.x + spacing;
     }
