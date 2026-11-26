@@ -278,6 +278,7 @@
     if(window.DogFight.validHandicap(s.handicap) && s.handicap.some(Boolean))settings.handicap=s.handicap;
     settings.timed=s.timed===true;
     settings.fixedCamera=s.fixedCamera===true;
+    settings.guidedLessons=s.guidedLessons===true;
     if(settings.timed && !settings.minutes)settings.minutes=3;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
     for (const key of ['fetch', 'sound', 'shake', 'tiltStick','flickJump1','flickJump2','quickAttack1','quickAttack2','bestOfThree','cornerTips']) if (typeof s[key] === 'boolean') settings[key] = s[key];
@@ -332,11 +333,12 @@
   function unlockMusic() {
     musicUnlocked=true;
     if (audioContext?.state!=='running') audioReady();
+    if(!window.YardScore && !dispatchLoads.has('YardScore'))loadDispatch('YardScore').catch(()=>{});
   }
   window.addEventListener('pointerdown',unlockMusic,{capture:true,passive:true});
   window.addEventListener('keydown',unlockMusic,{capture:true});
   function updateMusic() {
-    if(!musicUnlocked || !audioContext) return;
+    if(!musicUnlocked || !audioContext || !window.YardScore) return;
     const level=settings.sound ? settings.musicVolume/100*settings.volume/100 : 0;
     if(!music && (!level || audioContext.state!=='running')) return;
     music ||= new window.YardScore.Player(audioContext);
@@ -2067,6 +2069,7 @@
     if(config.sparring && !visit)spar=resume?.spar || new window.FighterSchool.Sparring(world);
     if (config.lesson !== undefined) world.lesson = config.fighterCourse ?
       window.FighterSchool.makeTrial(config.lesson,world,storage) : new window.FightSchool.Lesson(config.lesson,world);
+    if(world.lesson && !world.lesson.course && settings.guidedLessons)prepareGuide(world.lesson,world.terrain);
     const openingFrames = leadInFrames || (config.mode === 'solo' && config.openingFrames);
     if (openingFrames && !resume && !rehearsal) {
       const opener = new Battle(config, undefined, seededRandom(soloSeed));
@@ -2234,7 +2237,7 @@
         'Resume</button><button class="utility" data-do="controls">' +
         icon('keyboard') +
         'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + cameraButton() + '</div>' +
-        (matchConfig.stageTrack!==undefined?'<p id="music-credit">'+(window.YardScore.scores[matchConfig.stageTrack]?.title || 'Quiet arena')+'</p>':'')+
+        (matchConfig.stageTrack!==undefined && window.YardScore?'<p id="music-credit">'+(window.YardScore.scores[matchConfig.stageTrack]?.title || 'Quiet arena')+'</p>':'')+
         targetRecap() + (spar?spar.goals(true):'') + (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
           (corner && latestFall()?recoveryButton:'') +
           (corner?'<button class="utility" data-do="corner-practice">Practice · '+(schoolLessons.find(l=>l.id===corner.practice)?.title || $(corner.practice).textContent)+'</button>'+
@@ -5351,6 +5354,8 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
+    LessonGuide:'lesson-guide.js?v=1',
+    YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
     RecoveryCoach:'recovery-coach.js?v=1', MatchReview:'match-review.js?v=match-film-1',
     StockCall:'stock-call.js?v=1',
@@ -5386,6 +5391,7 @@
     return Promise.all([loadDispatch(part),versusStylesheet]);
   }
   function loadDispatch(part) {
+    if(part==='StageMusic' && !window.YardScore)return loadDispatch('YardScore').then(()=>loadDispatch(part));
     if(window[part])return Promise.resolve();
     if(!dispatchLoads.has(part)){
       const task=new Promise((resolve,reject)=>{
@@ -6300,12 +6306,26 @@
     }
     if(tip.hidden)tip.hidden=false;
   }
+  function prepareGuide(lesson,terrain){
+    const attach=()=>{if(!lesson.example)lesson.guide=new window.LessonGuide.Guide(lesson.id,terrain);};
+    if(window.LessonGuide)return attach();
+    lesson.guideLoading=true;
+    loadDispatch('LessonGuide').then(attach,()=>{lesson.guideError=true;}).finally(()=>{lesson.guideLoading=false;});
+  }
+  function toggleGuide(){
+    const lesson=page==='match'?world?.lesson:null;
+    settings.guidedLessons=!!lesson?.guideError || !settings.guidedLessons;save();
+    if(lesson && !lesson.course)return replaySchoolLesson(false);
+    const target=schoolSave.rematch?.id;
+    startLesson(target?schoolLessons.findIndex(l=>l.id===target):Math.max(0,unfinishedLesson()),!!target);
+  }
   function renderSchool(pads) {
     const lesson=world.lesson, info=lesson.info || schoolLessons[lesson.index];
     const device=promptDevice(pads);
     const example=lesson.example;
-    const state=example?(lesson.done || lesson.missed?'example-ended':'example'):lesson.missed?'retry':lesson.done?'passed':'playing';
-    const key=lesson.id+'/'+state+'/'+device+'/'+(example?example.index:lesson.note || '');
+    const state=example?(lesson.done || lesson.missed?'example-ended':'example'):lesson.missed?'retry':lesson.done?'passed':
+      lesson.guide?'guided':lesson.guideLoading?'loading-guide':'playing';
+    const key=lesson.id+'/'+state+'/'+device+'/'+(example?example.index:lesson.guide?.revision ?? lesson.note ?? '');
     if ($('school-coach').dataset.key===key) return;
     $('school-coach').dataset.key=key;
     $('school-coach').dataset.state=state;
@@ -6317,6 +6337,9 @@
     $('school-list').textContent=matchConfig.tryout?'Tryout card':matchConfig.specialStudy?'Back to moves':matchConfig.cornerLesson?'Back to fight':'Lessons';
     $('school-title').textContent=info.title;
     const watch=$('school-example'),next=$('school-next');
+    const guideButton=$('school-guide');
+    guideButton.hidden=!!lesson.course || !!example;
+    guideButton.textContent=lesson.guide || lesson.guideLoading?'Restart at match speed':lesson.guideError?'Retry guided practice':'Guide my inputs';
     $('school-retry').hidden=!!example;
     watch.hidden=!!example && !lesson.done && !lesson.missed;
     watch.textContent=(device===1?'View · ':'')+(example?'Watch again':'Watch example');
@@ -6336,6 +6359,10 @@
     $('school-bindings').textContent=lesson.done ? (device===1?'A to continue':device===0?'Enter to continue':'') :
       lesson.missed?'':lesson.course?window.FighterSchool.hint(info,device,keyFor,padFor):schoolHint(info.id,device);
     $('school-next').hidden=!lesson.done;
+    if(state==='guided')lesson.guide.render($('school-task'),$('school-bindings'),action=>device===0?keyFor(0,action):
+      device===1 && !['right','up','down','left'].includes(action)?padFor(0,action):(device===1?'Stick ':'')+action[0].toUpperCase()+action.slice(1));
+    else if(state==='loading-guide')$('school-task').textContent='Loading guided practice…';
+    else if(lesson.guideError && state==='playing')$('school-task').textContent=info.task+' Guided practice could not load.';
     if(matchConfig.cornerLesson){
       if(lesson.done && lesson.course)window.FighterSchool.mark(storage,lesson.id);
       next.textContent='Return to fight';return;
@@ -6413,7 +6440,9 @@
       schoolLessons.map((l,i)=>'<button type="button" class="utility" data-lesson="'+i+'">'+(i+1)+'. '+l.title+
         (schoolSave.passed.includes(l.id)?' ✓':'')+'</button>').join('')+'</div><div class="dialog-actions"><button class="primary" id="school-resume">'+
       (world?.lesson?'Back to lesson':schoolSave.rematch?(schoolSave.rematch.fight?'Rematch Brisket':'Continue rematch practice'):unfinishedLesson()<0?(schoolSave.firstFightDone?'Replay course':'Play first match'):
-        schoolSave.started?'Continue course':'Start course')+'</button><button class="utility" data-do="fighter-classes">Fighter lessons</button><button class="utility" data-do="home">Main menu</button></div>');
+        schoolSave.started?'Continue course':'Start course')+'</button><button class="utility" id="syllabus-guide">'+
+      (settings.guidedLessons && !world?.lesson?.guideError?'Practice at match speed':'Guide my inputs')+'</button><button class="utility" data-do="fighter-classes">Fighter lessons</button><button class="utility" data-do="home">Main menu</button></div>');
+    $('syllabus-guide').onclick=toggleGuide;
     $('school-syllabus').onclick=e=>{const button=e.target.closest('[data-lesson]');if(button) startLesson(Number(button.dataset.lesson));};
     $('school-resume').onclick=()=>world?.lesson?dismiss():resumeCourse();
     $('school-resume').focus({preventScroll:true});
@@ -6501,6 +6530,7 @@
   $('home-school').onclick=schoolList;
   $('school-next').onclick=nextLesson;
   $('school-example').onclick=()=>replaySchoolLesson(true);
+  $('school-guide').onclick=toggleGuide;
   $('school-retry').onclick=()=>matchConfig.tryout || matchConfig.specialStudy || matchConfig.cornerLesson?replaySchoolLesson(false):world.lesson.course?startFighterLesson(world.lesson.course,world.lesson.index):startLesson(world.lesson.index,matchConfig.schoolReview);
   $('school-list').onclick=openLessonList;
   $('home-guide').onclick = () => showMoves(settings.p1);
@@ -7778,6 +7808,10 @@
       showHome(false);openLayouts('home');
     } else if (hash === '#local/profiles') {
       leaveOnline();settings.mode='local';editing=0;toLobby();openProfiles('lobby',0);
+    } else if (hash==='#tutorial/guided' || hash.startsWith('#tutorial/guided/') && schoolLessons.some(l=>l.id===hash.split('/')[2])) {
+      settings.guidedLessons=true;save();
+      const index=schoolLessons.findIndex(l=>l.id===hash.split('/')[2]);
+      if(index<0)resumeCourse();else startLesson(index);
     } else if (hash === '#tutorial/first-match') {
       startFirstFight();
     } else if (hash === '#tutorial') {

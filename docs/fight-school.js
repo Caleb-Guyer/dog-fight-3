@@ -37,6 +37,7 @@
     }
     canStep(input) {
       if (this.done || this.missed) return false;
+      if (!this.example && (this.guideLoading || (this.guide && !this.guide.allows(input))))return false;
       if (this.id === 'return' && !this.started && !(input.special || input.tapped?.special || input.jump || input.tapped?.jump)) return false;
       this.started=true;
       return true;
@@ -68,6 +69,7 @@
       }
     }
     afterStep(world) {
+      if(!this.example)this.guide?.advance(world);
       const f=world.dogs[0];
       if (this.id==='move' && f.x>=600 && f.ground===0) this.done=true;
       if (this.id==='platform' && f.ground===1) this.done=true;
@@ -76,6 +78,7 @@
         if ((this.cast || this.caught) && f.ground===0 && !f.ledge && !f.floorAction) this.done=true;
       }
     }
+    drawCourse(ctx){if(!this.example && !this.done)this.guide?.draw(ctx);}
   }
   const cornerTips={
     opening:['jab','First stock','Close in on Brisket. Release the direction and tap {attack} for a jab.'],
