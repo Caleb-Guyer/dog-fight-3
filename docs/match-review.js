@@ -452,7 +452,7 @@
       '<button type="button" class="utility" data-prev>Previous moment</button><button type="button" class="utility" data-next>Next moment</button>'+
       '<button type="button" class="utility" data-lead>Watch lead-in</button>'+
       '<button type="button" class="primary" data-study></button></div></div>';
-    root.prepend(panel);
+    root.append(panel);
     const select=panel.querySelector('select'),note=panel.querySelector('p'),controls=panel.querySelector('div');
     const study=panel.querySelector('[data-study]');let marks,revision=0;
     function choose(seek=true){
@@ -556,9 +556,9 @@
     };
     el('film-speed').onclick=e=>{rate=rate===1?2:rate===2?.5:1;e.currentTarget.textContent='Speed · '+(rate===.5?'½':rate)+'×';};
     const marks=el('film-marks');
-    defensePanel(marks,film,card,selection,(frame,play)=>{pauseAt(frame);if(play)el('film-play').click();},study,holdTimeline,at);
     if(film.data.falls.length){
       const details=document.createElement('details'),heading=document.createElement('summary');
+      details.id='film-knockouts';
       heading.textContent='Knockout lead-ins';details.append(heading);marks.append(details);
       for(const [i,fall] of film.data.falls.entries()){
         const b=document.createElement('button');b.type='button';b.className='utility';
@@ -572,6 +572,7 @@
         }
       }
     }
+    defensePanel(marks,film,card,selection,(frame,play)=>{pauseAt(frame);if(play)el('film-play').click();},study,holdTimeline,at);
     for(const i of [0,1])el('film-p'+(i+1)).onclick=()=>{stop();practice(player.frame,i);};
     el('film-back').onclick=()=>{stop();back();};el('film-play').focus({preventScroll:true});
     if(playing)raf=requestAnimationFrame(tick);
