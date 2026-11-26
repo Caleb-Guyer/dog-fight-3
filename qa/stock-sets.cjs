@@ -570,6 +570,21 @@ async function timedBattles(browser,phone){
     assert.match(await d.page.locator('.card-timeline').innerText(),/Self-destruct/);
     await d.press('[data-do=card-back]');
   }
+  await host.press('[data-recovery-seat="0"]');
+  await host.page.locator('#recovery-play').waitFor();
+  assert.match(await host.page.locator('#recovery-route').innerText(),/recorded inputs/);
+  assert.equal(await guest.page.locator('[data-do=coach-fall]').count(),0);
+  await guest.press('[data-do=ko-replays]');await guest.press('[data-ko]');
+  await guest.press('[data-clip-recovery="0"]');await guest.page.locator('#recovery-demo').waitFor();
+  await guest.press('#recovery-demo');
+  await guest.page.waitForFunction(()=>document.querySelector('#recovery-cue')?.textContent.includes('point saved'));
+  await guest.press('#recovery-back');await guest.press('[data-do=clip-back]');await guest.press('#ko-list-back');
+  await host.press('#recovery-play');await host.page.waitForFunction(()=>document.querySelector('#countdown')?.textContent==='Your move');
+  await host.page.keyboard.down('d');await host.page.keyboard.down('Space');
+  await host.page.locator('[data-do=trial-results]').waitFor();
+  await host.page.keyboard.up('Space');await host.page.keyboard.up('d');
+  assert.equal(await host.page.locator('#dialog-title').innerText(),'Point saved!');
+  await host.press('[data-do=trial-results]');
   await host.press('[data-do=online-rematch]');await guest.press('[data-do=online-rematch]');
   for(const d of [host,guest]){
     await expectHud(d,zero);

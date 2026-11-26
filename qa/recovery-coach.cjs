@@ -7,8 +7,8 @@ require('../docs/recovery-coach.js');
 const {Battle,FinishTape,kits,seededRandom,idleInput}=window.DogFight;
 const coach=window.RecoveryCoach;
 
-function find(tape) {
-  const search=coach.search(tape);
+function find(tape,slot=0,follow) {
+  const search=coach.search(tape,slot,follow);
   let result;
   do {result=search.next();} while(!result.done);
   return result.value;
@@ -66,10 +66,67 @@ test('saved and suspended clips preserve the checkpoint, random state and demons
   assert.equal(a.battle.random.state,b.battle.random.state);
   assert.deepEqual(a.battle.dogs.map(f=>[f.x,f.y,f.damage,f.stocks]),b.battle.dogs.map(f=>[f.x,f.y,f.damage,f.stocks]));
 });
-test('an exhausted fall below the stage, a local fight and a timed fight offer no coached landing',()=>{
+test('an exhausted fall and a clip without the selected human fighter falling offer no landing',()=>{
   const {clip}=record({position:{x:85,y:780,vy:940,usedUp:true}});
   assert.equal(find(clip),null);
-  assert.equal(find(record({mode:'local',position:{}}).clip),null);
-  assert.equal(find(record({timeBattle:true,position:{}}).clip),null);
+  assert.equal(find(record({mode:'local',position:{}}).clip,1),null);
+  assert.equal(find(record({position:{}}).clip,1),null);
+  assert(find(record({timeBattle:true,position:{}}).clip));
   assert.equal(find(new FinishTape()),null);
+});
+
+function twoSeats(slot,{timed=false, kind='noodle',followFrames=4}={}){
+  const kinds=slot?['pip',kind]:[kind,'pip'];
+  const b=new Battle({mode:'local',p1:kinds[0],p2:kinds[1],stage:'nightmail',fetch:false,timeBattle:timed,minutes:1},undefined,seededRandom(19));
+  const tape=new FinishTape(true),history=[];
+  let fallenAt=null;
+  for(let n=0;n<600 && (fallenAt===null || n<fallenAt+followFrames);n++){
+    // The opening idle makes the KO clip start mid-checkpoint in the rolling history.
+    const mine={...idleInput,x:n<270?0:slot?1:-1};
+    const rival={...idleInput,x:fallenAt===null?0:.5,shield:n%51<9,jump:n%97===30};
+    const pair=slot?[rival,mine]:[mine,rival];history.push(pair);
+    tape.record(b,...pair);b.step(1/60,...pair);tape.captureKnockouts(b);
+    if(fallenAt===null && b.matchCard.losses.some(l=>l.slot===slot))fallenAt=n+1;
+  }
+  assert(fallenAt>270);
+  return {b,tape,history,entry:tape.knockouts[0]};
+}
+
+for(const slot of [0,1])for(const timed of [false,true])test('P'+(slot+1)+' can recover the recorded '+(timed?'point':'stock')+' against the other seat’s inputs',()=>{
+  const {b,tape,history,entry}=twoSeats(slot,{timed});
+  const {tape:clip,returnTape:follow}=entry;
+  const before=structuredClone(b.matchCard),plan=find(clip,slot,follow);
+  assert(plan);assert.equal(plan.slot,slot);assert.equal(plan.dir,slot?-1:1);
+  const original=clip.playback(clip.length).battle;
+  const practice=coach.attempt(clip,plan,undefined,follow),ref=clip.playback(plan.start).battle;
+  while(!practice.outcome){
+    const tick=clip.count-clip.length+practice.frame;
+    const input=coach.controls(plan,practice.frame-plan.start),other=history[tick]?.[1-slot] || idleInput;
+    ref.step(1/60,...(slot?[other,input]:[input,other]));practice.step(input);
+    assert.deepEqual(practice.battle.dogs,ref.dogs,'recorded rival at tick '+tick);
+  }
+  assert.equal(practice.outcome,'landed');assert.equal(practice.frame,plan.end);
+  assert(practice.frame>clip.length+follow.length,'recovery continues past the last recorded input');
+  if(timed){assert.equal(practice.battle.matchCard.points[slot],original.matchCard.points[slot]+1);assert.match(coach.feedback(practice,plan),/point/);}
+  else assert.equal(practice.battle.dogs[slot].stocks,original.dogs[slot].stocks+1);
+  assert.deepEqual(b.matchCard,before);
+  const fail=coach.attempt(clip,plan,undefined,follow);
+  while(!fail.outcome)fail.step(history[clip.count-clip.length+fail.frame]?.[slot] || idleInput);
+  assert.equal(fail.outcome,'fell');assert.equal(fail.frame,clip.length);
+  const {catalog,blocks,film}=window.MatchReview.pack(tape);
+  const restored=window.MatchReview.resumeTape(structuredClone({catalog,blocks,film}),before.losses).knockouts[0];
+  assert.deepEqual(find(restored.tape,slot,restored.returnTape),plan);
+});
+
+test('a simultaneous final fall ends either attempt without crediting the new round as a landing',()=>{
+  const b=new Battle({mode:'local',p1:'pip',p2:'pip',stage:'nightmail',stockCount:1,fetch:false},undefined,seededRandom(8));
+  const tape=new FinishTape(),deck=b.terrain[0];
+  for(const [slot,f] of b.dogs.entries())Object.assign(f,{x:slot?deck.x2+50:deck.x1-50,y:deck.y+22,ground:-1,vy:250});
+  while(!tape.knockouts.length && tape.count<180){tape.record(b,idleInput,idleInput);b.step(1/60);tape.captureKnockouts(b);}
+  const clip=tape.knockouts[0].tape;assert.deepEqual(tape.knockouts[0].losses.map(l=>l.zone),['bottom','bottom']);
+  for(const slot of [0,1]){
+    const p=coach.attempt(clip,{start:0,dir:slot?-1:1,slot});
+    while(!p.outcome)p.step(idleInput);
+    assert.equal(p.outcome,'fell');assert.equal(p.battle.suddenDeath.cause,'double');
+  }
 });

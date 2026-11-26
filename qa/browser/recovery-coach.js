@@ -97,6 +97,21 @@ async function check(browser,device) {
       await choose('[data-do=trial-results]');await page.locator('.card-stats').waitFor();
       await page.locator('[data-saved-clip="0"][data-ko-slot="0"]').waitFor();
     }
+    await page.goto('http://127.0.0.1:8080/?couch#local/rules/time/3/1/single/flat/off');
+    await choose('#rules-use');await choose('#slots [data-index="1"]');await choose('#roster [data-kind=pip]');
+    await choose('#start');await page.clock.runFor(2500);
+    await page.keyboard.down('ArrowRight');await page.clock.runFor(1500);await page.keyboard.up('ArrowRight');
+    await choose('#pause');await choose('[data-recovery-seat="1"]');await route();
+    assert.match(await page.locator('#recovery-position').textContent(),/P2 · Pip/);
+    assert.match(await page.locator('#recovery-route').textContent(),/P1 controls.+recorded inputs/);
+    await choose('#recovery-fall');await page.clock.runFor(3200);
+    assert.match(await page.locator('#recovery-cue').textContent(),/point lost/);
+    await play();await page.clock.runFor(1200);await hold(-1,true);await page.clock.runFor(250);
+    await hold(-1);await page.clock.runFor(2200);await hold(0);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Point saved!',device+' P2 recovery');
+    assert.match(await page.locator('#dialog-body').textContent(),/kept the point/);
+    await choose('[data-do=trial-results]');
+    assert.deepEqual(await page.locator('#hud .lives').evaluateAll(rows=>rows.map(r=>r.getAttribute('aria-label'))),['0 points','-1 point']);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
