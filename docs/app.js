@@ -1994,7 +1994,7 @@
         drillSide = null;
       }
       if (name === 'blastThreat' && !world.survivalPractice) announce(e.f.stats.name + ' near the ' + e.zone + ' blast line');
-      if(name==='stockCall')announce(window.StockCall?.describe(e) || e.exits.map(d=>fighters[d.kind].name).join(' and ')+' knocked out');
+      if(name==='ringOutScore')announce(window.StockCall?.describe(e) || e.exits.map(d=>fighters[d.kind].name).join(' and ')+' knocked out');
       if(name==='ko' && !e.scored)announce(e.f.stats.name+' knocked out');
       if(name==='relayEntry')announce(labelFor(e.f.index)+' sends in '+e.f.stats.name);
       if (name === 'ledge' && drillSide && e.f.index === 0)
