@@ -2773,6 +2773,7 @@
       this.end = null;
       this.endReason = '';
       this.matchFrames = 0;
+      this.stockCall = null;
       this.suddenDeath = null;
       const versus = this.mode === 'solo' || this.mode === 'local';
       if(versus && config.lesson===undefined && !config.suddenStart && !config.lastStockStart && validRelayTeams(config.relayTeams)){
@@ -5578,6 +5579,7 @@
     step(dt, input1 = idleInput, input2 = idleInput) {
       if (this.end !== null) return;
       const frames = dt * 60;
+      if(this.stockCall && (this.stockCall.age+=frames)>=72)this.stockCall=null;
       if (this.suddenDeath?.intro > 0) {
         this.suddenDeath.intro = Math.max(0, this.suddenDeath.intro - frames);
         this.dogs[0].prev = { ...input1 };
@@ -9936,7 +9938,8 @@
         suddenRound:this.suddenDeath?.round || 0, lastHit:this.matchCard.players[f.index].lastHit,
       });
       this.projectiles = this.projectiles.filter((d) => d.owner !== f.index);
-      this.emit('ko', { f, x: f.x, y: f.y, stageWidth: this.stageWidth, remaining: f.stocks });
+      this.emit('ko', { f, x: f.x, y: f.y, stageWidth: this.stageWidth, remaining: f.stocks,
+        zone:this.matchCard?.losses.at(-1)?.zone, scored:!!this.matchCard });
     }
     knockouts(out) {
       if (this.wallPractice?.runner && out.includes(this.dogs[0])) this.finishWallReturn(this.dogs[0], 'out');
@@ -9958,6 +9961,14 @@
         this.loseStock(f);
       }
       const eliminated = this.dogs.filter((f) => f.stocks <= 0);
+      if(this.matchCard){
+        // Both exits belong to one exchange. Capture the outgoing coats and tally before a relay handoff or tiebreak.
+        const losses=this.matchCard.losses.slice(-out.length),points=!this.suddenDeath && this.matchCard.points;
+        this.stockCall={age:0,frame:this.matchFrames,points:!!points,score:points?points.slice():this.dogs.map(f=>f.stocks),
+          exits:out.map((f,i)=>({slot:f.index,kind:f.kind,coat:this.coatFor(f.index),face:f.face,
+            x:f.x,y:f.y,zone:losses[i].zone,credited:losses[i].credited}))};
+        this.emit('stockCall',this.stockCall);
+      }
       if(this.relayTeams && !this.suddenDeath){
         for(const f of out){
           if(f.stocks<=0)continue;

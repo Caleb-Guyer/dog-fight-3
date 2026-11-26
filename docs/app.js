@@ -558,7 +558,10 @@
     } else if (name === 'jump' || name === 'recover')
       tone(name === 'jump' ? 260 : 330, name === 'jump' ? 430 : 720, 0.1, 0, 'triangle', 0.043);
     else if (name === 'ko') {
-      tone(690, 71, 0.38, 0, 'sawtooth', 0.056);
+      if(detail.zone==='top'){
+        tone(620,1460,.20,0,'triangle',.10);
+        tone(1760,1760,.09,.22,'sine',.065);
+      }else tone(690, 71, 0.38, 0, 'sawtooth', 0.056);
       tone(150, 39, 0.47, 0.02, 'sine', 0.13);
     } else if (name === 'block') {
       const weight = (detail.impactFrames || 2) - 2;
@@ -1906,7 +1909,7 @@
       random=seededRandom(crypto.getRandomValues(new Uint32Array(1))[0]);
     }
     finishTape=resume?.tape || (!visit && config.lesson===undefined && ['solo','local'].includes(config.mode) ? new window.DogFight.FinishTape() : null);
-    if(finishTape)loadDispatch('MatchReview').catch(()=>{});
+    if(finishTape)for(const part of ['MatchReview','StockCall'])loadDispatch(part).catch(()=>{});
     if (online.match) online.match.onConfirmedInput=(battle,a,b)=>finishTape?.record(battle,a,b);
     audioReady();
     dismiss();
@@ -1991,7 +1994,8 @@
         drillSide = null;
       }
       if (name === 'blastThreat' && !world.survivalPractice) announce(e.f.stats.name + ' near the ' + e.zone + ' blast line');
-      if (name === 'ko') announce(e.f.stats.name + ' knocked out');
+      if(name==='stockCall')announce(window.StockCall?.describe(e) || e.exits.map(d=>fighters[d.kind].name).join(' and ')+' knocked out');
+      if(name==='ko' && !e.scored)announce(e.f.stats.name+' knocked out');
       if(name==='relayEntry')announce(labelFor(e.f.index)+' sends in '+e.f.stats.name);
       if (name === 'ledge' && drillSide && e.f.index === 0)
         $('recovery-tip').textContent =
@@ -2299,6 +2303,7 @@
     $('clip-export').onclick=prepare;
     prepare();
     seekClip(atFrame??0);
+    if(!window.StockCall)loadDispatch('StockCall').then(()=>{if(!signal.aborted)paintClip(0);}).catch(()=>{});
     $('clip-exchange').onclick=()=>chooseFinishFighter(clipScreen.player.frame,review);
     $('clip-toggle').onclick=()=>{
       if (clipScreen.player.frame===clipScreen.player.length) seekClip(0);
@@ -5283,6 +5288,7 @@
   let campaign = yardChapter;
   const dispatchSources={
     MatchReview:'match-review.js?v=saved-replays-1',
+    StockCall:'stock-call.js?v=1',
     PlayerProfiles:'player-profiles.js?v=1',
     VersusRulebook:'versus-rules.js?v=throw-reads-1',
     PackRelay:'pack-relay.js?v=1',

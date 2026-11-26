@@ -2351,6 +2351,7 @@
       this.shake = 0;
       this.zoom = 1;
       this.finishReturn = 0;
+      this.outroFrames = 0;
       this.cx = 600;
       this.cy = 337.5;
     }
@@ -2977,6 +2978,11 @@
       for (const f of finishers) finalHitArrow(ctx,f,survival?.lockedAim || f.tumble.finalAim || f.prev);
       ctx.restore();
       this.drawOffscreen(ctx, world, left, top, width, height, this.zoom, time);
+      if(confirmed.end===null)this.outroFrames=0;
+      if(confirmed.stockCall && window.StockCall){
+        window.StockCall.draw(ctx,confirmed,confirmed.stockCall.age+this.outroFrames,left,top,this.zoom,steady);
+        if(confirmed.end!==null)this.outroFrames+=dt*60;
+      }
       if (this.radar) this.drawRadar(world, left, top, halfW * 2, halfH * 2);
       if (this.launchTrace) launchKey(ctx, this.launchTrace, canvas.clientWidth);
     }
