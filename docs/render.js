@@ -2342,6 +2342,7 @@
   }
   class FightView {
     constructor(radar = null) {
+      if(!window.FightCamera)FightView.prepare?.();
       this.radar = radar;
       this.effects = [];
       this.pendingLaunch = null;
@@ -2588,10 +2589,6 @@
         this.launchTrace = { ...this.pendingLaunch, practice };
       this.pendingLaunch = null;
       ctx.imageSmoothingEnabled = false;
-      const spread = Math.abs(a.x - b.x);
-      const vertical = Math.abs(a.y - b.y);
-      const off = [a, b].some((f) => f.x < 155 || f.x > 1045 || f.y > 490 || f.y < 80);
-      const wideShot = Math.min(1, width / 1200, height / 675);
       const koTest = world.freshnessPractice?.koTest;
       const survival = world.survivalPractice;
       const steady = reduced.matches || this.shakeEnabled === false;
@@ -2601,47 +2598,16 @@
       const focus = finishers[0];
       if (focus) this.finishReturn = .24;
       else this.finishReturn = Math.max(0,this.finishReturn-dt);
-      let targetZoom = world.bells ? Math.min(width/1060,height/580,1.5) : off || reduced.matches ? wideShot :
-        clamp(Math.min(width / (spread + 505), height / (vertical + 345)), wideShot, 1.5);
-      let launchCenterY, survivalX;
-      if (koTest) {
-        const floorY = world.terrain[0].y, scale = height / (canvas.clientHeight || height);
-        // Keep the roof and blast line clear of the score and menu on small screens.
-        const above = clamp(80 * scale, height * 0.11, height * 0.24);
-        const below = clamp(78 * scale, height * 0.13, height * 0.22);
-        targetZoom = Math.min(width / 575, (height - above - below) / (floorY - topBlastY));
-        launchCenterY = (floorY + topBlastY) / 2 + (below - above) / (2 * targetZoom);
+      const fixed = reduced.matches || FightView.fixedCamera===true, changed=fixed!==this.fixed;
+      this.fixed=fixed;
+      this.pixelRatio = height/(canvas.clientHeight || height);
+      if(window.FightCamera){
+        window.FightCamera.frame(this,width,height,dt,world,resized || !this.framed || changed,focus,steady);
+        this.framed=true;
+      }else{
+        this.zoom=Math.min(1,width/1200,height/675);this.cx=600;this.cy=337.5;
       }
-      if (survival) {
-        const edge = survival.dir > 0 ? world.stageWidth + 115 : -115, floor = world.terrain[survival.ground];
-        const inner = survival.lip - survival.dir * 183, outer = edge + survival.dir * 54;
-        const high = Math.min(floor.y - 245, a.y - a.stats.height - 78), low = Math.max(floor.y + 88, a.y + 52);
-        targetZoom = Math.min(1.45, width / Math.abs(outer - inner), height / (low - high + 152));
-        survivalX = (inner + outer) / 2;
-        launchCenterY = (low + high) / 2 - 18;
-      }
-      let focusX,focusY;
-      if (focus && !steady) {
-        const left = Math.min(a.x-a.stats.width,b.x-b.stats.width), right = Math.max(a.x+a.stats.width,b.x+b.stats.width);
-        const top = Math.min(a.y-a.stats.height,b.y-b.stats.height), bottom = Math.max(a.y,b.y);
-        focusX = (right+left)/2;
-        focusY = (top+bottom)/2;
-        targetZoom = Math.min(2.55,width/(right-left+248),height/(bottom-top+232));
-      }
-      const blend = resized ? 1 : this.finishReturn && !steady ? 1-Math.exp(-dt*(focus ? 18 : 12)) :
-        koTest || survival || world.bells ? 1 : 1 - Math.exp(-dt * (targetZoom < this.zoom ? 7.5 : 4));
-      this.zoom += (targetZoom - this.zoom) * blend;
-      const halfW = width / (2 * this.zoom), halfH = height / (2 * this.zoom);
-      const centerX = world.bells ? 600 : survival ? survivalX : koTest ? world.freshnessPractice.marks[0] + (a.kind === 'clover' ? 176 : 89) :
-        halfW >= 600 ? 600 : clamp((a.x + b.x) / 2, halfW, 1200 - halfW);
-      const centerY = world.bells ? 324 : koTest || survival ? launchCenterY : halfH >= 337.5 ? 337.5 : clamp((a.y + b.y) / 2 - 67, halfH, 675 - halfH);
-      this.cx += ((focusX ?? centerX) - this.cx) * blend;
-      this.cy += ((focusY ?? centerY) - this.cy) * blend;
-      if (focus && !steady) {
-        this.cx = clamp(this.cx, Math.max(a.x+a.stats.width,b.x+b.stats.width)-halfW+34,
-          Math.min(a.x-a.stats.width,b.x-b.stats.width)+halfW-34);
-        this.cy = clamp(this.cy, Math.max(a.y,b.y)-halfH+32, Math.min(a.y-a.stats.height,b.y-b.stats.height)+halfH-48);
-      }
+      const halfW=width/(2*this.zoom),halfH=height/(2*this.zoom);
       const sx = steady ? 0 : snap(Math.sin(time * 97) * this.shake, 2),
         sy = steady ? 0 : snap(Math.cos(time * 81) * this.shake * 0.55, 2);
       this.shake = Math.max(0, this.shake - 62 * dt);
@@ -2927,7 +2893,7 @@
         }
       }
       if (this.launchTrace) launchDirections(ctx, this.launchTrace);
-      if (spread > 14) this.leftFighter = a.x < b.x ? 0 : 1;
+      if (Math.abs(a.x-b.x) > 14) this.leftFighter = a.x < b.x ? 0 : 1;
       fighterTags(ctx, world, this.leftFighter);
       for (const f of world.dogs) {
         const speed = Math.hypot(f.vx, f.vy);

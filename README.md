@@ -70,6 +70,8 @@ In **Training → Launch practice → Take the lift**, tap Attack to start. Drop
 
 The game fills the browser window. On browsers with fullscreen support, starting your first fight or chapter also hides the browser controls. Select **Fullscreen** or press **F** to switch at any time. On a phone, rotate to landscape for a wider view with the touch controls over the arena.
 
+In portrait, the camera follows both fighters and pulls back as they separate. At a contested ledge it keeps the landing in view, including the gap between Laundry Line’s two roofs. To keep the whole stage in frame, select **Fight camera · Wide** in Options or the versus pause menu. The game remembers your choice and uses Wide automatically with reduced motion. On a portrait touch screen, Hop fills the bottom row beneath the six action buttons.
+
 On **Moonbell Bandstand**, hold Jump beneath either wing. Once your paws land, jump inward to reach the high center platform with your midair jump still available. The right and left ends of the high platform overlap the wings below. Tap Down there to retreat one level. Dropping through the middle takes you back to the deck.
 
 On **Night Mail**, fight on the roof of a moving mail car. Both dogs share one long landing surface. Drift toward open roof when Brisket gets underneath you, or challenge him with a falling aerial. Pip and Noodle can wall-jump off the sides of the car. In Training, drills that need raised platforms take you to another arena. **Reset positions** brings you back to the train.
