@@ -660,6 +660,10 @@ In **Edge practice**, compare **Short recovery** and **Long recovery**. Tap Atta
 
 Open **Training → Contested ledge**. **Take the ledge** starts you outside a rival’s grip. Drift inward or use your recovery. **Defend the ledge** starts you hanging while the rival approaches. Wait for the bump, tap Shield to roll clear, or drop early and try a back air. Select Noodle as the dummy to practice against Ledge Lasso. **Switch ledge** mirrors both roles.
 
+**Run-off back air.** Dash off the occupied ledge and steer inward as you fall. When your dog takes the ledge, press Down + Jump together. Release Down, aim away from the stage and tap Attack for your back aerial. Steer inward during the swing to land. Guided practice pauses for the turn, the drop jump and the back air. Turn it off to perform the sequence at match speed. [Practice the follow-up](https://caleb-guyer.github.io/dog-fight-3/#training/runoff-trump)
+
+Rival can use the same sequence if you linger on an outside ledge. Watch for the dash and tap Shield to roll onstage or Jump to clear the lip before the other dog catches it. [Practice the escape](https://caleb-guyer.github.io/dog-fight-3/#training/escape-runoff) · [Play three stocks against Brisket](https://caleb-guyer.github.io/dog-fight-3/#solo/runoff-trump)
+
 ## Specials and recovery
 
 Press Special alone for Neutral. Hold left or right, up, or down as you press Special for the other three moves. These inputs work on the ground and in the air. On touchscreens, ↖ and ↗ aim an Up Special toward the stage. Slide your thumb onto a side arrow to steer. In the **Move list**, choose **Specials & recovery** to see the timing and artwork for each move.
