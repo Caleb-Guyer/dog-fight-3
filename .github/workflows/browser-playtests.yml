@@ -316,6 +316,7 @@ jobs:
           node qa/stock-sets.cjs --rulesets
           node qa/stock-sets.cjs --friend-rules
           node qa/browser/local-tournament.js
+          node qa/browser/matchup-card.js
       - name: Save tournament screen previews
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

@@ -5,6 +5,31 @@ const {encode,decode}=window.VersusRulebook;
 const config={mode:'local',stage:'picnic',p1:'pip',p2:'brisket',fetch:false};
 const create=extra=>new Battle({...config,...extra},undefined,seededRandom(11));
 const step=w=>w.step(1/60,idleInput,idleInput);
+test('matchup links replay both coats, arena form, opponent and starting rules in a fresh battle',()=>{
+  const {decodeMatchup,encodeMatchup}=window.VersusRulebook;
+  const {fighters,coatFor,arenas,cpuLevels}=window.DogFight;
+  for(const p1 of Object.keys(fighters))for(const p2 of Object.keys(fighters))
+    for(const mode of ['local','solo'])for(const stage of Object.keys(arenas))for(const stageForm of Object.keys(stageForms)){
+      const coats=[2,coatFor(1,p1,p2,[2,2])], timed=stageForm==='trio';
+      const card={mode,p1,p2,coats,stage,...(mode==='solo'?{cpuLevel:Object.keys(cpuLevels).at(-1)}:{}),
+        ...versusRules({timed,lives:2,minutes:3,bestOfThree:true,stageForm,fetch:false,handicap:[70,20]})};
+      const decoded=decodeMatchup(encodeMatchup(card));
+      assert.deepEqual(decoded,card);
+      const battle=create({...decoded,spawnDamage:decoded.handicap,stockCount:decoded.lives,timeBattle:decoded.timed,form:decoded.stageForm});
+      assert.deepEqual(battle.dogs.map((f,i)=>[f.kind,battle.coatFor(i),f.damage]),[[p1,coats[0],70],[p2,coats[1],20]]);
+      assert.equal(battle.clockFrames,10800);assert.equal(battle.form,stageForm);assert.equal(battle.fetch,false);
+      assert.equal(!!battle.matchCard.points,timed);
+    }
+});
+test('invalid matchup links cannot partially apply settings and a mirror gets distinct coats',()=>{
+  const {decodeMatchup}=window.VersusRulebook;
+  const hash='#solo/matchup/pip/0/pip/0/bandstand/rival/stock/5/0/single/original/on';
+  assert.deepEqual(decodeMatchup(hash).coats,[0,1]);
+  for(const h of [null,{},'',hash.slice(0,-2),hash+'/0-900',hash+'/0-10/more',hash.replace('rival','p2'),
+    hash.replace('solo','local'),hash.replace('pip','constructor'),hash.replace('bandstand','toString'),
+    hash.replace('/0/pip','/00/pip'),hash.replace('single','bracket'),hash.replace('stock','time'),hash.replace('solo','online')])
+    assert.equal(decodeMatchup(h),null);
+});
 test('shared links retain every playable rule; invalid or incomplete links cannot import a partial setup',()=>{
   for(const timed of [true,false])for(const minutes of stockMinutes.filter(n=>n || !timed))
     for(const lives of [1,2,3,4,5])for(const stageForm of Object.keys(stageForms))
