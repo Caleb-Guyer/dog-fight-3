@@ -1830,19 +1830,10 @@
     const restart = page === 'match';
     backToPause = restart;
     const level = restart ? world.cpuLevel : settings.cpuLevel;
-    const choices = Object.entries(cpuLevels).map(([id, cpu]) =>
-      '<button type="button" data-cpu="' + id + '" aria-pressed="' + (level === id) + '">' +
-      '<strong>' + cpu.name + '</strong><span>' + cpu.tip + '</span></button>').join('');
-    showDialog('cpu-level', restart ? 'Replay the opening' : 'CPU opponent',
-      (restart ? '<p>Choose an opponent to replay this match from the same opening.</p>' : '') +
-      '<div class="cpu-choices">' + choices + '</div>' + (restart ? '' :
-        '<p>Rival watches how you leave shield. In a set, it remembers between games.</p>' +
-        '<div class="dialog-actions"><button class="utility" data-do="shield-read-match">Try Rival · Pip vs. Noodle</button>' +
-        '<button class="utility" data-do="shield-read-set">Play a Rival set · Pip vs. Noodle</button>' +
-        '<button class="utility" data-do="cut-off-clover">Intercept Clover · Pip vs. Clover</button></div>' +
-        '<p>Escape Brisket’s grab at GO. On the top platform, steer across his up throw and air-dodge toward open ground. At the ledge, try a quick jab before his paws close.</p>' +
-        '<div class="dialog-actions"><button class="utility" data-do="throw-read-perch">Top platform · 110%</button>' +
-        '<button class="utility" data-do="throw-read-edge">Left ledge · 80%</button></div>'));
+    if(!window.VersusRulebook)return waitForDispatch('CPU opponent',()=>loadDispatch('VersusRulebook'),showCpuLevels,
+      ()=>restart?showPause():$('cpu-level').focus());
+    showDialog('cpu-level',restart?'Replay the opening':'CPU opponent',
+      window.VersusRulebook.cpuSheet(cpuLevels,level,restart,!restart || matchConfig?.ledgeTrapStart));
     document.querySelector('[data-cpu="' + level + '"]').focus({preventScroll:true});
   }
   $('cpu-level').onclick = showCpuLevels;
@@ -1890,6 +1881,11 @@
     afterStory = null;
     startMatch({...settings, mode:'solo', p1:'pip', p2:'clover', cpuLevel:'rival', stage:'picnic',
       fetch:false, minutes:7, openingFrames:49}, undefined, 7);
+  }
+  function startLedgeFight(hero,guard,side='left'){
+    leaveOnline();afterStory=null;
+    startMatch({mode:'solo',p1:hero,p2:guard,cpuLevel:'rival',stage:'nightmail',stockCount:3,
+      coats:[savedCoat(0,hero),savedCoat(1,guard)],minutes:7,fetch:false,ledgeTrapStart:side},undefined,42);
   }
   function startThrowRead(position) {
     leaveOnline();
@@ -3005,6 +3001,9 @@
     }
     if (action === 'resume' || action === 'close') exitDialog();
     if (action === 'lobby') toLobby();
+    const guard=e.target.closest('[data-ledge-guard]')?.dataset.ledgeGuard;
+    if(guard)return startLedgeFight(page==='match'?world.dogs[0].kind:settings.p1,guard,
+      matchConfig?.ledgeTrapStart==='right' && page==='match'?'right':'left');
     if (action === 'cpu-level') showCpuLevels();
     if (action === 'shield-read-match') startShieldReadMatch();
     if (action === 'throw-read-perch' || action === 'throw-read-edge') startThrowRead(action.slice('throw-read-'.length));
@@ -5304,7 +5303,7 @@
     FightCamera:'fight-camera.js?v=1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PlayerProfiles:'player-profiles.js?v=1',
-    VersusRulebook:'versus-rules.js?v=throw-reads-1',
+    VersusRulebook:'versus-rules.js?v=ledge-guards-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
     ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=defend-contact-1',
@@ -7668,11 +7667,8 @@
       document.querySelector('[data-do=rehearse]').focus();
     } else if (hash === '#solo/runoff-trump') {
       startRunoffFight('left','pip','brisket','nightmail','original');
-    } else if (hash === '#solo/ledge-trap') {
-      leaveOnline();
-      afterStory = null;
-      startMatch({...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'rival',
-        minutes:7, fetch:false, ledgeTrapStart:true}, undefined, 42);
+    } else if (/^#solo\/ledge-trap(?:\/(pip|brisket|noodle|clover)(?:\/(left|right))?)?$/.test(hash)) {
+      startLedgeFight('pip',form || 'brisket',hash.split('/')[3]);
     } else if (hash === '#solo/under-the-table') {
       leaveOnline();
       afterStory = null;

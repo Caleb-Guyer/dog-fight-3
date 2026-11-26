@@ -2847,8 +2847,9 @@
         Object.assign(guard, {x:floor.x1+65, y:floor.y, ground:0, face:-1});
       }
       if (config.ledgeTrapStart && this.mode === 'solo') {
-        const floor = this.terrain[0];
-        this.setLedgeTrap({index:0, left:true, x:floor.x1, y:floor.y});
+        const left=config.ledgeTrapStart!=='right', decks=this.terrain.filter(p=>!p.thin);
+        const floor=left?decks[0]:decks.at(-1);
+        this.setLedgeTrap({index:this.terrain.indexOf(floor),left,x:left?floor.x1:floor.x2,y:floor.y});
       }
       if (config.highReturn && this.mode === 'solo') this.placeHighReturn(config.highReturn);
       if (config.runoffTrump && this.mode === 'solo') this.placeRunoffTrump(config.runoffTrump,1);
@@ -4798,8 +4799,7 @@
       const [climber,guard] = this.dogs, dir = edge.left ? 1 : -1;
       climber.damage = 120;
       this.hangLedge(climber, edge);
-      const [reach,,radius] = smashes[guard.kit.smashes.side].box;
-      Object.assign(guard,{x:edge.x + dir*(reach+radius+climber.stats.width+4),
+      Object.assign(guard,{x:edge.x + dir*this.ledgeTrapSpacing(guard,climber),
         y:edge.y, ground:edge.index, face:-dir, vx:0, vy:0});
     }
     resetClimbPractice(role = 'escape', side = 'left', slow = true) {
@@ -10580,28 +10580,40 @@
       plan.thrown=true;plan.grabAt=this.time;
       return {...idleInput,grab:true,tapped:{grab:true}};
     }
+    ledgeTrapSpacing(guard,climber) {
+      const move=smashes[guard.kit.smashes.side];
+      if(guard.kind==='pip')return 55;
+      if(guard.kind==='clover')return 205;
+      if(move.sweetSpot)return move.sweetSpot.box[0]+climber.kit.ledgeClimb.distance+18;
+      return move.box[0]+move.box[2]+climber.stats.width+4;
+    }
     ledgeSmashInput(f, foe, brain) {
       const edge = foe.ledge, plan = brain.ledgeTrap;
       if (plan && !f.smashCharge) plan.released = true;
-      if (f.kind !== 'brisket' || f.stun || f.grip || f.shieldBreak || f.floorAction || f.attack || f.ground < 0) return null;
-      if (plan && !plan.released && f.smashCharge?.side === 'side') {
+      if (f.stun || f.grip || f.shieldBreak || f.floorAction || f.attack || f.ground < 0) return null;
+      const side=f.kind==='pip'?'up':'side';
+      if (plan && !plan.released && f.smashCharge?.side === side) {
         const action = foe.floorAction;
-        // Commit as the climb or roll becomes visible. A patient opponent can wait out the charge.
-        const opening = action?.type === 'ledgeClimb' ? foe.kit.ledgeClimb.protectedThrough - 12 : 4;
-        const exposed = !edge && (!action || action.time * 60 >= opening);
+        const move=smashes[f.smashCharge.moveId];
+        const climb=action?.type==='ledgeClimb';
+        const opening=climb?foe.kit.ledgeClimb.protectedThrough-move.frames[0]:4;
+        // Pip watches for a rise, Noodle for planted paws. Clover fires on her original beat.
+        let exposed=!edge && (!action || action.time*60>=opening);
+        if(f.kind==='pip')exposed=!edge && !foe.attack?.edge && !action && foe.vy<-100;
+        if(f.kind==='noodle')exposed=climb && action.time*60>=opening;
+        if(f.kind==='clover')exposed=false;
         if (exposed || this.time + 1e-8 >= plan.deadline) {
           plan.released = true;
           return idleInput;
         }
-        return {...idleInput,smash:true,smashX:f.face};
+        return {...idleInput,smash:true,smashX:f.face,smashY:verticalAim(side)};
       }
       if (!edge || plan?.edge === edge || f.smashCharge || f.command || f.charge >= 0 || f.shield || f.landingLag ||
           f.run || f.ground !== edge.index || f.face !== (edge.left ? -1 : 1)) return null;
-      const gap = (edge.x - f.x) * f.face, move = smashes[f.kit.smashes.side];
-      const reach = move.box[0]+move.box[2]+foe.stats.width;
-      if (gap < reach || gap > reach+foe.kit.ledgeClimb.distance-3) return null;
-      brain.ledgeTrap = {edge, deadline:this.time + (52 + Math.floor(this.random()*18))/60};
-      return {...idleInput,smash:true,smashX:f.face};
+      const gap=(edge.x-f.x)*f.face, spacing=this.ledgeTrapSpacing(f,foe);
+      if (gap < spacing-(f.kind==='brisket'?4:18) || gap > spacing+(f.kind==='brisket'?foe.kit.ledgeClimb.distance-7:20))return null;
+      brain.ledgeTrap = {edge, deadline:this.time + ((f.kind==='clover'?18:52) + Math.floor(this.random()*18))/60};
+      return {...idleInput,smash:true,smashX:f.face,smashY:verticalAim(side)};
     }
     cpuRecoveryInput(f, closest, inside, under, unsafe, result) {
       if (f.attack?.charging) {
