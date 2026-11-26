@@ -1607,6 +1607,13 @@
     }
     return filmLoads.get(key);
   }
+  function nextStop(layout,next,name,showDialog){
+    showDialog('dispatch-next', layout.name + ' clear',
+      '<p>' + layout.dispatch + '</p><div class="dialog-actions"><button class="primary" data-next-stop="' +
+      next + '">Continue to ' + name + '</button>' +
+      '<button class="utility" data-do="route">Route map</button></div>');
+    document.querySelector('[data-next-stop]').focus();
+  }
   function chapterClear(campaign,night,marks,portrait,showDialog) {
     showDialog(
       'dispatch-clear',
@@ -1630,7 +1637,7 @@
       '<div class="dialog-actions"><button class="primary" id="lift-enter">'+label+
       '</button><button class="utility" data-do="route">Route map</button></div>');
   }
-  window.DispatchCovers = Object.freeze({draw,routeBoard,reelShelf,loadFilm,chapterClear,liftTicket});
+  window.DispatchCovers = Object.freeze({draw,routeBoard,reelShelf,loadFilm,chapterClear,liftTicket,nextStop});
   // The films and the printed route map share the same native pixel grid and props.
   function ease(start, end, time) {
     const t = Math.max(0, Math.min(1, (time - start) / (end - start)));

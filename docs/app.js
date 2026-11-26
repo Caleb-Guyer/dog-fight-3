@@ -573,6 +573,8 @@
     } else if (name === 'special' && detail.moveId === 'pipBark') {
       tone(375, 170, 0.055, 0.035, 'square', 0.03);
       tone(430, 145, 0.07, 0.17, 'square', 0.04);
+    } else if(name==='plateBreak'){
+      const note=440+detail.count*110;tone(note,note*1.5,.07);tone(note*2,note,.12,.045);
     } else if (name === 'counter' || name === 'catch' || name === 'skip') {
       tone(name === 'counter' ? 830 : 560, name === 'counter' ? 350 : 875, 0.07, 0, 'triangle', 0.065);
     } else if (name === 'jump' || name === 'recover')
@@ -2061,7 +2063,7 @@
     view.shakeEnabled = settings.shake;
     const Match = config.mode==='targets' ? window.BellBreak.Run : config.mode==='parcel'?window.ParcelPunt.Run:Battle;
     world = resume?.battle || new Match({...config, rivalRead:series?.openingRead}, (name, e) => {
-      world?.lesson?.contact(name,e);
+      world?.lesson?.contact(name,e,world);
       corner?.target?.contact(name,e,world);
       spar?.contact(name,e,world);
       view.event(name, e);
@@ -5519,11 +5521,11 @@
     VersusRulebook:'versus-rules.js?v=wide-return-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
-    ComboLab:'combo-lab.js?v=tapes-1', FinishTools:'finish-tools.js?v=landing-review-1',
-    MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=down-air-1',
-    DispatchCovers:'dispatch-covers.js?v=wide-return-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
+    ComboLab:'combo-lab.js?v=disc-range-1', FinishTools:'finish-tools.js?v=landing-review-1',
+    MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
+    DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=ledge-rescue-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=disc-range-1',
     ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=tapes-1',
   };
   const dispatchLoads=new Map();
@@ -6002,40 +6004,13 @@
     view.shakeEnabled = settings.shake;
     noticeUntil = 0;
     $('dispatch-notice').hidden = true;
+    const cues=view.missionCues({tone,sound,dispatchNotice,stockLabel,mission,sideRoute,cupRound,
+      unlockLift:book.bonus?.stampRoom===index,stored:()=>stored,rivalName:()=>world.foes[0].f.stats.name});
     world = new window.DispatchRun({ chapter:book.number, room: index, checkpoint, atCheckpoint, stamps: cupRound ? 0 : progress.stamps,
       cupFighter:cupRound?.kind,coat:cupRound?.coat }, (name, e) => {
-      view.event(name, e);
-      if (name === 'dispatchCheckpoint') {
-        if (!cupRound) saveProgress({ room: index, checkpoint: e.checkpoint, atCheckpoint: e.atCheckpoint });
-        tone(485, 735, 0.12);
-        tone(735, 980, 0.13, 0.12);
-        dispatchNotice(stored ? 'Checkpoint saved' : 'Checkpoint reached');
-      } else if (name === 'dispatchStamp') {
-        if (cupRound) return;
-        saveProgress({ room: index, stamp: index });
-        tone(760, 1150, 0.09);
-        dispatchNotice(book.bonus?.stampRoom===index?'Postmark collected · Dead Letter Lift unlocked':'Postmark collected');
-      } else if (name === 'dispatchSignal') {
-        tone(330, 660, 0.19);
-        dispatchNotice(e.name + ' raised');
-      } else if (name === 'dispatchWave') {
-        tone(420, 570, 0.12);
-        if (sideRoute) dispatchNotice(mission.stops[e.wave-1]+' · '+world.foes[0].f.stats.name);
-        else if (mission.rules === 'horde') dispatchNotice('Wave ' + e.wave);
-      } else if (name === 'ko') {
-        sound(name, e);
-        dispatchNotice(e.f.stats.name + (e.remaining ? ' · ' + stockLabel(e.remaining) + ' left' : ' out'));
-      } else if (name === 'stockTie') dispatchNotice('Tiebreak · One stock each');
-      else if (name === 'hoist') dispatchNotice('Gantry catch · Armor damaged');
-      else if (name === 'dispatchVictory') dispatchNotice(cupRound ? 'Copper Hound defeated' : 'Mission clear');
-      else if (name === 'machineWindup') {
-        if (e.move === 'bell') { tone(540, 485, 0.22); tone(810, 735, 0.23, 0.36); }
-        else tone(e.move === 'charge' ? 240 : 160, e.move === 'charge' ? 390 : 210, 0.18, 0, 'triangle', 0.07);
-      } else if (name === 'machineDown') {
-        tone(215, 48, 0.18);
-        tone(620, 435, 0.12, 0.1);
-      } else if (name === 'machineSwing') tone(135, 55, 0.11);
-      else sound(name, e);
+      if(!cupRound && name==='dispatchCheckpoint')saveProgress({room:index,checkpoint:e.checkpoint,atCheckpoint:e.atCheckpoint});
+      if(!cupRound && name==='dispatchStamp')saveProgress({room:index,stamp:index});
+      cues(name,e);
     });
     $('match-mode').textContent = sideRoute?'Bonus dispatch · Relay':cupRound ? 'Arcade Cup · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
     if(suspended){
@@ -6116,27 +6091,10 @@
       else {
         const next = roomIndex + 1;
         saveProgress({ room: next, pending: '' });
-        showRoute(()=>{
-          showDialog('dispatch-next', layout.name + ' clear',
-            '<p>' + layout.dispatch + '</p><div class="dialog-actions"><button class="primary" data-next-stop="' +
-            next + '">Continue to ' + campaign.rooms[next].name + '</button>' +
-            '<button class="utility" data-do="route">Route map</button></div>');
-          document.querySelector('[data-next-stop]').focus();
-        });
+        showRoute(()=>window.DispatchCovers.nextStop(layout,next,campaign.rooms[next].name,showDialog));
       }
     } else if (world.finished === 'fallen') {
-      showDialog(
-        'dispatch-fall',
-        world.bridge ? 'Runner down' : 'Out of stocks',
-        '<p>Restart at ' + (world.layout.checkpoints[world.checkpoint - 1]?.name || world.layout.name) +
-          (world.bridge ? '.' : ' with ' + stockLabel(world.atCheckpoint?.stocks ?? campaign.fightStocks) + ' at ' +
-          Math.floor(world.atCheckpoint?.damage || 0) + '%.') +
-          '</p><div class="dialog-actions"><button class="primary" data-do="dispatch-retry">Retry</button>' +
-          (!world.bridge && world.checkpoint ? '<button class="utility" data-do="dispatch-rematch">Restart mission</button>' : '') +
-          '<button class="utility" data-do="route">Route map</button></div>',
-        false,
-      );
-      document.querySelector('[data-do=dispatch-retry]').focus();
+      window.DispatchView.fallPanel(world,campaign.fightStocks,showDialog,stockLabel);
     }
   }
   function refreshAudition() {
@@ -6341,7 +6299,7 @@
       next.textContent=(device===1?'A · ':device===0?'Enter · ':'')+'Try it';
       return;
     }
-    $('school-task').textContent=lesson.missed?(lesson.course?'Retry to practice the technique from the starting position.':'The stock ended. Retry to return to the starting position.'):
+    $('school-task').textContent=lesson.missed?(info.miss || (lesson.course?'Retry to practice the technique from the starting position.':'The stock ended. Retry to return to the starting position.')):
       lesson.done?info.success:lesson.note || info.task;
     $('school-bindings').textContent=lesson.done ? (device===1?'A to continue':device===0?'Enter to continue':'') :
       lesson.missed?'':lesson.course?window.FighterSchool.hint(info,device,keyFor,padFor):schoolHint(info.id,device);
@@ -6489,7 +6447,7 @@
     leaveOnline();
     afterStory=null;
     const course=window.FighterSchool.courses[kind];
-    startMatch({...settings,mode:'local',stage:index<0?'nightmail':course.stage,form:'original',p1:kind,p2:index<0?'pip':course.rival,
+    startMatch({...settings,mode:'local',stage:index===-2?'picnic':index<0?'nightmail':course.stage,form:'original',p1:kind,p2:index<0?'pip':course.rival,
       coats:[savedCoat(tryout?editing:0,kind),0],fetch:false,minutes:0,lesson:index,fighterCourse:kind,tryout,cornerLesson:!!visit},
       undefined,undefined,null,{visit});
     delete $('school-coach').dataset.key;
@@ -7668,6 +7626,8 @@
       showHome(false);showSpecialPreview({kind:arena,side:form,page:'home',paused:false});
     }else if(/^#(solo|local)\/matchup(?:\/|$)/.test(hash)){
       showHome(false);showMatchup(hash,'shared');
+    }else if(hash==='#arcade/disc-range'){
+      waitForDispatch('Disc Range',()=>loadDispatch('FighterSchool'),()=>startFighterLesson('clover',-2,true),()=>showHome());
     }else if(/^#(solo|local)\/tryouts(?:\/(pip|brisket|noodle|clover))?$/.test(hash)){
       settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();openTryout(form);
     }else if(/^#online\/rules(?:\/|$)/.test(hash)){

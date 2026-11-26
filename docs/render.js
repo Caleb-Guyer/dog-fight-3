@@ -218,6 +218,7 @@
     if (a.folded) return 'fall';
     if (a.diving) return 'pipSlideDive';
     if (a.anchor && a.time + 1e-8 >= a.start) return 'noodleReelLedge';
+    if(a.pitch)return a.moveId+(a.pitch<0?'High':'Low');
     if (a.tiltAngle) {
       const strike = a.secondPose && a.time + 1e-8 >= a.start + a.active ? a.secondPose : a.moveId;
       return strike + (a.tiltAngle < 0 ? 'High' : 'Low');
@@ -302,7 +303,8 @@
     if (f.attack) return [attackPose(f), attackPhase(f.attack)];
     if (f.smashCharge && f.charge >= 0) {
       const power = clamp(f.charge / window.DogFight.smashChargeTime, 0, 1);
-      return [f.smashCharge.moveId, 0.08 + 0.26 * power];
+      const {moveId,pitch}=f.smashCharge;
+      return [pitch?moveId+(pitch<0?'High':'Low'):moveId, 0.08 + 0.26 * power];
     }
     if (f.charge >= 0) {
       const windup = f.kit.tilts?.[f.chargeDirection] || f.kit.ground[f.chainWindow > 0 ? f.chainNext : 0];
@@ -354,7 +356,7 @@
       ctx.fillRect(x, y, 4, 3);
     }
     const px = up ? 4 : down ? 35 : 37;
-    const py = up ? -f.stats.height - 4 : down ? -6 : -39;
+    const py = up ? -f.stats.height - 4 : down ? -6 : -39+(f.smashCharge.pitch || 0)*9;
     if (power > 0.1) {
       const step = Math.min(3, Math.ceil(3 * power));
       if (f.kind === 'pip') {
@@ -1003,7 +1005,8 @@
       }
       case 'cloverLineDrive':
         if (a.fired) {
-          pixelLine(ctx, 31 + p * 6, y - 3, 47 + p * 7, y - 5, lilac);
+          const dy=(a.pitch || 0)*9;
+          pixelLine(ctx, 31 + p * 6, y - 3+dy, 47 + p * 7, y - 5+dy*1.5, lilac);
           if (!reduced.matches) pixelLine(ctx, 28 + p * 6, y + 4, 41 + p * 6, y + 3, cream);
         }
         break;
@@ -3098,6 +3101,7 @@
       ctx.save();
       ctx.translate(snap(d.x, 2), snap(d.y, 2));
       ctx.scale(direction, 1);
+      if(d.pitch)ctx.rotate(Math.atan2(d.vy,Math.abs(d.vx)));
       pixelLine(ctx, -32 - power * 11, 0, -12, 0, lilac, 4, 2);
       if (!reduced.matches) pixelLine(ctx, -24 - power * 7, 5, -12, 4, '#9089b0', 2, 2);
       oval(ctx, 0, 0, 18, rim + 2, ink, 2);

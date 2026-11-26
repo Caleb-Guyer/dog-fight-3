@@ -2390,12 +2390,16 @@
     f.chainWindow = f.landTime = f.skidTime = 0;
   }
   function releaseSmash(f) {
-    const { moveId, side, face, fromJumpSquat, spotCounter } = f.smashCharge;
+    const { moveId, side, face, fromJumpSquat, spotCounter, pitch } = f.smashCharge;
     const slide = f.chargeSlide;
     const power = smashPower(f.charge);
     f.face = face;
     beginAttack(f, 'heavy', verticalAim(side), power, moveId);
     f.attack.smashSide = side;
+    if(pitch){
+      f.attack.pitch=pitch;
+      f.lastMove+=pitch<0?' · high':' · low';
+    }
     if (spotCounter) f.attack.spotCounter = true;
     if (fromJumpSquat) {
       f.attack.fromJumpSquat = true;
@@ -2671,6 +2675,7 @@
       this.fetch = config.fetch;
       this.itemDrops=config.itemDrops!==false;
       if(config.shieldPogo!==false)this.shieldPogo=true;
+      if(config.aimedDrive!==false)this.aimedDrive=true;
       this.time = 0;
       this.end = null;
       this.endReason = '';
@@ -3200,6 +3205,7 @@
       Object.assign(this, structuredClone(state));
       if (!('itemDrops' in state)) delete this.itemDrops;
       if (!('shieldPogo' in state)) delete this.shieldPogo;
+      if (!('aimedDrive' in state)) delete this.aimedDrive;
       if (!('closingHeight' in state)) delete this.closingHeight;
       this.random.state = random.state;
     }
@@ -7573,6 +7579,11 @@
               this.emit('smashCharge', { f });
             }
           }
+          if(this.aimedDrive && f.smashCharge?.moveId==='cloverLineDrive' && !f.chargeReleased){
+            const hand=f.smashCharge.button==='attack';
+            const x=hand?input.x:input.smashX || input.x, y=hand?input.y:input.smashY || input.y;
+            if(x*f.face>.45)f.smashCharge.pitch=Math.abs(y)>=.35?Math.sign(y):0;
+          }
           if (f.smashCharge && before < smashChargeTime && f.charge >= smashChargeTime)
             this.emit('smashReady', { f });
           const heldCross = f.chargingCross && input.attack && !f.chargeReleased && f.chargeDirection === 'neutral';
@@ -8684,6 +8695,11 @@
         d.vy = 0;
         d.power = a.power;
         d.rangeLeft = 215 + 150 * a.power;
+        if(a.pitch){
+          d.pitch=a.pitch;
+          d.y+=a.pitch*9;
+          d.vy=a.pitch*Math.abs(d.vx)*.32;
+        }
       }
       this.projectiles.push(d);
       const drill = this.footworkPractice;
@@ -9653,6 +9669,7 @@
             d.vx = f.face * clamp(Math.abs(d.vx)*1.25,550,1025);
             if (d.type === 'return') d.vy = -d.vy;
             if (d.type === 'drive') d.rangeLeft = 215 + 150*d.power;
+            if(d.pitch){d.pitch=-d.pitch;d.vy=d.pitch*Math.abs(d.vx)*.32;}
             d.age = 0; d.back = false; d.hit = []; d.moveEntry = null; d.sample = null;
             this.emit('discReflect',{f,target:owner,moveId:d.moveId,point,face:f.face});
             const drill = this.footworkPractice;
@@ -9703,7 +9720,7 @@
             d.type === 'drive' ? 'heavy' : d.type === 'snare' ? 'snare' : 'disc',
             direction || owner.face,
             point,
-            spec,
+            d.pitch?{...spec,angle:spec.angle-12*d.pitch}:spec,
             d.moveId,
             d,
             covered,
@@ -9722,10 +9739,20 @@
           }
         };
         if (d.type === 'drive') {
-          const step = Math.min(d.rangeLeft, Math.abs(d.vx) * dt);
-          const face = Math.sign(d.vx);
-          d.x += face * step;
-          d.rangeLeft -= step;
+          if(d.pitch){
+            const speed=Math.hypot(d.vx,d.vy);
+            let travel=Math.min(dt,d.rangeLeft/speed), grounded=false;
+            if(d.vy>0)for(const floor of this.terrain){
+              if(floor.thin)continue;
+              const contact=(floor.y-5-oldY)/d.vy, x=oldX+contact*d.vx;
+              if(contact>=0 && contact<=travel && x>=floor.x1 && x<=floor.x2){travel=contact;grounded=true;}
+            }
+            d.x+=d.vx*travel;d.y+=d.vy*travel;
+            d.rangeLeft=grounded?0:Math.max(0,d.rangeLeft-speed*travel);
+          }else{
+            const step=Math.min(d.rangeLeft,Math.abs(d.vx)*dt);
+            d.x+=Math.sign(d.vx)*step;d.rangeLeft-=step;
+          }
           if (this.discContacts(d, oldX, oldY, damage, rivals, impact)) return false;
           if (this.ball && this.ball.holder==null && Math.abs(d.x - this.ball.x) < 29 && Math.abs(d.y - this.ball.y) < 19) {
             this.swat(this.dogs[d.owner], 0, Math.sign(d.vx));
@@ -11862,6 +11889,17 @@
         result.x = result.y = 0;
         result.jump = false;
         result.smash = f.charge < brain.smashHold;
+        if(this.cpuLevel==='rival' && this.aimedDrive && f.smashCharge.moveId==='cloverLineDrive'){
+          const gap=(foe.x-f.x)*f.face-37;
+          if(gap>0 && gap<215+150*smashPower(f.charge)){
+            const t=smashes.cloverLineDrive.start+gap/(560+260*smashPower(f.charge));
+            const landing=foe.ground>=0?foe.ground:this.floorAhead(foe,t);
+            const feet=landing>=0?this.terrain[landing].y:foe.y+foe.vy*t+770*foe.kit.gravity*t*t;
+            const height=feet-bodyHeight(foe)*.52-(f.y-39);
+            result.smashX=f.face;
+            result.smashY=Math.abs(height)>(9+gap*.32)*.58?Math.sign(height):0;
+          }
+        }
         return result;
       }
       const defense = this.cpuGuard(f, foe);
