@@ -5511,7 +5511,7 @@
     LessonGuide:'lesson-guide.js?v=1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=ledge-rescue-1', MatchReview:'match-review.js?v=stock-retry-1',
+    RecoveryCoach:'recovery-coach.js?v=ledge-rescue-2', MatchReview:'match-review.js?v=stock-retry-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',

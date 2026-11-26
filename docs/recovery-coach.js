@@ -17,7 +17,7 @@
     const slot=plan.slot ?? 0, replay=tape.playback(plan.start,emit,slot), battle=replay.battle, dog=battle.dogs[slot];
     const losses=battle.matchCard.losses.length, round=battle.suddenDeath?.round;
     const player={battle,frame:plan.start,length:plan.start+limit,outcome:null,landed:0,
-      jumped:false,cast:false,dodged:false,caught:false,inward:0,outward:0,
+      jumped:false,cast:false,dodged:false,caught:false,rolled:false,inward:0,outward:0,
       step(input) {
         if (this.outcome) return false;
         const jumps=dog.jumps;
@@ -37,6 +37,7 @@
         if(dog.attack?.specialSide==='up')this.cast=true;
         if(dog.airDodge?.type==='directionalAirDodge')this.dodged=true;
         if(dog.ledge)this.caught=true;
+        if(dog.floorAction?.type==='ledgeRoll')this.rolled=true;
         const safe=dog.ground>=0 && !dog.grip && !dog.floorAction && !dog.stockLift &&
           !dog.stun && !dog.tumble && !dog.respawning && !dog.ledge;
         this.landed=safe?this.landed+1:0;
@@ -51,6 +52,7 @@
   function controls(route,tick) {
     const {dir,jumpAt,upAt}=route;
     if (!tick && route.dodge) return {...idleInput,...route.dodge,shield:true,tapped:{shield:true}};
+    if(tick===route.rollAt)return {...idleInput,shield:true,tapped:{shield:true}};
     if (tick===upAt) return {...idleInput,x:dir,y:-1,special:true,tapped:{special:true}};
     if (jumpAt!==null && tick>=jumpAt && tick<jumpAt+15)
       return {...idleInput,x:dir,jump:true,tapped:{jump:tick===jumpAt}};
@@ -63,12 +65,13 @@
     if ((options.jump && !f.jumps) || (options.up && f.usedUp)) return null;
     while (!p.outcome) {
       const tick=p.frame-start;
+      if(options.roll && f.ledge && plan.rollAt===undefined)plan.rollAt=tick;
       if (options.jump && options.up && plan.upAt===null && tick>=15 && f.vy>=0 && !f.ledge && f.ground<0)
         plan.upAt=tick;
       p.step(controls(plan,tick));
     }
     if (p.outcome!=='landed' || (options.jump && !p.jumped) || (options.up && !p.cast) ||
-        (plan.dodge && !(p.dodged && p.caught))) return null;
+        (plan.dodge && !(p.dodged && p.caught)) || (options.roll && !p.rolled)) return null;
     plan.end=p.frame;
     return plan;
   }
@@ -104,7 +107,7 @@
     if (lastFall!==original.length) return null;
     samples.sort((a,b)=>a.score-b.score);
     for (const {start,dir,dodge} of samples) {
-      for (const options of dodge?[{},{dodge}]:[{},{jump:true},{up:true},{jump:true,up:true}]) {
+      for (const options of dodge?[{},{dodge},{dodge,roll:true}]:[{},{jump:true},{up:true},{jump:true,up:true}]) {
         const plan=routeFrom(tape,start,dir,options,slot,follow);
         if (plan) return plan;
         yield;
@@ -115,7 +118,8 @@
 
   function instruction(plan,label) {
     const direction=label(plan.dir>0?'right':'left');
-    if(plan.dodge)return 'Aim '+dodgeAim(plan,label)+' and tap '+label('shield')+' to catch the ledge. Then hold '+direction+' to climb.';
+    if(plan.dodge)return 'Aim '+dodgeAim(plan,label)+' and tap '+label('shield')+' to catch the ledge. '+
+      (plan.rollAt!==undefined?'Release '+label('shield')+', then tap it again as your paws catch to roll onto the stage.':'Then hold '+direction+' to climb.');
     if (plan.jumpAt!==null && plan.upAt!==null)
       return 'Hold '+direction+' and '+label('jump')+'. As the jump peaks, press '+label('up')+' + '+label('special')+'. Keep steering toward the stage.';
     if (plan.jumpAt!==null) return 'Hold '+direction+' and press '+label('jump')+' for an air jump. Keep steering toward the stage.';
@@ -126,6 +130,13 @@
     return [plan.dodge.y && label('up'),plan.dodge.x && label(plan.dir>0?'right':'left')].filter(Boolean).join(' + ');
   }
   function gate(plan,tick,input,label,dog) {
+    if(plan.rollAt!==undefined){
+      if(tick===1 && input.shield)return 'Release '+label('shield');
+      if(dog?.ledge){
+        if(dog.prev.shield && !input.tapped?.shield)return input.shield?'Release '+label('shield'):'';
+        return input.shield || input.tapped?.shield?'':label('shield')+' · Roll';
+      }
+    }
     if(dog?.ledge)return input.x*(dog.ledge.left?1:-1)>.5?'':label(dog.ledge.left?'right':'left')+' · Climb';
     if(tick && tick!==plan.upAt && tick!==plan.jumpAt)return '';
     const inward=input.x*plan.dir>.5, side=label(plan.dir>0?'right':'left');
@@ -143,10 +154,11 @@
     return '';
   }
   function feedback(p,plan,projection=false) {
-    if(projection && p.outcome==='landed')return 'You climbed back onstage with the same stock in '+((p.frame-plan.start)/60).toFixed(1)+' seconds.';
+    if(projection && p.outcome==='landed')return 'You got back onstage with the same stock in '+((p.frame-plan.start)/60).toFixed(1)+' seconds.';
     if(p.outcome==='landed')return (p.battle.matchCard.points && !p.battle.suddenDeath?'You landed onstage and kept the point you lost in the recording.':'You landed onstage with the stock you lost in the recording.')+' Your return took '+((p.frame-plan.start)/60).toFixed(1)+' seconds.';
     if(p.outcome==='restart')return 'Sudden Death started before you landed.';
-    if(p.caught)return 'You reached the ledge. Keep holding toward the stage to finish the climb.';
+    if(p.caught)return plan.rollAt!==undefined && !p.rolled?'You reached the ledge. Release Shield, then tap it again on the ledge to roll past the guard.':
+      'You reached the ledge. Keep holding toward the stage to finish the climb.';
     if(p.outward>3 && p.outward>p.inward)return 'You steered away from the stage. Turn toward the nearest edge as you start.';
     if(plan.dodge)return p.dodged?'Your dodge missed the ledge. Watch the direction of the example when the dodge starts.':
       'The directional air dodge never started. Aim before you tap Shield.';
@@ -188,7 +200,7 @@
         while (carry>=1/30 && p.frame<p.length && !p.outcome) {
           const t=p.frame-plan.start;
           if (example) {
-            const action=!t && plan.dodge?'Air dodge · '+dodgeAim(plan,label):t===plan.upAt?'Up Special':t===plan.jumpAt?'Air jump':'';
+            const action=!t && plan.dodge?'Air dodge · '+dodgeAim(plan,label):t===plan.rollAt?'Ledge roll · '+label('shield'):t===plan.upAt?'Up Special':t===plan.jumpAt?'Air jump':'';
             if (action || !t) cue.textContent=action || 'Steer toward the stage';
             p.step(controls(plan,t));
           } else p.step();
