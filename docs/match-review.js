@@ -495,7 +495,8 @@
       for(const [i,m] of marks.entries())select.add(new Option('P'+(m.slot+1)+' '+m.dog+' · '+defenseNames[m.type]+
         (m.roll?(m.dir<0?' left':' right'):'')+' · frame '+m.frame,String(i)));
       const initial=marks.findLastIndex(m=>(!selected.frame || m.frame===selected.frame) && m.slot===selected.slot && m.type===selected.type);
-      select.selectedIndex=initial>=0?initial:0;controls.hidden=false;choose(!selected.frame || at===selected.frame);
+      select.selectedIndex=initial>=0?initial:0;controls.hidden=false;
+      choose(at===selected.frame || (!selected.frame && (!selected.sample || !at)));
     };
     panel.open=selected.open ?? (!!selected.type || selected.sample===true);
   }
