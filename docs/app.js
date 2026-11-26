@@ -2142,7 +2142,7 @@
     first.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }
-  function showPause() {
+  function showPause(autosave=true) {
     if(finishTrial)return showTrialPause();
     if (page !== 'match' || !world || world.end !== null) return;
     if(world.warmupPartner)return showWarmupMenu();
@@ -2209,7 +2209,7 @@
         '<button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
     );
     document.querySelector('[data-do=resume]').focus();
-    if(corner && !practiceFight)saveFirstPosition(pausedFight()).catch(()=>{});
+    if(autosave && corner && !practiceFight)saveFirstPosition(pausedFight()).catch(()=>{});
   }
   function startNextSetGame(stage) {
     if (localSet?.advance(stage)) startMatch({...matchConfig, stage}, undefined, undefined, localSet);
@@ -5450,7 +5450,7 @@
     showDialog('mission-saving','Saving first match','<p role="status">Saving this fight…</p>',false);
     try{await saveFirstPosition(position);}
     catch(error){
-      showPause();
+      showPause(false);
       const alert=document.createElement('p');alert.setAttribute('role','alert');
       alert.textContent=error.message==='Another tab has a newer first match.'?error.message:
         'This browser could not save your fight. Keep playing or try again.';
