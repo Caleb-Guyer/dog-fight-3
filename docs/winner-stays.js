@@ -41,6 +41,12 @@
     remember(dogs,coats){
       for(let i=0;i<2;i++)Object.assign(this.players[i],{kind:dogs[i],coat:coats[i]});
     }
+    get pair(){return this.players.slice(0,2);}
+    handoff(winner,tags){
+      const challenger=1-winner;
+      return tags[winner]+' keeps P'+(winner+1)+' · '+this.players[winner].streak+
+        ' win streak. Pass P'+(challenger+1)+' to '+this.players[challenger].name+'.';
+    }
     finish(bout,winner){
       if(bout!==this.bout || (winner!==0 && winner!==1))return false;
       const champ=this.players[winner],lost=this.players[1-winner];
