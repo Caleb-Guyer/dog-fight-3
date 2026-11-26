@@ -601,7 +601,10 @@ async function packRelay(browser){
   await p.keyboard.press('Escape');await press('[data-do=rematch]');
   await p.waitForFunction(()=>observedBattle.end===null && observedBattle.dogs.every(f=>f.stocks===3 && f.damage===0));
   await p.goto(root+'?archive#records');
-  await press('[data-record-id]');assert.equal(await p.locator('.card-timeline li').count(),3);
+  await press('[data-record-id]');await p.locator('.card-timeline').waitFor();
+  assert.equal(await p.locator('.card-timeline li').count(),3);
+  await press('[data-saved-clip="1"]');assert.match(await p.locator('.clip-caption').innerText(),/P1 Clover/);
+  await press('[data-do=clip-back]');
   await p.goto(root+'?reload#local/pack-relay');
   assert.match(await p.locator(seat(0,1)).innerText(),/Clover/);
   await p.close();
