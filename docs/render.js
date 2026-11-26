@@ -2630,9 +2630,9 @@
       world.lesson?.drawCourse?.(ctx);
       if (this.finishReturn) finalHitBackdrop(ctx,left,top,2*halfW,2*halfH,focus,steady,this.finishReturn/.24);
       if (world.suddenDeath) {
-        const inset = world.blastInset();
+        const bounds=world.blastBounds();
         for (const dir of [1,-1]) {
-          const line = dir === 1 ? -115 + inset : world.stageWidth + 115 - inset;
+          const line = dir === 1 ? bounds.left : bounds.right;
           const outer = dir === 1 ? left : left + 2*halfW;
           if ((line - outer)*dir < 0) continue;
           ctx.fillStyle = 'rgba(146, 35, 42, .43)';
@@ -2642,6 +2642,21 @@
           for (let y=Math.floor(top/26)*26; y<top+halfH*2; y+=26) {
             pixelLine(ctx, line-dir*5, y, line, y+5, gold, 3, 2);
             pixelLine(ctx, line, y+5, line-dir*5, y+10, gold, 3, 2);
+          }
+        }
+        if(world.suddenDeath.ceiling!==undefined && world.suddenDeath.frames>=480){
+          const x1=Math.max(left,bounds.left),x2=Math.min(left+2*halfW,bounds.right);
+          for(const dir of [1,-1]){
+            const line=dir===1?bounds.top:bounds.bottom;
+            if(line<top || line>top+halfH*2 || x1>=x2)continue;
+            ctx.fillStyle='rgba(146, 35, 42, .43)';
+            const edge=dir===1?top:top+2*halfH;
+            ctx.fillRect(x1,edge,x2-x1,line-edge);
+            ctx.fillStyle='#3c2431';ctx.fillRect(x1,line-2,x2-x1,5);
+            for(let x=Math.ceil(x1/26)*26;x<x2-10;x+=26){
+              pixelLine(ctx,x,line-dir*5,x+5,line,gold,3,2);
+              pixelLine(ctx,x+5,line,x+10,line-dir*5,gold,3,2);
+            }
           }
         }
       }
@@ -2963,14 +2978,14 @@
     drawRadar(world, left, top, width, height) {
       const radar = this.radar;
       const {blastSideMargin, bottomBlastY} = window.DogFight;
-      const inset = world.blastInset(), start = -blastSideMargin + inset, end = world.stageWidth + blastSideMargin - inset;
+      const bounds=world.blastBounds(),start=bounds.left,end=bounds.right;
       const margin = radar.hidden ? 120 : 156;
       const visible = world.end === null && (world.survivalPractice || world.suddenDeath || world.dogs.some(f => {
         if (f.absent || f.stocks <= 0 || f.stockLift) return false;
         const chest = f.y - f.stats.height * .52;
         return chest < top || chest > top + height || f.x < left || f.x > left + width ||
           (f.ground < 0 && !f.ledge && (f.tumble?.threat ||
-            Math.min(f.x-start, end-f.x, f.y-topBlastY, bottomBlastY-f.y) < margin));
+            Math.min(f.x-start, end-f.x, f.y-bounds.top, bounds.bottom-f.y) < margin));
       }));
       if (!visible) { if (!radar.hidden) radar.hidden = true; return; }
       if (radar.hidden) radar.hidden = false;
@@ -2979,7 +2994,7 @@
       const X = x => Math.round(w/2 + (x - world.stageWidth/2) * scale);
       const Y = y => Math.round(h/2 + (y - (topBlastY + bottomBlastY)/2) * scale);
       ctx.clearRect(0, 0, w, h);
-      const x1 = X(start), x2 = X(end), y1 = Y(topBlastY), y2 = Y(bottomBlastY);
+      const x1=X(start),x2=X(end),y1=Y(bounds.top),y2=Y(bounds.bottom);
       ctx.fillStyle = '#262937';
       ctx.fillRect(x1, y1, x2-x1+1, y2-y1+1);
       ctx.strokeStyle = '#ed9679';
@@ -2999,8 +3014,8 @@
       // Draw the moving fighter last if both markers meet at this scale.
       const active = world.dogs.filter(f => !f.absent && f.stocks > 0 && !f.stockLift);
       const positions = active.map(f => {
-        const nearest = Math.min(f.x-start, end-f.x, f.y-topBlastY, bottomBlastY-f.y);
-        const side = nearest === f.x-start ? 'left' : nearest === end-f.x ? 'right' : nearest === f.y-topBlastY ? 'top' : 'bottom';
+        const nearest=Math.min(f.x-start,end-f.x,f.y-bounds.top,bounds.bottom-f.y);
+        const side=nearest===f.x-start?'left':nearest===end-f.x?'right':nearest===f.y-bounds.top?'top':'bottom';
         const where = nearest < margin ? 'near the ' + side + ' boundary' : f.ledge ? 'at the ledge' : f.ground >= 0 ? 'onstage' : 'airborne';
         return 'P' + (f.index+1) + ' ' + f.stats.name + ' ' + where;
       });

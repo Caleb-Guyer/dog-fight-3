@@ -112,22 +112,24 @@
     let ko = null;
     const player = tape.playback(frame-1, (event,e) => {
       if (event === 'ko' && e.f.index === slot) {
-        ko = {x:e.x,y:e.y,zone:player.battle.matchCard.losses.at(-1).zone};
+        ko = {x:e.x,y:e.y,zone:e.zone,bounds:player.battle.blastBounds()};
       }
     }, slot);
     const battle = player.battle, dog = battle.dogs[slot];
     const points = [{x:dog.x,y:dog.y}];
     const terrain = battle.terrain.map(p => ({x1:p.x1,x2:p.x2,y:p.y,thin:p.thin}));
-    const width = battle.stageWidth, inset = battle.blastInset();
+    const width=battle.stageWidth;
+    let bounds=battle.blastBounds();
     while (player.frame < player.length && battle.end === null && !ko) {
       const tick = player.frame+1;
       const recorded = controlsAt(tape,tick,slot);
       player.step(tick === frame && aim ? {...recorded,...aim} : recorded);
+      bounds=ko?.bounds || battle.blastBounds();
       points.push(ko ? {x:ko.x,y:ko.y} : {x:dog.x,y:dog.y});
     }
     const outcome = ko ? 'KO at the '+ko.zone+' line' : dog.ledge ? 'Holding the ledge' :
       dog.ground >= 0 ? 'Onstage' : 'Still airborne';
-    return {points,terrain,width,inset,outcome,frame:player.frame};
+    return {points,terrain,width,bounds,inset:bounds.left+window.DogFight.blastSideMargin,outcome,frame:player.frame};
   }
   function drawFlights(canvas, recorded, attempt) {
     const ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
@@ -136,9 +138,10 @@
     const x = value => Math.round(w/2+(value-recorded.width/2)*scale);
     const y = value => Math.round(h/2+(value-(bottomBlastY+topBlastY)/2)*scale);
     ctx.fillStyle='#262937';ctx.fillRect(0,0,w,h);
-    const left=x(-blastSideMargin+recorded.inset), right=x(recorded.width+blastSideMargin-recorded.inset);
+    const bounds=recorded.bounds;
+    const left=x(bounds.left),right=x(bounds.right);
     ctx.strokeStyle='#b77973';ctx.lineWidth=1;
-    ctx.strokeRect(left+.5,y(topBlastY)+.5,right-left,y(bottomBlastY)-y(topBlastY));
+    ctx.strokeRect(left+.5,y(bounds.top)+.5,right-left,y(bounds.bottom)-y(bounds.top));
     for(const p of recorded.terrain){
       ctx.fillStyle=p.thin?'#9eaeaa':'#d5c3a0';
       ctx.fillRect(x(p.x1),y(p.y),Math.max(1,x(p.x2)-x(p.x1)),p.thin?2:4);

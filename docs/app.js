@@ -1398,17 +1398,22 @@
     const clock = $('match-clock'), seconds = Math.ceil((confirmed.clockFrames || 0) / 60);
     const hideClock = confirmed.clockFrames === null && !confirmed.suddenDeath;
     if (clock.hidden !== hideClock) clock.hidden = hideClock;
-    const clockText = confirmed.suddenDeath ? 'SD' : Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2,'0');
+    const tiebreak=confirmed.suddenDeath;
+    const elapsed=tiebreak?.ceiling!==undefined?tiebreak.frames:0;
+    const phase=elapsed>=1500?'Final':elapsed>=600?'Closing':elapsed>=480?'↕ '+Math.ceil((600-elapsed)/60):'';
+    const clockText = tiebreak ? 'SD'+(phase?' · '+phase:'') : Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2,'0');
     if (clock.textContent !== clockText) clock.textContent = clockText;
     clock.classList.toggle('urgent', !!confirmed.suddenDeath || seconds <= 10);
-    const call = $('countdown'), tiebreak = confirmed.suddenDeath;
+    const call = $('countdown');
     call.classList.toggle('sudden', !!tiebreak?.intro);
     if (tiebreak?.intro) {
       const caption = tiebreak.cause === 'time' ? (confirmed.matchCard?.points?'Time! Points tied':'Time! Stocks tied') :
-        tiebreak.cause === 'double' ? 'Double knockout' : 'One stock each';
+        tiebreak.cause === 'double' ? 'Double knockout' : tiebreak.opening==='gap'?'Air jump toward the left deck':
+        tiebreak.opening==='perch'?'Short hop under the ceiling':'One stock each';
       if (call.dataset.caption !== caption) call.dataset.caption = caption;
     }
-    const clockLabel = tiebreak ? 'Sudden Death · One stock at 300%' : 'Match clock';
+    const clockLabel = tiebreak ? 'Sudden Death · One stock at 300%'+(elapsed>=1500?' · Boundaries at their final positions':
+      elapsed>=600?' · Ceiling and floor closing':elapsed>=480?' · Ceiling and floor close in '+Math.ceil((600-elapsed)/60)+' seconds':'') : 'Match clock';
     if (clock.getAttribute('aria-label') !== clockLabel) clock.setAttribute('aria-label', clockLabel);
     const combo = world.lastCombo;
     const grip = world.grapple;
@@ -1877,6 +1882,12 @@
     startMatch({...settings, mode:'solo', p1:'pip', p2:'brisket', cpuLevel:'rival', stage:'nightmail',
       form:'trio', stockCount:3, timeBattle:false, minutes:7, handicap:undefined, spawnDamage:undefined,
       fetch:false, throwOpening:position}, undefined, 31);
+  }
+  function startClosingFight(opening,mode='solo',p1='pip',p2='brisket'){
+    leaveOnline();
+    afterStory=null;
+    startMatch({mode,p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:opening==='gap'?'laundry':'bandstand',
+      form:'original',cpuLevel:settings.cpuLevel,fetch:false,suddenStart:true,suddenOpening:opening},undefined,17);
   }
   function startDashBack(role) {
     leaveOnline(); afterStory = null;
@@ -2865,6 +2876,11 @@
     }
     if (e.target.closest('[data-do="sudden-start"]')) {
       startMatch({ ...settings, form:lobbyForm(), coats:lobbyCoats, suddenStart:true });
+      return;
+    }
+    const closing=e.target.closest('[data-sudden-opening]');
+    if(closing){
+      startClosingFight(closing.dataset.suddenOpening,settings.mode==='local'?'local':'solo',settings.p1,settings.p2);
       return;
     }
     if (e.target.closest('[data-do="last-stock-start"]')) {
@@ -5359,13 +5375,13 @@
     StageMusic:'stage-music.js?v=1',
     RecoveryCoach:'recovery-coach.js?v=1', MatchReview:'match-review.js?v=match-film-1',
     StockCall:'stock-call.js?v=1',
-    FightCamera:'fight-camera.js?v=1',
+    FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PlayerProfiles:'player-profiles.js?v=1',
-    VersusRulebook:'versus-rules.js?v=lift-fight-1',
+    VersusRulebook:'versus-rules.js?v=closing-lines-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
-    ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=replay-lifetime-1',
+    ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=closing-lines-1',
     MoveGuide:'move-guide.js?v=descriptions-1', FighterSchool:'fighter-lessons.js?v=sparring-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
@@ -7497,7 +7513,7 @@
   function roundCall(w) {
     if (w.lesson) return '';
     if (w.endReason === 'time') return 'Time!';
-    if (w.suddenDeath) return w.suddenDeath.intro > 0 ? 'Sudden Death' : w.suddenDeath.frames < 22 ? 'GO!' : '';
+    if (w.suddenDeath) return w.suddenDeath.intro > 0 ? 'Sudden Death' : w.suddenDeath.frames-(w.suddenDeath.startFrame || 0) < 22 ? 'GO!' : '';
     return w.time < 0.37 && w.mode !== 'training' ? 'GO!' : '';
   }
   function runOnline(dt, pads) {
@@ -7781,6 +7797,9 @@
       afterStory = null;
       startMatch({...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'nightmail', cpuLevel:'rival',
         minutes:7, fetch:false, lastStockStart:true}, undefined, 42);
+    } else if (/^#(solo|local)\/sudden-death\/(gap|perch)$/.test(hash)) {
+      const [mode,,opening]=hash.slice(1).split('/');
+      startClosingFight(opening,mode);
     } else if (hash === '#solo/sudden-death') {
       leaveOnline();
       afterStory = null;

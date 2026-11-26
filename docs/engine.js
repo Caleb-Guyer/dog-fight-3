@@ -253,8 +253,8 @@
   }
   const warmupPartners={stand:{title:'Stand still',tag:'DUMMY'},shield:{title:'Hold shield',tag:'SHIELD'},spar:{title:'Spar with CPU',tag:'CPU'}};
   const blastSideMargin = 115, bottomBlastY = 765;
-  const blastZone = (x, y, width, inset = 0) => x < -blastSideMargin + inset ? 'left' : x > width + blastSideMargin - inset ? 'right' :
-    y < topBlastY ? 'top' : y > bottomBlastY ? 'bottom' : '';
+  const standardBounds=Object.freeze({left:-blastSideMargin,right:1200+blastSideMargin,top:topBlastY,bottom:bottomBlastY});
+  const blastZone=(x,y,bounds)=>x<bounds.left?'left':x>bounds.right?'right':y<bounds.top?'top':y>bounds.bottom?'bottom':'';
   function launchInfluence(vx, vy, input) {
     const speed = Math.hypot(vx, vy), stick = Math.hypot(input.x, input.y);
     if (!speed || stick <= 0.2) return { x: vx, y: vy, angle: 0, scale: 1 };
@@ -2677,6 +2677,7 @@
       this.stockCall = null;
       this.suddenDeath = null;
       const versus = this.mode === 'solo' || this.mode === 'local';
+      if(versus && config.closingHeight!==false)this.closingHeight=true;
       if(versus && config.lesson===undefined && !config.suddenStart && !config.lastStockStart && validRelayTeams(config.relayTeams)){
         this.relayTeams=config.relayTeams.map(team=>team.slice());
         this.relayCoats=relayCoats(this.relayTeams,config.coatBook);
@@ -2725,7 +2726,22 @@
       this.resetCpu();
       if (this.cpuLevel === 'rival' && config.rivalRead) this.bot.shieldHabit = {...config.rivalRead};
       if (this.mode === 'training') this.resetTraining();
-      else if (versus && config.suddenStart) this.startSuddenDeath();
+      else if (versus && config.suddenStart) {
+        this.startSuddenDeath();
+        if(this.closingHeight && ((config.suddenOpening==='gap' && this.geometryStage==='laundry') ||
+            (config.suddenOpening==='perch' && this.geometryStage==='bandstand'))){
+          const round=this.suddenDeath, [hero,rival]=this.dogs;
+          round.opening=config.suddenOpening;
+          round.frames=round.startFrame=1500;
+          if(round.opening==='gap'){
+            Object.assign(hero,{x:this.terrain[0].x2+42,y:this.blastBounds().bottom-30,ground:-1,vy:165,face:-1,jumps:1});
+            rival.x=this.terrain[1].x1+100;
+          }else{
+            Object.assign(hero,{x:600,y:this.terrain[3].y,ground:3});
+            rival.x=765;
+          }
+        }
+      }
       else for (const f of this.dogs) {
         this.spawn(f, false);
         if (versus && config.lastStockStart) { f.stocks = 1; f.damage = 125; }
@@ -3164,6 +3180,7 @@
       // Copy one graph so both ends of a grab and fighter keys in hit ledgers stay linked.
       Object.assign(this, structuredClone(state));
       if (!('itemDrops' in state)) delete this.itemDrops;
+      if (!('closingHeight' in state)) delete this.closingHeight;
       this.random.state = random.state;
     }
     saveTrainingMoment() {
@@ -5429,7 +5446,7 @@
           path.hardImpact = !f.throwBounce && floorImpactSpeed(vy, downLaunch, (f.tumble?.time || 0) + n * dt) >= maxTechSpeed;
           break;
         }
-        path.zone = blastZone(path.x, path.y, this.stageWidth, this.blastInset(path.ticks));
+        path.zone = blastZone(path.x,path.y,this.blastBounds(path.ticks));
         if (path.zone) break;
         if (!path.dodgeFrame && (f.tumble?.pending || f.tumble?.fromHit) && !f.tumble.meteor && !f.usedDodge && !f.throwBounce &&
             fadeWindow(f.tumble.time+n*dt,Math.hypot(vx,vy),f.stun-n*dt,false)) {
@@ -5442,7 +5459,10 @@
     cpuLaunchAim(f) {
       const home = f.x < this.stageWidth / 2 ? 1 : -1;
       const normal = { x: home, y: Math.abs(f.vx) > Math.abs(f.vy) ? -1 : 0 };
-      const margin = p => Math.min(p.x + 115 - this.blastInset(p.ticks), this.stageWidth + 115 - p.x - this.blastInset(p.ticks), p.y - topBlastY, 765 - p.y);
+      const margin=p=>{
+        const b=this.blastBounds(p.ticks);
+        return Math.min(p.x-b.left,b.right-p.x,p.y-b.top,b.bottom-p.y);
+      };
       const forecast = input => {
         const v = launchInfluence(f.vx, f.vy, input);
         return this.projectLaunch(f, v.x, v.y);
@@ -5496,8 +5516,22 @@
     blastInset(aheadFrames = 0) {
       return this.suddenDeath ? clamp((this.suddenDeath.frames + aheadFrames - 300) / 1080, 0, 1) * 480 : 0;
     }
+    blastBounds(aheadFrames=0){
+      const r=this.suddenDeath;
+      if(!r && this.stageWidth===1200)return standardBounds;
+      const inset=this.blastInset(aheadFrames);
+      const t=r?.ceiling!==undefined?clamp((r.frames+aheadFrames-600)/900,0,1):0;
+      return {left:inset-blastSideMargin,right:this.stageWidth+blastSideMargin-inset,
+        top:t?topBlastY+(r.ceiling-topBlastY)*t:topBlastY,
+        bottom:t?bottomBlastY+(r.floor-bottomBlastY)*t:bottomBlastY};
+    }
     startSuddenDeath(cause = 'direct') {
       this.suddenDeath = { round:(this.suddenDeath?.round || 0) + 1, intro:90, frames:0, cause };
+      if(this.closingHeight){
+        const terrain=platforms(this.geometryStage,0);
+        this.suddenDeath.ceiling=Math.min(...terrain.map(p=>p.y))-128;
+        this.suddenDeath.floor=Math.max(...terrain.filter(p=>!p.thin).map(p=>p.y))+94;
+      }
       this.clockFrames = null;
       this.grapple = this.ball = null;
       this.projectiles = [];
@@ -6117,8 +6151,8 @@
         !wallDrill
       )
         this.updateBall(dt);
-      const inset = this.blastInset();
-      const out = this.dogs.filter(f => !f.absent && blastZone(f.x, f.y, this.stageWidth, inset));
+      const bounds=this.blastBounds();
+      const out = this.dogs.filter(f => !f.absent && blastZone(f.x,f.y,bounds));
       if (this.trumpPractice?.guardSlot!==undefined) this.checkRunoffPractice(out);
       if(combo?.source==='throwChase' && combo.thrown && !combo.outcome){
         const rival=this.dogs[1];
@@ -9915,7 +9949,7 @@
         slot:f.index, frame:this.matchFrames, damage:f.damage,
         ...(this.relayTeams ? {kind:f.kind,coat:this.coatFor(f.index)} : {}),
         ...(points ? {credited,points:points.slice()} : {remaining:f.stocks}),
-        zone:blastZone(f.x, f.y, this.stageWidth, this.blastInset()),
+        zone:blastZone(f.x,f.y,this.blastBounds()),
         suddenRound:this.suddenDeath?.round || 0, lastHit:this.matchCard.players[f.index].lastHit,
       });
       this.projectiles = this.projectiles.filter((d) => d.owner !== f.index);
@@ -11589,7 +11623,7 @@
       if (f.tumble && !f.tumble.pending && !f.usedDodge && f.stun > 0 && f.stun <= inputWindow - dt + 1e-8 &&
           this.floorAhead(f, techWindow + dt) < 0) {
         const x = f.x + f.vx * (f.stun + 4 * dt), y = f.y + f.vy * (f.stun + 4 * dt);
-        const out = blastZone(x, y, this.stageWidth, this.blastInset(f.stun * 60 + 4));
+        const out=blastZone(x,y,this.blastBounds(f.stun*60+4));
         if (out) {
           const inward = f.x < closest.x1 ? 1 : f.x > closest.x2 ? -1 : Math.sign(this.stageWidth / 2 - f.x);
           const duck = out === 'top' ? 1 : f.y > closest.y + 25 ? -1 : 0;

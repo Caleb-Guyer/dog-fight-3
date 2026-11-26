@@ -43,6 +43,19 @@
   }
   function frame(view,width,height,dt,world,resized,focus,steady){
     const [a,b]=world.dogs,koTest=world.freshnessPractice?.koTest,survival=world.survivalPractice;
+    if(!view.fixed && !focus && world.suddenDeath?.ceiling!==undefined && world.suddenDeath.frames>600){
+      const box=world.blastBounds();
+      const left=Math.min(box.left,a.x-a.stats.width,b.x-b.stats.width)-20;
+      const right=Math.max(box.right,a.x+a.stats.width,b.x+b.stats.width)+20;
+      const top=Math.min(box.top,a.y-a.stats.height,b.y-b.stats.height)-24;
+      const bottom=Math.max(box.bottom,a.y,b.y)+20;
+      const zoom=Math.min(1.85,width*.94/(right-left),height*.79/(bottom-top));
+      const blend=resized?1:1-Math.exp(-dt*(zoom<view.zoom?5:3));
+      view.zoom+=(zoom-view.zoom)*blend;
+      view.cx+=((left+right)/2-view.cx)*blend;
+      view.cy+=((top+bottom)/2-view.cy)*blend;
+      return;
+    }
     if(!view.fixed && !focus && !world.bells && !koTest && !survival && duel(view,width,height,dt,world,resized))return;
     const spread=Math.abs(a.x-b.x),vertical=Math.abs(a.y-b.y);
     const off=a.x<155 || a.x>1045 || a.y>490 || a.y<80 || b.x<155 || b.x>1045 || b.y>490 || b.y<80;

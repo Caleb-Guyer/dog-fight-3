@@ -68,8 +68,11 @@
       '<h3>Match clock</h3><div class="dialog-actions">' + choices + '</div>' +
       '<p>Play the last stock with both dogs at 125%. When a hit threatens the match, steer during the close-up to change your launch.</p>' +
       '<div class="dialog-actions"><button class="utility" data-do="last-stock-start">Play last stock</button></div>' +
-      '<p>Sudden Death starts both dogs at 300% on one stock. The side boundaries close in after five seconds.</p>' +
-      '<div class="dialog-actions"><button class="utility" data-do="sudden-start">Play Sudden Death</button></div>');
+      '<h3>Sudden Death</h3><p>One stock at 300%. The sides start closing after five seconds. The ceiling and floor follow at ten seconds.</p>' +
+      '<div class="dialog-actions"><button class="utility" data-do="sudden-start">Play Sudden Death</button></div>'+
+      '<p>Start at the final boundaries. Air jump left out of the Laundry Line gap, or short hop from Moonbell’s top perch. Then fight for the last stock.</p>'+
+      '<div class="dialog-actions"><button class="utility" data-sudden-opening="gap">Save the low return</button>'+
+      '<button class="utility" data-sudden-opening="perch">Jump under the ceiling</button></div>');
   }
   function open(root,settings,{storage,hash='',focusDamage=false,apply,back}){
     const current=versusRules(settings), shared=decode(hash);
