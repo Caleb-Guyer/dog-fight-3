@@ -2695,7 +2695,7 @@
     trial.carry+=ledge?.watch?dt/2:dt;
     trial.seats?.sync(pads);
     while(trial.carry>=1/60 && player.frame<player.length && !player.outcome && player.battle.end===null){
-      const input=ledge?.watch?window.FinishTools.ledgeReply(ledge.mark,ledge.action,player.frame-trial.start,ledge.delay):
+      const input=ledge?.watch?player.reply(ledge.action,ledge.delay):
         playerInput(trial.seats?trial.slot:0,pads,trial.slot,player.battle);
       if(trial.review?.landing && trial.review.guided && player.frame===trial.start){
         if(!input.shield && !input.tapped?.shield){$('countdown').textContent='Tap Shield';trial.carry=0;return;}

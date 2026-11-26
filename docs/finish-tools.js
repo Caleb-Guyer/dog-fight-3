@@ -431,13 +431,6 @@
     if(focusFrame!=null)panel.open=true;
   }
   const ledgeReplies={climb:'Climb inward',roll:'Roll onto the stage',attack:'Get-up attack',jump:'Jump',drop:'Drop',hang:'Keep hanging'};
-  function ledgeReply(mark,action,tick,delay){
-    if(tick!==delay)return idleInput;
-    if(action==='climb')return {...idleInput,x:mark.left?1:-1};
-    if(action==='drop')return {...idleInput,y:1};
-    const key={roll:'shield',attack:'attack',jump:'jump'}[action];
-    return key?{...idleInput,[key]:true,tapped:{[key]:true}}:idleInput;
-  }
   function ledgeAttempt(tape,mark,recorded=false,emit=()=>{}){
     const {slot}=mark;
     const length=Math.min(tape.length,mark.frame+100);
@@ -450,7 +443,16 @@
       if(event==='ko' && e.f.index===slot)result.text=replay.battle.matchCard.points && !replay.battle.suddenDeath?'Lost a point':'Lost the stock';
       emit(event,e);
     },recorded?null:slot);
+    const dog=replay.battle.dogs[slot],edge=dog.ledge;
     return {battle:replay.battle,length,result,get frame(){return replay.frame;},get outcome(){return result.text;},
+      reply(action,delay){
+        const tick=replay.frame-mark.frame;
+        if(tick<delay || dog.ledge!==edge)return idleInput;
+        if(action==='climb')return {...idleInput,x:mark.left?1:-1};
+        if(action==='drop')return tick===delay && dog.prev.y>.45?idleInput:{...idleInput,y:1};
+        const key={roll:'shield',attack:'attack',jump:'jump'}[action];
+        return key && tick===delay?{...idleInput,[key]:true,tapped:{[key]:true}}:idleInput;
+      },
       step(input){
         if(result.text || replay.frame>=length || !replay.step(input))return false;
         result.frames=replay.frame-mark.frame;
@@ -466,7 +468,7 @@
   function ledgePreview(tape,mark,action,delay){
     const attempt=ledgeAttempt(tape,mark,action==='recorded');
     while(!attempt.outcome && attempt.frame<attempt.length)
-      attempt.step(ledgeReply(mark,action,attempt.frame-mark.frame,delay));
+      attempt.step(attempt.reply(action,delay));
     return attempt.result;
   }
   function ledgeDemo(){
@@ -801,5 +803,5 @@
     const sync=inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump,signal});
     return ()=>{sync();if(panel && selected)panel.hidden=frame()!==selected.frame;};
   }
-  window.FinishTools={chooseFighter,install,moments,analyze,inputFrame,launchFlight,holdAttempt,holdPreview,holdReport,ledgeDemo,ledgeAttempt,ledgeReply,ledgePreview,ledgeLine,defenseReply,returnTrace,returnComparison,landingDemo,landingTry,landingPreview,landingName,timing,landingActions,landingReport};
+  window.FinishTools={chooseFighter,install,moments,analyze,inputFrame,launchFlight,holdAttempt,holdPreview,holdReport,ledgeDemo,ledgeAttempt,ledgePreview,ledgeLine,defenseReply,returnTrace,returnComparison,landingDemo,landingTry,landingPreview,landingName,timing,landingActions,landingReport};
 })();
