@@ -2787,6 +2787,11 @@
         this.bot.rollHabit={count:2,delay:config.scoutedRoll.delay};
       }
       if (config.driveOpening && this.mode === 'solo') this.placeDriveFighters(config.driveOpening.edge, config.driveOpening.damage);
+      if (timed && config.finalCount) {
+        this.clockFrames = 600;
+        this.placeDriveFighters(true, 135);
+        this.dogs[0].damage = 135;
+      }
       if (this.mode === 'solo' && ['bait','watch','delay'].includes(config.dashBackOpening)) {
         const slot = config.dashBackOpening === 'bait' ? 0 : 1;
         const dancer = this.dogs[slot], puncher = this.dogs[1-slot];
@@ -5572,7 +5577,12 @@
       if (this.suddenDeath && this.hitStop <= 0) this.suddenDeath.frames += frames;
       this.stepFighters(dt, input1, input2);
       if (this.clockFrames === null || holdingFinish) return;
-      this.clockFrames = Math.max(0, this.clockFrames - frames);
+      const before = this.clockFrames;
+      this.clockFrames = Math.max(0, before - frames);
+      if (this.clockFrames <= 300 && this.clockFrames > 0 && this.matchCard && this.end === null) {
+        const seconds = Math.ceil(this.clockFrames / 60);
+        if (before > seconds * 60) this.emit('clockBeat', {seconds});
+      }
       if (this.clockFrames > 1e-8 || this.end !== null) return;
       const [first,second] = this.matchCard?.points || this.dogs.map(f=>f.stocks);
       if (first === second) this.startSuddenDeath('time');

@@ -2,9 +2,24 @@
   'use strict';
   const {clamp,fighters}=window.DogFight;
   const teams=['#ef926e','#98d0d1'],ink='#252337',paper='#fff1c7',gold='#f4c76a';
-  function describe(call){
-    const outs=call.exits.map(d=>'P'+(d.slot+1)+' '+fighters[d.kind].name+' out at the '+d.zone+' blast line');
-    return outs.join('. ')+'. '+(call.points?'Points':'Stocks remaining')+'. P1 '+call.score[0]+', P2 '+call.score[1]+'.';
+  function standing(call,solo){
+    const [a,b]=call.score, leader=a>b?'P1':solo?'CPU':'P2';
+    if(!call.points){
+      if(a===0 || b===0)return a===b?'Sudden Death':leader+' wins';
+      if(a===1 && b===1)return 'Last stock each';
+    }
+    let before=a-b;
+    for(const exit of call.exits){
+      const swing=call.points && exit.credited?2:1;
+      before+=exit.slot===0?swing:-swing;
+    }
+    if(a===b)return before===0?'Still tied':'All square';
+    return leader+(Math.sign(before)===Math.sign(a-b)?' leads':' takes the lead');
+  }
+  function describe(call,solo=false){
+    const second=solo?'CPU':'P2';
+    const outs=call.exits.map(d=>(d.slot?second:'P1')+' '+fighters[d.kind].name+' out at the '+d.zone+' blast line');
+    return outs.join('. ')+'. '+(call.points?'Points':'Stocks remaining')+'. P1 '+call.score[0]+', '+second+' '+call.score[1]+'. '+standing(call,solo)+'.';
   }
   function spark(ctx,x,y,r,color){
     ctx.fillStyle=color;
@@ -51,7 +66,7 @@
   }
   function tally(ctx,call,age,scale,steady,solo){
     const {width,height}=ctx.canvas, center=Math.round(width/2);
-    const y=Math.round(height*(call.exits.some(d=>d.zone==='top')?.74:.265));
+    const y=Math.round(clamp(height*(call.exits.some(d=>d.zone==='top')?.74:.265),24*scale,height-46*scale));
     ctx.save();ctx.translate(center,y);ctx.scale(scale,scale);ctx.textAlign='center';ctx.textBaseline='middle';
     const offset=steady?0:Math.round(12*Math.max(0,1-age/8)**2);
     const caption=call.exits.length===2?'DOUBLE KO':call.points?(call.exits[0].credited?'KO':'SELF-DESTRUCT'):'STOCKS';
@@ -68,6 +83,11 @@
       ctx.fillText(i?(solo?'CPU':'P2'):'P1',x,-2);
     }
     ctx.fillStyle=gold;ctx.fillRect(-4,9,8,3);
+    const state=standing(call,solo).toUpperCase();
+    ctx.font='10px "Brawl Pixel", monospace';
+    const w=Math.ceil(ctx.measureText(state).width/2)+7;
+    ctx.fillStyle=ink;ctx.fillRect(-w,29,w*2,16);
+    ctx.fillStyle=paper;ctx.fillText(state,0,37);
     ctx.restore();
   }
   function draw(ctx,world,age,left,top,zoom,steady){
@@ -85,5 +105,18 @@
     tally(ctx,call,age,scale,steady,world.mode==='solo');
     ctx.restore();
   }
-  window.StockCall={draw,describe};
+  function drawClock(ctx,frames){
+    const {width,height,clientWidth}=ctx.canvas, seconds=Math.ceil(frames/60);
+    const scale=Math.min(2.5,width/170,height/110,Math.max(1,clientWidth?width/clientWidth:1,Math.min(width/580,height/540)));
+    // Keep the center and the bottom touch controls clear during the final exchange.
+    ctx.save();ctx.translate(Math.round(width*.78),Math.round(height*.22));ctx.scale(scale,scale);
+    ctx.fillStyle=ink;ctx.fillRect(-29,-13,58,26);
+    ctx.fillStyle=paper;ctx.textAlign='center';ctx.textBaseline='middle';ctx.font='13px "Brawl Pixel", monospace';
+    ctx.fillText(seconds+' SEC',0,-2);
+    for(let i=0;i<5;i++){
+      ctx.fillStyle=i<seconds?gold:'#555063';ctx.fillRect(-23+i*10,7,7,3);
+    }
+    ctx.restore();
+  }
+  window.StockCall={draw,drawClock,describe};
 })();

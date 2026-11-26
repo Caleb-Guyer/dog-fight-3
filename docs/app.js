@@ -395,6 +395,12 @@
     oscillator.stop(now + length + 0.014);
   }
   function sound(name, detail = {}) {
+    if(name==='clockBeat'){
+      const pitch=detail.seconds===1?880:587;
+      tone(pitch,pitch,.11,0,'triangle',.09);
+      tone(pitch*2,pitch*2,.07,.004,'sine',.035);
+      return;
+    }
     if(name==='parcelLaunch'){tone(330,740,.18,0,'triangle',.09);tone(640,960,.12,.06,'sine',.06);return;}
     if (name === 'ringBell') {
       const pitch=[392,440,494,587,659,784][detail.count-1];
@@ -1513,7 +1519,7 @@
   let matchConfig, soloSeed, localSet = null, practiceFight = null, corner=null, spar=null;
   const schoolRuns=new WeakMap();
   let finishTape=null, clipScreen=null, victoryShot=null, finishTrial=null;
-  let bellChoice='pip', bellLoad, parcelChoice='pip';
+  let bellChoice='pip', parcelChoice='pip';
   function stadiumTabs(parcel){
     return '<div class="dialog-actions stadium-events" role="group" aria-label="Stadium event">'+
       '<button class="utility" data-do="bells-sheet" aria-pressed="'+!parcel+'">Bell Break</button>'+
@@ -1535,26 +1541,10 @@
     const run=world;
     window.ParcelPunt.showResult(run,showDialog,announce,()=>world===run && dialogType==='parcel-result');
   }
-  async function bellSheet(kind=bellChoice) {
+  function bellSheet(kind=bellChoice) {
     if (!Object.hasOwn(fighters,kind)) return;
     if (page!=='home') showHome(false);
-    if (!window.BellBreak) {
-      showDialog('bells-loading','Bell Break','<p role="status">Opening the bell yard…</p>');
-      if (!bellLoad) bellLoad=new Promise((resolve,reject)=>{
-        const script=document.createElement('script');
-        script.src='./bell-break.js?v=course-sheet-1';
-        script.onload=()=>window.BellBreak ? resolve() : reject();
-        script.onerror=reject;
-        document.head.append(script);
-      }).finally(()=>{bellLoad=null;});
-      try { await bellLoad; }
-      catch {
-        if (dialogType==='bells-loading') showDialog('bells','Bell Break',
-          '<p>The course could not load.</p><button class="primary" data-do="bells-sheet">Try again</button>');
-        return;
-      }
-      if (dialogType!=='bells-loading') return;
-    }
+    if(!window.BellBreak)return waitForDispatch('Bell Break',()=>loadDispatch('BellBreak'),()=>bellSheet(kind),showHome);
     bellChoice=kind;
     const device=getPads().length?1:matchMedia('(pointer:coarse)').matches?2:0;
     showDialog('bells','Bell Break',stadiumTabs(false)+window.BellBreak.courseSheet(kind,id=>portrait(id,savedCoat(0,id))));
@@ -1568,13 +1558,8 @@
     startMatch({mode:'targets',p1:kind,p2:'pip',coats:[savedCoat(0,kind),0],stage:window.BellBreak.courses[kind].stage,fetch:false});
   }
   function bellResult() {
-    const run=world, {formatTime}=window.BellBreak, won=run.endReason==='clear';
-    showDialog('bell-result',won?'Course cleared!':'Missed the landing',window.BellBreak.courseResult(run),false);
-    if (won) run.saved.then(()=>{
-      if (world===run && dialogType==='bell-result') $('bell-record').textContent=
-        (run.record?'New personal best':'Personal best')+' · '+formatTime(window.BellBreak.bellBest(run.dogs[0].kind))+(run.tabOnly?' · Saved for this tab':'');
-    });
-    document.querySelector('[data-do=bells-start]').focus({preventScroll:true});
+    const run=world;
+    window.BellBreak.showResult(run,showDialog,()=>world===run && dialogType==='bell-result');
   }
   const reducedReplays=matchMedia('(prefers-reduced-motion: reduce)');
   const cup = window.YardCup, unsavedCup = new Map();
@@ -1949,6 +1934,11 @@
     startMatch({mode,p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:opening==='gap'?'laundry':'bandstand',
       form:'original',cpuLevel:settings.cpuLevel,fetch:false,suddenStart:true,suddenOpening:opening},undefined,17);
   }
+  function startFinalCount(mode,p1='brisket',p2='pip'){
+    leaveOnline();afterStory=null;
+    startMatch({mode,p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:'nightmail',form:'flat',
+      cpuLevel:'rival',fetch:false,timeBattle:true,minutes:1,finalCount:true},undefined,17);
+  }
   function startDashBack(role) {
     leaveOnline(); afterStory = null;
     const p1 = role === 'bait' ? 'pip' : 'brisket', p2 = role === 'bait' ? 'brisket' : 'pip';
@@ -2112,7 +2102,8 @@
         drillSide = null;
       }
       if (name === 'blastThreat' && !world.survivalPractice) announce(e.f.stats.name + ' near the ' + e.zone + ' blast line');
-      if(name==='ringOutScore')announce(window.StockCall?.describe(e) || e.exits.map(d=>fighters[d.kind].name).join(' and ')+' knocked out');
+      if(name==='ringOutScore')announce(window.StockCall?.describe(e,world.mode==='solo') || e.exits.map(d=>fighters[d.kind].name).join(' and ')+' knocked out');
+      if(name==='clockBeat' && e.seconds===5 && !(online.match?.confirmedWorld || world).stockCall)announce('Five seconds left');
       if(name==='ko' && !e.scored)announce(e.f.stats.name+' knocked out');
       if(name==='relayEntry')announce(labelFor(e.f.index)+' sends in '+e.f.stats.name);
       if (name === 'ledge' && drillSide && e.f.index === 0)
@@ -2956,6 +2947,7 @@
       return;
     }
     const closing=e.target.closest('[data-sudden-opening]');
+    if(e.target.closest('[data-do="final-count"]'))return startFinalCount(settings.mode==='local'?'local':'solo',settings.p1,settings.p2);
     if(closing){
       startClosingFight(closing.dataset.suddenOpening,settings.mode==='local'?'local':'solo',settings.p1,settings.p2);
       return;
@@ -5459,11 +5451,11 @@
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
     RecoveryCoach:'recovery-coach.js?v=both-seats-1', MatchReview:'match-review.js?v=match-film-1',
-    StockCall:'stock-call.js?v=1',
+    StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PlayerProfiles:'player-profiles.js?v=1',
-    VersusRulebook:'versus-rules.js?v=matchup-pin-1',
+    VersusRulebook:'versus-rules.js?v=final-count-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
     ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=instant-replay-1',
@@ -7879,6 +7871,8 @@
       startDropCatch(hash==='#solo/defend-drop');
     } else if (hash==='#solo/fetch' || hash==='#local/fetch') {
       startFetchMatch(hash.startsWith('#local')?'local':'solo');
+    } else if (hash==='#solo/final-count' || hash==='#local/final-count') {
+      startFinalCount(hash.slice(1).split('/')[0]);
     } else if (hash === '#solo/time-battle') {
       leaveOnline();
       afterStory = null;

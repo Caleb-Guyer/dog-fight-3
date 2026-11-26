@@ -2968,6 +2968,8 @@
       ctx.restore();
       this.drawOffscreen(ctx, world, left, top, width, height, this.zoom, time);
       if(confirmed.end===null)this.outroFrames=0;
+      if(confirmed.matchCard && confirmed.end===null && confirmed.clockFrames>0 && confirmed.clockFrames<=300)
+        window.StockCall?.drawClock(ctx,confirmed.clockFrames);
       if(confirmed.stockCall && window.StockCall){
         window.StockCall.draw(ctx,confirmed,confirmed.stockCall.age+this.outroFrames,left,top,this.zoom,steady);
         if(confirmed.end!==null)this.outroFrames+=dt*60;

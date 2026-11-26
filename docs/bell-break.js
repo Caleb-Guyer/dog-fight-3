@@ -155,5 +155,14 @@
       '<div class="dialog-actions"><button class="primary" data-do="bells-start">Run again</button>'+
       '<button class="utility" data-do="bells-sheet">Choose course</button><button class="utility" data-do="home">Main menu</button></div>';
   }
-  window.BellBreak = {Run,courses,formatTime,readBest,draw,preview,bellBest,saveBellTime,courseSheet,courseResult};
+  function showResult(run,dialog,current){
+    const won=run.endReason==='clear';
+    dialog('bell-result',won?'Course cleared!':'Missed the landing',courseResult(run),false);
+    if(won)run.saved.then(()=>{
+      if(current())document.getElementById('bell-record').textContent=(run.record?'New personal best':'Personal best')+
+        ' · '+formatTime(bellBest(run.dogs[0].kind))+(run.tabOnly?' · Saved for this tab':'');
+    });
+    document.querySelector('[data-do=bells-start]').focus({preventScroll:true});
+  }
+  window.BellBreak = {Run,courses,formatTime,readBest,draw,preview,bellBest,saveBellTime,courseSheet,courseResult,showResult};
 })();
