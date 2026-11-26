@@ -15,8 +15,14 @@
   const chargeColors = { pip: '#ee9775', brisket: gold, noodle: '#e5b47b', clover: lilac };
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const snap = (value, cell = 3) => Math.round(value / cell) * cell;
-  const effectsAtlas = new Image();
-  effectsAtlas.src = './assets/fight-fx.png';
+  let effectsAtlas;
+  function loadEffects() {
+    if (!effectsAtlas) {
+      effectsAtlas = new Image();
+      effectsAtlas.src = './assets/fight-fx.png';
+    }
+    return effectsAtlas;
+  }
   const atlasRow = { light: 0, impact: 1, block: 2, land: 3, skid: 4, smoke: 5 };
 
   // Effects are stamped on the same coarse grid as the scenery.
@@ -2282,7 +2288,7 @@
       return;
     }
     const row = atlasRow[e.type];
-    if (row !== undefined && effectsAtlas.naturalWidth) {
+    if (row !== undefined && (effectsAtlas || loadEffects()).naturalWidth) {
       const frame = Math.min(4, Math.floor(p * 5));
       const floor = e.type === 'land' || e.type === 'skid';
       ctx.save();
@@ -2348,6 +2354,7 @@
   }
   class FightView {
     constructor(radar = null) {
+      loadEffects();
       if(!window.FightCamera)FightView.prepare?.();
       this.radar = radar;
       this.effects = [];
