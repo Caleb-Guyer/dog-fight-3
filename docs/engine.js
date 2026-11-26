@@ -2862,6 +2862,22 @@
         this.bot.rollHabit={count:2,delay:config.scoutedRoll.delay};
       }
       if (config.driveOpening && this.mode === 'solo') this.placeDriveFighters(config.driveOpening.edge, config.driveOpening.damage);
+      if (this.mode === 'solo' && ['bait','watch','delay'].includes(config.dashBackOpening)) {
+        const slot = config.dashBackOpening === 'bait' ? 0 : 1;
+        const dancer = this.dogs[slot], puncher = this.dogs[1-slot];
+        const floor = this.terrain[0], dir = slot === 0 ? -1 : 1, center = (floor.x1 + floor.x2) / 2;
+        Object.assign(puncher, {ground:0, x:center-dir*50, y:floor.y, face:dir});
+        const delay = config.dashBackOpening === 'delay', smash = smashes[puncher.kit.smashes.side];
+        const distance = smash.box[0]+smash.box[2]+dancer.stats.width+(delay ? 10 : -18);
+        Object.assign(dancer, {ground:0, x:puncher.x+dir*distance, y:floor.y, face:-dir});
+        puncher.charge = .35;
+        lockSmash(puncher, 'smash', 0, dir);
+        if (delay) this.bot.missedSmash = {id:puncher.kit.smashes.side,expires:this.time+9};
+        else {
+          releaseSmash(puncher);
+          puncher.attack.time = 3/60;
+        }
+      }
       if(this.mode==='solo' && this.stage==='nightmail' && this.form==='trio' && ['perch','edge'].includes(config.throwOpening)){
         const [p,guard]=this.dogs,perch=config.throwOpening==='perch';
         const ground=perch?3:0,floor=this.terrain[ground],face=perch?-1:1,x=perch?(floor.x1+floor.x2)/2:floor.x1+30;
@@ -2893,6 +2909,8 @@
         opening.matchFrames = 0;
         this.copyFightFrom(opening);
       }
+      // Solo replays reconstruct the CPU. Older checkpoints retain the footwork they recorded.
+      if (this.cpuLevel === 'rival') this.bot.dashBackEnabled = true;
       this.matchCard = versus && config.lesson === undefined ? {
         players:this.dogs.map(f => ({kind:f.kind, coat:this.coatFor(f.index), damage:0, hits:0, blocks:0, parries:0,
           techs:0, knockdowns:0, shieldBreaks:0, lastHit:null})),
@@ -2911,7 +2929,7 @@
     resetCpu() {
       const memory = this.bot;
       this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
-      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches'])
+      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled'])
         if (memory[key] !== undefined) this.bot[key] = memory[key];
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
@@ -2923,6 +2941,8 @@
         this.bot.ledgeTrap = null;
         this.bot.rollForecast = null;
         this.bot.jumpIn = null;
+        delete this.bot.dashBack;
+        delete this.bot.missedSmash;
         this.bot.shieldWatch = 0;
         this.bot.rookieNext = 0;
       }
@@ -10874,6 +10894,102 @@
       if (windup > .15 || gap - closing * windup > offset + radius + f.stats.width + 8) return null;
       return {...idleInput, x:f.shield ? 0 : dir, shield:true};
     }
+    dashBackPunish(f, foe) {
+      const brain = this.bot, swing = foe.attack;
+      if (!swing || f.ground < 0 || f.ground !== foe.ground || f.attack || f.shield || f.charge >= 0 ||
+          f.floorAction || f.grip || f.stun || f.shieldDrop || f.shieldStun || f.command || f.jumpSquat || f.landingLag ||
+          f.dodge || f.tumble || f.clashRecoil || protectionTime(f) || protectionTime(foe) || swing.connected) {
+        if (brain.dashBack) delete brain.dashBack;
+        return null;
+      }
+      const away = foe.face, gap = (f.x - foe.x) * away, floor = this.terrain[f.ground];
+      if (brain.dashBack?.swing !== swing) {
+        if (brain.dashBack) delete brain.dashBack;
+        const standingGrab = swing.grabAttempt && swing.grabStyle === 'standing' && !swing.step;
+        if ((!standingGrab && swing.smashSide !== 'side') || swing.burst || swing.projectile || swing.second ||
+            swing.time + 1e-8 < 3/60 || swing.time >= swing.start || Math.abs(foe.vx) > 30 ||
+            (f.run && f.run.face !== away && (f.run.turned || f.run.age+1e-8 >= f.kit.footwork.reverseFrames/60))) return null;
+        const reach = swing.box[0]+swing.box[2]+f.stats.width;
+        const clear = reach+6-gap, steps = Math.ceil((swing.start-swing.time)*60-1e-8);
+        const room = away > 0 ? floor.x2-f.x : f.x-floor.x1;
+        if (clear <= 0 || room < clear+f.stats.width+f.stats.speed**2/(2*f.kit.footwork.traction)) return null;
+        let travel = 0, speed = Math.max(f.kit.footwork.burst,f.vx*away);
+        for (let i=0; i<steps; i++) {
+          speed = Math.min(f.stats.speed, speed+f.kit.footwork.acceleration/60);
+          travel += speed/60;
+        }
+        if (clear > travel) return null;
+        brain.dashBack = {swing, reach};
+        brain.hop = null;
+        brain.hold = brain.guard = brain.jumpHold = 0;
+      }
+      if (swing.time + 1e-8 < swing.start+swing.active) {
+        if (gap < brain.dashBack.reach+6) return {...idleInput, x:away};
+        return idleInput;
+      }
+      if (swing.smashSide && !brain.dashBack.observed) {
+        brain.dashBack.observed = true;
+        brain.missedSmash = {id:swing.moveId, expires:this.time+9};
+      }
+      const dir = -away, left = swing.end-swing.time;
+      const tilt = moves[f.kit.tilts.forward], dash = moves[f.kit.dashAttack];
+      const speed = Math.max(0,f.vx*dir);
+      if (f.run?.face === dir && !f.run.turned && speed >= f.stats.speed*.4 && left >= dash.start) {
+        const slide = Math.min(dash.start, speed*dash.carry/dash.brake);
+        const gapAtHit = gap - slide*(speed*dash.carry - dash.brake*slide/2);
+        if (Math.abs(gapAtHit-dash.box[0]) <= dash.box[2]+foe.stats.width-3)
+          return {...idleInput,x:dir,tapped:{attack:true}};
+      }
+      if (left >= tilt.start && Math.abs(gap-tilt.box[0]) <= tilt.box[2]+foe.stats.width-3)
+        return {...idleInput,aimStick:true,tiltMode:true,smashX:dir,tapped:{aimStick:true}};
+      if (left > Math.min(dash.start,tilt.start)) return {...idleInput,x:dir};
+      return idleInput;
+    }
+    baitRepeatSmash(f, foe) {
+      const read = this.bot.missedSmash;
+      if (!read) return null;
+      const charge = foe.smashCharge, swing = foe.attack;
+      if (this.time > read.expires || f.ground < 0 || f.ground !== foe.ground || f.stun || f.grip ||
+          f.ledge || f.floorAction || protectionTime(foe) || (read.charging && read.charging !== charge && swing?.moveId !== read.id)) {
+        delete this.bot.missedSmash;
+        return null;
+      }
+      if (f.attack || f.command || f.shield || f.jumpSquat || f.landingLag || f.charge >= 0) return null;
+      const dir = foe.face, gap = (f.x-foe.x)*dir;
+      const move = smashes[read.id], reach = move.box[0]+move.box[2]+f.stats.width;
+      if (!read.charging) {
+        if (charge?.moveId !== read.id || foe.charge < .10 || gap < reach-4 || gap > reach+72) return null;
+        const floor = this.terrain[f.ground], room = dir > 0 ? floor.x2-f.x : f.x-floor.x1;
+        if (room < f.stats.width+24) return null;
+        read.charging = charge;
+        read.closeAt = this.time+.30;
+        this.bot.hold = this.bot.guard = this.bot.jumpHold = 0;
+        this.bot.hop = null;
+      }
+      if (this.time < read.closeAt) {
+        if (swing?.moveId === read.id) {
+          this.bot.dashBack = {swing,reach};
+          delete this.bot.missedSmash;
+          return this.dashBackPunish(f,foe);
+        }
+        // Show the pause at the edge of the punch. The attacker can hold it to catch the run in.
+        const delta = reach+10-gap;
+        return {...idleInput,x: Math.abs(delta)>3 ? Math.sign(delta)*dir*.50 : 0};
+      }
+      if (this.time-read.closeAt > .55 || gap <= 0) {
+        delete this.bot.missedSmash;
+        return null;
+      }
+      // Walk the first steps of the approach so the player can see the commitment before the dash grab.
+      if (this.time-read.closeAt < .21) return {...idleInput,x:-dir*.5};
+      const running = f.run?.face === -dir && !f.run.turned && -dir*f.vx >= f.stats.speed*.4;
+      const grab = grabs[running ? f.kit.dashGrab : f.kit.grab];
+      if (gap <= grab.box[0]+grab.box[2]+foe.stats.width-5) {
+        delete this.bot.missedSmash;
+        return {...idleInput,x:running ? -dir : 0,grabX:-dir,tapped:{grab:true}};
+      }
+      return {...idleInput,x:-dir};
+    }
     cpuDiscResponse(f) {
       if (f.ground < 0 || f.stun || f.impactLag || f.grip || f.attack || f.command || f.floorAction ||
           f.charge >= 0 || f.smashCharge || f.jumpSquat || f.respawning) return null;
@@ -11371,7 +11487,8 @@
           }
           return idleInput;
         }
-        const answer = (!unsafe && (this.cpuDiscResponse(f) || this.cpuDashShield(f, foe))) ||
+        const answer = (!unsafe && (this.cpuDiscResponse(f) ||
+          (brain.dashBackEnabled && (this.baitRepeatSmash(f,foe) || this.dashBackPunish(f,foe))) || this.cpuDashShield(f, foe))) ||
           this.rivalLedgeReturn(f, foe) || this.readShieldEscape(f, foe) || this.rivalJumpIn(f, foe, dt) ||
           this.attackCancelInput(f, foe) || this.runningAntiAir(f, foe) || this.angledTiltInput(f, foe);
         if (answer) return answer;

@@ -178,6 +178,11 @@
         '<div class="dialog-actions"><button class="utility" data-do="shield-read-match">Try Rival · Pip vs. Noodle</button>' +
         '<button class="utility" data-do="shield-read-set">Play a Rival set · Pip vs. Noodle</button>' +
         '<button class="utility" data-do="cut-off-clover">Intercept Clover · Pip vs. Clover</button></div>' +
+        '<h3>Make Haymaker miss</h3><p>Brisket has already let his punch go. As Pip, dash left at GO, let the punch pass, then run back in and tap Attack. Switch dogs to see Rival Pip’s timing.</p>' +
+        '<div class="dialog-actions"><button class="utility" data-do="dash-back-bait">Dodge the punch as Pip</button>' +
+        '<button class="utility" data-do="dash-back-watch">Face Rival Pip as Brisket</button></div>' +
+        '<p>Pip has seen Haymaker miss once. Hold Smash through GO, watch his front foot, then release as he steps toward you. Wait too long and he can grab you.</p>' +
+        '<button class="utility" data-do="dash-back-delay">Catch Pip stepping in</button>' +
         '<p>Escape Brisket’s grab at GO. On the top platform, steer across his up throw and air-dodge toward open ground. At the ledge, try a quick jab before his paws close.</p>' +
         '<div class="dialog-actions"><button class="utility" data-do="throw-read-perch">Top platform · 110%</button>' +
         '<button class="utility" data-do="throw-read-edge">Left ledge · 80%</button></div>') + ledgeChoices;
