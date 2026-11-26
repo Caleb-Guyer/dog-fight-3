@@ -78,6 +78,22 @@ async function run(browser,phone){
       return [speculative,count(),calls.at(-1).labels];
     });
     assert.deepEqual(gates,[0,1,['STOCKS','3','P1','2','P2']]);
+    if(!phone){
+      await press('[data-do=clip-back]');await press('#ko-list-back');await press('[data-do=resume]');
+      await page.keyboard.down('a');
+      for(let n=0;n<65 && !await page.locator('[data-do=match-card]').isVisible();n++)await page.clock.runFor(1000);
+      await page.keyboard.up('a');await press('[data-do=match-card]');
+      const id=await page.evaluate(()=>new FightRecords.Book(localStorage).list()[0].id);
+      await press('[data-do=card-back]');await press('[data-do=home]');
+      await press('#home-records');await press('[data-record-id="'+id+'"]');
+      await page.locator('[data-saved-clip="0"]').first().waitFor();
+      await page.goto('http://127.0.0.1:8080/?archive#records');await press('[data-record-id="'+id+'"]');
+      await press('[data-saved-clip="0"]');await press('#clip-return');await press('#clip-exchange');
+      await press('[data-finish-slot="1"]');assert.match(await page.locator('#match-mode').textContent(),/Stock return · P2 Brisket/);
+      await page.clock.runFor(5100);assert.match(await page.locator('.finish-comparison').innerText(),/Automatic drop on frame/);
+      await press('[data-do=trial-results]');await page.locator('[data-saved-clip="0"]:focus').waitFor();
+      assert.equal(await page.evaluate(()=>new FightRecords.Book(localStorage).list().length),1);
+    }
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

@@ -150,6 +150,13 @@ async function ringside(browser){
     assert.equal(await page.locator('[data-do=corner-toggle]').getAttribute('aria-pressed'),'false');
     await page.locator('[data-do=corner-toggle]').click();await page.locator('[data-do=resume]').click();
     await page.clock.runFor(32);assert(await tip.isVisible());
+    await page.keyboard.down('a');
+    for(let n=0;n<150 && !(await tip.getAttribute('data-cue'))?.startsWith('lift/');n++)await page.clock.runFor(60);
+    await page.keyboard.up('a');assert.match(await line.textContent(),/lamps turn mint/);
+    await page.locator('#pause').click();assert.match(await practice.textContent(),/Take the lift/);await practice.click();
+    assert.equal(await page.locator('#launch-stock-return').getAttribute('aria-pressed'),'true');
+    await page.locator('#return-fight').click();await page.clock.runFor(50);
+    assert.match(await line.textContent(),/lamps turn mint/);
     assert.deepEqual(errors,[]);
   }finally{await ctx.close();}
 }
