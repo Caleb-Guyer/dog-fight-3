@@ -8,7 +8,7 @@ async function play(browser,device) {
   const page=await browser.newPage({viewport:touch?{width:390,height:844}:{width:1280,height:720},isMobile:touch,hasTouch:touch});
   const errors=[]; page.on('pageerror',e=>errors.push(e.message));
   const choose=selector=>touch?page.locator(selector).tap():page.locator(selector).click();
-  const keys={left:'a',right:'d',attack:'j',smash:'i'};
+  const keys={left:'a',right:'d',attack:'j',smash:'i',shield:'l'};
   const fingers=new Map();
   try {
     if(pad) await page.addInitScript(()=>{
@@ -17,7 +17,7 @@ async function play(browser,device) {
       Object.defineProperty(navigator,'getGamepads',{value:()=>[gamepad]});
       window.padInput=(action,on)=>{
         if(action==='left'||action==='right') gamepad.axes[0]=on?(action==='left'?-1:1):0;
-        else Object.assign(gamepad.buttons[action==='smash'?7:2],{pressed:on,value:Number(on)});
+        else Object.assign(gamepad.buttons[{attack:2,smash:7,shield:4}[action]],{pressed:on,value:Number(on)});
       };
     });
     const client=touch && await page.context().newCDPSession(page);
@@ -36,7 +36,20 @@ async function play(browser,device) {
     await page.goto('http://127.0.0.1:8080/#solo/dash-back/watch');
     await page.evaluate(()=>{
       const step=DogFight.Battle.prototype.step;
-      DogFight.Battle.prototype.step=function(...args){ if(this.mode==='solo') window.live=this; return step.apply(this,args); };
+      const seen=new WeakSet();
+      DogFight.Battle.prototype.step=function(...args){
+        if(this.mode==='solo'){
+          window.live=this;
+          if(!seen.has(this)){
+            seen.add(this);window.contacts=[];
+            const emit=this.emit;this.emit=(name,e)=>{
+              if(['hit','block','grabCatch'].includes(name))window.contacts.push([name,e.moveId]);
+              emit(name,e);
+            };
+          }
+        }
+        return step.apply(this,args);
+      };
     });
     const damage=()=>page.evaluate(()=>live.dogs.map(f=>f.damage));
     const frame=()=>page.evaluate(()=>window.live?.matchFrames??0);
@@ -65,6 +78,17 @@ async function play(browser,device) {
     assert((await damage())[1]>20,device+' caught the step');
     await choose('#pause');await choose('[data-do=rematch]');await page.clock.runFor(3050);
     assert.deepEqual(await damage(),[7,0],device+' early release');
+    await choose('#pause');await choose('[data-do=lobby]');await choose('#cpu-level');await choose('[data-do=lift-fight]');
+    await page.evaluate(()=>{window.live=null;});await page.clock.runFor(2050);await advanceTo(28);
+    assert.deepEqual(await page.evaluate(()=>live.dogs.map(f=>f.stocks)),[3,2]);
+    await hold('shield',true);await advanceTo(55);
+    assert.deepEqual(await page.evaluate(()=>contacts[0]),await page.evaluate(()=>['block',live.dogs[1].kit.air.down]),device+' late shield');
+    await hold('shield',false);await choose('#pause');await choose('[data-do=rematch]');
+    await page.evaluate(()=>{window.live=null;});await page.clock.runFor(2050);await advanceTo(2);
+    await hold('shield',true);await advanceTo(55);await hold('shield',false);
+    assert.deepEqual(await page.evaluate(()=>contacts[0]),await page.evaluate(()=>['grabCatch',live.dogs[1].kit.grab]),device+' early shield');
+    await page.goto('http://127.0.0.1:8080/?return#solo/stock-return/noodle');
+    assert.match(await page.locator('#match-mode').textContent(),/Rival/);
     assert.deepEqual(errors,[]);
   } finally { await page.close(); }
 }
