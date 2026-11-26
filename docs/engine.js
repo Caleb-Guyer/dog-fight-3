@@ -2822,6 +2822,10 @@
         this.spawn(f, false);
         if (versus && config.lastStockStart) { f.stocks = 1; f.damage = 125; }
       }
+      if (config.fetchStart && this.fetch && versus && !this.suddenDeath) {
+        const f=this.dogs[0];
+        this.ball={x:f.x+f.face*42,y:f.y-12,vx:0,vy:0,age:0,hits:2,owner:-1};
+      }
       if (config.underTableStart && this.mode === 'solo' && this.geometryStage === 'picnic') {
         const [hero, guard] = this.dogs, floor = this.terrain[0];
         Object.assign(hero, {x:floor.x1+23, y:floor.y+40+hero.stats.height, ground:-1, jumps:1, damage:90, face:-1});
@@ -7487,7 +7491,11 @@
           f.command = null;
           const neutralInAir = command.type === 'special' && command.airSide === 'neutral' && f.ground < 0;
           if (command.face && !neutralInAir && (f.ground >= 0 || command.type !== 'attack')) f.face = command.face;
-          if (command.type === 'grab') {
+          if (this.ball?.holder===f.index && (command.type==='grab' || command.type==='attack')) {
+            if(command.face)f.face=command.face;
+            beginAttack(f,'grab',command.aim,0,f.kit.grab);
+            Object.assign(f.attack,{ballToss:true,start:4/60,active:3/60,end:17/60});
+          } else if (command.type === 'grab') {
             const style = f.ground >= 0 && command.grabStyle ? command.grabStyle : 'standing';
             beginGrab(f, style, style === 'standing' ? 0 : command.runFace, command.aim, command.shieldGrab, command.boostGrab);
             if (command.boostGrab)
@@ -7558,6 +7566,10 @@
           }
         }
         a.time += dt;
+        if (a.ballToss && !a.fired && a.time+1e-8>=a.start) {
+          a.fired=true;
+          if(this.ball?.holder===f.index)this.tossBall(f,a.aim);
+        }
         if (
           a.shieldGrab && a.step &&
           a.time > shieldGrabPenalty + 1e-8 && a.time - dt <= shieldGrabPenalty + 1e-8
@@ -7966,6 +7978,7 @@
       return !!edge;
     }
     catchRival(owner, target, attack) {
+      if(this.ball?.holder===target.index)this.dropBall(target);
       this.rememberTechPunish(target);
       if(this.chasePractice?.role==='readTech' && target.index===1 && this.chasePractice.phase!=='done')
         this.finishChase(target.floorAction?.techChoice?'grabPunish':this.chasePractice.phase==='getup'?'escaped':'early');
@@ -8590,7 +8603,7 @@
     }
     activeSwing(f) {
       const attack = f.attack;
-      if (!attack || f.impactLag > 1e-8 || attack.pummel || attack.throwSide || attack.projectile ||
+      if (!attack || f.impactLag > 1e-8 || attack.caughtBall || attack.ballToss || attack.pummel || attack.throwSide || attack.projectile ||
           attack.anchor || attack.charging || attack.diving || (attack.moveId === 'brisketBrace' && !attack.riposte))
         return null;
       const beat = attackWindow(attack);
@@ -8700,7 +8713,7 @@
           };
           if (
             !attack.ballHit &&
-            this.ball &&
+            this.ball && this.ball.holder==null &&
             Math.abs(this.ball.x - area.x) < area.rx + 14 &&
             Math.abs(this.ball.y - area.y) < area.ry + 14
           ) {
@@ -8795,6 +8808,8 @@
         f.reboundTime = 0.14;
         f.attack = null;
       }
+      if (this.ball && this.ball.holder==null && !swats.length && active.length)
+        this.catchBall(active,catches);
       if (!catches.length) return;
       // One pair of paws can seize one opponent. Choose the nearest reachable body.
       const nearest = new Map();
@@ -8889,6 +8904,7 @@
     }
     dealDamage(target, damage, preserveCombo, hitId) {
       if (damage > 0) {
+        if(this.ball?.holder===target.index)this.dropBall(target);
         target.shortHopFlight = false;
         target.ledgeProtectionReady = true;
         target.ledgeCatches = 0;
@@ -9580,7 +9596,7 @@
           d.x += face * step;
           d.rangeLeft -= step;
           if (this.discContacts(d, oldX, oldY, damage, rivals, impact)) return false;
-          if (this.ball && Math.abs(d.x - this.ball.x) < 29 && Math.abs(d.y - this.ball.y) < 19) {
+          if (this.ball && this.ball.holder==null && Math.abs(d.x - this.ball.x) < 29 && Math.abs(d.y - this.ball.y) < 19) {
             this.swat(this.dogs[d.owner], 0, Math.sign(d.vx));
             return false;
           }
@@ -9651,6 +9667,41 @@
         return d.age < 2.6 && d.x > -130 && d.x < this.stageWidth + 130;
       });
     }
+    carryBall(f) {
+      this.ball.x=f.x+f.face*(f.stats.width+8);
+      this.ball.y=f.y-bodyHeight(f)*.58;
+    }
+    catchBall(active,catches) {
+      const b=this.ball;
+      let nearest=Infinity, catcher;
+      for(const {f,attack,area} of active){
+        if(!attack.grabAttempt || f.attack!==attack || f.grip || catches.some(c=>c.f===f))continue;
+        const dx=Math.abs(b.x-area.x),dy=Math.abs(b.y-area.y);
+        const atPaws=f.ground>=0 && Math.abs(b.y-(f.y-12))<=3 && Math.abs(b.x-f.x)<=f.stats.width+35;
+        if(dx>area.rx+13 || (dy>area.ry+13 && !atPaws))continue;
+        const distance=dx*dx+dy*dy;
+        if(distance<nearest || (distance===nearest && this.random()<.5)){catcher=f;nearest=distance;}
+      }
+      if(!catcher)return;
+      catcher.attack.caughtBall=true;
+      Object.assign(b,{holder:catcher.index,owner:-1,age:0,vx:0,vy:0});
+      this.carryBall(catcher);
+      this.emit('ballCatch',{f:catcher,point:{x:b.x,y:b.y}});
+    }
+    dropBall(f) {
+      const b=this.ball;
+      this.carryBall(f);
+      delete b.holder;
+      Object.assign(b,{owner:-1,vx:-f.face*90,vy:-180,age:0});
+    }
+    tossBall(f,aim) {
+      const b=this.ball, speed=b.hits===3?820:565;
+      this.carryBall(f);
+      delete b.holder;
+      Object.assign(b,{owner:f.index,age:0,vx:f.face*(aim?speed*.38:speed),
+        vy:aim<0?-640:aim>0?540:-120});
+      this.emit('swat',{f,ball:b});
+    }
     swat(f, aim, face = f.face) {
       const b = this.ball;
       b.hits = Math.min(3, b.hits + 1);
@@ -9677,6 +9728,7 @@
         return;
       }
       const b = this.ball, oldX = b.x, oldY = b.y;
+      if(b.holder!=null){this.carryBall(this.dogs[b.holder]);return;}
       b.age += dt;
       b.vy += (b.hits === 3 ? 280 : 840) * dt;
       b.x += b.vx * dt;
@@ -9754,6 +9806,7 @@
       return pick;
     }
     loseStock(f) {
+      if(this.ball?.holder===f.index){this.ball=null;this.nextBall=3.5;}
       if (f.grip) this.breakGrapple(false);
       const points=this.suddenDeath ? null : this.matchCard?.points;
       const hit=this.matchCard?.players[f.index].lastHit;
@@ -10913,6 +10966,18 @@
       const f = this.dogs[1],
         foe = this.dogs[0],
         brain = this.bot;
+      const ball=this.ball;
+      if(ball && f.ground>=0 && !f.attack && !f.grip && !f.stun && !f.stockLift && !f.ledge){
+        const dx=foe.x-f.x,dy=foe.y-f.y;
+        if(ball.holder===f.index && Math.abs(dx)<620)
+          return {...idleInput,x:Math.sign(dx),y:Math.abs(dy)>65?Math.sign(dy):0,tapped:{attack:true}};
+        if(ball.holder==null && !f.shield && this.cpuLevel!=='rookie' && Math.abs(dx)>120){
+          const windup=grabs[f.kit.grab].start, gap=ball.x+ball.vx*windup-f.x;
+          const feet=ball.y+ball.vy*windup-f.y;
+          if(Math.abs(gap)>12 && Math.abs(gap)<68 && feet>=-f.stats.height && feet<8)
+            return {...idleInput,x:Math.sign(gap),tapped:{grab:true}};
+        }
+      }
       if (brain.boostApproach) {
         const dir = brain.boostApproach;
         brain.boostApproach = 0;

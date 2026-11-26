@@ -1447,6 +1447,13 @@
   }
   function swing(ctx, f, floor) {
     const a = f.attack;
+    if(a?.ballToss){
+      if(a.fired && a.time<a.start+.11){
+        const x=f.x+f.face*(f.stats.width+8),y=f.y-f.stats.height*.58;
+        pixelLine(ctx,x,y,x+f.face*(a.aim?8:20),y+a.aim*17-2,cream,3,2);
+      }
+      return;
+    }
     // A pummel lands only through its shared grip and has no free melee hitbox.
     if (a?.pummel) return;
     if (a?.floorAttack) return floorSweep(ctx, f, a);
@@ -1782,13 +1789,13 @@
       y = snap(b.y, 2);
     ctx.save();
     ctx.translate(x, y);
-    if (b.hits === 3) {
+    if (b.hits === 3 && b.holder==null) {
       const dir = Math.sign(b.vx) || 1;
       pixelLine(ctx, -dir * 45, -5, -dir * 5, -5, '#e67549', 6);
       pixelLine(ctx, -dir * 35, 1, -dir * 5, 1, gold, 8);
       pixelLine(ctx, -dir * 19, 8, -dir * 7, 8, cream);
     }
-    const flip = Math.floor(time * (b.owner < 0 ? 3 : 10)) % 2;
+    const flip = b.holder==null && Math.floor(time * (b.owner < 0 ? 3 : 10)) % 2;
     ctx.scale(flip ? -1 : 1, 1);
     ctx.drawImage(tennisSprite(b.hits === 3), -13, -13, 26, 26);
     ctx.restore();
@@ -2541,6 +2548,7 @@
         this.add('skid', e.point.x - dir * 8, e.point.y - 3, mint, .16, 32, dir);
       }
       if (name === 'swat') this.add('star', e.ball.x, e.ball.y, gold, 0.2, 25);
+      if (name === 'ballCatch') this.add('star',e.point.x,e.point.y,mint,.16,17);
       if (name === 'ko') {
         this.add('burst', clamp(e.x, 30, (e.stageWidth ?? 1200) - 30), clamp(e.y, 38, 620), teamColor(f), 0.7, 108);
         if (!reduced.matches) this.shake = 10;
