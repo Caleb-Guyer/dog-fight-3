@@ -16,13 +16,18 @@
   ].map(([id,title,task,success])=>({id,title,task,success}));
 
   class Lesson {
-    constructor(index, world) {
+    constructor(index, world, review=false) {
       this.index = index;
       this.id = lessons[index].id;
       this.done = false;
       this.missed = false;
       this.started = false;
       this.ticks = 0;
+      this.counterGrab=review && this.id==='jab';
+      if(this.counterGrab)this.info={...lessons[index],title:'Interrupt the grab',
+        task:'Tap Attack to jab as Brisket reaches. Try holding Shield to see what his grab catches.',
+        miss:'Bear Hug caught Pip. Retry and tap Attack with your direction centered.',
+        success:'Your jab interrupted Bear Hug before Brisket could grab Pip.'};
       const [pip,brisket] = world.dogs, floor = world.terrain[0];
       let x = 560, rivalX = x + 58;
       if (this.id === 'move') { x = 360; rivalX = 868; }
@@ -38,11 +43,13 @@
     canStep(input) {
       if (this.done || this.missed) return false;
       if (!this.example && (this.guideLoading || (this.guide && !this.guide.allows(input))))return false;
+      if(this.counterGrab && !this.started && !input.shield && !input.attack && !input.tapped?.attack)return false;
       if (this.id === 'return' && !this.started && !(input.special || input.tapped?.special || input.jump || input.tapped?.jump)) return false;
       this.started=true;
       return true;
     }
     partner(input) {
+      if(this.counterGrab)return this.ticks++===0?{...idleInput,grab:true}:idleInput;
       if (this.id === 'throw') return {...idleInput,shield:true};
       if (this.id === 'guard' && input.shield) {
         this.ticks++;
@@ -53,7 +60,8 @@
     contact(name,e) {
       if (this.done || this.missed) return;
       const player=e.f?.index===0, target=e.f?.index===1;
-      if (name==='ko') {
+      if(this.counterGrab && name==='grabCatch' && e.target.index===0)this.missed=true;
+      else if (name==='ko') {
         if (target && this.id==='stock' && this.launched) this.done=true;
         else this.missed=true;
       } else if (name==='block' && player && this.id==='guard') this.done=true;
@@ -94,6 +102,7 @@
     across:['air-lastDodge','Air dodge to the ledge','Aim {side} and tap {shield}. Hold {side} to climb.'],
     slant:['air-lastDodge','Air dodge to the ledge','Aim {up} + {side} and tap {shield}. Hold {side} to climb.'],
     vertical:['air-lastDodge','Air dodge to the ledge','Aim {up} and tap {shield}. Hold {side} when your paws catch.'],
+    caught:['escape-gripEscape','Break the hold','Alternate {attack} and {jump}, or flick the stick left and right before Brisket throws. Each fresh input shortens his hold.'],
     hang:['return','Ledge caught','Tap {side} to climb onto the stage, or tap {jump} to jump from the ledge.'],
     lift:['launch-stock-return','Your next stock','When the lamps turn mint, tap {down} to drop or {jump} to spring off. To replay the stock you lost, choose Retry my stock in Pause.'],
     landing:['launch-stock-catch','Brisket is protected','Make room for his landing. Once his last mail tag goes out, a hit or grab can connect.'],
@@ -104,6 +113,7 @@
     const [pip,brisket]=world.dogs, floor=world.terrain[0];
     if(world.end!==null || world.suddenDeath)return '';
     if(pip.stockLift)return 'lift';
+    if(world.grapple?.target===0 && world.grapple.phase!=='throw')return 'caught';
     if(pip.respawning)return '';
     if(pip.ledge)return 'hang/'+(pip.ledge.left?'right':'left');
     if(pip.floorAction?.type==='downed')return 'downed';
@@ -212,6 +222,7 @@
     if(change?.fight && save.rematch?.ticket===change.fight)save.rematch.fight=true;
   }
   function rematchLesson(card) {
+    if(window.FightRecords?.throwLosses(card,0)>=2)return {id:'jab',button:'Practice interrupting the grab',reason:'Brisket threw Pip just before at least two knockouts. Try a jab as his paws reach for you.'};
     const falls=card.losses.filter(loss=>loss.slot===0 && loss.zone==='bottom').length;
     if (falls) return {id:'return',button:'Practice recovery',reason:'Pip lost '+falls+(falls===1?' stock':' stocks')+' below the stage. Try reaching the ledge with Up Special.'};
     const [pip,brisket]=card.players;
