@@ -60,14 +60,25 @@
         const {emit,random,...state}=b.battle;
         blocks.set(b.start,{state,seed:random.state,inputs:b.inputs});
       }
-      return {start:t.blocks[0].start,count:t.count};
+      const result={start:t.blocks[0].start,count:t.count};
+      if(t.from!==undefined)result.from=t.from;
+      return result;
     }
-    const knockouts=tape.knockouts.map(c=>({...span(c.tape),first:c.first,losses:c.losses.length}));
+    const knockouts=tape.knockouts.map(c=>{
+      const result={...span(c.tape),first:c.first,losses:c.losses.length};
+      if(c.returnTape?.length)result.follow=span(c.returnTape);
+      return result;
+    });
     return {catalog:{version:1,knockouts,finish:span(tape)},blocks};
   }
   function restore(span,blocks) {
     const tape=new FinishTape();
     tape.count=span.count;
+    if(span.from!==undefined){
+      if(!Number.isSafeInteger(span.from) || span.from<span.start || span.from>=span.start+120 ||
+          span.from>=span.count || span.count-span.from>240)throw Error('Invalid stock return');
+      tape.from=span.from;
+    }
     if(!Number.isSafeInteger(tape.count) || !Number.isSafeInteger(span.start) || span.start<0 || span.start%120 ||
         tape.count<=span.start || tape.count-span.start>360 || blocks.length!==Math.ceil((tape.count-span.start)/120))
       throw Error('Invalid replay window');
@@ -149,7 +160,11 @@
                    const actual=result.matchCard.losses[span.first+i];
                    return actual?.frame===l.frame && actual.slot===l.slot && actual.zone===l.zone;
                  })))throw Error('Replay differs from its scorecard');
-            open({clip:{tape,first:span.first,losses},slot,finish,result,from:'archive',id,entry});
+            const clip={tape,first:span.first,losses};
+            if(span.follow && span.follow.from===span.count){
+              try{clip.returnTape=await read(id,span.follow);}catch{/* Keep the original knockout playable. */}
+            }
+            if(b.isConnected)open({clip,slot,finish,result,from:'archive',id,entry});
           }catch{if(b.isConnected){status.hidden=false;status.textContent='This replay could not be opened. Your match stats are still available.';}}
         };
         parent.append(b);

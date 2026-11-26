@@ -2,12 +2,41 @@
   'use strict';
   const workerURL=new URL('finish-gif.js?v=finish-gif-1',document.currentScript.src);
   const {moves,specials,throws,smashes,pummels}=window.DogFight;
-  function analyze(tape,slot){
+  const exitNames={drop:'Drop',step:'Step off',jump:'Jump',action:'Action exit',auto:'Automatic drop'};
+  function returnTrace(){
+    return {exits:[null,null],marks:[],firstHit:null,observe(event,e,frame){
+      let label;
+      if(event==='stockReady')label='Lift ready';
+      if(event==='stockLeave'){
+        this.exits[e.f.index]={option:e.option,protection:e.frames,frame};
+        label=exitNames[e.option];
+      }
+      if(event==='stockOpen')label='Protection ended';
+      if(label)label=e.f.stats.name+' · '+label;
+      if(event==='hit' && !this.firstHit && e.owner){
+        this.firstHit=e.owner.stats.name+' · '+(e.name || 'Hit');
+        label=this.firstHit;
+      }
+      if(label)this.marks.push({frame,label});
+    }};
+  }
+  function returnComparison(recorded,attempt,losses,names){
+    const row=(label,a,b)=>'<tr><th scope="row">'+label+'</th><td>'+a+'</td><td>'+b+'</td></tr>';
+    const exit=e=>e?exitNames[e.option]+' on frame '+e.frame:'Still on lift';
+    const protection=e=>e?e.protection+' frames':'On lift';
+    return losses.map(l=>{
+      const a=recorded.exits[l.slot],b=attempt.exits[l.slot];
+      const dog='P'+(l.slot+1)+' '+names[l.slot];
+      return row(dog+' exit',exit(a),exit(b))+row(dog+' protection',protection(a),protection(b));
+    }).join('')+row('First hit',recorded.firstHit || 'No hit',attempt.firstHit || 'No hit');
+  }
+  function analyze(tape,slot,follow){
     const list=[];
     let player,escape=null,knockedOut=false,lifeStart=0,launch=null;
     const markEscape=(frame,label)=>{escape={frame:Math.max(lifeStart,frame-15),label};};
     player=tape.playback(0,(event,e)=>{
       const frame=player.frame+1;
+      if(follow){follow.observe(event,e,frame);return;}
       let label;
       if(event==='hit' || event==='throwRelease'){
         const who=event==='hit'?e.owner:e.f, id=e.moveId;
@@ -41,7 +70,7 @@
       }
     }
     // A solo CPU has no recorded stick to substitute. Both seats of a two-player tape do.
-    return {marks:list.slice(-4),launch:knockedOut && (slot===0 || player.battle.mode==='local') ? launch : null,
+    return {marks:follow?follow.marks:list.slice(-4),launch:knockedOut && (slot===0 || player.battle.mode==='local') ? launch : null,
       escape:escape || {frame:Math.max(lifeStart,player.length-90),label:'Before the knockout'}};
   }
   const moments=tape=>analyze(tape).marks;
@@ -241,9 +270,9 @@
       worker.postMessage({type:'start',width:out.width,height:out.height});
     });
   }
-  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch}){
+  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
-    const {marks,escape,launch}=analyze(tape,slot);
+    const {marks,escape,launch}=analyze(tape,slot,follow);
     escapeReady?.(escape);
     if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch);
     for(const {frame,label} of marks){
@@ -279,5 +308,5 @@
     };
     return inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump});
   }
-  window.FinishTools={install,moments,analyze,inputFrame,launchFlight};
+  window.FinishTools={install,moments,analyze,inputFrame,launchFlight,returnTrace,returnComparison};
 })();

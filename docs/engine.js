@@ -11828,7 +11828,7 @@
   // A checkpoint owns its random generator and the complete shared graph of dogs and grabs.
   class FinishTape {
     constructor() { this.blocks=[]; this.count=0; this.knockouts=[]; this.observedLosses=null; }
-    get length() { return Math.min(240,this.count); }
+    get length() { return Math.min(240,this.count-(this.from ?? 0)); }
     copy(source) {
       const battle=Object.create(Battle.prototype);
       battle.emit=()=>{};
@@ -11842,8 +11842,16 @@
         this.blocks.push({start:this.count,battle:this.copy(battle),inputs:[]});
         if (this.blocks.length>3) this.blocks.shift();
       }
-      this.blocks.at(-1).inputs.push([this.input(first),this.input(second)]);
+      const block=this.blocks.at(-1);
+      block.inputs.push([this.input(first),this.input(second)]);
       this.count++;
+      // The return uses the same confirmed inputs and checkpoints as the live recorder.
+      const follow=this.returning;
+      if(follow){
+        if(follow.blocks.at(-1)!==block)follow.blocks.push(block);
+        follow.count=this.count;
+        if(follow.length===240)this.returning=null;
+      }
     }
     captureKnockouts(battle) {
       const losses=battle.matchCard?.losses;
@@ -11858,7 +11866,15 @@
       clip.blocks=this.blocks.slice();
       const last=clip.blocks.length-1;
       clip.blocks[last]={...clip.blocks[last],inputs:clip.blocks[last].inputs.slice()};
-      this.knockouts.push({first,losses:losses.slice(first),tape:clip});
+      const falls=losses.slice(first);
+      this.returning=null;
+      const entry={first,losses:falls,tape:clip};
+      if(battle.end===null && falls.some(l=>battle.dogs[l.slot].stockLift)){
+        const follow=new FinishTape();
+        follow.from=follow.count=this.count;
+        entry.returnTape=this.returning=follow;
+      }
+      this.knockouts.push(entry);
       if(this.knockouts.length>12)this.knockouts.shift();
     }
     input(value) {
