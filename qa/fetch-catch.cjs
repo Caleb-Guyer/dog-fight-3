@@ -88,3 +88,84 @@ test('a late remote catch and a late remote throw converge on the offline fight 
     p.net.confirm(p.world);assert.deepEqual(sample(p.world),sample(ref));assert.deepEqual(p.events,['ballCatch','swat']);
   }
 });
+
+function dropMatch(extra={}){
+  return match({stage:'nightmail',form:'original',fetchStart:false,dropCatchOpening:'drop',...extra});
+}
+for(const kind of Object.keys(fighters))test(kind+' can drop without recovery, swing to recatch, or aim a normal toss',()=>{
+  for(const option of ['drop','recatch','aim','attack','legacy']){
+    const {w,events}=dropMatch({p1:kind}),f=w.dogs[0];
+    w.ball.hits=3;
+    if(option==='legacy') w.itemDrops=false;
+    ticks(w,1,option==='attack'?{attack:true}:{grab:true,x:option==='aim'?-1:0});
+    if(['legacy','attack','aim'].includes(option)){
+      assert(f.attack.ballToss);ticks(w,7);
+      assert(events.some(e=>e.name==='swat' && (option!=='aim'||e.vx<0)));continue;
+    }
+    assert.equal(f.attack,null);assert(w.ball.dropped);assert.equal(w.ball.owner,0);
+    if(option==='recatch'){
+      ticks(w,1,{attack:true,y:-1});
+      assert.equal(w.ball.holder,0);assert.equal(w.ball.hits,3);
+      assert(f.attack.itemCatch);assert.equal(f.attack.airSide,'up');
+      assert.deepEqual(events.filter(e=>['ballDrop','ballCatch'].includes(e.name)).map(e=>e.name),['ballDrop','ballCatch']);
+    }else{
+      ticks(w,36);assert.equal(w.dogs[1].damage,5);assert.equal(w.ball.hits,3);assert.equal(w.ball.owner,-1);
+    }
+  }
+});
+test('a rival can intercept the dropped ball with its aerial or shield the landing',()=>{
+  for(const defend of ['catch','shield','move away']){
+    const {w,events}=dropMatch(),[a,b]=w.dogs;
+    ticks(w,1,{grab:true},{shield:defend==='shield'});
+    if(defend==='catch'){
+      Object.assign(b,{x:w.ball.x+b.stats.width*.55,y:a.y,ground:-1,vy:35,face:-1});
+      ticks(w,1,{}, {attack:true});assert.equal(w.ball.holder,1);assert(b.attack.itemCatch);assert.equal(w.ball.hits,2);
+    }else {
+      if(defend==='move away')b.x+=320;
+      ticks(w,48,{}, {shield:defend==='shield'});assert.equal(b.damage,0);
+      assert.equal(events.some(e=>e.name==='block'),defend==='shield');assert.equal(w.ball.owner,-1);
+      assert.equal(w.ball.dropped,undefined);
+    }
+  }
+});
+test('Rival lets a drop hit an open landing and takes the ball back above a shield',()=>{
+  for(const shield of [false,true]){
+    const {w,events}=dropMatch({mode:'solo',cpuLevel:'rival',dropCatchOpening:'defend'});
+    ticks(w,22,{shield});assert(events.some(e=>e.name==='ballDrop' && e.slot===1));
+    assert.equal(events.some(e=>e.name==='ballCatch' && e.slot===1),shield);
+    if(shield){assert.equal(w.dogs[0].damage,0);assert(events.some(e=>e.name==='block'));}
+    else assert.equal(w.dogs[0].damage,4);
+  }
+});
+test('late remote drop and aerial inputs correct both peers to the recorded offline frames',()=>{
+  const options={...config,stage:'nightmail',form:'original',dropCatchOpening:'defend',fetchStart:false};
+  const relevant=new Set(['ballDrop','ballCatch','swat']);
+  const peers=[0,1].map(side=>{
+    const packets=[],events=[];
+    let world;
+    const session=new window.DogOnline.OnlineSession({start(config,random){
+      world=new Battle(config,name=>{if(relevant.has(name))events.push(name);},random);
+    }});
+    session.side=side;session.send=m=>packets.push(m);
+    session.beginRound(['start',1,'pip','brisket','nightmail',42]);
+    const opening=new Battle(options,undefined,seededRandom(42));
+    for(const state of [world,session.match.confirmedWorld])state.copyFightFrom(opening);
+    return {packets,net:session.match,world,events};
+  });
+  const events=[],ref=new Battle(options,name=>{if(relevant.has(name))events.push(name);},seededRandom(42));
+  const sample=w=>structuredClone([w.ball,w.dogs.map(f=>[f.x,f.y,f.damage,f.stocks,f.attack?.airSide,f.attack?.itemCatch]),w.random.state]);
+  const hist=[sample(ref)];
+  for(let n=0;n<85;n++){
+    const pair=[idleInput,{...idleInput,grab:n===2,attack:n===4 || n===55}];
+    ref.step(dt,...pair);hist.push(sample(ref));
+    for(const [i,p] of peers.entries()){
+      if(n>=7){const m=peers[1-i].packets[n-7];assert(p.net.receive(m[2],m[3]));}
+      p.net.tick(()=>pair[i],p.world);assert.deepEqual(sample(p.net.confirmedWorld),hist[p.net.confirmed]);
+    }
+  }
+  assert.deepEqual(events,['ballDrop','ballCatch','swat']);
+  for(const [i,p] of peers.entries()){
+    for(const m of peers[1-i].packets.slice(-7))assert(p.net.receive(m[2],m[3]));
+    p.net.confirm(p.world);assert.deepEqual(sample(p.world),sample(ref));assert.deepEqual(p.events,events);
+  }
+});
