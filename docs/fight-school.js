@@ -87,10 +87,14 @@
     hop:['return','Second hop available','Release {special}. Aim {up} and tap {special} again while steering {side}.'],
     drift:['return','Drift toward the ledge','Hold {side} to bring Pip back within reach.'],
     hang:['return','Ledge caught','Tap {side} to climb onto the stage, or tap {jump} to jump from the ledge.'],
+    lift:['launch-stock-return','Your next stock','When the lamps turn mint, tap {down} to drop or {jump} to spring off. Leaving early keeps more protection.'],
+    landing:['launch-stock-catch','Brisket is protected','Make room for his landing. Once his last mail tag goes out, a hit or grab can connect.'],
   };
   function cornerSituation(world){
     const [pip,brisket]=world.dogs, floor=world.terrain[0];
-    if(world.end!==null || pip.stockLift || pip.respawning || world.suddenDeath)return '';
+    if(world.end!==null || world.suddenDeath)return '';
+    if(pip.stockLift)return 'lift';
+    if(pip.respawning)return '';
     if(pip.ledge)return 'hang/'+(pip.ledge.left?'right':'left');
     if(pip.ground<0 && (pip.x<floor.x1 || pip.x>floor.x2)){
       const side=pip.x<floor.x1?'right':'left';
@@ -98,7 +102,8 @@
       const move=pip.hopWindow>0?'hop':pip.jumps>0?'jump':!pip.usedUp?'rise':'drift';
       return move+'/'+side;
     }
-    if(pip.ground<0 || brisket.stockLift || brisket.stockGuard || brisket.ground<0 || world.grapple)return '';
+    if(brisket.stockLift || brisket.stockGuard)return 'landing';
+    if(pip.ground<0 || brisket.ground<0 || world.grapple)return '';
     const near=Math.abs(pip.y-brisket.y)<60 && Math.abs(pip.x-brisket.x)<110;
     if(near && brisket.shield)return 'grab';
     if(near && brisket.damage>=105){
