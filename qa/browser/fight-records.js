@@ -10,7 +10,10 @@ async function run(browser,mobile) {
   await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
   const press=selector=>mobile?page.locator(selector).tap():page.locator(selector).click();
   const entries=()=>page.evaluate(()=>new FightRecords.Book(localStorage).list());
-  const timelineFacts=()=>page.locator('.card-timeline :is(time,strong,span)').allTextContents();
+  const timelineFacts=async()=>{
+    await page.locator('.card-timeline').waitFor();
+    return page.locator('.card-timeline :is(time,strong,span)').allTextContents();
+  };
   try {
     await page.goto(root+'#records');
     assert(await page.locator('[data-do=record-solo]').isVisible());
@@ -47,21 +50,58 @@ async function run(browser,mobile) {
     assert(await page.locator('#dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
     await page.goto(root+'?reload#records');
     await press('[data-record-id]');assert.deepEqual(await timelineFacts(),timeline);
+    assert.equal(first[0].entry.replay,true);
+    await press('[data-saved-clip="0"]');assert.equal(await page.locator('#clip-escape').textContent(),'Try to save P1');
+    await press('#clip-escape');await page.clock.runFor(5800);
+    assert.equal(await page.locator('.finish-comparison tbody tr').count(),2);
+    await press('[data-do=trial-results]');
+    await page.waitForFunction(()=>document.activeElement.dataset.savedClip==='0');
+    await press('[data-saved-clip=finish]');
+    await page.getByRole('heading',{name:'Finish replay'}).waitFor();
+    await page.locator('#clip-seek').press('Home');
+    await press('#clip-exchange'); await press('[data-finish-slot="1"]');
+    assert.match(await page.locator('#match-mode').textContent(),/Finish practice · P2 Brisket/);
+    await page.clock.runFor(5800);
+    await press('[data-do=trial-replay]');await press('[data-do=clip-back]');
+    await page.waitForFunction(()=>document.activeElement.dataset.savedClip==='finish');
+    assert.deepEqual(await entries(),first);
     await page.keyboard.press('Escape');await page.keyboard.press('Escape');
     assert.equal(await page.evaluate(()=>document.activeElement.id),'home-records');
     const guarded=await page.evaluate(()=>{
       const book=new FightRecords.Book(localStorage),entry=book.list()[0].entry;
-      entry.mode='local';entry.time++;entry.card.players[0].blocks=6;
+      entry.mode='local';entry.time++;delete entry.replay;entry.card.players[0].blocks=6;
       entry.card.players[1].hits=1;entry.card.players[1].knockdowns=entry.card.players[1].shieldBreaks=0;
       return book.add(entry);
     });
     await press('#home-records');await press('[data-record-id="'+guarded+'"]');
+    assert.equal(await page.locator('[data-saved-clip]').count(),0);
     assert.equal(await page.locator('[data-record-drill="1"]').textContent(),'Practice hit confirms');
     await press('[data-record-drill="1"]');await page.locator('#combo-confirm[aria-pressed=true]').waitFor();
     assert.match(await page.locator('#hud .hud-name').first().textContent(),/Brisket/);
     await press('#return-fight');
     assert.equal(await page.locator('#dialog').getAttribute('data-view'),'record-card');
     assert.match(await page.locator('.record-tip').last().textContent(),/blocked 6 hits/);
+    if(!mobile){
+      const retained=await page.evaluate(async()=>{
+        const {FinishTape,Battle,seededRandom,idleInput}=DogFight;
+        const tape=new FinishTape(),w=new Battle({mode:'local',p1:'pip',p2:'brisket',stage:'picnic'},undefined,seededRandom(1));
+        tape.record(w,idleInput,idleInput);
+        const ids=Array.from({length:13},(_,i)=>'9999999999999999-'+String(i).padStart(16,'0'));
+        await Promise.all(ids.map(id=>MatchReview.save(id,tape)));
+        const read=r=>new Promise((res,rej)=>{r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});
+        const db=await read(indexedDB.open('dog-fight-3.replays'));
+        try{
+          const tx=db.transaction(['games','blocks']);
+          const [games,blocks]=await Promise.all(['games','blocks'].map(n=>read(tx.objectStore(n).getAllKeys())));
+          return {expected:ids.slice(1),games,blocks:blocks.map(([id])=>id)};
+        }finally{db.close();}
+      });
+      assert.deepEqual(retained.games,retained.expected);
+      assert.deepEqual(retained.blocks,retained.expected);
+      await press('[data-do=card-back]');await press('[data-record-id="'+first[0].id+'"]');
+      await page.getByRole('status').filter({hasText:'The replay is unavailable on this device.'}).waitFor();
+      assert.deepEqual(await timelineFacts(),timeline);
+    }
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

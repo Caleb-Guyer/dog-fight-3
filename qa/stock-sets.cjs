@@ -427,6 +427,11 @@ async function onlineSet(browser,phoneBrowser) {
     await d.page.goto(root+'?finished-set#records');
     assert.equal(await d.page.locator('[data-record-id]').count(),3);
     await d.press('[data-record-id]:first-child');
+    await d.page.locator('[data-saved-clip=finish]').waitFor();
+    assert.equal(await d.page.locator('[data-saved-clip][data-ko-slot]').count(),3);
+    await d.press('[data-saved-clip=finish]');await d.page.locator('#clip-seek').press('End');
+    assert.match(await d.page.locator('#clip-scores').textContent(),/Noodle/);
+    await d.press('[data-do=clip-back]');await d.page.locator('[data-saved-clip=finish]').waitFor();
     const you=await d.page.locator('.card-stats thead small').allTextContents();
     assert(you[d===host?0:1].includes('YOU'));
     if(d===guest){

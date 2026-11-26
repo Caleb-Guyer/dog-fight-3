@@ -3,11 +3,36 @@ const assert=require('node:assert/strict');
 global.window={};
 require('../docs/engine.js');
 require('../docs/online.js');
+require('../docs/match-review.js');
 global.document={currentScript:{src:'https://example.test/finish-tools.js'}};
 require('../docs/finish-tools.js');
 const {Battle,FinishTape,seededRandom,idleInput}=window.DogFight;
 const dt=1/60;
 function state({emit,random,...fields}) { return {fields,seed:random.state}; }
+function archive(tape) {
+  const {catalog,blocks}=structuredClone(window.MatchReview.pack(tape));
+  const restore=span=>window.MatchReview.restore(span,[...blocks].filter(([start])=>start>=span.start && start<span.count)
+    .sort(([a],[b])=>a-b).map(([,b])=>b));
+  return {catalog,blocks,restore};
+}
+
+test('saved finish and knockout windows share blocks while preserving simultaneous losses and exact boundary frames',()=>{
+  const w=new Battle({mode:'local',stage:'picnic',p1:'pip',p2:'brisket'},undefined,seededRandom(71));
+  const tape=new FinishTape();
+  for(const dog of w.dogs)Object.assign(dog,{ground:-1,y:w.terrain[0].y+900});
+  for(let i=0;i<360;i++){
+    tape.record(w,idleInput,idleInput);w.step(dt,idleInput,idleInput);
+  }
+  tape.captureKnockouts(w);
+  const {catalog,blocks,restore}=archive(tape);
+  assert.equal(catalog.knockouts.length,1);
+  assert.equal(catalog.knockouts[0].losses,2);
+  const ko=tape.knockouts[0].tape, saved=restore(catalog.knockouts[0]);
+  assert(blocks.size<ko.blocks.length+tape.blocks.length);
+  for(const n of [0,ko.length])assert.deepEqual(state(saved.playback(n).battle),state(ko.playback(n).battle));
+  assert.deepEqual(state(restore(catalog.finish).playback(tape.length).battle),state(w));
+  assert.throws(()=>window.MatchReview.restore(catalog.finish,[]));
+});
 
 test('both delayed peers can revisit the same confirmed non-final knockout after the replay ring rolls over',()=>{
   const queues=[[],[]],worlds=[],tapes=[new FinishTape(),new FinishTape()];
@@ -82,7 +107,9 @@ test('a new tape keeps shared grip references, releases, coats and a clock finis
     tape.record(battle,first,idleInput);battle.step(dt,first,idleInput);
   }
   assert.equal(battle.endReason,'time');
-  const clip=tape.playback();
+  const stored=archive(tape);
+  assert.equal(stored.catalog.knockouts.length,0);
+  const clip=stored.restore(stored.catalog.finish).playback();
   assert.equal(clip.battle.dogs[0].grip,clip.battle.grapple);
   assert.equal(clip.battle.dogs[1].grip,clip.battle.grapple);
   assert.notEqual(clip.battle.grapple,tape.blocks[0].battle.grapple);
@@ -120,6 +147,11 @@ test('two rollback peers keep only confirmed ticks after delayed corrections',()
     while(player.step()) {}
     assert.deepEqual(state(player.battle),final);
     assert.deepEqual(state(peers[i].confirmedWorld),final);
+    const stored=archive(tape), saved=stored.restore(stored.catalog.finish);
+    assert.deepEqual(state(saved.playback(saved.length).battle),final);
+    const fork=saved.playback(90,undefined,1);
+    while(fork.step({...idleInput,x:-1,shield:true})){}
+    assert.deepEqual(state(fork.battle),state(branches[i].battle));
   }
 });
 
