@@ -291,6 +291,7 @@
       });
     }
     useConnection(peer, conn, host) {
+      if (!host) this.itemDrops=false;
       this.pending.add(conn);
       const timeout = setTimeout(() => {
         if (this.pending.delete(conn)) conn.close();
@@ -472,7 +473,8 @@
       this.myResult = this.theirResult = null;
       this.nextStage = this.nextPick = this.earlyVote = undefined;
       this.phase = 'playing';
-      const config = { mode: 'local', p1, p2, stage, form, coats, fetch: true, itemDrops:this.itemDrops===true };
+      const config = { mode: 'local', p1, p2, stage, form, coats, fetch: true };
+      if (this.itemDrops===false) config.itemDrops=false;
       if(rules)Object.assign(config,{stockCount:rules.lives,minutes:rules.minutes,fetch:rules.fetch});
       if (this.timeMinutes) Object.assign(config, {timeBattle:true,minutes:this.timeMinutes});
       this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed);
