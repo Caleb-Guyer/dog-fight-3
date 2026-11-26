@@ -123,12 +123,12 @@
       const battle=Object.assign(Object.create(Battle.prototype),structuredClone(part.state));
       battle.random=seededRandom(0);battle.random.state=part.seed;battle.emit=()=>{};
       let run=0;
-      const player={frame:checkpoint*120,length,battle,step(record){
+      const player={frame:checkpoint*120,length,battle,step(record,first,second){
         if(this.frame>=length)return false;
         const at=this.frame%120,runs=parts[Math.floor(this.frame/120)].runs;
         if(!at)run=0;
         else if(runs[run+1]?.[0]===at)run++;
-        const [,a,b]=runs[run];
+        const a=first ?? runs[run][1], b=second ?? runs[run][2];
         if(record)record.record(battle,a,b);
         battle.step(1/60,a,b);this.frame++;return true;
       }};
@@ -281,48 +281,54 @@
     (root.querySelector('[data-ko="'+(focus ?? clips[0]?.first)+'"]') || cancel).focus();
   }
   class StockRetry {
-    constructor(film,fall){
-      this.film=film;
-      const prior=film.data.falls.filter(k=>k.at<fall.at && k.slots.includes(0));
+    constructor(film,fall,slot=0){
+      this.film=film;this.slot=slot;
+      const prior=film.data.falls.filter(k=>k.at<fall.at && k.slots.includes(slot));
       this.start=prior.at(-1)?.at || 0;
       this.end=fall.at;
       this.original=film.playback(this.end).battle;
-      this.number=this.original.matchCard.losses.filter(l=>l.slot===0).length;
-      this.loss=this.original.matchCard.losses.findLast(l=>l.slot===0);
+      const losses=this.original.matchCard.losses.filter(l=>l.slot===slot);
+      this.number=losses.length;this.loss=losses.at(-1);
     }
     attempt(emit){
-      const battle=this.film.playback(this.start).battle;
-      battle.emit=emit;
-      const damage=battle.matchCard.players[0].damage,end=this.end;
+      const replay=this.film.playback(this.start,emit),battle=replay.battle,slot=this.slot;
+      const damage=battle.matchCard.players[slot].damage,end=this.end;
       let seen=battle.matchCard.losses.length,stable=0;
       return {battle,frame:this.start,length:end+180,outcome:null,openingDamage:damage,
-        step(input){
+        step(input=window.DogFight.idleInput,partner){
           if(this.outcome)return false;
-          battle.step(1/60,input);this.frame++;
-          const dog=battle.dogs[0];
+          const a=slot===0?input:partner, b=slot===1?input:partner;
+          // After the recording ends, the absent opponent releases their controls.
+          if(!replay.step(null,a,b))battle.step(1/60,a,b);
+          this.frame++;
+          const dog=battle.dogs[slot];
           const safe=dog.ground>=0 && !dog.stockLift && !dog.respawning && !dog.ledge && !dog.grip &&
             !dog.tumble && !dog.stun && !dog.floorAction && !dog.impactLag;
           stable=safe?stable+1:0;
           const losses=battle.matchCard.losses;
-          if(losses.length>seen && losses.slice(seen).some(l=>l.slot===0))this.outcome='lost';
-          else if(battle.suddenDeath || battle.end!==null)this.outcome=battle.end===0?'won':'ended';
+          if(losses.length>seen && losses.slice(seen).some(l=>l.slot===slot))this.outcome='lost';
+          else if(battle.suddenDeath || battle.end!==null)this.outcome=battle.end===slot?'won':'ended';
           else if(this.frame>=end && stable>=12)this.outcome='saved';
           else if(this.frame>=this.length)this.outcome='unsettled';
           seen=losses.length;
           return true;
         }};
     }
-    sheet({showDialog,back,play,shake}){
-      const begin=this.film.playback(this.start).battle, [hero,rival]=begin.dogs,loss=this.loss;
+    sheet({showDialog,back,play,shake,sample}){
+      const begin=this.film.playback(this.start).battle,hero=begin.dogs[this.slot],rival=begin.dogs[1-this.slot],loss=this.loss;
+      const versus=begin.mode==='local';
       const id=loss.lastHit?.id, move=(moves[id] || throws[id] || smashes[id] || specials[id] || pummels[id])?.label;
-      showDialog('finish-stock','Retry stock '+this.number,
-        '<p>'+hero.stats.name+' lost this stock at '+Math.round(loss.damage)+'% through the '+loss.zone+' blast line.'+
+      showDialog('finish-stock','Retry '+(versus?'P'+(this.slot+1)+'’s ':'')+'stock '+this.number,
+        '<p>'+(loss.kind?window.DogFight.fighters[loss.kind].name:hero.stats.name)+' lost this stock at '+Math.round(loss.damage)+'% through the '+loss.zone+' blast line.'+
         (move?' The last hit was '+move+'.':'')+'</p><p>Start '+(hero.stockLift?'on the respawn lift':begin.matchFrames?'from the recorded position':'at GO')+
         ' against '+rival.stats.name+' at '+Math.round(rival.damage)+'%. Keep your stock and regain your footing through '+
         seconds(this.end-this.start)+', or win the match first.</p>'+
+        (versus?'<p>Use P1 controls for '+hero.stats.name+' against the recorded inputs. Choose Play together to use both original seats.</p>':'')+
+        (sample?'<p>Brisket opens with Bear Hug. Try Shield + Right as play starts to roll past his paws.</p>':'')+
         '<canvas id="clip-arena" width="640" height="360" role="img" aria-label="Opening position for this stock"></canvas>'+
         '<p id="stock-caption" class="clip-caption" role="status">Opening position</p>'+
-        '<div class="dialog-actions"><button class="primary" id="stock-try">Play this stock</button>'+
+        '<div class="dialog-actions"><button class="primary" id="stock-try">'+(versus?'Face the recording':'Play this stock')+'</button>'+
+        (versus?'<button class="utility" id="stock-together">Play together</button>':'')+
         '<button class="utility" id="stock-watch">Watch the knockout</button><button class="utility" id="stock-back">Back</button></div>');
       const el=id=>document.getElementById(id), canvas=el('clip-arena'),caption=el('stock-caption');
       const view=new window.DogFightView.FightView();view.shakeEnabled=shake;
@@ -346,7 +352,8 @@
         raf=requestAnimationFrame(tick);
       };
       el('stock-back').onclick=()=>{cancelAnimationFrame(raf);back();};
-      el('stock-try').onclick=()=>{cancelAnimationFrame(raf);play();};
+      el('stock-try').onclick=()=>{cancelAnimationFrame(raf);play(false);};
+      if(versus)el('stock-together').onclick=()=>{cancelAnimationFrame(raf);play(true);};
       el('stock-try').focus({preventScroll:true});
     }
     comparison(player){
@@ -355,15 +362,15 @@
       const text={lost:'Your dog crossed the blast line.',saved:'You stayed onstage past the original knockout.',
         won:'You won the match on this stock.',ended:'The clock expired during the attempt.',
         unsettled:'You passed the original knockout but were still in danger three seconds later.'}[player.outcome];
-      const damage=b=>Math.round((b.matchCard.players[0].damage-player.openingDamage)*10)/10+'%';
+      const damage=b=>Math.round((b.matchCard.players[this.slot].damage-player.openingDamage)*10)/10+'%';
       return {title,html:'<p>'+text+'</p><table class="finish-comparison"><thead><tr><th>Stock '+this.number+'</th>'+
         '<th>Original</th><th>This attempt</th></tr></thead><tbody><tr><th>Time played</th><td>'+seconds(this.end-this.start)+
         '</td><td>'+seconds(elapsed)+'</td></tr><tr><th>Damage dealt</th><td>'+damage(original)+'</td><td>'+damage(player.battle)+'</td></tr></tbody></table>'};
     }
-    actions(from){
+    actions(from,sample){
       return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Retry stock</button>'+
         '<button class="utility" data-do="trial-replay">Review stock</button><button class="utility" data-do="trial-results">'+
-        (from==='pause'?'Back to fight':from==='archive'?'Back to match stats':'Back to results')+'</button></div>';
+        (sample?'Back to full match':from==='pause'?'Back to fight':from==='archive'?'Back to match stats':'Back to results')+'</button></div>';
     }
   }
   const defenseStats={knockdown:'knockdowns',tech:'techs',break:'shieldBreaks',parry:'parries'};
@@ -373,7 +380,7 @@
     const battle=new Battle(config,undefined,seededRandom(27)),tape=new FinishTape(true);
     const {idleInput}=window.DogFight;
     battle.resetTraining();battle.dogs[0].damage=35;
-    for(let frame=1;frame<=1170;frame++){
+    for(let frame=1;frame<=1200;frame++){
       if(frame%90===0)await new Promise(resolve=>setTimeout(resolve,0));
       const gap=battle.dogs[0].x-battle.dogs[1].x;
       const pip={...idleInput,shield:frame===611 || frame>=796 && frame<820 || frame>=880};
@@ -411,8 +418,8 @@
       trial(0,slot,review);
     };
     watchFilm(film,{stageName,showDialog,shake,card,selection,practice,study:m=>practice(m.frame,m.slot,m),
-      retryStock:!sample && origin.mode==='solo' && !origin.matchCard.points?(fall,frame)=>stockSheet({film:context,fall,frame,entry,id,
-        from,result:entry?film.playback(film.length).battle:world}):null,
+      retryStock:!origin.matchCard.points?(fall,frame,slot)=>stockSheet({film:context,fall,frame,slot,entry,id,
+        from,result:from==='archive'?film.playback(film.length).battle:world}):null,
       back:()=>{
         if(sample){records('sample');return;}
         if(entry){cardSheet(0,entry,id,{first:'full'});return;}
@@ -566,11 +573,12 @@
         const b=document.createElement('button');b.type='button';b.className='utility';
         b.textContent='KO '+(i+1)+' · '+fall.slots.map(n=>'P'+(n+1)).join(' & ')+' · '+time(fall.at);
         b.onclick=()=>{pauseAt(Math.max(0,fall.at-120));el('film-play').focus();};details.append(b);
-        const slot=fall.slots.indexOf(0);
-        if(retryStock && slot>=0 && losses?.[fall.first+slot]?.suddenRound===0){
+        for(const [index,slot] of fall.slots.entries()){
+          if(!retryStock || (film.data.parts[0].state.mode==='solo' && slot!==0) || losses?.[fall.first+index]?.suddenRound!==0)continue;
           const retry=document.createElement('button');retry.type='button';retry.className='utility';
-          retry.dataset.stockAt=fall.at;retry.textContent='Retry stock lost at '+time(fall.at);
-          retry.onclick=()=>{stop();retryStock(fall,player.frame);};details.append(retry);
+          retry.dataset.stockAt=fall.at;retry.dataset.stockSlot=slot;
+          retry.textContent='Retry '+(film.data.parts[0].state.mode==='local'?'P'+(slot+1)+'’s ':'')+'stock lost at '+time(fall.at);
+          retry.onclick=()=>{stop();retryStock(fall,player.frame,slot);};details.append(retry);
         }
       }
     }
