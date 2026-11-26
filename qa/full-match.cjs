@@ -140,7 +140,7 @@ test('continuous holds are compact, and a one-frame tap or fractional stick move
   const damaged=pack(t);damaged.film.parts[0]={runs:[]};
   assert.throws(()=>new MatchFilm(damaged.film));assert.equal(resumeTape(damaged,w.matchCard.losses).length,240);
 });
-test('both rollback peers save the same confirmed fight from GO despite late remote inputs',()=>{
+for(const lostSlot of [0,1])test('both rollback peers can retry P'+(lostSlot+1)+'’s complete confirmed stock after delayed inputs',()=>{
   const send=[[],[]],worlds=[],records=[new FinishTape(true),new FinishTape(true)];
   const peers=records.map((t,i)=>{
     const s=new window.DogOnline.OnlineSession({start(cfg,rng){worlds[i]=new Battle(cfg,undefined,rng);}});
@@ -150,7 +150,10 @@ test('both rollback peers save the same confirmed fight from GO despite late rem
   const deliver=i=>{for(const p of send[i].splice(0))assert(peers[i].receive(p[2],p[3]));};
   for(let f=0;f<800;f++){
     if(f%6===0){deliver(0);deliver(1);}
-    for(const [i,peer] of peers.entries())peer.tick(()=>({...idleInput,x:i===0 && f<155?-1:0,attack:f%74===11}),worlds[i]);
+    for(const [i,peer] of peers.entries()){
+      const firstStock=worlds[i].dogs[lostSlot].stocks===3;
+      peer.tick(()=>({...idleInput,x:i===lostSlot && firstStock?(i?1:-1):0,attack:i!==lostSlot && f%74===11}),worlds[i]);
+    }
   }
   const movies=peers.map((p,i)=>{
     deliver(i);p.confirm(worlds[i]);records[i].captureKnockouts(p.confirmedWorld);
@@ -161,4 +164,57 @@ test('both rollback peers save the same confirmed fight from GO despite late rem
     assert.deepEqual(snapshot(movies[0].playback(f).battle),snapshot(movies[1].playback(f).battle));
   }
   assert.deepEqual(snapshot(movies[0].playback(movies[0].length).battle),snapshot(peers[0].confirmedWorld));
+  for(const film of movies){
+    const fall=film.data.falls.find(k=>k.slots.includes(lostSlot));assert(fall);
+    const retry=new window.MatchReview.StockRetry(film,fall,lostSlot);
+    const ref=film.playback(),p=retry.attempt(()=>{}),q=retry.attempt(()=>{});
+    while(!p.outcome){
+      let mine;
+      ref.step({record(w,a,b){mine=lostSlot?b:a;}});
+      p.step(mine);
+    }
+    assert.equal(p.frame,fall.at);assert.equal(p.outcome,'lost');
+    assert.deepEqual(snapshot(p.battle),snapshot(ref.battle));
+    while(!q.outcome)q.step(idleInput);
+    assert.equal(q.outcome,'saved');assert.equal(q.battle.dogs[lostSlot].stocks,3);
+  }
+});
+
+test('couch stocks begin at the selected seat’s previous fall and can branch with two live players',()=>{
+  const w=new Battle({...cfg,p1:'brisket',stage:'picnic',form:'original',fetch:false},undefined,seededRandom(17));
+  const tape=new FinishTape(true),inputs=[];let wait=460;
+  for(let n=0;n<2000 && w.matchCard.losses.length<3;n++){
+    const lossCount=w.matchCard.losses.length,slot=[1,0,1][lossCount];
+    const other={...idleInput,jump:n%121===0,attack:n%139===10};
+    const outward=n<wait?idleInput:{...idleInput,x:slot?1:-1};
+    const pair=slot?[other,outward]:[outward,other];
+    inputs.push(pair);tape.record(w,...pair);w.step(tick,...pair);
+    if(w.matchCard.losses.length>lossCount)wait=n+130;
+  }
+  tape.captureKnockouts(w);const frozen=snapshot(w);
+  const restored=resumeTape(structuredClone(pack(tape)),w.matchCard.losses);
+  const film=new MatchFilm(restored.fullMatch()),falls=film.data.falls;
+  assert.deepEqual(falls.map(f=>f.slots),[[1],[0],[1]]);
+  for(const [i,fall] of falls.entries()){
+    const slot=fall.slots[0],retry=new window.MatchReview.StockRetry(film,fall,slot);
+    assert.equal(retry.start,i===2?falls[0].at:0);assert.equal(retry.number,i===2?2:1);
+    const original=retry.attempt(()=>{}),live=retry.attempt(()=>{}),partner={...idleInput,x:slot?-1:1};
+    for(let f=0;f<40;f++){original.step(idleInput);live.step(idleInput,partner);}
+    assert.notEqual(original.battle.dogs[1-slot].x,live.battle.dogs[1-slot].x);
+    const p=retry.attempt(()=>{});
+    while(!p.outcome)p.step(inputs[p.frame][slot]);
+    assert.equal(p.outcome,'lost');assert.deepEqual(snapshot(p.battle),snapshot(retry.original));
+  }
+  assert.deepEqual(snapshot(w),frozen);
+});
+
+test('Pip can save the sample stock by rolling through Brisket’s recorded opening grab',async()=>{
+  const {film}=await window.MatchReview.sampleFight(),fall=film.data.falls[0];
+  const stock=new window.MatchReview.StockRetry(film,fall,0);
+  assert.equal(stock.loss.lastHit.id,'brisketHaymaker');
+  for(const dodge of [false,true]){
+    const p=stock.attempt(()=>{});
+    while(!p.outcome)p.step(dodge && p.frame<15?{...idleInput,x:1,shield:true}:idleInput);
+    assert.equal(p.outcome,dodge?'saved':'lost');
+  }
 });

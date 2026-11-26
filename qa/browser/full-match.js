@@ -56,8 +56,13 @@ async function match(browser,device){
     const frame=Number(await seek.inputValue());assert(frame>=60 && frame<100);
     await choose('#film-step');assert.equal(Number(await seek.inputValue()),frame+1);
     await choose('#film-speed');assert.match(await page.locator('#film-speed').textContent(),/2×/);
-    await choose('#film-knockouts summary');assert.equal(await page.locator('#film-knockouts button').count(),3);
-    await choose('#film-knockouts button:last-child');assert(Number(await seek.inputValue())>360);
+    await choose('#film-knockouts summary');
+    const leadIns='#film-knockouts button:not([data-stock-at])',retries='#film-knockouts [data-stock-at][data-stock-slot="0"]';
+    assert.equal(await page.locator(leadIns).count(),3);
+    assert.equal(await page.locator(retries).count(),3);
+    await choose(leadIns+' >> nth=2');const leadFrame=await seek.inputValue();assert(Number(leadFrame)>360);
+    await choose(retries+' >> nth=2');assert.equal(await page.locator('#dialog-title').textContent(),'Retry P1’s stock 3');
+    await choose('#stock-back');assert.equal(await seek.inputValue(),leadFrame);
     await seek.press('Home');assert.equal(await seek.inputValue(),'0');
     await choose('#film-p1');await page.clock.runFor(850);await move(true,true);
     await page.clock.runFor(4300);await move(false,true);
@@ -209,6 +214,39 @@ async function match(browser,device){
     assert.match(await panel.locator('select option:checked').textContent(),/P2 Pip/);
     await choose('[data-do=clip-back]');await page.clock.runFor(100);await choose('#film-back');
     assert.equal(await page.locator('#dialog').getAttribute('data-view'),'record-card');
+    await choose('[data-saved-clip=full]');await choose('#film-knockouts summary');
+    await choose('[data-stock-at][data-stock-slot="1"]');
+    assert.equal(await page.locator('#dialog-title').textContent(),'Retry P2’s stock 1');
+    await choose('#stock-together');
+    assert.match(await page.locator('#match-mode').textContent(),/P2 Pip · Play together/);
+    if(device==='keyboard'){
+      await page.evaluate(()=>{
+        const step=DogFight.Battle.prototype.step;
+        window.playedBothSeats=false;
+        DogFight.Battle.prototype.step=function(dt,a,b){
+          if(a?.x<0 && b?.x>0)window.playedBothSeats=true;
+          return step.apply(this,arguments);
+        };
+      });
+      await page.keyboard.down('a');await page.keyboard.down('ArrowRight');await page.clock.runFor(1250);
+      await page.keyboard.up('a');await page.keyboard.up('ArrowRight');
+      assert(await page.evaluate(()=>window.playedBothSeats),'both original seats receive independent input');
+    }else await page.clock.runFor(1100);
+    await choose('#pause');await choose('[data-do=trial-replay]');await choose('#stock-try');
+    await page.clock.runFor(12000);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!',device+' saved P2’s stock against the original P1');
+    await choose('[data-do=trial-results]');await page.locator('[data-saved-clip=full]:focus').waitFor();
+    if(device==='keyboard'){
+      await page.goto(root+'?roll#records/study/stock');
+      await page.locator('#stock-try').waitFor();
+      assert.match(await page.locator('#dialog').innerText(),/Haymaker/);
+      await choose('#stock-try');await page.keyboard.down('d');await page.keyboard.down('l');
+      await page.clock.runFor(1030);await page.keyboard.up('d');await page.keyboard.up('l');
+      await page.clock.runFor(21000);
+      assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!');
+      await choose('[data-do=trial-results]');await page.locator('#film-defense [data-study]').waitFor();
+      assert.equal(await seek.inputValue(),'1196','return to the knockout after saving the sample stock');
+    }
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
