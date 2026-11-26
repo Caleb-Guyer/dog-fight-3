@@ -7484,7 +7484,7 @@
       }
     } else if (!paused && world?.mode === 'adventure') {
       runAdventure(dt, pads);
-    } else if (!paused && world) {
+    } else if (!paused && world && dialogType!=='finish-film') {
       let steppedFrame = false;
       if (countdown > 0) {
         countdown = Math.max(0, countdown - dt);
