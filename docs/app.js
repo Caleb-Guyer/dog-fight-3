@@ -1934,10 +1934,10 @@
     startMatch({mode,p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:opening==='gap'?'laundry':'bandstand',
       form:'original',cpuLevel:settings.cpuLevel,fetch:false,suddenStart:true,suddenOpening:opening},undefined,17);
   }
-  function startFinalCount(mode,p1='brisket',p2='pip'){
+  function startFinalCount(mode,p1='brisket',p2='pip',opening=true){
     leaveOnline();afterStory=null;
     startMatch({mode,p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:'nightmail',form:'flat',
-      cpuLevel:'rival',fetch:false,timeBattle:true,minutes:1,finalCount:true},undefined,17);
+      cpuLevel:'rival',fetch:false,timeBattle:true,minutes:1,finalCount:opening},undefined,17);
   }
   function startDashBack(role) {
     leaveOnline(); afterStory = null;
@@ -1960,6 +1960,8 @@
     if (world.mode !== 'solo' || world.cpuLevel !== 'rival') return '';
     const {spotReads, spotPunishes, rollReads, rollPunishes, shieldHabit} = world.bot;
     let report = '';
+    if(world.bot.heldCenter)report+='<p>Rival played for center stage with a late lead. Dash in, then shield before you reach its attack range.</p>';
+    if(world.bot.chasedLead)report+='<p>Rival came straight in on foot when it needed a KO. Step back and catch the approach with a tilt.</p>';
     if(world.bot.ledgeRollReads){
       const reads=world.bot.ledgeRollReads, catches=world.bot.ledgeRollCatches || 0;
       report+='<p>Rival covered your ledge roll '+reads+(reads===1?' time':' times')+' and grabbed you during '+catches+
@@ -2893,6 +2895,8 @@
         '</p></div></div>' + (spar?spar.goals():cpuReadReport()) + '<div class="dialog-actions"><button class="primary" data-do="'+
         (matchConfig.rotationRound?'rotation':'rematch')+'">'+(matchConfig.rotationRound?(matchConfig.tourneyRound?'Tournament bracket':'Next challenger'):icon('reset')+'Rematch')+
         '</button>'+(result.relayTeams?'<button class="utility" data-do="pack-relay">Change teams</button>':'')+
+        (result.matchCard?.openingPoints?'<button class="utility" data-do="swap-clock">'+
+          (matchConfig.finalCount==='chase'?'Start a point ahead':'Start a point behind')+'</button>':'')+
         (spar?'<button class="utility" data-do="spar-card">Fighter lessons</button>':'<button class="utility" data-do="lobby">Fighter select</button>') + cardButton + '<button class="utility" data-do="home">Main menu</button></div>',
       false,
     );
@@ -2947,7 +2951,9 @@
       return;
     }
     const closing=e.target.closest('[data-sudden-opening]');
-    if(e.target.closest('[data-do="final-count"]'))return startFinalCount(settings.mode==='local'?'local':'solo',settings.p1,settings.p2);
+    const clockStart=e.target.closest('[data-do="final-count"],[data-do="clock-opening"]');
+    if(clockStart)return startFinalCount(settings.mode==='local'?'local':'solo',settings.p1,settings.p2,clockStart.dataset.opening || true);
+    if(e.target.closest('[data-do="swap-clock"]'))return startFinalCount(matchConfig.mode,matchConfig.p1,matchConfig.p2,matchConfig.finalCount==='chase'?'defend':'chase');
     if(closing){
       startClosingFight(closing.dataset.suddenOpening,settings.mode==='local'?'local':'solo',settings.p1,settings.p2);
       return;
@@ -5450,17 +5456,17 @@
     LessonGuide:'lesson-guide.js?v=1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=both-seats-1', MatchReview:'match-review.js?v=match-film-1',
+    RecoveryCoach:'recovery-coach.js?v=both-seats-1', MatchReview:'match-review.js?v=clock-rival-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PlayerProfiles:'player-profiles.js?v=1',
-    VersusRulebook:'versus-rules.js?v=final-count-1',
+    VersusRulebook:'versus-rules.js?v=clock-rival-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
     ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=instant-replay-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=down-air-1',
-    DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
+    DispatchCovers:'dispatch-covers.js?v=route-board-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=bell-wave-1',
     ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=1',
@@ -5764,59 +5770,7 @@
     menuScreen('dispatch-route');
     afterStory = null;
     if(!window.DispatchCovers)return waitForDispatch('Route map',()=>loadDispatch('DispatchCovers'),()=>showRoute(then),()=>showHome());
-    const night = campaign===nightChapter;
-    $('route-bonus').hidden=night || progress.room<yardChapter.bonus.stampRoom;
-    window.DispatchCovers.draw($('route-cover'), night?'eastRoute':'route', progress.room);
-    $('route-cover').setAttribute('aria-label','Rail map · '+campaign.rooms.map(r=>r.name).join(' to '));
-    $('route-number').textContent = 'Chapter 0'+campaign.number;
-    $('route-chapter').textContent = campaign.title;
-    $('route-switch').hidden = !nightUnlocked();
-    $('route-switch').textContent = night?'Chapter 01 · The Silent Yard':'Chapter 02 · The Night Mail';
-    const stops = $('route-stops');
-    stops.replaceChildren();
-    for (const [i, r] of campaign.rooms.entries()) {
-      const li = document.createElement('li'),
-        button = document.createElement('button');
-      button.type = 'button';
-      button.dataset.stop = i;
-      const sealed = i > progress.room,
-        marked = !!(progress.stamps & (1 << i));
-      button.disabled = sealed;
-      const status = sealed
-        ? 'Sealed'
-        : marked
-          ? 'Postmark found'
-          : i === progress.room && !progress.complete
-            ? 'Current stop'
-            : 'Open stop';
-      button.innerHTML =
-        '<em>0' + (i + 1) + '</em><span><b>' + r.name + '</b><small>' + r.type + (r.rules ? ' · 3 stocks' : '') + ' · ' + status + '</small></span>';
-      li.append(button);
-      stops.append(li);
-    }
-    $('route-runner-portrait').src = portrait(campaign.chapterFighter);
-    $('route-runner-name').textContent = fighters[campaign.chapterFighter].name;
-    $('route-progress').textContent = progress.complete
-      ? 'Chapter clear'
-      : progress.started
-        ? (stored ? 'Saved at ' : 'This session · ') +
-          campaign.rooms[progress.room].name +
-          (progress.checkpoint ? ' · ' + campaign.rooms[progress.room].checkpoints[progress.checkpoint - 1].name : '')
-        : 'First stop · '+campaign.rooms[0].name;
-    $('route-marks').textContent =
-      'Postmarks ' +
-      countMarks(progress.stamps) +
-      ' / ' + campaign.rooms.length +
-      (!stored ? ' · Progress lasts for this session' : '');
-    $('dispatch-start').textContent =
-      campaign.scenes[progress.pending]?.completesChapter
-        ? 'Watch ending'
-        : progress.complete
-          ? 'Replay chapter'
-          : progress.started
-            ? 'Continue'
-            : 'Begin chapter';
-    $('dispatch-start').focus({ preventScroll: true });
+    window.DispatchCovers.routeBoard(campaign,progress,{stored,portrait,canSwitch:nightUnlocked(),marks:countMarks(progress.stamps)});
     if(then)then();
   }
   const filmLoads = new Map();
@@ -5835,27 +5789,7 @@
     return filmLoads.get(key);
   }
   function showReels(selected = campaign.rooms[0].intro) {
-    const locks = {
-      opening: '',
-      rescue: progress.room >= 1 ? '' : 'Finish Parcel Alley',
-      boss: progress.room >= campaign.lastRoom ? '' : 'Cross Sorting Bridge',
-      ending: progress.complete || progress.pending === 'ending' ? '' : 'Defeat the Copper Hound',
-      nightmail: '', firstlight: progress.complete || progress.pending === 'firstlight' ? '' : 'Win at East Signal Box',
-    };
-    const rows = Object.entries(campaign.scenes).map(([key, scene]) => {
-      const locked = locks[key];
-      const print = locked ? '<i class="film-leader" aria-hidden="true"></i>' :
-        '<canvas width="160" height="90" aria-hidden="true"></canvas>';
-      return '<button type="button" data-reel="' + key + '"' + (locked ? ' disabled' : '') + '>' +
-        print + '<span><b>' + scene.title + '</b><small>' + (locked || 'Play cutscene') + '</small></span></button>';
-    });
-    showDialog('cutscenes', 'Cutscenes', '<div class="film-library">' + rows.join('') + '</div>');
-    for (const button of document.querySelectorAll('[data-reel]:enabled')) {
-      const canvas = button.querySelector('canvas'), key = button.dataset.reel;
-      if (window.DispatchFilms[key] && window.DispatchFilm) window.DispatchFilm.poster(canvas,key);
-      else window.DispatchCovers.draw(canvas,key);
-    }
-    document.querySelector('[data-reel="' + selected + '"]').focus();
+    window.DispatchCovers.reelShelf(campaign,progress,selected,showDialog);
   }
   function filmArea() {
     const screen = $('dispatch-story').getBoundingClientRect();
@@ -7871,8 +7805,8 @@
       startDropCatch(hash==='#solo/defend-drop');
     } else if (hash==='#solo/fetch' || hash==='#local/fetch') {
       startFetchMatch(hash.startsWith('#local')?'local':'solo');
-    } else if (hash==='#solo/final-count' || hash==='#local/final-count') {
-      startFinalCount(hash.slice(1).split('/')[0]);
+    } else if (/^#(solo|local)\/final-count(?:\/(defend|chase))?$/.test(hash)) {
+      startFinalCount(hash.slice(1).split('/')[0],undefined,undefined,form || true);
     } else if (hash === '#solo/time-battle') {
       leaveOnline();
       afterStory = null;

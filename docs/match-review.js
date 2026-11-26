@@ -34,7 +34,7 @@
     const stats = (card.stockCount?row('Starting stocks',()=>card.stockCount):'') + (card.handicap?row('Starting damage',(_,i)=>card.handicap[i]+'%'):'') + row('Damage dealt', p => tenth(p.damage) + '%') + relayRows + row('Hits landed', p => p.hits) +
       row('Hits blocked', p => p.blocks) + row('Parries', p => p.parries) + row('Shield breaks suffered',p=>p.shieldBreaks) +
       row('Landing techs',p=>p.techs) + row('Knockdowns taken',p=>p.knockdowns) +
-      (card.points?row('Regulation points',(_,i)=>card.points[i])+row('Credited KOs',(_,i)=>losses.filter(l=>l.slot!==i && l.credited).length)+
+      (card.points?(card.openingPoints?row('Opening points',(_,i)=>card.openingPoints[i]):'')+row('Regulation points',(_,i)=>card.points[i])+row('Credited KOs',(_,i)=>losses.filter(l=>l.slot!==i && l.credited).length)+
         row('Falls',(_,i)=>losses.filter(l=>l.slot===i && !l.suddenRound).length):row('Stocks lost', (_,i) => losses.filter(loss => loss.slot === i).length));
     const timeline = losses.map((loss,n) => {
       const clip=clips.find(c=>n>=c.first && n<c.first+c.losses.length);

@@ -19,6 +19,7 @@
       (c.stockCount===undefined || window.DogFight.validStockCount(c.stockCount)) &&
       (c.handicap===undefined || window.DogFight.validHandicap(c.handicap)) &&
       (c.points===undefined || (scores(c.points) && [1,3,7].includes(c.minutes))) &&
+      (c.openingPoints===undefined || (c.points && scores(c.openingPoints))) &&
       (c.relayTeams===undefined || (validRelayTeams(c.relayTeams) && c.players.every((p,i)=>c.relayTeams[i].includes(p.kind) &&
         Array.isArray(c.relayDamage?.[i]) && c.relayDamage[i].length===3 && c.relayDamage[i].every(number)))) &&
       c.losses.every(l=>l && slot(l.slot) && count(l.frame) && number(l.damage) &&
