@@ -8,6 +8,17 @@ dialog[data-view='finish-replay'] { width:min(760px,calc(100% - 16px)); }
 .clip-input-seats { display:flex; gap:4px; align-items:center; margin-top:4px; }
 .clip-input-seats [aria-pressed=true] { color:var(--ink); background:var(--gold); }
 #dialog-body #clip-inputs p { margin:4px 0; font-variant-numeric:tabular-nums; }
+#clip-launch { margin:6px 0; padding:5px 2px; border-block:1px solid currentColor; }
+#clip-launch summary { cursor:pointer; font-weight:bold; }
+#dialog-body #clip-launch p { margin:6px 0; }
+.flight-study { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.flight-stick { display:grid; grid-template-columns:repeat(3, minmax(38px,1fr)); gap:3px; }
+#clip-launch .flight-stick button { min-width:38px; min-height:38px; padding:2px; font-size:18px; }
+.flight-stick [aria-pressed=true] { background:var(--gold); color:var(--ink); }
+.flight-study canvas { flex:1 1 160px; width:0; min-width:min(100%,160px); max-width:360px; height:auto; image-rendering:pixelated; }
+.flight-key::before, .flight-result::before { content:''; display:inline-block; width:17px; margin-right:6px; vertical-align:middle; }
+.flight-key::before { border-top:3px dashed #98651c; }
+.flight-result::before { border-top:3px solid #286d66; }
 @media(max-height:520px) {
   dialog[data-view='finish-replay'] .dialog-inner { padding:8px 12px; }
   dialog[data-view='finish-replay'] .dialog-heading, #dialog-body .clip-caption { margin:2px 0; padding-bottom:2px; }

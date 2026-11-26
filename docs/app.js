@@ -912,7 +912,7 @@
   function showDialog(kind, title, html, close = true) {
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=1';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=launch-study-1';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
@@ -2537,8 +2537,11 @@
     if (finishTape?.length && stats) {
       if(knockoutClips(result).length)stats.insertAdjacentHTML('beforebegin',knockoutButton);
       const button=document.createElement('button');
-      button.className='utility';button.dataset.do='watch-finish';button.textContent='Watch finish';
-      stats.before(button);
+      button.className='utility';button.dataset.do='watch-finish';
+      if(matchConfig.schoolFinal && result.end===1 && result.endReason==='ko'){
+        button.textContent='Replay my last stock';
+        stats.closest('.dialog-actions').querySelector('[data-do=rematch]').after(button);
+      }else{button.textContent='Watch finish';stats.before(button);}
       const practice=document.createElement('button');
       practice.className='utility';practice.textContent='Practice finish';practice.dataset.do='practice-finish';
       practice.onclick=()=>chooseFinishFighter();
@@ -2587,7 +2590,7 @@
         if(signal.aborted)return;
         clipScreen.syncInputs=window.FinishTools.install({tape,signal,stage:stageName(result.stage,result.form),shake:settings.shake,root:$('dialog-body'),
           twoPlayers:result.mode==='local',initialSeat:review?.slot ?? loss?.slot ?? 0,frame:()=>clipScreen.player.frame,
-          slot:review?loss.slot:undefined,escapeReady:review?mark=>{
+          slot:loss?.slot,practiceLaunch:(frame,slot)=>startFinishTrial(frame,slot,review),escapeReady:review?mark=>{
             $('clip-escape-start').textContent=mark.label+' · frame '+mark.frame;
             $('clip-escape').onclick=()=>startFinishTrial(mark.frame,loss.slot,review);
           }:undefined,
@@ -5562,7 +5565,7 @@
     VersusRulebook:'versus-rules.js?v=throw-reads-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
-    ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=replay-inputs-1',
+    ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=launch-study-1',
     FighterSchool:'fighter-lessons.js?v=special-studies-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
