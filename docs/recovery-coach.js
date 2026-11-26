@@ -27,9 +27,7 @@
           // Continue from the altered position with the rival's next recorded input.
           // The stock-return clip shares the original fight's absolute tick numbers.
           const tick=tape.count+this.frame-tape.length;
-          const block=battle.mode==='local' && follow && tick>=follow.from && tick<follow.count &&
-            follow.blocks.findLast(b=>b.start<=tick);
-          const other=block?block.inputs[tick-block.start][1-slot]:idleInput;
+          const other=battle.mode==='local' && follow?follow.inputAt(tick,1-slot):idleInput;
           battle.step(1/60,slot===0?input:other,slot===1?input:other);
         }
         this.frame++;

@@ -2492,7 +2492,7 @@
         if(returning)review.recordedReturn=window.FinishTools.returnTrace();
         clipScreen.syncInputs=window.FinishTools.install({tape,signal,stage:stageName(result.stage,result.form),shake:settings.shake,root:$('dialog-body'),
           follow:returning?review.recordedReturn:null,
-          ledgeFocus:review?.ledgeFocus,practiceLedge:ledge=>startFinishTrial(ledge.mark.frame,ledge.mark.slot,{
+          ledgeFocus:review?.ledgeFocus,returnTape:review?.clip?.returnTape,practiceLedge:ledge=>startFinishTrial(ledge.mark.frame,ledge.mark.slot,{
             ...(review || {finish:true,from:'result',clip:{tape,losses:[]},result}),ledge,replayFrame:ledge.mark.frame}),
           holdFocus:review?.holdFocus,practiceHold:(hold,originalHold)=>startFinishTrial(hold.frame,hold.slot,{
             ...(review || {finish:true,from:'result',clip:{tape,losses:[]},result}),hold,originalHold,replayFrame:hold.frame}),
@@ -2612,7 +2612,7 @@
     const emit=(name,e)=>{
       camera.event(name,e);fightSound(name,e);trace?.observe(name,e,player.frame+1);
     };
-    const player=review?.ledge?window.FinishTools.ledgeAttempt(tape,review.ledge.mark,false,emit):review?.hold?window.FinishTools.holdAttempt(tape,review.hold,false,emit):review?.stock?review.stock.attempt(emit):review?.landing?window.FinishTools.landingTry(tape,review.landing,start,emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
+    const player=review?.ledge?window.FinishTools.ledgeAttempt(tape,review.ledge.mark,false,emit,review.clip?.returnTape):review?.hold?window.FinishTools.holdAttempt(tape,review.hold,false,emit):review?.stock?review.stock.attempt(emit):review?.landing?window.FinishTools.landingTry(tape,review.landing,start,emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
     const saved=finishTrial?.saved || {mode:$('match-mode').textContent,pause:$('pause-label').textContent,
       call:$('countdown').textContent,setHidden:$('match-set').hidden,cornerHidden:$('corner-tip').hidden,schoolHidden:$('school-coach').hidden,
       cornerTitle:$('corner-title').textContent,cornerLine:$('corner-line').textContent};
@@ -4207,7 +4207,7 @@
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=launch-rescue-1', MatchReview:'match-review.js?v=versus-stock-1',
+    RecoveryCoach:'recovery-coach.js?v=ledge-1', MatchReview:'match-review.js?v=versus-stock-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
