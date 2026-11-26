@@ -307,6 +307,43 @@ async function rivalSet(browser) {
   await page.close();
   console.log('Noodle caught the repeated keyboard roll and remembered it after a three-stock counterpick and restart.');
 }
+async function interruptFriendMatch(host,guest){
+  const pages=[host.page,guest.page];
+  await Promise.all(pages.map(p=>p.waitForFunction(()=>window.roomUnderTest?.match?.confirmed>12)));
+  for(const p of pages)await p.evaluate(()=>{
+    const room=roomUnderTest;
+    window.beforeDrop={match:room.match,series:room.series,link:room.link,code:room.code,round:room.round};
+  });
+  await guest.page.evaluate(()=>{
+    const connect=signalingPeer.connect.bind(signalingPeer);
+    window.holdRecovery=true;
+    signalingPeer.connect=(id,opts)=>window.holdRecovery && opts?.label.endsWith('-resume')?null:connect(id,opts);
+    roomUnderTest.link.close();
+  });
+  await Promise.all(pages.map(p=>p.waitForFunction(()=>roomUnderTest.recovery && document.querySelector('#countdown').textContent.includes('Reconnecting'))));
+  const frozen=await Promise.all(pages.map(p=>p.evaluate(()=>[roomUnderTest.match.frame,roomUnderTest.match.confirmedWorld.clockFrames])));
+  await host.press('#pause');
+  assert.match(await host.page.locator('#online-fight-status').innerText(),/fight is paused/);
+  await host.press('[data-do=resume]');
+  for(const [i,p] of pages.entries())assert.deepEqual(await p.evaluate(()=>[roomUnderTest.match.frame,roomUnderTest.match.confirmedWorld.clockFrames]),frozen[i]);
+  const checkpoint=Math.max(...frozen.map(f=>f[0]))+30;
+  for(const p of pages)await p.evaluate(frame=>{
+    const m=roomUnderTest.match, record=m.onConfirmedInput;
+    m.onConfirmedInput=(w,a,b)=>{
+      record?.(w,a,b);
+      if(m.confirmed===frame)window.resumeCheckpoint=[w.clockFrames,w.matchFrames,...w.dogs.map(d=>[d.kind,d.x,d.y,d.damage,d.stocks]),...roomUnderTest.series.score];
+    };
+  },checkpoint);
+  await guest.page.evaluate(()=>window.holdRecovery=false);
+  await Promise.all(pages.map(p=>p.waitForFunction(()=>window.resumeCheckpoint && !roomUnderTest.recovery)));
+  for(const p of pages)assert(await p.evaluate(()=>{
+    const r=roomUnderTest,b=beforeDrop;
+    return r.match===b.match && r.series===b.series && r.link!==b.link && r.link.open &&
+      r.code===b.code && r.round===b.round && r.round===2 && r.series.score.join(',')==='1,0';
+  }));
+  assert.deepEqual(await host.page.evaluate(()=>resumeCheckpoint),await guest.page.evaluate(()=>resumeCheckpoint));
+  console.log('The two WebRTC peers resumed the same best-of-three game at an identical confirmed frame.');
+}
 async function onlineSet(browser,phoneBrowser) {
   const host=await device(browser,false,'#controls'), guest=await device(phoneBrowser,true,'#controls');
   const {page:a}=host,{page:b}=guest;
@@ -314,6 +351,10 @@ async function onlineSet(browser,phoneBrowser) {
     await d.press('[data-key="jump"]');await d.page.keyboard.press(key);
     await d.page.goto(root+'?custom-key'+(d===host?'#online/best-of-three':'#online'));await observe(d.page);
     await d.press('#online-coat');await d.press('[data-coat="2"]');
+    await d.page.evaluate(()=>{
+      const proto=DogOnline.OnlineSession.prototype,attach=proto.attach;
+      proto.attach=function(...args){window.roomUnderTest=this;return attach.apply(this,args);};
+    });
   }
   assert.equal(await a.locator('#online-format').getAttribute('aria-pressed'),'true');
   await a.selectOption('#online-stage','laundry');await a.selectOption('#online-form','flat');
@@ -446,6 +487,7 @@ async function onlineSet(browser,phoneBrowser) {
         await winner.press('[data-do=online-rematch]');
       }
       for(const d of [host,guest])await fresh(d,i+2,i===0?'1–0':'1–1');
+      if(i===0)await interruptFriendMatch(host,guest);
     }else{
       assert.match(await a.locator('#set-score').textContent(),/P1 2 – 1 P2/);
       await guest.press('[data-do=online-rematch]');await host.press('[data-do=online-rematch]');

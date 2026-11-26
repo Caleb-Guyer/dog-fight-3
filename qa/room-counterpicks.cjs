@@ -14,12 +14,13 @@ const previous=process.env.DF3_LEGACY_ONLINE ? fs.readFileSync(process.env.DF3_L
 
 // Deliver the released clients' real handshake and round messages in order. Timeouts
 // are idle in this transport, which never registers a browser or a public room.
-function room(sources,timeMinutes=0,rules=null,format='set') {
+function room(sources,timeMinutes=0,rules=null,format='set',worlds=null) {
   const queue=[], links=[new EventEmitter(),new EventEmitter()];
   const peers=sources.map((source,side)=>{
-    const context={window:{DogFight:window.DogFight},crypto,performance,setInterval:()=>0,setTimeout:()=>0,clearInterval(){},clearTimeout(){}};
+    const context={window:{DogFight:window.DogFight},crypto,performance,setInterval:fn=>fn,setTimeout:()=>0,clearInterval(){},clearTimeout(){}};
     vm.runInNewContext(source,context);
-    const s=new context.window.DogOnline.OnlineSession({start(){},status(){},votes(){},closed:message=>assert.fail(message)});
+    const s=new context.window.DogOnline.OnlineSession({start(config,rng){if(worlds)worlds[side]=new window.DogFight.Battle(config,()=>{},rng);},
+      status(){},votes(){},closed:message=>assert.fail(message)});
     Object.assign(s,{side,round:0,kind:'pip',coat:2,roomSet:side===0 && format==='set',
       action:format==='quick'?'quick':side?'join':'create',openingStage:'picnic',roomForm:format==='quick'?'original':'flat',peer:{disconnect(){}}});
     if(!side){
@@ -32,7 +33,9 @@ function room(sources,timeMinutes=0,rules=null,format='set') {
     while(queue.length){const {side,msg}=queue.shift();links[1-side].emit('data',msg);}
   }
   for(const [side,link] of links.entries()){
-    link.open=true;link.send=msg=>queue.push({side,msg:structuredClone(msg)});
+    link.open=true;link.peer=side?'room-host':'original-guest';
+    link.close=()=>{if(link.open){link.open=false;link.emit('close');}};
+    link.send=msg=>queue.push({side,msg:structuredClone(msg)});
     peers[side].useConnection(peers[side].peer,link,side===0);
   }
   links.forEach(link=>link.emit('open'));deliver();
@@ -42,6 +45,72 @@ function lineup(s) {
   const w=s.match.confirmedWorld;
   return w.dogs.map((dog,i)=>[dog.kind,w.coatFor(i)]);
 }
+
+test('a replacement friend-room channel recovers precisely the missing inputs without duplicating confirmed replay frames',()=>{
+  const worlds=[],{peers,deliver}=room([current,current],0,null,'set',worlds),[host,guest]=peers;
+  assert(host.roomTicket && host.roomTicket===guest.roomTicket);
+  const matches=peers.map(s=>s.match), sets=peers.map(s=>s.series);
+  const taped=[[],[]], history=[[],[]];
+  matches.forEach((m,i)=>m.onConfirmedInput=(w,a,b)=>taped[i].push([w.matchFrames,a.x,a.jump,b.shield,b.tapped.attack]));
+  function tick(i){
+    const m=matches[i],f=m.frame;
+    m.tick(()=>({x:((f%9)-4)/4,jump:f%19===0,shield:f%11===0,tapped:{attack:f%7===0}}),worlds[i]);
+  }
+  for(let i=0;i<80;i++){tick(0);tick(1);deliver();}
+  for(let i=0;i<6;i++){tick(0);tick(1);}
+  const cursors=matches.map(m=>m.received);
+  matches.forEach((m,i)=>{history[i]=structuredClone(m.inputsFrom(cursors[1-i]));assert.equal(history[i].length,6);});
+  const original=peers.map(s=>s.link), pipes=peers.map((s,i)=>{
+    const p=new EventEmitter();p.open=true;p.peer=s.opponentId;
+    p.close=()=>{if(p.open){p.open=false;p.emit('close');}};return p;
+  });
+  const packets=[], sent=[[],[]], notices=[[],[]];
+  pipes.forEach((p,i)=>p.send=msg=>{sent[i].push(structuredClone(msg));packets.push([1-i,structuredClone(msg)]);});
+  peers.forEach((s,i)=>{s.peer.open=true;s.events.recovery=active=>notices[i].push(active);});
+  guest.peer.connect=(id,{label})=>{assert.equal(id,guest.opponentId);assert.match(label,/-resume$/);host.useConnection(host.peer,pipes[0],true,true);return pipes[1];};
+  original[0].close();original[1].close();
+  pipes.forEach(p=>p.emit('open'));
+  while(packets.length){const [i,msg]=packets.shift();pipes[i].emit('data',msg);}
+  deliver(); // Late callbacks from the retired channel must be ignored.
+  original.forEach(p=>p.emit('close'));
+  for(const [i,s] of peers.entries()){
+    assert.equal(s.link,pipes[i]);assert.equal(s.match,matches[i]);assert.equal(s.series,sets[i]);assert.deepEqual(notices[i],[true,false]);
+    const retransmitted=sent[i].filter(msg=>msg[0]==='input');
+    assert.deepEqual(retransmitted.map(msg=>msg[2]),history[i].map((_,n)=>cursors[1-i]+n));
+    assert.deepEqual(retransmitted.map(msg=>msg[3]),history[i]);
+    assert.equal(s.match.inputsFrom(-1),null);assert.equal(s.match.inputsFrom(1),null);assert.equal(s.match.inputsFrom(s.match.frame+1),null);
+  }
+  for(let i=0;i<160;i++){
+    tick(0);tick(1);while(packets.length){const [side,msg]=packets.shift();pipes[side].emit('data',msg);}
+  }
+  matches.forEach((m,i)=>m.confirm(worlds[i]));
+  assert.deepEqual(taped[0],taped[1]);assert.equal(taped[0].length,246);
+  assert.equal(new Set(taped[0].map(frame=>frame[0])).size,246);
+  assert.deepEqual(matches[0].confirmedWorld.matchCard,matches[1].confirmedWorld.matchCard);
+  assert.deepEqual(matches[0].confirmedWorld.dogs.map(d=>[d.x,d.y,d.damage,d.stocks]),matches[1].confirmedWorld.dogs.map(d=>[d.x,d.y,d.damage,d.stocks]));
+});
+
+test('a reserved seat rejects wrong room, identity, round, sequence and input cursor, then expires back to its original room',()=>{
+  const {peers:[host,guest]}=room([current,current]);
+  host.peer.open=true;host.code='ABCDEF';host.link.close();
+  for(const [id,ticket,round,seq,cursor] of [
+    ['stranger',host.roomTicket,1,1,0],[host.opponentId,'old-ticket',1,1,0],
+    [host.opponentId,host.roomTicket,2,1,0],[host.opponentId,host.roomTicket,1,0,0],
+    [host.opponentId,host.roomTicket,1,1,1]
+  ]){
+    const c=new EventEmitter();c.peer=id;c.close=()=>c.emit('close');
+    host.useConnection(host.peer,c,true,true);c.emit('data',['resume',ticket,round,seq,cursor]);assert(!host.pending.has(c));assert(!host.link);assert(host.match);
+  }
+  const newcomer=new EventEmitter();let response;
+  newcomer.send=msg=>response=msg[0];host.useConnection(host.peer,newcomer,true);newcomer.emit('data',['join','pip',0]);
+  assert.equal(response,'full');host.recovery.until=0;host.recovery.timer();
+  assert.equal(host.phase,'room');assert.equal(host.code,'ABCDEF');assert(!host.match && !host.series && !host.roomTicket && !host.recovery);
+  assert(!room([current,current],0,null,'quick').peers.some(s=>s.match.sent));
+  for(const versions of [[current,previous],[previous,current]]){
+    const modern=room(versions).peers[versions.indexOf(current)];assert(!modern.match.sent && !modern.canRecover());
+  }
+  assert(guest.match);
+});
 for(const format of ['single','quick'])test(format+' rematches accept both picks in either order and keep the resolved mirror coats',()=>{
   const {peers,deliver}=room([current,current],0,null,format), [host,guest]=peers;
   for(const peer of peers)assert.equal(peer.rematchPicks,true);
