@@ -5548,9 +5548,14 @@
     if (!savedGames().some(g=>g.id===id)) return showHome();
     if (id==='school-stock')return resumeFirstPosition();
     if (missionSaves.some(s=>s.id===id))return resumeMission(id);
-    if (id==='school') return readMissionSaves().then(()=>{
-      if(page==='home')missionSaves.some(s=>s.id==='school-stock')?resumeFirstPosition():resumeCourse();
-    });
+    if (id==='school'){
+      let checkpoint=false;
+      try{checkpoint=storage.getItem('dog-fight-3.stock-ready')==='1';}catch{}
+      if(!checkpoint)return resumeCourse();
+      return readMissionSaves().then(()=>{
+        if(page==='home')missionSaves.some(s=>s.id==='school-stock')?resumeFirstPosition():resumeCourse();
+      });
+    }
     if (id==='adventure') { selectChapter(nightUnlocked()?nightChapter:yardChapter); return continueAdventure(); }
     // Use the route card's checked transaction, including its cross-tab retry guard.
     cupSheet(id);
