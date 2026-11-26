@@ -307,7 +307,7 @@ jobs:
           persist-credentials: false
       - name: Play a three-dog relay and review the team scorecard
         run: |
-          node --test qa/pack-relay.cjs
+          node --test qa/pack-relay.cjs qa/cup-relay.cjs
           node --test qa/runoff-trump.cjs
           node --test qa/fetch-catch.cjs
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
@@ -315,6 +315,7 @@ jobs:
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/stock-sets.cjs --pack-relay
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/cup-relay.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fetch-catch.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/runoff-trump.js
   versus-rules:
