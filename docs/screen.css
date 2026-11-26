@@ -103,6 +103,9 @@ body .topbar .wordmark {
 #school-coach div { display:flex; flex-wrap:wrap; gap:5px; margin-top:5px; }
 #school-coach[data-state^="example"] { border-color:#96dcd1; }
 #school-bindings { color:#aadcd8; }
+#school-coach[data-state="guided"] { border-color:#98dec8; }
+.guide-key { display:inline-block; padding:1px 5px; margin:1px 0; border:1px solid #b0b7bb; color:#fff2d0; }
+.guide-key[data-met="true"] { color:#20242e; background:#98dec8; border-color:#98dec8; }
 .rules-source,.rules-fields label { display:grid; gap:4px; }
 .rules-source { margin:10px 0; }
 .rules-fields { display:grid; gap:0; }
