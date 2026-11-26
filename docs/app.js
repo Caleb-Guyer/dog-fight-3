@@ -5441,6 +5441,10 @@
   }
   const countMarks = (bits) => campaign.rooms.filter((_, i) => bits & (1 << i)).length;
   function menuScreen(id, keepRoom = false) {
+    if(id==='online-lobby' && !$('online-sheet')){
+      const link=document.createElement('link');link.id='online-sheet';link.rel='stylesheet';link.href='./online.css?v=lobby-1';
+      link.onerror=()=>link.remove();document.head.append(link);
+    }
     corner=spar=null;
     finishTrial=null;
     finishTape=null;
@@ -5693,14 +5697,15 @@
     $('story-map').textContent = fromLibrary ? 'Cutscenes' : 'Route map';
     $('story-skip').hidden = fromLibrary;
     $('story-next').onclick = () => film?.next();
-    if (!window.DispatchFilms?.[key] || !window.DispatchFilm) {
+    const loading=!window.DispatchFilms?.[key] || !window.DispatchFilm;
+    if (loading) {
       $('film-time').textContent = '';
       $('film-progress').style.transform = 'scaleX(0)';
       $('story-speaker').textContent = '';
       $('story-text').textContent = 'Loading cutscene…';
       $('story-next').textContent = 'Next';
       $('film-pause').disabled = $('story-next').disabled = true;
-      $(fromLibrary ? 'story-map' : 'story-skip').focus({preventScroll:true});
+      $('story-title').focus({preventScroll:true});
       try {
         await loadDispatch('DispatchCovers');
         if (page!=='dispatch-story' || afterStory!==then) return;
@@ -5731,7 +5736,8 @@
     updateFilmButton();
     // A story film leads straight into its mission. Library screenings end on the reel shelf.
     if(!fromLibrary && !scene.completesChapter && !missionReady())loadMission().catch(()=>{});
-    $(film.paused && fromLibrary ? 'film-pause' : 'story-next').focus({ preventScroll: true });
+    if(!loading || document.activeElement===$('story-title'))
+      $(film.paused && fromLibrary ? 'film-pause' : 'story-next').focus({ preventScroll: true });
   }
   function showStoryPage(key, part) {
     const scene = campaign.scenes[key],
