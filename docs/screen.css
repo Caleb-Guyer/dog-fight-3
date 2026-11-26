@@ -956,3 +956,16 @@ dialog[data-view='practice'] #dialog-body {
 @media (forced-colors: active) {
   .pad-navigation :is(button,input,select,a,summary):focus { outline-color: Highlight; }
 }
+.mode-rack { grid-template-rows: repeat(4, minmax(0, 1fr)); }
+.mode-rack #home-online {
+  --tab: #eabb68;
+  background: #443b37;
+  border-bottom: 3px solid #222534;
+}
+.mode-rack button[data-enter-mode="training"] {
+  --tab: #c6abcf;
+  background: #373749;
+  border-bottom: 0;
+}
+.mode-rack #home-online:is(:hover, :focus-visible) { background: #51463d; }
+.mode-rack button[data-enter-mode="training"]:is(:hover, :focus-visible) { background: #494657; }
