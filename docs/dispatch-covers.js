@@ -1514,7 +1514,85 @@
     g.drawImage(frame, Math.floor((canvas.width - w) / 2), Math.floor((canvas.height - h) / 2), w, h);
     g.restore();
   }
-  window.DispatchCovers = Object.freeze({ draw });
+  function routeBoard(campaign,progress,{stored,portrait,canSwitch,marks}){
+    const night=campaign.number===2, $=id=>document.getElementById(id);
+    $('route-bonus').hidden=night || progress.room<campaign.bonus.stampRoom;
+    draw($('route-cover'), night?'eastRoute':'route', progress.room);
+    $('route-cover').setAttribute('aria-label','Rail map · '+campaign.rooms.map(r=>r.name).join(' to '));
+    $('route-number').textContent = 'Chapter 0'+campaign.number;
+    $('route-chapter').textContent = campaign.title;
+    $('route-switch').hidden = !canSwitch;
+    $('route-switch').textContent = night?'Chapter 01 · The Silent Yard':'Chapter 02 · The Night Mail';
+    const stops = $('route-stops');
+    stops.replaceChildren();
+    for (const [i, r] of campaign.rooms.entries()) {
+      const li = document.createElement('li'),
+        button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.stop = i;
+      const sealed = i > progress.room,
+        marked = !!(progress.stamps & (1 << i));
+      button.disabled = sealed;
+      const status = sealed
+        ? 'Sealed'
+        : marked
+          ? 'Postmark found'
+          : i === progress.room && !progress.complete
+            ? 'Current stop'
+            : 'Open stop';
+      button.innerHTML =
+        '<em>0' + (i + 1) + '</em><span><b>' + r.name + '</b><small>' + r.type + (r.rules ? ' · 3 stocks' : '') + ' · ' + status + '</small></span>';
+      li.append(button);
+      stops.append(li);
+    }
+    $('route-runner-portrait').src = portrait(campaign.chapterFighter);
+    $('route-runner-name').textContent = window.DogFight.fighters[campaign.chapterFighter].name;
+    $('route-progress').textContent = progress.complete
+      ? 'Chapter clear'
+      : progress.started
+        ? (stored ? 'Saved at ' : 'This session · ') +
+          campaign.rooms[progress.room].name +
+          (progress.checkpoint ? ' · ' + campaign.rooms[progress.room].checkpoints[progress.checkpoint - 1].name : '')
+        : 'First stop · '+campaign.rooms[0].name;
+    $('route-marks').textContent =
+      'Postmarks ' +
+      marks +
+      ' / ' + campaign.rooms.length +
+      (!stored ? ' · Progress lasts for this session' : '');
+    $('dispatch-start').textContent =
+      campaign.scenes[progress.pending]?.completesChapter
+        ? 'Watch ending'
+        : progress.complete
+          ? 'Replay chapter'
+          : progress.started
+            ? 'Continue'
+            : 'Begin chapter';
+    $('dispatch-start').focus({ preventScroll: true });
+  }
+  function reelShelf(campaign,progress,selected,showDialog){
+    const locks = {
+      opening: '',
+      rescue: progress.room >= 1 ? '' : 'Finish Parcel Alley',
+      boss: progress.room >= campaign.lastRoom ? '' : 'Cross Sorting Bridge',
+      ending: progress.complete || progress.pending === 'ending' ? '' : 'Defeat the Copper Hound',
+      nightmail: '', firstlight: progress.complete || progress.pending === 'firstlight' ? '' : 'Win at East Signal Box',
+    };
+    const rows = Object.entries(campaign.scenes).map(([key, scene]) => {
+      const locked = locks[key];
+      const print = locked ? '<i class="film-leader" aria-hidden="true"></i>' :
+        '<canvas width="160" height="90" aria-hidden="true"></canvas>';
+      return '<button type="button" data-reel="' + key + '"' + (locked ? ' disabled' : '') + '>' +
+        print + '<span><b>' + scene.title + '</b><small>' + (locked || 'Play cutscene') + '</small></span></button>';
+    });
+    showDialog('cutscenes', 'Cutscenes', '<div class="film-library">' + rows.join('') + '</div>');
+    for (const button of document.querySelectorAll('[data-reel]:enabled')) {
+      const canvas = button.querySelector('canvas'), key = button.dataset.reel;
+      if (window.DispatchFilms[key] && window.DispatchFilm) window.DispatchFilm.poster(canvas,key);
+      else draw(canvas,key);
+    }
+    document.querySelector('[data-reel="' + selected + '"]').focus();
+  }
+  window.DispatchCovers = Object.freeze({draw,routeBoard,reelShelf});
   // The films and the printed route map share the same native pixel grid and props.
   function ease(start, end, time) {
     const t = Math.max(0, Math.min(1, (time - start) / (end - start)));

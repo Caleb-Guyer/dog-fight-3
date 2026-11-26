@@ -2685,6 +2685,7 @@
         this.coats=this.relayCoats.map(team=>team[0]);
       }
       const timed=versus && !this.relayTeams && config.timeBattle===true && config.lesson===undefined && !config.lastStockStart && !config.suddenStart;
+      const openingLead=timed && (config.finalCount==='defend' || config.finalCount==='chase');
       const minutes = timed && !config.minutes ? 3 : stockMinutes.includes(config.minutes) ? config.minutes : 7;
       this.clockFrames = versus && minutes ? minutes * 3600 : null;
       this.emit = event;
@@ -2789,8 +2790,12 @@
       if (config.driveOpening && this.mode === 'solo') this.placeDriveFighters(config.driveOpening.edge, config.driveOpening.damage);
       if (timed && config.finalCount) {
         this.clockFrames = 600;
-        this.placeDriveFighters(true, 135);
-        this.dogs[0].damage = 135;
+        if(openingLead){
+          for(const f of this.dogs)f.damage=135;
+        }else{
+          this.placeDriveFighters(true,135);
+          this.dogs[0].damage=135;
+        }
       }
       if (this.mode === 'solo' && ['bait','watch','delay'].includes(config.dashBackOpening)) {
         const slot = config.dashBackOpening === 'bait' ? 0 : 1;
@@ -2841,7 +2846,10 @@
       }
       // Solo replays reconstruct the CPU. Older checkpoints retain the footwork they recorded.
       if (this.cpuLevel === 'rival') this.bot.dashBackEnabled = true;
-      if (this.mode==='solo' && this.cpuLevel==='rival')this.bot.liftReadEnabled=true;
+      if (this.mode==='solo' && this.cpuLevel==='rival'){
+        this.bot.liftReadEnabled=true;
+        this.bot.clockAware=true;
+      }
       this.matchCard = versus && config.lesson === undefined ? {
         players:this.dogs.map(f => ({kind:f.kind, coat:this.coatFor(f.index), damage:0, hits:0, blocks:0, parries:0,
           techs:0, knockdowns:0, shieldBreaks:0, lastHit:null})),
@@ -2851,6 +2859,10 @@
         ...(this.relayTeams ? {relayTeams:this.relayTeams,relayDamage:[[0,0,0],[0,0,0]]} : {}),
         ...(timed ? {points:[0,0],minutes} : {}),
       } : null;
+      if(openingLead){
+        this.matchCard.points[config.finalCount==='chase'?0:1]=-1;
+        this.matchCard.openingPoints=this.matchCard.points.slice();
+      }
     }
     get geometryStage() { return stageGeometry(this.stage, this.form); }
     get movingSurfaces() { return this.layout ? undefined : movingSurfaces[this.geometryStage]; }
@@ -2860,7 +2872,7 @@
     resetCpu() {
       const memory = this.bot;
       this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
-      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','liftReadEnabled'])
+      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','liftReadEnabled','clockAware','heldCenter','chasedLead'])
         if (memory[key] !== undefined) this.bot[key] = memory[key];
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
@@ -11303,6 +11315,27 @@
       }
       return input;
     }
+    clockPositionInput(f,foe,floor){
+      if(!floor || floor.thin || f.attack || f.command || f.shield || f.stun || f.grip || f.charge>=0 ||
+        f.jumpSquat || f.floorAction || f.landingLag || this.projectiles.length || this.ball || foe.stockLift ||
+        protectionTime(foe) || foe.attack?.projectile)return null;
+      const points=this.matchCard?.points, lead=points?points[1]-points[0]:f.stocks-foe.stocks;
+      if(!lead)return null;
+      const gap=foe.x-f.x,dir=Math.sign(gap);
+      // Inside striking distance, the usual guard, grab and punish decisions take over.
+      const reach=Math.max(125,foe.stats.width+Math.abs(foe.vx)*.20+85);
+      if(Math.abs(gap)<=reach && Math.abs(f.y-foe.y)<100)return null;
+      if(lead<0){
+        if(foe.ground!==f.ground || Math.abs(gap)<=reach || foe.attack || foe.charge>=0)return null;
+        this.bot.chasedLead=true;
+        return {...idleInput,x:dir};
+      }
+      const middle=clamp(this.stageWidth/2,floor.x1+55,floor.x2-55);
+      const mark=clamp(middle+dir*40,floor.x1+55,floor.x2-55),distance=mark-f.x;
+      this.bot.heldCenter=true;
+      const x=Math.abs(distance)>12?Math.sign(distance)*(Math.abs(distance)>80?1:.45):f.face!==dir?dir*.4:0;
+      return {...idleInput,x};
+    }
     cpu(dt) {
       const f = this.dogs[1],
         foe = this.dogs[0],
@@ -11456,6 +11489,10 @@
         const basic = this.rookieNeutral(f, foe);
         if (basic) return basic;
       } else if (this.cpuLevel === 'rival') {
+        if(brain.clockAware && this.matchCard && this.clockFrames>0 && this.clockFrames<=600){
+          const position=this.clockPositionInput(f,foe,this.terrain[f.ground]);
+          if(position)return position;
+        }
         const intercept = this.rivalEdgeHop(f,foe,this.terrain[f.ground],outerLeft,outerRight);
         if (intercept) return intercept;
         const jab = f.attack;

@@ -124,7 +124,10 @@
       (settings.mode==='training'?'':'<div class="dialog-actions"><button class="utility" data-do="strike-set">Play a stage strike set</button></div>')+
       '<h3>Match clock</h3><div class="dialog-actions">' + choices + '</div>' +
       (settings.timed && settings.mode!=='training'?'<p>Ten seconds left, tied at zero. Both dogs are at 135% by the Night Mail ledge. Take the lead before the bell or fight the tiebreak.</p>'+
-      '<div class="dialog-actions"><button class="utility" data-do="final-count">Play the final ten seconds</button></div>':'')+
+      '<div class="dialog-actions"><button class="utility" data-do="final-count">Play the final ten seconds</button></div>'+
+      '<p>Try the same ten seconds from opposite scores. Start apart on the main deck at 135%. A credited KO can swing a one-point deficit into a lead.</p>'+
+      '<div class="dialog-actions"><button class="utility" data-do="clock-opening" data-opening="defend">Protect a one-point lead</button>'+
+      '<button class="utility" data-do="clock-opening" data-opening="chase">Come back from one down</button></div>':'')+
       '<p>Play the last stock with both dogs at 125%. When a hit threatens the match, steer during the close-up to change your launch.</p>' +
       '<div class="dialog-actions"><button class="utility" data-do="last-stock-start">Play last stock</button></div>' +
       '<h3>Sudden Death</h3><p>One stock at 300%. The sides start closing after five seconds. The ceiling and floor follow at ten seconds.</p>' +
