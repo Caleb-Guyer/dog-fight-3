@@ -58,7 +58,7 @@ async function check(browser,device) {
     }
     const play=()=>choose('#recovery-play');
     const root='http://127.0.0.1:8080/';
-    await page.goto(root);await choose('#welcome-play');await choose('#school-list');
+    await page.goto(root);await choose('#welcome-play');await choose(pad?'#pause':'#school-list');
     await choose('#dialog-body button:text-is("Recovery clinic")');await route();
     assert.match(await page.locator('#recovery-position').textContent(),/Left.+0 air jumps/);
     await choose('#recovery-guide');await page.clock.runFor(1600);
@@ -181,6 +181,8 @@ async function check(browser,device) {
 }
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{for(const device of ['keyboard','touch','controller'])await check(browser,device);}
+  try{for(const device of ['keyboard','touch','controller']){
+    try{await check(browser,device);}catch(error){throw Error(device+' recovery playtest: '+error.stack);}
+  }}
   finally{await browser.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+e.stack.replaceAll('\n','%0A'));process.exitCode=1;});
