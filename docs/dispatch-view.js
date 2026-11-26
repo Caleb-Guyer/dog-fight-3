@@ -115,6 +115,37 @@
     ctx.restore();
   }
   class DispatchView extends FightView {
+    static updateScoreboard(world,recovery,order,marks,{$,tenth,showPercent,showStocks,recoveryStrip}) {
+      const hero=world.dogs[0], foes=world.foes, lead=foes[0];
+      const boss=world.layout.rules==='boss', horde=world.layout.rules==='horde';
+      $('runner-score').hidden = !!world.bridge;
+      $('runner-recovery').hidden = recovery === null;
+      if (recovery !== null) $('runner-recovery').innerHTML = recoveryStrip(recovery);
+      if (!world.bridge) {
+        showPercent($('runner-percent'), hero.damage);
+        showStocks($('runner-lives'), hero.stocks, hero.stats.name);
+      }
+      $('machine-meter').hidden = !lead;
+      if (lead) {
+        $('machine-name').textContent = horde ? 'Sorting crew' : lead.f.stats.name;
+        $('rival-score').hidden = boss;
+        $('machine-health').hidden = !boss;
+        if (boss) {
+          $('machine-health').max = lead.maxHP;
+          $('machine-health').value = lead.hp;
+        } else {
+          $('rival-percent').hidden = horde;
+          if (!horde) showPercent($('rival-percent'), lead.f.damage);
+          const team = world.sideRoute?'Lift crew':horde ? 'Sorting crew' : world.layout.rules === 'relay' ? 'Cage guards' : lead.f.stats.name;
+          showStocks($('rival-lives'), world.rivalStocks, team);
+          if (horde) $('rival-score').setAttribute('aria-label', foes.filter((e) => e.f.stocks)
+            .map((e) => e.f.stats.name + ' ' + tenth(e.f.damage) + '%').join(', '));
+          else $('rival-score').removeAttribute('aria-label');
+        }
+      }
+      $('dispatch-marks').textContent = marks;
+      if ($('dispatch-objective').textContent !== order) $('dispatch-objective').textContent = order;
+    }
     drawEdgePortrait(ctx, f, x, y, time, world) {
       const kind = f.encounter?.kind;
       if (!kind || Object.hasOwn(window.DogFight.fighters, kind)) return super.drawEdgePortrait(ctx, f, x, y, time, world);

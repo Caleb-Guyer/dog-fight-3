@@ -89,6 +89,9 @@
     rise:['return','Recover with Fence Hopper','Aim {up} + {special}, then steer {side} toward the ledge.'],
     hop:['return','Second hop available','Release {special}. Aim {up} and tap {special} again while steering {side}.'],
     drift:['return','Drift toward the ledge','Hold {side} to bring Pip back within reach.'],
+    across:['air-lastDodge','Air dodge to the ledge','Aim {side} and tap {shield}. Hold {side} to climb.'],
+    slant:['air-lastDodge','Air dodge to the ledge','Aim {up} + {side} and tap {shield}. Hold {side} to climb.'],
+    vertical:['air-lastDodge','Air dodge to the ledge','Aim {up} and tap {shield}. Hold {side} when your paws catch.'],
     hang:['return','Ledge caught','Tap {side} to climb onto the stage, or tap {jump} to jump from the ledge.'],
     lift:['launch-stock-return','Your next stock','When the lamps turn mint, tap {down} to drop or {jump} to spring off. To replay the stock you lost, choose Retry my stock in Pause.'],
     landing:['launch-stock-catch','Brisket is protected','Make room for his landing. Once his last mail tag goes out, a hit or grab can connect.'],
@@ -106,6 +109,10 @@
     if(pip.ground<0 && (pip.x<floor.x1 || pip.x>floor.x2)){
       const side=pip.x<floor.x1?'right':'left';
       if(pip.stun>0 || pip.impactLag>0)return 'drift/'+side;
+      if(!pip.jumps && pip.usedUp && !pip.usedDodge){
+        const dodge=world.lastDodgeInput(pip,floor);
+        if(dodge)return (dodge.y?(dodge.x?'slant':'vertical'):'across')+'/'+side;
+      }
       const move=pip.hopWindow>0?'hop':pip.jumps>0?'jump':!pip.usedUp?'rise':'drift';
       return move+'/'+side;
     }
@@ -153,7 +160,7 @@
   class Corner {
     constructor(id){this.seen=new Set();this.stock=0;this.cue='';this.lesson='jab';this.until=0;
       this.target=Object.hasOwn(targets,id)?new RematchTarget(id):null;}
-    get practice(){return this.target?.doneAt===null?this.target.id:this.lesson;}
+    get practice(){return this.lesson!=='air-lastDodge' && this.target?.doneAt===null?this.target.id:this.lesson;}
     read(world){
       const stock=world.dogs[0].stocks, frame=world.matchFrames;
       if(stock!==this.stock){this.stock=stock;this.seen.clear();this.cue='';}
@@ -164,7 +171,7 @@
         if(cue){
           const id=cue.split('/')[0];
           this.lesson=cornerTips[id][0];
-          if(this.lesson==='return')this.until=Infinity;
+          if(this.lesson==='return' || this.lesson==='air-lastDodge')this.until=Infinity;
           else if(!this.seen.has(cue)){this.seen.add(cue);this.until=frame+210;}
         }
       }

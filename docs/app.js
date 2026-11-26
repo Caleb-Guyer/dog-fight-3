@@ -2339,12 +2339,14 @@
       (battle.mode==='local' && !online.match?'Recover P'+(slot+1)+'’s last fall':'Recover my last fall')+'</button>').join('');
   }
   function recoverySheet({coach,coachLine,...review},plan=coach) {
-    const back=()=>review.fromClip?showFinishReplay(null,review):review.from==='pause'?showPause():showResult();
+    const back=()=>review.rescue?closeRecoveryClinic():review.fromClip?showFinishReplay(null,review):review.from==='pause'?showPause():showResult();
     if(!window.RecoveryCoach)return waitForDispatch('Practice this recovery',()=>loadDispatch('RecoveryCoach'),()=>recoverySheet(review,plan),back);
     const device=promptDevice(getPads());
     const label=a=>device===0?keyFor(0,a):device===1 && !['left','right','up'].includes(a)?padFor(0,a):a[0].toUpperCase()+a.slice(1);
-    window.RecoveryCoach.sheet(review.clip.tape,{showDialog,back,label,shake:settings.shake,slot:review.slot,follow:review.clip.returnTape,play:route=>
-      startFinishTrial(route.start,route.slot,{...review,coach:route,coachLine:window.RecoveryCoach.instruction(route,label)})},plan);
+    window.RecoveryCoach.sheet(review.clip.tape,{showDialog,back,label,shake:settings.shake,slot:review.slot,follow:review.clip.returnTape,projection:review.rescue || review.projection,
+      swap:review.rescue && {title:review.wide?'Try the low fall':'Try the wide fall',open:()=>recoveryClinic(!review.wide)},
+      play:(route,guided=false)=>startFinishTrial(route.start,route.slot,{...review,coach:route,guided,coachLabel:label,
+        coachLine:window.RecoveryCoach.instruction(route,label)})},plan);
   }
   function knockoutClips(battle){
     finishTape?.captureKnockouts(battle);
@@ -2620,11 +2622,12 @@
     };
     const player=review?.stock?review.stock.attempt(emit):review?.landing?window.FinishTools.landingTry(tape,review.landing,start,emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
     const saved=finishTrial?.saved || {mode:$('match-mode').textContent,pause:$('pause-label').textContent,
-      call:$('countdown').textContent,setHidden:$('match-set').hidden,cornerHidden:$('corner-tip').hidden,
+      call:$('countdown').textContent,setHidden:$('match-set').hidden,cornerHidden:$('corner-tip').hidden,schoolHidden:$('school-coach').hidden,
       cornerTitle:$('corner-title').textContent,cornerLine:$('corner-line').textContent};
     dismiss();
     finishTrial={player,camera,start,slot,review,original,saved,trace,returnNames:trace && player.battle.dogs.map(f=>f.stats.name),carry:0,ready:.8};
     if(review?.instant)finishTrial.openingDamage=player.battle.matchCard.players.map(p=>p.damage);
+    $('school-coach').hidden=true;
     $('corner-tip').hidden=true;
     if(review?.landing){
       $('corner-title').textContent='Break your fall';
@@ -2676,7 +2679,14 @@
         if(!input.shield && !input.tapped?.shield){$('countdown').textContent='Tap Shield';trial.carry=0;return;}
         $('countdown').textContent='';
       }
-      if(trial.review?.coach && player.frame===trial.start){
+      if(trial.review?.coach && trial.review.guided){
+        const cue=window.RecoveryCoach.gate(trial.review.coach,player.frame-trial.start,input,trial.review.coachLabel,player.battle.dogs[trial.slot]);
+        if(cue){
+          if($('countdown').textContent!==cue)$('countdown').textContent=cue;
+          taps.clear();touchTaps.clear();trial.carry=0;return;
+        }
+        $('countdown').textContent='';
+      }else if(trial.review?.coach && player.frame===trial.start){
         if(!input.x && !input.y && !input.jump && !input.special && !input.shield && !input.attack && !input.shortHop){
           $('countdown').textContent='Your move';trial.carry=0;return;
         }
@@ -2702,10 +2712,12 @@
     $('match-mode').textContent=saved.mode;$('match-set').hidden=saved.setHidden;
     $('pause-label').textContent=saved.pause;$('countdown').textContent=saved.call;
     $('corner-tip').hidden=saved.cornerHidden;
+    $('school-coach').hidden=saved.schoolHidden;
     if(review?.coach || review?.landing){$('corner-title').textContent=saved.cornerTitle;$('corner-line').textContent=saved.cornerLine;}
     hudKey='';updateHUD();
     view.draw($('game'),online.match?.confirmedWorld || world,0,world.time);
-    if(!replay && review?.clinic){showHome(false);schoolList();}
+    if(!replay && review?.rescue)closeRecoveryClinic();
+    else if(!replay && review?.clinic){showHome(false);schoolList();}
     else if(replay && review?.stock)stockSheet(review);
     else if(replay && review?.coach)recoverySheet(review,review.coach);
     else if(replay && review?.film)watchMatch(review.film,review.frame);
@@ -2715,10 +2727,11 @@
     else showResult();
   }
   function trialActions(){
+    if(finishTrial.review?.coach)return window.RecoveryCoach.actions(finishTrial.review);
     if(finishTrial.review?.landing)return window.FinishTools.landingActions(finishTrial.review);
     if(finishTrial.review?.stock)return finishTrial.review.stock.actions(finishTrial.review.from);
-    return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">'+(finishTrial.review?.coach?'Retry recovery':finishTrial.trace?'Retry return':'Retry exchange')+'</button>'+
-      '<button class="utility" data-do="trial-replay">'+(finishTrial.review?.instant?'Back to instant replay':finishTrial.review?.coach?'Back to demonstration':finishTrial.review?.film?'Back to full match':finishTrial.trace?'Back to return replay':'Choose another frame')+'</button><button class="utility" data-do="trial-results">'+
+    return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">'+(finishTrial.trace?'Retry return':'Retry exchange')+'</button>'+
+      '<button class="utility" data-do="trial-replay">'+(finishTrial.review?.instant?'Back to instant replay':finishTrial.review?.film?'Back to full match':finishTrial.trace?'Back to return replay':'Choose another frame')+'</button><button class="utility" data-do="trial-results">'+
       (finishTrial.review?.from==='pause'?'Back to fight':['card','archive'].includes(finishTrial.review?.from)?'Back to match stats':'Back to results')+'</button></div>';
   }
   function showTrialPause(){
@@ -2740,7 +2753,7 @@
       const landed=player.outcome==='landed';
       const point=player.battle.matchCard.points && !player.battle.suddenDeath;
       showDialog('finish-comparison',landed?(point?'Point saved!':'Stock saved!'):'Try the return again',
-        '<p>'+window.RecoveryCoach.feedback(player,review.coach)+'</p>'+
+        '<p>'+window.RecoveryCoach.feedback(player,review.coach,review.rescue || review.projection)+'</p>'+
         (landed?'':'<p>'+review.coachLine+'</p>')+trialActions(),false);
       document.querySelector('[data-do=trial-'+(landed?'results':'retry')+']').focus();return;
     }
@@ -3092,6 +3105,7 @@
     }
     if(action==='pack-relay')return openRelay();
     if(action==='trial-retry')return startFinishTrial(finishTrial.start,finishTrial.slot,finishTrial.review);
+    if(action==='recovery-speed')return startFinishTrial(finishTrial.start,finishTrial.slot,{...finishTrial.review,guided:!finishTrial.review.guided});
     if(action==='landing-speed')return startFinishTrial(finishTrial.review.landing.start,finishTrial.slot,{...finishTrial.review,guided:false});
     if(action==='trial-replay' || action==='trial-results')return leaveFinishTrial(action==='trial-replay');
     if (action==='record-solo') {
@@ -5497,7 +5511,7 @@
     LessonGuide:'lesson-guide.js?v=1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=both-seats-1', MatchReview:'match-review.js?v=stock-retry-1',
+    RecoveryCoach:'recovery-coach.js?v=ledge-rescue-1', MatchReview:'match-review.js?v=stock-retry-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
@@ -5509,7 +5523,7 @@
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=down-air-1',
     DispatchCovers:'dispatch-covers.js?v=wide-return-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=bell-wave-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=ledge-rescue-1',
     ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=tapes-1',
   };
   const dispatchLoads=new Map();
@@ -6052,8 +6066,7 @@
       noticeUntil = 0;
       $('dispatch-notice').hidden = true;
     }
-    const hero = world.dogs[0], foes = world.foes, lead = foes[0];
-    const boss = world.layout.rules === 'boss', horde = world.layout.rules === 'horde';
+    const hero = world.dogs[0], foes = world.foes;
     const recovery = world.bridge ? null : offstageOptions(hero, world.terrain);
     const grip = world.grapple;
     const order = !grip || grip.phase === 'throw' ? world.objective : grip.owner === 0
@@ -6062,34 +6075,9 @@
       ...foes.flatMap((e) => [e.f.stocks, tenth(e.f.damage), e.hp])].join('|');
     if (key === adventureKey) return;
     adventureKey = key;
-    $('runner-score').hidden = !!world.bridge;
-    $('runner-recovery').hidden = recovery === null;
-    if (recovery !== null) $('runner-recovery').innerHTML = recoveryStrip(recovery);
-    if (!world.bridge) {
-      showPercent($('runner-percent'), hero.damage);
-      showStocks($('runner-lives'), hero.stocks, hero.stats.name);
-    }
-    $('machine-meter').hidden = !lead;
-    if (lead) {
-      $('machine-name').textContent = horde ? 'Sorting crew' : lead.f.stats.name;
-      $('rival-score').hidden = boss;
-      $('machine-health').hidden = !boss;
-      if (boss) {
-        $('machine-health').max = lead.maxHP;
-        $('machine-health').value = lead.hp;
-      } else {
-        $('rival-percent').hidden = horde;
-        if (!horde) showPercent($('rival-percent'), lead.f.damage);
-        const team = world.sideRoute?'Lift crew':horde ? 'Sorting crew' : world.layout.rules === 'relay' ? 'Cage guards' : lead.f.stats.name;
-        showStocks($('rival-lives'), world.rivalStocks, team);
-        if (horde) $('rival-score').setAttribute('aria-label', foes.filter((e) => e.f.stocks)
-          .map((e) => e.f.stats.name + ' ' + tenth(e.f.damage) + '%').join(', '));
-        else $('rival-score').removeAttribute('aria-label');
-      }
-    }
-    $('dispatch-marks').textContent = world.sideRoute?'Noodle / Brisket / Clover':cupAttempt ? 'Arcade Cup · Round 4 / 4' :
+    const marks=world.sideRoute?'Noodle / Brisket / Clover':cupAttempt ? 'Arcade Cup · Round 4 / 4' :
       'Postmarks ' + countMarks(world.stamps) + ' / ' + campaign.rooms.length;
-    if ($('dispatch-objective').textContent !== order) $('dispatch-objective').textContent = order;
+    window.DispatchView.updateScoreboard(world,recovery,order,marks,{$,tenth,showPercent,showStocks,recoveryStrip});
   }
   function showPercent(element, damage) {
     const css='percentage' + (damage >= 110 ? ' danger' : damage >= 65 ? ' high' : '');
@@ -6420,6 +6408,11 @@
       stage:'picnic',form:'original',stockCount:3,timeBattle:false,fetch:false,minutes:7};
   }
   function startCornerLesson(){
+    if(corner.practice==='air-lastDodge'){
+      if(!window.RecoveryCoach)return waitForDispatch('Practice this recovery',()=>loadDispatch('RecoveryCoach'),startCornerLesson,showPause);
+      const {clip}=window.RecoveryCoach.recordFall(world);
+      return clip?recoverySheet({clip,from:'pause',projection:true,result:world}):startExercise(corner.practice);
+    }
     if(corner.practice==='launch-escape' && world.matchFrames-corner.landingAt<finishTape?.length)
       return showFinishReplay(null,{instant:true,finish:true,landingFocus:true,from:'pause',result:world,clip:{tape:finishTape,losses:[]}});
     if(corner.practice.startsWith('launch-'))return startExercise(corner.practice);
@@ -6445,6 +6438,7 @@
       (settings.guidedLessons && !world?.lesson?.guideError?'Practice at match speed':'Guide my inputs')+'</button><button class="utility" data-do="fighter-classes">Fighter lessons</button><button class="utility" data-do="home">Main menu</button></div>');
     const clinic=document.createElement('button');clinic.type='button';clinic.className='utility';clinic.textContent='Landing clinic';
     $('syllabus-guide').after(clinic);clinic.onclick=landingClinic;
+    const rescue=clinic.cloneNode(false);rescue.textContent='Recovery clinic';clinic.after(rescue);rescue.onclick=()=>recoveryClinic(false);
     $('syllabus-guide').onclick=toggleGuide;
     $('school-syllabus').onclick=e=>{const button=e.target.closest('[data-lesson]');if(button) startLesson(Number(button.dataset.lesson));};
     $('school-resume').onclick=()=>world?.lesson?dismiss():resumeCourse();
@@ -6456,6 +6450,16 @@
     const {config,battle,tape}=window.FinishTools.landingDemo();
     startMatch(config,undefined,undefined,null,{resume:{battle,tape,countdown:0,call:''}});
     showFinishReplay(0,{clinic:true,instant:true,finish:true,from:'pause',result:battle,clip:{tape,losses:[]}});
+  }
+  function closeRecoveryClinic(){
+    if(matchConfig?.recoveryClinic)showHome(false);
+    schoolList();
+  }
+  function recoveryClinic(wide){
+    if(!window.RecoveryCoach)return waitForDispatch('Recovery clinic',()=>loadDispatch('RecoveryCoach'),()=>recoveryClinic(wide),schoolList);
+    const {config,battle,tape,clip}=window.RecoveryCoach.example(wide);
+    if(page!=='match')startMatch({...config,recoveryClinic:true},undefined,undefined,null,{resume:{battle,tape,countdown:0,call:''}});
+    recoverySheet({rescue:true,wide,clip,result:battle,from:'school'});
   }
   function leaveFighterSheet(){
     if(page==='match' && (matchConfig?.schoolFinal || spar) && world?.end!=null)return showResult();
@@ -7812,6 +7816,8 @@
       settings.guidedLessons=true;save();
       const index=schoolLessons.findIndex(l=>l.id===hash.split('/')[2]);
       if(index<0)resumeCourse();else startLesson(index);
+    } else if (hash==='#tutorial/recovery' || hash==='#tutorial/recovery/wide') {
+      recoveryClinic(hash.endsWith('/wide'));
     } else if (hash === '#tutorial/landings') {
       landingClinic();
     } else if (hash === '#tutorial/first-match') {
