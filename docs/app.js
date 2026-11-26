@@ -6321,7 +6321,7 @@
       (lesson.pace?' · Pace '+fighters[lesson.pace.kind].name:''):matchConfig.specialStudy?fighters[lesson.course].name+' · '+specialInputs[matchConfig.specialStudy.side]:
       matchConfig.cornerLesson?(lesson.course?'Sparring practice':'First fight practice'):matchConfig.schoolReview?'Rematch practice · Pip vs. Brisket':
       (lesson.course?fighters[lesson.course].name+' · Fighter lessons':'Fight School')+' · '+(lesson.index+1)+' / '+count;
-    $('school-list').textContent=matchConfig.tryout?'Tryout card':matchConfig.specialStudy?'Back to moves':matchConfig.cornerLesson?'Back to fight':'Lessons';
+    $('school-list').textContent=(device===1?'Start · ':'')+(matchConfig.tryout?'Tryout card':matchConfig.specialStudy?'Back to moves':matchConfig.cornerLesson?'Back to fight':'Lessons');
     $('school-title').textContent=info.title;
     const watch=$('school-example'),next=$('school-next');
     const guideButton=$('school-guide');
@@ -7054,7 +7054,7 @@
   }
   window.addEventListener('keydown', (e) => {
     if (page !== 'match' || $('dialog').open) return;
-    if (world?.lesson && e.code==='Enter' && !e.repeat && e.target=== $('game')) {
+    if (!finishTrial && world?.lesson && e.code==='Enter' && !e.repeat && e.target=== $('game')) {
       e.preventDefault();
       if(world.lesson.done || world.lesson.example)nextLesson();else replaySchoolLesson(true);
       return;
@@ -7457,9 +7457,9 @@
       else if (page === 'match' && !dialogType) showPause();
       else if (page === 'dispatch-story' && !dialogType) toggleFilm();
       else if (page === 'lobby' && !dialogType) $('start').click();
-    } else if (world?.lesson && !menuOpen && now.example && !oldPad.example) {
+    } else if (!finishTrial && world?.lesson && !menuOpen && now.example && !oldPad.example) {
       replaySchoolLesson(true);
-    } else if ((world?.lesson?.done || world?.lesson?.example) && !menuOpen && now.confirm && !oldPad.confirm) {
+    } else if (!finishTrial && (world?.lesson?.done || world?.lesson?.example) && !menuOpen && now.confirm && !oldPad.confirm) {
       for (const pad of pads) if (down(pad,0)) menuPadButtons.set(pad.index,1);
       nextLesson();
     } else if (page === 'match' && world?.mode === 'training' && !world.warmupPartner && !$('dialog').open &&
