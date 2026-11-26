@@ -13,8 +13,9 @@
     }
     return best;
   }
-  function attempt(tape,plan,emit=()=>{}) {
-    const battle=tape.playback(plan.start).battle, dog=battle.dogs[0], stocks=dog.stocks;
+  function attempt(tape,plan,emit=()=>{},follow) {
+    const slot=plan.slot ?? 0, replay=tape.playback(plan.start,emit,slot), battle=replay.battle, dog=battle.dogs[slot];
+    const losses=battle.matchCard.losses.length, round=battle.suddenDeath?.round;
     const player={battle,frame:plan.start,length:plan.start+limit,outcome:null,landed:0,
       jumped:false,cast:false,caught:false,inward:0,outward:0,
       step(input) {
@@ -22,7 +23,15 @@
         const jumps=dog.jumps;
         if(input.x*plan.dir>.28)this.inward++;
         if(input.x*plan.dir<-.28)this.outward++;
-        battle.step(1/60,input,idleInput);
+        if(!replay.step(input)){
+          // Continue from the altered position with the rival's next recorded input.
+          // The stock-return clip shares the original fight's absolute tick numbers.
+          const tick=tape.count+this.frame-tape.length;
+          const block=battle.mode==='local' && follow && tick>=follow.from && tick<follow.count &&
+            follow.blocks.findLast(b=>b.start<=tick);
+          const other=block?block.inputs[tick-block.start][1-slot]:idleInput;
+          battle.step(1/60,slot===0?input:other,slot===1?input:other);
+        }
         this.frame++;
         if(dog.jumps<jumps && dog.ground<0 && !dog.ledge && dog.vy<0)this.jumped=true;
         if(dog.attack?.specialSide==='up')this.cast=true;
@@ -30,12 +39,12 @@
         const safe=dog.ground>=0 && !dog.grip && !dog.floorAction && !dog.stockLift &&
           !dog.stun && !dog.tumble && !dog.respawning && !dog.ledge;
         this.landed=safe?this.landed+1:0;
-        if (dog.stocks<stocks || dog.stockLift || dog.respawning) this.outcome='fell';
+        if (battle.matchCard.losses.length>losses && battle.matchCard.losses.slice(losses).some(l=>l.slot===slot)) this.outcome='fell';
+        else if(battle.suddenDeath?.round!==round)this.outcome='restart';
         else if (this.landed>=6) this.outcome='landed';
         else if (this.frame>=this.length || battle.end!==null) this.outcome='time';
         return true;
       }};
-    battle.emit=emit;
     return player;
   }
   function controls(route,tick) {
@@ -45,9 +54,9 @@
       return {...idleInput,x:dir,jump:true,tapped:{jump:tick===jumpAt}};
     return {...idleInput,x:dir};
   }
-  function routeFrom(tape,start,dir,options) {
-    const plan={start,dir,jumpAt:options.jump?0:null,upAt:options.up && !options.jump?0:null};
-    const p=attempt(tape,plan), f=p.battle.dogs[0];
+  function routeFrom(tape,start,dir,options,slot,follow) {
+    const plan={slot,start,dir,jumpAt:options.jump?0:null,upAt:options.up && !options.jump?0:null};
+    const p=attempt(tape,plan,undefined,follow), f=p.battle.dogs[slot];
     if ((options.jump && !f.jumps) || (options.up && f.usedUp)) return null;
     while (!p.outcome) {
       const tick=p.frame-start;
@@ -59,12 +68,13 @@
     plan.end=p.frame;
     return plan;
   }
-  function* search(tape) {
+  function* search(tape,slot=0,follow) {
     const original=tape?.length && tape.playback();
-    if (!original || original.battle.mode!=='solo' || original.battle.matchCard?.points) return null;
+    if (!original || !original.battle.matchCard || ![0,1].includes(slot) ||
+      !(original.battle.mode==='local' || original.battle.mode==='solo' && slot===0)) return null;
     let samples=[], lastFall=-1;
     while (original.frame<original.length) {
-      const b=original.battle, f=b.dogs[0], deck=nearestDeck(b,f);
+      const b=original.battle, f=b.dogs[slot], deck=nearestDeck(b,f);
       if (f.ground>=0 || f.ledge || f.stockLift) samples=[];
       const dir=deck && (f.x<deck.x1?1:f.x>deck.x2?-1:0);
       if (dir && f.ground<0 && !f.ledge && !f.grip && !f.stun && !f.tumble && !f.attack && !f.airDodge &&
@@ -73,11 +83,14 @@
         const depth=f.y-deck.y, gap=dir>0?deck.x1-f.x:f.x-deck.x2;
         samples.push({start:original.frame,dir,score:Math.abs(depth-36)+Math.abs(gap-68)*.35});
       }
-      const before=f.stocks;
+      const before=b.matchCard.losses.length;
       original.step();
-      if (f.stocks<before) {
-        if(b.matchCard.losses.findLast(l=>l.slot===0)?.zone==='bottom')lastFall=original.frame;
-        if(original.frame<original.length)samples=[];
+      if(b.matchCard.losses.length>before){
+        const loss=b.matchCard.losses.slice(before).find(l=>l.slot===slot);
+        if(loss){
+          if(loss.zone==='bottom')lastFall=original.frame;
+          if(original.frame<original.length)samples=[];
+        }
       }
       if (original.frame%40===0) yield;
     }
@@ -85,7 +98,7 @@
     samples.sort((a,b)=>a.score-b.score);
     for (const {start,dir} of samples) {
       for (const options of [{},{jump:true},{up:true},{jump:true,up:true}]) {
-        const plan=routeFrom(tape,start,dir,options);
+        const plan=routeFrom(tape,start,dir,options,slot,follow);
         if (plan) return plan;
         yield;
       }
@@ -102,21 +115,22 @@
     return 'Hold '+direction+' toward the stage until your paws land.';
   }
   function feedback(p,plan) {
-    if(p.outcome==='landed')return 'You landed onstage with the stock you lost in the recording. Your return took '+((p.frame-plan.start)/60).toFixed(1)+' seconds.';
+    if(p.outcome==='landed')return (p.battle.matchCard.points && !p.battle.suddenDeath?'You landed onstage and kept the point you lost in the recording.':'You landed onstage with the stock you lost in the recording.')+' Your return took '+((p.frame-plan.start)/60).toFixed(1)+' seconds.';
+    if(p.outcome==='restart')return 'Sudden Death started before you landed.';
     if(p.caught)return 'You reached the ledge. Keep holding toward the stage to finish the climb.';
     if(p.outward>3 && p.outward>p.inward)return 'You steered away from the stage. Turn toward the nearest edge as you start.';
     if(plan.jumpAt!==null && !p.jumped)return 'Your air jump never came out. Press Jump as you turn toward the stage.';
     if(plan.upAt!==null && !p.cast)return 'Your Up Special never came out. Aim up as you press Special.';
     return p.outcome==='fell'?'You crossed the blast line. Watch where the example turns toward the stage.':'Your dog was still fighting for a landing when time ran out.';
   }
-  function sheet(tape,{showDialog,back,play,label,shake},savedPlan) {
-    showDialog('finish-recovery','Recover this stock','<p id="recovery-position" class="clip-caption" hidden></p><p id="recovery-route" role="status">Checking the last fall…</p>'+
+  function sheet(tape,{showDialog,back,play,label,shake,slot=0,follow},savedPlan) {
+    showDialog('finish-recovery','Practice this recovery','<p id="recovery-position" class="clip-caption" hidden></p><p id="recovery-route" role="status">Checking the last fall…</p>'+
       '<canvas id="clip-arena" width="640" height="360" role="img" aria-label="Recorded recovery position" hidden></canvas>'+
       '<p id="recovery-cue" role="status"></p><div class="dialog-actions"><button class="primary" id="recovery-play" hidden>Try this recovery</button>'+
       '<button class="utility" id="recovery-demo" hidden>Watch the recovery</button><button class="utility" id="recovery-fall" hidden>Watch my fall</button>'+
       '<button class="utility" id="recovery-back">Back</button></div>');
     const el=id=>document.getElementById(id), backButton=el('recovery-back'), canvas=el('clip-arena');
-    const task=search(tape);
+    const task=search(tape,slot,follow);
     let plan=savedPlan, raf=0;
     backButton.onclick=()=>{cancelAnimationFrame(raf);back();}; backButton.focus();
     function preview(which) {
@@ -124,7 +138,8 @@
       const example=which==='demo', view=new window.DogFightView.FightView();
       view.shakeEnabled=shake;
       const event=(name,e)=>view.event(name,e);
-      const p=example?attempt(tape,plan,event):tape.playback(plan.start,event);
+      const p=example?attempt(tape,plan,event,follow):tape.playback(plan.start,event);
+      const point=p.battle.matchCard.points && !p.battle.suddenDeath;
       let last=null, carry=0;
       const draw=dt=>view.draw(canvas,p.battle,dt,p.battle.time);
       draw(0);
@@ -145,7 +160,9 @@
           count++;carry-=1/30;
         }
         draw(count/60);
-        if (p.outcome || p.frame===p.length) {cue.textContent=example?'Landed onstage with the stock.':'Recorded fall · stock lost.';return;}
+        if (p.outcome || p.frame===p.length) {
+          cue.textContent=example?(point?'Landed onstage · point saved.':'Landed onstage with the stock.'):(point?'Recorded fall · point lost.':'Recorded fall · stock lost.');return;
+        }
         raf=requestAnimationFrame(tick);
       }
       cue.textContent=example?'Example · half speed':'Your fall · half speed';
@@ -153,10 +170,11 @@
     }
     function ready() {
       if(!plan){el('recovery-route').textContent='No landing found from the available recovery positions in this clip. Try an earlier frame in the match replay.';return;}
-      const battle=tape.playback(plan.start).battle, dog=battle.dogs[0], where=el('recovery-position');
-      where.textContent=dog.stats.name+' · '+Math.round(dog.damage)+'% · '+(plan.dir>0?'Left':'Right')+' of the ledge · '+dog.jumps+' air '+(dog.jumps===1?'jump':'jumps');
+      const battle=tape.playback(plan.start).battle, dog=battle.dogs[slot], where=el('recovery-position');
+      where.textContent=(battle.mode==='local'?'P'+(slot+1)+' · ':'')+dog.stats.name+' · '+Math.round(dog.damage)+'% · '+(plan.dir>0?'Left':'Right')+' of the ledge · '+dog.jumps+' air '+(dog.jumps===1?'jump':'jumps');
       where.hidden=false;
-      el('recovery-route').textContent=instruction(plan,label);
+      el('recovery-route').textContent=instruction(plan,label)+(battle.mode==='local'?
+        ' Use P1 controls. '+battle.dogs[1-slot].stats.name+' repeats the recorded inputs, then releases the controls when the recording ends.':'');
       for(const id of ['clip-arena','recovery-demo','recovery-play','recovery-fall'])el(id).hidden=false;
       preview(null);
       el('recovery-demo').onclick=()=>preview('demo');el('recovery-fall').onclick=()=>preview('fall');
