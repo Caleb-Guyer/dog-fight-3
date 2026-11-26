@@ -4,8 +4,46 @@ global.window={};
 require('../docs/engine.js');
 require('../docs/match-review.js');
 require('../docs/recovery-coach.js');
+require('../docs/fight-school.js');
 const {Battle,FinishTape,kits,seededRandom,idleInput}=window.DogFight;
 const coach=window.RecoveryCoach;
+
+for(const kind of Object.keys(kits))test(kind+' saves exhausted low and wide falls from either edge and either seat',()=>{
+  for(const slot of [0,1])for(const side of ['left','right'])for(const wide of [false,true]){
+    const battle=new Battle({mode:'local',p1:slot?'brisket':kind,p2:slot?kind:'brisket',stage:'picnic',fetch:false},undefined,seededRandom(42));
+    battle.placeLastDodge(side,wide,slot);
+    const tape=new FinishTape(true);
+    while(!tape.knockouts.length && tape.count<90){
+      tape.record(battle,idleInput,idleInput);battle.step(1/60,idleInput,idleInput);tape.captureKnockouts(battle);
+    }
+    const clip=tape.knockouts[0].tape,plan=find(clip,slot),label=k=>k;
+    assert(plan?.dodge && (wide?!plan.dodge.y:plan.dodge.y<0),kind+'/'+slot+'/'+side+'/'+wide);
+    const good=coach.controls(plan,0),wrong={...good,y:wide?-1:0};
+    assert(coach.gate(plan,0,wrong,label));assert.equal(coach.gate(plan,0,good,label),'');
+    const landed=coach.attempt(clip,plan),miss=coach.attempt(clip,plan);
+    while(!landed.outcome)landed.step(coach.controls(plan,landed.frame-plan.start));
+    while(!miss.outcome)miss.step(miss.frame===plan.start?wrong:{...idleInput,x:plan.dir});
+    assert(landed.dodged && landed.caught);assert.equal(landed.outcome,'landed');
+    assert.equal(landed.battle.dogs[slot].stocks,3);assert.equal(miss.outcome,'fell');
+  }
+});
+test('projecting an immediate dodge for Fight School keeps the actual stock, clock and opponent intact',()=>{
+  const cfg={mode:'solo',schoolFinal:true,p1:'pip',p2:'brisket',stage:'picnic',cpuLevel:'rookie',fetch:false};
+  for(const wide of [false,true]){
+    const w=new Battle(cfg,undefined,seededRandom(42)),side=wide?'right':'left';
+    w.placeLastDodge(side,wide,0);
+    const corner=new window.FightSchool.Corner('return'),cue=corner.read(w);
+    assert.equal(cue,wide?'across/left':'slant/right');assert.equal(corner.practice,'air-lastDodge');
+    const snapshot=b=>[b.matchFrames,b.clockFrames,b.random.state,b.dogs.map(f=>[f.x,f.y,f.stocks,f.usedDodge]),b.matchCard.losses.length];
+    const before=snapshot(w),{clip}=coach.recordFall(w);
+    assert.equal(clip.losses[0].slot,0);assert.deepEqual(snapshot(w),before);
+    const demo=coach.example(wide),plan=find(demo.clip.tape);
+    const result=play(demo.clip.tape,plan,n=>coach.controls(plan,n));
+    assert.equal(result.outcome,'landed');assert.equal(demo.battle.dogs[0].stocks,2);
+    assert.match(coach.instruction(plan,k=>'['+k+']'),wide?/\[left\].*\[shield\]/:/\[up\].*\[right\].*\[shield\]/);
+    w.dogs[0].usedDodge=true;assert.equal(corner.read(w),'drift/'+(wide?'left':'right'));
+  }
+});
 
 function firstMatchFilm(){
   const battle=new Battle({mode:'solo',p1:'pip',p2:'brisket',stage:'picnic',form:'original',minutes:7,

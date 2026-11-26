@@ -14,7 +14,8 @@ async function check(browser,device) {
       if(pad){
         const g={id:'Hosted pad',index:0,connected:true,mapping:'standard',axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
         Object.defineProperty(navigator,'getGamepads',{value:()=>[g]});
-        window.controls=(x,jump)=>{g.axes[0]=x;Object.assign(g.buttons[0],{pressed:jump,value:Number(jump)});};
+        window.controls=(x,jump,y=0,shield=false)=>{g.axes[0]=x;g.axes[1]=y;
+          Object.assign(g.buttons[0],{pressed:jump,value:Number(jump)});Object.assign(g.buttons[4],{pressed:shield,value:Number(shield)});};
         window.menuButton=on=>Object.assign(g.buttons[9],{pressed:on,value:Number(on)});
       }else if(!matchMedia('(pointer:coarse)').matches)
         localStorage.setItem('dog-fight-3.controls',JSON.stringify({keyboard:[{jump:'KeyQ'},{}]}));
@@ -23,19 +24,19 @@ async function check(browser,device) {
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
     const client=touch && await page.context().newCDPSession(page);
     let previous=[];
-    async function hold(x,jump=false){
-      if(pad)return page.evaluate(([x,j])=>controls(x,j),[x,jump]);
-      const next=[...(x?[x<0?'left':'right']:[]),...(jump?['jump']:[])];
+    async function hold(x,jump=false,up=false,shield=false){
+      if(pad)return page.evaluate(args=>controls(...args),[x,jump,up?-1:0,shield]);
+      const next=[...(x?[x<0?'left':'right']:[]),...(jump?['jump']:[]),...(up?['up']:[]),...(shield?['shield']:[])];
       if(touch){
         const points=[];
         for(const action of next){
           const b=await page.locator('[data-touch='+action+']').boundingBox();assert(b,action);
-          points.push({id:action==='jump'?2:1,x:b.x+b.width/2,y:b.y+b.height/2});
+          points.push({id:{left:1,right:1,jump:2,up:3,shield:4}[action],x:b.x+b.width/2,y:b.y+b.height/2});
         }
         if(previous.some(a=>!next.includes(a)))await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
         if(points.length)await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points});
       }else{
-        const keys={left:'a',right:'d',jump:'q'};
+        const keys={left:'a',right:'d',jump:'q',up:'w',shield:'l'};
         for(const a of previous)if(!next.includes(a))await page.keyboard.up(keys[a]);
         for(const a of next)if(!previous.includes(a))await page.keyboard.down(keys[a]);
       }
@@ -56,6 +57,26 @@ async function check(browser,device) {
       assert(await page.locator('#recovery-play').isVisible(),device+' '+await page.locator('#recovery-route').textContent());
     }
     const play=()=>choose('#recovery-play');
+    const root='http://127.0.0.1:8080/';
+    await page.goto(root);await choose('#welcome-play');await choose('#school-list');
+    await choose('#dialog-body button:text-is("Recovery clinic")');await route();
+    assert.match(await page.locator('#recovery-position').textContent(),/Left.+0 air jumps/);
+    await choose('#recovery-guide');await page.clock.runFor(1600);
+    const clock=await page.locator('#match-clock').textContent();
+    await hold(1,false,false,true);await page.clock.runFor(750);await hold(0);
+    assert.equal(await page.locator('#match-clock').textContent(),clock,'wrong angle leaves the recorded frame playable');
+    await hold(1,false,true,true);await page.clock.runFor(160);await hold(1);await page.clock.runFor(1800);await hold(0);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!',device+' low');
+    await choose('[data-do=recovery-speed]');await page.clock.runFor(1200);
+    await hold(1,false,false,true);await page.clock.runFor(140);await hold(1);await page.clock.runFor(2600);await hold(0);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Try the return again',device+' free attempt');
+    await choose('[data-do=trial-replay]');await route();await choose('#recovery-swap');await route();
+    assert.match(await page.locator('#recovery-position').textContent(),/Right.+0 air jumps/);
+    await choose('#recovery-guide');await page.clock.runFor(1200);
+    await hold(-1,false,false,true);await page.clock.runFor(140);await hold(-1);await page.clock.runFor(2200);await hold(0);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!',device+' wide');
+    await choose('[data-do=trial-results]');await choose('#school-resume');
+    assert.equal(await page.locator('#school-title').textContent(),'Take center stage');
     await page.goto('http://127.0.0.1:8080/#tutorial/first-match');
     await page.evaluate(()=>{
       const step=DogFight.Battle.prototype.step;
@@ -132,6 +153,23 @@ async function check(browser,device) {
     assert.match(await page.locator('#dialog-body').textContent(),/kept the point/);
     await choose('[data-do=trial-results]');
     assert.deepEqual(await page.locator('#hud .lives').evaluateAll(rows=>rows.map(r=>r.getAttribute('aria-label'))),['0 points','-1 point']);
+    if(device==='keyboard'){
+      await page.goto(root+'?last-dodge#tutorial/first-match');
+      await page.evaluate(()=>{
+        const step=DogFight.Battle.prototype.step;
+        DogFight.Battle.prototype.step=function(...args){if(this.mode==='solo')window.firstFight ||= this;return step.apply(this,args);};
+      });
+      await page.clock.runFor(2600);
+      await page.evaluate(()=>firstFight.placeLastDodge('left',false,0));
+      await page.clock.runFor(18);
+      assert.equal(await page.locator('#corner-title').textContent(),'Air dodge to the ledge');
+      await choose('#pause');const before=await page.evaluate(()=>[firstFight.matchFrames,firstFight.random.state,firstFight.dogs[0].y]);
+      await choose('[data-do=corner-practice]');await route();await choose('#recovery-guide');await page.clock.runFor(1400);
+      await hold(1,false,true,true);await page.clock.runFor(140);await hold(1);await page.clock.runFor(2000);await hold(0);
+      assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!');
+      await choose('[data-do=trial-results]');
+      assert.deepEqual(await page.evaluate(()=>[firstFight.matchFrames,firstFight.random.state,firstFight.dogs[0].y]),before);
+    }
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
