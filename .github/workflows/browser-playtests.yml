@@ -22,6 +22,8 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/menu-navigation.js
           node --test qa/ledge-scout.cjs
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/ledge-scout.js
+          node --test qa/ledge-guards.cjs
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/ledge-guards.js
           node --test qa/special-studies.cjs
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/special-studies.js
           node --test qa/fighter-tryouts.cjs
