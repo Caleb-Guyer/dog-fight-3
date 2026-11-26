@@ -5434,7 +5434,9 @@
       if(slot.key===key)return slot.pending;
       const record=window.DispatchSuspend.schoolCapture(position);
       slot.key=key;
-      slot.pending=window.DispatchSuspend.writeSchool(slot,record).catch(error=>{
+      slot.pending=window.DispatchSuspend.writeSchool(slot,record).then(()=>{
+        if(page==='home')return readMissionSaves();
+      }).catch(error=>{
         if(slot.key===key)slot.key=null;
         throw error;
       });
@@ -5493,7 +5495,7 @@
   }
   function savedGames() {
     const items=missionSaves.slice();
-    if (schoolSave.started && (schoolSave.rematch || schoolSave.passed.length<schoolLessons.length || !schoolSave.firstFightDone)) {
+    if (!items.some(s=>s.id==='school-stock') && schoolSave.started && (schoolSave.rematch || schoolSave.passed.length<schoolLessons.length || !schoolSave.firstFightDone)) {
       const index=unfinishedLesson(), final=index<0;
       const r=schoolSave.rematch;
       items.push({id:'school',title:'Fight School',kind:'pip',playedAt:schoolSave.playedAt,
