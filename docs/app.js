@@ -950,6 +950,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='fighter-tryout'){dismiss();if(page==='lobby')$('lobby-tryout').focus();return;}
     if(dialogType==='mission-saving')return;
     if(dialogType==='special-preview')return $('move-back').click();
     if(dialogType==='stage-strike')return strikeBack();
@@ -2316,7 +2317,7 @@
       if (name === 'win') resultDelay = 0.7;
     }, random);
     if (config.lesson !== undefined) world.lesson = config.fighterCourse ?
-      window.FighterSchool.makeTrial(config.lesson,world) : new window.FightSchool.Lesson(config.lesson,world);
+      window.FighterSchool.makeTrial(config.lesson,world,storage) : new window.FightSchool.Lesson(config.lesson,world);
     const openingFrames = leadInFrames || (config.mode === 'solo' && config.openingFrames);
     if (openingFrames && !resume && !rehearsal) {
       const opener = new Battle(config, undefined, seededRandom(soloSeed));
@@ -5566,7 +5567,7 @@
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
     ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=launch-study-1',
-    FighterSchool:'fighter-lessons.js?v=special-studies-1',
+    FighterSchool:'fighter-lessons.js?v=tryouts-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=suspend-mission-1', DispatchView:'dispatch-view.js?v=letter-lift-1',
@@ -6469,10 +6470,11 @@
     $('school-coach').dataset.key=key;
     $('school-coach').dataset.state=state;
     const count=lesson.course?window.FighterSchool.courses[lesson.course].lessons.length:schoolLessons.length;
-    $('school-count').textContent=matchConfig.specialStudy?fighters[lesson.course].name+' · '+specialInputs[matchConfig.specialStudy.side]:
+    $('school-count').textContent=matchConfig.tryout?'Tryouts · '+fighters[lesson.course].name+
+      (lesson.pace?' · Pace '+fighters[lesson.pace.kind].name:''):matchConfig.specialStudy?fighters[lesson.course].name+' · '+specialInputs[matchConfig.specialStudy.side]:
       matchConfig.cornerLesson?'First fight practice':matchConfig.schoolReview?'Rematch practice · Pip vs. Brisket':
       (lesson.course?fighters[lesson.course].name+' · Fighter lessons':'Fight School')+' · '+(lesson.index+1)+' / '+count;
-    $('school-list').textContent=matchConfig.specialStudy?'Back to moves':matchConfig.cornerLesson?'Back to fight':'Lessons';
+    $('school-list').textContent=matchConfig.tryout?'Tryout card':matchConfig.specialStudy?'Back to moves':matchConfig.cornerLesson?'Back to fight':'Lessons';
     $('school-title').textContent=info.title;
     const watch=$('school-example'),next=$('school-next');
     $('school-retry').hidden=!!example;
@@ -6495,8 +6497,8 @@
       lesson.missed?'':lesson.course?window.FighterSchool.hint(info,device,keyFor,padFor):schoolHint(info.id,device);
     $('school-next').hidden=!lesson.done;
     if(lesson.course){
-      if(lesson.done)window.FighterSchool.mark(storage,lesson.id);
-      $('school-next').textContent=matchConfig.specialStudy?'Back to moves':lesson.index+1<count?'Next lesson':'Fighter card';
+      if(lesson.done){if(lesson.index<0)lesson.saveTime(storage);else window.FighterSchool.mark(storage,lesson.id);}
+      $('school-next').textContent=matchConfig.tryout?'Tryout card':matchConfig.specialStudy?'Back to moves':lesson.index+1<count?'Next lesson':'Fighter card';
       return;
     }
     if(matchConfig.cornerLesson){next.textContent='Return to fight';return;}
@@ -6526,6 +6528,7 @@
   }
   function nextLesson() {
     if(world.lesson.example)return replaySchoolLesson(false);
+    if(matchConfig.tryout)return openTryout(world.lesson.course);
     if(matchConfig.specialStudy)return leaveSpecialStudy();
     if(matchConfig.cornerLesson)return returnToFight();
     if (matchConfig.schoolReview) return startFirstFight(world.lesson.id);
@@ -6579,12 +6582,19 @@
       choose:fighterSheet,start:startFighterLesson,cup:cupSheet,back:leaveFighterSheet,
       backLabel:page==='match' && world?.lesson?.course?'Back to lesson':matchConfig?.schoolFinal && page==='match'?'Back to results':'Fight School'});
   }
-  function startFighterLesson(kind,index){
+  function openTryout(kind=settings[editing?'p2':'p1']){
+    const back=()=>{if(page==='match')toLobby();else dismiss();$('lobby-tryout').focus();};
+    if(!window.FighterSchool)return waitForDispatch('Fighter tryouts',()=>loadDispatch('FighterSchool'),()=>openTryout(kind),back);
+    window.FighterSchool.tryoutSheet(kind,{storage,slot:editing,label:slotLabel(editing),coat:savedCoat,portrait,
+      root:$('dialog-body'),showDialog,choose:openTryout,start:startFighterLesson,back,pick:id=>{back();pickLobbyFighter(id);}});
+  }
+  $('lobby-tryout').onclick=()=>openTryout();
+  function startFighterLesson(kind,index,tryout=false){
     leaveOnline();
     afterStory=null;
     const course=window.FighterSchool.courses[kind];
-    startMatch({...settings,mode:'local',stage:course.stage,form:'original',p1:kind,p2:course.rival,
-      coats:[savedCoat(0,kind),0],fetch:false,minutes:0,lesson:index,fighterCourse:kind});
+    startMatch({...settings,mode:'local',stage:index<0?'nightmail':course.stage,form:'original',p1:kind,p2:index<0?'pip':course.rival,
+      coats:[savedCoat(tryout?editing:0,kind),0],fetch:false,minutes:0,lesson:index,fighterCourse:kind,tryout});
     delete $('school-coach').dataset.key;
     renderSchool(getPads());
   }
@@ -6593,11 +6603,11 @@
     if(example && !window.FighterSchool)
       return waitForDispatch('Lesson example',()=>loadDispatch('FighterSchool'),()=>replaySchoolLesson(true),()=>{});
     startMatch(matchConfig,undefined,undefined,null,{visit:matchConfig.cornerLesson?practiceFight:null});
-    if(example)world.lesson.example=new window.FighterSchool.Example(world.lesson.id);
+    if(example)world.lesson.example=new window.FighterSchool.Example(world.lesson.id,world.lesson);
     delete $('school-coach').dataset.key;
     renderSchool(getPads());
   }
-  function openLessonList(){return matchConfig?.specialStudy?leaveSpecialStudy():matchConfig?.cornerLesson?returnToFight():world?.lesson?.course?fighterSheet(world.lesson.course):schoolList();}
+  function openLessonList(){return matchConfig?.tryout?openTryout(world.lesson.course):matchConfig?.specialStudy?leaveSpecialStudy():matchConfig?.cornerLesson?returnToFight():world?.lesson?.course?fighterSheet(world.lesson.course):schoolList();}
   $('home').addEventListener('click',e=>{
     if (!$('school-welcome').hidden && e.target.closest('button')) {
       if (!schoolSave.seen) saveSchool();
@@ -6637,7 +6647,7 @@
   $('home-school').onclick=schoolList;
   $('school-next').onclick=nextLesson;
   $('school-example').onclick=()=>replaySchoolLesson(true);
-  $('school-retry').onclick=()=>matchConfig.specialStudy || matchConfig.cornerLesson?replaySchoolLesson(false):world.lesson.course?startFighterLesson(world.lesson.course,world.lesson.index):startLesson(world.lesson.index,matchConfig.schoolReview);
+  $('school-retry').onclick=()=>matchConfig.tryout || matchConfig.specialStudy || matchConfig.cornerLesson?replaySchoolLesson(false):world.lesson.course?startFighterLesson(world.lesson.course,world.lesson.index):startLesson(world.lesson.index,matchConfig.schoolReview);
   $('school-list').onclick=openLessonList;
   $('home-guide').onclick = () => showMoves(settings.p1);
   $('home-options').onclick = showOptions;
@@ -7721,6 +7731,8 @@
     const [,arena,form] = hash.split('/');
     if(Object.hasOwn(fighters,arena) && ['neutral','side','up','down'].includes(form) && hash==='#moves/'+arena+'/'+form){
       showHome(false);showSpecialPreview({kind:arena,side:form,page:'home',paused:false});
+    }else if(/^#(solo|local)\/tryouts(?:\/(pip|brisket|noodle|clover))?$/.test(hash)){
+      settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();openTryout(form);
     }else if(/^#online\/rules(?:\/|$)/.test(hash)){
       showOnline();openRulebook(hash);
     }else if(/^#(local|solo)\/rules(?:\/|$)/.test(hash)){

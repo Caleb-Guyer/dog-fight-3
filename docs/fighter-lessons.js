@@ -169,7 +169,84 @@
       if(!this.done && this.ticks>=180)this.missed=true;
     }
   }
-  const makeTrial=(index,world)=>index<2?new Trial(index,world):new SpecialTrial(index,world);
+  const shuttleKey='dog-fight-3.shuttle.v1.', sessionRuns=new Map();
+  const raceTime=frames=>(frames/60).toFixed(2)+' s';
+  function bestRun(storage,kind){
+    let best=sessionRuns.get(kind);
+    try{
+      const run=JSON.parse(storage.getItem(shuttleKey+kind));
+      if(run && Number.isInteger(run.frames) && run.frames>0 && run.frames<=600 &&
+        Array.isArray(run.track) && run.track.length===1+Math.ceil(run.frames/3) &&
+        run.track.every(p=>Array.isArray(p) && p.length===2 && p.every(n=>Number.isInteger(n) && Math.abs(n)<4000)) &&
+        (!best || run.frames<best.frames))best=run;
+    }catch{}
+    return best;
+  }
+  class Shuttle {
+    constructor(world,storage){
+      const [f,rival]=world.dogs, deck=world.terrain[0];
+      this.course=f.kind;this.index=-1;this.id='shuttle';this.ticks=0;
+      this.start=440;this.turn=680;this.floor=deck.y;
+      Object.assign(f,{x:this.start,y:deck.y,ground:0,face:1,vx:0,vy:0});
+      Object.assign(rival,{x:deck.x2-30,y:deck.y,ground:0,face:-1,vx:0,vy:0});
+      this.track=[[this.start,deck.y]];
+      for(const kind of Object.keys(courses)){
+        const run=bestRun(storage,kind);
+        if(run && (!this.pace || run.frames<this.pace.frames))this.pace={...run,kind};
+      }
+      this.info={title:'Rooftop shuttle',task:'Cross the gold post. Turn and cross the start line on the roof.',
+        keys:[['right'],['left']]};
+      this.done=this.missed=false;
+    }
+    canStep(input){
+      if(this.done || this.missed)return false;
+      if(!this.ticks && !(input.x || input.y || input.attack || input.special || input.jump || input.shield ||
+        input.smash || input.grab || Object.values(input.tapped || {}).some(Boolean)))return false;
+      this.ticks++;return true;
+    }
+    partner(){return idleInput;}
+    contact(name,e){if(name==='ko' && e.f.index===0)this.missed=true;}
+    afterStep(world){
+      if(this.missed)return;
+      const f=world.dogs[0];
+      if(!this.split && f.x>=this.turn){this.split=this.ticks;this.note='Turn back. Cross the mint line on the roof.';}
+      this.done=!!this.split && f.x<=this.start && f.ground===0;
+      if(this.ticks%3===0 || this.done)this.track.push([Math.round(f.x),Math.round(f.y)]);
+      if(this.done)this.info.success=raceTime(this.ticks)+' round trip · '+raceTime(this.split)+' to the turn.';
+      else if(this.ticks>=600)this.missed=true;
+    }
+    saveTime(storage){
+      if(!this.done || this.example || this.saved)return;
+      this.saved=true;
+      const previous=bestRun(storage,this.course);
+      if(previous && previous.frames<=this.ticks)return;
+      const run={frames:this.ticks,track:this.track};
+      sessionRuns.set(this.course,run);
+      try{storage.setItem(shuttleKey+this.course,JSON.stringify(run));}catch{}
+    }
+    drawCourse(ctx){
+      const y=this.floor;
+      ctx.save();
+      for(const [x,color] of [[this.start,'#8de0cb'],[this.turn,'#ffd483']]){
+        ctx.fillStyle='#252839';ctx.fillRect(x-4,y-57,8,63);
+        ctx.fillStyle=color;ctx.fillRect(x-2,y-55,4,59);ctx.fillRect(x+2,y-54,16,12);
+        ctx.fillStyle='#252839';ctx.fillRect(x+5,y-54,4,4);ctx.fillRect(x+9,y-50,4,4);
+      }
+      if(this.pace){
+        const {frames,track,kind}=this.pace,t=Math.min(frames,this.ticks);
+        const i=Math.floor(t/3),a=track[i],b=track[i+1] || a;
+        const u=(t-i*3)/Math.max(1,Math.min(3,frames-i*3)),x=Math.round(a[0]+(b[0]-a[0])*u),h=Math.round(a[1]+(b[1]-a[1])*u)-7;
+        ctx.fillStyle='#252839';ctx.fillRect(x-5,h-14,10,14);ctx.fillRect(x-21,h-29,42,16);
+        ctx.fillStyle='#ffc76c';ctx.fillRect(x-2,h-14,4,14);
+        ctx.font='bold 10px monospace';ctx.textAlign='center';ctx.fillText(kind.toUpperCase(),x,h-17);
+      }
+      ctx.font='bold 18px monospace';ctx.textAlign='center';
+      ctx.fillStyle='#252839';ctx.fillRect((this.start+this.turn)/2-47,y+9,94,26);
+      ctx.fillStyle='#f8e2ad';ctx.fillText(raceTime(this.ticks),(this.start+this.turn)/2,y+28);
+      ctx.restore();
+    }
+  }
+  const makeTrial=(index,world,storage)=>index===-1?new Shuttle(world,storage):index<2?new Trial(index,world):new SpecialTrial(index,world);
   // Durations are in fight frames. A short hold before each new input lets the
   // viewer read the cue without changing the timing between real inputs.
   const examples={
@@ -202,15 +279,18 @@
       [100,'right','Release Special over the deck to fold the sail and land.']],
   };
   class Example {
-    constructor(id){
+    constructor(id,lesson){
       const [kind,index]=id.split('-');
       const extra=extraStudies[kind]?.[Number(index)-2];
-      const sequence=extra?[[1,extra[3].join(' '),extra[1]],[180,'','Release the controls and watch the exchange.']]:examples[id];
+      if(id==='shuttle')this.shuttle=lesson;
+      const sequence=this.shuttle?[[600,'right','Run to the gold post.'],[600,'left','Reverse and run across the start line.']]:
+        extra?[[1,extra[3].join(' '),extra[1]],[180,'','Release the controls and watch the exchange.']]:examples[id];
       this.cues=sequence.map(([frames,chord,caption])=>{
         const keys=chord?chord.split(' '):[];
         const input={...idleInput,quickAttack:true};
         for(const key of keys){
           if(key==='right')input.x=1;
+          else if(key==='left')input.x=-1;
           else if(key==='up')input.y=-1;
           else if(key==='down')input.y=1;
           else input[key]=true;
@@ -223,6 +303,7 @@
     }
     get cue(){return this.cues[this.index];}
     input(){
+      if(this.shuttle?.split && this.index===0){this.index=1;this.frame=-18;}
       if(this.frame===this.cue.frames && this.index+1<this.cues.length){
         this.index++;this.frame=-18;
       }
@@ -233,7 +314,7 @@
     function label(action){
       if(device===0)return keyFor(0,action);
       if(device===2)return action[0].toUpperCase()+action.slice(1);
-      return ['right','up','down'].includes(action)?'Stick '+action:padFor(0,action);
+      return ['left','right','up','down'].includes(action)?'Stick '+action:padFor(0,action);
     }
     return info.keys.map(chord=>chord.map(label).join(' + ')).join(' → ');
   }
@@ -262,6 +343,28 @@
     root.querySelector('[data-class-cup]').onclick=()=>cup(kind);
     root.querySelector('[data-class-back]').onclick=back;
     root.querySelector('[data-class-dog][aria-pressed=true]').focus({preventScroll:true});
+  }
+  function tryoutSheet(kind,{storage,slot,label,coat,portrait,root,showDialog,choose,start,pick,back}){
+    const {fighters,kits}=window.DogFight;
+    const dogs=Object.keys(courses).map(id=>{
+      const best=bestRun(storage,id);
+      return '<button type="button" class="cup-dog" data-try-dog="'+id+'" aria-pressed="'+(id===kind)+'">'+
+        '<img alt="" src="'+portrait(id,coat(slot,id))+'"><strong>'+fighters[id].name+'</strong>'+
+        (best?'<small>'+raceTime(best.frames)+'</small>':'')+'</button>';
+    }).join('');
+    const moves=courses[kind].lessons.slice(0,2).map((m,i)=>'<button type="button" class="utility" data-try-run="'+i+'">'+
+      (i?'Recovery':'Signature')+' · '+m.title+(cleared(storage,kind+'-'+i)?' ✓':'')+'</button>').join('');
+    showDialog('fighter-tryout','Fighter tryouts','<div class="cup-dogs" role="group" aria-label="Dogs to try">'+dogs+'</div>'+
+      '<h3 class="card-stage">'+fighters[kind].name+' · '+fighters[kind].style+'</h3><p>'+kits[kind].style+'</p>'+
+      '<div class="dialog-actions">'+moves+'<button class="utility" data-try-run="-1">Rooftop shuttle</button></div>'+
+      '<p>Use P1 controls. Shuttle times are personal bests. The fastest dog sets the pace on the roof.</p>'+
+      '<div class="dialog-actions"><button class="primary" data-try-pick>Pick '+fighters[kind].name+' for '+label+'</button>'+
+      '<button class="utility" data-try-back>Back to fighter select</button></div>');
+    for(const b of root.querySelectorAll('[data-try-dog]'))b.onclick=()=>choose(b.dataset.tryDog);
+    for(const b of root.querySelectorAll('[data-try-run]'))b.onclick=()=>start(kind,Number(b.dataset.tryRun),true);
+    root.querySelector('[data-try-pick]').onclick=()=>pick(kind);
+    root.querySelector('[data-try-back]').onclick=back;
+    root.querySelector('[aria-pressed=true]').focus({preventScroll:true});
   }
   class Demonstration{
     constructor(kind,side,coat,event){
@@ -321,5 +424,5 @@
       paint(frames/60);
     }};
   }
-  window.FighterSchool={courses,Trial,Example,hint,sheet,mark,cleared,study,makeTrial,Demonstration,preview};
+  window.FighterSchool={courses,Trial,Example,hint,sheet,tryoutSheet,mark,cleared,study,makeTrial,Demonstration,preview};
 })();
