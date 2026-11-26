@@ -10608,7 +10608,8 @@
       }
       if(!plan){
         const perch=this.terrain[f.ground],floor=this.terrain[foe.ground];
-        if(!foe.shield || !perch?.thin || !floor || f.shield || f.attack || f.jumpSquat || f.command ||
+        // Against a known shield escape, keep the block pressure that draws out that roll or dodge.
+        if(brain.shieldHabit?.count>=2 || !foe.shield || !perch?.thin || !floor || f.shield || f.attack || f.jumpSquat || f.command ||
             f.charge>=0 || f.landingLag || f.shieldDrop || f.shieldStun || Math.abs(f.vx)>60)return null;
         const height=floor.y-perch.y,gap=(foe.x-f.x)*f.face;
         if(height<55 || height>200 || gap<0 || gap>grabs[f.kit.grab].box[0]+foe.stats.width+20 ||
