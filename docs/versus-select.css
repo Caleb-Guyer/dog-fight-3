@@ -1,4 +1,10 @@
 .rotation-line { padding:0; margin:.6rem 0; list-style:none; display:grid; gap:4px; }
+.cup-relay-arena { position:relative; margin:0; border:2px solid var(--ink); background:var(--ink); }
+.cup-relay-arena canvas { display:block; width:100%; max-height:18vh; object-fit:contain; image-rendering:pixelated; }
+.cup-relay-arena figcaption { text-align:center; padding:3px; color:var(--cream); font-family:var(--pixel); }
+.cup-relay-team { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; list-style:none; padding:0; margin:4px 0; }
+.cup-relay-team li { display:flex; align-items:center; justify-content:center; gap:4px; flex-wrap:wrap; border-block:1px solid #aa9b77; }
+.cup-relay-team li img { width:32px; height:30px; object-fit:contain; image-rendering:pixelated; }
 .rotation-line li { display:flex; align-items:center; gap:8px; padding:5px 8px; border-left:4px solid #aea081; background:#ede1c2; color:#292333; }
 .rotation-line li:nth-child(1) { border-color:#d37143; }
 .rotation-line li:nth-child(2) { border-color:#5185a0; }
