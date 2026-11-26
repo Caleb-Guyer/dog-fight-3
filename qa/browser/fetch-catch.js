@@ -10,7 +10,7 @@ async function play(browser,touch){
     await page.clock.install({time:new Date('2030-01-01Z')});await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
     await page.goto(touch?root+'#local/fetch':root);
     if(!touch){
-      assert.equal(await page.evaluate(()=>!!window.FighterSchool),false);
+      assert.equal(await page.evaluate(()=>!!window.MoveGuide || !!window.FighterSchool),false);
       await click('[data-enter-mode=local]');await click('#ball-info');await click('[data-do=fetch-match]');
     }
     await page.evaluate(()=>{
@@ -27,7 +27,7 @@ async function play(browser,touch){
     assert.equal(await page.evaluate(()=>fight.dogs[1].damage),6);
     assert(await page.locator('#grapple-prompt').isHidden());
     if(!touch){
-      await click('#pause');await page.route('**/fighter-lessons.js*',r=>r.abort(),{times:1});
+      await click('#pause');await page.route('**/move-guide.js*',r=>r.abort(),{times:1});
       await click('[data-do=moves]');await page.locator('#dispatch-load-retry').waitFor();await click('#dispatch-load-retry');
       await page.locator('[data-guide-section=defense]').waitFor();await click('[data-guide-section=defense]');
       assert(await page.locator('.guide-defense canvas').count()>0);
