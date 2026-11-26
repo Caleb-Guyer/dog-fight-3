@@ -178,6 +178,8 @@
         '<div class="dialog-actions"><button class="utility" data-do="shield-read-match">Try Rival · Pip vs. Noodle</button>' +
         '<button class="utility" data-do="shield-read-set">Play a Rival set · Pip vs. Noodle</button>' +
         '<button class="utility" data-do="cut-off-clover">Intercept Clover · Pip vs. Clover</button></div>' +
+        '<h3>Defend the stock return</h3><p>You just took a stock. Your opponent rides the lift down over you. Shield after their paws leave the lift to block the falling aerial. Hold Shield from GO and they can land beside you and grab.</p>'+
+        '<button class="utility" data-do="lift-fight">Face the returning Rival</button>'+
         '<h3>Make Haymaker miss</h3><p>Brisket has already let his punch go. As Pip, dash left at GO, let the punch pass, then run back in and tap Attack. Switch dogs to see Rival Pip’s timing.</p>' +
         '<div class="dialog-actions"><button class="utility" data-do="dash-back-bait">Dodge the punch as Pip</button>' +
         '<button class="utility" data-do="dash-back-watch">Face Rival Pip as Brisket</button></div>' +
@@ -186,6 +188,29 @@
         '<p>Escape Brisket’s grab at GO. On the top platform, steer across his up throw and air-dodge toward open ground. At the ledge, try a quick jab before his paws close.</p>' +
         '<div class="dialog-actions"><button class="utility" data-do="throw-read-perch">Top platform · 110%</button>' +
         '<button class="utility" data-do="throw-read-edge">Left ledge · 80%</button></div>') + ledgeChoices;
+  }
+  function controlsTable(networkGame,settings,keyboard,padFor,strikeKeys,nativeScreen) {
+    const row=(title,key,pad)=>{
+      const label=i=>typeof pad==='function'?pad(i):pad;
+      const p=label(0), q=label(1);
+      return [title,key(0),key(1),networkGame || p===q?p:'P1 '+p+' · P2 '+q];
+    };
+    const simple=(title,action)=>row(title,i=>keyboard(i,action),i=>padFor(i,action));
+    const rows = [
+      row('Move / aim',i=>['up','left','down','right'].map(a=>keyboard(i,a)).join(' '),'Stick / D-pad'),
+      row('Walk',i=>keyboard(i,'walk')+' + '+keyboard(i,'left')+' / '+keyboard(i,'right'),'Tilt left stick gently'),
+      row('Jump',i=>keyboard(i,'jump')+(settings['flickJump'+(i+1)]?' / '+keyboard(i,'up'):''),i=>padFor(i,'jump')+' / flick Up if enabled'),
+      simple('Short hop','hop'),simple('Attack','attack'),row('Aim strike ← / → / ↑ / ↓',strikeKeys,'Right stick'),
+      row('Smash / charge',i=>keyboard(i,'smash'),i=>padFor(i,'smash')+(settings[i?'tiltStick2':'tiltStick']?'':' / right stick')),
+      simple('Special','special'),row('Shield / air dodge / tech',i=>keyboard(i,'shield'),i=>padFor(i,'shield')+' / '+padFor(i,'shieldAlt')),
+      row('Tilt shield',i=>keyboard(i,'shield')+' + '+keyboard(i,'walk')+' + direction',i=>'Gentle stick / '+padFor(i,'shield')+' + '+padFor(i,'shieldAlt')+' + stick'),
+      simple('Grab / throw','grab'),[networkGame ? 'Match menu' : 'Pause','Esc','Esc','Start'],
+    ];
+    if (nativeScreen) rows.push(['Fullscreen', 'F', 'F', '—']);
+    return '<table class="control-table"><thead><tr><th>Action</th>' +
+      (networkGame ? '<th>Keyboard</th>' : '<th>P1</th><th>P2</th>') + '<th>Gamepad</th></tr></thead><tbody>' +
+      rows.map((r) => '<tr>' + (networkGame ? [r[0], r[1], r[3]] : r).map((c) => '<td>' + c + '</td>').join('') + '</tr>').join('') +
+      '</tbody></table>';
   }
   const controlsGuide =
     '<p>Flick a side to dash. Reverse in the first few steps to dash-dance. After a full run your dog plants its paws to turn. On touch, slide from the center dot onto a side arrow to walk, or tap a side arrow to dash.</p>' +
@@ -202,5 +227,5 @@
         '<p>Flick a direction during the hit spark to shift your dog. You can slide sideways on the ground or in eight directions in the air. Try escaping the second swing in Training → Combo escape.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
         '<p>Your dog crouches for three frames. Hold Short hop for a low jump, or tap Jump and release during the crouch. Hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Flick Down in the last three rising frames or during descent to fast-fall. Release Down to aim freely. Jump again in midair. Press Jump just above a rival’s head for a footstool, even with your air jump spent. A rival stepped on in the air can tech the fall with Shield. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. Ground Attack starts on the press by default. Each player can choose Hold to smash in Options to charge with Attack from a standstill. With the default Smash stick, hold the right stick in a direction and release to swing. Choose Tilt under Options for instant grounded tilts with the aim stick, aim keys, or a swipe from Smash.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>';
-  window.VersusRulebook={encode,decode,quick,open,controlsGuide,cpuSheet};
+  window.VersusRulebook={encode,decode,quick,open,controlsGuide,controlsTable,cpuSheet};
 })();

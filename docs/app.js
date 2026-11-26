@@ -1110,36 +1110,9 @@
     if (!window.VersusRulebook) return waitForDispatch('Controls', () => loadDispatch('VersusRulebook'), showControls,
       () => page === 'match' ? showPause() : $('controls').focus());
     backToPause = page === 'match';
-    const networkGame = !!online.match || page === 'online-lobby';
-    const keyboard=(i,action)=>keyFor(i,action);
-    const row=(title,key,pad)=>{
-      const label=i=>typeof pad==='function'?pad(i):pad;
-      const p=label(0), q=label(1);
-      return [title,key(0),key(1),networkGame || p===q?p:'P1 '+p+' · P2 '+q];
-    };
-    const simple=(title,action)=>row(title,i=>keyboard(i,action),i=>padFor(i,action));
-    const rows = [
-      row('Move / aim',i=>['up','left','down','right'].map(a=>keyboard(i,a)).join(' '),'Stick / D-pad'),
-      row('Walk',i=>keyboard(i,'walk')+' + '+keyboard(i,'left')+' / '+keyboard(i,'right'),'Tilt left stick gently'),
-      row('Jump',i=>keyboard(i,'jump')+(settings['flickJump'+(i+1)]?' / '+keyboard(i,'up'):''),i=>padFor(i,'jump')+' / flick Up if enabled'),
-      simple('Short hop','hop'),simple('Attack','attack'),row('Aim strike ← / → / ↑ / ↓',strikeKeys,'Right stick'),
-      row('Smash / charge',i=>keyboard(i,'smash'),i=>padFor(i,'smash')+(settings[i?'tiltStick2':'tiltStick']?'':' / right stick')),
-      simple('Special','special'),row('Shield / air dodge / tech',i=>keyboard(i,'shield'),i=>padFor(i,'shield')+' / '+padFor(i,'shieldAlt')),
-      row('Tilt shield',i=>keyboard(i,'shield')+' + '+keyboard(i,'walk')+' + direction',i=>'Gentle stick / '+padFor(i,'shield')+' + '+padFor(i,'shieldAlt')+' + stick'),
-      simple('Grab / throw','grab'),[networkGame ? 'Match menu' : 'Pause','Esc','Esc','Start'],
-    ];
-    if (nativeScreen) rows.push(['Fullscreen', 'F', 'F', '—']);
-    const table =
-      '<table class="control-table"><thead><tr><th>Action</th>' +
-      (networkGame ? '<th>Keyboard</th>' : '<th>P1</th><th>P2</th>') + '<th>Gamepad</th></tr></thead><tbody>' +
-      rows.map((r) => '<tr>' + (networkGame ? [r[0], r[1], r[3]] : r).map((c) => '<td>' + c + '</td>').join('') + '</tr>').join('') +
-      '</tbody></table>';
-    showDialog(
-      'controls',
-      'Controls',
-      '<div class="dialog-actions"><button class="primary" data-do="bindings">Customize controls</button></div>' + table +
-        window.VersusRulebook.controlsGuide,
-    );
+    const rules=window.VersusRulebook,networkGame=!!online.match || page==='online-lobby';
+    const table=rules.controlsTable(networkGame,settings,keyFor,padFor,strikeKeys,nativeScreen);
+    showDialog('controls','Controls','<div class="dialog-actions"><button class="primary" data-do="bindings">Customize controls</button></div>'+table+rules.controlsGuide);
   }
   $('controls').onclick = showControls;
   const specialInputs = {
@@ -1908,6 +1881,11 @@
     const p1 = role === 'bait' ? 'pip' : 'brisket', p2 = role === 'bait' ? 'brisket' : 'pip';
     startMatch({mode:'solo', p1, p2, coats:[savedCoat(0,p1),savedCoat(1,p2)], stage:'picnic', cpuLevel:'rival',
       stockCount:3, minutes:7, fetch:false, dashBackOpening:role}, undefined, 42);
+  }
+  function startLiftFight(p2=settings.p2,p1=settings.p1) {
+    leaveOnline();afterStory=null;
+    startMatch({mode:'solo',p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:'picnic',form:'flat',
+      cpuLevel:'rival',stockCount:3,minutes:7,fetch:false,liftOpening:true},undefined,42);
   }
   function fightRivalPip() {
     leaveOnline();
@@ -3081,6 +3059,7 @@
     if (action === 'shield-read-match') startShieldReadMatch();
     if (action === 'throw-read-perch' || action === 'throw-read-edge') startThrowRead(action.slice('throw-read-'.length));
     if (['dash-back-bait','dash-back-watch','dash-back-delay'].includes(action)) startDashBack(action.slice('dash-back-'.length));
+    if (action==='lift-fight')startLiftFight();
     if (action === 'cut-off-clover') startCloverApproach();
     if (action === 'shield-read-set') startShieldReadMatch(true);
     if (action === 'rematch') {
@@ -5378,7 +5357,7 @@
     FightCamera:'fight-camera.js?v=1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PlayerProfiles:'player-profiles.js?v=1',
-    VersusRulebook:'versus-rules.js?v=dash-back-1',
+    VersusRulebook:'versus-rules.js?v=lift-fight-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
     ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=replay-lifetime-1',
@@ -7763,6 +7742,8 @@
       startMatch({...settings,p1:'pip',p2:'brisket',mode:'solo',stage:'picnic',cpuLevel:'rival',minutes:1,fetch:false,timeBattle:true},undefined,42);
     } else if (/^#solo\/throw-read\/(perch|edge)$/.test(hash)) {
       startThrowRead(hash.split('/').pop());
+    } else if (/^#solo\/stock-return\/(pip|brisket|noodle|clover)$/.test(hash)) {
+      startLiftFight(hash.split('/').pop(),'pip');
     } else if (/^#solo\/dash-back\/(bait|watch|delay)$/.test(hash)) {
       startDashBack(hash.split('/').pop());
     } else if (hash === '#solo/last-stock') {
