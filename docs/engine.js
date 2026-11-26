@@ -9967,7 +9967,7 @@
         this.stockCall={age:0,frame:this.matchFrames,points:!!points,score:points?points.slice():this.dogs.map(f=>f.stocks),
           exits:out.map((f,i)=>({slot:f.index,kind:f.kind,coat:this.coatFor(f.index),face:f.face,
             x:f.x,y:f.y,zone:losses[i].zone,credited:losses[i].credited}))};
-        this.emit('stockCall',this.stockCall);
+        this.emit('ringOutScore',this.stockCall);
       }
       if(this.relayTeams && !this.suddenDeath){
         for(const f of out){
