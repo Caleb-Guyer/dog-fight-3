@@ -2326,7 +2326,9 @@ async function testShieldBreak(page,mobile) {
   else await hold(['shield']);
   await waitFor('dizzy');
   const left=mobile && await point('left',2), right=mobile && await point('right',2);
-  for(let i=0;i<26 && await status.getAttribute('data-result')==='dizzy';i++){
+  // Center the touch stick before wakeup. A fresh sideways flick on the first
+  // actionable frame correctly produces a shield roll instead of a block.
+  for(let i=0;i<(mobile?12:26) && await status.getAttribute('data-result')==='dizzy';i++){
     if(mobile) {
       await cdp.send('Input.dispatchTouchEvent',{type:i?'touchMove':'touchStart',touchPoints:[shield,i%2?right:left]});
       await page.clock.runFor(64);
