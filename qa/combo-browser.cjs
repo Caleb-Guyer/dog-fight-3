@@ -2483,11 +2483,13 @@ async function testDevice(browser, mobile) {
   }
 }
 async function main() {
+  const device = process.argv[2] || 'both';
+  assert(['desktop','phone','both'].includes(device), 'Expected desktop, phone, or both');
   const executablePath = execFileSync('which', ['google-chrome'], { encoding: 'utf8' }).trim();
   const browser = await chromium.launch({ executablePath, headless: true });
   try {
-    await testDevice(browser, false);
-    await testDevice(browser, true);
+    if (device !== 'phone') await testDevice(browser, false);
+    if (device !== 'desktop') await testDevice(browser, true);
   } finally {
     await browser.close();
   }
