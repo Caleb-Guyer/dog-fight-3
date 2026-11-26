@@ -10,7 +10,7 @@ async function play(browser,device){
   try{
     await page.addInitScript(pad=>{
       if(!localStorage.getItem('dog-fight-3.config'))localStorage.setItem('dog-fight-3.config',JSON.stringify({
-        mode:'local',p1:'brisket',p2:'pip',stage:'canal',stageForm:'trio',lives:5,minutes:5,fetch:false,
+        mode:'local',p1:'brisket',p2:'pip',stage:'canal',stageForm:'trio',lives:5,minutes:3,fetch:false,
         coatBook:[{brisket:1},{clover:2}]}));
       if(pad){
         const p={index:0,id:'Bench controller',mapping:'standard',connected:true,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
@@ -26,7 +26,9 @@ async function play(browser,device){
     await page.goto(url);
     if(!touch && !pad)await press('#dispatch-load-retry');
     await page.getByRole('button',{name:'Pick Clover for Player 1'}).waitFor();
-    await press('[data-try-back]');await press('.slot[data-index="1"]');await press('#lobby-tryout');
+    await press('[data-try-back]');
+    assert.match(await page.locator('#rules-label').textContent(),/5 stocks · 3 min/);
+    await press('.slot[data-index="1"]');await press('#lobby-tryout');
     await press('[data-try-dog=clover]');await press('[data-try-run="-1"]');
     await page.clock.runFor(500);
     assert.equal(await page.locator('#school-title').textContent(),'Rooftop shuttle');
@@ -62,7 +64,7 @@ async function play(browser,device){
     assert.equal(await page.locator('#roster [aria-pressed=true]').getAttribute('data-kind'),'clover');
     const settings=await page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.config')));
     assert.deepEqual([settings.mode,settings.p1,settings.p2,settings.stage,settings.stageForm,settings.lives,settings.minutes,settings.fetch,settings.coatBook[1].clover],
-      ['local','brisket','clover','canal','trio',5,5,false,2]);
+      ['local','brisket','clover','canal','trio',5,3,false,2]);
     await press('#start');await page.clock.runFor(3000);
     assert.equal(await page.locator('#hud .lives[aria-label="5 stocks"]').count(),2);
     assert.match(await page.locator('#match-stage').textContent(),/Canal/);
