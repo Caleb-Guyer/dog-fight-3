@@ -2552,7 +2552,7 @@
       if (name === 'swat') this.add('star', e.ball.x, e.ball.y, gold, 0.2, 25);
       if (name === 'ballCatch') this.add('star',e.point.x,e.point.y,mint,.16,17);
       if (name === 'ko') {
-        this.add('burst', clamp(e.x, 30, (e.stageWidth ?? 1200) - 30), clamp(e.y, 38, 620), teamColor(f), 0.7, 108);
+        if(!e.scored || !window.StockCall)this.add('burst', clamp(e.x, 30, (e.stageWidth ?? 1200) - 30), clamp(e.y, 38, 620), teamColor(f), 0.7, 108);
         if (!reduced.matches) this.shake = 10;
       }
       if (name === 'ledgeTrump' || (name === 'ledge' && !e.trump)) {
