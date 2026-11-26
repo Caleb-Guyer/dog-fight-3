@@ -6,6 +6,22 @@ const {Selection}=window.CouchSelect, {Seats}=window.FightControls;
 const {fighters,arenas,coatFor,Battle,StockSet,idleInput}=window.DogFight;
 const dogs=Object.keys(fighters),stages=Object.keys(arenas);
 const cfg={stage:'picnic',mode:'local',p1:'pip',p2:'brisket',coatBook:[{},{}],fetch:false};
+test('pad loss retains both seats and a replacement rejoins its owner at a new index',()=>{
+  const a={index:2}, b={index:5}, replacement={index:7};
+  const seats=new Seats([a,b]);seats.beginMatch([a,b]);
+  seats.track([b]);assert.equal(seats.lost,1);assert.equal(seats.get(1,[b]),b);
+  seats.track([b,replacement]);assert.equal(seats.present,3);
+  assert.deepEqual(seats.ids,[7,5]);assert.equal(seats.lost,1);
+  seats.lost=0;seats.track([]);assert.equal(seats.lost,3);
+  seats.track([b]);assert.equal(seats.present,2);assert.equal(seats.lost,3);
+  seats.beginMatch([b]);assert.equal(seats.lost,0);assert.equal(seats.present,2);
+});
+test('a keyboard-only match accepts a first controller for P2 and reports a same-tick replacement',()=>{
+  const seats=new Seats([]), a={index:1}, b={index:4};
+  seats.beginMatch([]);seats.track([]);assert.equal(seats.lost,0);
+  seats.track([a]);assert.equal(seats.present,2);assert.equal(seats.lost,0);
+  seats.track([b]);assert.equal(seats.lost,2);assert.equal(seats.present,2);assert.equal(seats.get(1,[b]),b);
+});
 require('../docs/stage-strike.js');
 const {Draft}=window.StageStrike;
 test('each seat draws a full roster and consecutive draws never repeat across refills',()=>{

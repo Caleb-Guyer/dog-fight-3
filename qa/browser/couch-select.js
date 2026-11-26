@@ -62,7 +62,9 @@ async function controllers(browser) {
     assert.equal(initial.stage,vote.includes('Laundry Line')?'laundry':'canal');
     assert.match(await page.locator('#match-set').textContent(),/Game 1/);
     // Pad 0 picked for P2 before pad 4 joined. Removing P1 cannot give P2 a different dog.
-    await held(0);await page.evaluate(()=>{window.pads[4]=null;});await held(0,[2],1);
+    await held(0);await page.evaluate(()=>{window.pads[4]=null;});await held(0);
+    assert.match(await page.locator('#pad-loss-seats').textContent(),/Q attack/);
+    await press('#pad-resume');await page.clock.runFor(2500);await held(0,[2],1);
     assert.deepEqual(await page.evaluate(()=>inputPair.map(x=>[x.attack,x.x])),[[false,0],[true,1]]);
     await held(0,[],1);
     for(let i=0;i<18 && !await page.locator('#set-score').isVisible();i++)await page.clock.runFor(2000);
@@ -98,6 +100,55 @@ async function controllers(browser) {
     await press('[data-do=match-card]');await press('[data-card-game="0"]');
     assert.match(await page.locator('.card-stats th[scope=col]').last().textContent(),/Brisket/);
     await press('[data-card-game="1"]');assert.match(await page.locator('.card-stats th[scope=col]').last().textContent(),/Noodle/);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
+async function reconnectInFight(browser) {
+  const page=await browser.newPage(), errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.addInitScript(()=>{
+      window.pad=i=>({index:i,id:'Hosted pad '+i,connected:true,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false}))});
+      window.pads=[pad(0),pad(1)];
+      Object.defineProperty(navigator,'getGamepads',{value:()=>pads});
+    });
+    await clock(page);await page.goto(root);
+    await page.locator('[data-enter-mode=local]').click();
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(dt,a,b){
+        window.battle=this;window.inputs=[a,b];return step.apply(this,arguments);
+      };
+    });
+    await page.locator('#start').click();await page.clock.runFor(2900);
+    const state=()=>page.evaluate(()=>[battle.matchFrames,battle.clockFrames,...battle.dogs.flatMap(d=>[d.x,d.y,d.damage,d.stocks])]);
+    const snapshot=await state();
+    await page.evaluate(()=>{pads[0].connected=false;pads[1].axes[0]=.8;});
+    await page.clock.runFor(800);
+    const resume=page.locator('#pad-resume');
+    assert.equal(await resume.textContent(),'Use keyboard for P1');
+    await page.keyboard.press('Escape');await page.clock.runFor(300);
+    assert.deepEqual(await state(),snapshot);
+    await page.evaluate(()=>{pads[3]=pad(3);pads[3].buttons[0].pressed=true;pads[3].buttons[2].pressed=true;});
+    await page.clock.runFor(300);
+    assert.equal(await resume.textContent(),'Resume match');
+    assert.match(await page.locator('#pad-loss-seats').textContent(),/P1 · Pad 4.*P2 · Pad 2/);
+    await page.evaluate(()=>{pads[3].buttons[0].pressed=false;});await page.clock.runFor(40);
+    await page.evaluate(()=>{pads[3].buttons[0].pressed=true;});await page.clock.runFor(2100);
+    assert.deepEqual(await state(),snapshot);
+    await page.clock.runFor(500);
+    assert((await state())[0]>snapshot[0]);
+    assert.deepEqual(await page.evaluate(()=>inputs.map(i=>[i.attack,i.jump,i.x>0])),[[false,false,false],[false,false,true]]);
+    await page.evaluate(()=>{pads[3].buttons[0].pressed=false;pads[3].buttons[2].pressed=false;});await page.clock.runFor(40);
+    await page.evaluate(()=>{pads[3].buttons[2].pressed=true;});await page.clock.runFor(40);
+    assert.equal(await page.evaluate(()=>inputs[0].attack),true);
+    await page.locator('#pause').click();const paused=await state();
+    await page.evaluate(()=>{pads[1]=null;});await page.clock.runFor(150);
+    await page.locator('[data-do=resume]').click();await page.clock.runFor(70);
+    assert.equal(await resume.textContent(),'Use keyboard for P2');assert.deepEqual(await state(),paused);
+    await resume.click();await page.clock.runFor(2500);
+    await page.keyboard.down('ArrowLeft');await page.clock.runFor(40);
+    assert.equal(await page.evaluate(()=>inputs[1].x),-1);await page.keyboard.up('ArrowLeft');
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
@@ -181,5 +232,5 @@ async function handheld(browser){
 }
 (async()=>{
   const b=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await controllers(b);await handheld(b);await shuffleDraft(b);}finally{await b.close();}
+  try{await controllers(b);await handheld(b);await shuffleDraft(b);await reconnectInFight(b);}finally{await b.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});
