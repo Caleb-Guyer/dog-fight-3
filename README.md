@@ -179,7 +179,7 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 - **Sound Test** plays the menu theme, all five arena tunes and each dog's victory fanfare. In a stock fight, the arena band changes its arrangement on the next bar when both fighters reach their last stock. Try the ordinary and final-stock versions of *Clothesline Waltz* on Laundry Line, then compare it with *Overnight Freight* on Night Mail. The music level can go to zero while combat cues stay audible. [Open Sound Test](https://caleb-guyer.github.io/dog-fight-3/#sound-test)
 - **Local versus** lets two people play on one device. Select either nameplate in the arena preview, then choose that side's dog from the roster.
 - **Training** starts you within striking distance of a stationary dummy. It shows the last move you used and counts hits that connect before the dummy can act again. Reset positions, change the dummy's starting damage, or practice getting back from the ledge.
-- **Fetch Ball** adds a tennis ball that both dogs can bat around. The third swat powers up the shot.
+- **Fetch Ball** adds a tennis ball that either dog can catch on the ground or in midair. Tap Grab as it reaches your paws. Carry it across a platform, then aim and tap Attack or Grab for a forward toss, a high lob, or a downward bounce. A hit or an opponent’s grab knocks it loose. Swatting a loose ball adds charge. The third swat turns it gold, and a catch keeps the stored charge. Try the three-stock opening with a two-paw ball at your feet. [Play solo Fetch](https://caleb-guyer.github.io/dog-fight-3/#solo/fetch) · [Play local Fetch](https://caleb-guyer.github.io/dog-fight-3/#local/fetch)
 
 | Action | Player 1 | Player 2 | Standard gamepad |
 | --- | --- | --- | --- |

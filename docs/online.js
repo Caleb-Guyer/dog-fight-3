@@ -1,8 +1,8 @@
 (() => {
   'use strict';
 
-  const prefix = 'dogfight3-cg-versus-v69-';
-  const channel = 'dogfight3-v69';
+  const prefix = 'dogfight3-cg-versus-v70-';
+  const channel = 'dogfight3-v70';
   const counterpickFeature = 'fighter-counterpick';
   const timeFeature = 'time-score-1';
   const roomFeature='room-rules-1';
