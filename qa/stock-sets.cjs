@@ -349,6 +349,18 @@ async function onlineSet(browser,phoneBrowser) {
     }
     assert.equal(await a.locator('#set-score').textContent(),await b.locator('#set-score').textContent());
     assert.equal(await b.locator('.set-history li').count(),i+1);
+    assert.equal(await winner.page.locator('[data-do=stock-retry]').count(),0);
+    const stock='[data-do=stock-retry][data-stock-slot="'+slot+'"]';
+    assert.equal(await loser.page.locator(stock).textContent(),'Retry my stock');
+    if(i===0){
+      await loser.press(stock);
+      assert.equal(await loser.page.locator('#dialog-title').textContent(),'Retry P2’s stock 3');
+      await loser.press('#stock-try');
+      await loser.page.getByRole('heading',{name:'Stock saved!'}).waitFor();
+      assert(await winner.page.locator('#set-score').isVisible());
+      await loser.press('[data-do=trial-results]');
+      assert.equal(await a.locator('#set-score').textContent(),await b.locator('#set-score').textContent());
+    }
     const cards=[];
     for(const d of [host,guest]){
       const archive=await d.page.evaluate(()=>new FightRecords.Book(localStorage).list().map(r=>r.entry).filter(e=>e.mode==='online'));
@@ -385,7 +397,8 @@ async function onlineSet(browser,phoneBrowser) {
         assert.equal(await d.page.locator('#clip-seek').inputValue(),'300');
         const early=await d.page.locator('#clip-scores').textContent();
         await d.page.locator('#clip-seek').press('End');
-        assert.equal(await d.page.locator('#film-marks button').count(),3);
+        assert.equal(await d.page.locator('#film-knockouts button:not([data-stock-at])').count(),3);
+        assert.equal(await d.page.locator('#film-knockouts [data-stock-at][data-stock-slot="1"]').count(),3);
         fullScores.push([early,await d.page.locator('#clip-seek').inputValue(),await d.page.locator('#clip-scores').textContent()]);
         await d.press('#film-back');
         await d.press('[data-do=ko-replays]');
