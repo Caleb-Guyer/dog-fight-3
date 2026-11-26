@@ -164,7 +164,7 @@ async function personalKnockout(browser){
     await page.locator('[data-record-id]').first().tap();
     await page.locator('[data-saved-clip][data-ko-slot="0"]').first().waitFor();
     await page.goto(root+'?review-your-stock');await page.locator('#home-continue').tap();
-    assert.equal(await page.locator('#school-title').innerText(),'Recover to the stage');
+    assert.equal(await page.locator('#school-title').textContent(),'Recover to the stage');
     await page.evaluate(()=>reviewStick(true));await page.clock.runFor(50);
     await page.evaluate(()=>reviewStick(false));await page.clock.runFor(50);
     await page.locator('#stock-try').waitFor();
@@ -180,13 +180,13 @@ async function personalKnockout(browser){
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:b.x+b.width/2,y:b.y+b.height/2}]});
     await page.clock.runFor(3500);
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-    assert.equal(await page.locator('#dialog-title').innerText(),'Stock saved!');
+    assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!');
     assert(await page.getByRole('button',{name:'Rematch Brisket',exact:true}).isVisible());
     await page.locator('[data-do=trial-results]').tap();
-    assert.equal(await page.locator('#school-title').innerText(),'Recover to the stage');
+    assert.equal(await page.locator('#school-title').textContent(),'Recover to the stage');
     assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'playing');
     await page.goto(root+'?after-personal-save');
-    assert.match(await page.locator('#home-continue').innerText(),/Rematch Brisket/);
+    assert.match(await page.locator('#home-continue').textContent(),/Rematch Brisket/);
     await page.locator('#home-continue').tap();await page.clock.runFor(3200);
     assert.equal(await page.locator('#hud .lives').first().getAttribute('aria-label'),'3 stocks');
   }finally{await page.close();}
