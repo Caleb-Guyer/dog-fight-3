@@ -36,7 +36,7 @@
   }
   function analyze(tape,slot,follow,allMoments=false){
     const list=[];
-    const landings=[],holds=[],falls=[null,null];
+    const landings=[],holds=[],ledges=[],lastEdge=[null,null],falls=[null,null];
     const seat=f=>'P'+(f.index+1)+' '+f.stats.name;
     const percent=n=>(Math.round(n*10)/10)+'%';
     let player,escape=null,knockedOut=false,lifeStart=0,launch=null,contact=null,grip=null;
@@ -110,6 +110,16 @@
       holds.push({frame,slot:g.target,move:moveName(g.grabId,'Grab'),dog:battle.dogs[g.target].stats.name});
     }
     if(!follow)rememberGrip(player.battle,0);
+    function rememberLedges(){
+      if(follow || player.frame>=player.length)return;
+      for(const f of player.battle.dogs){
+        if(f.index===1 && player.battle.mode==='solo')continue;
+        if(f.ledge && f.ledge!==lastEdge[f.index])
+          ledges.push({frame:player.frame,slot:f.index,dog:f.stats.name,left:f.ledge.left});
+        lastEdge[f.index]=f.ledge;
+      }
+    }
+    rememberLedges();
     while(player.frame<player.length){
       if(!follow)for(const f of player.battle.dogs){
         const i=f.index;
@@ -122,6 +132,7 @@
       const planted=dog && (dog.ground>=0 || dog.ledge) && !dog.stun && !dog.tumble && !dog.grip && !dog.stockLift;
       knockedOut=false;
       player.step();
+      rememberLedges();
       if(holds.at(-1)?.frame===player.frame && (!player.battle.grapple || player.battle.grapple.phase==='throw'))holds.pop();
       if(knockedOut){
         if(player.frame<player.length){escape=null;launch=null;contact=grip=null;lifeStart=player.frame;}
@@ -133,7 +144,7 @@
       }
     }
     // A solo CPU has no recorded stick to substitute. Both seats of a two-player tape do.
-    return {landings,holds,marks:follow?follow.marks:allMoments?list:list.slice(-4),launch:knockedOut && (slot===0 || player.battle.mode==='local') ? launch : null,
+    return {landings,holds,ledges,marks:follow?follow.marks:allMoments?list:list.slice(-4),launch:knockedOut && (slot===0 || player.battle.mode==='local') ? launch : null,
       contact:knockedOut && (slot===0 || player.battle.mode==='local')?contact:null,
       escape:escape || {frame:Math.max(lifeStart,player.length-90),label:'Before the knockout'}};
   }
@@ -419,6 +430,95 @@
     el('play').onclick=()=>practice(hold,original);
     if(focusFrame!=null)panel.open=true;
   }
+  const ledgeReplies={climb:'Climb inward',roll:'Roll onto the stage',attack:'Get-up attack',jump:'Jump',drop:'Drop',hang:'Keep hanging'};
+  function ledgeReply(mark,action,tick,delay){
+    if(tick!==delay)return idleInput;
+    if(action==='climb')return {...idleInput,x:mark.left?1:-1};
+    if(action==='drop')return {...idleInput,y:1};
+    const key={roll:'shield',attack:'attack',jump:'jump'}[action];
+    return key?{...idleInput,[key]:true,tapped:{[key]:true}}:idleInput;
+  }
+  function ledgeAttempt(tape,mark,recorded=false,emit=()=>{}){
+    const {slot}=mark;
+    const length=Math.min(tape.length,mark.frame+100);
+    const result={text:'',contact:'',frames:0};
+    const replay=tape.playback(mark.frame,(event,e)=>{
+      if(!result.contact && event==='hit' && e.owner)
+        result.contact=e.owner.stats.name+' landed '+moveName(e.moveId,e.name)+' on frame '+(replay.frame+1);
+      if(!result.contact && event==='grabCatch')
+        result.contact=e.f.stats.name+' grabbed '+e.target.stats.name+' on frame '+(replay.frame+1);
+      if(event==='ko' && e.f.index===slot)result.text=replay.battle.matchCard.points && !replay.battle.suddenDeath?'Lost a point':'Lost the stock';
+      emit(event,e);
+    },recorded?null:slot);
+    return {battle:replay.battle,length,result,get frame(){return replay.frame;},get outcome(){return result.text;},
+      step(input){
+        if(result.text || replay.frame>=length || !replay.step(input))return false;
+        result.frames=replay.frame-mark.frame;
+        if(!result.text && (replay.frame===length || replay.battle.end!==null)){
+          const f=replay.battle.dogs[slot];
+          result.text=f.grip?.target===slot?'Caught in a grab':f.ledge?'Hanging at the ledge':
+            f.ground>=0?'Onstage':f.tumble?'Still in flight':'Airborne';
+        }
+        return true;
+      }};
+  }
+  const ledgeLine=r=>r.text+' after '+r.frames+' frame'+(r.frames===1?'':'s')+'. '+(r.contact?r.contact+'.':'No hit or grab.');
+  function ledgePreview(tape,mark,action,delay){
+    const attempt=ledgeAttempt(tape,mark,action==='recorded');
+    while(!attempt.outcome && attempt.frame<attempt.length)
+      attempt.step(ledgeReply(mark,action,attempt.frame-mark.frame,delay));
+    return attempt.result;
+  }
+  function ledgeDemo(){
+    const {Battle,FinishTape,seededRandom}=window.DogFight;
+    const config={mode:'solo',p1:'pip',p2:'brisket',cpuLevel:'rival',stage:'nightmail',ledgeTrapStart:'left',stockCount:3,fetch:false};
+    const battle=new Battle(config,undefined,seededRandom(31)),tape=new FinishTape();
+    for(let n=0;n<100;n++){
+      const input=n===0?{...idleInput,x:1}:idleInput;
+      tape.record(battle,input,idleInput);battle.step(1/60,input,idleInput);
+    }
+    return {config,battle,tape};
+  }
+  function ledgePanel(nav,tape,ledges,slot,jump,practice,focus){
+    const panel=document.createElement('details');
+    panel.id='clip-ledge';
+    panel.innerHTML='<summary>Retry a ledge catch</summary><label>Catch <select data-catch></select></label>'+
+      '<p data-opponent></p><p data-original></p><label>Get-up <select data-option></select></label>'+
+      '<label>Timing <select data-delay></select></label><p data-outcome role="status"></p>'+
+      '<div class="dialog-actions"><button type="button" class="utility" data-watch>Watch at half speed</button>'+
+      '<button type="button" class="primary" data-play>Try the ledge myself</button></div>';
+    nav.before(panel);
+    const el=key=>panel.querySelector('[data-'+key+']'),catches=el('catch'),options=el('option'),timing=el('delay');
+    for(const [i,mark] of ledges.entries())catches.add(new Option('P'+(mark.slot+1)+' '+mark.dog+' · '+(mark.left?'Left':'Right')+' ledge · Frame '+mark.frame,i));
+    const selected=ledges.findLastIndex(m=>focus?m.slot===focus.slot && m.frame===focus.frame:m.slot===slot);
+    catches.selectedIndex=Math.max(0,selected);
+    for(const [id,label] of Object.entries(ledgeReplies))options.add(new Option(label,id));
+    let mark,original;
+    function refresh(){
+      if(!panel.open || !panel.isConnected)return;
+      const next=ledges[catches.selectedIndex];
+      if(mark!==next){
+        mark=next;original=ledgePreview(tape,mark,'recorded',0);
+        const battle=tape.playback(mark.frame).battle,other=battle.dogs[1-mark.slot],dog=battle.dogs[mark.slot];
+        const protection=Math.round(window.DogFight.protectionTime(dog)*60);
+        el('opponent').textContent=dog.stats.name+' has '+window.DogFight.gripFramesLeft(dog)+' frames of grip and '+protection+
+          ' frames of protection left. '+(battle.mode==='solo'?other.stats.name+' reacts to your get-up.':other.stats.name+' repeats the recorded inputs. Use P1 controls to take either side.');
+        el('original').textContent='Recorded · '+ledgeLine(original);
+        timing.replaceChildren();
+        for(const n of [0,12,30,60])if(n<tape.length-mark.frame)
+          timing.add(new Option(n?'Wait '+n+' frames':'Go immediately',n));
+        if(focus?.delay!=null && [...timing.options].some(o=>Number(o.value)===focus.delay))timing.value=String(focus.delay);
+        if(focus && Object.hasOwn(ledgeReplies,focus.action))options.value=focus.action;
+      }
+      timing.disabled=options.value==='hang';
+      jump(mark.frame);
+      el('outcome').textContent='Chosen get-up · '+ledgeLine(ledgePreview(tape,mark,options.value,Number(timing.value)));
+    }
+    const play=watch=>{refresh();practice({mark,original,action:options.value,delay:Number(timing.value),watch});};
+    catches.onchange=options.onchange=timing.onchange=panel.ontoggle=refresh;
+    el('watch').onclick=()=>play(true);el('play').onclick=()=>play(false);
+    if(focus)panel.open=true;
+  }
   function defenseChoices(dog) {
     return dog.ground>=0
       ? [['guard','Hold Shield'],['parry','Tap Shield'],['spot','Spot-dodge'],['jump','Jump'],['attack','Tap Attack']]
@@ -643,10 +743,11 @@
 
     document.querySelector('[data-finish-slot="'+slot+'"]').focus();
   }
-  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,practiceHold,holdFocus,clinic,rescueLaunch}){
+  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,practiceHold,holdFocus,practiceLedge,ledgeFocus,clinic,rescueLaunch}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
-    const {marks,escape,launch,contact,landings,holds}=analyze(tape,slot,follow,!!retryMoment);
+    const {marks,escape,launch,contact,landings,holds,ledges}=analyze(tape,slot,follow,!!retryMoment);
     escapeReady?.(escape);
+    if(ledges.length && practiceLedge)ledgePanel(nav,tape,ledges,initialSeat,jump,practiceLedge,ledgeFocus);
     if(holds.length && practiceHold)holdPanel(nav,tape,holds,initialSeat,jump,practiceHold,holdFocus);
     if(contact && practiceLaunch)defensePanel(nav,tape,contact,jump,practiceLaunch,signal);
     if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch,signal,rescueLaunch);
@@ -700,5 +801,5 @@
     const sync=inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump,signal});
     return ()=>{sync();if(panel && selected)panel.hidden=frame()!==selected.frame;};
   }
-  window.FinishTools={chooseFighter,install,moments,analyze,inputFrame,launchFlight,holdAttempt,holdPreview,holdReport,defenseReply,returnTrace,returnComparison,landingDemo,landingTry,landingPreview,landingName,timing,landingActions,landingReport};
+  window.FinishTools={chooseFighter,install,moments,analyze,inputFrame,launchFlight,holdAttempt,holdPreview,holdReport,ledgeDemo,ledgeAttempt,ledgeReply,ledgePreview,ledgeLine,defenseReply,returnTrace,returnComparison,landingDemo,landingTry,landingPreview,landingName,timing,landingActions,landingReport};
 })();
