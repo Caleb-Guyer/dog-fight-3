@@ -930,8 +930,9 @@
     sound('menu');
   };
   const dialogPresses=new Set();
-  let movePreview=null;
+  let movePreview=null,refreshCardPin=null;
   function showDialog(kind, title, html, close = true) {
+    refreshCardPin=null;
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
       link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=match-film-1';
@@ -957,6 +958,7 @@
     if (kind==='result' || kind==='online-result') presentWinner();
   }
   function dismiss() {
+    refreshCardPin=null;
     movePreview=null;
     couchPanel=null;
     clipScreen?.lifetime.abort();
@@ -979,6 +981,7 @@
     if(dialogType==='stage-strike')return strikeBack();
     if(dialogType==='profiles')return $('profile-back').click();
     if(dialogType==='rulebook')return backFromRulebook();
+    if(dialogType==='matchup-card')return $('matchup-back').click();
     if(dialogType==='pack-relay')return backFromRelay();
     if(dialogType==='finish-picker')return $('finish-picker-back').click();
     if(dialogType==='ko-replays')return $('ko-list-back').click();
@@ -1859,6 +1862,66 @@
       Object.assign(settings,{handicap:undefined},rules);save();dismiss();syncLobby();$('start').focus();sound('menu');
     }});
   }
+  const pinKey='dog-fight-3.pinned-matchup.1';
+  let visitPin;
+  function pinnedMatchup(){
+    if(visitPin!==undefined)return visitPin;
+    try{return storage?.getItem(pinKey) || null;}catch{return null;}
+  }
+  function writeMatchupPin(hash){
+    try{
+      if(hash)storage.setItem(pinKey,hash);else storage.removeItem(pinKey);
+      visitPin=undefined;return true;
+    }catch{visitPin=hash;return false;}
+  }
+  function lobbyMatchup(){
+    return {mode:settings.mode,p1:settings.p1,p2:settings.p2,stage:settings.stage,coats:[lobbyCoat(0),lobbyCoat(1)],
+      ...(settings.mode==='solo'?{cpuLevel:settings.cpuLevel}:{}),...window.DogFight.versusRules(settings)};
+  }
+  function playMatchup(card){
+    leaveOnline();afterStory=null;
+    startMatch({...settings,handicap:undefined,...card,...lobbyBattleRules(card),form:card.stageForm,openingMatchup:card},
+      undefined,undefined,card.bestOfThree?new StockSet(card.stage):null);
+  }
+  function showMatchup(value,source){
+    const back=()=>{
+      if(source==='rules'){$('rules-label').click();$('dialog-body').querySelector('[data-do=matchup-card]')?.focus();}
+      else if(source==='result'){showResult();$('dialog-body').querySelector('[data-do=matchup-card]')?.focus();}
+      else{showHome();if(source==='pin' && !$('home-pin').hidden)$('pin-view').focus({preventScroll:true});}
+    };
+    if(!window.VersusRulebook)return waitForDispatch('Matchup card',()=>loadDispatch('VersusRulebook'),()=>showMatchup(value,source),back);
+    const book=window.VersusRulebook, card=typeof value==='string'?book.decodeMatchup(value):value;
+    if(!card){
+      showDialog('matchup-card','Matchup unavailable','<p>This matchup link is incomplete or contains an unknown fighter, arena, or rule.</p><button class="primary" id="matchup-back">Main menu</button>');
+      $('matchup-back').onclick=back;$('matchup-back').focus();return;
+    }
+    showDialog('matchup-card',source==='shared'?'Shared matchup':source==='pin'?'Pinned matchup':'Matchup card','');
+    refreshCardPin=book.matchupSheet($('dialog-body'),card,{drawPreview,coatNames,stageName,back,play:()=>playMatchup(card),
+      edit:()=>{
+        const {coats,...config}=card;
+        Object.assign(settings,{handicap:undefined},config);
+        settings.coatBook[0][card.p1]=coats[0];settings.coatBook[1][card.p2]=coats[1];
+        editing=0;save();toLobby();$('start').focus({preventScroll:true});
+      },pinned:pinnedMatchup,pin:value=>{const saved=writeMatchupPin(value);syncHomePin();return saved;}});
+  }
+  function syncHomePin(){
+    const hash=pinnedMatchup(),box=$('home-pin'),book=window.VersusRulebook;
+    if(hash && !book){
+      return loadDispatch('VersusRulebook').then(syncHomePin).catch(()=>{box.hidden=true;});
+    }
+    const card=book?.decodeMatchup(hash),active=box.contains(document.activeElement);
+    box.hidden=!card;
+    if(!card){if(active && page==='home')focusHome();return;}
+    const play=$('pin-play'),pair=fighters[card.p1].name+' vs. '+fighters[card.p2].name;
+    play.textContent='▶ '+pair;
+    play.setAttribute('aria-label','Play pinned matchup · '+pair+' · '+modes[card.mode]+' · '+stageName(card.stage,card.stageForm));
+    play.title=play.getAttribute('aria-label');
+  }
+  $('pin-play').onclick=()=>{
+    const card=window.VersusRulebook?.decodeMatchup(pinnedMatchup());
+    if(card)playMatchup(card);else syncHomePin();
+  };
+  $('pin-view').onclick=()=>showMatchup(pinnedMatchup(),'pin');
   function startShieldReadMatch(series = false) {
     leaveOnline();
     afterStory = null;
@@ -2341,6 +2404,7 @@
       }
     }
     if (finishTape?.length && stats) {
+      if(matchConfig.openingMatchup)stats.insertAdjacentHTML('beforebegin','<button class="utility" data-do="matchup-card">Opening matchup · Pin or share</button>');
       const clips=knockoutClips(result);
       stats.insertAdjacentHTML('beforebegin',recoveryButtons(result,clips));
       if(finishTape.reel)stats.insertAdjacentHTML('beforebegin','<button class="utility" data-do="watch-match">Watch full match</button>');
@@ -2840,8 +2904,8 @@
     announce(f.stats.name + ' wins the Golden Tennis Ball');
     document.querySelector('#dialog-body .primary').focus();
   }
-  $('start').onclick = () => startMatch({...settings,...lobbyBattleRules(settings),form:lobbyForm(),coats:lobbyCoats}, undefined, undefined,
-    settings.mode !== 'training' && settings.bestOfThree ? new StockSet(settings.stage) : null);
+  $('start').onclick = () => settings.mode==='training'?
+    startMatch({...settings,...lobbyBattleRules(settings),form:lobbyForm(),coats:lobbyCoats}):playMatchup(lobbyMatchup());
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
     const coat = e.target.closest('[data-coat]');
@@ -2967,6 +3031,7 @@
     if(spar && drill)return startFighterLesson(spar.kind,Number(drill.dataset.sparLesson),false,pausedFight());
     if(spar && action==='spar-card')return fighterSheet(spar.kind);
     if(action==='rulebook')return openRulebook();
+    if(action==='matchup-card')return page==='match'?showMatchup(matchConfig.openingMatchup,'result'):showMatchup(lobbyMatchup(),'rules');
     if(action==='handicap')return openRulebook(undefined,true);
     if(action==='corner-practice' && corner)return startCornerLesson();
     if(action==='coach-fall'){
@@ -5392,7 +5457,7 @@
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PlayerProfiles:'player-profiles.js?v=1',
-    VersusRulebook:'versus-rules.js?v=closing-lines-1',
+    VersusRulebook:'versus-rules.js?v=matchup-pin-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
     ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=closing-lines-1',
@@ -5612,14 +5677,19 @@
   }
   function showHome(focus = true) {
     menuScreen('home');
+    const pendingPin=syncHomePin();
     afterStory = null;
     if (!schoolUnsaved) Object.assign(schoolSave,readSchool());
     refreshHomeSaves();
     readMissionSaves();
-    if (focus) focusHome();
+    if (focus) {
+      focusHome();
+      pendingPin?.then(()=>{if(page==='home' && !$('dialog').open && document.activeElement===$('home-adventure'))focusHome();});
+    }
   }
   function focusHome() {
-    const id = !$('home-saves').hidden ? 'home-continue' : $('school-welcome').hidden ? 'home-adventure' : 'welcome-play';
+    const id = !$('home-saves').hidden ? 'home-continue' : !$('school-welcome').hidden ? 'welcome-play' :
+      !$('home-pin').hidden?'pin-play':'home-adventure';
     $(id).focus({preventScroll:true});
   }
   function savedGames() {
@@ -6529,6 +6599,11 @@
     }
   });
   window.addEventListener('storage',e=>{
+    if(e.key===pinKey || e.key===null){
+      visitPin=undefined;
+      if(page==='home')syncHomePin();
+      if(dialogType==='matchup-card' && $('matchup-pin'))refreshCardPin?.();
+    }
     if (dialogType==='records' && (e.key===null || e.key.startsWith(window.FightRecords.prefix))) {
       const focused=document.activeElement;
       showRecords(focused?.dataset.recordId);
@@ -7699,6 +7774,8 @@
     const [,arena,form] = hash.split('/');
     if(Object.hasOwn(fighters,arena) && ['neutral','side','up','down'].includes(form) && hash==='#moves/'+arena+'/'+form){
       showHome(false);showSpecialPreview({kind:arena,side:form,page:'home',paused:false});
+    }else if(/^#(solo|local)\/matchup(?:\/|$)/.test(hash)){
+      showHome(false);showMatchup(hash,'shared');
     }else if(/^#(solo|local)\/tryouts(?:\/(pip|brisket|noodle|clover))?$/.test(hash)){
       settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();openTryout(form);
     }else if(/^#online\/rules(?:\/|$)/.test(hash)){

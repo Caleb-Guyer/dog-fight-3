@@ -47,6 +47,62 @@
     for(const [id,card] of temporary)cards.set(id,card);
     return cards;
   }
+  function encodeMatchup(card){
+    const rules=encode(card.mode,card).split('/').slice(2);
+    return ['#'+card.mode,'matchup',card.p1,card.coats[0],card.p2,card.coats[1],card.stage,card.mode==='local'?'p2':card.cpuLevel,...rules].join('/');
+  }
+  function decodeMatchup(hash){
+    if(typeof hash!=='string')return null;
+    const [route,kind,p1,first,p2,second,stage,rival,...tail]=hash.split('/');
+    const {fighters,arenas,cpuLevels,coatFor}=window.DogFight;
+    if(!['#solo','#local'].includes(route) || kind!=='matchup' || !Object.hasOwn(fighters,p1) || !Object.hasOwn(fighters,p2) ||
+      !/^[0-3]$/.test(first) || !/^[0-3]$/.test(second) || !Object.hasOwn(arenas,stage) ||
+      !(route==='#local'?rival==='p2':Object.hasOwn(cpuLevels,rival)))return null;
+    const rules=decode([route,'rules',...tail].join('/'));
+    if(!rules)return null;
+    const coats=[Number(first),Number(second)];
+    coats[1]=coatFor(1,p1,p2,coats);
+    return {mode:route.slice(1),p1,p2,stage,coats,...(route==='#solo'?{cpuLevel:rival}:{}),...rules};
+  }
+  function matchupSheet(root,card,{drawPreview,coatNames,stageName,back,play,edit,pinned,pin}){
+    const {fighters,cpuLevels}=window.DogFight, hash=encodeMatchup(card);
+    const [one,two]=[card.p1,card.p2].map(kind=>fighters[kind].name);
+    const format=card.bestOfThree?'Best of three':'Single game', match=card.timed?'Time Battle':card.lives+(card.lives===1?' stock':' stocks');
+    const clock=card.minutes?card.minutes+' min':'No clock';
+    root.innerHTML='<canvas id="matchup-preview" role="img"></canvas><div class="matchup-fighters"></div>'+
+      '<strong id="matchup-stage"></strong><p id="matchup-terms"></p><div class="dialog-actions">'+
+      '<button type="button" class="primary" id="matchup-play">'+(card.bestOfThree?'Start set':'Start fight')+'</button>'+
+      '<button type="button" class="utility" id="matchup-pin"></button><button type="button" class="utility" id="matchup-share">Share link</button>'+
+      '<button type="button" class="utility" id="matchup-edit">Edit in fighter select</button>'+
+      '<button type="button" class="utility" id="matchup-back">Back</button></div>'+
+      '<input id="matchup-link" aria-label="Shareable matchup link" hidden readonly><p id="matchup-status" role="status"></p>';
+    const el=id=>root.querySelector('#matchup-'+id),status=el('status'),link=el('link');
+    root.querySelector('.matchup-fighters').innerHTML=[card.p1,card.p2].map((kind,i)=>'<div><small>'+
+      (i===0?'P1':card.mode==='local'?'P2':cpuLevels[card.cpuLevel].name+' CPU')+'</small><strong>'+fighters[kind].name+'</strong><span>'+
+      coatNames[kind][card.coats[i]]+(card.handicap?' · '+card.handicap[i]+'%':'')+'</span></div>').join('');
+    el('stage').textContent=stageName(card.stage,card.stageForm);
+    el('terms').textContent=[match,clock,format,'Fetch '+(card.fetch?'on':'off')].join(' · ');
+    const canvas=el('preview');canvas.setAttribute('aria-label',one+' and '+two+' at '+el('stage').textContent);
+    drawPreview(canvas,card,1.4,card.coats);
+    function sync(){
+      const value=pinned(),same=value===hash;
+      el('pin').textContent=same?'Remove pin':value?'Replace pinned matchup':'Pin to main menu';
+      el('pin').setAttribute('aria-pressed',String(same));
+    }
+    el('pin').onclick=()=>{
+      const remove=pinned()===hash, durable=pin(remove?null:hash);
+      status.textContent=(remove?'Pin removed':'Pinned '+one+' vs. '+two)+(durable?'.':' for this visit. Browser storage is unavailable.');
+      sync();
+    };
+    el('share').onclick=async()=>{
+      const url=new URL(location.protocol==='file:'?'https://caleb-guyer.github.io/dog-fight-3/':location.href);
+      url.search='';url.hash=hash;link.value=url.href;link.hidden=false;link.select();status.textContent='Copy the link to share this matchup.';
+      try{await navigator.clipboard.writeText(url.href);if(link.isConnected)status.textContent='Matchup link copied.';}catch{}
+    };
+    el('back').onclick=back;el('edit').onclick=edit;el('play').onclick=play;
+    sync();el('play').focus({preventScroll:true});
+    return sync;
+  }
   function store(storage,id,card){
     try{storage.setItem(prefix+id,JSON.stringify(card));temporary.delete(id);return true;}
     catch{temporary.set(id,card);return false;}
@@ -56,6 +112,7 @@
       '" aria-pressed="' + (settings.minutes === n) + '">' + (n ? n + ' min' : 'No clock') + '</button>').join('');
     return (
       '<div class="dialog-actions"><button class="primary" data-do="rulebook">Choose or create a ruleset</button><button class="utility" data-do="handicap">Starting damage</button></div>'+
+      (settings.mode==='training'?'':'<div class="dialog-actions"><button class="utility" data-do="matchup-card">Matchup card · Pin or share</button></div>')+
       '<h3>Battle rules</h3><div class="dialog-actions"><button class="utility" data-scoring="stock" aria-pressed="'+!settings.timed+'">Stock</button>'+
       '<button class="utility" data-scoring="time" aria-pressed="'+settings.timed+'">Time Battle</button>'+
       '<button class="utility" data-do="pack-relay">Pack Relay · Choose teams</button></div>'+
@@ -230,5 +287,5 @@
         '<p>Flick a direction during the hit spark to shift your dog. You can slide sideways on the ground or in eight directions in the air. Try escaping the second swing in Training → Combo escape.</p>' +
         '<p>When a strong hit freezes the action, hold a direction across the launch to bend its path. As you tumble toward a platform, tap Shield just before contact to tech. Hold left or right as you land for a tech roll. Try both in Training → Launch practice.</p>' +
         '<p>Your dog crouches for three frames. Hold Short hop for a low jump, or tap Jump and release during the crouch. Hold Jump through the crouch for a full jump. Jump + Attack during the crouch gives a short-hop aerial. Flick Down in the last three rising frames or during descent to fast-fall. Release Down to aim freely. Jump again in midair. Press Jump just above a rival’s head for a footstool, even with your air jump spent. A rival stepped on in the air can tech the fall with Shield. Down + Jump drops through a raised platform.</p><p>Tap Attack alone for your dog’s jab combo. On the ground, aim left, right, up, or down and tap Attack for a tilt. Press left or right and Attack together for a forward tilt. Press Attack once your dog is running for a dash attack. In the air, press Attack alone or aim forward, back, up, or down. Forward follows the way your dog faces.</p><p>For a grounded smash, aim sideways, up, or down. Tap Smash to swing immediately, or hold it and release for more power. Ground Attack starts on the press by default. Each player can choose Hold to smash in Options to charge with Attack from a standstill. With the default Smash stick, hold the right stick in a direction and release to swing. Choose Tilt under Options for instant grounded tilts with the aim stick, aim keys, or a swipe from Smash.</p><p>Press Special alone for Neutral Special, or aim as you press it. Up + Special helps you get back to the stage. While hanging from an edge, tap Attack to climb in and strike. The Move list shows every fighter’s inputs.</p><p>Grabs beat shields. Run and press Grab to reach ahead. Press the opposite direction and Grab together as you turn to catch a pursuer. Once you catch a rival, tap Attack to pummel. Tap it again for another hit, or tap a direction to throw. The escape timer keeps running during pummels. Forward follows your facing at the catch. Press Grab again for forward, or tap action buttons to escape when caught.</p><p>Higher damage sends a dog farther. Three knockouts win a match. In local versus, one controller plays P2. Two controllers play one dog each.</p><div class="dialog-actions"><button class="primary" data-do="close">Got it</button></div>';
-  window.VersusRulebook={encode,decode,quick,open,controlsGuide,controlsTable,cpuSheet};
+  window.VersusRulebook={encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
 })();

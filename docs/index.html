@@ -13,7 +13,7 @@
     <link rel="preload" href="./assets/brawl-pixel.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="./style.css?v=parcel-1" />
     <link rel="stylesheet" href="./dispatch.css?v=first-menu-1" />
-    <link rel="stylesheet" href="./screen.css?v=lesson-guide-1" />
+    <link rel="stylesheet" href="./screen.css?v=matchup-pin-1" />
     <script defer src="./fighters-art.js?v=fast-cels-1"></script>
     <script defer src="./arena-art.js?v=counterweights-1"></script>
     <script defer src="./engine.js?v=closing-lines-1"></script>
@@ -24,7 +24,7 @@
     <script defer src="./render.js?v=closing-lines-1"></script>
     <script defer src="./dispatch-script.js?v=letter-lift-1"></script>
     <script defer src="./online.js?v=closing-lines-1"></script>
-    <script defer src="./app.js?v=both-seats-1"></script>
+    <script defer src="./app.js?v=matchup-pin-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -61,6 +61,10 @@
         <div class="board-heading">
           <h1 id="home-heading">Main menu</h1>
           <span class="rail-rule" aria-hidden="true"></span>
+          <div id="home-pin" hidden>
+            <button type="button" class="board-back" id="pin-play"></button>
+            <button type="button" class="board-back" id="pin-view" aria-label="View pinned matchup" title="View pinned matchup">⋯</button>
+          </div>
         </div>
         <aside id="school-welcome" hidden aria-labelledby="welcome-title">
           <div><strong id="welcome-title">Your first fight</strong><span>Learn with Pip, then take on Brisket.</span></div>
