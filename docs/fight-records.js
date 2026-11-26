@@ -69,6 +69,10 @@
       return id;
     }
   }
+  function throwLosses(card,slot){
+    return card.losses.filter(l=>l.slot===slot && l.lastHit && Object.hasOwn(window.DogFight.throws,l.lastHit.id) &&
+      l.frame>=l.lastHit.frame && l.frame-l.lastHit.frame<=90).length;
+  }
   function coaching(card,who) {
     const p=card.players[who], rival=card.players[1-who], name=card.relayTeams?'Your pack':fighters[p.kind].name;
     const lost=card.losses.filter(l=>l.slot===who), falls=lost.filter(l=>l.zone==='bottom').length;
@@ -76,6 +80,8 @@
     const times=n=>n===1?'once':n+' times';
     if (p.shieldBreaks) return {id:'shield-breakEscape',label:'Escape a shield break',
       why:name+'’s shield broke '+times(p.shieldBreaks)+'. Practice escaping the stun before the punish lands.'};
+    const thrown=throwLosses(card,who);
+    if(thrown>=2)return {id:'escape-gripEscape',label:'Practice breaking a grab',why:'A throw was the last hit within 90 frames of '+thrown+' of your knockouts. Practice tapping fresh inputs while the rival holds you.'};
     if (falls) return {id:'ledge-training',label:'Practice recovery',
       why:name+' crossed the bottom blast line '+times(falls)+'. Start below the ledge and find the way back with an air jump and Up Special.'};
     if (p.knockdowns) return {id:'launch-escape',label:'Practice a landing tech',
@@ -92,5 +98,5 @@
     return {id:'spacing-approach',label:'Practice a landing aerial',
       why:name+' landed '+p.hits+(p.hits===1?' hit':' hits')+' in this game. Work on placing an aerial just before touching down.'};
   }
-  window.FightRecords={Book,coaching,prefix,limit};
+  window.FightRecords={Book,coaching,throwLosses,prefix,limit};
 })();

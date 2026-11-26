@@ -1227,5 +1227,25 @@
       tip.textContent = result[1];
     }
   }
-  window.PracticeFeedback={event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
+  function shieldPrompt(pattern,player){
+    return {
+        yourHop: 'Hold Hop or Jump beside the rival. Tap Grab as your paws touch down, then choose a throw.',
+        crossup: 'Block Belly Drop. If Brisket lands in front, tap Attack to grab. If he crosses behind, jump and attack back.',
+        emptyHop: 'Hold Shield to start. Let the empty hop grab you once. Retry and tap Down as the rival reaches for you.',
+        fallingAir: 'Hold Shield to start. Watch the falling swing, then hold your ground or release Shield to parry.',
+        mixHop: 'Hold Shield to start. Watch for a swing on the way down or a grab after touchdown.',
+        kick: 'You’re Clover. Hold Shield. Tap Grab when Pip’s Flying Kick hits the far side of your shield.',
+        drop: 'You’re Clover. Hold Shield. Tap Grab as Brisket’s Belly Drop hits to catch him before he recovers.',
+        strike: 'Raise Shield to start. Roll through the strike, or release Shield as it lands to parry.',
+        grab: 'Raise Shield to start. Tap Down just before the grab to spot-dodge, or tap a side to roll.',
+        counterGrab: 'Hold Shield. Tap Down as the grab comes out, then release Down. Tap Attack as your dog rises to punish with a jab.',
+        dodgeTiming: 'Hold Shield and tap Down, then release Down. Pip sweeps at the end of your dodge. Try repeating the dodge immediately and after a rest.',
+        breakEscape: 'Hold Shield until it bursts. Try staying still after landing, then retry and tap Attack or flick the stick repeatedly. Keep Shield held to block the punish as you wake.',
+        breakPunish: 'Hold a smash as the rival’s shield wears out. Wait for the dizzy landing, then release. Choose Punish the break to retry.',
+        low: 'Hold Shield. Noodle sweeps your paws. Aim Down gently with the stick, Walk + Down, or a drag from the center dot.',
+        high: 'Hold Shield. Noodle jumps for your ears. Aim Up as the lead swings over the bubble.',
+        poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + window.DogFight.moves[player.kit.tilts.down].label + '.',
+      }[pattern];
+  }
+  window.PracticeFeedback={shieldPrompt,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
 })();

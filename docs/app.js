@@ -2136,7 +2136,7 @@
     }
     if(config.sparring && !visit)spar=resume?.spar || new window.FighterSchool.Sparring(world);
     if (config.lesson !== undefined) world.lesson = config.fighterCourse ?
-      window.FighterSchool.makeTrial(config.lesson,world,storage) : new window.FightSchool.Lesson(config.lesson,world);
+      window.FighterSchool.makeTrial(config.lesson,world,storage) : new window.FightSchool.Lesson(config.lesson,world,config.schoolReview);
     if(world.lesson && !world.lesson.course && settings.guidedLessons)prepareGuide(world.lesson,world.terrain);
     const openingFrames = leadInFrames || (config.mode === 'solo' && config.openingFrames);
     if (openingFrames && !resume && !rehearsal) {
@@ -2492,6 +2492,8 @@
         if(returning)review.recordedReturn=window.FinishTools.returnTrace();
         clipScreen.syncInputs=window.FinishTools.install({tape,signal,stage:stageName(result.stage,result.form),shake:settings.shake,root:$('dialog-body'),
           follow:returning?review.recordedReturn:null,
+          holdFocus:review?.holdFocus,practiceHold:(hold,originalHold)=>startFinishTrial(hold.frame,hold.slot,{
+            ...(review || {finish:true,from:'result',clip:{tape,losses:[]},result}),hold,originalHold,replayFrame:hold.frame}),
           clinic:review?.moment || review?.clinic || review?.landingFocus,practiceLanding:(landing,start,guided)=>startFinishTrial(start,landing.slot,{
             ...(review || {finish:true,from:'result',clip:{tape,losses:[]},result}),landing,guided,replayFrame:landing.frame}),
           retryMoment:review?.instant?(frame,slot,contact)=>startFinishTrial(frame,slot,{...review,replayFrame:contact}):null,
@@ -2608,7 +2610,7 @@
     const emit=(name,e)=>{
       camera.event(name,e);fightSound(name,e);trace?.observe(name,e,player.frame+1);
     };
-    const player=review?.stock?review.stock.attempt(emit):review?.landing?window.FinishTools.landingTry(tape,review.landing,start,emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
+    const player=review?.hold?window.FinishTools.holdAttempt(tape,review.hold,false,emit):review?.stock?review.stock.attempt(emit):review?.landing?window.FinishTools.landingTry(tape,review.landing,start,emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
     const saved=finishTrial?.saved || {mode:$('match-mode').textContent,pause:$('pause-label').textContent,
       call:$('countdown').textContent,setHidden:$('match-set').hidden,cornerHidden:$('corner-tip').hidden,schoolHidden:$('school-coach').hidden,
       cornerTitle:$('corner-title').textContent,cornerLine:$('corner-line').textContent};
@@ -2635,11 +2637,11 @@
     if(review?.coach){
       $('corner-title').textContent='Reach the stage';$('corner-line').textContent=review.coachLine;$('corner-tip').hidden=false;
     }
-    $('match-mode').textContent=(review?.landing?'Landing practice':review?.moment?'Defense practice':review?.stock?'Stock '+review.stock.number+' retry':review?.instant?'Exchange practice':review?.coach?'Recovery practice':trace?'Stock return':review?.film?'Match replay practice':review && !review.finish?'KO practice':'Finish practice')+' · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
+    $('match-mode').textContent=(review?.hold?'Grab escape':review?.landing?'Landing practice':review?.moment?'Defense practice':review?.stock?'Stock '+review.stock.number+' retry':review?.instant?'Exchange practice':review?.coach?'Recovery practice':trace?'Stock return':review?.film?'Match replay practice':review && !review.finish?'KO practice':'Finish practice')+' · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
     if(review?.together)$('match-mode').textContent+=' · Play together';
     $('match-set').hidden=$('grapple-prompt').hidden=true;
     $('match-clock').hidden=false;
-    $('match-clock').setAttribute('aria-label','Practice time left');
+    $('match-clock').setAttribute('aria-label',review?.hold?'Grip remaining':'Practice time left');
     $('match-clock').classList.remove('urgent');
     $('pause-label').textContent='Pause';
     $('countdown').classList.remove('sudden','net-lag');
@@ -2653,14 +2655,16 @@
     camera.draw($('game'),battle,dt,battle.time);
     for(const [i,f] of battle.dogs.entries())updateFighterCard(f,i,battle.coatFor(i),stockStatus(f,battle,i===slot || !!finishTrial.seats),offstageOptions(f,battle.terrain),finishTrial.seats?'P'+(i+1):i===slot?'YOU':'RIVAL',battle.matchCard?.points?.[i]??null,battle);
     const stock=finishTrial.review?.stock;
-    const clock=$('match-clock'),text=stock && player.frame>=stock.end?'Land':(((stock?.end ?? player.length)-player.frame)/60).toFixed(1)+'s';
+    const clock=$('match-clock'),text=finishTrial.review?.hold && battle.grapple?
+      'Grip '+Math.ceil(100*Math.max(0,battle.grapple.remaining)/battle.grapple.capacity)+'%':
+      stock && player.frame>=stock.end?'Land':(((stock?.end ?? player.length)-player.frame)/60).toFixed(1)+'s';
     if(clock.textContent!==text)clock.textContent=text;
     const grip=battle.grapple, prompt=$('grapple-prompt');
     const hide=!grip || grip.phase==='throw';
     if(prompt.hidden!==hide)prompt.hidden=hide;
     if(!hide){
       const label=finishTrial.seats?'P'+(grip.owner+1)+' grabbed P'+(2-grip.owner)+' · Aim to throw or tap to escape':
-        grip.owner===slot?'Grabbed rival · Aim to throw':'Grabbed · Tap actions to escape';
+        grip.owner===slot?'Grabbed rival · Aim to throw':'Grabbed · Tap buttons or flick the stick';
       if(prompt.textContent!==label)prompt.textContent=label;
     }
   }
@@ -2687,8 +2691,8 @@
           taps.clear();touchTaps.clear();trial.carry=0;return;
         }
         $('countdown').textContent='';
-      }else if(trial.review?.coach && !trial.review.coach.aim && player.frame===trial.start){
-        if(!input.x && !input.y && !input.jump && !input.special && !input.shield && !input.attack && !input.shortHop){
+      }else if((trial.review?.hold || trial.review?.coach && !trial.review.coach.aim) && player.frame===trial.start){
+        if(!input.x && !input.y && !input.jump && !input.special && !input.shield && !input.attack && !input.shortHop && !input.grab && !input.smash && !input.aimStick){
           $('countdown').textContent='Your move';trial.carry=0;return;
         }
         $('countdown').textContent='';
@@ -2703,6 +2707,7 @@
   function leaveFinishTrial(replay) {
     const {saved,start,review}=finishTrial;
     finishTrial=null;
+    if(review?.hold){review.holdFocus=review.hold.frame;delete review.hold;delete review.originalHold;}
     if(replay && review?.landing){review.landingFocus=true;delete review.landing;delete review.guided;}
     if(review?.from==='archive'){
       showHome(false);
@@ -2745,6 +2750,10 @@
   }
   function showTrialComparison(){
     const {player,original,slot,review}=finishTrial;
+    if(review?.hold){
+      window.FinishTools.holdReport(review.originalHold,player.result,showDialog,trialActions());
+      return;
+    }
     if(review?.landing){
       window.FinishTools.landingReport(player,review.landing,showDialog,trialActions());
       return;
@@ -3762,24 +3771,7 @@
         $('jump-in-speed').setAttribute('aria-pressed',String(guard.slow));
         if (pattern === 'yourHop') $('shield-status').textContent = 'Hop beside the shield';
       }
-      message = {
-        yourHop: 'Hold Hop or Jump beside the rival. Tap Grab as your paws touch down, then choose a throw.',
-        crossup: 'Block Belly Drop. If Brisket lands in front, tap Attack to grab. If he crosses behind, jump and attack back.',
-        emptyHop: 'Hold Shield to start. Let the empty hop grab you once. Retry and tap Down as the rival reaches for you.',
-        fallingAir: 'Hold Shield to start. Watch the falling swing, then hold your ground or release Shield to parry.',
-        mixHop: 'Hold Shield to start. Watch for a swing on the way down or a grab after touchdown.',
-        kick: 'You’re Clover. Hold Shield. Tap Grab when Pip’s Flying Kick hits the far side of your shield.',
-        drop: 'You’re Clover. Hold Shield. Tap Grab as Brisket’s Belly Drop hits to catch him before he recovers.',
-        strike: 'Raise Shield to start. Roll through the strike, or release Shield as it lands to parry.',
-        grab: 'Raise Shield to start. Tap Down just before the grab to spot-dodge, or tap a side to roll.',
-        counterGrab: 'Hold Shield. Tap Down as the grab comes out, then release Down. Tap Attack as your dog rises to punish with a jab.',
-        dodgeTiming: 'Hold Shield and tap Down, then release Down. Pip sweeps at the end of your dodge. Try repeating the dodge immediately and after a rest.',
-        breakEscape: 'Hold Shield until it bursts. Try staying still after landing, then retry and tap Attack or flick the stick repeatedly. Keep Shield held to block the punish as you wake.',
-        breakPunish: 'Hold a smash as the rival’s shield wears out. Wait for the dizzy landing, then release. Choose Punish the break to retry.',
-        low: 'Hold Shield. Noodle sweeps your paws. Aim Down gently with the stick, Walk + Down, or a drag from the center dot.',
-        high: 'Hold Shield. Noodle jumps for your ears. Aim Up as the lead swings over the bubble.',
-        poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + moves[player.kit.tilts.down].label + '.',
-      }[pattern];
+      message=window.PracticeFeedback.shieldPrompt(pattern,player);
     } else if (survival) {
       window.PracticeFeedback.survivalFeedback(world, 'survivalReady', {});
       message = $('recovery-tip').textContent;
@@ -4207,7 +4199,7 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
-    PracticeFeedback:'practice-feedback.js?v=1', DogOnline:'online.js?v=ground-space-1',
+    PracticeFeedback:'practice-feedback.js?v=grip-1', DogOnline:'online.js?v=ground-space-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
@@ -4220,7 +4212,7 @@
     VersusRulebook:'versus-rules.js?v=rumble-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=button-check-1',StageStrike:'stage-strike.js?v=button-check-1',
-    ComboLab:'combo-lab.js?v=ground-space-1', FinishTools:'finish-tools.js?v=launch-rescue-1',
+    ComboLab:'combo-lab.js?v=ground-space-1', FinishTools:'finish-tools.js?v=grip-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
@@ -5113,7 +5105,7 @@
     }
     if(corner.practice==='launch-escape' && world.matchFrames-corner.landingAt<finishTape?.length)
       return showFinishReplay(null,{instant:true,finish:true,landingFocus:true,from:'pause',result:world,clip:{tape:finishTape,losses:[]}});
-    if(corner.practice.startsWith('launch-') || corner.practice==='platform-below'){
+    if(corner.practice==='escape-gripEscape' || corner.practice.startsWith('launch-') || corner.practice==='platform-below'){
       if(!window.PracticeFeedback)return waitForDispatch('Practice instructions',()=>loadDispatch('PracticeFeedback'),startCornerLesson,showPause);
       return startExercise(corner.practice);
     }
