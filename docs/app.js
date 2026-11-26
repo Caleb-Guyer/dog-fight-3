@@ -2692,7 +2692,8 @@
         }
         $('countdown').textContent='';
       }else if((trial.review?.hold || trial.review?.coach && !trial.review.coach.aim) && player.frame===trial.start){
-        if(!input.x && !input.y && !input.jump && !input.special && !input.shield && !input.attack && !input.shortHop && !input.grab && !input.smash && !input.aimStick){
+        if(!input.x && !input.y && !input.jump && !input.special && !input.shield && !input.attack && !input.shortHop &&
+          !(trial.review.hold && (input.grab || input.smash || input.aimStick))){
           $('countdown').textContent='Your move';trial.carry=0;return;
         }
         $('countdown').textContent='';
@@ -3598,21 +3599,7 @@
         ? 'Tap Down to drop. As your paws pass the platform, aim down and tap Attack for ' + moves[player.kit.air.down].label + '.'
         : 'Press Down and Attack together for ' + moves[player.kit.tilts.down].label + '. Keep both paws on the platform.';
     } else if (escape) {
-      for (const id of ['tip','close','counter','break','gripEscape','gripThrow','carry']) $('escape-' + id).setAttribute('aria-pressed', String(id === pattern));
-      $('escape-slow').setAttribute('aria-pressed', String(world.escapePractice.slow));
-      $('escape-status').dataset.result = 'ready';
-      if (world.escapePractice.gripDrill) {
-        window.PracticeFeedback.escapeFeedback(world, {phase:'ready'});
-        message = $('recovery-tip').textContent;
-      } else if (pattern === 'counter') {
-        message = window.PracticeFeedback.crouchCounterPrompt(world);
-      } else if (pattern === 'break') {
-        $('escape-status').textContent = 'Rival crouching';
-        message = 'Try a light hit and watch for the low tilt. Retry with a grab and throw or a stronger launcher.';
-      } else {
-        $('escape-status').textContent = 'Rim Rattle';
-        message = 'Tap Attack to start. Watch Clover’s disc, then flick left on the first hit spark.';
-      }
+      message=window.PracticeFeedback.escapePanel(world,pattern);
     } else if (edge) {
       const d = world.edgePractice, side = d.dir > 0 ? 'right' : 'left';
       for (const id of ['lip','shortCatch','longCatch','tip','deep','corner','inside']) $('edge-' + id).setAttribute('aria-pressed', String(id === d.pattern));
@@ -3750,28 +3737,7 @@
           ', then tap Shield to slip past the guard and catch the lip.'
         : 'Jump. As you fall toward the dummy, release the directions and tap Shield before its up tilt connects.';
     } else if (shield) {
-      $('shield-status').dataset.result = 'ready';
-      const guard = world.shieldPractice;
-      $('shield-status').textContent = guard.coverage ? (pattern === 'poke' ? 'Rival shield' : 'Your shield') + (guard.worn ? ' · 30%' : ' · 100%') : 'Hold Shield to begin';
-      if (pattern === 'dodgeTiming') $('shield-status').textContent = 'Spot-dodge once';
-      if (pattern === 'breakEscape') $('shield-status').textContent = 'Hold your worn shield';
-      if (pattern === 'breakPunish') $('shield-status').textContent = 'Rival has a worn shield';
-      $('shield-strength').hidden = !guard.coverage;
-      $('shield-strength').setAttribute('aria-pressed', String(!!guard.coverage && !guard.worn));
-      $('jump-in-options').hidden = !guard.jumpIn;
-      $('shield-landing-options').hidden = pattern !== 'crossup';
-      if (pattern === 'crossup') {
-        $('shield-landing-choice').value = guard.landingChoice;
-        $('shield-landing-speed').setAttribute('aria-pressed',String(guard.slow));
-      }
-      for (const button of $('shield-patterns').querySelectorAll(':scope > button:not(#shield-strength)'))
-        button.setAttribute('aria-pressed', String(button.id === 'shield-' + (guard.jumpIn ? 'jumpIn' : pattern)));
-      if (guard.jumpIn) {
-        $('jump-in-choice').value = pattern;
-        $('jump-in-speed').setAttribute('aria-pressed',String(guard.slow));
-        if (pattern === 'yourHop') $('shield-status').textContent = 'Hop beside the shield';
-      }
-      message=window.PracticeFeedback.shieldPrompt(pattern,player);
+      message=window.PracticeFeedback.shieldPanel(world,pattern,player);
     } else if (survival) {
       window.PracticeFeedback.survivalFeedback(world, 'survivalReady', {});
       message = $('recovery-tip').textContent;
@@ -4199,7 +4165,7 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
-    PracticeFeedback:'practice-feedback.js?v=grip-1', DogOnline:'online.js?v=ground-space-1',
+    PracticeFeedback:'practice-feedback.js?v=grip-2', DogOnline:'online.js?v=ground-space-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',

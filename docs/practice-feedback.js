@@ -1227,7 +1227,45 @@
       tip.textContent = result[1];
     }
   }
-  function shieldPrompt(pattern,player){
+  function escapePanel(world,pattern){
+    for (const id of ['tip','close','counter','break','gripEscape','gripThrow','carry']) $('escape-' + id).setAttribute('aria-pressed', String(id === pattern));
+    $('escape-slow').setAttribute('aria-pressed', String(world.escapePractice.slow));
+    $('escape-status').dataset.result = 'ready';
+    if (world.escapePractice.gripDrill) {
+      escapeFeedback(world, {phase:'ready'});
+      return $('recovery-tip').textContent;
+    } else if (pattern === 'counter') {
+      return crouchCounterPrompt(world);
+    } else if (pattern === 'break') {
+      $('escape-status').textContent = 'Rival crouching';
+      return 'Try a light hit and watch for the low tilt. Retry with a grab and throw or a stronger launcher.';
+    } else {
+      $('escape-status').textContent = 'Rim Rattle';
+      return 'Tap Attack to start. Watch Clover’s disc, then flick left on the first hit spark.';
+    }
+  }
+  function shieldPanel(world,pattern,player){
+    $('shield-status').dataset.result = 'ready';
+    const guard = world.shieldPractice;
+    $('shield-status').textContent = guard.coverage ? (pattern === 'poke' ? 'Rival shield' : 'Your shield') + (guard.worn ? ' · 30%' : ' · 100%') : 'Hold Shield to begin';
+    if (pattern === 'dodgeTiming') $('shield-status').textContent = 'Spot-dodge once';
+    if (pattern === 'breakEscape') $('shield-status').textContent = 'Hold your worn shield';
+    if (pattern === 'breakPunish') $('shield-status').textContent = 'Rival has a worn shield';
+    $('shield-strength').hidden = !guard.coverage;
+    $('shield-strength').setAttribute('aria-pressed', String(!!guard.coverage && !guard.worn));
+    $('jump-in-options').hidden = !guard.jumpIn;
+    $('shield-landing-options').hidden = pattern !== 'crossup';
+    if (pattern === 'crossup') {
+      $('shield-landing-choice').value = guard.landingChoice;
+      $('shield-landing-speed').setAttribute('aria-pressed',String(guard.slow));
+    }
+    for (const button of $('shield-patterns').querySelectorAll(':scope > button:not(#shield-strength)'))
+      button.setAttribute('aria-pressed', String(button.id === 'shield-' + (guard.jumpIn ? 'jumpIn' : pattern)));
+    if (guard.jumpIn) {
+      $('jump-in-choice').value = pattern;
+      $('jump-in-speed').setAttribute('aria-pressed',String(guard.slow));
+      if (pattern === 'yourHop') $('shield-status').textContent = 'Hop beside the shield';
+    }
     return {
         yourHop: 'Hold Hop or Jump beside the rival. Tap Grab as your paws touch down, then choose a throw.',
         crossup: 'Block Belly Drop. If Brisket lands in front, tap Attack to grab. If he crosses behind, jump and attack back.',
@@ -1244,8 +1282,8 @@
         breakPunish: 'Hold a smash as the rival’s shield wears out. Wait for the dizzy landing, then release. Choose Punish the break to retry.',
         low: 'Hold Shield. Noodle sweeps your paws. Aim Down gently with the stick, Walk + Down, or a drag from the center dot.',
         high: 'Hold Shield. Noodle jumps for your ears. Aim Up as the lead swings over the bubble.',
-        poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + window.DogFight.moves[player.kit.tilts.down].label + '.',
+        poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + moves[player.kit.tilts.down].label + '.',
       }[pattern];
   }
-  window.PracticeFeedback={shieldPrompt,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
+  window.PracticeFeedback={shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
 })();
