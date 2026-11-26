@@ -524,7 +524,10 @@
     const play=watch=>{refresh();practice({mark,original,action:options.value,delay:Number(timing.value),watch});};
     catches.onchange=options.onchange=timing.onchange=panel.ontoggle=refresh;
     el('watch').onclick=()=>play(true);el('play').onclick=()=>play(false);
-    if(focus)panel.open=true;
+    if(focus){
+      panel.open=true;
+      refresh();
+    }
   }
   function defenseChoices(dog) {
     return dog.ground>=0
