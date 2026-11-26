@@ -332,6 +332,18 @@
       if (this.cue < 0) this.cue = tracks[this.key].length;
       this.paint();
     }
+    static area() {
+      const screen = document.getElementById('dispatch-story').getBoundingClientRect();
+      const heading = document.querySelector('.film-heading').getBoundingClientRect();
+      const tools = document.querySelector('.topbar').getBoundingClientRect();
+      const footer = document.querySelector('.film-footer').getBoundingClientRect();
+      return {
+        width: screen.width,
+        height: screen.height,
+        above: Math.max(heading.bottom, tools.bottom) - screen.top + 3,
+        below: screen.bottom - footer.top + 3,
+      };
+    }
     static poster(canvas, key) {
       draw(canvas, key, 0, posters[key][0]);
     }

@@ -1592,7 +1592,22 @@
     }
     document.querySelector('[data-reel="' + selected + '"]').focus();
   }
-  window.DispatchCovers = Object.freeze({draw,routeBoard,reelShelf});
+  const filmLoads = new Map();
+  function loadFilm(key) {
+    if (window.DispatchFilms[key]) return Promise.resolve();
+    if (!filmLoads.has(key)) {
+      const task = new Promise((resolve,reject)=>{
+        const script = document.createElement('script');
+        script.src = Object.hasOwn(window.DispatchScript.chapters[1].scenes,key) ? './film-night-mail.js?v=1' : './film-'+key+'.js?v=widefilm-1';
+        script.onload = () => window.DispatchFilms[key] ? resolve() : reject(new Error('Missing animation'));
+        script.onerror = () => reject(new Error('Animation unavailable'));
+        document.head.append(script);
+      });
+      filmLoads.set(key,task.finally(()=>filmLoads.delete(key)));
+    }
+    return filmLoads.get(key);
+  }
+  window.DispatchCovers = Object.freeze({draw,routeBoard,reelShelf,loadFilm});
   // The films and the printed route map share the same native pixel grid and props.
   function ease(start, end, time) {
     const t = Math.max(0, Math.min(1, (time - start) / (end - start)));

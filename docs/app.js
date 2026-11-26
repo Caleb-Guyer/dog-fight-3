@@ -993,6 +993,7 @@
     if(dialogType==='ko-replays')return $('ko-list-back').click();
     if(dialogType==='finish-film')return $('film-back').click();
     if(dialogType==='finish-recovery')return $('recovery-back').click();
+    if(dialogType==='finish-stock')return $('stock-back').click();
     if(dialogType==='finish-comparison')return leaveFinishTrial(true);
     if(dialogType==='finish-pause')return dismiss();
     if(dialogType==='code-pad'){
@@ -2266,7 +2267,7 @@
     if (world.lesson) return openLessonList();
     const clips=!online.match?knockoutClips(world):[];
     const reviewButton=(!online.match && finishTape?.length?'<button class="utility" data-do="instant-replay">Instant replay</button>':'')+
-      (clips.length?recoveryButtons(world,clips)+knockoutButton:'');
+      (clips.length?stockRetryButton(world)+recoveryButtons(world,clips)+knockoutButton:'');
     if (cupAttempt) {
       showDialog('pause','Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+(cupAttempt.round+1)+
         ' of 4. Leaving now restarts this round on your next attempt.</p><div class="dialog-actions">'+
@@ -2324,6 +2325,10 @@
   }
   const cardButton = '<button class="utility" data-do="match-card">Match stats</button>';
   const knockoutButton='<button type="button" class="utility" data-do="ko-replays">KO replays</button>';
+  function stockRetryButton(battle){
+    return finishTape?.reel && battle.mode==='solo' && !battle.matchCard?.points && finishTape.fallFrames.some(f=>f.slots.includes(0) && battle.matchCard.losses[f.first+f.slots.indexOf(0)]?.suddenRound===0)?
+      '<button type="button" class="utility" data-do="stock-retry">Retry my stock</button>':'';
+  }
   function latestFall(clips,slot){return clips.findLast(c=>c.losses.some(l=>l.slot===slot && l.zone==='bottom'));}
   function recoveryButtons(battle,clips){
     const seats=online.match?[online.side]:battle.mode==='local'?[0,1]:[0];
@@ -2349,20 +2354,13 @@
   function showKnockouts(from,focus){
     const battle=online.match?.confirmedWorld || world;
     const clips=knockoutClips(battle).slice().reverse();
-    const choices=clips.map(c=>'<button type="button" class="utility" data-ko="'+c.first+'">'+cardTime(c.losses[0].frame)+
-      ' · '+knockoutLabel(c,battle)+'</button>').join('');
-    showDialog('ko-replays','KO replays','<p>Choose a knockout to watch or play it from either side.</p>'+
-      '<div class="option-list">'+choices+'</div><div class="dialog-actions"><button class="utility" id="ko-list-back">'+
-      (from==='pause'?'Back to pause':'Back to results')+'</button></div>');
-    for(const b of $('dialog-body').querySelectorAll('[data-ko]')){
-      const clip=clips.find(c=>c.first===Number(b.dataset.ko));
-      b.onclick=()=>showFinishReplay(null,{clip,from});
-    }
-    $('ko-list-back').onclick=()=>{
+    const back=()=>{
       if(from==='pause')showPause();else showResult();
       $('dialog-body').querySelector('[data-do=ko-replays]')?.focus();
     };
-    ($('dialog-body').querySelector('[data-ko="'+(focus ?? clips[0]?.first)+'"]') || $('ko-list-back')).focus();
+    if(!window.MatchReview)return waitForDispatch('KO replays',()=>loadDispatch('MatchReview'),()=>showKnockouts(from,focus),back);
+    window.MatchReview.koList(clips,from,focus,{showDialog,back,label:c=>cardTime(c.losses[0].frame)+' · '+knockoutLabel(c,battle),
+      open:clip=>showFinishReplay(null,{clip,from})});
   }
   function presentWinner() {
     const photo=document.querySelector('#dialog-body .winner img');
@@ -2397,7 +2395,7 @@
     if (finishTape?.length && stats) {
       if(matchConfig.openingMatchup)stats.insertAdjacentHTML('beforebegin','<button class="utility" data-do="matchup-card">Opening matchup · Pin or share</button>');
       const clips=knockoutClips(result);
-      stats.insertAdjacentHTML('beforebegin',recoveryButtons(result,clips));
+      stats.insertAdjacentHTML('beforebegin',stockRetryButton(result)+recoveryButtons(result,clips));
       if(finishTape.reel)stats.insertAdjacentHTML('beforebegin','<button class="utility" data-do="watch-match">Watch full match</button>');
       if(clips.length)stats.insertAdjacentHTML('beforebegin',knockoutButton);
       const button=document.createElement('button');
@@ -2420,7 +2418,18 @@
     shot.cel=cel;
     window.DogFightView.drawPodium(shot.canvas,shot.kind,shot.coat,cel);
   }
-  function replayTape(review){return review?.returning?review.clip.returnTape:review?.clip.tape || finishTape;}
+  function replayTape(review){return review?.returning?review.clip.returnTape:review?.clip?.tape || finishTape;}
+  function stockSheet(review){
+    const back=()=>review.film?watchMatch(review.film,review.frame):review.from==='pause'?showPause(false):showResult();
+    if(!window.MatchReview)return waitForDispatch('Retry my stock',()=>loadDispatch('MatchReview'),()=>stockSheet(review),back);
+    if(!review.stock){
+      const film=review.film?.film || new window.MatchReview.MatchFilm(finishTape.fullMatch());
+      const fall=review.fall || film.data.falls.findLast(f=>f.slots.includes(0) && world.matchCard.losses[f.first+f.slots.indexOf(0)]?.suddenRound===0);
+      if(!fall)return back();
+      review.stock=new window.MatchReview.StockRetry(film,fall);
+    }
+    review.stock.sheet({showDialog,shake:settings.shake,back,play:()=>startFinishTrial(review.stock.start,0,review)});
+  }
   function watchMatch(context,at=null){
     if(!window.MatchReview)return waitForDispatch('Match replay',()=>loadDispatch('MatchReview'),()=>watchMatch(context,at),showResult);
     if(!context){
@@ -2428,7 +2437,10 @@
       context={film:new window.MatchReview.MatchFilm(data)};
     }
     const {film,entry,id}=context;
-    window.MatchReview.watchFilm(film,{stageName,showDialog,shake:settings.shake,back:()=>{
+    const origin=film.data.parts[0].state;
+    window.MatchReview.watchFilm(film,{stageName,showDialog,shake:settings.shake,losses:(entry?.card || world.matchCard).losses,
+      retryStock:origin.mode==='solo' && !origin.matchCard.points?(fall,frame)=>stockSheet({film:context,fall,frame,entry,id,
+        from:entry?'archive':'result',result:entry?film.playback(film.length).battle:world}):null,back:()=>{
       if(entry)return showMatchCard(0,entry,id,{first:'full'});
       showResult();document.querySelector('[data-do=watch-match]')?.focus();
     },practice:(frame,slot)=>{
@@ -2586,8 +2598,8 @@
     document.querySelector('[data-finish-slot="'+slot+'"]').focus();
   }
   function startFinishTrial(start,slot,review=null) {
-    const tape=replayTape(review);
-    const original=review ? review.result || finishTrial?.original || tape.playback(tape.length).battle : online.match?.confirmedWorld || world;
+    const tape=review?.stock?null:replayTape(review);
+    const original=review ? review.result || finishTrial?.original || (review.stock?world:tape.playback(tape.length).battle) : online.match?.confirmedWorld || world;
     if(review?.from==='archive' && page!=='match'){
       const [first,second]=original.dogs;
       recordedFights.add(original);
@@ -2600,7 +2612,7 @@
     const emit=(name,e)=>{
       camera.event(name,e);sound(name,e);trace?.observe(name,e,player.frame+1);
     };
-    const player=review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
+    const player=review?.stock?review.stock.attempt(emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
     const saved=finishTrial?.saved || {mode:$('match-mode').textContent,pause:$('pause-label').textContent,
       call:$('countdown').textContent,setHidden:$('match-set').hidden,cornerHidden:$('corner-tip').hidden,
       cornerTitle:$('corner-title').textContent,cornerLine:$('corner-line').textContent};
@@ -2611,7 +2623,7 @@
     if(review?.coach){
       $('corner-title').textContent='Reach the stage';$('corner-line').textContent=review.coachLine;$('corner-tip').hidden=false;
     }
-    $('match-mode').textContent=(review?.instant?'Exchange practice':review?.coach?'Recovery practice':trace?'Stock return':review?.film?'Match replay practice':review && !review.finish?'KO practice':'Finish practice')+' · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
+    $('match-mode').textContent=(review?.stock?'Stock '+review.stock.number+' retry':review?.instant?'Exchange practice':review?.coach?'Recovery practice':trace?'Stock return':review?.film?'Match replay practice':review && !review.finish?'KO practice':'Finish practice')+' · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
     $('match-set').hidden=$('grapple-prompt').hidden=true;
     $('match-clock').hidden=false;
     $('match-clock').setAttribute('aria-label','Practice time left');
@@ -2627,7 +2639,8 @@
     const {player,camera,slot}=finishTrial,battle=player.battle;
     camera.draw($('game'),battle,dt,battle.time);
     for(const [i,f] of battle.dogs.entries())updateFighterCard(f,i,battle.coatFor(i),stockStatus(f,battle,i===slot),offstageOptions(f,battle.terrain),i===slot?'YOU':'RIVAL',battle.matchCard?.points?.[i]??null,battle);
-    const clock=$('match-clock'),text=((player.length-player.frame)/60).toFixed(1)+'s';
+    const stock=finishTrial.review?.stock;
+    const clock=$('match-clock'),text=stock && player.frame>=stock.end?'Land':(((stock?.end ?? player.length)-player.frame)/60).toFixed(1)+'s';
     if(clock.textContent!==text)clock.textContent=text;
     const grip=battle.grapple, prompt=$('grapple-prompt');
     const hide=!grip || grip.phase==='throw';
@@ -2665,6 +2678,7 @@
     finishTrial=null;
     if(review?.from==='archive'){
       showHome(false);
+      if(review.stock && replay)return stockSheet(review);
       if(review.coach && replay)return recoverySheet(review,review.coach);
       if(review.film)return replay?watchMatch(review.film,review.frame):showMatchCard(0,review.entry,review.id,{first:'full'});
       return replay?showFinishReplay(start,review):backToSavedCard(review);
@@ -2675,7 +2689,8 @@
     if(review?.coach){$('corner-title').textContent=saved.cornerTitle;$('corner-line').textContent=saved.cornerLine;}
     hudKey='';updateHUD();
     view.draw($('game'),online.match?.confirmedWorld || world,0,world.time);
-    if(replay && review?.coach)recoverySheet(review,review.coach);
+    if(replay && review?.stock)stockSheet(review);
+    else if(replay && review?.coach)recoverySheet(review,review.coach);
     else if(replay && review?.film)watchMatch(review.film,review.frame);
     else if(replay)showFinishReplay(review?.replayFrame ?? start,review);
     else if(review?.from==='pause')dismiss();
@@ -2683,6 +2698,7 @@
     else showResult();
   }
   function trialActions(){
+    if(finishTrial.review?.stock)return finishTrial.review.stock.actions(finishTrial.review.from);
     return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">'+(finishTrial.review?.coach?'Retry recovery':finishTrial.trace?'Retry return':'Retry exchange')+'</button>'+
       '<button class="utility" data-do="trial-replay">'+(finishTrial.review?.instant?'Back to instant replay':finishTrial.review?.coach?'Back to demonstration':finishTrial.review?.film?'Back to full match':finishTrial.trace?'Back to return replay':'Choose another frame')+'</button><button class="utility" data-do="trial-results">'+
       (finishTrial.review?.from==='pause'?'Back to fight':['card','archive'].includes(finishTrial.review?.from)?'Back to match stats':'Back to results')+'</button></div>';
@@ -2693,6 +2709,11 @@
   }
   function showTrialComparison(){
     const {player,original,slot,review}=finishTrial;
+    if(review?.stock){
+      const report=review.stock.comparison(player);
+      showDialog('finish-comparison',report.title,report.html+trialActions(),false);
+      document.querySelector('[data-do=trial-results]').focus();return;
+    }
     if(review?.coach){
       const landed=player.outcome==='landed';
       const point=player.battle.matchCard.points && !player.battle.suddenDeath;
@@ -3036,6 +3057,7 @@
     if(action==='matchup-card')return page==='match'?showMatchup(matchConfig.openingMatchup,'result'):showMatchup(lobbyMatchup(),'rules');
     if(action==='handicap')return openRulebook(undefined,true);
     if(action==='corner-practice' && corner)return startCornerLesson();
+    if(action==='stock-retry')return stockSheet({from:dialogType==='pause'?'pause':'result'});
     if(action==='coach-fall'){
       const slot=Number(e.target.closest('[data-recovery-seat]').dataset.recoverySeat);
       const clip=latestFall(knockoutClips(online.match?.confirmedWorld || world),slot);
@@ -5456,7 +5478,7 @@
     LessonGuide:'lesson-guide.js?v=1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=both-seats-1', MatchReview:'match-review.js?v=clock-rival-1',
+    RecoveryCoach:'recovery-coach.js?v=both-seats-1', MatchReview:'match-review.js?v=stock-retry-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
@@ -5466,7 +5488,7 @@
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
     ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=instant-replay-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=down-air-1',
-    DispatchCovers:'dispatch-covers.js?v=route-board-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
+    DispatchCovers:'dispatch-covers.js?v=film-load-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=bell-wave-1',
     ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=1',
@@ -5773,35 +5795,8 @@
     window.DispatchCovers.routeBoard(campaign,progress,{stored,portrait,canSwitch:nightUnlocked(),marks:countMarks(progress.stamps)});
     if(then)then();
   }
-  const filmLoads = new Map();
-  function loadFilm(key) {
-    if (window.DispatchFilms[key]) return Promise.resolve();
-    if (!filmLoads.has(key)) {
-      const task = new Promise((resolve,reject)=>{
-        const script = document.createElement('script');
-        script.src = Object.hasOwn(nightChapter.scenes,key) ? './film-night-mail.js?v=1' : './film-'+key+'.js?v=widefilm-1';
-        script.onload = () => window.DispatchFilms[key] ? resolve() : reject(new Error('Missing animation'));
-        script.onerror = () => reject(new Error('Animation unavailable'));
-        document.head.append(script);
-      });
-      filmLoads.set(key,task.finally(()=>filmLoads.delete(key)));
-    }
-    return filmLoads.get(key);
-  }
   function showReels(selected = campaign.rooms[0].intro) {
     window.DispatchCovers.reelShelf(campaign,progress,selected,showDialog);
-  }
-  function filmArea() {
-    const screen = $('dispatch-story').getBoundingClientRect();
-    const heading = document.querySelector('.film-heading').getBoundingClientRect();
-    const tools = document.querySelector('.topbar').getBoundingClientRect();
-    const footer = document.querySelector('.film-footer').getBoundingClientRect();
-    return {
-      width: screen.width,
-      height: screen.height,
-      above: Math.max(heading.bottom, tools.bottom) - screen.top + 3,
-      below: screen.bottom - footer.top + 3,
-    };
   }
   async function story(key, then, fromLibrary = false) {
     menuScreen('dispatch-story');
@@ -5826,7 +5821,7 @@
         await loadDispatch('DispatchCovers');
         if (page!=='dispatch-story' || afterStory!==then) return;
         window.DispatchCovers.draw($('story-cover'),key);
-        await Promise.all([loadDispatch('DispatchFilm'),loadFilm(key)]);
+        await Promise.all([loadDispatch('DispatchFilm'),window.DispatchCovers.loadFilm(key)]);
       }
       catch {
         if (page!=='dispatch-story' || afterStory!==then) return;
@@ -5847,7 +5842,7 @@
         $('film-progress').style.transform = 'scaleX(' + time / duration + ')';
         const label = '0:' + String(Math.floor(time)).padStart(2, '0') + ' / 0:' + duration;
         if ($('film-time').textContent !== label) $('film-time').textContent = label;
-      }, finishStory, filmArea,
+      }, finishStory, window.DispatchFilm.area,
     );
     updateFilmButton();
     // A story film leads straight into its mission. Library screenings end on the reel shelf.
