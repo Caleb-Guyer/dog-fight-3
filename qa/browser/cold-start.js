@@ -16,7 +16,8 @@ function assets(directory,prefix,files){
   }
 }
 const deferred=['dispatch-actors','dispatch-bridge','dispatch-covers','dispatch-film','dispatch-run','dispatch-view','yard-art'];
-async function sample(browser,url,candidate){
+async function sample(browser,url,build){
+  const candidate=build==='new', modern=build!=='old';
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   try{
     const page=await context.newPage(), cdp=await context.newCDPSession(page),errors=[];
@@ -49,13 +50,56 @@ async function sample(browser,url,candidate){
     await page.waitForFunction(()=>window.walkedAt>0);
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
     const resources=await page.evaluate(()=>performance.getEntriesByType('resource').map(r=>new URL(r.name).pathname));
-    assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.woff2')),candidate);
-    assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.ttf')),!candidate);
-    if(candidate)assert(!resources.some(p=>p.endsWith('/online.css')),'Online room styling stays out of first launch');
-    for(const name of deferred)assert.equal(resources.some(p=>p.endsWith('/'+name+'.js')),!candidate,name);
+    assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.woff2')),modern);
+    assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.ttf')),!modern);
+    if(modern)assert(!resources.some(p=>p.endsWith('/online.css')),'Online room styling stays out of first launch');
+    for(const name of deferred)assert.equal(resources.some(p=>p.endsWith('/'+name+'.js')),!modern,name);
+    assert.equal(resources.some(p=>p.endsWith('/online.js')),!candidate,'rollback transport');
+    assert(!resources.some(p=>p.endsWith('/practice-feedback.js')),'Fight School loads independently of advanced training readouts');
     assert.deepEqual(errors,[]);
     return {...boot,move:await page.evaluate(()=>window.walkedAt)};
   }finally{await context.close();}
+}
+async function optionalModes(browser,url){
+  const page=await browser.newPage(),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.route('**/practice-feedback.js*',route=>route.abort(),{times:1});
+    await page.goto(url+'#training/flick-jump');
+    await page.locator('#dispatch-load-retry').click();
+    await page.locator('#spacing-flick[aria-pressed="true"]').waitFor();
+    assert.match(await page.locator('#recovery-tip').textContent(),/Tap Up and release/);
+    await page.locator('#spacing-flick').click();
+    assert.equal(await page.locator('#spacing-flick').getAttribute('aria-pressed'),'false');
+    assert.equal(await page.evaluate(()=>!!window.DogOnline),false);
+
+    let release;
+    const gate=new Promise(resolve=>release=resolve);
+    await page.route('**/online.js*',async route=>{await gate;await route.continue();},{times:1});
+    await page.goto(url+'?cancel#online/best-of-three',{waitUntil:'domcontentloaded'});
+    await page.locator('#dispatch-load-back').click();
+    release();
+    await page.waitForFunction(()=>!!window.DogOnline);
+    assert(await page.locator('#home').isVisible());
+    await page.locator('#home-online').click();
+    await page.locator('#online-quick').waitFor();
+    assert.equal(await page.locator('#online-format').getAttribute('aria-pressed'),'false');
+
+    await page.route('**/online.js*',route=>route.abort(),{times:1});
+    await page.goto(url+'?retry#online/best-of-three');
+    await page.locator('#dispatch-load-retry').click();
+    await page.locator('#online-format[aria-pressed="true"]').waitFor();
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'online-create');
+    await page.goto(url+'?rulebook#online/rules');
+    await page.getByRole('heading',{name:'Friend room rulesets'}).waitFor();
+    await page.goto(url+'?invite#room/abc234');
+    await page.locator('#online-join').waitFor();
+    assert.equal(await page.locator('#online-code').inputValue(),'ABC234');
+    await page.goto(url+'?bad#room/x');
+    await page.locator('#online-join').waitFor();
+    assert.match(await page.locator('#online-status').textContent(),/invalid room code/);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
 }
 async function recovery(browser,url){
   const page=await browser.newPage(),errors=[];
@@ -119,7 +163,7 @@ async function recovery(browser,url){
   }finally{await page.close();}
 }
 (async()=>{
-  const files=new Map();assets('docs','/new',files);assets('previous/docs','/old',files);
+  const files=new Map();assets('docs','/new',files);assets('previous/docs','/old',files);assets('prior-release/docs','/prior',files);
   const server=http.createServer((req,res)=>{
     const path=new URL(req.url,'http://localhost').pathname;
     const file=files.get(path.endsWith('/')?path+'index.html':path);
@@ -130,17 +174,22 @@ async function recovery(browser,url){
   const origin='http://127.0.0.1:'+server.address().port;
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
   try{
-    const rows={old:[],new:[]};
-    for(let i=0;i<3;i++)for(const build of i===1?['new','old']:['old','new'])
-      rows[build].push(await sample(browser,origin+'/'+build+'/',build==='new'));
+    const rows={old:[],prior:[],new:[]};
+    for(const order of [['old','prior','new'],['prior','new','old'],['new','old','prior']]){
+      for(const build of order)rows[build].push(await sample(browser,origin+'/'+build+'/',build));
+    }
     const median=(rows,k)=>Math.round(rows.map(r=>r[k]).sort((a,b)=>a-b)[1]);
     const result=Object.fromEntries(Object.entries(rows).map(([build,r])=>[build,Object.fromEntries(
       ['ready','move','scripts','js','payload'].map(k=>[k,median(r,k)]))]));
     console.log('::notice title=Cold start::'+JSON.stringify(result));
-    assert.equal(result.old.scripts-result.new.scripts,8);
-    assert(result.old.payload-result.new.payload>35000);
+    assert.equal(result.old.scripts-result.new.scripts,9);
+    assert.equal(result.prior.scripts-result.new.scripts,1);
+    assert(result.old.payload-result.new.payload>55000);
+    assert(result.prior.payload-result.new.payload>24000);
+    assert(result.prior.js-result.new.js>100000);
     if(rows.old[0].hash!==rows.new[0].hash)console.log('Reference-title '+rows.old[0].png);
     assert.equal(rows.old[0].hash,rows.new[0].hash,'home cover pixels');
     await recovery(browser,origin+'/new/');
+    await optionalModes(browser,origin+'/new/');
   }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});
