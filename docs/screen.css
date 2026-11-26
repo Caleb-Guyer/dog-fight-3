@@ -62,6 +62,17 @@ body .topbar .wordmark {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 #home.has-welcome, #home.has-saves { grid-template-rows:auto auto minmax(0,1fr) auto; }
+#home-pin:not([hidden]) { display:flex; gap:4px; align-items:center; min-width:0; }
+#pin-play { color:#ffdf96; white-space:normal; line-height:1.1; }
+#pin-view { min-width:40px; }
+#matchup-preview { display:block; width:100%; aspect-ratio:2.9; image-rendering:pixelated; background:#292b38; }
+.matchup-fighters { display:grid; grid-template-columns:1fr 1fr; border-bottom:2px solid #726654; margin-bottom:10px; }
+.matchup-fighters div { border-top:3px solid #ff9b75; padding:6px 4px; }
+.matchup-fighters div+div { border-color:#8edecb; text-align:right; }
+.matchup-fighters strong, .matchup-fighters span { display:block; }
+.matchup-fighters strong { font:24px/1.15 var(--pixel); }
+#matchup-link { box-sizing:border-box; width:100%; margin-top:8px; }
+#matchup-status:empty { display:none; }
 #home-saves:not([hidden]) {
   display:flex; align-items:center; gap:8px; padding:4px var(--right-edge) 4px var(--left-edge);
   background:#26383a; border-bottom:2px solid #87bdb1;
