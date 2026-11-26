@@ -79,6 +79,8 @@
       why:name+' crossed the bottom blast line '+times(falls)+'. Start below the ledge and find the way back with an air jump and Up Special.'};
     if (p.knockdowns) return {id:'launch-escape',label:'Practice a landing tech',
       why:name+' hit the floor in tumble '+times(p.knockdowns)+'. Tap Shield just before impact to land in place or roll.'};
+    if(rival.blocks>=3 && rival.blocks>p.hits)return {id:'combo-confirm',label:'Practice hit confirms',
+      why:(card.relayTeams?'The other pack':fighters[rival.kind].name)+' blocked '+rival.blocks+' hits. Try a jab, watch for the shield flash, and choose between a second strike and a grab.'};
     if(last && last.lastHit && (last.zone==='left' || last.zone==='right' || last.zone==='top')) return {id:'launch-survival',label:'Practice launch influence',
       why:name+(last.points?' lost a point at ':' lost a stock at ')+Math.round(last.damage)+'% at the '+last.zone+' blast line. Try steering a strong launch during the hit freeze.'};
     if(rival.hits && !p.blocks && !p.parries) return {id:'shield-strike',label:'Practice defending a strike',
