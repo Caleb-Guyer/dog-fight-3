@@ -36,7 +36,8 @@
   const verbs={strike:'Strike',ban:'Ban',pick:'Pick'};
   function panel(root,{draft,dogs,form,game,solo,seats,keys,pads,drawStageTile,leave,start,sound,previous,padNames=(i,p)=>window.FightControls.padLegend(p)}){
     let current=draft.winner || draft.remaining[0],closed=false,cpuAt=null;
-    const old=[null,null];let connected=pads;
+    const old=[null,null];let connected=pads,shownLegend;
+    const turnLegend=()=>{const n=draft.turn ?? 0;return padNames(n,solo?connected[0]:seats.get(n,connected));};
     const player=i=>solo && i===1?'CPU '+fighters[dogs[i]].name:'P'+(i+1)+' '+fighters[dogs[i]].name;
     root.innerHTML='<h3 id="strike-turn" class="card-stage" aria-live="polite"></h3><p id="strike-rules"></p>'+
       '<div id="strike-stages" role="group" aria-label="Arenas">'+stages.map(s=>'<button class="utility" type="button" data-strike-stage="'+s+
@@ -61,7 +62,7 @@
       el('detail').textContent=arenas[current].name+' · '+(stageForms[form].description || arenas[current].description);
       confirm.disabled=thinking;confirm.textContent=winner?'Start game '+game:verbs[draft.action]+' '+arenas[current].name;
       const n=turn ?? 0,map=keys[n],key=window.FightControls.keyName;
-      const legend=padNames(n,solo?connected[0]:seats.get(n,connected));
+      const legend=shownLegend=turnLegend();
       el('keys').textContent=thinking?'':winner?'Press '+legend[9]+' or choose Start game.':
         'P'+(n+1)+' · '+key(map.left)+' / '+key(map.right)+' select · '+key(map.attack)+' confirm · D-pad / '+legend[0]+' on controller';
       confirm.dataset.play=String(!!winner);
@@ -105,6 +106,7 @@
         if(time>=cpuAt){draft.cpu(dogs,form,previous);cpuAt=null;sound('menu');draw();}
       }else cpuAt=null;
       connected=devices;seats.sync(devices);
+      if(turnLegend()!==shownLegend)draw();
       const turn=draft.turn,ready=!!draft.winner;
       for(let slot=0;slot<(solo?1:2);slot++){
         const pad=solo?devices[0]:seats.get(slot,devices),last=old[slot];

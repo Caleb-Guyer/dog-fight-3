@@ -6305,7 +6305,7 @@
     $('school-bindings').textContent=lesson.done ? (device===1?names[0]+' to continue':device===0?'Enter to continue':'') :
       lesson.missed?'':lesson.course?window.FighterSchool.hint(info,device,keyFor,padFor):schoolHint(info.id,device);
     $('school-next').hidden=!lesson.done;
-    if(state==='guided')lesson.guide.touchPrompts(touchButtons,device===2);
+    lesson.guide?.touchPrompts(touchButtons,state==='guided' && device===2);
     if(state==='guided')lesson.guide.render($('school-task'),$('school-bindings'),action=>device===0?keyFor(0,action):
       device===1 && !['right','up','down','left'].includes(action)?padFor(0,action):(device===1?'Stick ':'')+action[0].toUpperCase()+action.slice(1));
     else if(state==='loading-guide')$('school-task').textContent='Loading guided practice…';

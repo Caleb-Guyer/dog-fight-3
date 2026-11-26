@@ -461,7 +461,7 @@
     return action;
   }
   function wireLayout(edit,layout,settings,profileTags,{drawLayouts,leaveLayouts,chooseBinding,assignControl,applyLayouts,openProfiles,style}){
-    const $=id=>document.getElementById(id),{mode,slot}=edit,keyboard=edit.device==='keyboard',testing=mode==='test',pending=mode==='swap'||mode==='reset';
+    const $=id=>document.getElementById(id),{mode,slot,device}=edit,keyboard=device==='keyboard',testing=mode==='test',pending=mode==='swap'||mode==='reset';
     if($('pad-label-style'))$('pad-label-style').onchange=e=>style(e.target.value);
     $('layout-slot').value=String(slot);$('layout-device').value=device;
     $('layout-slot').onchange=e=>{edit.slot=Number(e.target.value);edit.mode='idle';drawLayouts();$('layout-slot').focus();};
