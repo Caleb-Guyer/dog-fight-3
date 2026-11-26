@@ -161,6 +161,8 @@
   const crouchLaunchScale = 2 / 3;
   const rageScale = damage => 1 + .10 * clamp((damage - 35) / 115, 0, 1);
   const finishingLaunch = (move, name) => !move?.setupHit && !move?.second && !move?.pull && !move?.bounce && name !== 'snare';
+  const launchStrength=(base,growth,damage,weight,power,rage)=>(base+damage*growth)*(.75+.25*power)*rage/weight;
+  const launchStun=(speed,rage,move)=>Math.max(move?.stun || 0,clamp(.115+speed*.00036,.14,.58*rage));
   const canStayPlanted = (vx, vy) => Math.hypot(vx, vy) <= 150 && Math.abs(vy) <= 96;
   function groundedLift(move, grounded, speed, sweet) {
     if (!grounded || !move?.lowLaunch || sweet?.angle != null) return 1;
@@ -2839,6 +2841,13 @@
         this.bot.rollHabit={count:2,delay:config.scoutedRoll.delay};
       }
       if (config.driveOpening && this.mode === 'solo') this.placeDriveFighters(config.driveOpening.edge, config.driveOpening.damage);
+      if(this.mode==='solo' && this.stage==='nightmail' && this.form==='trio' && ['perch','edge'].includes(config.throwOpening)){
+        const [p,guard]=this.dogs,perch=config.throwOpening==='perch';
+        const ground=perch?3:0,floor=this.terrain[ground],face=perch?-1:1,x=perch?(floor.x1+floor.x2)/2:floor.x1+30;
+        Object.assign(guard,{x,y:floor.y,ground,face});
+        Object.assign(p,{x:x+face*(guard.stats.width+p.stats.width+2),y:floor.y,ground,face:-face,damage:perch?110:80});
+        beginGrab(guard,'standing',0,0);
+      }
       if (config.dodgeReturn && this.mode === 'solo') this.placeLastDodge(config.dodgeReturn.side, config.dodgeReturn.wide, 1);
       if (config.shieldLanding && this.mode === 'solo') {
         const {dir,cross} = config.shieldLanding;
@@ -9191,7 +9200,7 @@
       this.comboContact(target, name === 'throw' ? 'throw' : 'hit', moveId || name, applied);
       const finish = finishingLaunch(move, name);
       const rage = finish && growth > 0 && name !== 'ball' ? rageScale(ownerDamage) : 1;
-      const speed = (base + target.damage * growth) * (0.75 + 0.25 * power) * rage / target.stats.weight;
+      const speed = launchStrength(base,growth,target.damage,target.stats.weight,power,rage);
       const lift = groundedLift(move, target.ground >= 0, speed * (braced ? crouchLaunchScale : 1), sweet);
       // Brisket's landing shockwave and a weak grounded spike still pop the rival up.
       const meteor = !!move?.meteor && !(use?.plunge && use.landed) && speed * (braced ? crouchLaunchScale : 1) >= tumbleSpeed;
@@ -9258,8 +9267,7 @@
       target.attack = null;
       cancelCharge(target);
       target.shield = false;
-      target.stun = clamp(0.115 + speed * 0.00036, 0.14, 0.58 * rage);
-      if (move?.stun) target.stun = Math.max(target.stun, move.stun);
+      target.stun = launchStun(speed,rage,move);
       if (planted) target.stun = (2 + Math.floor(Math.abs(target.vx) / 48)) / 60;
       else if (braced) target.stun *= crouchLaunchScale;
       const emphatic =
@@ -9718,6 +9726,32 @@
         this.ball = null;
         this.nextBall = 3.5;
       }
+    }
+    finishingThrow(owner, target, grip) {
+      // A neutral launch is visible to both players. The captive can still steer during hit freeze.
+      let quickest = Infinity, pick = null;
+      const rage = rageScale(owner.damage);
+      for (const [side, id] of Object.entries(owner.kit.throws)) {
+        const move = throws[id];
+        if (!finishingLaunch(move, 'throw')) continue;
+        const power = moveFreshness(owner, id);
+        const damage = Math.min(999, target.damage + scaledDamage(move.dmg, power));
+        const speed = launchStrength(move.base, move.growth, damage, target.stats.weight, power, rage);
+        const face = side === 'back' || move.reverseLaunch ? -grip.face : grip.face;
+        const angle = move.angle * Math.PI / 180;
+        const vx = face * speed * Math.cos(angle), vy = -speed * Math.sin(angle) - 40;
+        if (Math.hypot(vx, vy) < tumbleSpeed) continue;
+        const release = {...target, x:owner.x + move.release[0] * grip.face,
+          y:owner.y + move.release[1] + target.stats.height * .52 - 1,
+          stun:launchStun(speed, rage, move), tumble:{pending:true, time:0}, throwBounce:null};
+        const path = this.projectLaunch(release, vx, vy);
+        const frames = move.frames[0] + path.ticks;
+        if (path.zone && !path.dodgeFrame && frames < quickest) {
+          pick = side;
+          quickest = frames;
+        }
+      }
+      return pick;
     }
     loseStock(f) {
       if (f.grip) this.breakGrapple(false);
@@ -10885,6 +10919,9 @@
         if (f.attack?.dashAttack && cancelableWindup(f)) return {...idleInput,x:dir,grab:true};
       }
       if (f.stockLift) return this.cpuLiftExit(f, foe);
+      // A direction held through the catch would queue a throw before Rival can assess the hold.
+      if (this.cpuLevel === 'rival' && foe.damage >= 65 && f.ground >= 0 && f.attack?.grabAttempt &&
+          f.attack.time < f.attack.start + f.attack.active && !f.grip) return idleInput;
       if(f.tumble?.techChoice && f.techBuffer>0)return {...idleInput,x:f.tumble.rollDir};
       if (f.shieldBreak) {
         if (f.shieldBreak.phase === 'pop' || this.cpuLevel === 'rookie') return idleInput;
@@ -10940,7 +10977,12 @@
           (grip.time >= 0.13 || grip.pummelCount || grip.remaining < 0.4)
         ) {
           const floor = this.terrain[f.ground];
-          const edge = floor && Math.min(f.x - floor.x1, floor.x2 - f.x) < 145;
+          const rival=this.cpuLevel==='rival';
+          const edge = floor && (!rival || !floor.thin) && Math.min(f.x - floor.x1, floor.x2 - f.x) < 145;
+          if(rival && floor && foe.damage>=65){
+            const side=this.finishingThrow(f,foe,grip);
+            if(side)return {...idleInput,x:side==='forward'?grip.face:side==='back'?-grip.face:0,y:verticalAim(side)};
+          }
           if (this.cpuLevel === 'rival' && f.kit.shoulderCarry && floor && !floor.thin &&
               foe.damage >= 60 && grip.remaining > .78) {
             const solid = this.terrain.filter(p=>!p.thin);
