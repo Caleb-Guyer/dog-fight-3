@@ -192,6 +192,25 @@ async function check(browser,device) {
     await choose('[data-do=trial-replay]');await route();await choose('#recovery-swap');await route();
     assert.match(await page.locator('#recovery-route').textContent(),/recover/);
     await choose('#recovery-back');await choose('#dialog-body button:text-is("Launch survival")');await route();
+    await choose('#recovery-back');await choose('#dialog-body button:text-is("Ledge clinic")');
+    const ledge=page.locator('#clip-ledge[open]');
+    await ledge.locator('[data-play]').waitFor();
+    assert.match(await ledge.locator('[data-original]').textContent(),/Lost the stock.+Haymaker/);
+    assert.match(await ledge.locator('[data-outcome]').textContent(),/Onstage/);
+    await choose('#clip-ledge [data-watch]');await page.clock.runFor(4800);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Onstage');
+    await choose('[data-do=ledge-play]');
+    for(let i=0;i<90 && !(await page.locator('#corner-line').textContent()).startsWith('Try');i++)await page.clock.runFor(32);
+    assert.match(await page.locator('#corner-line').textContent(),/^Try/);
+    await hold(1);await page.clock.runFor(800);await hold(0);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Onstage');
+    await choose('[data-do=trial-replay]');await ledge.locator('[data-play]').waitFor();
+    assert.equal(await ledge.locator('[data-delay]').inputValue(),'60');
+    await ledge.locator('[data-delay]').selectOption('0');
+    assert.match(await ledge.locator('[data-outcome]').textContent(),/Lost the stock/);
+    await choose('#clip-ledge [data-play]');await hold(1);await page.clock.runFor(2400);await hold(0);
+    assert.match(await page.locator('#dialog-body').textContent(),/Your get-up · Lost the stock/);
+    await choose('[data-do=trial-results]');assert.equal(await page.locator('#dialog-title').textContent(),'Fight School');
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

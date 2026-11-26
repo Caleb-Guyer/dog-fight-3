@@ -14,7 +14,7 @@ jobs:
           persist-credentials: false
       - name: Revisit a recorded fall and land onstage with the original stock
         run: |
-          node --test qa/recovery-coach.cjs
+          node --test qa/recovery-coach.cjs qa/ledge-replay.cjs
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
           python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/coach-http.log" 2>&1 &
           server_pid=$!
