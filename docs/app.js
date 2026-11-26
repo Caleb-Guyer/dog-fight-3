@@ -2646,7 +2646,8 @@
     const hide=!grip || grip.phase==='throw';
     if(prompt.hidden!==hide)prompt.hidden=hide;
     if(!hide){
-      const label=grip.owner===slot?'Grabbed rival · Aim to throw':'Grabbed · Tap actions to escape';
+      const label=finishTrial.seats?'P'+(grip.owner+1)+' grabbed P'+(2-grip.owner)+' · Aim to throw or tap to escape':
+        grip.owner===slot?'Grabbed rival · Aim to throw':'Grabbed · Tap actions to escape';
       if(prompt.textContent!==label)prompt.textContent=label;
     }
   }
@@ -5988,7 +5989,7 @@
         grab: tapped('grab'),
       },
     };
-    const trial = !i && world.spacingPractice?.pattern === 'landing' ? world.spacingPractice.flickJump : undefined;
+    const trial = !i && battle.spacingPractice?.pattern === 'landing' ? battle.spacingPractice.flickJump : undefined;
     if (trial ?? settings[i === 0 ? 'flickJump1' : 'flickJump2']) {
       const device = pad ? pad.index + ':' + pad.id : '';
       if (flickJumpStates[i].device !== device) flickJumpStates[i] = {device};
