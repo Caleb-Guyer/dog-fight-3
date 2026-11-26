@@ -13,17 +13,17 @@
     <link rel="preload" href="./assets/brawl-pixel.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="./style.css?v=parcel-1" />
     <link rel="stylesheet" href="./dispatch.css?v=first-menu-1" />
-    <link rel="stylesheet" href="./screen.css?v=button-check-1" />
+    <link rel="stylesheet" href="./screen.css?v=first-press-1" />
+    <script defer id="menu-controls" src="./controls.js?v=button-check-1"></script>
     <script defer src="./fighters-art.js?v=disc-range-1"></script>
     <script defer src="./arena-art.js?v=counterweights-1"></script>
     <script defer src="./engine.js?v=return-perch-1"></script>
     <script defer src="./fight-records.js?v=clock-rival-1"></script>
     <script defer src="./fight-school.js?v=ledge-rescue-1"></script>
     <script defer src="./arcade.js?v=continue-1"></script>
-    <script defer src="./controls.js?v=button-check-1"></script>
     <script defer src="./render.js?v=ground-space-1"></script>
     <script defer src="./dispatch-script.js?v=letter-lift-1"></script>
-    <script defer src="./app.js?v=lighter-boot-1"></script>
+    <script defer src="./app.js?v=first-press-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -60,6 +60,7 @@
         <div class="board-heading">
           <h1 id="home-heading">Main menu</h1>
           <span class="rail-rule" aria-hidden="true"></span>
+          <span id="opening-choice" role="status" aria-live="polite"></span>
           <div id="home-pin" hidden>
             <button type="button" class="board-back" id="pin-play"></button>
             <button type="button" class="board-back" id="pin-view" aria-label="View pinned matchup" title="View pinned matchup">⋯</button>
@@ -124,6 +125,147 @@
           <span class="menu-hint"><span class="key-legend">Arrow keys · Choose &nbsp; Enter · Select</span><span class="pad-legend" id="pad-legend">D-pad · Choose &nbsp; A · Select &nbsp; B · Back</span></span>
         </div>
       </section>
+      <dialog id="opening-error" aria-labelledby="opening-error-title" aria-describedby="opening-error-detail">
+        <div class="dialog-inner">
+          <h2 id="opening-error-title">The game couldn’t load</h2>
+          <p id="opening-error-detail">Check your connection and try again.</p>
+          <button type="button" id="opening-retry" class="primary">Retry</button>
+        </div>
+      </dialog>
+      <script>
+        // The menu can receive input while the deferred game scripts are still downloading.
+        (() => {
+          const home = document.getElementById('home');
+          const status = document.getElementById('opening-choice');
+          const welcome = document.getElementById('school-welcome');
+          const error = document.getElementById('opening-error');
+          const options = [...home.querySelectorAll('#school-welcome button, .home-grid button, .ticket-tools button')];
+          const onMenu = () => !location.hash || location.hash === '#home';
+          const optionKey = button => button.id || button.dataset.enterMode;
+          const listeners = new AbortController();
+          const listen = (node, type, fn) => node.addEventListener(type, fn, {signal:listeners.signal});
+          let choice = null, padFrame = 0, repeat, lastDirection = '';
+          const heldButtons = new Map();
+
+          function select(button) {
+            choice?.removeAttribute('data-opening');
+            choice = button || null;
+            if (!choice) { status.textContent = ''; return; }
+            choice.setAttribute('data-opening', '');
+            const label = choice.querySelector('.ticket-corner, b') || choice;
+            status.textContent = choice.id === 'welcome-dismiss' ? 'Skipping tutorial…' :
+              'Opening ' + (choice.id === 'welcome-play' ? 'Fight School' : label.textContent.trim()) + '…';
+          }
+
+          function prepareMenu() {
+            select(null);
+            home.inert = !onMenu();
+            // Returning players get the actual save list from the game, including suspended fights.
+            let fresh = false;
+            try { fresh = !Object.keys(localStorage).some(key => key.startsWith('dog-fight-3.')); } catch {}
+            welcome.hidden = !onMenu() || !fresh;
+            home.classList.toggle('has-welcome', !welcome.hidden);
+            if (!welcome.hidden && document.activeElement === document.body)
+              document.getElementById('welcome-play').focus({preventScroll:true});
+          }
+          prepareMenu();
+          listen(window, 'hashchange', prepareMenu);
+          function moveFocus(direction) {
+            if (!window.FightControls || !onMenu() || error.open) return;
+            const visible = options.filter(button => !button.closest('[hidden]'));
+            const current = visible.indexOf(document.activeElement);
+            if (current < 0) { visible[0].focus(); return; }
+            const bounds = visible.map(button => button.getBoundingClientRect());
+            const rect = bounds[current], horizontal = direction === 'left' || direction === 'right';
+            const lane = horizontal ? (rect.top + rect.bottom) / 2 : (rect.left + rect.right) / 2;
+            visible[FightControls.menuNeighbor(bounds, current, direction, lane)].focus();
+          }
+          function pads() {
+            try { return Array.from(navigator.getGamepads?.() || []).filter(pad => pad && pad.connected !== false); }
+            catch { return []; }
+          }
+          const buttons = pad => Number(!!pad.buttons[0]?.pressed) | (Number(!!pad.buttons[1]?.pressed) << 1);
+          function readPads(time) {
+            padFrame = 0;
+            const connected = pads();
+            if (!connected.length) { heldButtons.clear(); return; }
+            let pressed = 0, direction = '';
+            for (const pad of connected) {
+              const held = buttons(pad);
+              pressed |= held & ~(heldButtons.get(pad.index) || 0);
+              heldButtons.set(pad.index, held);
+              direction ||= FightControls.menuDirection(pad, lastDirection);
+            }
+            lastDirection = direction;
+            if ((pressed || direction) && (onMenu() || error.open)) {
+              document.body.classList.add('pad-navigation');
+              if (error.open) {
+                if (pressed & 1) document.getElementById('opening-retry').click();
+              } else {
+                if (repeat.poll(direction, 'opening', time / 1000)) moveFocus(direction);
+                if (pressed & 2) select(null);
+                else if (pressed & 1) (options.includes(document.activeElement) ? document.activeElement :
+                  options.find(button => !button.closest('[hidden]')))?.click();
+              }
+            } else repeat.poll('', '', time / 1000);
+            padFrame = requestAnimationFrame(readPads);
+          }
+          function connectPad() {
+            if (!padFrame && window.FightControls && pads().length) {
+              repeat = new FightControls.MenuRepeat();
+              padFrame = requestAnimationFrame(readPads);
+            }
+          }
+          listen(document.getElementById('menu-controls'), 'load', connectPad);
+          listen(window, 'gamepadconnected', connectPad);
+          listen(home, 'click', event => {
+            const button = event.target.closest('button');
+            if (!onMenu() || !options.includes(button)) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            select(button);
+          });
+          listen(window, 'keydown', event => {
+            if (event.key === 'Escape' && !error.open) select(null);
+            if (onMenu() && !error.open && options.includes(document.activeElement) &&
+                !event.altKey && !event.metaKey && !event.ctrlKey && /^Arrow(Up|Down|Left|Right)$/.test(event.key) && window.FightControls) {
+              event.preventDefault();
+              moveFocus(event.key.slice(5).toLowerCase());
+            }
+          });
+          // A retry belongs to this tab, history entry and URL. Consume it once.
+          const retry = history.state?.dogFightOpening;
+          if (retry) {
+            const {dogFightOpening, ...rest} = history.state;
+            try { history.replaceState(rest, ''); } catch {}
+            if (onMenu() && retry.url === location.href)
+              select(options.find(button => optionKey(button) === retry.key && !button.closest('[hidden]')));
+          }
+          listen(document, 'dogfight-ready', event => {
+            const selected = choice;
+            listeners.abort();
+            cancelAnimationFrame(padFrame);
+            for (const pad of heldButtons.size ? pads() : []) {
+              const held = buttons(pad) & (heldButtons.get(pad.index) || 0);
+              if (held) event.detail(pad.index, held);
+            }
+            home.inert = false;
+            select(null);
+            if (onMenu() && selected && !selected.disabled && !selected.closest('[hidden]')) selected.click();
+          });
+          listen(document, 'DOMContentLoaded', () => {
+            document.getElementById('opening-retry').onclick = () => {
+              if (choice && onMenu()) {
+                try { history.replaceState({...history.state, dogFightOpening:{url:location.href, key:optionKey(choice)}}, ''); } catch {}
+              }
+              location.reload();
+            };
+            error.oncancel = event => event.preventDefault();
+            error.showModal();
+            document.getElementById('opening-retry').focus();
+          });
+        })();
+      </script>
       <section id="online-lobby" class="dispatch-board" aria-labelledby="online-title" hidden>
         <div class="board-heading">
           <h1 id="online-title">Online versus</h1>

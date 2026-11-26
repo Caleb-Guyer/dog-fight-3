@@ -1,5 +1,8 @@
 (() => {
   'use strict';
+  // The HTML menu offers Retry if a required script did not arrive.
+  if (![window.DogFight, window.DogFightView, window.DogArt, window.ArenaArt, window.FightControls,
+    window.FightRecords, window.YardCup, window.FightSchool, window.DispatchScript].every(Boolean)) return;
   const {
     fighters,
     kits,
@@ -6745,6 +6748,14 @@
     } else showHome();
   }
   window.addEventListener('hashchange', openLink);
+  const initialFocus = document.activeElement;
   openLink();
+  if (page === 'home' && !$('dialog').open && $('home').contains(initialFocus) && initialFocus.matches('button') &&
+      !initialFocus.disabled && !initialFocus.closest('[hidden]')) initialFocus.focus({preventScroll:true});
   requestAnimationFrame(frame);
+  document.dispatchEvent(new CustomEvent('dogfight-ready', {detail(index, held) {
+    // A confirm held across startup must not also jump or confirm the next menu.
+    menuPadButtons.set(index, held);
+    oldPad = {...oldPad, confirm:oldPad.confirm || !!(held & 1), back:oldPad.back || !!(held & 2)};
+  }}));
 })();
