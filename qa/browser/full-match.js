@@ -111,6 +111,27 @@ async function match(browser,device){
     await page.clock.runFor(2400);await page.evaluate(()=>{window.resuming=true;});
     await choose('[data-do=trial-results]');await page.clock.runFor(100);
     assert.equal(await page.evaluate(()=>firstResumed),frozen);
+    await page.goto(root+'?landing-clinic#tutorial/landings');
+    const panel=page.locator('#clip-landings');
+    await panel.locator('[data-after]').waitFor({state:'visible'});
+    assert.match(await panel.locator('[data-before]').textContent(),/Pip · Knocked down. No Shield tap/);
+    assert.match(await panel.locator('[data-after]').textContent(),/Landed in place on frame 98/);
+    await choose('#clip-landings [data-dir="1"]');
+    assert.match(await panel.locator('[data-after]').textContent(),/Rolled right/);
+    await choose('[data-guided]');await page.clock.runFor(1700);
+    assert.equal(await page.locator('#countdown').textContent(),'Tap Shield',device);
+    if(touch)await page.locator('[data-touch=shield]').tap();
+    else if(pad)await page.evaluate(()=>Object.assign(pad.buttons[4],{pressed:true,value:1}));
+    else await page.keyboard.press('l');
+    await page.clock.runFor(650);
+    if(pad)await page.evaluate(()=>Object.assign(pad.buttons[4],{pressed:false,value:0}));
+    assert.equal(await page.locator('#dialog-title').textContent(),'Landed in place',device);
+    assert.match(await page.locator('.finish-comparison').innerText(),/5 frames before impact/);
+    await choose('[data-do=landing-speed]');await page.clock.runFor(2300);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Knocked down',device);
+    await choose('[data-do=trial-results]');
+    assert.equal(await page.locator('#dialog-title').textContent(),'Fight School');
+    console.log(device+' passed guided and match-speed landing comparison from a recorded throw.');
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

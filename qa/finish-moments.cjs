@@ -2,6 +2,37 @@ const test=require('node:test'),assert=require('node:assert/strict');
 global.window={};global.document={currentScript:{src:'https://example.test/finish-tools.js'}};
 require('../docs/engine.js');require('../docs/finish-tools.js');
 const {Battle,FinishTape,idleInput,seededRandom}=window.DogFight;
+test('the clinic compares real missed, in-place, rolling and air-dodge landings after the same Brisket throw',()=>{
+  const tools=window.FinishTools,{tape,battle}=tools.landingDemo(),before=battle.dogs.map(d=>[d.x,d.y,d.damage,d.stocks]);
+  const [fall]=tools.analyze(tape).landings;
+  assert.deepEqual([fall.frame,fall.start,fall.type,fall.press],[98,62,'downed',null]);
+  for(const lead of [0,5,10,11,16])for(const dir of [-1,0,1]){
+    const p=tools.landingPreview(tape,fall,lead,dir);
+    assert.equal(p.result.type,lead===16?'airDodgeLand':lead===11?'downed':dir?'techRoll':'tech');
+    assert.equal(p.result.press,98-lead);
+    if(p.result.type==='techRoll')assert.equal(p.result.dir,dir);
+  }
+  assert.deepEqual(battle.dogs.map(d=>[d.x,d.y,d.damage,d.stocks]),before);
+  assert.equal(tape.playback(98).battle.dogs[0].floorAction.type,'downed');
+});
+test('landing review finds either local seat across rolling checkpoints and reports a locked second tap',()=>{
+  const tools=window.FinishTools;
+  for(const slot of [0,1]){
+    const w=new Battle({mode:'local',p1:slot?'brisket':'pip',p2:slot?'pip':'brisket',stage:'nightmail',fetch:false},()=>{},seededRandom(91));
+    const tape=new FinishTape();
+    w.resetTraining();w.dogs[slot].damage=35;
+    for(let i=-300;i<150;i++){
+      const pair=[idleInput,idleInput];pair[slot]={...idleInput,tapped:{shield:i===86 || i===92}};
+      pair[1-slot]={...idleInput,grab:i===0,y:w.grapple?.phase==='hold'?-1:0};
+      tape.record(w,...pair);w.step(1/60,...pair);
+    }
+    const fall=tools.analyze(tape).landings.find(l=>l.slot===slot);
+    assert(fall);assert.equal(fall.type,'downed');assert.equal(fall.locked,true);
+    assert.match(tools.timing(fall.press,fall.frame,fall.held,fall.locked),/previous tap/);
+    const branch=tools.landingPreview(tape,fall,3,-1);
+    assert.equal(branch.result.type,'techRoll');assert.equal(branch.result.dir,-1);
+  }
+});
 test('recorded sticks, holds, releases and between-tick taps line up with the displayed frame',()=>{
   const world=new Battle({mode:'local',p1:'clover',p2:'noodle',stage:'picnic',fetch:false},undefined,seededRandom(2));
   const tape=new FinishTape(),read=(n,i=0)=>window.FinishTools.inputFrame(tape,n,i);
