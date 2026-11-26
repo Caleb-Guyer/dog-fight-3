@@ -1121,20 +1121,19 @@
     up: 'Up + Special',
     down: 'Down + Special',
   };
-  function showMoves(kind, section='air', fromPause=dialogType==='moves'?backToPause:dialogType==='pause') {
-    if(!window.FighterSchool)return waitForDispatch(fighters[kind].name+' moves',()=>loadDispatch('FighterSchool'),
-      ()=>showMoves(kind,section,fromPause),()=>{if(fromPause)showPause();else if(page==='match')$('game').focus();});
+  function showMoves(kind, section='air', fromPause=dialogType==='moves'?backToPause:dialogType==='pause',focusSide) {
+    if(!window.MoveGuide)return waitForDispatch(fighters[kind].name+' moves',()=>loadDispatch('MoveGuide'),
+      ()=>showMoves(kind,section,fromPause,focusSide),()=>{if(fromPause)showPause();else if(page==='match')$('game').focus();});
     backToPause=fromPause;
-    showDialog('moves',fighters[kind].name+' moves',window.FighterSchool.moveGuide(kind,section,{keyFor,padFor,strikeKeys,specialInputs}));
+    showDialog('moves',fighters[kind].name+' moves',window.MoveGuide.sheet(kind,section,{keyFor,padFor,strikeKeys,specialInputs}));
     for(const canvas of document.querySelectorAll('[data-direction]'))
       drawMoveThumbnail(canvas,kind,canvas.dataset.direction,canvas.dataset.category);
+    if(focusSide)document.querySelector('[data-watch-special="'+focusSide+'"]').focus();
   }
   $('lobby-moves').onclick = () => showMoves(settings[editing ? 'p2' : 'p1']);
   $('training-moves').onclick = () => showMoves(world.dogs[world.trainingPlayerSlot].kind);
   function backToMoveCard(source){
-    showMoves(source.kind,'specials');
-    backToPause=source.paused;
-    document.querySelector('[data-watch-special="'+source.side+'"]').focus();
+    showMoves(source.kind,'specials',source.paused,source.side);
   }
   function showSpecialPreview(source){
     const {kind,side}=source,school=window.FighterSchool;
@@ -5250,7 +5249,7 @@
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
     ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=launch-study-1',
-    FighterSchool:'fighter-lessons.js?v=fetch-guide-1',
+    MoveGuide:'move-guide.js?v=1', FighterSchool:'fighter-lessons.js?v=tryouts-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=bell-wave-1',
