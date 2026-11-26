@@ -66,6 +66,8 @@ async function play(browser,mobile){
     assert.equal(await page.locator('#tourney-call strong').textContent(),champion+' wins the tournament!');
     assert.equal(await page.locator('#tourney-grid [aria-current]').count(),0);
     assert(await page.locator('#dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+    if(mobile)assert(await page.locator('.bracket-match').evaluate(el=>el.offsetWidth>=el.parentElement.clientWidth-2));
+    assert.equal(await page.locator('#tourney-status').textContent(),'Results saved in this tab.');
     await page.locator('#dialog').screenshot({path:path.join(process.env.RUNNER_TEMP,'bracket-'+(mobile?'phone':'desktop')+'.png')});
     const completed=await snapshot();await page.goto(root+'?champion#local/tournament');
     await page.locator('#tourney-end').waitFor();
