@@ -160,10 +160,11 @@
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     const left = Math.round(center - width / 2);
-    const top = Math.round(podiums[0].y - height * (rooftops ? 0.8 : 0.69));
+    const lifting = form === 'counterweights';
+    const top = Math.round((lifting ? (podiums[0].y+podiums[1].y)/2 : podiums[0].y) - height * (rooftops ? 0.8 : 0.69));
     ctx.translate(-left, -top);
-    window.ArenaArt.draw(ctx, config.stage, stageTime, { left, top, right: left + width, bottom: top + height },form);
-    const scale = clamp((viewportHeight * (rooftops ? 0.49 : 0.56)) / 77, 0.8, 3.1);
+    window.ArenaArt.draw(ctx, config.stage, stageTime, { left, top, right: left + width, bottom: top + height },form,ground);
+    const scale = clamp((viewportHeight * (rooftops ? 0.49 : 0.56) - (lifting ? 67 : 0)) / 77, 0.8, 3.1);
     [config.p1, config.p2].forEach((kind, i) => {
       const x = snap(positions[i]),
         y = podiums[i].y;
@@ -2653,7 +2654,7 @@
       const top = Math.round(this.cy) - halfH - sy / this.zoom;
       window.ArenaArt.draw(ctx, world.stage, world.time, {
         left, top, right: left + 2 * halfW, bottom: top + 2 * halfH,
-      },world.form);
+      },world.form,world.terrain);
       if (world.bells) window.BellBreak.draw(ctx,world);
       world.lesson?.drawCourse?.(ctx);
       if (this.finishReturn) finalHitBackdrop(ctx,left,top,2*halfW,2*halfH,focus,steady,this.finishReturn/.24);
