@@ -2323,7 +2323,7 @@
     }
     if (online.match) {
       showDialog('online-menu', 'Match menu',
-        '<p>The online fight is still running.</p><div class="dialog-actions"><button class="primary" data-do="resume">Return to fight</button><button class="utility" data-do="online-leave">Leave match</button></div>');
+        '<p id="online-fight-status">'+onlineFightStatus()+'</p><div class="dialog-actions"><button class="primary" data-do="resume">Return to fight</button><button class="utility" data-do="online-leave">Leave match</button></div>');
       document.querySelector('[data-do=resume]').focus();
       return;
     }
@@ -4243,7 +4243,7 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
-    PracticeFeedback:'practice-feedback.js?v=grip-2', DogOnline:'online.js?v=ground-space-1',
+    PracticeFeedback:'practice-feedback.js?v=grip-2', DogOnline:'online.js?v=room-resume-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
@@ -5345,6 +5345,9 @@
   }
   const offline = {match:null,phase:'idle'};
   let online = offline;
+  function onlineFightStatus(){
+    return online.recovery?'Reconnecting to your opponent. The fight is paused.':'The online fight is still running.';
+  }
   const roomEvents = {
     status: onlineStatus, start(config,random){
       const warmedUp=!!world?.warmupPartner;
@@ -5356,6 +5359,14 @@
         announce('Opponent found. You are P'+(online.side+1)+' on '+stageName(config.stage,config.form)+'.');
       }
     }, votes: updateVotes,
+    recovery(active){
+      accumulator=0;
+      taps.clear();touchTaps.clear();touchFlick=flickAim=null;
+      $('countdown').classList.toggle('net-lag',active);
+      $('countdown').textContent=active?'Reconnecting…':'';
+      if($('online-fight-status'))$('online-fight-status').textContent=onlineFightStatus();
+      announce(active?onlineFightStatus():'Reconnected. Fight resumed.');
+    },
     closed: (message) => showOnline(message, online.action === 'join' ? online.code : ''),
   };
   function leaveOnline() {
@@ -6238,7 +6249,11 @@
       runAdventure(dt, pads);
     } else if (!paused && world && dialogType!=='finish-film') {
       let steppedFrame = false;
-      if (countdown > 0) {
+      if(online.recovery){
+        const seconds=Math.max(0,Math.ceil((online.recovery.until-Date.now())/1000));
+        const caption='Reconnecting · '+seconds+'s';
+        if($('countdown').textContent!==caption)$('countdown').textContent=caption;
+      } else if (countdown > 0) {
         countdown = Math.max(0, countdown - dt);
         if(view.entrance){
           const intro=view.entrance;

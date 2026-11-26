@@ -12,6 +12,9 @@
   const driveFeature='aimed-drive-1';
   const pogoFeature='shield-pogo-1';
   const spaceFeature='ground-space-1';
+  const resumeFeature='resume-inputs-1';
+  const resumeChannel=channel+'-resume';
+  const resumeTime=18000;
   function readRoomRules(msg){
     if(msg.length!==13 || msg[8]!==roomFeature || !['stock','time'].includes(msg[9]) ||
       !window.DogFight.validStockCount(msg[10]) || !window.DogFight.stockMinutes.includes(msg[11]) ||
@@ -24,6 +27,7 @@
   const buttons = ['jump', 'attack', 'smash', 'special', 'shield', 'grab', 'aimStick', 'tiltMode', 'shortHop', 'quickAttack'];
   const axes = ['x', 'y', 'grabX', 'smashX', 'smashY', 'airDodgeX', 'airDodgeY'];
   const predictionLimit = 8;
+  const historySize=predictionLimit*2+2;
   const fighter = (kind) => typeof kind === 'string' && Object.hasOwn(window.DogFight.fighters, kind);
   const validCode = (value) => typeof value === 'string' && /^[A-HJ-NP-Z2-9]{6}$/.test(value);
   const randomInt = () => crypto.getRandomValues(new Uint32Array(1))[0];
@@ -62,12 +66,13 @@
 
   // The second Battle is a rolling checkpoint. Only it advances on two known inputs.
   class RollbackMatch {
-    constructor(side, round, send, config, seed) {
+    constructor(side, round, send, config, seed, keepInputs) {
       this.side = side;
       this.round = round;
       this.send = send;
       this.confirmedWorld = new window.DogFight.Battle(config, silent, seededRandom(seed));
       this.pending = [];
+      this.sent=keepInputs?new Array(historySize):null;
       this.remote = [];
       this.frame = this.confirmed = this.received = 0;
       this.prediction = pack({});
@@ -81,6 +86,10 @@
       this.remote.push(values);
       this.received++;
       return true;
+    }
+    inputsFrom(first){
+      if(!this.sent || !Number.isSafeInteger(first) || first<Math.max(0,this.frame-historySize) || first>this.frame)return null;
+      return Array.from({length:this.frame-first},(_,i)=>this.sent[(first+i)%historySize]);
     }
     step(world, mine, other, emit) {
       const previous = world.emit;
@@ -158,6 +167,7 @@
         Math.abs(a.y - b.y) <= Math.max(a.stats.height, b.stats.height) + 95;
       const record = { mine, other: this.remote[0] || this.prediction, cues: this.cues, nearHead };
       this.pending.push(record);
+      if(this.sent)this.sent[this.frame%historySize]=mine;
       this.send(['input', this.round, this.frame++, mine]);
       this.step(world, mine, record.other, this.events(record, world.emit, false));
       if (this.remote.length) this.confirm(world);
@@ -204,6 +214,8 @@
     close(message = '') {
       clearTimeout(this.timer);
       clearInterval(this.watch);
+      this.stopRecovery();
+      this.roomTicket=null;
       this.phase = 'idle';
       this.disposePeer(true);
       this.link = this.match = this.series = null;
@@ -278,7 +290,9 @@
         }
       });
       peer.on('connection', (conn) => {
-        if (this.peer !== peer || !host || conn.label !== channel || this.pending.size >= 8) return conn.close();
+        if (this.peer !== peer || !host || this.pending.size >= 8) return conn.close();
+        if(conn.label===resumeChannel && this.roomTicket && conn.peer===this.opponentId)return this.useConnection(peer,conn,true,true);
+        if(conn.label!==channel)return conn.close();
         this.useConnection(peer, conn, true);
       });
       peer.on('error', (error) => {
@@ -298,8 +312,8 @@
         if (this.peer === peer && !this.match) this.close('Lost contact with matchmaking. Try again.');
       });
     }
-    useConnection(peer, conn, host) {
-      if (!host) this.itemDrops=this.closingHeight=this.shieldPogo=this.aimedDrive=this.groundSpace=false;
+    useConnection(peer, conn, host, restoring=false, attempt=0) {
+      if (!host && !restoring) this.itemDrops=this.closingHeight=this.shieldPogo=this.aimedDrive=this.groundSpace=false;
       this.pending.add(conn);
       const timeout = setTimeout(() => {
         if (this.pending.delete(conn)) conn.close();
@@ -311,14 +325,40 @@
       };
       conn.on('open', () => {
         if (!current()) return conn.close();
-        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature] :
+        if(!host && restoring){
+          if(this.recovery?.dial!==conn)return conn.close();
+          return conn.send(['resume',this.roomTicket,this.round,attempt,this.match.received]);
+        }
+        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,resumeFeature] :
           ['join',this.kind,this.coat,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature]);
       });
       conn.on('data', (data) => {
         if (!current() || !Array.isArray(data)) return;
         if (conn === this.link) return this.receive(data);
+        if(!this.pending.has(conn))return;
+        if(restoring){
+          const [type,ticket,round,sequence,first]=data;
+          if(data.length!==5 || type!==(host?'resume':'resumed') || ticket!==this.roomTicket ||
+              !this.canRecover() || round!==this.round || conn.peer!==this.opponentId ||
+              this.recovery && Date.now()>=this.recovery.until || !Number.isSafeInteger(sequence) ||
+              (host ? sequence<=this.resumeAttempt : sequence!==attempt || this.recovery?.dial!==conn))return conn.close();
+          const missing=this.match.inputsFrom(first);
+          if(!missing)return conn.close();
+          const previous=this.link;
+          this.stopRecovery();
+          this.attach(conn,sequence);
+          if(previous && previous!==conn)previous.close();
+          if(host)this.send(['resumed',ticket,round,sequence,this.match.received]);
+          missing.forEach((input,i)=>this.send(['input',round,first+i,input]));
+          if(this.finished)this.send(['result',round,this.myResult]);
+          if(this.link===conn && this.match){
+            this.match.lastStep=performance.now();
+            this.events.recovery?.(false);
+          }
+          return;
+        }
         if (host && data[0] === 'join' && fighter(data[1])) {
-          if (this.link) return reject('full');
+          if (this.link || this.recovery) return reject('full');
           const rules=this.roomRules;
           this.customRound=!!rules && data[5]===roomFeature;
           if(rules && !this.customRound && (!rules.fetch || !rules.timed && (rules.lives!==3 || rules.minutes!==7))){
@@ -346,6 +386,10 @@
             if (this.shieldPogo) reply.push(pogoFeature);
             if (this.aimedDrive) reply.push(driveFeature);
             if (this.groundSpace) reply.push(spaceFeature);
+            if(this.action==='create' && data.includes(resumeFeature)){
+              this.roomTicket=crypto.randomUUID();
+              reply.push(resumeFeature,this.roomTicket);
+            }
             if (this.rematchPicks) reply.push(rematchFeature);
             conn.send(reply);
           }
@@ -361,6 +405,8 @@
           this.aimedDrive=data.includes(driveFeature);
           this.groundSpace=data.includes(spaceFeature);
           this.shieldPogo=data.includes(pogoFeature);
+          const key=data.indexOf(resumeFeature),ticket=data[key+1];
+          if(this.action==='join' && key>=0 && typeof ticket==='string' && /^[0-9a-f-]{36}$/i.test(ticket))this.roomTicket=ticket;
         } else if (!host && this.action==='join' && !this.round && data[0]==='room-offer' && readRoomRules(data) && this.validStart(data)){
           this.remoteKind=data[2];this.offer=['start',...data.slice(1)];this.attach(conn);
           this.status('review','Review the host’s rules before starting.');
@@ -377,10 +423,13 @@
       });
       const lost = () => {
         clearTimeout(timeout);
-        this.pending.delete(conn);
+        const wasPending=this.pending.delete(conn);
         if (!current()) return;
-        if (this.link === conn) this.opponentLeft('Your opponent disconnected.');
-        else if (!host && !this.link) {
+        if(this.link===conn){
+          if(this.canRecover())this.startRecovery();else this.opponentLeft('Your opponent disconnected.');
+        }else if(restoring){
+          if(this.recovery?.dial===conn)this.recovery.dial=null;
+        }else if (wasPending && !host && !this.link && !this.recovery) {
           if (this.action === 'quick') this.retryQuick();
           else this.close('The room closed before the match started.');
         }
@@ -388,21 +437,62 @@
       conn.on('close', lost);
       conn.on('error', lost);
     }
-    attach(conn) {
+    attach(conn,sequence=0) {
       clearTimeout(this.timer);
+      clearInterval(this.watch);
       this.pending.delete(conn);
       this.link = conn;
+      this.resumeAttempt=sequence;
+      this.opponentId=conn.peer;
       this.lastTraffic = Date.now();
       this.watch = setInterval(() => {
+        if(this.canRecover() && Date.now()-this.lastTraffic>6500)return this.startRecovery();
         if (Date.now() - this.lastTraffic > 22000) return this.opponentLeft('Connection timed out.');
         this.send(['ping']);
       }, 3000);
+    }
+    canRecover(){
+      return !!(this.roomTicket && this.match?.sent && this.peer && !this.peer.destroyed && (!this.finished || this.theirResult===null && !this.myVote));
+    }
+    stopRecovery(){
+      if(this.recovery)clearInterval(this.recovery.timer);
+      this.recovery=null;
+    }
+    startRecovery(){
+      if(this.recovery)return;
+      const recovery={until:Date.now()+resumeTime,dial:null,attemptAt:0};
+      this.recovery=recovery;
+      clearInterval(this.watch);
+      const previous=this.link;
+      this.link=null;
+      previous?.close();
+      this.events.recovery?.(true);
+      const retry=()=>{
+        if(this.recovery!==recovery)return;
+        const now=Date.now(),peer=this.peer;
+        if(now>=recovery.until || !peer || peer.destroyed)return this.opponentLeft('Could not reconnect to your opponent.');
+        if(peer.disconnected){try{peer.reconnect();}catch{}return;}
+        if(this.side!==1 || !peer.open || now-recovery.attemptAt<3500)return;
+        recovery.attemptAt=now;
+        recovery.dial?.close();
+        try{
+          const conn=peer.connect(this.opponentId,{label:resumeChannel,serialization:'json',reliable:true});
+          recovery.dial=conn;
+          if(conn)this.useConnection(peer,conn,false,true,++this.resumeAttempt);
+        }catch{
+          recovery.dial=null;
+        }
+      };
+      recovery.timer=setInterval(retry,500);
+      retry();
     }
     send(data) {
       if (this.link?.open) this.link.send(data);
     }
     opponentLeft(message) {
       if (this.action !== 'create' || !this.peer?.open) return this.close(message);
+      this.stopRecovery();
+      this.roomTicket=null;
       const conn = this.link;
       this.link = this.match = this.series = null;
       this.offer=null;this.accepted=this.customRound=false;
@@ -501,7 +591,7 @@
       if (this.groundSpace===false) config.groundSpace=false;
       if(rules)Object.assign(config,{stockCount:rules.lives,minutes:rules.minutes,fetch:rules.fetch});
       if (this.timeMinutes) Object.assign(config, {timeBattle:true,minutes:this.timeMinutes});
-      this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed);
+      this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed,!!this.roomTicket);
       this.events.start(config, seededRandom(seed));
     }
     receive(msg) {
