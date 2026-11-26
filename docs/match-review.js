@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const {Battle,FinishTape,seededRandom,fighters,moves,specials,smashes,pummels,throws}=window.DogFight;
-  function recordList(records,recordModes,portrait,showDialog,focusId){
+  function recordList(records,recordModes,portrait,showDialog,focusId,sample){
     const rows=records.list();
     const buttons=rows.map(({id,entry})=>{
       const dogs=entry.card.players, winner=dogs[entry.winner];
@@ -16,6 +16,10 @@
       (rows.some(r=>records.transient.has(r.id))?'<p>Storage is unavailable. Recent games are kept in this tab.</p>':''):
       '<p>Your next completed fight will appear here with both fighters’ stats and a knockout recap.</p>'+
       '<div class="dialog-actions"><button class="primary" data-do="record-solo">Play a solo fight</button></div>');
+    const demo=document.createElement('button');demo.type='button';demo.className='utility';
+    demo.id='record-example';demo.textContent='Study a sample replay';demo.onclick=sample;
+    document.getElementById('dialog-body').append(demo);
+    if(focusId==='sample'){demo.focus({preventScroll:true});return;}
     (Array.from(document.querySelectorAll('[data-record-id]')).find(b=>b.dataset.recordId===focusId) ||
       document.querySelector('[data-record-id],[data-do=record-solo]')).focus({preventScroll:true});
   }
@@ -54,10 +58,12 @@
     ).join('') + '</nav>' : '';
     const tips=(mode==='local'?[0,1]:[side]).map(i=>{
       const tip=window.FightRecords.coaching(game.card,i);
-      if(!tip)return '';
-      return '<div class="record-tip"><strong>'+heading(i)+' · '+name(i)+'</strong><p>'+tip.why+'</p>'+
+      const mark=Object.keys(defenseStats).find(type=>card.players[i][defenseStats[type]]>0);
+      if(!tip && !mark)return '';
+      return '<div class="record-tip"><strong>'+heading(i)+' · '+name(i)+'</strong>'+(tip?'<p>'+tip.why+'</p>':'')+
+        (mark?'<button type="button" hidden class="utility" data-study-slot="'+i+'" data-study-type="'+mark+'">Review '+name(i)+'’s '+defenseNames[mark].toLowerCase()+'</button>':'')+(!tip?'':
         (inRoom?'<small>'+tip.label+' · Available from Fight Records after leaving the room.</small>':
-          '<button class="utility" data-record-drill="'+i+'">'+tip.label+'</button>')+'</div>';
+          '<button class="utility" data-record-drill="'+i+'">'+tip.label+'</button>'))+'</div>';
     }).join('');
     return tabs + '<h3 class="card-stage">' +
       (set ? 'Game ' + (index+1) + ' · ' : archived ? recordModes[mode]+' · ' : '') + stageName(game.stage,form) + '</h3><p class="card-finish">' +
@@ -129,9 +135,36 @@
       while(player.frame<stop)player.step();
       battle.emit=emit;return player;
     }
-    exchange(frame){
+    // Counters in the six-second checkpoints let older recordings locate events
+    // without storing a second timeline or scanning quiet stretches of the fight.
+    async defenses(card,active=()=>true){
+      if(this.defenseMarks)return this.defenseMarks;
+      const marks=[],parts=this.data.parts;
+      let slice=performance.now();
+      for(let start=0;start<this.length;start+=360){
+        if(!active())return null;
+        const before=parts[start/120].state.matchCard?.players;
+        const after=(parts[start/120+3]?.state.matchCard || card)?.players;
+        if(before && after && !before.some((p,i)=>Object.values(defenseStats).some(key=>p[key]!==after[i][key])))continue;
+        const player=this.playback(start,(type,e)=>{
+          if(!Object.hasOwn(defenseStats,type))return;
+          marks.push({type,frame:player.frame+1,slot:e.f.index,dog:e.f.stats.name,dir:e.dir || 0,roll:e.type==='techRoll'});
+        });
+        const stop=Math.min(start+360,this.length);
+        while(player.frame<stop){
+          player.step();
+          if(performance.now()-slice>6){
+            await new Promise(resolve=>setTimeout(resolve,0));
+            if(!active())return null;
+            slice=performance.now();
+          }
+        }
+      }
+      return this.defenseMarks=marks;
+    }
+    exchange(frame,length=240){
       const player=this.playback(frame),tape=new FinishTape();
-      for(let i=0;i<240 && player.frame<player.length;i++)player.step(tape);
+      for(let i=0;i<length && player.frame<player.length;i++)player.step(tape);
       return {tape,result:player.battle};
     }
   }
@@ -331,7 +364,134 @@
         (from==='pause'?'Back to fight':from==='archive'?'Back to match stats':'Back to results')+'</button></div>';
     }
   }
-  function watchFilm(film,{showDialog,stageName,back,practice,retryStock,losses,shake},at=null){
+  const defenseStats={knockdown:'knockdowns',tech:'techs',break:'shieldBreaks',parry:'parries'};
+  const defenseNames={knockdown:'Missed landing',tech:'Landing tech',break:'Shield break',parry:'Parry'};
+  async function sampleFight(){
+    const config={mode:'local',stage:'nightmail',p1:'pip',p2:'brisket',minutes:0,fetch:false};
+    const battle=new Battle(config,undefined,seededRandom(27)),tape=new FinishTape(true);
+    const {idleInput}=window.DogFight;
+    battle.resetTraining();battle.dogs[0].damage=35;
+    for(let frame=1;frame<=1170;frame++){
+      if(frame%90===0)await new Promise(resolve=>setTimeout(resolve,0));
+      const gap=battle.dogs[0].x-battle.dogs[1].x;
+      const pip={...idleInput,shield:frame===611 || frame>=796 && frame<820 || frame>=880};
+      const brisket={...idleInput};
+      if(frame===1 || frame===516)brisket.grab=true;
+      if(battle.grapple?.phase==='hold')brisket.y=-1;
+      if((frame>164 && frame<490 || frame>630 && frame<795) && Math.abs(gap)>52)brisket.x=Math.sign(gap)*.5;
+      if(frame>=880 && Math.abs(gap)>57)brisket.x=Math.sign(gap)*.5;
+      if(frame>=796 && frame<810 || frame>=900 && (frame-900)%100<40){brisket.smash=true;brisket.smashX=Math.sign(gap);}
+      tape.record(battle,pip,brisket);battle.step(1/60,pip,brisket);
+    }
+    tape.captureKnockouts(battle);
+    return {film:new MatchFilm(tape.fullMatch()),card:battle.matchCard,sample:true,selection:{sample:true}};
+  }
+  function openFilm(context,at,{world,tape,stageName,showDialog,shake,records,cardSheet,resultSheet,stockSheet,trial,clip}){
+    if(!context){
+      const data=tape?.fullMatch();if(!data)return;
+      context={film:new MatchFilm(data)};
+    }
+    const {film,entry,id,sample}=context,origin=film.data.parts[0].state;
+    const card=entry?.card || context.card || world.matchCard;
+    const from=entry || sample?'archive':'result';
+    const selection=context.selection??={};
+    const practice=(frame,slot,mark)=>{
+      const landing=mark && ['tech','knockdown'].includes(mark.type) && (origin.mode==='local' || slot===0);
+      const start=mark?Math.max(0,frame-(landing?84:24)):frame;
+      const {tape,result}=film.exchange(start,mark?frame-start+(landing?60:90):240);
+      if(!tape.length)return;
+      const review={film:context,frame,entry,id,slot,finish:true,result,from,clip:{tape,losses:[]}};
+      if(mark){
+        review.moment={...mark,title:defenseNames[mark.type],at:frame-start};
+        if(landing)return clip(frame-start,review);
+        review.baseline=tape.playback(0).battle.matchCard.players.map(p=>({...p}));
+      }
+      trial(0,slot,review);
+    };
+    watchFilm(film,{stageName,showDialog,shake,card,selection,practice,study:m=>practice(m.frame,m.slot,m),
+      retryStock:!sample && origin.mode==='solo' && !origin.matchCard.points?(fall,frame)=>stockSheet({film:context,fall,frame,entry,id,
+        from,result:entry?film.playback(film.length).battle:world}):null,
+      back:()=>{
+        if(sample){records('sample');return;}
+        if(entry){cardSheet(0,entry,id,{first:'full'});return;}
+        resultSheet();document.querySelector('[data-do=watch-match]')?.focus();
+      }},at);
+  }
+  function defenseReport(review,attempt){
+    const {slot,baseline,moment}=review,other=1-slot;
+    const diff=(card,seat,key)=>Math.round((card.players[seat][key]-baseline[seat][key])*10)/10;
+    const before=review.result.matchCard,after=attempt.matchCard;
+    const row=(label,seat,key,unit='')=>'<tr><th scope="row">'+label+'</th><td>'+diff(before,seat,key)+unit+'</td><td>'+diff(after,seat,key)+unit+'</td></tr>';
+    const key=defenseStats[moment.type],count=diff(after,slot,key);
+    const title=moment.type==='break'?(count?'Shield broke again':'Shield break avoided'):
+      moment.type==='parry'?(count?'Parry landed':'Parry attempt'):moment.title+' practice';
+    return {title,html:'<p>P'+(slot+1)+' '+moment.dog+' · '+moment.title+' on match frame '+moment.frame+'</p>'+
+      '<table class="finish-comparison"><thead><tr><th>Exchange</th><th>Original</th><th>This attempt</th></tr></thead><tbody>'+
+      row('Parries',slot,'parries')+row('Shield breaks suffered',slot,'shieldBreaks')+row('Knockdowns',slot,'knockdowns')+
+      row('Damage taken',other,'damage','%')+row('Damage dealt',slot,'damage','%')+'</tbody></table>'};
+  }
+  function defenseCue(type){
+    if(type==='break')return 'Try releasing Shield to parry the incoming hit, or use a roll to escape.';
+    if(type==='parry')return 'Hold Shield through the windup, then release it just before contact.';
+    return 'Tap Shield just before touching down. Hold sideways with the tap to roll.';
+  }
+  function defenseActions(){
+    return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Retry exchange</button>'+
+      '<button class="utility" data-do="trial-results">Back to full match</button></div>';
+  }
+  function enableStudy(open){
+    for(const b of document.querySelectorAll('[data-study-slot]')){
+      b.hidden=false;b.onclick=()=>open({slot:Number(b.dataset.studySlot),type:b.dataset.studyType});
+    }
+  }
+  function defensePanel(root,film,card,selected,watch,practice,stop,at){
+    if(!card.players.some(p=>Object.values(defenseStats).some(key=>p[key]>0)))return;
+    const panel=document.createElement('details');panel.id='film-defense';
+    panel.innerHTML='<summary>Defensive moments</summary><p role="status"></p><div hidden>'+
+      '<label>Exchange <select></select></label><div class="dialog-actions">'+
+      '<button type="button" class="utility" data-prev>Previous moment</button><button type="button" class="utility" data-next>Next moment</button>'+
+      '<button type="button" class="utility" data-lead>Watch lead-in</button>'+
+      '<button type="button" class="primary" data-study></button></div></div>';
+    root.prepend(panel);
+    const select=panel.querySelector('select'),note=panel.querySelector('p'),controls=panel.querySelector('div');
+    const study=panel.querySelector('[data-study]');let marks,revision=0;
+    function choose(seek=true){
+      const mark=marks[select.selectedIndex];selected.frame=mark.frame;selected.slot=mark.slot;selected.type=mark.type;
+      const landing=['knockdown','tech'].includes(mark.type);
+      panel.querySelector('[data-prev]').disabled=select.selectedIndex===0;
+      panel.querySelector('[data-next]').disabled=select.selectedIndex===marks.length-1;
+      note.textContent=landing?'Compare Shield timing on this landing, then try it yourself.':
+        mark.type==='break'?'Take over before the shield breaks. Try releasing Shield to parry, or use a roll to escape.':
+        'Take over before contact. Release Shield just before the hit to repeat the parry.';
+      study.textContent=landing?'Review this landing':mark.type==='break'?'Prevent this break':'Repeat this parry';
+      if(seek)watch(mark.frame,false);
+    }
+    select.onchange=choose;
+    panel.querySelector('[data-prev]').onclick=()=>{select.selectedIndex--;choose();};
+    panel.querySelector('[data-next]').onclick=()=>{select.selectedIndex++;choose();};
+    study.onclick=()=>practice(marks[select.selectedIndex]);
+    panel.querySelector('[data-lead]').onclick=()=>watch(Math.max(0,marks[select.selectedIndex].frame-60),true);
+    panel.ontoggle=async()=>{
+      const mine=++revision;selected.open=panel.open;if(!panel.open)return;
+      stop();
+      if(marks){choose();return;}
+      note.textContent='Finding defensive moments…';
+      const current=()=>panel.isConnected && panel.open && revision===mine;
+      let found;
+      try{found=await film.defenses(card,current);}
+      catch{if(current())note.textContent='These moments could not be read. Close and reopen to retry.';return;}
+      if(!found || !current())return;
+      if(!found.length){note.textContent='The recording contains no defensive moments.';return;}
+      marks=found;
+      for(const [i,m] of marks.entries())select.add(new Option('P'+(m.slot+1)+' '+m.dog+' · '+defenseNames[m.type]+
+        (m.roll?(m.dir<0?' left':' right'):'')+' · frame '+m.frame,String(i)));
+      const initial=marks.findLastIndex(m=>(!selected.frame || m.frame===selected.frame) && m.slot===selected.slot && m.type===selected.type);
+      select.selectedIndex=initial>=0?initial:0;controls.hidden=false;choose(!selected.frame || at===selected.frame);
+    };
+    panel.open=selected.open ?? (!!selected.type || selected.sample===true);
+  }
+  function watchFilm(film,{showDialog,stageName,back,practice,retryStock,card,study,selection,shake},at=null){
+    const losses=card.losses;
     const time=n=>Math.floor(n/3600)+':'+String(Math.floor(n/60)%60).padStart(2,'0');
     showDialog('finish-film','Full match replay',
       '<p id="film-stage" class="clip-caption"></p><canvas id="clip-arena" width="640" height="360" role="img" aria-label="Full match replay"></canvas>'+
@@ -396,6 +556,7 @@
     };
     el('film-speed').onclick=e=>{rate=rate===1?2:rate===2?.5:1;e.currentTarget.textContent='Speed · '+(rate===.5?'½':rate)+'×';};
     const marks=el('film-marks');
+    defensePanel(marks,film,card,selection,(frame,play)=>{pauseAt(frame);if(play)el('film-play').click();},study,holdTimeline,at);
     if(film.data.falls.length){
       const details=document.createElement('details'),heading=document.createElement('summary');
       heading.textContent='Knockout lead-ins';details.append(heading);marks.append(details);
@@ -456,7 +617,8 @@
         const b=document.createElement('button');b.type='button';b.className='utility';b.textContent='Watch full match';
         b.dataset.savedClip='full';actions.append(b);
         if(focus?.first==='full')b.focus({preventScroll:true});
-        b.onclick=async()=>{
+        const load=async(selection)=>{
+          if(b.disabled)return;
           b.disabled=true;
           try{
             const db=await database();let data;
@@ -464,10 +626,11 @@
             const film=new MatchFilm(data),last=film.playback(film.length).battle;
             if(last.stage!==entry.stage || last.form!==entry.form || last.end!==entry.winner || last.matchCard.frames!==entry.card.frames)
               throw Error('Replay differs from its scorecard');
-            if(b.isConnected)openFilm(film);
+            if(b.isConnected)openFilm(film,selection);
           }catch{if(b.isConnected){status.hidden=false;status.textContent='The full replay could not be opened.';}}
           finally{b.disabled=false;}
         };
+        b.onclick=()=>load();enableStudy(load);
       }
       const rows=root.querySelectorAll('.card-timeline li');
       for(const span of c.knockouts)for(let i=0;i<span.losses;i++){
@@ -477,5 +640,5 @@
       status.hidden=true;status.textContent='';
     }catch{if(card.isConnected)status.textContent='The replay is unavailable on this device. Your match stats are saved.';}
   }
-  window.MatchReview={recordList,cardHTML,save,attach,pack,restore,resumeTape,MatchFilm,watchFilm,StockRetry,koList};
+  window.MatchReview={sampleFight,openFilm,enableStudy,defenseReport,defenseCue,defenseActions,recordList,cardHTML,save,attach,pack,restore,resumeTape,MatchFilm,watchFilm,StockRetry,koList};
 })();

@@ -55,4 +55,7 @@ dialog:is([data-view='finish-replay'],[data-view='finish-film']) { width:min(760
 
 #film-marks summary { cursor:pointer; font-weight:bold; }
 #film-marks button { margin:4px 4px 0 0; }
+#film-defense { width:100%; }
+#film-defense select { max-width:100%; font:inherit; }
+#film-defense label { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
 #film-time { font-variant-numeric:tabular-nums; }
