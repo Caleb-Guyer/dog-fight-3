@@ -244,6 +244,8 @@ The postmark above Sorting Bridge’s Crane House opens **Dead Letter Lift** on 
 
 ## Publish on GitHub Pages
 
+The ZIP includes the browser-ready build. To edit the game, work in the readable JavaScript files directly under `docs/`. After editing the engine, app, renderer, fighter art or arena art, run `npm ci --prefix tools` and `npm run build --prefix tools` from the repository root. Commit the generated `docs/runtime/` files and updated `docs/index.html` with your edits. Use `npm run check --prefix tools` to verify that the published scripts match the source.
+
 1. Create or open your GitHub repository. A public repository named `dog-fight-3` is a simple choice.
 2. Put the extracted `docs` folder and this README at the top of the `main` branch. Keep the folder structure so that `docs/index.html` is the entry point.
 3. Open **Settings → Pages**. Under **Build and deployment**, choose **Deploy from a branch**, then **main** and **/docs**. Click **Save**.
