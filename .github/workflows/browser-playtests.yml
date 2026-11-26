@@ -231,7 +231,7 @@ jobs:
           persist-credentials: false
       - name: Save, share and play custom rulesets in couch and private WebRTC fights
         run: |
-          node --test qa/versus-rules.cjs
+          node --test qa/versus-rules.cjs qa/local-tournament.cjs
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1 peer@1.0.2
           export NODE_PATH="$RUNNER_TEMP/df3/node_modules"
           python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/rules-http.log" 2>&1 &
@@ -241,3 +241,10 @@ jobs:
           trap 'kill "$server_pid" "$peer_pid"' EXIT
           node qa/stock-sets.cjs --rulesets
           node qa/stock-sets.cjs --friend-rules
+          node qa/browser/local-tournament.js
+      - name: Save tournament screen previews
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tournament-previews
+          path: ${{ runner.temp }}/bracket-*.png
+          retention-days: 3
