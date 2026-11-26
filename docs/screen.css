@@ -434,6 +434,11 @@ dialog[data-view='special-preview'] { width:min(760px,calc(100% - 16px)); }
 @media(max-height:520px) { #move-arena { width:min(100%,64dvh); } }
 .card-games, .form-choices { display: flex; gap: 6px; margin-bottom: 12px; }
 .card-games button, .form-choices button { flex: 1; min-width: 0; }
+.form-choices button { flex-basis: auto; }
+@media (max-width: 520px) {
+  .form-choices { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .form-choices button { min-height: 44px; }
+}
 .card-games [aria-pressed='true'], .form-choices [aria-pressed='true'] { background: var(--gold); color: var(--ink); }
 .card-stage, .card-timeline-title { font: 20px/1.15 var(--pixel); margin: 0; }
 .card-timeline { list-style: none; margin: 5px 0; padding: 0; }
