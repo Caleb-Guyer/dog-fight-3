@@ -10,12 +10,12 @@ dialog:is([data-view='finish-replay'],[data-view='finish-film']) { width:min(760
 #dialog-body #clip-inputs p { margin:4px 0; font-variant-numeric:tabular-nums; }
 #clip-launch { margin:6px 0; padding:5px 2px; border-block:1px solid currentColor; }
 #clip-launch summary { cursor:pointer; font-weight:bold; }
-:is(#clip-defense,#clip-landings,#clip-grip) { border-block:1px solid currentColor; margin:6px 0; padding:5px 2px; }
-:is(#clip-defense,#clip-landings,#clip-grip) summary { cursor:pointer; font-weight:bold; }
-#dialog-body :is(#clip-defense,#clip-landings,#clip-grip) p { margin:6px 0; }
-#clip-grip select { max-width:100%; font:inherit; }
+:is(#clip-defense,#clip-landings,#clip-grip,#clip-ledge) { border-block:1px solid currentColor; margin:6px 0; padding:5px 2px; }
+:is(#clip-defense,#clip-landings,#clip-grip,#clip-ledge) summary { cursor:pointer; font-weight:bold; }
+#dialog-body :is(#clip-defense,#clip-landings,#clip-grip,#clip-ledge) p { margin:6px 0; }
+:is(#clip-grip,#clip-ledge) select { max-width:100%; font:inherit; }
 :is(#clip-defense,#clip-landings) canvas { display:block; width:min(100%,512px); height:auto; image-rendering:pixelated; border:2px solid var(--ink); }
-:is(#clip-landings,#clip-grip) label { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:6px 0; }
+:is(#clip-landings,#clip-grip,#clip-ledge) label { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:6px 0; }
 #clip-landings input { accent-color:var(--ink); }
 .defense-timing, .defense-choices { display:flex; flex-wrap:wrap; gap:4px; margin:6px 0; }
 :is(#clip-defense,#clip-landings) [aria-pressed=true] { color:var(--ink); background:var(--gold); }
