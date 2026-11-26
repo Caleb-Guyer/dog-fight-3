@@ -298,6 +298,7 @@ async function testFootstools(page, mobile) {
     }
     assert.fail('Expected '+result+', saw '+await status.innerText());
   }
+  await status.waitFor({state:'visible'});
   assert.match(await status.innerText(),/Footstool rescue/);
   await start(); await waitFor('fell');
   await button('spacing-footstool'); await button('spacing-side');
