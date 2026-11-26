@@ -64,8 +64,35 @@ async function match(browser,device){
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
+async function measureSeeking(browser){
+  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  try{
+    await page.goto(root+'#solo/last-stock');await page.waitForFunction(()=>!!window.MatchReview);
+    await (await page.context().newCDPSession(page)).send('Emulation.setCPUThrottlingRate',{rate:4});
+    const result=await page.evaluate(()=>{
+      const {Battle,FinishTape,idleInput,seededRandom}=DogFight;
+      const w=new Battle({mode:'local',stage:'nightmail',p1:'clover',p2:'pip',minutes:7,timeBattle:true},undefined,seededRandom(81));
+      const tape=new FinishTape(true);
+      for(let i=0;i<25200;i++){
+        const first={...idleInput,x:Math.floor(i/170)%2?1:-1,attack:i%66===0,jump:i%99===0};
+        tape.record(w,first,idleInput);w.step(1/60,first,idleInput);
+      }
+      tape.captureKnockouts(w);
+      const film=new MatchReview.MatchFilm(tape.fullMatch()),times=[];
+      for(let i=1;i<=24;i++){
+        const start=performance.now();film.playback((i*4291)%film.length);times.push(performance.now()-start);
+      }
+      times.sort((a,b)=>a-b);
+      const last=film.playback(film.length).battle;
+      return {frames:film.length,checkpoints:film.data.parts.filter(p=>p.state).length,seekP95Ms:+times[22].toFixed(1),
+        accurate:last.matchFrames===w.matchFrames && last.dogs.every((f,i)=>f.stocks===w.dogs[i].stocks && f.x===w.dogs[i].x)};
+    });
+    assert.equal(result.accurate,true);assert.equal(result.frames,25200);assert.equal(result.checkpoints,70);
+    console.log('::notice title=Full replay seek::Hosted Chrome, 390x844, 4x CPU throttle: '+JSON.stringify(result));
+  }finally{await page.close();}
+}
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{for(const device of ['keyboard','touch','controller'])await match(browser,device);}
+  try{for(const device of ['keyboard','touch','controller'])await match(browser,device);await measureSeeking(browser);}
   finally{await browser.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});
