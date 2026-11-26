@@ -397,6 +397,11 @@
     oscillator.start(now);
     oscillator.stop(now + length + 0.014);
   }
+  function fightSound(name,e) {
+    sound(name,e);
+    if(currentPads.length && !dialogType && musicFocused && !document.hidden)
+      window.PadFeedback?.contact(name,e,finishTrial?.player.battle || world,finishTrial,online.match?online.side:null,playPad,rumble);
+  }
   function sound(name, detail = {}) {
     if(name==='clockBeat'){
       const pitch=detail.seconds===1?880:587;
@@ -941,9 +946,10 @@
     sound('menu');
   };
   const dialogPresses=new Set();
-  let movePreview=null,refreshCardPin=null;
+  let movePreview=null,refreshCardPin=null,refreshRumble=null;
   function showDialog(kind, title, html, close = true) {
-    refreshCardPin=null;
+    refreshCardPin=null;refreshRumble=null;
+    if(dialogType==='rumble')window.PadFeedback?.stop();
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
       link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=defensive-moments-1';
@@ -969,7 +975,8 @@
     if (kind==='result' || kind==='online-result') presentWinner();
   }
   function dismiss() {
-    refreshCardPin=null;
+    refreshCardPin=null;refreshRumble=null;
+    if(dialogType==='rumble')window.PadFeedback?.stop();
     movePreview=null;
     couchPanel=null;
     clipScreen?.lifetime.abort();
@@ -990,6 +997,7 @@
     if(dialogType==='mission-saving')return;
     if(dialogType==='special-preview')return $('move-back').click();
     if(dialogType==='stage-strike')return strikeBack();
+    if(dialogType==='rumble')return $('rumble-back').click();
     if(dialogType==='profiles')return $('profile-back').click();
     if(dialogType==='rulebook')return backFromRulebook();
     if(dialogType==='matchup-card')return $('matchup-back').click();
@@ -1139,7 +1147,7 @@
     if (!window.VersusRulebook) return waitForDispatch('Controls', () => loadDispatch('VersusRulebook'), showControls,
       () => page === 'match' ? showPause() : $('controls').focus());
     backToPause = page === 'match';
-    showDialog('controls','Controls','<div class="dialog-actions"><button class="primary" data-do="bindings">Customize controls</button><button class="utility" data-do="pad-check">Check controller</button></div>'+controlTable()+window.VersusRulebook.controlsGuide);
+    showDialog('controls','Controls','<div class="dialog-actions"><button class="primary" data-do="bindings">Customize controls</button><button class="utility" data-do="pad-check">Check controller</button><button class="utility" data-do="rumble">Controller rumble</button></div>'+controlTable()+window.VersusRulebook.controlsGuide);
   }
   $('controls').onclick = showControls;
   const specialInputs = {
@@ -2085,7 +2093,7 @@
       corner?.target?.contact(name,e,world);
       spar?.contact(name,e,world);
       view.event(name, e);
-      sound(name, e);
+      fightSound(name,e);
       if (name==='ringBell') announce(e.count+' of '+world.bells.length+' bells');
       if (name==='win' && world?.bells) world.saved=window.BellBreak.saveBellTime(world);
       if(name==='win' && world?.mode==='parcel')world.saved=window.ParcelPunt.save(world);
@@ -2598,7 +2606,7 @@
     const camera=new FightView($('blast-radar'));camera.shakeEnabled=settings.shake;
     const trace=review?.returning?window.FinishTools.returnTrace():null;
     const emit=(name,e)=>{
-      camera.event(name,e);sound(name,e);trace?.observe(name,e,player.frame+1);
+      camera.event(name,e);fightSound(name,e);trace?.observe(name,e,player.frame+1);
     };
     const player=review?.stock?review.stock.attempt(emit):review?.landing?window.FinishTools.landingTry(tape,review.landing,start,emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
     const saved=finishTrial?.saved || {mode:$('match-mode').textContent,pause:$('pause-label').textContent,
@@ -3154,6 +3162,7 @@
     if (action === 'cup-start' || action === 'cup-next') return startCupRound(cupAttempt?.kind || cupChoice);
     if (action === 'match-card') return showMatchCard();
     if (action === 'card-back') return exitDialog();
+    if(action==='rumble')return openRumble(dialogType);
     if(action==='pad-check')return controllerCheck(dialogType);
     if (action==='bindings') openLayouts(dialogType);
     if (action === 'practice') showPractice();
@@ -4206,8 +4215,9 @@
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
-    PlayerProfiles:'player-profiles.js?v=button-check-1',
-    VersusRulebook:'versus-rules.js?v=platform-read-1',
+    PadFeedback:'pad-feedback.js?v=1',
+    PlayerProfiles:'player-profiles.js?v=rumble-1',
+    VersusRulebook:'versus-rules.js?v=rumble-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=button-check-1',StageStrike:'stage-strike.js?v=button-check-1',
     ComboLab:'combo-lab.js?v=ground-space-1', FinishTools:'finish-tools.js?v=launch-rescue-1',
@@ -4696,7 +4706,7 @@
     view.shakeEnabled = settings.shake;
     noticeUntil = 0;
     $('dispatch-notice').hidden = true;
-    const cues=view.missionCues({tone,sound,dispatchNotice,stockLabel,mission,sideRoute,cupRound,
+    const cues=view.missionCues({tone,sound:fightSound,dispatchNotice,stockLabel,mission,sideRoute,cupRound,
       unlockLift:book.bonus?.stampRoom===index,stored:()=>stored,rivalName:()=>world.foes[0].f.stats.name});
     world = new window.DispatchRun({ chapter:book.number, room: index, checkpoint, atCheckpoint, stamps: cupRound ? 0 : progress.stamps,
       cupFighter:cupRound?.kind,coat:cupRound?.coat }, (name, e) => {
@@ -4726,7 +4736,7 @@
     if (world?.layout?.rules !== 'boss' || cupAttempt) return;
     const parked = view.parkedBoss || {world, view, noticeUntil, notice:$('dispatch-notice').textContent, mode:$('match-mode').textContent};
     const lessonView = new window.DispatchView();
-    const lesson = parked.world.rehearseBoss(move, lessonView.missionCues({tone,sound,dispatchNotice,stockLabel,mission:world.layout}));
+    const lesson = parked.world.rehearseBoss(move, lessonView.missionCues({tone,sound:fightSound,dispatchNotice,stockLabel,mission:world.layout}));
     if (!lesson) return;
     world = lesson;
     view = lessonView;
@@ -5528,6 +5538,7 @@
   };
   let returnToOnline = false;
   window.addEventListener('pagehide', () => {
+    window.PadFeedback?.stop();
     returnToOnline = !!online.match || !!world?.warmupPartner || page === 'online-lobby';
     leaveOnline();
   });
@@ -5538,11 +5549,12 @@
   const layoutStore='dog-fight-3.controls';
   const prefKeys=i=>['quickAttack'+(i+1),'flickJump'+(i+1),i?'tiltStick2':'tiltStick'];
   const seatPrefs=i=>prefKeys(i).map(key=>settings[key]);
-  let profileTags=['',''], labelStyles=['auto','auto'];
+  let profileTags=['',''], labelStyles=['auto','auto'],rumble=[1,1];
   let layout=controls.load();
   function readLayouts(){
     const raw=JSON.parse(localStorage.getItem(layoutStore));
     layout=controls.load(raw);
+    rumble=[0,1].map(i=>[0,1,2].includes(raw?.rumble?.[i])?raw.rumble[i]:1);
     labelStyles=[0,1].map(i=>Object.hasOwn(controls.labelStyles,raw?.labelStyles?.[i])?raw.labelStyles[i]:'auto');
     profileTags=[0,1].map(i=>typeof raw?.tags?.[i]==='string'?raw.tags[i].slice(0,16):'');
     for(const i of [0,1])prefKeys(i).forEach((key,n)=>{
@@ -5576,7 +5588,7 @@
     delete $('school-coach').dataset.key;
     delete $('corner-tip').dataset.cue;
     hudKey='';
-    if(persist)try {localStorage.setItem(layoutStore,JSON.stringify({...layout,tags:profileTags,labelStyles,prefs:[seatPrefs(0),seatPrefs(1)]}));} catch {return false;}
+    if(persist)try {localStorage.setItem(layoutStore,JSON.stringify({...layout,tags:profileTags,labelStyles,rumble,prefs:[seatPrefs(0),seatPrefs(1)]}));} catch {return false;}
     return true;
   }
   function openProfiles(source,slot){
@@ -5588,7 +5600,9 @@
     showDialog('profiles','Player profiles','');
     window.PlayerProfiles.open($('dialog-body'),{
       storage,slot,back,padNames:i=>padNames(i,seatPad(i)),layout:()=>layout,prefs:seatPrefs,tags:()=>profileTags,
-      apply(i,next,prefs,tag,displaced){
+      rumble:i=>rumble[i],
+      apply(i,next,prefs,tag,displaced,strength){
+        if(strength!==undefined)rumble[i]=strength;
         layout=next;profileTags[i]=tag;
         if(displaced)profileTags[1-i]='';
         prefKeys(i).forEach((key,n)=>{settings[key]=prefs[n];});
@@ -5599,6 +5613,15 @@
     });
   }
   $('lobby-profiles').onclick=()=>openProfiles('lobby',settings.mode==='local'?editing:0);
+  function openRumble(source){
+    const back=()=>{
+      if(source==='bindings')drawLayouts();else showControls();
+      $('dialog-body').querySelector('[data-do=rumble]')?.focus();
+    };
+    if(!window.PadFeedback)return waitForDispatch('Controller rumble',()=>loadDispatch('PadFeedback'),()=>openRumble(source),back);
+    refreshRumble=window.PadFeedback.panel({showDialog,back,slot:source==='bindings'?edit.slot:0,padFor:seatPad,
+      levels:()=>rumble,save:(i,value)=>{rumble[i]=value;profileTags[i]='';return applyLayouts(true);}});
+  }
   function controllerCheck(source){
     Object.assign(edit,{source,slot:0,device:'pad',mode:'test',last:null});edit.down.clear();drawLayouts();
   }
@@ -5616,25 +5639,7 @@
     else if(edit.source==='lobby')openProfiles('lobby',edit.slot);
     else dismiss();
   }
-  function assignControl() {
-    const other=controls.occupant(layout,edit.device,edit.slot,edit.value);
-    if(other)profileTags[other.slot]='';
-    profileTags[edit.slot]='';
-    controls.assign(layout,edit.device,edit.slot,edit.action,edit.value);
-    applyLayouts(true);edit.mode='idle';
-    drawLayouts(controls.names[edit.action]+' saved.');
-  }
-  function chooseBinding(action,value) {
-    const map=layout[edit.device][edit.slot];
-    edit.action=action;edit.value=value;
-    if(map[action]===value){edit.mode='idle';drawLayouts();return;}
-    const other=controls.occupant(layout,edit.device,edit.slot,value);
-    if(!other){assignControl();return;}
-    edit.mode='swap';
-    const old=edit.device==='keyboard'?controls.keyName(map[action]):padNames(edit.slot,seatPad(edit.slot))[map[action]];
-    const name=edit.device==='keyboard'?controls.keyName(value):padNames(edit.slot,seatPad(edit.slot))[value];
-    drawLayouts('Swap '+name+' and '+old+'? P'+(other.slot+1)+' '+controls.names[other.action]+' will move to '+old+'.');
-  }
+  let chooseBinding;
   function showTestInputs(pads) {
     const pad=seatPad(edit.slot,pads);
     window.VersusRulebook.testInputs(edit,layout,pad,padNames(edit.slot,pad));
@@ -5644,7 +5649,7 @@
     if(!window.VersusRulebook || !versusStyled)return waitForDispatch('Customize controls',()=>loadVersusPanel('VersusRulebook'),()=>drawLayouts(message),leaveLayouts);
     edit.legend=padNames(slot,seatPad(slot));
     showDialog('bindings','Customize controls',window.VersusRulebook.layoutSheet(edit,layout,settings,prefKeys,message,padNames(slot,seatPad(slot)),labelStyles[slot]));
-    window.VersusRulebook.wireLayout(edit,layout,settings,profileTags,{drawLayouts,leaveLayouts,chooseBinding,assignControl,applyLayouts,openProfiles,
+    chooseBinding=window.VersusRulebook.wireLayout(edit,layout,settings,profileTags,{drawLayouts,leaveLayouts,applyLayouts,openProfiles,
       style:value=>{labelStyles[slot]=value;applyLayouts(true);drawLayouts();$('pad-label-style').focus();}});
     if(testing){edit.last=null;showTestInputs(currentPads);}
   }
@@ -5806,7 +5811,7 @@
   });
   function onBlur() {
     if(dialogType==='bindings' && edit.mode==='test'){edit.down.clear();showTestInputs([]);}
-    musicFocused=false;music?.stop();
+    musicFocused=false;music?.stop();window.PadFeedback?.stop();
     clearInput();
     if(finishTrial && !$('dialog').open)showTrialPause();
     if (page === 'dispatch-story') setFilmPaused(true);
@@ -5906,12 +5911,15 @@
       moveMenuFocus(e.code.slice(5).toLowerCase());
     }
   });
+  function playPad(i,pads=currentPads){
+    return finishTrial?.seats ? finishTrial.seats.get(i,pads) : finishTrial ? pads[0] : matchConfig?.couchSeats && world.mode==='local' ? matchConfig.couchSeats.get(i,pads) :
+      world.hasSecondPlayer && !world.lesson && !online.match && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
+  }
   function playerInput(i, pads, fighterIndex = i, battle = world) {
     const map = keys[i];
     const tapped = (action) => taps.has(map[action]) || (!i && touchTaps.has(action));
     const key = (action) => held.has(map[action]) || (!i && touches.has(action)) || tapped(action);
-    const pad = finishTrial?.seats ? finishTrial.seats.get(i,pads) : finishTrial ? pads[0] : matchConfig?.couchSeats && world.mode==='local' ? matchConfig.couchSeats.get(i,pads) :
-      world.hasSecondPlayer && !world.lesson && !online.match && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
+    const pad=playPad(i,pads);
     const mapped=action=>{
       const n=layout.pad[i][action];
       return down(pad,n) && !(menuPadButtons.get(pad.index) & (1<<n));
@@ -6171,7 +6179,9 @@
     const now = timestamp / 1000,
       dt = Math.min(0.09, Math.max(0, now - before));
     before = now;
-    const pads = currentPads = getPads();
+    const pads=getPads();
+    if(pads.length && !currentPads.length)loadDispatch('PadFeedback').catch(()=>{});
+    currentPads=pads;refreshRumble?.();
     if(page==='match' && world?.mode==='local')checkLocalPads(pads);
     padMenu(pads,now);
     if(page==='match' && world?.mode==='local' && matchConfig?.couchSeats?.lost && !dialogType)checkLocalPads(pads);
@@ -6461,6 +6471,8 @@
       showHome(false);openStageMusic(hash.split('/')[1]);
     } else if (hash === '#sound-test') {
       showHome(false);showSoundTest();
+    } else if(hash==='#controls/rumble'){
+      showHome(false);openRumble('controls');
     } else if(hash==='#controls/controller'){
       showHome(false);controllerCheck('controls');
     } else if (hash === '#controls') {
