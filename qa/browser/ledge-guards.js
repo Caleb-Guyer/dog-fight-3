@@ -32,17 +32,23 @@ async function check(browser,device){
       if(pad)return pressPad(0);
       await page.keyboard.press('Enter');
     };
-    await page.goto(root+'#solo/ledge-trap/clover/right');
-    await page.evaluate(()=>{
+    const observe=()=>page.evaluate(()=>{
       const step=DogFight.Battle.prototype.step;
       DogFight.Battle.prototype.step=function(...args){
         if(this.mode==='solo'){
           window.fight=this;
-          if(!this.matchFrames)window.opener=[this.dogs[0].kind,this.dogs[1].kind,this.dogs[0].ledge?.left,this.dogs[0].damage,this.stockCount];
+          if(!this.matchFrames){
+            window.opener=[this.dogs[0].kind,this.dogs[1].kind,this.dogs[0].ledge?.left,this.dogs[0].damage,this.stockCount];
+            window.returnMoves=[];
+            window.returnSpawn=[this.dogs[1].face,this.dogs[1].ground,this.dogs[1].damage];
+          }
+          const move=this.dogs[1].attack?.moveId;
+          if(move && !returnMoves.includes(move))returnMoves.push(move);
         }
         return step.apply(this,args);
       };
     });
+    await page.goto(root+'#solo/ledge-trap/clover/right');await observe();
     await page.clock.runFor(2610);
     assert.deepEqual(await page.evaluate(()=>opener),['pip','clover',false,120,3]);
     await choose('#pause');await choose('[data-do=lobby]');
@@ -66,6 +72,17 @@ async function check(browser,device){
     assert.equal(await page.evaluate(()=>fight.dogs[1].smashCharge.moveId),'noodleLeadSnap');
     await choose('#pause');await choose('[data-do=rematch]');await page.clock.runFor(2480);
     assert.deepEqual(await page.evaluate(()=>opener),['pip','noodle',true,120,3]);
+    await choose('#pause');await choose('[data-do=cpu-level]');
+    assert.equal(await page.locator('[data-returner]').count(),4);
+    await choose('[data-returner=clover]');await page.clock.runFor(3100);
+    assert.deepEqual(await page.evaluate(()=>returnSpawn),[1,-1,60]);
+    assert(await page.evaluate(()=>returnMoves.includes('cloverRound') && returnMoves.includes('cloverChase')));
+    await choose('#pause');await choose('[data-do=rematch]');await page.clock.runFor(2480);
+    assert.deepEqual(await page.evaluate(()=>returnSpawn),[1,-1,60]);
+    await page.goto(root+'?mirrored#solo/guard-the-return/brisket/right');await observe();
+    await page.clock.runFor(2740);
+    assert.deepEqual(await page.evaluate(()=>returnSpawn),[-1,-1,60]);
+    assert(await page.evaluate(()=>returnMoves.includes('brisketCharge')));
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

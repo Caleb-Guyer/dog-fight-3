@@ -12,6 +12,12 @@ module.exports=function liftInput(frame,world) {
       if(!pip.jumps){input.y=-1;input.special=frame%4===0;}
     }
   }else if(!opponent.absent){
+    // Hold the lip when Clover throws from outside. Her disc can bring her back over Pip.
+    const outside=opponent.x<deck.x1 || opponent.x>deck.x2;
+    if(opponent.kind==='clover' && outside && pip.ground>=0 && (pip.x<deck.x1+100 || pip.x>deck.x2-100)){
+      input.shield=opponent.attack?.moveId==='cloverChase';
+      return input;
+    }
     input.x=gap>64?side:0;
     if(opponent.y<pip.y-56 && pip.ground>=0){input.jump=true;input.x=side;}
     if(pip.ground>=0 && gap<112 && Math.abs(opponent.y-pip.y)<76){

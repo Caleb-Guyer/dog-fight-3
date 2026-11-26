@@ -79,3 +79,68 @@ test('a natural ledge catch can trigger the guard while lower CPU levels and uns
     }
   }
 });
+
+function wideReturn(kind,side,stage,input=()=>idleInput,record=false){
+  const events=[],tape=record?new FinishTape():null;
+  const w=new Battle({mode:'solo',p1:'pip',p2:kind,stage,cpuLevel:'rival',wideReturn:side,fetch:false},
+    (event,e)=>{if(['special','recover','hit','block','disc'].includes(event))events.push([w.matchFrames,event,e.moveId,e.f.index]);},
+    seededRandom(42));
+  const [guard,returner]=w.dogs,dir=side==='left'?1:-1;
+  assert.equal(returner.damage,60);
+  assert.equal(returner.ground,-1);
+  assert.equal(guard.damage,0);
+  assert.deepEqual([guard.stocks,returner.stocks],[3,3]);
+  assert.equal(guard.face,-dir);
+  let home,homing=false,reeling=false;
+  for(let frame=0;frame<100;frame++){
+    const buttons={...idleInput,...input(frame,dir)};
+    if(tape)tape.record(w,buttons,idleInput);
+    w.step(beat,buttons,idleInput);
+    homing ||= !!returner.attack?.disc;
+    reeling ||= !!returner.attack?.reeling;
+    if(!home && (returner.ground>=0 || returner.ledge))home=returner.ledge?'ledge':'ground';
+  }
+  return {w,events,tape,home,homing,reeling};
+}
+const paths={
+  pip:['pipPounce','ground'],brisket:['brisketCharge','ledge'],
+  noodle:['noodleLasso','ledge'],clover:['cloverRound','ground'],
+};
+for(const [kind,[move,home]] of Object.entries(paths)){
+  test(kind+' returns from a wide launch on both sides of three stages',()=>{
+    for(const stage of ['nightmail','laundry','picnic'])for(const side of ['left','right']){
+      const r=wideReturn(kind,side,stage);
+      assert.equal(r.home,home,stage+'/'+side);
+      assert.equal(r.events.find(e=>e[1]==='recover'||e[1]==='special')[2],move);
+      assert.equal(r.w.dogs[1].stocks,3);
+      if(kind==='clover'){
+        assert(r.homing,'Clover chases a disc that exists in the fight');
+        assert(r.events.some(e=>e[1]==='hit' && e[2]==='cloverChase'));
+      }
+    }
+  });
+}
+test('a player can interrupt a pounce, block a shoulder, jab the tether or hit the disc rider on either side',()=>{
+  const options={
+    pip:[n=>({jump:n>=8 && n<22,attack:n===16}),'hit','pipSpin',1],
+    brisket:[n=>({shield:n<28}),'block','brisketCharge',0],
+    noodle:[n=>({attack:n===30}),'hit','pipJab',1],
+    clover:[n=>({jump:n<14,attack:n===30}),'hit','pipSpin',1],
+  };
+  for(const side of ['left','right'])for(const [kind,[input,event,move,target]] of Object.entries(options)){
+    const r=wideReturn(kind,side,'nightmail',input,true);
+    assert(r.events.some(([at,e,id,slot])=>at<=48 && e===event && id===move && slot===target),kind);
+    const replay=r.tape.playback(r.tape.length).battle;
+    const states=w=>w.dogs.map(f=>[f.kind,f.x,f.y,f.vx,f.vy,f.damage,f.stocks,f.lastMove]);
+    assert.deepEqual(states(replay),states(r.w));
+    assert.deepEqual(replay.projectiles,r.w.projectiles);
+  }
+});
+test('Noodle can reel toward a short-hop challenger, then lasso the ledge',()=>{
+  for(const side of ['left','right']){
+    const r=wideReturn('noodle',side,'nightmail',(n,dir)=>({x:n<30?-dir:0,jump:n>=1 && n<3}));
+    assert(r.reeling && r.events.some(([at,e,id])=>at<20 && e==='hit' && id==='noodleSling'));
+    assert.equal(r.home,'ledge');assert.equal(r.w.dogs[1].stocks,3);
+    assert(r.events.some(([,,id])=>id==='noodleLasso'));
+  }
+});
