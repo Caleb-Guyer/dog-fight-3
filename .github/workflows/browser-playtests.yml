@@ -134,6 +134,8 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/saved-games.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/finish-replay.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/bell-break.js
+          node --test qa/parcel-punt.cjs
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/parcel-punt.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fight-records.js
   sound-test:
     runs-on: ubuntu-24.04
