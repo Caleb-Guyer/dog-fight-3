@@ -10979,10 +10979,6 @@
           const floor = this.terrain[f.ground];
           const rival=this.cpuLevel==='rival';
           const edge = floor && (!rival || !floor.thin) && Math.min(f.x - floor.x1, floor.x2 - f.x) < 145;
-          if(rival && floor && foe.damage>=65){
-            const side=this.finishingThrow(f,foe,grip);
-            if(side)return {...idleInput,x:side==='forward'?grip.face:side==='back'?-grip.face:0,y:verticalAim(side)};
-          }
           if (this.cpuLevel === 'rival' && f.kit.shoulderCarry && floor && !floor.thin &&
               foe.damage >= 60 && grip.remaining > .78) {
             const solid = this.terrain.filter(p=>!p.thin);
@@ -10990,6 +10986,10 @@
             const right = floor === solid[solid.length-1] ? floor.x2-f.x : Infinity;
             const distance = Math.min(left,right);
             if (distance >= 60 && distance <= 165) return {...idleInput,special:true};
+          }
+          if(rival && floor && foe.damage>=65){
+            const side=this.finishingThrow(f,foe,grip);
+            if(side)return {...idleInput,x:side==='forward'?grip.face:side==='back'?-grip.face:0,y:verticalAim(side)};
           }
           if (edge && foe.damage >= 40) result.x = f.x - floor.x1 < floor.x2 - f.x ? -1 : 1;
           else if (
