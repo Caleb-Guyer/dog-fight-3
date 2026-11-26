@@ -941,7 +941,7 @@
     refreshCardPin=null;
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=match-film-1';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=landing-review-1';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
@@ -1025,10 +1025,12 @@
     if (dialogType==='finish-replay') {
       if(clipScreen?.review){
         const r=clipScreen.review;
+        if(r.clinic){showHome(false);schoolList();return;}
         if(r.instant){
           showPause(false);$('dialog-body').querySelector('[data-do=instant-replay]')?.focus();return;
         }
         if(r.from==='archive')return backToSavedCard(r);
+        if(r.finish && r.from==='result'){showResult();return;}
         if(r.from==='card'){
           showMatchCard();
           $('dialog-body').querySelector('[data-card-ko="'+r.clip.first+'"][data-ko-slot="'+r.slot+'"]')?.focus();
@@ -2462,7 +2464,7 @@
     const detail=review?.instant?'Last '+(tape.length/60).toFixed(1)+' seconds':!ko && result.endReason==='time'?'Time expired':label?'Last hit · '+label:
       id==='ball'?'Last hit · Tennis ball':loss?.zone?'Knockout · '+loss.zone+' blast line':'Knockout';
     const caption=ko?cardTime(loss.frame)+' · '+knockoutLabel(review.clip,result)+' · ':'';
-    showDialog('finish-replay',review?.instant?'Instant replay':returning?'Stock return':ko?'KO replay':'Finish replay','<p class="clip-caption">'+
+    showDialog('finish-replay',review?.clinic?'Landing clinic':review?.instant?'Instant replay':returning?'Stock return':ko?'KO replay':'Finish replay','<p class="clip-caption">'+
       (returning?stageName(result.stage,result.form)+' · '+cardTime(review.clip.losses[0].frame)+' · After the knockout':caption+stageName(result.stage,result.form)+' · '+detail)+
       '</p><canvas id="clip-arena" width="640" height="360" role="img" aria-label="Replay of the exchange"></canvas>'+
       '<div class="clip-status"><span id="clip-scores"></span><output id="clip-frame" aria-live="off"></output></div>'+
@@ -2483,6 +2485,7 @@
     clipScreen={tape,review,playing:atFrame===null && !reducedReplays.matches,rate:.5,carry:0,lifetime:new AbortController()};
     if($('clip-return'))$('clip-return').onclick=()=>showFinishReplay(null,{...review,returning:!returning});
     if(ko)$('clip-escape').onclick=()=>startFinishTrial(Math.max(0,tape.length-90),loss.slot,review);
+    if(review?.clinic)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to Fight School';
     for(const b of $('dialog-body').querySelectorAll('[data-clip-recovery]'))
       b.onclick=()=>recoverySheet({...review,slot:Number(b.dataset.clipRecovery),fromClip:true});
     const {signal}=clipScreen.lifetime;
@@ -2495,6 +2498,8 @@
         if(returning)review.recordedReturn=window.FinishTools.returnTrace();
         clipScreen.syncInputs=window.FinishTools.install({tape,signal,stage:stageName(result.stage,result.form),shake:settings.shake,root:$('dialog-body'),
           follow:returning?review.recordedReturn:null,
+          clinic:review?.clinic || review?.landingFocus,practiceLanding:(landing,start,guided)=>startFinishTrial(start,landing.slot,{
+            ...(review || {finish:true,from:'result',clip:{tape,losses:[]},result}),landing,guided,replayFrame:landing.frame}),
           retryMoment:review?.instant?(frame,slot,contact)=>startFinishTrial(frame,slot,{...review,replayFrame:contact}):null,
           twoPlayers:result.mode==='local',initialSeat:review?.slot ?? loss?.slot ?? 0,frame:()=>clipScreen.player.frame,
           slot:loss?.slot,practiceLaunch:(frame,slot)=>startFinishTrial(frame,slot,review),escapeReady:ko?mark=>{
@@ -2613,7 +2618,7 @@
     const emit=(name,e)=>{
       camera.event(name,e);sound(name,e);trace?.observe(name,e,player.frame+1);
     };
-    const player=review?.stock?review.stock.attempt(emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
+    const player=review?.stock?review.stock.attempt(emit):review?.landing?window.FinishTools.landingTry(tape,review.landing,start,emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
     const saved=finishTrial?.saved || {mode:$('match-mode').textContent,pause:$('pause-label').textContent,
       call:$('countdown').textContent,setHidden:$('match-set').hidden,cornerHidden:$('corner-tip').hidden,
       cornerTitle:$('corner-title').textContent,cornerLine:$('corner-line').textContent};
@@ -2621,10 +2626,15 @@
     finishTrial={player,camera,start,slot,review,original,saved,trace,returnNames:trace && player.battle.dogs.map(f=>f.stats.name),carry:0,ready:.8};
     if(review?.instant)finishTrial.openingDamage=player.battle.matchCard.players.map(p=>p.damage);
     $('corner-tip').hidden=true;
+    if(review?.landing){
+      $('corner-title').textContent='Break your fall';
+      $('corner-line').textContent=review.guided?'The fall waits for Shield. Tap it with your stick centered, or aim sideways to roll.':'Watch the distance to the floor. Tap Shield just before impact.';
+      $('corner-tip').hidden=false;
+    }
     if(review?.coach){
       $('corner-title').textContent='Reach the stage';$('corner-line').textContent=review.coachLine;$('corner-tip').hidden=false;
     }
-    $('match-mode').textContent=(review?.stock?'Stock '+review.stock.number+' retry':review?.instant?'Exchange practice':review?.coach?'Recovery practice':trace?'Stock return':review?.film?'Match replay practice':review && !review.finish?'KO practice':'Finish practice')+' · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
+    $('match-mode').textContent=(review?.landing?'Landing practice':review?.stock?'Stock '+review.stock.number+' retry':review?.instant?'Exchange practice':review?.coach?'Recovery practice':trace?'Stock return':review?.film?'Match replay practice':review && !review.finish?'KO practice':'Finish practice')+' · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
     $('match-set').hidden=$('grapple-prompt').hidden=true;
     $('match-clock').hidden=false;
     $('match-clock').setAttribute('aria-label','Practice time left');
@@ -2662,6 +2672,10 @@
     trial.carry+=dt;
     while(trial.carry>=1/60 && player.frame<player.length && !player.outcome && player.battle.end===null){
       const input=playerInput(0,pads,trial.slot,player.battle);
+      if(trial.review?.landing && trial.review.guided && player.frame===trial.start){
+        if(!input.shield && !input.tapped?.shield){$('countdown').textContent='Tap Shield';trial.carry=0;return;}
+        $('countdown').textContent='';
+      }
       if(trial.review?.coach && player.frame===trial.start){
         if(!input.x && !input.y && !input.jump && !input.special && !input.shield && !input.attack && !input.shortHop){
           $('countdown').textContent='Your move';trial.carry=0;return;
@@ -2677,6 +2691,7 @@
   function leaveFinishTrial(replay) {
     const {saved,start,review}=finishTrial;
     finishTrial=null;
+    if(replay && review?.landing){review.landingFocus=true;delete review.landing;delete review.guided;}
     if(review?.from==='archive'){
       showHome(false);
       if(review.stock && replay)return stockSheet(review);
@@ -2687,10 +2702,11 @@
     $('match-mode').textContent=saved.mode;$('match-set').hidden=saved.setHidden;
     $('pause-label').textContent=saved.pause;$('countdown').textContent=saved.call;
     $('corner-tip').hidden=saved.cornerHidden;
-    if(review?.coach){$('corner-title').textContent=saved.cornerTitle;$('corner-line').textContent=saved.cornerLine;}
+    if(review?.coach || review?.landing){$('corner-title').textContent=saved.cornerTitle;$('corner-line').textContent=saved.cornerLine;}
     hudKey='';updateHUD();
     view.draw($('game'),online.match?.confirmedWorld || world,0,world.time);
-    if(replay && review?.stock)stockSheet(review);
+    if(!replay && review?.clinic){showHome(false);schoolList();}
+    else if(replay && review?.stock)stockSheet(review);
     else if(replay && review?.coach)recoverySheet(review,review.coach);
     else if(replay && review?.film)watchMatch(review.film,review.frame);
     else if(replay)showFinishReplay(review?.replayFrame ?? start,review);
@@ -2699,6 +2715,7 @@
     else showResult();
   }
   function trialActions(){
+    if(finishTrial.review?.landing)return window.FinishTools.landingActions(finishTrial.review);
     if(finishTrial.review?.stock)return finishTrial.review.stock.actions(finishTrial.review.from);
     return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">'+(finishTrial.review?.coach?'Retry recovery':finishTrial.trace?'Retry return':'Retry exchange')+'</button>'+
       '<button class="utility" data-do="trial-replay">'+(finishTrial.review?.instant?'Back to instant replay':finishTrial.review?.coach?'Back to demonstration':finishTrial.review?.film?'Back to full match':finishTrial.trace?'Back to return replay':'Choose another frame')+'</button><button class="utility" data-do="trial-results">'+
@@ -2710,6 +2727,10 @@
   }
   function showTrialComparison(){
     const {player,original,slot,review}=finishTrial;
+    if(review?.landing){
+      window.FinishTools.landingReport(player,review.landing,showDialog,trialActions());
+      return;
+    }
     if(review?.stock){
       const report=review.stock.comparison(player);
       showDialog('finish-comparison',report.title,report.html+trialActions(),false);
@@ -3071,6 +3092,7 @@
     }
     if(action==='pack-relay')return openRelay();
     if(action==='trial-retry')return startFinishTrial(finishTrial.start,finishTrial.slot,finishTrial.review);
+    if(action==='landing-speed')return startFinishTrial(finishTrial.review.landing.start,finishTrial.slot,{...finishTrial.review,guided:false});
     if(action==='trial-replay' || action==='trial-results')return leaveFinishTrial(action==='trial-replay');
     if (action==='record-solo') {
       settings.mode='solo'; editing=0; save(); audioReady(); return toLobby();
@@ -5477,10 +5499,10 @@
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PlayerProfiles:'player-profiles.js?v=1',
-    VersusRulebook:'versus-rules.js?v=clock-rival-1',
+    VersusRulebook:'versus-rules.js?v=landing-review-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
-    ComboLab:'combo-lab.js?v=tapes-1', FinishTools:'finish-tools.js?v=instant-replay-1',
+    ComboLab:'combo-lab.js?v=tapes-1', FinishTools:'finish-tools.js?v=landing-review-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=down-air-1',
     DispatchCovers:'dispatch-covers.js?v=film-load-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
@@ -6175,38 +6197,8 @@
     $('open-sound-test').focus();
   }
   function showOptions() {
-    showDialog(
-      'options',
-      'Options',
-      '<div class="option-list"><button type="button" data-do="option-sound" aria-pressed="' +
-        settings.sound +
-        '">Sound <b>' +
-        (settings.sound ? 'On' : 'Off') +
-        '</b></button><label for="option-volume">Master volume <input type="range" id="option-volume" min="0" max="100" step="5" value="' +
-        settings.volume +
-        '"><output id="option-volume-value">' +
-        settings.volume +
-        '%</output></label><label for="option-music">Music level <input type="range" id="option-music" min="0" max="100" step="5" value="'+
-        settings.musicVolume+'"><output id="option-music-value">'+settings.musicVolume+'%</output></label>'+
-        '<button type="button" id="open-sound-test">Sound Test</button><button type="button" data-do="bindings">Customize controls</button><button type="button" data-do="option-shake" aria-pressed="' +
-        settings.shake +
-        '">Camera shake <b>' +
-        (settings.shake ? 'On' : 'Off') +
-        '</b></button>'+cameraButton()+['tiltStick','tiltStick2'].map((key,i)=>'<button type="button" data-do="option-'+key+'" aria-pressed="'+settings[key]+'">P'+(i+1)+
-          ' grounded aim stick <b>'+(settings[key]?'Tilt':'Smash')+'</b></button>').join('')+'<p>Also applies to the aim keys and a swipe from Smash on touch.</p>' +
-        [1,2].map(slot => {
-          const quick = settings['quickAttack'+slot];
-          return '<button type="button" data-do="option-quickAttack'+slot+'" aria-pressed="'+quick+'">P'+slot+
-            ' ground Attack <b>'+(quick?'On press':'Hold to smash')+'</b></button>';
-        }).join('') +
-        '<p>On press starts a jab or tilt immediately. Hold Smash to charge. Hold to smash also lets you charge with Attack.</p>' +
-        [1,2].map(slot => {
-          const enabled = settings['flickJump'+slot];
-          return '<button type="button" data-do="option-flickJump'+slot+'" aria-pressed="'+enabled+'">P'+slot+
-            ' flick jump <b>'+(enabled?'On':'Off')+'</b></button>';
-        }).join('') +
-        '<p>Flick the left stick up or tap Up to jump. For an up tilt, aim gently, hold Walk, or slide from the center dot on touch. Online uses your P1 controls.</p></div><div class="dialog-actions"><button class="primary" data-do="close">Done</button></div>',
-    );
+    if(!window.VersusRulebook)return waitForDispatch('Options',()=>loadDispatch('VersusRulebook'),showOptions,()=>$('home-options').focus());
+    showDialog('options','Options',window.VersusRulebook.options(settings,cameraButton));
     document.querySelector('[data-do=option-sound]').focus();
   }
   $('dialog-body').addEventListener('click',e=>{if(e.target.closest('#open-sound-test'))showSoundTest();});
@@ -6442,6 +6434,8 @@
       stage:'picnic',form:'original',stockCount:3,timeBattle:false,fetch:false,minutes:7};
   }
   function startCornerLesson(){
+    if(corner.practice==='launch-escape' && world.matchFrames-corner.landingAt<finishTape?.length)
+      return showFinishReplay(null,{instant:true,finish:true,landingFocus:true,from:'pause',result:world,clip:{tape:finishTape,losses:[]}});
     if(corner.practice.startsWith('launch-'))return startExercise(corner.practice);
     const visit=pausedFight(), index=schoolLessons.findIndex(l=>l.id===corner.practice);
     startMatch({...settings,mode:'local',stage:'nightmail',form:'original',p1:'pip',p2:'brisket',fetch:false,minutes:0,
@@ -6463,10 +6457,19 @@
       (world?.lesson?'Back to lesson':schoolSave.rematch?(schoolSave.rematch.fight?'Rematch Brisket':'Continue rematch practice'):unfinishedLesson()<0?(schoolSave.firstFightDone?'Replay course':'Play first match'):
         schoolSave.started?'Continue course':'Start course')+'</button><button class="utility" id="syllabus-guide">'+
       (settings.guidedLessons && !world?.lesson?.guideError?'Practice at match speed':'Guide my inputs')+'</button><button class="utility" data-do="fighter-classes">Fighter lessons</button><button class="utility" data-do="home">Main menu</button></div>');
+    const clinic=document.createElement('button');clinic.type='button';clinic.className='utility';clinic.textContent='Landing clinic';
+    $('syllabus-guide').after(clinic);clinic.onclick=landingClinic;
     $('syllabus-guide').onclick=toggleGuide;
     $('school-syllabus').onclick=e=>{const button=e.target.closest('[data-lesson]');if(button) startLesson(Number(button.dataset.lesson));};
     $('school-resume').onclick=()=>world?.lesson?dismiss():resumeCourse();
     $('school-resume').focus({preventScroll:true});
+  }
+  function landingClinic(){
+    if(!window.FinishTools)return waitForDispatch('Landing clinic',()=>loadDispatch('FinishTools'),landingClinic,schoolList);
+    leaveOnline();afterStory=null;
+    const {config,battle,tape}=window.FinishTools.landingDemo();
+    startMatch(config,undefined,undefined,null,{resume:{battle,tape,countdown:0,call:''}});
+    showFinishReplay(0,{clinic:true,instant:true,finish:true,from:'pause',result:battle,clip:{tape,losses:[]}});
   }
   function leaveFighterSheet(){
     if(page==='match' && (matchConfig?.schoolFinal || spar) && world?.end!=null)return showResult();
@@ -6988,30 +6991,8 @@
   }
   function drawLayouts(message='') {
     const {device,slot,mode}=edit,keyboard=device==='keyboard',testing=mode==='test',pending=mode==='swap'||mode==='reset';
-    const map=layout[device][slot],actions=Object.keys(map);
-    const title=keyboard?'Keyboard':'Controller';
-    const value=a=>keyboard?controls.keyName(map[a]):controls.buttons[map[a]];
-    const rows=actions.map(a=>{
-      const label=controls.names[a];
-      const binding=testing?'<kbd>'+value(a)+'</kbd>':keyboard?
-        '<button type="button" class="utility" data-key="'+a+'" aria-label="Change '+label+' key, currently '+value(a)+'">'+(mode==='capture' && edit.action===a?'Press a key…':value(a))+'</button>':
-        '<select data-pad="'+a+'" aria-label="'+label+' button">'+controls.buttons.map((text,n)=>'<option value="'+n+'"'+(n===map[a]?' selected':'')+'>'+text+'</option>').join('')+'</select>';
-      return '<div data-action="'+a+'"><span>'+label+'</span>'+binding+'</div>';
-    }).join('');
-    showDialog('bindings','Customize controls',
-      '<div class="layout-switch"><label>Player <select id="layout-slot"><option value="0">P1</option><option value="1">P2</option></select></label>'+
-      '<label>Device <select id="layout-device"><option value="keyboard">Keyboard</option><option value="pad">Controller</option></select></label></div>'+
-      '<p>'+(testing?(keyboard?'Press your keys to see which actions register.':'Press controller buttons to test them. Start leaves the test.') : keyboard?'Choose an action, then press its new key. Both players share this keyboard.':
-        'Choose a button for each action. A and B still select and go back in menus.')+'</p>'+
-      '<p id="layout-status" role="status">'+(message || (mode==='capture'?'Press a key for '+controls.names[edit.action]+'. Escape cancels.':
-        mode==='reset'?keyboard?'Restore both keyboard layouts to their defaults?':'Restore the P'+(slot+1)+' controller defaults?':'Online uses your P1 layout.'))+'</p>'+
-      '<div id="layout-grid"'+(pending?' hidden':'')+'>'+rows+'</div>'+
-      (mode==='idle'?'<div class="layout-playstyle" role="group" aria-label="P'+(slot+1)+' fight controls">'+
-        prefKeys(slot).map((key,n)=>'<button type="button" class="utility" data-playstyle="'+key+'" aria-pressed="'+settings[key]+'">'+
-          ['Ground Attack','Flick jump','Aim stick'][n]+' · '+[settings[key]?'On press':'Hold to smash',settings[key]?'On':'Off',settings[key]?'Tilt':'Smash'][n]+'</button>').join('')+'</div>':'')+
-      '<div class="dialog-actions">'+(pending?'<button type="button" class="primary" id="layout-confirm">'+(mode==='swap'?'Swap assignments':'Restore defaults')+'</button>':'')+
-      (mode==='idle'?'<button type="button" class="primary" id="layout-test">Test layout</button><button type="button" class="utility" id="layout-profiles">Player profiles</button><button type="button" class="utility" id="layout-reset">'+(keyboard?'Restore keyboards':'Restore controller')+'</button>':'')+
-      '<button type="button" class="utility" id="layout-back">'+(pending||mode==='capture'?'Cancel':testing?'Done testing':'Done')+'</button></div>');
+    if(!window.VersusRulebook)return waitForDispatch('Customize controls',()=>loadDispatch('VersusRulebook'),()=>drawLayouts(message),leaveLayouts);
+    showDialog('bindings','Customize controls',window.VersusRulebook.layoutSheet(edit,layout,settings,prefKeys,message));
     $('layout-slot').value=String(slot);$('layout-device').value=device;
     $('layout-slot').onchange=e=>{edit.slot=Number(e.target.value);edit.mode='idle';drawLayouts();$('layout-slot').focus();};
     $('layout-device').onchange=e=>{edit.device=e.target.value;edit.mode='idle';drawLayouts();$('layout-device').focus();};
@@ -7845,6 +7826,8 @@
       settings.guidedLessons=true;save();
       const index=schoolLessons.findIndex(l=>l.id===hash.split('/')[2]);
       if(index<0)resumeCourse();else startLesson(index);
+    } else if (hash === '#tutorial/landings') {
+      landingClinic();
     } else if (hash === '#tutorial/first-match') {
       startFirstFight();
     } else if (hash === '#tutorial') {

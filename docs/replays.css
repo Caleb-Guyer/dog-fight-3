@@ -10,12 +10,14 @@ dialog:is([data-view='finish-replay'],[data-view='finish-film']) { width:min(760
 #dialog-body #clip-inputs p { margin:4px 0; font-variant-numeric:tabular-nums; }
 #clip-launch { margin:6px 0; padding:5px 2px; border-block:1px solid currentColor; }
 #clip-launch summary { cursor:pointer; font-weight:bold; }
-#clip-defense { border-block:1px solid currentColor; margin:6px 0; padding:5px 2px; }
-#clip-defense summary { cursor:pointer; font-weight:bold; }
-#dialog-body #clip-defense p { margin:6px 0; }
-#clip-defense canvas { display:block; width:min(100%,512px); height:auto; image-rendering:pixelated; border:2px solid var(--ink); }
+:is(#clip-defense,#clip-landings) { border-block:1px solid currentColor; margin:6px 0; padding:5px 2px; }
+:is(#clip-defense,#clip-landings) summary { cursor:pointer; font-weight:bold; }
+#dialog-body :is(#clip-defense,#clip-landings) p { margin:6px 0; }
+:is(#clip-defense,#clip-landings) canvas { display:block; width:min(100%,512px); height:auto; image-rendering:pixelated; border:2px solid var(--ink); }
+#clip-landings label { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:6px 0; }
+#clip-landings input { accent-color:var(--ink); }
 .defense-timing, .defense-choices { display:flex; flex-wrap:wrap; gap:4px; margin:6px 0; }
-#clip-defense [aria-pressed=true] { color:var(--ink); background:var(--gold); }
+:is(#clip-defense,#clip-landings) [aria-pressed=true] { color:var(--ink); background:var(--gold); }
 #dialog-body #clip-launch p { margin:6px 0; }
 .flight-study { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
 .flight-stick { display:grid; grid-template-columns:repeat(3, minmax(38px,1fr)); gap:3px; }

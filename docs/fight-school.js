@@ -92,6 +92,8 @@
     hang:['return','Ledge caught','Tap {side} to climb onto the stage, or tap {jump} to jump from the ledge.'],
     lift:['launch-stock-return','Your next stock','When the lamps turn mint, tap {down} to drop or {jump} to spring off. To replay the stock you lost, choose Retry my stock in Pause.'],
     landing:['launch-stock-catch','Brisket is protected','Make room for his landing. Once his last mail tag goes out, a hit or grab can connect.'],
+    fall:['launch-escape','Break your fall','Tap {shield} just before you touch down. Aim sideways with it to roll.'],
+    downed:['launch-escape','Knocked down','Tap {attack} to get up swinging. In Pause, choose Practice to retry the landing.'],
   };
   function cornerSituation(world){
     const [pip,brisket]=world.dogs, floor=world.terrain[0];
@@ -99,6 +101,8 @@
     if(pip.stockLift)return 'lift';
     if(pip.respawning)return '';
     if(pip.ledge)return 'hang/'+(pip.ledge.left?'right':'left');
+    if(pip.floorAction?.type==='downed')return 'downed';
+    if(pip.tumble && pip.vy>0 && world.floorAhead(pip,.34)>=0)return 'fall';
     if(pip.ground<0 && (pip.x<floor.x1 || pip.x>floor.x2)){
       const side=pip.x<floor.x1?'right':'left';
       if(pip.stun>0 || pip.impactLag>0)return 'drift/'+side;
@@ -155,6 +159,7 @@
       if(stock!==this.stock){this.stock=stock;this.seen.clear();this.cue='';}
       const cue=cornerSituation(world);
       if(cue!==this.cue){
+        if(cue==='downed')this.landingAt=frame;
         this.cue=cue;this.until=0;
         if(cue){
           const id=cue.split('/')[0];
