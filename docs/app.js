@@ -254,6 +254,7 @@
     volume: 75,
     musicVolume: 55,
     shake: true,
+    fixedCamera:false,
     cornerTips: true,
     tiltStick: false,
     tiltStick2: false,
@@ -276,6 +277,7 @@
     if(validStockCount(s.lives))settings.lives=s.lives;
     if(window.DogFight.validHandicap(s.handicap) && s.handicap.some(Boolean))settings.handicap=s.handicap;
     settings.timed=s.timed===true;
+    settings.fixedCamera=s.fixedCamera===true;
     if(settings.timed && !settings.minutes)settings.minutes=3;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
     for (const key of ['fetch', 'sound', 'shake', 'tiltStick','flickJump1','flickJump2','quickAttack1','quickAttack2','bestOfThree','cornerTips']) if (typeof s[key] === 'boolean') settings[key] = s[key];
@@ -284,6 +286,13 @@
     if (Number.isFinite(s.musicVolume)) settings.musicVolume = Math.max(0, Math.min(100, s.musicVolume));
   } catch {
     /* Settings are optional in private browsing. */
+  }
+  FightView.fixedCamera=settings.fixedCamera;
+  function cameraButton(){
+    const reduced=reducedReplays.matches;
+    const label=reduced?'Wide (reduced motion)':settings.fixedCamera?'Wide':'Follow fighters';
+    return '<button class="utility" data-do="camera-mode" aria-pressed="'+(reduced || settings.fixedCamera)+'"'+
+      (reduced?' disabled':'')+'>Fight camera · '+label+'</button>';
   }
   function save() {
     try {
@@ -2155,7 +2164,7 @@
         icon('play') +
         'Resume</button><button class="utility" data-do="controls">' +
         icon('keyboard') +
-        'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div>' +
+        'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + cameraButton() + '</div>' +
         targetRecap() + (spar?spar.goals(true):'') + (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
           (corner?'<button class="utility" data-do="corner-practice">Practice · '+schoolLessons.find(l=>l.id===corner.practice).title+'</button>'+
             '<button class="utility" data-do="corner-toggle" aria-pressed="'+settings.cornerTips+'">Ringside tips · '+(settings.cornerTips?'On':'Off')+'</button>':'')+
@@ -2303,7 +2312,7 @@
     $('clip-export').onclick=prepare;
     prepare();
     seekClip(atFrame??0);
-    if(!window.StockCall)loadDispatch('StockCall').then(()=>{if(!signal.aborted)paintClip(0);}).catch(()=>{});
+    if(!window.StockCall || !window.FightCamera)Promise.all(['StockCall','FightCamera'].map(loadDispatch)).then(()=>{if(!signal.aborted)paintClip(0);}).catch(()=>{});
     $('clip-exchange').onclick=()=>chooseFinishFighter(clipScreen.player.frame,review);
     $('clip-toggle').onclick=()=>{
       if (clipScreen.player.frame===clipScreen.player.length) seekClip(0);
@@ -2783,6 +2792,12 @@
       return;
     }
     const action = e.target.closest('[data-do]')?.dataset.do;
+    if(action==='camera-mode'){
+      FightView.fixedCamera=settings.fixedCamera=!settings.fixedCamera;save();
+      if(dialogType==='options')showOptions();
+      else{view.draw($('game'),world,0,world.time,online.match?.confirmedWorld || world);showPause();}
+      $('dialog-body').querySelector('[data-do=camera-mode]').focus();return;
+    }
     const drill=e.target.closest('[data-spar-lesson]');
     if(spar && drill)return startFighterLesson(spar.kind,Number(drill.dataset.sparLesson),false,pausedFight());
     if(spar && action==='spar-card')return fighterSheet(spar.kind);
@@ -5289,6 +5304,7 @@
   const dispatchSources={
     MatchReview:'match-review.js?v=saved-replays-1',
     StockCall:'stock-call.js?v=1',
+    FightCamera:'fight-camera.js?v=1',
     PlayerProfiles:'player-profiles.js?v=1',
     VersusRulebook:'versus-rules.js?v=throw-reads-1',
     PackRelay:'pack-relay.js?v=1',
@@ -5333,6 +5349,7 @@
     }
     return dispatchLoads.get(part);
   }
+  FightView.prepare=()=>loadDispatch('FightCamera').catch(()=>{});
   const missionParts=['DispatchActors','YardArt','DispatchBridge','DispatchRun','DispatchView'];
   const missionReady=()=>missionParts.every(part=>window[part]);
   const loadMission=()=>Promise.all(missionParts.map(loadDispatch));
@@ -6053,7 +6070,7 @@
         settings.shake +
         '">Camera shake <b>' +
         (settings.shake ? 'On' : 'Off') +
-        '</b></button>'+['tiltStick','tiltStick2'].map((key,i)=>'<button type="button" data-do="option-'+key+'" aria-pressed="'+settings[key]+'">P'+(i+1)+
+        '</b></button>'+cameraButton()+['tiltStick','tiltStick2'].map((key,i)=>'<button type="button" data-do="option-'+key+'" aria-pressed="'+settings[key]+'">P'+(i+1)+
           ' grounded aim stick <b>'+(settings[key]?'Tilt':'Smash')+'</b></button>').join('')+'<p>Also applies to the aim keys and a swipe from Smash on touch.</p>' +
         [1,2].map(slot => {
           const quick = settings['quickAttack'+slot];

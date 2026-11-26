@@ -764,6 +764,9 @@ dialog[data-view='practice'] #dialog-body {
   #match .touch-pad {
     position: static;
     grid-row: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3.3fr);
+    gap: clamp(7px, 3vw, 20px);
     min-height: clamp(137px, 24dvh, 230px);
     padding: 12px var(--right-edge) var(--bottom-edge) var(--left-edge);
     align-items: center;
@@ -771,12 +774,26 @@ dialog[data-view='practice'] #dialog-body {
     border-top: 3px solid #4e4d5c;
   }
   .dpad {
-    grid-template-columns: repeat(3, clamp(32px, 10vw, 60px));
+    width: 100%;
+    max-width: 180px;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-template-rows: repeat(3, clamp(35px, 5.6dvh, 56px));
   }
   .touch-actions {
-    grid-template-columns: repeat(4, clamp(39px, 11.5vw, 64px));
-    grid-template-rows: repeat(2, clamp(42px, 6dvh, 64px));
+    width: 100%;
+    max-width: 320px;
+    justify-self: end;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: repeat(3, clamp(38px, 5.7dvh, 54px));
+  }
+  #match .touch-actions [data-touch='hop'] {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+  #match .touch-actions button {
+    min-width: 0;
+    padding-inline: 1px;
+    font-size: clamp(11px, 3vw, 14px);
   }
   #training-tools {
     position: static;
