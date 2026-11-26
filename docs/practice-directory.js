@@ -116,8 +116,11 @@
     const state = e.outcome || e.phase;
     status.dataset.result = state;
     const pattern = world.footworkPractice.pattern;
-    if (pattern === 'center') {
+    if (pattern === 'center' || pattern==='brace') {
       const result={
+        heldLine:['Held the chalk · '+world.footworkPractice.distance+' px pushed','Retry unguarded and compare the distance. A fresh shield braces harder than a worn one.'],
+        lostLine:['Pushed past the chalk · '+world.footworkPractice.distance+' px','Retry holding Shield before the shoulders meet, or roll through the runner.'],
+        caughtRunner:['Caught the runner','Choose a throw. Retry and compare a grab with bracing in place.'],
         crossed:['Changed sides','You landed behind the rival. Retry and try pushing through on foot.'],
         tookGround:['Took ground','You pushed the rival back. Retry and roll through them as your shoulders meet.'],
         lostGround:['Rival reached the chalk','Move forward sooner, or jump as the rival approaches and land behind them.'],

@@ -4323,7 +4323,7 @@
         lab.trace.push([target.x, y]);
       if (report.outcome) lab.revision++;
     }
-    resetFootworkPractice(pattern = 'bait', dir = 1, slow = true) {
+    resetFootworkPractice(pattern = 'bait', dir = 1, slow = true, worn = false) {
       const pauseOnWindup = this.footworkPractice?.pauseOnWindup ?? true;
       this.resetTraining();
       const originalDogs = this.dogs;
@@ -4332,7 +4332,7 @@
       const playerKind = {crawl:'noodle', returnFire:'clover', reflect:'pip', power:'pip', armor:'brisket', armorGrab:'pip'}[pattern];
       const player = playerKind ? newFighter(playerKind, 0) : originalDogs[0];
       const kind = { bait: 'brisket', match: player.kind, power: 'brisket', disc: 'clover', brake: 'pip',
-        center: originalDogs[1].kind, pivot: player.kind, antiAir: originalDogs[1].kind, angleHigh: originalDogs[1].kind,
+        center: originalDogs[1].kind, brace: originalDogs[1].kind, pivot: player.kind, antiAir: originalDogs[1].kind, angleHigh: originalDogs[1].kind,
         angleLow: originalDogs[1].kind, cancelDash: originalDogs[1].kind, cancelTurn: originalDogs[1].kind,
         crawl:'clover', reflect:'clover', returnFire:'pip', dashShield:'brisket', armor:'pip', armorGrab:'brisket' }[pattern];
       const dummy = newFighter(boost ? originalDogs[1].kind : kind, 1);
@@ -4347,6 +4347,11 @@
       if (pattern === 'center') {
         player.x=center-dir*43;dummy.x=center+dir*43;
         mark=center-dir*50;
+      }
+      if (pattern==='brace') {
+        player.x=center;
+        dummy.x=center+dir*(player.stats.width+dummy.stats.width+50);
+        mark=center-dir*30;
       }
       player.face = dir;
       dummy.face = -dir;
@@ -4411,17 +4416,31 @@
       this.footworkPractice = { phase: 'ready', pattern, dir, slow: pattern !== 'bait' && slow,
         mark, originalDogs, tell: 0, beat: 0, sent: false, sendAt, outcome: '' };
       if (discRole) this.footworkPractice.discRole = discRole;
+      if (pattern==='brace') {
+        this.footworkPractice.startX=player.x;
+        this.footworkPractice.worn=worn;
+        player.shieldHP=worn ? .3 : 1;
+      }
       if (boost) this.footworkPractice.boost = true;
       if (boost || pattern === 'cancelDash' || pattern === 'cancelTurn') this.footworkPractice.pauseOnWindup = pauseOnWindup;
     }
     footworkInput(dt) {
       const drill = this.footworkPractice, [player, dummy] = this.dogs;
-      if (drill.pattern === 'center') {
+      if (drill.pattern === 'center' || drill.pattern === 'brace') {
         if (drill.phase === 'done') return idleInput;
         const forward=x=>(x-drill.mark)*drill.dir;
         if (player.ground===dummy.ground && player.ground>=0 && !player.floorAction && forward(player.x)>forward(dummy.x)+6)
           this.finishFootwork('crossed');
-        else if (forward(dummy.x)>108) this.finishFootwork('tookGround');
+        else if (drill.pattern==='brace') {
+          // Count one short drive from first body contact, even if the defender then leaves the ground.
+          if (drill.tell || Math.abs(dummy.x-player.x)<=player.stats.width+dummy.stats.width+1) drill.tell++;
+          if (drill.tell>=18 && player.ground>=0 && !player.floorAction) {
+            const distance=Math.max(0,Math.round((drill.startX-player.x)*drill.dir));
+            drill.distance=distance;
+            this.finishFootwork(forward(player.x)>=0?'heldLine':'lostLine');
+          }
+          return drill.phase==='done' || drill.tell>=18?idleInput:{...idleInput,x:-drill.dir};
+        } else if (forward(dummy.x)>108) this.finishFootwork('tookGround');
         else if (forward(dummy.x)<=0) this.finishFootwork('lostGround');
         return drill.phase==='done'?idleInput:{...idleInput,x:-.48*drill.dir};
       }
@@ -4576,6 +4595,10 @@
     gradeFootwork(target, projectile = false) {
       const drill = this.footworkPractice;
       if (!drill || drill.phase === 'done') return;
+      if (drill.pattern==='brace' || drill.pattern==='center') {
+        this.finishFootwork(this.dogs[0].attack?.grabAttempt?'caughtRunner':'hitFirst');
+        return;
+      }
       if (drill.pattern === 'crawl') {
         if (target.index === 1 && !projectile) this.finishFootwork(drill.phase === 'inside' ? 'caughtServe' : 'earlyHit');
         return;
@@ -5769,6 +5792,14 @@
         this.freshnessPractice.waiting = false;
       }
       const footwork = this.footworkPractice;
+      if (footwork?.pattern==='brace' && footwork.phase==='ready') {
+        if (!input1.attack && !input1.tapped?.attack) return;
+        footwork.phase='approach';footwork.consumeAttack=true;
+      }
+      if (footwork?.pattern==='brace' && footwork.consumeAttack) {
+        footwork.consumeAttack=!!input1.attack;
+        input1={...input1,attack:false,tapped:{...input1.tapped,attack:false}};
+      }
       if (footwork?.pattern==='center' && footwork.phase==='ready') {
         if (!input1.x && !input1.shield && !input1.jump && !input1.shortHop) return;
         footwork.phase='approach';
@@ -6139,8 +6170,6 @@
           if (target) this.footstool(f, target);
         }
       }
-      const [first,secondDog]=this.dogs;
-      const standingGap=this.groundSpace && first.ground>=0 && first.ground===secondDog.ground ? secondDog.x-first.x : 0;
       for (const f of this.dogs) {
         if (f.impactLag > 1e-8) f.impactLag = f.impactLag <= dt + 1e-8 ? 0 : f.impactLag - dt;
         else {
@@ -6152,7 +6181,6 @@
         f.techBuffer = Math.max(0, f.techBuffer - dt);
         f.techLock = Math.max(0, f.techLock - dt);
       }
-      if (standingGap) this.resolveGroundSpace(first,secondDog,standingGap);
       if (settingUpWallHit) this.dogs[0].prev = { ...input1 };
       // All attacks that connect this frame read the same pre-contact damage, including a disc trading with a paw.
       const damageAtContact = this.dogs.map(f => f.damage);
@@ -6226,23 +6254,6 @@
       if (this.freshnessPractice) this.traceFreshness(out.includes(this.dogs[1]));
       if (out.length) this.knockouts(out);
     }
-    resolveGroundSpace(a,b,oldGap) {
-      if (a.ground<0 || a.ground!==b.ground) return;
-      const left=oldGap>0?a:b, right=oldGap>0?b:a;
-      const width=(left.stats.width+right.stats.width)*.6;
-      // Only undo new overlap. Landing and rolling can legitimately leave two dogs close together.
-      const overlap=Math.min(width,Math.abs(oldGap))-(right.x-left.x);
-      if (overlap<=0) return;
-      const yieldsSpace=f=>f.absent || (f.encounter && f.encounter.kind!==f.kind) || f.attack || f.charge>=0 || f.grip || f.floorAction ||
-        f.dodge || f.airDodge || f.jumpSquat || f.stun || f.shieldStun || f.impactLag || f.ledge ||
-        f.tumble || f.reaction || f.shieldBreak || f.clashRecoil || f.waveSlide || f.stockLift || protectionTime(f);
-      if (yieldsSpace(left) || yieldsSpace(right)) return;
-      const mass=f=>f.stats.weight*(f.shield?2:1);
-      const floor=this.terrain[left.ground];
-      const leftRoom=Math.max(0,left.x-floor.x1),rightRoom=Math.max(0,floor.x2-right.x);
-      const back=Math.min(leftRoom,Math.max(overlap-rightRoom,overlap*mass(right)/(mass(left)+mass(right))));
-      left.x-=back;right.x+=Math.min(rightRoom,overlap-back);
-    }
     trainingRivalInput(dt, player) {
       if(this.warmupPartner==='spar')return this.cpu(dt);
       if(this.warmupPartner==='shield')return {...idleInput,shield:this.dogs[1].ground>=0};
@@ -6293,7 +6304,13 @@
       const aIsLeft = climber ? (climber.floorAction.dir === 1) === (climber === a) : a.x <= b.x;
       const [left, right] = aIsLeft ? [a, b] : [b, a];
       const surface = this.terrain[left.ground];
-      const share = right.stats.weight / (left.stats.weight + right.stats.weight);
+      // A planted, healthy shield resists a body push. Shield stun and running slides use the usual weight.
+      const pushing=(this.groundSpace || this.footworkPractice?.pattern==='brace') && !climber &&
+        !left.attack && !right.attack && !left.grip && !right.grip;
+      const weight=f=>pushing && f.shield && !f.brakingShield && !f.shieldStun && !f.impactLag ?
+        f.stats.weight*(1+3*f.shieldHP) : f.stats.weight;
+      const rightWeight=weight(right);
+      const share = rightWeight / (weight(left) + rightWeight);
       left.x = clamp(left.x - (spacing + left.x - right.x) * share, surface.x1 - 3, surface.x2 - spacing + 3);
       right.x = left.x + spacing;
     }

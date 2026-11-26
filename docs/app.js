@@ -31,7 +31,7 @@
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
   const $ = (id) => document.getElementById(id);
   const footworkPatterns = ['bait','match','power','armor','armorGrab','disc','reflect','returnFire','crawl',
-    'center','brake','dashShield','pivot','antiAir','angleHigh','angleLow','cancelDash','cancelTurn','boostGrab','boostPivot'];
+    'center','brace','brake','dashShield','pivot','antiAir','angleHigh','angleLow','cancelDash','cancelTurn','boostGrab','boostPivot'];
   const glyphs = {
     paw: [
       '...##.##....',
@@ -4549,7 +4549,7 @@
         pattern === 'ko' ? !lab?.koTest : lab?.koTest ?? false);
     }
     else if (footwork) world.resetFootworkPractice(pattern, pattern === 'bait' ? 1 : direction ?? world.footworkPractice?.dir ?? 1,
-      world.footworkPractice?.pattern !== 'bait' ? world.footworkPractice?.slow ?? true : true);
+      world.footworkPractice?.pattern !== 'bait' ? world.footworkPractice?.slow ?? true : true,study ?? world.footworkPractice?.worn ?? false);
     else if (spacing) {
       if ((pattern === 'sweet' || pattern === 'sweetAligned') && !isSweetPractice(world.spacingPractice)) showContactBoxes(true);
       world.resetSpacingPractice(pattern, direction ?? world.spacingPractice?.dir ?? 1,
@@ -4771,11 +4771,13 @@
       $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
       $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
       $('footwork-pause').hidden = practice.pauseOnWindup === undefined;
+      $('footwork-worn').hidden = pattern!=='brace';
+      $('footwork-worn').setAttribute('aria-pressed',String(!!practice.worn));
       $('footwork-pause').setAttribute('aria-pressed', String(!!practice.pauseOnWindup));
       $('footwork-status').dataset.result = 'ready';
       $('footwork-status').textContent = {
         brake: 'Brake at the chalk', pivot: 'Catch the chase', antiAir: 'Catch the landing',
-        center:'Hold the line',dashShield:'Run to the chalk',
+        center:'Take ground',brace:'Brace at the chalk',dashShield:'Run to the chalk',
         angleHigh: 'Tag the hop', angleLow: 'Clip the recovery',
         cancelDash:'Catch the hop from a run', cancelTurn:'Turn away, then swing back',
         boostGrab:'Shield just beyond dash-grab range', boostPivot:'Rival behind your run',
@@ -4794,6 +4796,7 @@
         cancelTurn:'Tap ' + (practice.dir > 0 ? 'Left' : 'Right') + ' + Attack to start a tilt facing away. Immediately press ' +
           (practice.dir > 0 ? 'Right' : 'Left') + ' + Jump to swing a back air toward the rival.',
         center:'Run toward the other dog to push them back, or jump or roll past and land behind them. Keep their paws off your chalk.',
+        brace:'Tap Attack to start the run. Stand still once, then retry holding Shield. Compare how far their shoulder pushes you.',
         angleHigh: angleTip, angleLow: angleTip,
         boostGrab:'You’re running. Tap Grab once to test its reach. Retry with Attack, then tap Grab as the windup begins.',
         boostPivot:'You’re running away from the rival. Tap Attack, then press back and tap Grab to reach behind you.',
@@ -5112,6 +5115,7 @@
   for (const pattern of footworkPatterns)
     $('footwork-' + pattern).onclick = () => drill('footwork', false, pattern);
   $('footwork-side').onclick = () => drill('footwork', false, world.footworkPractice.pattern, -world.footworkPractice.dir);
+  $('footwork-worn').onclick = () => drill('footwork',false,'brace',world.footworkPractice.dir,!world.footworkPractice.worn);
   $('footwork-pause').onclick = () => {
     const d = world.footworkPractice;
     d.pauseOnWindup = !d.pauseOnWindup;
@@ -7597,11 +7601,11 @@
       afterStory = null;
       startMatch({...settings, mode:'training', p1:'brisket', p2:'pip', stage:'nightmail', fetch:false});
       drill('footwork', false, hash === '#training/haymaker' ? 'armor' : 'armorGrab');
-    } else if (hash === '#training/dash-shield' || hash === '#training/hold-center') {
+    } else if (hash === '#training/dash-shield' || hash === '#training/hold-center' || hash === '#training/brace') {
       leaveOnline();
       afterStory = null;
       startMatch({...settings, mode:'training', p1:'pip', p2:'brisket', stage:'nightmail', fetch:false});
-      drill('footwork',false,hash==='#training/hold-center'?'center':'dashShield');
+      drill('footwork',false,hash==='#training/brace'?'brace':hash==='#training/hold-center'?'center':'dashShield');
     } else if (hash === '#training/disc-reflect' || hash === '#training/disc-return') {
       leaveOnline();
       afterStory = null;
