@@ -30,6 +30,12 @@
       }catch{return null;}
     }
     save(storage){try{storage.setItem(key,JSON.stringify(this));return true;}catch{return false;}}
+    syncRules(settings){
+      if(this.started)return;
+      const ownFormat=this.sets!==this.rules.bestOfThree;
+      this.rules=versusRules(settings);
+      if(!ownFormat)this.sets=this.rules.bestOfThree;
+    }
     add(){
       if(this.started || this.players.length>=8)return false;
       this.players.push(entrant(++this.serial,kinds[(this.serial-1)%kinds.length]));return true;
