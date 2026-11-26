@@ -142,6 +142,55 @@ async function graduation(browser) {
   assert.match(await page.locator('#school-count').textContent(),/1 \/ 10/);
   await page.close();
 }
+async function personalKnockout(browser){
+  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.addInitScript(()=>{
+      const random=crypto.getRandomValues.bind(crypto);
+      crypto.getRandomValues=a=>a instanceof Uint32Array && a.length===1?a.fill(42):random(a);
+      const buttons=Array.from({length:17},()=>({pressed:false,value:0}));
+      Object.defineProperty(navigator,'getGamepads',{value:()=>[{id:'Hosted pad',index:0,mapping:'standard',axes:[0,0,0,0],buttons}]});
+      window.reviewStick=on=>Object.assign(buttons[11],{pressed:on,value:Number(on)});
+    });
+    await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+    await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+    await page.goto(root+'#tutorial/first-match');
+    await page.keyboard.down('a');
+    for(let i=0;i<30 && !await page.locator('[data-school-review="return"]').count();i++)await page.clock.runFor(1200);
+    await page.keyboard.up('a');
+    await page.locator('[data-school-review="return"]').waitFor();
+    await page.locator('[data-do=home]').tap();await page.locator('#home-records').tap();
+    await page.locator('[data-record-id]').first().tap();
+    await page.locator('[data-saved-clip][data-ko-slot="0"]').first().waitFor();
+    await page.goto(root+'?review-your-stock');await page.locator('#home-continue').tap();
+    assert.equal(await page.locator('#school-title').innerText(),'Recover to the stage');
+    await page.evaluate(()=>reviewStick(true));await page.clock.runFor(50);
+    await page.evaluate(()=>reviewStick(false));await page.clock.runFor(50);
+    await page.locator('#stock-try').waitFor();
+    assert.equal(await page.locator('#dialog-title').textContent(),'Retry stock 3');
+    assert.equal(await page.locator('#stock-caption').textContent(),'Before leaving the stage');
+    await page.locator('#stock-watch').tap();await page.clock.runFor(6000);
+    assert.match(await page.locator('#stock-caption').textContent(),/Recorded knockout · bottom/);
+    await page.locator('#stock-back').tap();await page.locator('#school-recording').tap();
+    await page.locator('#stock-try').tap();await page.clock.runFor(1600);
+    assert.equal(await page.locator('#countdown').textContent(),'Your move');
+    const b=await page.locator('[data-touch=shield]').boundingBox();assert(b);
+    const cdp=await page.context().newCDPSession(page);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:b.x+b.width/2,y:b.y+b.height/2}]});
+    await page.clock.runFor(3500);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    assert.equal(await page.locator('#dialog-title').innerText(),'Stock saved!');
+    assert(await page.getByRole('button',{name:'Rematch Brisket',exact:true}).isVisible());
+    await page.locator('[data-do=trial-results]').tap();
+    assert.equal(await page.locator('#school-title').innerText(),'Recover to the stage');
+    assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'playing');
+    await page.goto(root+'?after-personal-save');
+    assert.match(await page.locator('#home-continue').innerText(),/Rematch Brisket/);
+    await page.locator('#home-continue').tap();await page.clock.runFor(3200);
+    assert.equal(await page.locator('#hud .lives').first().getAttribute('aria-label'),'3 stocks');
+  }finally{await page.close();}
+}
 async function touchRematch(browser){
   const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   page.on('pageerror',e=>errors.push(e.message));
@@ -154,6 +203,7 @@ async function touchRematch(browser){
       rematch:{id:'guard',ticket:'0000000000000001-0123456789abcdef',fight:false}
     })));
     await page.reload();await page.locator('#home-continue').tap();
+    assert(await page.locator('#school-recording').isHidden());
     assert.match(await page.locator('#school-count').textContent(),/Rematch practice/);
     await page.locator('#school-example').tap();await page.clock.runFor(1800);
     const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.school')).rematch);
@@ -171,6 +221,6 @@ async function touchRematch(browser){
 }
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try {await savedRoutes(browser);await graduation(browser);await touchRematch(browser);assert.deepEqual(errors,[]);}
+  try {await savedRoutes(browser);await graduation(browser);await touchRematch(browser);await personalKnockout(browser);assert.deepEqual(errors,[]);}
   finally{await browser.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});

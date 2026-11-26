@@ -6,6 +6,7 @@ require('../docs/online.js');
 require('../docs/match-review.js');
 global.document={currentScript:{src:'https://example.test/finish-tools.js'}};
 require('../docs/finish-tools.js');
+require('../docs/fight-school.js');
 const {Battle,FinishTape,seededRandom,idleInput}=window.DogFight;
 const dt=1/60;
 function state({emit,random,...fields}) { return {fields,seed:random.state}; }
@@ -15,6 +16,39 @@ function archive(tape) {
     .sort(([a],[b])=>a-b).map(([,b])=>b));
   return {catalog,blocks,restore};
 }
+
+test('a saved Fight School knockout reproduces the original loss and lets Pip save it from the marked departure',()=>{
+  const w=new Battle({mode:'solo',stage:'picnic',form:'original',p1:'pip',p2:'brisket',cpuLevel:'rookie',stockCount:3,minutes:7,fetch:false},undefined,seededRandom(42));
+  const tape=new FinishTape(),left={...idleInput,x:-1};
+  for(let f=0;w.end===null && f<4200;f++){tape.record(w,left);w.step(dt,left);}
+  tape.captureKnockouts(w);
+  assert.equal(w.end,1);
+  const entry={mode:'school',winner:1,replay:true,card:w.matchCard};
+  const i=window.FightSchool.reviewLoss(entry,'return');
+  const packed=archive(tape);assert(!packed.catalog.whole);
+  const span=packed.catalog.knockouts.find(s=>s.first<=i && i<s.first+s.losses);
+  const clip=packed.restore(span),mark=window.FinishTools.analyze(clip,0).escape;
+  const retry=new window.MatchReview.StockRetry(clip,null,0,mark);
+  assert.equal(retry.loss.zone,'bottom');assert.equal(retry.number,3);
+  assert.equal(mark.label,'Before leaving the stage');assert(retry.end-retry.start<150);
+  for(const [input,outcome] of [[left,'lost'],[{...idleInput,shield:true},'saved']]){
+    const p=retry.attempt(()=>{});
+    while(!p.outcome)p.step(input);
+    assert.equal(p.outcome,outcome);assert.equal(retry.original.dogs[0].stocks,0);
+  }
+  assert.equal(w.matchCard.losses.length,3);
+});
+
+test('rematch practice selects the relevant recorded stock and ignores other dogs, wins, and sudden death',()=>{
+  const loss=(zone,id,frame=150)=>({zone,frame,slot:0,suddenRound:0,lastHit:id && {frame:frame-30,id}});
+  const card={players:[{kind:'pip'},{kind:'brisket'}],losses:[
+    loss('bottom'),loss('left',Object.keys(window.DogFight.throws)[0]),loss('top','jab'),{...loss('bottom'),slot:1},{...loss('bottom'),suddenRound:1}
+  ]};
+  const base={mode:'school',winner:1,replay:true,card},pick=window.FightSchool.reviewLoss;
+  assert.equal(pick(base,'return'),0);assert.equal(pick(base,'jab'),1);assert.equal(pick(base,'guard'),2);assert.equal(pick(base,'stock'),2);
+  for(const edit of [{mode:'solo'},{winner:0},{replay:false},{card:{...card,losses:[]}},{card:{...card,players:[{kind:'clover'},{kind:'brisket'}]}}])assert.equal(pick({...base,...edit},'return'),-1);
+  assert.equal(pick(null,'return'),-1);
+});
 
 test('saved finish and knockout windows share blocks while preserving simultaneous losses and exact boundary frames',()=>{
   const w=new Battle({mode:'local',stage:'picnic',p1:'pip',p2:'brisket'},undefined,seededRandom(71));
