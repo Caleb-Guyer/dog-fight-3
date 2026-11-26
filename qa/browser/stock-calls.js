@@ -46,11 +46,26 @@ async function run(browser,phone){
     assert.deepEqual(call.dogs,phone?[]:[['pip','tumble',0]]);
     assert.match(await page.locator('#announce').textContent(),/Pip out at the top blast line.*P1 2, P2 3/);
     assert.deepEqual(await page.evaluate(()=>[...new Set(ramps)]),[1460,1760]);
-    await page.clock.runFor(1400);
+    await page.clock.runFor(4300);
     await page.locator('#pause').click();await page.locator('[data-do=ko-replays]').click();await page.locator('[data-ko="0"]').click();
     await page.locator('#clip-seek').press('End');
     const replay=await page.evaluate(()=>calls.filter(c=>c.canvas==='clip-arena').at(-1));
     assert.deepEqual(replay.labels,call.labels);assert.equal(replay.age,0);
+    const press=id=>phone?page.locator(id).tap():page.locator(id).click();
+    await press('#clip-return');await page.locator('#clip-exchange:enabled').waitFor();
+    assert.equal(await page.locator('#clip-seek').getAttribute('max'),'240');
+    const marks=await page.locator('[data-clip-moment]').allTextContents();
+    assert(marks.some(m=>m.includes('Automatic drop')) && marks.some(m=>m.includes('Protection ended')),JSON.stringify(marks));
+    await press('#clip-exchange');await press('[data-finish-slot="0"]');
+    await page.clock.runFor(1260);
+    if(phone)await press('[data-touch=jump]');else await page.keyboard.press('Space');
+    await page.clock.runFor(3950);
+    const report=await page.locator('.finish-comparison').innerText();
+    assert.match(report,/Automatic drop on frame/);assert.match(report,/Jump on frame/);assert.match(report,/24 frames/);
+    await press('[data-do=trial-retry]');await page.clock.runFor(5000);
+    assert.doesNotMatch(await page.locator('.finish-comparison').innerText(),/Jump on frame/);
+    await press('[data-do=trial-replay]');await press('#clip-return');
+    assert(await page.locator('#clip-escape').isVisible());
     // A local prediction can move a dog beyond the line before the other peer's steering arrives.
     const gates=await page.evaluate(()=>{
       const make=()=>new DogFight.Battle({mode:'local',stage:'picnic',p1:'pip',p2:'brisket'},undefined,DogFight.seededRandom(4));

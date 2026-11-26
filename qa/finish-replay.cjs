@@ -55,6 +55,8 @@ test('both delayed peers can revisit the same confirmed non-final knockout after
   assert.equal(tapes[0].knockouts.length,1);assert.equal(tapes[1].knockouts.length,1);
   const [a,b]=tapes.map(t=>t.knockouts[0]);
   assert.deepEqual(a.losses,b.losses);assert.equal(a.losses[0].remaining,2);
+  assert.equal(a.returnTape.length,240);
+  for(const n of [0,24,143,240])assert.deepEqual(state(a.returnTape.playback(n).battle),state(b.returnTape.playback(n).battle));
   assert(a.tape.count<tapes[0].count-240);
   for(let n=1;n<=a.tape.length;n++){
     for(const slot of [0,1])assert.deepEqual(window.FinishTools.inputFrame(a.tape,n,slot),window.FinishTools.inputFrame(b.tape,n,slot));
@@ -67,6 +69,49 @@ test('both delayed peers can revisit the same confirmed non-final knockout after
     assert.equal(fork.battle.dogs[0].stocks,3);
   }
   peers.forEach((p,i)=>assert.deepEqual(state(p.confirmedWorld),live[i]));
+});
+
+test('the return begins on the knockout frame and every saved checkpoint reproduces both dogs',()=>{
+  const w=new Battle({mode:'solo',p1:'pip',p2:'brisket',stage:'nightmail',form:'trio',cpuLevel:'rival',throwOpening:'perch'},undefined,seededRandom(42));
+  const t=new FinishTape(),frames=[];
+  for(let i=0;i<560;i++){
+    t.record(w,idleInput,idleInput);w.step(dt,idleInput,idleInput);
+    if(w.matchCard.losses.length===1 && frames.length<=240)frames.push(structuredClone(state(w)));
+  }
+  const ko=t.knockouts[0],f=ko.returnTape,store=archive(t),span=store.catalog.knockouts[0].follow,saved=store.restore(span);
+  assert.equal(f.from,ko.tape.count);assert.equal(f.length,240);assert.equal(saved.length,240);
+  assert.deepEqual(state(saved.playback(0).battle),state(ko.tape.playback(ko.tape.length).battle));
+  for(const n of [0,1,24,119,120,144,239,240])assert.deepEqual(state(saved.playback(n).battle),frames[n]);
+  for(const b of f.blocks)assert(store.blocks.has(b.start));
+  assert.throws(()=>store.restore({...span,from:span.count}));
+});
+test('a return takeover compares a real jump against an automatic drop and leaves the original recording alone',()=>{
+  const w=new Battle({mode:'local',p1:'pip',p2:'brisket',stage:'nightmail'},undefined,seededRandom(42));
+  w.dogs[0].x=-400;const t=new FinishTape();
+  for(let i=0;i<270;i++){t.record(w,idleInput,idleInput);w.step(dt,idleInput,idleInput);}
+  const ko=t.knockouts[0],f=ko.returnTape,tools=window.FinishTools;
+  const before=structuredClone(state(f.playback(f.length).battle));
+  const recorded=tools.returnTrace(),edited=tools.returnTrace();tools.analyze(f,0,recorded);
+  const branch=f.playback(0,(name,e)=>edited.observe(name,e,branch.frame+1),0);
+  while(branch.frame<branch.length)branch.step(branch.frame===24?{...idleInput,jump:true}:idleInput);
+  assert.equal(recorded.exits[0].option,'auto');assert.equal(recorded.exits[0].protection,24);
+  assert.equal(edited.exits[0].option,'jump');assert(edited.exits[0].protection>=95);
+  assert(recorded.marks.some(m=>m.label.includes('Protection ended')));
+  assert.match(tools.returnComparison(recorded,edited,ko.losses,['Pip','Brisket']),/Automatic drop.*Jump on frame.*24 frames.*9[56] frames/);
+  assert.deepEqual(state(f.playback(f.length).battle),before);
+});
+test('the next knockout seals a partial return and a match-ending fall starts no new clip',()=>{
+  const w=new Battle({mode:'local',stockCount:2,p1:'pip',p2:'brisket',stage:'picnic'},undefined,seededRandom(3)),t=new FinishTape();
+  w.dogs[0].x=-400;
+  for(let i=0;i<30;i++){
+    if(i===13)w.dogs[1].x=1600;
+    t.record(w,idleInput,idleInput);w.step(dt,idleInput,idleInput);
+  }
+  const first=t.knockouts[0],second=t.knockouts[1];
+  assert.equal(first.returnTape.count,second.tape.count);assert(first.returnTape.length<24);
+  w.knockouts([w.dogs[0]]);t.captureKnockouts(w);
+  assert.notEqual(w.end,null);assert.equal(t.knockouts.at(-1).returnTape,undefined);
+  assert.equal(t.returning,null);
 });
 
 for(const mode of ['local','solo']) test(mode+' can seek or replay the final 240 ticks exactly',()=>{

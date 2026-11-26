@@ -37,9 +37,18 @@ test('ringside tips read a close shield and an outward finish, leave quiet time,
   pip.x=floor.x1+100;brisket.x=floor.x1+50;assert.equal(read(),'finish/left');
   brisket.damage=0;world.matchCard.players[1].hits=2;assert.equal(read(),'guard');
   world.matchCard.players[0].blocks=1;assert.equal(read(),'');
-  pip.stocks--;pip.stockLift={ready:true};assert.equal(read(),'');
+  pip.stocks--;pip.stockLift={ready:true};assert.equal(read(),'lift');assert.equal(coach.practice,'launch-stock-return');
   pip.stockLift=null;brisket.shield=true;assert.equal(read(),'grab');
   world.suddenDeath={round:1};assert.equal(read(),'');
+});
+test('the first fight teaches both sides of a stock change and prioritizes getting back to the edge',()=>{
+  const {world,coach,pip,brisket,floor,read}=cornerFight();
+  world.beginStockReturn(brisket);
+  assert.equal(read(),'landing');assert.equal(coach.practice,'launch-stock-catch');
+  Object.assign(pip,{ground:-1,x:floor.x1-60,y:floor.y+20,jumps:1});
+  assert.equal(read(),'jump/right');
+  world.beginStockReturn(pip);assert.equal(read(),'lift');
+  assert.match(window.FightSchool.cornerLine('lift',action=>'['+action+']')[1],/\[down\].*\[jump\]/);
 });
 
 test('older lesson saves resume the next uncleared skill and distinguish dismissing the welcome',()=>{
