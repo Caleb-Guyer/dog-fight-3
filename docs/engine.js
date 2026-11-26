@@ -10607,7 +10607,12 @@
           plan.phase='swing';
           return {...idleInput,y:1,jump:true,tapped:{jump:true}};
         }
-        if (f.ground<0) return {...idleInput,x:dir};
+        if (f.ground<0) {
+          if (f.y>plan.edge.y+64 || (plan.edge.x-f.x)*dir>45) {this.bot.runoff=null;return null;}
+          // Tap down just after running off. Release it on the next tick to let the paws catch.
+          if (!plan.dipped && f.vy>0) {plan.dipped=true;return {...idleInput,x:dir,y:1};}
+          return {...idleInput,x:dir};
+        }
         // A walk stops at the lip. Reset the stick if a fresh dash flick is needed.
         return !f.run && f.prev.x*dir<-.55 ? idleInput : {...idleInput,x:-dir};
       }
