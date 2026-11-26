@@ -7,6 +7,52 @@ require('../docs/recovery-coach.js');
 const {Battle,FinishTape,kits,seededRandom,idleInput}=window.DogFight;
 const coach=window.RecoveryCoach;
 
+function firstMatchFilm(){
+  const battle=new Battle({mode:'solo',p1:'pip',p2:'brisket',stage:'picnic',form:'original',minutes:7,
+    schoolFinal:true,cpuLevel:'rookie',fetch:false},undefined,seededRandom(42));
+  const tape=new FinishTape(true),left={...idleInput,x:-1};
+  while(battle.end===null && tape.count<2400){
+    tape.record(battle,left,idleInput);battle.step(1/60,left,idleInput);tape.captureKnockouts(battle);
+  }
+  assert.equal(battle.end,1);
+  return {battle,tape,left,film:new window.MatchReview.MatchFilm(tape.fullMatch())};
+}
+test('whole-stock retries reproduce three real losses, including a stock longer than the KO clip',()=>{
+  const {battle,tape,left,film}=firstMatchFilm(),last=structuredClone(battle.matchCard);
+  const falls=film.data.falls.filter(f=>f.slots.includes(0));assert.equal(falls.length,3);
+  assert(falls[1].at-falls[0].at>240);
+  for(const [i,fall] of falls.entries()){
+    const retry=new window.MatchReview.StockRetry(film,fall),p=retry.attempt(()=>{});
+    assert.equal(retry.number,i+1);assert.equal(p.frame,i?falls[i-1].at:0);
+    assert.equal(!!p.battle.dogs[0].stockLift,i>0);
+    while(!p.outcome)p.step(left);
+    assert.equal(p.outcome,'lost');assert.equal(p.frame,fall.at);
+    assert.deepEqual(p.battle.matchCard,retry.original.matchCard);
+    assert.equal(p.battle.random.state,retry.original.random.state);
+    assert.equal(p.step(idleInput),false);assert.equal(p.frame,fall.at);
+  }
+  assert.deepEqual(last,battle.matchCard);
+  const restored=window.MatchReview.resumeTape(structuredClone(window.MatchReview.pack(tape)),last.losses);
+  const saved=new window.MatchReview.MatchFilm(restored.fullMatch());
+  assert.deepEqual(saved.data.falls,film.data.falls);
+  const p=new window.MatchReview.StockRetry(saved,saved.data.falls[0]).attempt(()=>{});
+  while(!p.outcome)p.step(idleInput);
+  assert.equal(p.outcome,'saved');assert.equal(p.frame,falls[0].at);
+});
+
+test('passing the recorded knockout in the air requires a landing and can still end in a later KO',()=>{
+  const {film}=firstMatchFilm(),falls=film.data.falls.filter(f=>f.slots.includes(0));
+  const first=new window.MatchReview.StockRetry(film,falls[0]),p=first.attempt(()=>{});
+  while(p.frame<first.end)p.step({...idleInput,jump:p.frame===first.end-6});
+  assert.equal(p.outcome,null);assert.equal(p.battle.dogs[0].ground,-1);
+  while(!p.outcome)p.step(idleInput);
+  assert.equal(p.outcome,'saved');assert(p.frame>first.end);assert.equal(p.battle.dogs[0].ground,0);
+  const second=new window.MatchReview.StockRetry(film,falls[1]),q=second.attempt(()=>{});
+  while(!q.outcome)q.step(idleInput);
+  assert(q.frame>second.end);assert.equal(q.outcome,'lost');
+  assert.equal(second.comparison(q).title,'Stock lost');
+});
+
 function find(tape,slot=0,follow) {
   const search=coach.search(tape,slot,follow);
   let result;

@@ -84,6 +84,18 @@ async function check(browser,device) {
     assert.equal(await page.evaluate(()=>fingerprint()),frozen);
     await choose('[data-do=trial-replay]');await route();await choose('#recovery-back');
     assert.equal(await page.locator('#dialog-title').textContent(),'Paused');
+    await choose('[data-do=stock-retry]');
+    assert.equal(await page.locator('#dialog-title').textContent(),'Retry stock 1');
+    await choose('#stock-watch');await page.clock.runFor(4400);
+    assert.match(await page.locator('#stock-caption').textContent(),/Recorded knockout · bottom/);
+    await choose('#stock-try');await page.clock.runFor(3100);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!');
+    assert.match(await page.locator('.finish-comparison').innerText(),/Time played/);
+    assert.equal(await page.evaluate(()=>fingerprint()),frozen);
+    await choose('[data-do=trial-retry]');await hold(-1);await page.clock.runFor(3000);await hold(0);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Stock lost');
+    await choose('[data-do=trial-replay]');await choose('#stock-back');
+    assert.equal(await page.locator('#dialog-title').textContent(),'Paused');
     if(device==='keyboard'){
       await choose('[data-do=resume]');await hold(-1);
       for(let i=0;i<20 && !await page.locator('[data-do=watch-finish]').isVisible();i++)await page.clock.runFor(3500);
@@ -96,6 +108,14 @@ async function check(browser,device) {
       assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!');
       await choose('[data-do=trial-results]');await page.locator('.card-stats').waitFor();
       await page.locator('[data-saved-clip="0"][data-ko-slot="0"]').waitFor();
+      await page.goto('http://127.0.0.1:8080/?stock-archive#records');
+      await choose('[data-record-id]');await choose('[data-saved-clip=full]');
+      await choose('#film-marks summary');await choose('[data-stock-at]');
+      assert.equal(await page.locator('#dialog-title').textContent(),'Retry stock 1');
+      await choose('#stock-try');await page.clock.runFor(3100);
+      assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!');
+      await choose('[data-do=trial-results]');await page.locator('[data-saved-clip=full]:focus').waitFor();
+      assert.equal(await page.evaluate(()=>new FightRecords.Book(localStorage).list().length),1);
     }
     await page.goto('http://127.0.0.1:8080/?couch#local/rules/time/3/1/single/flat/off');
     await choose('#rules-use');await choose('#slots [data-index="1"]');await choose('#roster [data-kind=pip]');
