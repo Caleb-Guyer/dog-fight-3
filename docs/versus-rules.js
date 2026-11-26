@@ -252,6 +252,8 @@
         '<button class="utility" data-do="cut-off-clover">Intercept Clover · Pip vs. Clover</button></div>' +
         '<h3>Defend the stock return</h3><p>You just took a stock. Your opponent rides the lift down over you. Shield after their paws leave the lift to block the falling aerial. Hold Shield from GO and they can land beside you and grab.</p>'+
         '<button class="utility" data-do="lift-fight">Face the returning Rival</button>'+
+        '<p>On Bandstand, you return above Rival. Drop as the lift lights up to take the high platform. Ride it to the end and watch for a jab as your last tag fades.</p>'+
+        '<button class="utility" data-do="return-perch">Take the top platform</button>'+
         '<h3>Make Haymaker miss</h3><p>Brisket has already let his punch go. As Pip, dash left at GO, let the punch pass, then run back in and tap Attack. Switch dogs to see Rival Pip’s timing.</p>' +
         '<div class="dialog-actions"><button class="utility" data-do="dash-back-bait">Dodge the punch as Pip</button>' +
         '<button class="utility" data-do="dash-back-watch">Face Rival Pip as Brisket</button></div>' +

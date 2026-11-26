@@ -268,13 +268,15 @@
     }finally{db.close();}
   }
   const seconds=frames=>(frames/60).toFixed(1)+' s';
-  function koList(clips,from,focus,{showDialog,back,label,open}){
-    const choices=clips.map(c=>'<button type="button" class="utility" data-ko="'+c.first+'">'+label(c)+'</button>').join('');
+  function koList(clips,from,focus,{showDialog,back,label,open,fight}){
+    const choices=clips.map(c=>'<div class="dialog-actions"><button type="button" class="utility" data-ko="'+c.first+'">'+label(c)+'</button>'+
+      (fight && c.returnTape?.length?'<button type="button" class="utility" data-return-fight="'+c.first+'" aria-label="Fight from the return after '+label(c)+'">Fight from this return</button>':'')+'</div>').join('');
     showDialog('ko-replays','KO replays','<p>Choose a knockout to watch or play it from either side.</p>'+
       '<div class="option-list">'+choices+'</div><div class="dialog-actions"><button class="utility" id="ko-list-back">'+
       (from==='pause'?'Back to pause':'Back to results')+'</button></div>');
     const root=document.getElementById('dialog-body'), cancel=root.querySelector('#ko-list-back');
     for(const b of root.querySelectorAll('[data-ko]'))b.onclick=()=>open(clips.find(c=>c.first===Number(b.dataset.ko)));
+    for(const b of root.querySelectorAll('[data-return-fight]'))b.onclick=()=>fight(clips.find(c=>c.first===Number(b.dataset.returnFight)));
     cancel.onclick=back;
     (root.querySelector('[data-ko="'+(focus ?? clips[0]?.first)+'"]') || cancel).focus();
   }
