@@ -95,6 +95,14 @@
       }
       if(this.extra)bindings.append(' · Release '+(this.extra==='aimStick'?'aimed strike':label(this.extra)));
     }
+    touchPrompts(buttons,active){
+      for(const button of buttons){
+        const action=button.dataset.touch==='neutral'?'center':button.dataset.touch;
+        const key=active && this.step.keys.find(k=>k===action || k==='!'+action);
+        if(key)button.dataset.lessonCue=key[0]==='!'?'release':'press';
+        else delete button.dataset.lessonCue;
+      }
+    }
     draw(ctx){
       if(!this.mark)return;
       const {x,y,left,right}=this.mark;

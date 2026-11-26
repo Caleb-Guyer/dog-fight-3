@@ -114,7 +114,7 @@
       }
       if(profile){
         const [quick,flick,tilt]=profile.prefs;
-        el('detail').textContent='Attack '+controls.keyName(profile.keyboard.attack)+' / '+controls.buttons[profile.pad.attack]+
+        el('detail').textContent='Attack '+controls.keyName(profile.keyboard.attack)+' / '+(game.padNames?.(slot) || controls.buttons)[profile.pad.attack]+
           ' · '+(quick?'Attack on press':'Hold Attack to smash')+' · Flick jump '+(flick?'on':'off')+' · '+(tilt?'Tilt stick':'Smash stick');
         el('use').onclick=()=>use(profile,true);
         el('delete').onclick=()=>{pending={type:'delete',profile};draw();};
