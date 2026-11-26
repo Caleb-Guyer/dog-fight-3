@@ -115,7 +115,9 @@ async function controllerCheck(browser){
   const page=await browser.newPage({viewport:{width:1100,height:800}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   await page.addInitScript(()=>{
+    window.pulses=[];
     window.makeController=(index,id)=>({index,id,connected:true,mapping:'standard',axes:[0,0,0,0],
+      vibrationActuator:{effects:['dual-rumble'],playEffect(type,params){pulses.push({index,type,...params});return Promise.resolve('complete');},reset(){}},
       buttons:Array.from({length:17},()=>({value:0,pressed:false}))});
     window.pads=[makeController(0,'DualSense Wireless Controller'),makeController(1,'Nintendo Switch Pro Controller')];
     Object.defineProperty(navigator,'getGamepads',{value:()=>window.pads});
@@ -154,8 +156,11 @@ async function controllerCheck(browser){
     await page.waitForFunction(()=>!!window.LessonGuide,null,{polling:20});await tick();
     assert.match(await hint(),/Cross.*Triangle/);
     assert.equal(await page.locator('#school-example').textContent(),'Create · Watch example');
+    await page.waitForFunction(()=>!!window.PadFeedback,null,{polling:20});
     await press([0,3]);await press([]);await tick(1500);
     assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'passed');
+    const contacts=await page.evaluate(()=>pulses);
+    assert(contacts.some(p=>p.index===0 && p.duration===32));assert(contacts.every(p=>p.index===0));
     assert.match(await hint(),/Cross to continue/);
     await press([0]);await press([]);assert.match(await hint(),/L1/);
     await page.evaluate(()=>{pads[0]=makeController(0,'Switch Pro Controller');});await tick();
@@ -163,6 +168,24 @@ async function controllerCheck(browser){
     assert.equal(await page.locator('#school-example').textContent(),'− · Watch example');
     await page.keyboard.down('l');await tick(20);await page.keyboard.up('l');
     assert.equal(await page.locator('#school-example').textContent(),'Watch example');
+    await page.goto(root+'?motors#controls/rumble');await page.locator('#rumble-seat').waitFor();await tick();
+    const sample=action=>page.locator('[data-pulse="'+action+'"]').click();
+    await page.selectOption('#rumble-seat','1');await page.selectOption('#rumble-level','2');await sample('knockout');
+    assert.deepEqual(await page.evaluate(()=>pulses.at(-1)),{index:1,type:'dual-rumble',duration:145,startDelay:0,strongMagnitude:.94,weakMagnitude:.22});
+    await page.selectOption('#rumble-seat','0');await sample('strike');
+    assert.equal(await page.evaluate(()=>pulses.at(-1).weakMagnitude),.48*.48);
+    await page.selectOption('#rumble-level','0');assert(await page.locator('[data-pulse=strike]').isDisabled());
+    await page.reload();await tick();assert.deepEqual((await stored()).rumble,[0,2]);
+    await page.selectOption('#rumble-seat','1');await tick();assert.equal(await page.locator('#rumble-level').inputValue(),'2');
+    await page.evaluate(()=>{pads[1].vibrationActuator.playEffect=()=>Promise.reject(new Error('device busy'));});
+    await sample('parry');assert.match(await page.locator('#rumble-result').textContent(),/could not play/);
+    await page.evaluate(()=>{pads[1].vibrationActuator.effects=['trigger-rumble'];});await tick();
+    assert(await page.locator('[data-pulse=parry]').isDisabled());assert.match(await page.locator('#rumble-device').textContent(),/unavailable/);
+    await page.evaluate(()=>{window.pads=[];});await tick();assert.match(await page.locator('#rumble-device').textContent(),/Connect a controller/);
+    await page.goto(root+'?motor-profile#local/profiles');await click('profile-seat-1');
+    await page.locator('#profile-name').fill('Thunder');await click('profile-save');await click('profile-seat-0');
+    await click('profile-use');if(await page.locator('#profile-pad-only').isVisible())await click('profile-pad-only');
+    assert.deepEqual((await stored()).rumble,[2,2]);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
