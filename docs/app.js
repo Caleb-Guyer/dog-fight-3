@@ -988,6 +988,7 @@
     if(dialogType==='profiles')return $('profile-back').click();
     if(dialogType==='rulebook')return backFromRulebook();
     if(dialogType==='matchup-card')return $('matchup-back').click();
+    if(dialogType==='practice-tapes')return $('tape-back').click();
     if(dialogType==='pack-relay')return backFromRelay();
     if(dialogType==='finish-picker')return $('finish-picker-back').click();
     if(dialogType==='ko-replays')return $('ko-list-back').click();
@@ -4753,7 +4754,7 @@
     $('trump-status').hidden = $('trump-patterns').hidden = !trump;
     let message = 'Positions reset.';
     if (combo) {
-      message=window.ComboLab.setup(world);
+      message=window.ComboLab.setup(world,drill,()=>world);
     } else if (wave) {
       const d = world.wavePractice;
       $('wave-back').setAttribute('aria-pressed', String(d.pattern === 'back'));
@@ -5179,32 +5180,25 @@
     }
   }, true);
   $('combo-training').onclick = () => drill('combo', false, 'example');
+  function practiceTapes(hash=''){
+    const active=!hash && world?.mode==='training';
+    const back=()=>{dismiss();(active?$('game'):$('home-records')).focus({preventScroll:true});};
+    if(!window.ComboLab)return waitForDispatch('Practice tapes',()=>loadDispatch('ComboLab'),()=>practiceTapes(hash),back);
+    if(active && !world.comboPractice)drill('combo',false,'example');
+    window.ComboLab.shelf(hash,active?world:null,showDialog,back,(card,source,slot)=>{
+      leaveOnline();afterStory=null;
+      startMatch({...settings,...card.config,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
+      window.ComboLab.restore(world,card);
+      drill('combo',false,source,'stand',slot);
+      if(world.comboPractice.slow!==card.slow)$('combo-slow').click();
+    });
+  }
+  $('combo-tapes').onclick=()=>practiceTapes();
   $('combo-fight-pip').onclick = fightRivalPip;
   for (const source of comboSources) $('combo-' + source).onclick = () => {
     if(source!=='throwChase')return drill('combo',false,source);
     if(world.comboPractice?.source!==source && !world.trainingDamage)world.setDummyDamage(95);
     drill('combo',false,source,world.comboPractice?.reply?.startsWith('di')?world.comboPractice.reply:'diMix');
-  };
-  $('combo-slot').onchange = e => {
-    const d = world.comboPractice, slot = Number(e.target.value);
-    drill('combo', false, d.source === 'record' ? 'record' : d.source === 'replay' && world.comboTakes[slot] ? 'replay' : 'defend',
-      d.reply, slot);
-  };
-  $('combo-restore').onclick = () => {
-    const d = world.comboPractice;
-    world.comboTakes[d.slot] = null;
-    drill('combo', false, 'defend', d.reply, d.slot);
-  };
-  $('combo-reply').onchange = e => {
-    const d = world.comboPractice;
-    drill('combo', false, d.source === 'record' && d.tape.length ? 'replay' : d.source, e.target.value);
-    if (e.target.value !== 'p2' && d.source!=='throwChase') e.target.focus({ preventScroll: true });
-  };
-  $('combo-slow').onclick = () => {
-    const d = world.comboPractice;
-    d.slow = !d.slow;
-    $('combo-slow').setAttribute('aria-pressed', String(d.slow));
-    $('game').focus({ preventScroll: true });
   };
   $('freshness-training').onclick = () => drill('freshness', false, 'repeat');
   $('wave-training').onclick = () => drill('wave', false, world.wavePractice?.pattern || 'back');
@@ -5486,12 +5480,12 @@
     VersusRulebook:'versus-rules.js?v=clock-rival-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
-    ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=instant-replay-1',
+    ComboLab:'combo-lab.js?v=tapes-1', FinishTools:'finish-tools.js?v=instant-replay-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=down-air-1',
     DispatchCovers:'dispatch-covers.js?v=film-load-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=bell-wave-1',
-    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=1',
+    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=tapes-1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -7868,6 +7862,8 @@
       afterStory = null;
       startMatch({...settings, mode:'training', p1:'brisket', p2:'pip', stage:'nightmail', fetch:false});
       drill('combo', false, 'record', 'punish');
+    } else if (hash === '#training/tapes' || hash.startsWith('#training/tapes/')) {
+      showHome(false);practiceTapes(hash);
     } else if (hash === '#training/read-the-hop') {
       leaveOnline();
       afterStory = null;

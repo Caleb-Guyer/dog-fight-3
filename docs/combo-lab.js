@@ -9,8 +9,10 @@
   const comboReplies = { stand: 'Standing', guard: 'Guard', away: 'Flick away', punish:'Block and punish', p2:'Player 2',
     diIn:'Launch DI in',diOut:'Launch DI out',diMix:'Mix launch DI' };
   const takeLetter = slot => slot ? 'B' : 'A';
+  const openedTakes=new WeakSet();
   function takeName(world,slot) {
-    return takeLetter(slot) + ' · ' + (world.comboTakes[slot]?.length ? 'Your recording' : slot ? 'Landing grab' : 'Falling aerial');
+    const take=world.comboTakes[slot];
+    return takeLetter(slot) + ' · ' + (openedTakes.has(take)?'Tape recording':take?.length?'Your recording':slot?'Landing grab':'Falling aerial');
   }
   function comboMoveName(moveId) {
     return (moves[moveId] || specials[moveId] || smashes[moveId] || grabs[moveId] ||
@@ -143,7 +145,30 @@
       const label=takeName(world,i);if(option.textContent!==label)option.textContent=label;
     }
   }
-  function setup(world){
+  function bindControls(drill,getWorld){
+    $('combo-slot').onchange = e => {
+      const world=getWorld(), d=world.comboPractice, slot=Number(e.target.value);
+      drill('combo',false,d.source==='record'?'record':d.source==='replay' && world.comboTakes[slot]?'replay':'defend',d.reply,slot);
+    };
+    $('combo-restore').onclick = () => {
+      const world=getWorld(), d=world.comboPractice;
+      world.comboTakes[d.slot]=null;
+      drill('combo',false,'defend',d.reply,d.slot);
+    };
+    $('combo-reply').onchange = e => {
+      const d=getWorld().comboPractice;
+      drill('combo',false,d.source==='record' && d.tape.length?'replay':d.source,e.target.value);
+      if(e.target.value!=='p2' && d.source!=='throwChase')e.target.focus({preventScroll:true});
+    };
+    $('combo-slow').onclick = () => {
+      const d=getWorld().comboPractice;
+      d.slow=!d.slow;
+      $('combo-slow').setAttribute('aria-pressed',String(d.slow));
+      $('game').focus({preventScroll:true});
+    };
+  }
+  function setup(world,drill,getWorld){
+    if(!$('combo-slot').onchange && drill)bindControls(drill,getWorld);
     const d = world.comboPractice;
     $('combo-reply').value = d.reply;
     $('combo-fight-pip').hidden = d.source !== 'flurry' && d.source !== 'escapeFlurry';
@@ -160,7 +185,7 @@
       : d.source === 'escapeFlurry' ? 'You control ' + world.dogs[1].stats.name + '. Tap Attack to start. Let Pip hit you once, then flick away during the spark. Re-center between hits to shift again.'
       : d.defending ? 'You control ' + world.dogs[1].stats.name + '. Tap Attack to start. ' +
       (d.source === 'mix' ? 'Each try picks either take. Watch the rival and choose your response.' :
-        world.comboTakes[d.slot]?.length ? 'Try shielding, escaping or hitting back against your recording.' :
+        world.comboTakes[d.slot]?.length ? 'Try shielding, escaping or hitting back against the recording.' :
         d.slot ? 'Hold Shield once. On the next try, spot-dodge just before the rival lands and punish the missed grab.' :
         'Hold Shield through the falling aerial, then try punishing the landing.') :
       d.reply === 'p2' ? 'P2 plays the defender live. Record P1’s opening, then replay it to try a different response.' :
@@ -169,5 +194,158 @@
       d.source === 'late' ? 'The second jab is delayed. Change the rival’s reply to see who can use the opening.' :
       d.source === 'replay' ? 'Replaying your inputs. Change the rival’s reply to compare.' : route + ' Change the rival’s reply to test the same inputs.';
   }
-  window.ComboLab={readout,setup,startConfirm,confirmInput,confirmContact,finishConfirm};
+  // Version 1 stores logical inputs after bindings and stick processing. A missing
+  // secondary axis is distinct from zero because the fighter falls back to the main stick.
+  const buttons=['jump','shortHop','attack','smash','aimStick','special','shield','grab','tiltMode','quickAttack'];
+  const axes=['x','y','grabX','airDodgeX','airDodgeY','smashX','smashY'];
+  const {fighters,arenas,idleInput}=window.DogFight;
+  const prefix='#training/tapes/', storePrefix='df3.practice-tape.v1.';
+  function mask(input){
+    return buttons.reduce((bits,key,i)=>input?.[key]?bits|(1<<i):bits,0);
+  }
+  function packTake(take){
+    if(!take?.length)return null;
+    const runs=[];
+    let previous;
+    for(const frame of take){
+      const state=[mask(frame),mask(frame.tapped),...axes.map(key=>frame[key]??null)];
+      while(state.length>2 && state.at(-1)===null)state.pop();
+      const signature=JSON.stringify(state);
+      if(signature===previous)runs.at(-1)[0]++;
+      else runs.push([1,...state]);
+      previous=signature;
+    }
+    return runs;
+  }
+  const integer=(value,min,max)=>Number.isInteger(value) && value>=min && value<=max;
+  function unpackTake(runs){
+    if(runs===null)return null;
+    if(!Array.isArray(runs) || !integer(runs.length,1,150))throw Error('Take length');
+    const frames=[];
+    for(const row of runs){
+      if(!Array.isArray(row) || !integer(row.length,3,3+axes.length))throw Error('Input fields');
+      const [count,held,pressed,...analog]=row;
+      if(!integer(count,1,150-frames.length) || ![held,pressed].every(n=>integer(n,0,(1<<buttons.length)-1)))throw Error('Input timing');
+      const frame={...idleInput,tapped:{}};
+      buttons.forEach((key,i)=>{
+        if(held&(1<<i))frame[key]=true;
+        if(pressed&(1<<i))frame.tapped[key]=true;
+      });
+      analog.forEach((value,i)=>{
+        if(value===null)return;
+        if(!Number.isFinite(value) || Math.abs(value)>1)throw Error('Stick position');
+        frame[axes[i]]=value;
+      });
+      for(let i=0;i<count;i++)frames.push(frame);
+    }
+    return frames;
+  }
+  function encode(card){
+    const {config:c}=card;
+    const data=[1,card.name,c.p1,c.p2,c.stage,c.coats,c.shieldPogo,card.damage,card.time,card.slow,card.takes.map(packTake)];
+    const bytes=new TextEncoder().encode(JSON.stringify(data));
+    return btoa(Array.from(bytes,b=>String.fromCharCode(b)).join('')).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
+  }
+  function decode(code){
+    try{
+      if(typeof code!=='string' || code.length>96000 || !/^[A-Za-z0-9_-]+$/.test(code))return null;
+      const text=atob(code.replaceAll('-','+').replaceAll('_','/'));
+      const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(text,c=>c.charCodeAt(0))));
+      if(!Array.isArray(data) || data.length!==11)return null;
+      const [version,name,p1,p2,stage,coats,shieldPogo,damage,time,slow,takes]=data;
+      if(version!==1 || typeof name!=='string' || !name.trim() || name.length>48 ||
+        ![p1,p2].every(id=>typeof id==='string' && Object.hasOwn(fighters,id)) || typeof stage!=='string' || !Object.hasOwn(arenas,stage) ||
+        !Array.isArray(coats) || coats.length!==2 || !coats.every(n=>integer(n,0,3)) ||
+        typeof shieldPogo!=='boolean' || typeof slow!=='boolean' || !Number.isFinite(damage) || damage<0 || damage>200 ||
+        !Number.isFinite(time) || time<0 || time>1e9 || !Array.isArray(takes) || takes.length!==2)return null;
+      return {name,config:{p1,p2,stage,coats,shieldPogo},damage,time,slow,takes:takes.map(unpackTake)};
+    }catch{return null;}
+  }
+  function capture(world){
+    const d=world.comboPractice, dogs=d?.originalDogs || world.dogs;
+    const [p1,p2]=dogs.map(f=>f.kind);
+    return {name:fighters[p1].name+' vs '+fighters[p2].name,config:{p1,p2,stage:world.stage,
+      coats:[...world.coats],shieldPogo:!!world.shieldPogo},damage:world.trainingDamage,time:world.comboMarkTime??world.time,
+      slow:d?.slow??true,takes:world.comboTakes || [null,null]};
+  }
+  function restore(world,card){
+    world.setDummyDamage(card.damage);
+    world.comboMarkTime=card.time;
+    world.comboTakes=card.takes.slice();
+    for(const take of world.comboTakes)if(take)openedTakes.add(take);
+  }
+  function houseTape(){
+    const take=act=>Array.from({length:85},(_,i)=>({...idleInput,...act(i)}));
+    return {name:'Brisket at the bell',config:{p1:'brisket',p2:'pip',stage:'bandstand',coats:[0,0],shieldPogo:true},
+      damage:35,time:0,slow:false,takes:[
+        take(i=>({shield:i<8,quickAttack:true,attack:i===18})),
+        take(i=>({shield:i<8,grab:i===32,x:i===61?1:0}))
+      ]};
+  }
+  function shelf(hash,world,showDialog,back,play){
+    const shared=hash.startsWith(prefix), incoming=shared?decode(hash.slice(prefix.length)):null;
+    const choices=[];
+    if(incoming)choices.push({card:incoming,group:'Shared'});
+    if(world?.comboTakes?.some(t=>t?.length))choices.push({card:capture(world),group:'In this match'});
+    choices.push({card:houseTape(),group:'House tape'});
+    try{
+      for(const key of Object.keys(localStorage).filter(k=>k.startsWith(storePrefix)).sort().reverse()){
+        const card=decode(localStorage.getItem(key));
+        if(card)choices.push({card,group:'Saved',key});
+      }
+    }catch{}
+    showDialog('practice-tapes','Practice tapes',
+      '<label class="practice-search">Choose a tape<select id="tape-pick"></select></label><p id="tape-detail"></p>'+
+      '<div class="dialog-actions"><button class="primary" id="tape-mix">Defend a blind mix</button>'+
+      '<button class="utility" id="tape-a">Defend A</button><button class="utility" id="tape-b">Defend B</button>'+
+      '<button class="utility" id="tape-record">Record your own A</button></div>'+
+      '<label class="practice-search">Tape name<input id="tape-name" maxlength="48" autocomplete="off"></label>'+
+      '<div class="dialog-actions"><button class="utility" id="tape-save">Save a copy</button>'+
+      '<button class="utility" id="tape-link">Get playable link</button><button class="utility" id="tape-remove" hidden>Remove saved tape</button></div>'+
+      '<input id="tape-url" aria-label="Playable tape link" readonly hidden><p role="status" id="tape-notice"></p>'+
+      '<button class="utility" id="tape-back">Back</button>');
+    const pick=$('tape-pick'),name=$('tape-name'),status=$('tape-notice'),url=$('tape-url');
+    function select(index){
+      pick.replaceChildren(...choices.map((entry,i)=>new Option(entry.group+' · '+entry.card.name,String(i))));
+      pick.selectedIndex=index;
+      const entry=choices[index], c=entry.card, config=c.config;
+      name.value=c.name;url.hidden=true;status.textContent='';$('tape-remove').hidden=!entry.key;
+      const take=slot=>c.takes[slot]?.length?c.takes[slot].length+' frames':slot?'Landing grab':'Falling aerial';
+      $('tape-detail').textContent=fighters[config.p1].name+' attacks. You play '+fighters[config.p2].name+' at '+c.damage+'% on '+arenas[config.stage].name+
+        '. A · '+take(0)+' / B · '+take(1)+'. '+(entry.group==='House tape'?'Watch Brisket lower his shield. Hold Shield against the jab, then try dodging the grab.':'Tap Attack when you’re ready for the exchange.');
+    }
+    const chosen=()=>choices[pick.selectedIndex].card;
+    const named=()=>({...chosen(),name:name.value.trim() || chosen().name});
+    pick.onchange=()=>select(pick.selectedIndex);
+    for(const [id,source,slot] of [['tape-a','defend',0],['tape-b','defend',1],['tape-mix','mix',0],['tape-record','record',0]])
+      $(id).onclick=()=>play(chosen(),source,slot);
+    $('tape-save').onclick=()=>{
+      const card=named(),code=encode(card);
+      try{
+        const existing=choices.findIndex(e=>e.key && localStorage.getItem(e.key)===code);
+        if(existing>=0){select(existing);status.textContent='Already saved on this device.';return;}
+        const key=storePrefix+Date.now()+'-'+crypto.randomUUID();
+        localStorage.setItem(key,code);
+        choices.push({card,group:'Saved',key});select(choices.length-1);
+        status.textContent='Saved on this device.';
+      }catch{status.textContent='Device storage is unavailable. Keep a playable link to reopen this tape.';}
+    };
+    $('tape-remove').onclick=()=>{
+      const i=pick.selectedIndex;
+      try{localStorage.removeItem(choices[i].key);choices.splice(i,1);select(0);status.textContent='Removed from this device.';}
+      catch{status.textContent='Could not remove this tape from device storage.';}
+    };
+    $('tape-link').onclick=async()=>{
+      const link=new URL(location.href);
+      link.search='';link.hash=prefix+encode(named());
+      url.value=link.href;url.hidden=false;url.focus();url.select();
+      status.textContent='Copy this link to play both takes on another device.';
+      try{await navigator.clipboard.writeText(link.href);if(!url.hidden && url.value===link.href)status.textContent='Playable link copied.';}catch{}
+    };
+    $('tape-back').onclick=back;
+    select(0);
+    if(shared && !incoming)status.textContent='This link could not be read. Choose a tape from the shelf.';
+    pick.focus();
+  }
+  window.ComboLab={readout,setup,startConfirm,confirmInput,confirmContact,finishConfirm,shelf,encode,decode,capture,restore,houseTape};
 })();

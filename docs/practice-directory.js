@@ -6,7 +6,7 @@
       ['Movement','Footwork','footwork', footworkPatterns],
       ['Movement','Wavedash','wave',['back','platform']],
       ['Movement','Platforms','platform',['below','top','hold','ferry','shield-drop','layers']],
-      ['Attack','Combo practice','combo',['example','confirm','throwChase','late','record','defend','mix','flurry','escapeFlurry']],
+      ['Attack','Combo practice','combo',['example','confirm','throwChase','late','record','defend','mix','tapes','flurry','escapeFlurry']],
       ['Attack','Aerial spacing','spacing',['approach','retreat','landing','airPower','fastfall','sweet','cancel','footstool','footstoolTech','reverse','wavebounce']],
       ['Attack','Knockdowns','launch',['lock','bait','read','floor-spike','edge-spike']],
       ['Attack','Move freshness','freshness',['training','ko','rage','drive']],
@@ -23,6 +23,7 @@
       ['Movement','Free practice','',['reset-training','partner-training']],
     ];
     const practiceAliases = {
+      'combo-tapes':'recording share saved mixup defend attack sequence',
       'footwork-crawl':'Noodle Clover duck boomerang projectile skip serve', 'footwork-antiAir':'anti-air',
       'footwork-angleHigh':'up angled forward tilt', 'footwork-angleLow':'down angled forward tilt',
       'footwork-reflect':'Pip bark projectile Clover', 'footwork-returnFire':'Clover Pip projectile reflect',

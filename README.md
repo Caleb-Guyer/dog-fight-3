@@ -564,6 +564,8 @@ To practice your own mix-up, choose **Take A** or **Take B**, then **Record your
 
 **Hit confirm** gives you six exchanges with your chosen dog. Center your direction, tap Attack, and release. If the jab lands, tap Attack again to connect a follow-up. If the shield flashes, close the gap and grab. The rival shields three times in a shuffled order. Each new exchange starts at 0%. Tap Attack after a result to start the next jab. At the end, check how many hits you confirmed and how many shields you grabbed. Turn off **Half speed** to try the same decisions at match speed. [Play Hit confirm](https://caleb-guyer.github.io/dog-fight-3/#training/hit-confirm)
 
+Open **Practice tapes** after recording to name and save both takes on this device. **Get playable link** lets a friend defend either take or try the blind mix with their own controls. The link includes the dogs and coats, arena, moving-platform timing, starting damage, playback speed and both sequences. An untouched slot keeps its default hop. Start with **Brisket at the bell** on Bandstand. As Pip at 35%, hold Shield against Body Check in A. In B, Brisket waits a beat and reaches for Bear Hug. Tap Down while shielding just before the grab. [Play the practice tapes](https://caleb-guyer.github.io/dog-fight-3/#training/tapes)
+
 When an opponent repeatedly shields your attacks, the match card can offer **Practice hit confirms**. It takes both dogs into the drill. **Back to fight** returns you to the same result or saved card.
 
 ## Ground tilts
