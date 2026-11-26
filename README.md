@@ -1,5 +1,9 @@
 # Dog Fight 3
 
+In **Solo → CPU → Make Haymaker miss**, play Pip against Brisket on Picnic Table. At GO, dash left a few steps and release. When the punch passes, run right and tap Attack for Grass Skid. Play the other side to see Rival Pip do it against your Haymaker. In ordinary fights all four Rivals can step beyond a planted side smash or standing grab and hit its recovery. They need room to give ground. [Dodge the punch as Pip](https://caleb-guyer.github.io/dog-fight-3/#solo/dash-back/bait) · [Face Rival Pip as Brisket](https://caleb-guyer.github.io/dog-fight-3/#solo/dash-back/watch)
+
+After making your side smash miss, Rival remembers it for the next nine seconds. Try **Catch Pip stepping in** to start a three-stock fight with Pip already expecting another punch. Hold Smash through GO. Pip waits outside Haymaker, walks toward you, then tries to grab. Release as he steps in to catch him. Restart and release immediately to see him punish the miss. [Hold Haymaker against Pip](https://caleb-guyer.github.io/dog-fight-3/#solo/dash-back/delay)
+
 In **Solo → CPU**, try two three-stock openings as Pip against Brisket. From the top platform at 110%, steer sideways during the up throw, then air-dodge and aim for open ground. At 80% near the left ledge, Brisket can throw Pip backward for a knockout. Jab at GO to interrupt the grab. Pause and choose **Restart match** to try again. [Play the top platform](https://caleb-guyer.github.io/dog-fight-3/#solo/throw-read/perch) · [Play the left ledge](https://caleb-guyer.github.io/dog-fight-3/#solo/throw-read/edge)
 
 A cartoon platform fighter for one or two players. Play **The Last Dispatch** story adventure, or pick Pip, Brisket, Noodle, or Clover for a three-stock fight on Picnic Table, Laundry Line, Moonbell Bandstand, Night Mail, or Canal Lock.
