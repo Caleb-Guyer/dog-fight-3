@@ -1671,6 +1671,39 @@ async function testDefendTakes(page,mobile) {
   assert(await page.locator('#combo-replay').isDisabled());
 }
 
+async function testPracticeTapes(page,mobile) {
+  await page.goto(root+'?new-tape#training/tapes');
+  const detail=page.locator('#tape-detail'), notice=page.locator('#tape-notice');
+  const {hold,press}=await trainingControls(page,mobile,detail);
+  assert.match(await detail.innerText(),/Brisket attacks. You play Pip at 35%/);
+  await press('tape-record');
+  await hold(['attack']);await page.clock.runFor(48);await hold([]);await page.clock.runFor(550);
+  assert.match(await page.locator('#combo-latest').innerText(),/Body Check/);
+  await press('combo-tapes');
+  assert.match(await page.locator('#tape-pick option:checked').innerText(),/In this match/);
+  await page.locator('#tape-name').fill('Jab & wait');
+  await press('tape-save');
+  assert.match(await notice.innerText(),/Saved on this device/);
+  await press('tape-link');
+  const link=await page.locator('#tape-url').inputValue();
+  assert(link.startsWith(root+'#training/tapes/'));
+  await page.reload();
+  await page.locator('#tape-pick').selectOption({label:'Saved · Jab & wait'});
+  assert.match(await detail.innerText(),/Pip at 35%/);
+  await press('tape-remove');
+  assert.equal(await page.locator('#tape-pick option').allTextContents().then(names=>names.includes('Saved · Jab & wait')),false);
+  await page.goto(link);
+  assert.equal(await page.locator('#tape-pick option:checked').innerText(),'Shared · Jab & wait');
+  await press('tape-a');
+  assert.equal(await page.locator('#dummy-damage').inputValue(),'35');
+  assert.equal(await page.locator('#combo-slow').getAttribute('aria-pressed'),'false');
+  await hold(['attack']);await page.clock.runFor(55);await hold(['shield']);await page.clock.runFor(2400);await hold([]);
+  assert.match(await page.locator('#combo-latest').innerText(),/Body Check · blocked/);
+  await page.goto(root+'#training/tapes/broken');
+  assert.match(await notice.innerText(),/link could not be read/);
+  assert(await page.locator('#dialog').isVisible());
+  console.log((mobile?'Phone touch':'Keyboard')+' recorded, saved, reloaded, removed and defended a shared tape.');
+}
 async function testShieldPunish(page,mobile) {
   await page.goto(root+'?pressure-test#training/shield-punish');
   const latest=page.locator('#combo-latest');
@@ -2433,6 +2466,7 @@ async function testDevice(browser, mobile) {
     assert.equal(await page.locator('#combo-slot option:checked').textContent(),'A · Your recording');
     console.log((mobile ? 'Phone touch' : 'Desktop keyboard') + ' passed examples, recording, replay, reply changes and free-training reset.');
     await testDefendTakes(page, mobile);
+    await testPracticeTapes(page,mobile);
     await testShieldPunish(page, mobile);
     await testCrawl(page, mobile);
     await testPracticeRoom(page, mobile);

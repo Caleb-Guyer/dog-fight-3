@@ -69,6 +69,63 @@ function combat(w) {
     f.x,f.y,f.vx,f.vy,f.ground,f.damage,f.stun,f.attack?.moveId,f.attack?.time,f.jumpSquat?.time,
     f.impactLag,f.shield,f.shieldStun,f.shieldHP,f.floorAction?.type,f.hitShift?.sector])];
 }
+require('../docs/combo-lab.js');
+const lab=window.ComboLab;
+test('shared house tape gives Pip a block, a throw through shield, and a real spot-dodge window',()=>{
+  const card=lab.decode(lab.encode(lab.houseTape()));
+  for(const [slot,dodge,expected] of [[0,false,['block']],[1,false,['grab','throw']],[1,true,[]]]){
+    const w=new Battle({...card.config,mode:'training'},()=>{},seededRandom(seed));
+    lab.restore(w,card);
+    w.resetComboPractice('defend','stand',card.slow,slot);
+    assert.equal(w.dogs[1].damage,35);
+    const d=defend(w,i=>({shield:true,y:dodge && i===35?1:0}));
+    assert.deepEqual(d.contacts.map(c=>c.kind),expected);
+    assert.equal(w.dogs[1].damage,expected.includes('throw')?47:35);
+  }
+});
+test('a named take rebuilds the recorded matchup and every combat frame at the saved Canal phase',()=>{
+  const c={...config('noodle','clover','canal'),coats:[3,1],shieldPogo:false};
+  const source=new Battle(c,()=>{},seededRandom(seed));
+  for(let i=0;i<78;i++)source.step(dt,idleInput);
+  source.setDummyDamage(65);
+  source.resetComboPractice('record','stand',false,1);
+  for(let i=0;i<150;i++)source.step(dt,input({
+    x:i>31?0:64/127,y:0,grabX:i>31?0:1,airDodgeX:i/155,airDodgeY:-.127,
+    quickAttack:true,attack:i===0 || i===12,aimStick:i===45,tiltMode:i===45,smashY:i===45?-.83:0,
+    tapped:{attack:i===11,aimStick:i===45},jump:i===24,shortHop:i===24
+  }));
+  const card=lab.capture(source);
+  card.name='Mina’s return 🐶';
+  const code=lab.encode(card),copy=lab.decode(code);
+  assert.deepEqual(copy.config,{p1:c.p1,p2:c.p2,stage:c.stage,coats:c.coats,shieldPogo:false});
+  assert.equal(copy.name,card.name);assert.equal(copy.takes[0],null);assert.equal(copy.slow,false);
+  assert.equal(copy.damage,65);assert.equal(copy.time,source.comboMarkTime);
+  assert.equal(lab.encode(copy),code);assert.equal(copy.takes[1].length,150);
+  const restored=new Battle({...copy.config,mode:'training'},()=>{},seededRandom(seed));
+  lab.restore(restored,copy);
+  for(const world of [source,restored]){
+    world.resetComboPractice('defend','stand',copy.slow,1);arm(world);
+  }
+  for(let i=0;i<211;i++){
+    for(const world of [source,restored])world.step(dt,input({shield:i<10}));
+    assert.deepEqual(combat(restored),combat(source));
+    assert.deepEqual(restored.terrain,source.terrain);
+  }
+  assert.deepEqual(restored.comboPractice.contacts,source.comboPractice.contacts);
+  assert(restored.comboPractice.contacts.length>0);
+});
+test('shared tapes reject damaged links and overlong inputs, and preserve absent versus centered axes',()=>{
+  const card=lab.houseTape();
+  card.takes=[null,[{...idleInput,x:.73},{...idleInput,x:.73,grabX:0}]];
+  const code=lab.encode(card);
+  const pair=lab.decode(code).takes[1];
+  assert.equal(pair[0].grabX,undefined);assert.equal(pair[1].grabX,0);
+  const raw=JSON.parse(Buffer.from(code,'base64url').toString());
+  const mutate=fn=>{const d=structuredClone(raw);fn(d);return Buffer.from(JSON.stringify(d)).toString('base64url');};
+  for(const invalid of ['',code.slice(0,-5),'x'.repeat(96001),mutate(d=>d[0]=2),mutate(d=>d[2]='constructor'),
+    mutate(d=>d[10][1][0][0]=151),mutate(d=>d[10][1][0][3]=2),mutate(d=>d[7]=-10)])
+    assert.equal(lab.decode(invalid),null);
+});
 function peer(side,c) {
   let world;
   const packets=[];
