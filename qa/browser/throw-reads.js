@@ -16,6 +16,8 @@ async function play(browser, device) {
         buttons:Array.from({length:17}, () => ({pressed:false,value:0}))};
       Object.defineProperty(navigator, 'getGamepads', {value:() => [controller]});
       window.attackButton = on => Object.assign(controller.buttons[2], {pressed:on,value:Number(on)});
+      window.confirmButton = on => Object.assign(controller.buttons[0], {pressed:on,value:Number(on)});
+      window.steer = x => { controller.axes[0]=x; };
     }, pad);
     await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
@@ -64,6 +66,55 @@ async function play(browser, device) {
     await press('[data-do=rematch]');
     await page.clock.runFor(4800);
     assert.equal(await page.evaluate(() => fight.matchCard.losses[0]?.zone), 'left');
+    await press('#pause');
+    await page.evaluate(()=>{window.liveStock=fight;window.beforeStudy=JSON.stringify(fight.matchCard);});
+    await press('[data-do=ko-replays]');await press('[data-ko="0"]');
+    const select=async selector=>{
+      const item=page.locator(selector);
+      if(touch)await item.tap();
+      else{
+        await item.focus();
+        if(pad){
+          await page.evaluate(()=>confirmButton(true));await page.clock.runFor(48);
+          await page.evaluate(()=>confirmButton(false));await page.clock.runFor(48);
+        }else await page.keyboard.press('Enter');
+      }
+    };
+    await select('#clip-launch summary');
+    await select('#clip-launch button[aria-label=Center]');
+    await page.locator('.flight-result').filter({hasText:/Center · KO at the left line/}).waitFor();
+    const figure=page.locator('#clip-launch canvas'),original=await figure.evaluate(c=>c.toDataURL());
+    await select('#clip-launch button[aria-label=Right]');
+    assert.match(await page.locator('.flight-result').textContent(),/Right · Still airborne/);
+    assert.notEqual(await figure.evaluate(c=>c.toDataURL()),original);
+    const bounds=await figure.boundingBox();
+    assert(bounds.width>110 && bounds.x>=0 && bounds.x+bounds.width<=page.viewportSize().width+1);
+    assert(Math.abs(bounds.width/bounds.height-360/206)<.02);
+    await select('[data-fly]');
+    if(pad)await page.evaluate(()=>steer(1));
+    else if(touch){
+      const box=await page.locator('[data-touch=right]').boundingBox();
+      await finger.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:box.x+box.width/2,y:box.y+box.height/2}]});
+    }else await page.keyboard.down('d');
+    await page.clock.runFor(1700);
+    if(pad)await page.evaluate(()=>steer(0));
+    else if(touch)await finger.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    else await page.keyboard.up('d');
+    assert.match(await page.locator('#dialog-body').textContent(),/You survived the original knockout/);
+    assert(await page.evaluate(()=>JSON.stringify(liveStock.matchCard)===beforeStudy));
+    await press('[data-do=trial-results]');
+    assert.equal(await page.locator('#dialog').evaluate(d=>d.open),false);
+    if(device==='keyboard'){
+      await page.goto('http://127.0.0.1:8080/?school-replay#tutorial/first-match');
+      await page.locator('#game').waitFor();
+      await page.keyboard.down('a');
+      for(let i=0;i<12 && !await page.locator('[data-do=watch-finish]').isVisible();i++)await page.clock.runFor(4000);
+      await page.keyboard.up('a');
+      assert.equal(await page.locator('[data-do=watch-finish]').textContent(),'Replay my last stock');
+      await press('[data-do=watch-finish]');await page.locator('#clip-frame').waitFor();
+      await press('[data-do=clip-back]');
+      assert.equal(await page.locator('#dialog-title').textContent(),'First fight finished');
+    }
     assert.deepEqual(errors, []);
   } finally {
     await page.close();

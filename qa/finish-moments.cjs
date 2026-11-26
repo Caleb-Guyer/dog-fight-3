@@ -38,6 +38,51 @@ function play(action,length){
   }
   return tape;
 }
+function launchRecording(opening, slot, releaseFrame, aim) {
+  const world=new Battle({stage:'nightmail',form:'trio',mode:slot?'local':'solo',
+    cpuLevel:'rival',p1:slot?'brisket':'pip',p2:slot?'pip':'brisket',
+    stockCount:slot?1:3,fetch:false,throwOpening:opening},undefined,seededRandom(31));
+  if(slot){
+    const [guard,p]=world.dogs,y=world.terrain[3].y;
+    Object.assign(guard,{x:600,y,ground:3,face:1});
+    Object.assign(p,{x:644,y,ground:3,face:-1,damage:125});
+  }
+  let ko;
+  world.emit=(n,e)=>{if(n==='ko' && e.f.index===slot)ko={x:e.x,y:e.y};};
+  const tape=new FinishTape(),points=[{x:world.dogs[slot].x,y:world.dogs[slot].y}];
+  for(let frame=1;frame<=160 && world.end===null && !ko;frame++){
+    const inputs=[slot?{...idleInput,grab:frame===1,y:world.grapple?.phase==='hold'?-1:0}:idleInput,idleInput];
+    if(frame===releaseFrame)inputs[slot]={...idleInput,...aim};
+    tape.record(world,...inputs);world.step(1/60,...inputs);
+    const {x,y}=ko || world.dogs[slot];points.push({x,y});
+  }
+  tape.captureKnockouts(world);
+  return {points,clip:tape.knockouts[0]?.tape,world};
+}
+for(const [opening,slot] of [['perch',0],['edge',0],['perch',1]]){
+  test('launch comparison matches an independent fight frame for frame on '+opening+' for P'+(slot+1),()=>{
+    const {clip,points,world}=launchRecording(opening,slot);
+    const {launch}=window.FinishTools.analyze(clip,slot);
+    assert(launch && launch.slot===slot);
+    const original=window.FinishTools.launchFlight(clip,launch);
+    assert.deepEqual(original.points,points.slice(launch.frame-1));
+    assert.match(original.outcome,/KO at the (top|left) line/);
+    const saved=structuredClone(world.matchCard);
+    for(const [x,y] of [[0,0],[1,0],[-1,0],[0,-1],[1,1]]){
+      const path=window.FinishTools.launchFlight(clip,launch,{x,y});
+      const independent=launchRecording(opening,slot,launch.frame,{x,y});
+      assert.deepEqual(path.points,independent.points.slice(launch.frame-1,path.frame+1));
+      assert(path.frame<=clip.length);
+    }
+    assert.deepEqual(world.matchCard,saved);
+    assert.deepEqual(window.FinishTools.launchFlight(clip,launch),original);
+    assert.equal(window.FinishTools.analyze(clip,1-slot).launch,null);
+  });
+}
+test('a fall without a steering window and a time expiry have no launch comparison',()=>{
+  assert.equal(window.FinishTools.analyze(play('ko',15),1).launch,null);
+  assert.equal(window.FinishTools.analyze(play('clock',30),0).launch,null);
+});
 for(const [action,label,event] of [['jab','Pip · Quick Paw','hit'],['throw','Pip · Kickoff','throwRelease'],
   ['parry','Pip · Parry','parry'],['ko','Brisket · KO','ko'],['clock','Time expired','win']]){
   test(action+' marker seeks to the exact simulation event',()=>{
