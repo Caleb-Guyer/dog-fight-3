@@ -1,0 +1,12 @@
+{
+  "name": "dog-fight-3-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node build-runtime.cjs",
+    "check": "node build-runtime.cjs --check"
+  },
+  "devDependencies": {
+    "terser": "5.44.1"
+  }
+}
