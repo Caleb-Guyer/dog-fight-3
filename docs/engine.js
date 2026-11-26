@@ -11352,10 +11352,10 @@
         }
         const forecast=this.predictLedgeRoll(f,foe,brain);
         if(forecast)return forecast;
-        const trap = this.ledgeSmashInput(f,foe,brain);
-        if (trap) return trap;
         const runoff=this.runoffTrumpInput(f,foe);
         if (runoff) return runoff;
+        const trap = this.ledgeSmashInput(f,foe,brain);
+        if (trap) return trap;
         const punish = this.shieldPunishInput(f,foe);
         if (punish) return punish;
         if (f.floorAction?.type === 'spotDodge') {
