@@ -93,6 +93,8 @@ async function play(browser, device) {
     await select('[data-watch-reply]');await page.clock.runFor(1100);
     assert.match(await page.locator('.defense-result').textContent(),/Pip hit Brisket/);
     await select('[data-play-defense]');
+    // A native details toggle may arrive after its dialog closed for takeover.
+    await page.locator('#clip-defense').evaluate(el=>el.dispatchEvent(new Event('toggle')));
     if(pad)await page.evaluate(()=>attackButton(true));
     else if(touch){
       const a=await page.locator('[data-touch=attack]').boundingBox();
