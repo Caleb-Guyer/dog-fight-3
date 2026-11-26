@@ -952,7 +952,7 @@
     if(dialogType==='rumble')window.PadFeedback?.stop();
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=defensive-moments-1';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=grip-1';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
