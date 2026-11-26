@@ -28,6 +28,8 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/high-return.js
           node --test qa/throw-chase.cjs
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/throw-chase.js
+          node --test qa/hit-confirm.cjs
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/hit-confirm.js
   night-mail:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
