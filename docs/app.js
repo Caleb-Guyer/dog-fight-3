@@ -1397,7 +1397,10 @@
     const hidePrompt=hideGrip && carrier==null;
     if (prompt.hidden !== hidePrompt) prompt.hidden = hidePrompt;
     if (hideGrip && carrier!=null) {
-      const text=world.dogs[carrier].stats.name+' has the ball · Aim + Attack or Grab to throw';
+      const rival=online.match ? online.side!==carrier : !world.hasSecondPlayer && carrier!==world.trainingPlayerSlot;
+      const seat=!online.match && world.hasSecondPlayer?'P'+(carrier+1)+' ':'';
+      const text=seat+scores[carrier].stats.name+' has the ball · '+
+        (rival?'Shield the throw or time a Grab to catch it':'Aim + Attack or Grab to throw');
       if(prompt.textContent!==text)prompt.textContent=text;
     } else if (!hideGrip) {
       const holder = world.dogs[grip.owner].stats.name;
