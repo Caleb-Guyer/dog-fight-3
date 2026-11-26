@@ -132,6 +132,60 @@ async function match(browser,device){
     await choose('[data-do=trial-results]');
     assert.equal(await page.locator('#dialog-title').textContent(),'Fight School');
     console.log(device+' passed guided and match-speed landing comparison from a recorded throw.');
+    await page.goto(root+'?defense#records');await page.locator('#record-example').waitFor();
+    const recordCount=await page.locator('[data-record-id]').count();
+    await choose('#record-example');
+    const defense=page.locator('#film-defense'),go='#film-defense [data-study]';
+    await page.clock.runFor(900);
+    await defense.locator('[data-study]').waitFor();
+    assert.equal(await defense.locator('select option').count(),4);
+    assert.equal(await seek.inputValue(),'98');
+    await choose('#film-defense [data-next]');assert.equal(await seek.inputValue(),'616');
+    await choose(go);await page.clock.runFor(100);
+    assert.match(await panel.locator('[data-before]').textContent(),/Landed in place/);
+    await choose('[data-guided]');await page.clock.runFor(1600);
+    assert.equal(await page.locator('#countdown').textContent(),'Tap Shield',device);
+    if(touch)await page.locator('[data-touch=shield]').tap();
+    else if(pad)await page.evaluate(()=>Object.assign(pad.buttons[4],{pressed:true,value:1}));
+    else await page.keyboard.press('l');
+    await page.clock.runFor(650);
+    if(pad)await page.evaluate(()=>Object.assign(pad.buttons[4],{pressed:false,value:0}));
+    assert.equal(await page.locator('#dialog-title').textContent(),'Landed in place');
+    await choose('[data-do=trial-replay]');await page.clock.runFor(120);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Landing tech');
+    await choose('[data-do=clip-back]');await page.clock.runFor(120);
+    assert.equal(await seek.inputValue(),'616');
+    await choose('#film-defense [data-next]');await choose('#film-defense [data-next]');
+    assert.match(await defense.locator('select option:checked').textContent(),/Shield break/);
+    await choose(go);await page.clock.runFor(3500);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Shield break avoided',device);
+    const damage=page.locator('.finish-comparison tr').filter({hasText:'Damage taken'});
+    assert.deepEqual(await damage.locator('td').allTextContents(),['0%','20.5%']);
+    await choose('[data-do=trial-results]');await page.clock.runFor(120);
+    assert.equal(await seek.inputValue(),'1051');
+    await choose('#film-back');assert.equal(await page.locator('#dialog-title').textContent(),'Fight Records');
+    assert.equal(await page.locator('[data-record-id]').count(),recordCount,'sample practice must not create fight records');
+    // Save a real, newly finished couch fight in which P2 missed the landing.
+    const id=await page.evaluate(async()=>{
+      const {Battle,FinishTape,idleInput,seededRandom}=DogFight,tape=new FinishTape(true);
+      const w=new Battle({mode:'local',p1:'brisket',p2:'pip',stage:'nightmail',lives:1,minutes:0,fetch:false},undefined,seededRandom(27));
+      w.resetTraining();w.dogs[1].damage=35;
+      for(let n=0;n<900 && w.end===null;n++){
+        const p1={...idleInput,grab:n===0,y:w.grapple?.phase==='hold'?-1:0},p2={...idleInput,x:n>155?1:0};
+        tape.record(w,p1,p2);w.step(1/60,p1,p2);
+      }
+      if(w.end!==0 || w.matchCard.players[1].knockdowns!==1)throw Error('Saved study fixture did not finish');
+      tape.captureKnockouts(w);
+      const key=new FightRecords.Book(localStorage).add({mode:'local',side:0,round:0,time:Date.now(),winner:w.end,stage:w.stage,form:w.form,card:w.matchCard,replay:true});
+      await MatchReview.save(key,tape);return key;
+    });
+    await page.goto(root+'?saved-defense#records');await choose('[data-record-id="'+id+'"]');
+    await choose('[data-study-slot="1"]');await page.clock.runFor(150);
+    assert.match(await defense.locator('select option:checked').textContent(),/P2 Pip · Missed landing/);
+    await choose(go);await page.clock.runFor(120);
+    assert.match(await panel.locator('select option:checked').textContent(),/P2 Pip/);
+    await choose('[data-do=clip-back]');await page.clock.runFor(100);await choose('#film-back');
+    assert.equal(await page.locator('#dialog').getAttribute('data-view'),'record-card');
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
