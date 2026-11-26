@@ -139,6 +139,8 @@ jobs:
           node --test qa/parcel-punt.cjs
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/parcel-punt.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fight-records.js
+          node --test qa/full-match.cjs
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/full-match.js
   sound-test:
     runs-on: ubuntu-24.04
     timeout-minutes: 3
