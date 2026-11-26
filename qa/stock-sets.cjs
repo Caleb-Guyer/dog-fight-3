@@ -583,7 +583,7 @@ async function timedBattles(browser,phone){
   await host.page.keyboard.down('d');await host.page.keyboard.down('Space');
   await host.page.locator('[data-do=trial-results]').waitFor();
   await host.page.keyboard.up('Space');await host.page.keyboard.up('d');
-  assert.equal(await host.page.locator('#dialog-title').innerText(),'Point saved!');
+  assert.equal(await host.page.locator('#dialog-title').textContent(),'Point saved!');
   await host.press('[data-do=trial-results]');
   await host.press('[data-do=online-rematch]');await guest.press('[data-do=online-rematch]');
   for(const d of [host,guest]){
