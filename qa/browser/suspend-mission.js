@@ -108,7 +108,7 @@ async function firstFight(browser,touch){
     await press('[data-do=practice]');await page.locator('#practice-query').fill('jab lock');
     assert(await page.locator('[data-exercise=launch-escape]').isVisible());
     assert.equal(await page.evaluate(()=>!!window.PracticeDirectory),true);
-    await page.keyboard.press('Escape');await press('[data-do=resume]');await page.clock.runFor(180);
+    await press('#dialog-close');await press('[data-do=resume]');await page.clock.runFor(180);
     // Leave the last committed checkpoint readable through a failed write and a subsequent retry.
     await page.evaluate(()=>{
       window.storagePut=IDBObjectStore.prototype.put;
