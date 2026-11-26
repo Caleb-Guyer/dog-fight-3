@@ -2647,6 +2647,7 @@
         left, top, right: left + 2 * halfW, bottom: top + 2 * halfH,
       },world.form);
       if (world.bells) window.BellBreak.draw(ctx,world);
+      world.lesson?.drawCourse?.(ctx);
       if (this.finishReturn) finalHitBackdrop(ctx,left,top,2*halfW,2*halfH,focus,steady,this.finishReturn/.24);
       if (world.suddenDeath) {
         const inset = world.blastInset();
