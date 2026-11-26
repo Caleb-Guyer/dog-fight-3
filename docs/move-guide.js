@@ -1,5 +1,107 @@
 (() => {
   'use strict';
+  const descriptions = {
+    pipRailKick: 'Swing over the lip on one paw and kick low. Pip lands quickly enough to chase the rival inward.',
+    brisketPorchBump: 'Haul up and drive your shoulder onto the stage. The shove hits hard, but a miss leaves you open.',
+    noodleLatchWhip: 'Hang on with one paw and snap the lead across the edge. A distant rival gets pulled toward your landing spot.',
+    cloverRimVault: 'Vault over the edge and scoop with the held disc. It sends a rival above you as you land farther in.',
+    pipStampKick: 'Plant one foot and snap the other straight out. The quick recovery lets you chase the low launch.',
+    pipChinFlick: 'Flick a paw under the chin. On contact, press Jump, Forward and Attack together to follow with Flying Kick.',
+    pipDewclaw: 'Crouch and rake the rival’s ankles. At close range, release Down and tap Attack again for Quick Paw.',
+    brisketGateCheck: 'Shove with the broad side of your forearm. The flat launch pushes rivals toward the edge.',
+    brisketCrownLift: 'Drive the top of your head upward. It catches landings over either shoulder.',
+    brisketDoorstop: 'Stamp one foot just ahead of you. It pops a grounded rival up in front of your paws.',
+    noodleKnotPoke: 'Poke straight out with the lead. The line deals 5%, and the knot at the tip deals 7%.',
+    noodleLoopLift: 'Send a narrow loop high above your head. It catches a falling rival and lifts them close.',
+    noodleTailBroom: 'Sweep your tail along the floor. It pops a standing rival up and knocks an airborne rival downward just off the ledge.',
+    cloverOneTwoPass: 'Tap once to check with your free paw for 2%, then flick the disc forward for another 4%.',
+    cloverCanopyTap: 'Meet the rival with the flat of the disc overhead. The nearly straight-up launch keeps them above you.',
+    cloverBackspin: 'Hook the rim low and flick it back toward you. Catch the rival close to send them behind you.',
+    pipGrassSkid: 'Slide in heel-first for a quick, low kick. Pip recovers fast enough to chase.',
+    brisketYardBuster: 'Lead with the shoulder. The first four frames of contact hit hardest, and a miss leaves Brisket open.',
+    noodleLeadSweep: 'Plant your paws and sweep the lead along the ground. Catch a rival at the tip to pull them into paw range.',
+    cloverRimRush: 'Skim the disc low, then scoop upward for a second hit. Jump as the rim pops the rival up to follow with an aerial.',
+    pipSpin: 'A fast paw-wheel that catches rivals on either side.',
+    pipDiveKick: 'The extended heel kicks the rival away. The trailing paw pops them up for Quick Paw on landing.',
+    pipBackKick: 'A quick heel strike behind you with a low launch.',
+    pipFlip: 'Catch the rival high over your forehead with the heel to launch almost straight up.',
+    pipPogo: 'Kick down. A clean hit bounces Pip upward once per airtime.',
+    brisketCurl: 'Tuck into a broad body hit on both sides. The windup leaves time to dodge.',
+    brisketRam: 'The leading shoulder launches hard. Clip them with the falling body to land close enough for Body Check.',
+    brisketHip: 'Back into them at close range for a heavy hip check. Grazing them at full reach gives a softer bump.',
+    brisketCrown: 'Lead with your forehead for a strong vertical launch.',
+    brisketDrop: 'Hang briefly, then plunge. The landing can catch a rival beside you.',
+    noodleCoil: 'Uncoil your tail in a wide sweep that reaches farther behind you.',
+    noodleCast: 'The outward cast reaches farthest. The shorter returning loop draws the rival in for Ankle Tap.',
+    noodleTail: 'Catch them at the very tip of the tail to send them skimming offstage.',
+    noodleLoop: 'Hook a rival high above your head with the rope.',
+    noodleHook: 'Reach below the platform and pull a rival upward toward you.',
+    cloverOrbit: 'The disc circles twice. Stay close to land both beats.',
+    cloverFore: 'The leading rim sends the rival outward. Brush them with the end of the sweep for a lift into Disc Tap.',
+    cloverBack: 'The broad face of the disc sends the rival out. Scoop them on its upper rim to loft them for a chase.',
+    cloverVolley: 'An upward disc swipe. Use it immediately after jumping out of Set Point.',
+    cloverSkip: 'Slice downward and forward with the disc to spike an airborne rival.',
+    pipBark: 'Two quick barks in front of Pip. The louder second bark can send an incoming disc back at its thrower.',
+    pipPounce: 'Spring sideways. After a clean hit, tap Side + Special again for one more pounce.',
+    pipHopper: 'Leap up, then tap Up + Special again for a second leap. Aim either hop left or right.',
+    pipSlide: 'Slide under a rival and pop up at their feet. From the air, dive to the floor to start the slide.',
+    brisketClinch: 'Scoop up a nearby rival and toss them overhead. Catches shielding or braced rivals.',
+    brisketCharge: 'Commit to a long sideways shoulder charge. Brisket needs room to brake afterward.',
+    brisketCannon: 'Hold Special to charge, then release to blast upward. A tap gives a shorter launch.',
+    brisketBrace: 'Brace just before a strike. Brisket stops the hit and answers with a short counter. Grabs beat the stance.',
+    noodleTug: 'Throw the rope straight ahead and yank a rival toward you.',
+    noodleSling: 'Hook a rival and pull Noodle toward them. The cast reaches farther than a normal strike.',
+    noodleLasso: 'Catch a solid ledge and reel Noodle to it. Without an edge in reach, Noodle hops and lashes overhead.',
+    noodleTripLine: 'Drop a rope snare. It stays on the first platform it touches and trips one grounded rival. A new snare replaces the old one.',
+    cloverRound: 'Throw a disc that curves home. It can hit once on the way out and once on the return.',
+    cloverChase: 'Dash sideways. A nearby Round Trip disc ahead pulls the dash toward it, and Clover can catch it early.',
+    cloverSail: 'Rise onto the disc. Hold Special and steer to glide, or let go to drop early.',
+    cloverServe: 'Skim a low disc across the arena. It bounces twice off platform tops and disappears on contact with a rival.',
+    pipBoltKick: 'Pip springs forward with both feet. The short windup lets you punish a missed attack.',
+    pipScissors: 'One heel lifts a nearby rival into a second kick straight overhead.',
+    pipDustDevil: 'Kick low in front, then sweep behind. Turn your back to the ledge for the stronger second kick.',
+    brisketHaymaker: 'Release Smash to plant your feet. When the gold shoulder marks appear, one hit worth up to 8% deals damage without stopping the punch. Grabs still catch you.',
+    brisketRoofRaiser: 'Drive upward with Brisket’s head and shoulders. The wide hit catches rivals on either side and launches them almost straight up.',
+    brisketQuake: 'Slam both paws down. The shockwave spreads along the floor on both sides. Stand close for the biggest hit.',
+    noodleLeadSnap: 'Crack the lead straight ahead. The knot at the far end hits much harder than the middle of the rope.',
+    noodleBellPull: 'Catch a nearby rival in an upward loop, then snap the rope above Noodle’s head to launch them.',
+    noodleSwitchback: 'Sweep the rope low on both sides and sling the rival across Noodle. A rival on your left flies right.',
+    cloverLineDrive: 'Fire the disc straight ahead. A longer charge gives it more speed, range, and knockback.',
+    cloverHaloLift: 'Lift the disc over Clover’s head. Catch a jumping rival with its top rim for a stronger launch.',
+    cloverRimRattle: 'Spin the disc around your paws. The first pass catches low on either side so the second can knock the rival out.',
+    pipCollarTag: 'A quick paw to the collar. Stay close enough to touch noses.',
+    brisketBearHug: 'Wrap both paws around a nearby rival. Tap Special to shoulder them, walk or hop, then aim and tap Grab to throw.',
+    noodleLeadLoop: 'Cast the lead straight ahead. A distant catch takes longer to reel in.',
+    cloverDiscHook: 'Slide forward with the disc and hook a rival over its rim.',
+    pipTagDash: 'Keep your stride and dart a paw forward. Pip reaches first and recovers quickly on a miss.',
+    pipHeelHook: 'Plant a heel and hook low behind you. The sharp stop is good for a close pursuer.',
+    brisketFreightHug: 'Carry your weight forward into a two-paw scoop. Start the reach a few steps out.',
+    brisketGateSwing: 'Swing both paws wide behind you. Brisket keeps sliding as the catch opens.',
+    noodleRunningLoop: 'Cast the lead low from a moving start. The loop reaches well ahead of your paws.',
+    noodleBackcast: 'Throw a long, narrow loop over your shoulder. Catch a pursuer while skidding away.',
+    cloverScoopSlide: 'Slide the disc close to the floor and scoop the rival onto its rim.',
+    cloverRimTurn: 'Plant one foot and sweep the disc upward behind you to catch a low jumper.',
+    pipPawDrum: 'Keep one paw on the collar and drum with the other. A fast 1% tap.',
+    brisketBearSqueeze: 'Lift and squeeze for 4%. The long windup gives the rival time to wriggle free.',
+    noodleKnotTug: 'Give the loop a short tug. Each pull draws the rival toward you for 2%.',
+    cloverRimTap: 'Flick the disc rim under the collar for 3%, then settle back into the hold.',
+    pipKickoff: 'Plant one foot and boot the rival straight out of paw range.',
+    pipSlipTurn: 'Duck under the collar and flick the rival low behind you.',
+    pipPopFly: 'Pop the rival straight up. Jump as they leave your paws to chase with an aerial.',
+    pipTumbleTrip: 'Sweep their feet for a short forward tumble. Dash after the landing.',
+    brisketYardHeave: 'Wind up at the shoulder and heave the rival in a heavy forward arc.',
+    brisketSuplex: 'Arch backward and sling the rival over your shoulder. Face inward at the edge.',
+    brisketPress: 'Press the rival overhead, then send them almost straight up.',
+    brisketSitSlam: 'Drive the rival into the floor for a high bounce. Over a gap they keep falling.',
+    noodleSlingCast: 'Swing a wide loop and release at full lead length in front of you.',
+    noodleReverseReel: 'Whip the lead across your back. Its low, long release reaches past the ledge.',
+    noodleFlagpole: 'Hoist the rival to the top of the loop before sending them skyward.',
+    noodleSlackSnap: 'Let the loop drop outward, then snap the rival inward to your feet for a follow-up.',
+    cloverForehandPass: 'Flick the rival off the disc on a fast, flat line.',
+    cloverBankPass: 'Roll the rival around the rim and send them high behind you.',
+    cloverSetToss: 'Set the rival just ahead and above you. Jump on release and meet them with Sky Volley.',
+    cloverSkipToss: 'Skim the rival off the rim. They skip once on the first platform they hit.',
+  };
   const tiltInputs = {
     forward: 'Forward tilt · Side + Attack',
     up: 'Up tilt · Up + Attack',
@@ -38,7 +140,7 @@
       input: 'After a knockdown · tap Attack',
     },
   };
-  function guideMoveRow(move, input, direction, category) {
+  function guideMoveRow(move, input, direction, category, id) {
     return (
       '<li><canvas width="124" height="78" data-direction="' +
       direction +
@@ -49,7 +151,7 @@
       '</small><strong>' +
       move.label +
       '</strong><span>' +
-      move.hint +
+      (descriptions[id] ?? move.hint) +
       (category === 'air' && move.late ? ' Clean ' + move.dmg + '%. Late ' + move.late.dmg +
         '% from frame ' + Math.round(move.late.start * 60) + '. A short hop deals 85% of these values.' : '') +
       (category === 'air' && move.meteor ? ' A strong spike rebounds off the floor. A falling rival can cancel from flight frame ' +
@@ -97,11 +199,11 @@
             .map(([key, move]) => guideMoveRow(key === 'floorAttack' ? moves[kit.floorAttack] : move, move.input, key, section))
             .join('')
         : Object.entries(entries)
-            .map(([side, id]) => guideMoveRow(moveSet[id], inputs[side], side, section))
+            .map(([side, id]) => guideMoveRow(moveSet[id], inputs[side], side, section, id))
             .join('');
     const ledgeMove =
       '<h3 class="guide-section">Ledge attack</h3><ul class="move-rows guide-ledge">' +
-      guideMoveRow(moves[kit.ledgeAttack], 'While hanging · tap Attack', 'ledge', 'ledge') +
+      guideMoveRow(moves[kit.ledgeAttack], 'While hanging · tap Attack', 'ledge', 'ledge', kit.ledgeAttack) +
       '</ul><p>Wait below a swing, then choose your get-up. Three amber marks count down to a slip. Damage and repeated catches shorten your grip.</p>';
     const sections =
       '<div class="guide-tabs" role="group" aria-label="Move categories">' +
@@ -282,10 +384,10 @@
         '. You can jab lock twice before finishing with ' + smashes[kit.smashes.down].label + ' (Down + Smash). Try Training → Launch practice → Jab lock.' +
         '</p><h3 class="guide-section">Ground tilts</h3><p>Aim and tap Attack. Angle a forward tilt with a shallow diagonal on the stick, Walk + a diagonal on keyboard, or a slide from the center dot to a diagonal on touch. Aim high to tag a jumper or low to cover a recovery. With Tilt stick enabled, hold Up or Down and flick the aim stick sideways.</p><p>Out of a run, release forward briefly, then press forward and Attack together to slide into a tilt. Reverse and tap Attack to strike behind you while your paws still skid forward. Up and down tilts work straight out of the run.</p><ul class="move-rows guide-tilts">' +
         Object.entries(kit.tilts)
-          .map(([side, id]) => guideMoveRow(moves[id], tiltInputs[side], side, 'tilts'))
+          .map(([side, id]) => guideMoveRow(moves[id], tiltInputs[side], side, 'tilts', id))
           .join('') +
         '</ul><h3 class="guide-section">Dash attack</h3><ul class="move-rows guide-dash">' +
-        guideMoveRow(moves[kit.dashAttack], 'Run + Attack', 'dash', 'dash') +
+        guideMoveRow(moves[kit.dashAttack], 'Run + Attack', 'dash', 'dash', kit.dashAttack) +
         '</ul>' +
         ledgeMove +
         '<h3 class="guide-section">Aerial attacks</h3><p>Jump + Attack gives a rising short-hop aerial. For a low approach, hold Short hop and wait until you are falling to press Attack. Flick Down in the last three frames before the apex or as you descend to fast-fall. Forward follows your facing.</p><p>Press Shield during an aerial in the last seven frames before touchdown to halve its landing recovery, rounded up. Mint streaks at the paws mark a landing cancel. Keep holding Shield to block the reply. Try <strong>Training → Aerial practice → Landing cancel</strong>.</p><p>Each forward air has a clean hit and a softer follow-through. Practice landing the late hit into a jab in <strong>Training → Aerial practice → Landing hits</strong>.</p><p>Steer with the left stick and flick the right stick to swing in a separate direction. On keyboard, aim left/right/up/down with '+strikeKeys(0)+' for P1 or '+strikeKeys(1)+' for P2. On touch, flick outward from Smash. For a running back air, reverse direction with Jump and steer back along your original path. Try <strong>Aerial practice → Approach</strong>.</p><ul class="move-rows guide-airs">' +
