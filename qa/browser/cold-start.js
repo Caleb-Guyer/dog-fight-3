@@ -39,6 +39,8 @@ async function sample(browser,url,build){
         return result;
       };
       const scripts=performance.getEntriesByType('resource').filter(r=>new URL(r.name).pathname.endsWith('.js'));
+      if(candidate && performance.getEntriesByType('resource').some(r=>new URL(r.name).pathname.endsWith('/fight-fx.png')))
+        throw Error('Fight effects downloaded while the player was still on the first menu');
       if(candidate && scripts.some(r=>/\/(score|lesson-guide)\.js$/.test(new URL(r.name).pathname)))throw Error('Optional music and input coaching loaded before first input');
       return {hash,png:candidate?null:canvas.toDataURL('image/png').split(',')[1],ready:performance.getEntriesByType('navigation')[0].domContentLoadedEventEnd,
         scripts:scripts.length,js:scripts.reduce((n,r)=>n+r.decodedBodySize,0),
@@ -50,6 +52,7 @@ async function sample(browser,url,build){
     await page.waitForFunction(()=>window.walkedAt>0);
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
     const resources=await page.evaluate(()=>performance.getEntriesByType('resource').map(r=>new URL(r.name).pathname));
+    if(candidate)await page.waitForFunction(()=>performance.getEntriesByType('resource').some(r=>new URL(r.name).pathname.endsWith('/fight-fx.png')));
     assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.woff2')),modern);
     assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.ttf')),!modern);
     if(modern)assert(!resources.some(p=>p.endsWith('/online.css')),'Online room styling stays out of first launch');
