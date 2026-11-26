@@ -267,6 +267,30 @@
       return restore(span,blocks);
     }finally{db.close();}
   }
+  async function readClip(id,entry,span,finish,withReturn=true){
+    const tape=await read(id,span),result=tape.playback(tape.length).battle;
+    const losses=finish?[]:entry.card.losses.slice(span.first,span.first+span.losses);
+    if(result.stage!==entry.stage || result.form!==entry.form ||
+      (finish ? result.end!==entry.winner || result.matchCard.frames!==entry.card.frames :
+        !losses.length || !losses.every((l,i)=>{
+          const actual=result.matchCard.losses[span.first+i];
+          return actual?.frame===l.frame && actual.slot===l.slot && actual.zone===l.zone;
+        })))throw Error('Replay differs from its scorecard');
+    const clip={tape,first:span.first,losses};
+    if(withReturn && span.follow && span.follow.from===span.count){
+      try{clip.returnTape=await read(id,span.follow);}catch{/* The knockout is still playable. */}
+    }
+    return {clip,result};
+  }
+  async function schoolKnockout(id,entry,lesson){
+    const i=window.FightSchool.reviewLoss(entry,lesson);
+    if(i<0)return null;
+    const c=await catalog(id),span=c?.knockouts.find(s=>s.first<=i && i<s.first+s.losses);
+    if(!span)return null;
+    const {clip,result}=await readClip(id,entry,span,false,false);
+    const mark=window.FinishTools.analyze(clip.tape,0).escape;
+    return {from:'lesson',slot:0,result,stock:new StockRetry(clip.tape,null,0,mark)};
+  }
   const seconds=frames=>(frames/60).toFixed(1)+' s';
   function koList(clips,from,focus,{showDialog,back,label,open,fight}){
     const choices=clips.map(c=>'<div class="dialog-actions"><button type="button" class="utility" data-ko="'+c.first+'">'+label(c)+'</button>'+
@@ -281,17 +305,16 @@
     (root.querySelector('[data-ko="'+(focus ?? clips[0]?.first)+'"]') || cancel).focus();
   }
   class StockRetry {
-    constructor(film,fall,slot=0){
-      this.film=film;this.slot=slot;
-      const prior=film.data.falls.filter(k=>k.at<fall.at && k.slots.includes(slot));
-      this.start=prior.at(-1)?.at || 0;
-      this.end=fall.at;
+    constructor(film,fall,slot=0,takeover=null){
+      this.film=film;this.slot=slot;this.takeover=takeover;
+      this.start=takeover?takeover.frame:film.data.falls.findLast(k=>k.at<fall.at && k.slots.includes(slot))?.at || 0;
+      this.end=takeover?film.length:fall.at;
       this.original=film.playback(this.end).battle;
       const losses=this.original.matchCard.losses.filter(l=>l.slot===slot);
       this.number=losses.length;this.loss=losses.at(-1);
     }
     attempt(emit){
-      const replay=this.film.playback(this.start,emit),battle=replay.battle,slot=this.slot;
+      const slot=this.slot,clip=!!this.takeover,replay=this.film.playback(this.start,emit,clip?slot:null),battle=replay.battle;
       const damage=battle.matchCard.players[slot].damage,end=this.end;
       let seen=battle.matchCard.losses.length,stable=0;
       return {battle,frame:this.start,length:end+180,outcome:null,openingDamage:damage,
@@ -299,7 +322,8 @@
           if(this.outcome)return false;
           const a=slot===0?input:partner, b=slot===1?input:partner;
           // After the recording ends, the absent opponent releases their controls.
-          if(!replay.step(null,a,b))battle.step(1/60,a,b);
+          const recorded=clip?replay.step(input):replay.step(null,a,b);
+          if(!recorded)battle.step(1/60,a,b);
           this.frame++;
           const dog=battle.dogs[slot];
           const safe=dog.ground>=0 && !dog.stockLift && !dog.respawning && !dog.ledge && !dog.grip &&
@@ -320,14 +344,14 @@
       const id=loss.lastHit?.id, move=(moves[id] || throws[id] || smashes[id] || specials[id] || pummels[id])?.label;
       showDialog('finish-stock','Retry '+(versus?'P'+(this.slot+1)+'’s ':'')+'stock '+this.number,
         '<p>'+(loss.kind?window.DogFight.fighters[loss.kind].name:hero.stats.name)+' lost this stock at '+Math.round(loss.damage)+'% through the '+loss.zone+' blast line.'+
-        (move?' The last hit was '+move+'.':'')+'</p><p>Start '+(hero.stockLift?'on the respawn lift':begin.matchFrames?'from the recorded position':'at GO')+
+        (move?' The last hit was '+move+'.':'')+'</p><p>Start '+(this.takeover?'at the marked moment':hero.stockLift?'on the respawn lift':begin.matchFrames?'from the recorded position':'at GO')+
         ' against '+rival.stats.name+' at '+Math.round(rival.damage)+'%. Keep your stock and regain your footing through '+
         seconds(this.end-this.start)+', or win the match first.</p>'+
         (versus?'<p>Use P1 controls for '+hero.stats.name+' against the recorded inputs. Choose Play together to use both original seats.</p>':'')+
         (sample?'<p>Brisket opens with Bear Hug. Try Shield + Right as play starts to roll past his paws.</p>':'')+
         '<canvas id="clip-arena" width="640" height="360" role="img" aria-label="Opening position for this stock"></canvas>'+
-        '<p id="stock-caption" class="clip-caption" role="status">Opening position</p>'+
-        '<div class="dialog-actions"><button class="primary" id="stock-try">'+(versus?'Face the recording':'Play this stock')+'</button>'+
+        '<p id="stock-caption" class="clip-caption" role="status">'+(this.takeover?this.takeover.label:'Opening position')+'</p>'+
+        '<div class="dialog-actions"><button class="primary" id="stock-try">'+(this.takeover?'Take over as '+hero.stats.name:versus?'Face the recording':'Play this stock')+'</button>'+
         (versus?'<button class="utility" id="stock-together">Play together</button>':'')+
         '<button class="utility" id="stock-watch">Watch the knockout</button><button class="utility" id="stock-back">Back</button></div>');
       const el=id=>document.getElementById(id), canvas=el('clip-arena'),caption=el('stock-caption');
@@ -337,7 +361,7 @@
       el('stock-watch').onclick=()=>{
         cancelAnimationFrame(raf);
         const camera=new window.DogFightView.FightView();camera.shakeEnabled=shake;
-        const replay=this.film.playback(Math.max(this.start,this.end-120),(name,e)=>camera.event(name,e));
+        const replay=this.film.playback(this.takeover?this.start:Math.max(this.start,this.end-120),(name,e)=>camera.event(name,e));
         canvas.setAttribute('aria-label','Original knockout replay');caption.textContent='Your knockout · half speed';
         let last=null,carry=0;
         const tick=now=>{
@@ -370,7 +394,7 @@
     actions(from,sample){
       return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Retry stock</button>'+
         '<button class="utility" data-do="trial-replay">Review stock</button><button class="utility" data-do="trial-results">'+
-        (sample?'Back to full match':from==='pause'?'Back to fight':from==='archive'?'Back to match stats':'Back to results')+'</button></div>';
+        (sample?'Back to full match':from==='lesson'?'Back to lesson':from==='pause'?'Back to fight':from==='archive'?'Back to match stats':'Back to results')+'</button></div>';
     }
   }
   const defenseStats={knockdown:'knockdowns',tech:'techs',break:'shieldBreaks',parry:'parries'};
@@ -603,21 +627,8 @@
         if(!finish)b.setAttribute('aria-label','Replay P'+(slot+1)+' knockout at '+parent.parentNode.querySelector('time').textContent);
         b.onclick=async()=>{
           try{
-            const tape=await read(id,span);
-            if(!b.isConnected)return;
-            const result=tape.playback(tape.length).battle;
-            const losses=finish?[]:entry.card.losses.slice(span.first,span.first+span.losses);
-            if(result.stage!==entry.stage || result.form!==entry.form ||
-               (finish ? result.end!==entry.winner || result.matchCard.frames!==entry.card.frames :
-                 !losses.length || !losses.every((l,i)=>{
-                   const actual=result.matchCard.losses[span.first+i];
-                   return actual?.frame===l.frame && actual.slot===l.slot && actual.zone===l.zone;
-                 })))throw Error('Replay differs from its scorecard');
-            const clip={tape,first:span.first,losses};
-            if(span.follow && span.follow.from===span.count){
-              try{clip.returnTape=await read(id,span.follow);}catch{/* Keep the original knockout playable. */}
-            }
-            if(b.isConnected)open({clip,slot,finish,result,from:'archive',id,entry});
+            const review=await readClip(id,entry,span,finish);
+            if(b.isConnected)open({...review,slot,finish,from:'archive',id,entry});
           }catch{if(b.isConnected){status.hidden=false;status.textContent='This replay could not be opened. Your match stats are still available.';}}
         };
         parent.append(b);
@@ -652,5 +663,5 @@
       status.hidden=true;status.textContent='';
     }catch{if(card.isConnected)status.textContent='The replay is unavailable on this device. Your match stats are saved.';}
   }
-  window.MatchReview={sampleFight,openFilm,enableStudy,defenseReport,defenseCue,defenseActions,recordList,cardHTML,save,attach,pack,restore,resumeTape,MatchFilm,watchFilm,StockRetry,koList};
+  window.MatchReview={sampleFight,schoolKnockout,openFilm,enableStudy,defenseReport,defenseCue,defenseActions,recordList,cardHTML,save,attach,pack,restore,resumeTape,MatchFilm,watchFilm,StockRetry,koList};
 })();
