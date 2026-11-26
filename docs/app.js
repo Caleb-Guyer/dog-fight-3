@@ -583,7 +583,11 @@
       tone(110, 54, .07, 0, 'triangle', .05);
       tone(700, 615, .11, .035, 'sine', .035);
     } else if (name === 'swat') tone(580, 210, 0.12, 0, 'square', 0.034);
-    else if(name==='ballCatch')tone(440,750,.08,0,'triangle',.05);
+    else if(name==='ballDrop')tone(620,290,.09,0,'sine',.055);
+    else if(name==='ballCatch'){
+      tone(440,750,.08,0,'triangle',.05);
+      if(detail.aerial)tone(880,1110,.09,.05,'sine',.05);
+    }
     else if (name === 'land' && detail.speed > 420) tone(90, 45, 0.063, 0, 'triangle', 0.037);
     else if (name === 'tick') tone(390, 420, 0.11);
     else if (name === 'go') {
@@ -1061,7 +1065,7 @@
     showDialog(
       'ball',
       'Fetch Ball',
-      '<p>Tap Grab as a loose or incoming ball reaches your paws. Carry it with you, then aim and tap Attack or Grab to throw. Getting hit knocks it loose.</p><p>Attack a loose ball to add a paw. The third swat fires a golden shot. Catching and throwing preserve its charge.</p><div class="dialog-actions"><button class="primary" data-do="fetch-match">Play a three-stock Fetch match</button><button class="utility" data-do="close">Got it</button></div>',
+      '<p>Tap Grab to catch a ball. Aim and tap Attack or Grab to throw. Three swats charge a gold shot.</p><p>In the air, release the direction and tap Grab to drop the ball. Let it fall onto a rival, or tap Attack while it’s within reach to catch it during your aerial. A catch keeps the charge.</p><div class="dialog-actions"><button class="primary" data-do="fetch-match">Play a three-stock Fetch match</button><button class="utility" data-do="drop-catch">Try the drop</button><button class="utility" data-do="defend-drop">Defend the landing</button><button class="utility" data-do="close">Got it</button></div>',
     );
   function chooseArena(picking = false, form = picking ? world.form : lobbyForm()) {
     const current = picking ? world.stage : settings.stage;
@@ -1417,13 +1421,17 @@
     const prompt = $('grapple-prompt');
     const hideGrip = !grip || grip.phase === 'throw' || world.comboPractice?.source==='throwChase' || world.comboPractice?.source==='confirm' || !!world.launchPractice || !!world.stockPractice || !!world.survivalPractice;
     const carrier=confirmed.ball?.holder;
-    const hidePrompt=hideGrip && carrier==null;
+    const falling=confirmed.ball?.dropped && confirmed.ball.owner>=0;
+    const hidePrompt=hideGrip && carrier==null && !falling;
     if (prompt.hidden !== hidePrompt) prompt.hidden = hidePrompt;
-    if (hideGrip && carrier!=null) {
+    if(hideGrip && falling){
+      const text=scores[confirmed.ball.owner].stats.name+' dropped the ball · Attack in the air to catch it';
+      if(prompt.textContent!==text)prompt.textContent=text;
+    }else if (hideGrip && carrier!=null) {
       const rival=online.match ? online.side!==carrier : !world.hasSecondPlayer && carrier!==world.trainingPlayerSlot;
       const seat=!online.match && world.hasSecondPlayer?'P'+(carrier+1)+' ':'';
-      const text=seat+scores[carrier].stats.name+' has the ball · '+
-        (rival?'Shield the throw or time a Grab to catch it':'Aim + Attack or Grab to throw');
+      const f=scores[carrier],text=seat+f.stats.name+(f.attack?.itemCatch?' · Aerial catch · ':' has the ball · ')+
+        (rival?'Shield the throw or time a Grab to catch it':confirmed.itemDrops && f.ground<0?'Neutral Grab to drop · Aim + Attack to throw':'Aim + Attack or Grab to throw');
       if(prompt.textContent!==text)prompt.textContent=text;
     } else if (!hideGrip) {
       const holder = world.dogs[grip.owner].stats.name;
@@ -1887,6 +1895,12 @@
   function startFetchMatch(mode) {
     startMatch({...settings,mode,form:'flat',fetch:true,fetchStart:true,stockCount:3,timeBattle:false,
       minutes:7,coats:[savedCoat(0,settings.p1),savedCoat(1,settings.p2)]},undefined,42);
+  }
+  function startDropCatch(defend){
+    leaveOnline();afterStory=null;
+    startMatch({...settings,mode:'solo',p1:settings.p1,p2:settings.p2,stage:'nightmail',form:'original',cpuLevel:'rival',
+      fetch:true,dropCatchOpening:defend?'defend':'drop',stockCount:3,timeBattle:false,minutes:7,
+      coats:[savedCoat(0,settings.p1),savedCoat(1,settings.p2)]},undefined,42);
   }
   function startMatch(config = settings, random = Math.random, opening, series = null, {visit, resume, leadInFrames = 0, cupRound = null} = {}) {
     finishTrial=null;
@@ -2944,6 +2958,7 @@
     }
     if (action === 'controls') showControls();
     if(action==='fetch-match')return startFetchMatch(settings.mode==='local'?'local':'solo');
+    if(action==='drop-catch' || action==='defend-drop')return startDropCatch(action==='defend-drop');
     if (action === 'moves') showMoves(world?.dogs[world.trainingPlayerSlot].kind || settings.p1);
   });
   function showDamageControl(counter, fineStep = false, before, partner = false) {
@@ -7660,6 +7675,8 @@
       afterStory = null;
       startMatch({...settings, p1:'brisket', p2:'pip', mode:'solo', stage:'picnic', cpuLevel:'rival',
         minutes:7, fetch:false}, undefined, 75);
+    } else if (hash==='#solo/drop-catch' || hash==='#solo/defend-drop'){
+      startDropCatch(hash==='#solo/defend-drop');
     } else if (hash==='#solo/fetch' || hash==='#local/fetch') {
       startFetchMatch(hash.startsWith('#local')?'local':'solo');
     } else if (hash === '#solo/time-battle') {

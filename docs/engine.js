@@ -2769,6 +2769,7 @@
       this.mode = config.mode;
       this.cpuLevel = config.mode === 'solo' && Object.hasOwn(cpuLevels, config.cpuLevel) ? config.cpuLevel : 'arcade';
       this.fetch = config.fetch;
+      this.itemDrops=config.itemDrops!==false;
       this.time = 0;
       this.end = null;
       this.endReason = '';
@@ -2832,6 +2833,13 @@
       if (config.fetchStart && this.fetch && versus && !this.suddenDeath) {
         const f=this.dogs[0];
         this.ball={x:f.x+f.face*42,y:f.y-12,vx:0,vy:0,age:0,hits:2,owner:-1};
+      }
+      if(config.dropCatchOpening && this.fetch && this.itemDrops && versus && !this.suddenDeath){
+        const slot=config.dropCatchOpening==='defend'?1:0,carrier=this.dogs[slot],guard=this.dogs[1-slot];
+        const floor=this.terrain[0],facing=slot?-1:1;
+        Object.assign(carrier,{x:600-facing*28,y:floor.y-106,ground:-1,vy:35,jumps:1,face:facing});
+        Object.assign(guard,{x:600+facing*24,y:floor.y,ground:0,face:-facing});
+        this.ball={hits:2,holder:slot,owner:-1,age:0,vx:0,vy:0};this.carryBall(carrier);
       }
       if (config.underTableStart && this.mode === 'solo' && this.geometryStage === 'picnic') {
         const [hero, guard] = this.dogs, floor = this.terrain[0];
@@ -3224,6 +3232,7 @@
       const {emit, random, ...state} = source;
       // Copy one graph so both ends of a grab and fighter keys in hit ledgers stay linked.
       Object.assign(this, structuredClone(state));
+      if (!('itemDrops' in state)) delete this.itemDrops;
       this.random.state = random.state;
     }
     saveTrainingMoment() {
@@ -6142,6 +6151,7 @@
       }
       if (this.ledgeClaims.length) this.resolveLedgeClaims();
       this.separateGroundedFighters();
+      if(this.ball?.dropped)this.catchDropWithAerial(dt);
       this.resolveMelee(damageAtContact);
       for (const f of this.dogs) if (f.attack?.landed) f.attack = null;
       this.updateDiscs(dt, damageAtContact);
@@ -6512,7 +6522,9 @@
           released: !input[button],
         };
         if (button === 'aimStick') f.command.button = button;
-        if (type === 'grab' && this.canBufferLandingGrab(f,input.x)) f.command.landGrab = true;
+        if(button==='grab' && this.itemDrops && this.ball?.holder===f.index && f.ground<0 &&
+            Math.hypot(x,y)<.28)f.command.itemDrop=true;
+        else if (type === 'grab' && this.canBufferLandingGrab(f,input.x)) f.command.landGrab = true;
         // These controls commit to a normal on the press, including when buffered during recovery.
         // Skip the hold-to-smash timer so the move starts with its full windup on the first free frame.
         if (stickTilt || (button === 'attack' && input.quickAttack)) f.command.released = true;
@@ -7590,7 +7602,9 @@
           f.command = null;
           const neutralInAir = command.type === 'special' && command.airSide === 'neutral' && f.ground < 0;
           if (command.face && !neutralInAir && (f.ground >= 0 || command.type !== 'attack')) f.face = command.face;
-          if (this.ball?.holder===f.index && (command.type==='grab' || command.type==='attack')) {
+          if(this.ball?.holder===f.index && command.itemDrop && f.ground<0){
+            this.releaseAirDrop(f);
+          }else if (this.ball?.holder===f.index && (command.type==='grab' || command.type==='attack')) {
             if(command.face)f.face=command.face;
             beginAttack(f,'grab',command.aim,0,f.kit.grab);
             Object.assign(f.attack,{ballToss:true,start:4/60,active:3/60,end:17/60});
@@ -9798,9 +9812,34 @@
       }
       if(!catcher)return;
       catcher.attack.caughtBall=true;
-      Object.assign(b,{holder:catcher.index,owner:-1,age:0,vx:0,vy:0});
-      this.carryBall(catcher);
-      this.emit('ballCatch',{f:catcher,point:{x:b.x,y:b.y}});
+      this.takeBall(catcher);
+    }
+    takeBall(f,aerial=false){
+      const b=this.ball;
+      if(aerial)f.attack.itemCatch=true;
+      delete b.dropped;
+      Object.assign(b,{holder:f.index,owner:-1,age:0,vx:0,vy:0});
+      this.carryBall(f);
+      this.emit('ballCatch',{f,aerial,point:{x:b.x,y:b.y}});
+    }
+    releaseAirDrop(f){
+      const b=this.ball;
+      this.carryBall(f);delete b.holder;
+      Object.assign(b,{owner:f.index,dropped:true,age:0,vx:f.vx*.5,vy:Math.max(72,f.vy*.55)});
+      this.emit('ballDrop',{f,point:{x:b.x,y:b.y}});
+    }
+    catchDropWithAerial(dt){
+      const b=this.ball;
+      let catcher,nearest=Infinity;
+      for(const f of this.dogs){
+        if(!f.attack?.airSide || f.attack.time>dt+1e-8 || f.ground>=0 || f.stun || f.impactLag)continue;
+        const dx=b.x-(f.x+f.face*f.stats.width*.55),dy=b.y-(f.y-bodyHeight(f)*.55);
+        const distance=(dx/(f.stats.width+22))**2+(dy/37)**2;
+        if(distance<=1 && (distance<nearest || distance===nearest && this.random()<.5)){
+          catcher=f;nearest=distance;
+        }
+      }
+      if(catcher)this.takeBall(catcher,true);
     }
     dropBall(f) {
       const b=this.ball;
@@ -9818,6 +9857,7 @@
     }
     swat(f, aim, face = f.face) {
       const b = this.ball;
+      delete b.dropped;
       b.hits = Math.min(3, b.hits + 1);
       b.owner = f.index;
       b.age = 0;
@@ -9851,17 +9891,20 @@
             b.y += lift.y - before;
         }
       }
-      b.vy += (b.hits === 3 ? 280 : 840) * dt;
+      b.vy += (b.hits === 3 && !b.dropped ? 280 : 840) * dt;
       b.x += b.vx * dt;
       b.y += b.vy * dt;
+      const falling=b.dropped && b.vy>=145;
+      let landedDrop=false;
       for (const [i,p] of this.terrain.entries()) {
         if (b.vy <= 0 || b.x < p.x1 || b.x > p.x2 || oldY + 12 > this.previousFloorY(i,p.y,this.time,dt) + 1 || b.y + 12 < p.y) continue;
         b.y = p.y - 12;
+        landedDrop=!!b.dropped;
         b.vy = b.vy > 90 ? -b.vy * 0.52 : 0;
         b.vx *= b.hits === 3 ? 0.96 : 0.78;
         break;
       }
-      if (b.owner >= 0 && Math.abs(b.vx) > 150) {
+      if (b.owner >= 0 && (b.dropped?falling:Math.abs(b.vx)>150)) {
         const target = this.dogs[1 - b.owner];
         const height = bodyHeight(target);
         const low = target.floorAction || target.crouch;
@@ -9876,25 +9919,27 @@
           this.hit(
             target,
             this.dogs[b.owner],
-            b.hits === 3 ? 19 : 4 + b.hits,
-            b.hits === 3 ? 290 : 110,
-            b.hits === 3 ? 6.2 : 2.2,
+            b.dropped ? 2+b.hits : b.hits === 3 ? 19 : 4 + b.hits,
+            b.dropped ? 80 : b.hits === 3 ? 290 : 110,
+            b.dropped ? 1.7 : b.hits === 3 ? 6.2 : 2.2,
             0,
             'ball',
-            Math.sign(b.vx),
+            Math.sign(b.vx) || Math.sign(target.x-b.x) || this.dogs[b.owner].face,
             covered ? shieldRim(bubble, x, y) : { x, y },
             null, null, null, covered,
           );
-          if (b.hits === 3) {
+          if (b.hits === 3 && !b.dropped) {
             this.ball = null;
             this.nextBall = 4;
             return;
           }
           b.owner = -1;
+          delete b.dropped;
           b.vx *= -0.28;
           b.vy = -200;
         }
       }
+      if(landedDrop){delete b.dropped;b.owner=-1;}
       if (b.x < -60 || b.x > 1260 || b.y > 715 || b.age > 20) {
         this.ball = null;
         this.nextBall = 3.5;
@@ -11136,6 +11181,15 @@
         foe = this.dogs[0],
         brain = this.bot;
       const ball=this.ball;
+      if(this.itemDrops && this.cpuLevel==='rival' && ball && !f.attack && !f.stun && !f.grip && !f.stockLift && !f.ledge){
+        const handX=f.x+f.face*(f.stats.width+8);
+        if(f.ground<0 && ball.holder===f.index && f.vy>=-150 && Math.abs(foe.x-handX)<44 &&
+            foe.y-f.y>44 && foe.y-f.y<168)return {...idleInput,tapped:{grab:true}};
+        if(ball.dropped && ball.owner===f.index && f.ground<0 && (foe.shield || Math.abs(foe.x-ball.x)>64) &&
+            Math.abs(ball.x-handX)<24 && Math.abs(ball.y-f.y+f.stats.height*.55)<28)return {...idleInput,tapped:{attack:true}};
+        if(ball.dropped && ball.owner!==f.index && f.ground>=0 && ball.y<f.y-30 && ball.y>f.y-162 &&
+            Math.abs(ball.x+ball.vx*.12-f.x)<48)return {...idleInput,shield:true};
+      }
       if(ball && f.ground>=0 && !f.attack && !f.grip && !f.stun && !f.stockLift && !f.ledge){
         const dx=foe.x-f.x,dy=foe.y-f.y;
         if(ball.holder===f.index && Math.abs(dx)<620)

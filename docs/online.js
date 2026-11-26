@@ -7,6 +7,7 @@
   const timeFeature = 'time-score-1';
   const roomFeature='room-rules-1';
   const rematchFeature='rematch-fighters-1';
+  const dropFeature='air-item-drop-1';
   function readRoomRules(msg){
     if(msg.length!==13 || msg[8]!==roomFeature || !['stock','time'].includes(msg[9]) ||
       !window.DogFight.validStockCount(msg[10]) || !window.DogFight.stockMinutes.includes(msg[11]) ||
@@ -227,6 +228,7 @@
       this.remoteCoat = 0;
       this.fighterPicks = false;
       this.rematchPicks = false;
+      this.itemDrops=false;
       this.code = action === 'create' ? roomCode() : code;
       this.attempts = 0;
       this.round = 0;
@@ -289,6 +291,7 @@
       });
     }
     useConnection(peer, conn, host) {
+      if (!host) this.itemDrops=false;
       this.pending.add(conn);
       const timeout = setTimeout(() => {
         if (this.pending.delete(conn)) conn.close();
@@ -300,8 +303,8 @@
       };
       conn.on('open', () => {
         if (!current()) return conn.close();
-        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature,rematchFeature] :
-          ['join',this.kind,this.coat,rematchFeature]);
+        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature,rematchFeature,dropFeature] :
+          ['join',this.kind,this.coat,rematchFeature,dropFeature]);
       });
       conn.on('data', (data) => {
         if (!current() || !Array.isArray(data)) return;
@@ -321,10 +324,12 @@
           this.remoteCoat = window.DogFight.validCoat(data[2]) ? data[2] : 0;
           this.fighterPicks = this.roomSet && data[3] === counterpickFeature && window.DogFight.validCoat(data[2]);
           this.rematchPicks = data[this.action === 'quick' ? 3 : 6] === rematchFeature && window.DogFight.validCoat(data[2]);
+          this.itemDrops=data.includes(dropFeature) && window.DogFight.validCoat(data[2]);
           // Ordered delivery puts both players' colors in the opening match configuration.
           if (window.DogFight.validCoat(data[2])) {
             const reply=['coat',this.coat];
             if (this.fighterPicks) reply.push(counterpickFeature);
+            if (this.itemDrops) reply.push(dropFeature);
             if (this.rematchPicks) reply.push(rematchFeature);
             conn.send(reply);
           }
@@ -335,6 +340,7 @@
           this.remoteCoat = data[1];
           this.fighterPicks = this.action === 'join' && data[2] === counterpickFeature;
           this.rematchPicks = data.at(-1) === rematchFeature;
+          this.itemDrops=data.includes(dropFeature);
         } else if (!host && this.action==='join' && !this.round && data[0]==='room-offer' && readRoomRules(data) && this.validStart(data)){
           this.remoteKind=data[2];this.offer=['start',...data.slice(1)];this.attach(conn);
           this.status('review','Review the host’s rules before starting.');
@@ -468,6 +474,7 @@
       this.nextStage = this.nextPick = this.earlyVote = undefined;
       this.phase = 'playing';
       const config = { mode: 'local', p1, p2, stage, form, coats, fetch: true };
+      if (this.itemDrops===false) config.itemDrops=false;
       if(rules)Object.assign(config,{stockCount:rules.lives,minutes:rules.minutes,fetch:rules.fetch});
       if (this.timeMinutes) Object.assign(config, {timeBattle:true,minutes:this.timeMinutes});
       this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed);

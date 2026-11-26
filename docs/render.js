@@ -1790,7 +1790,10 @@
       y = snap(b.y, 2);
     ctx.save();
     ctx.translate(x, y);
-    if (b.hits === 3 && b.holder==null) {
+    if(b.dropped){
+      pixelLine(ctx,-4,-28,-3,-17,'#8dddd0',3,2);
+      pixelLine(ctx,5,-23,5,-15,cream,2,2);
+    }else if (b.hits === 3 && b.holder==null && Math.abs(b.vx)>150) {
       const dir = Math.sign(b.vx) || 1;
       pixelLine(ctx, -dir * 45, -5, -dir * 5, -5, '#e67549', 6);
       pixelLine(ctx, -dir * 35, 1, -dir * 5, 1, gold, 8);
