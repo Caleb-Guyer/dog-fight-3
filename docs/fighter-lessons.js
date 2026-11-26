@@ -191,8 +191,53 @@
     ]
   };
   function study(kind,side){
+    if(side==='down-air'){
+      const id=window.DogFight.kits[kind].air.down;
+      return {index:4,id,stage:'nightmail',rival:courses[kind].rival,title:window.DogFight.moves[id].label};
+    }
     const index=directions[kind].indexOf(side),id=window.DogFight.kits[kind].specials[side];
     return {index,id,stage:index<2?courses[kind].stage:'picnic',rival:courses[kind].rival,title:window.DogFight.specials[id].label};
+  }
+  const downAirTasks={
+    pip:['Kick down onto Brisket’s shield. Steer right on the bounce and land behind him.','Pip crossed the shield and landed behind Brisket.'],
+    brisket:['Use Belly Drop beside Pip. Catch his feet with the splash as you land.','The landing splash caught Pip outside the diving hitbox.'],
+    noodle:['Swing Underhook from above Pip and pull him up from the roof.','Underhook lifted Pip off the roof.'],
+    clover:['Spike Pip outside the right edge. Land back on the mail car.','Skip Shot sent Pip below the lip and Clover landed on the roof.']
+  };
+  class DownAirTrial{
+    constructor(world){
+      const [f,r]=world.dogs,deck=world.terrain[0],kind=f.kind;
+      this.course=kind;this.index=4;this.id=kind+'-4';this.ticks=0;this.done=this.missed=false;
+      const [task,success]=downAirTasks[kind];
+      this.info={title:study(kind,'down-air').title,task,success,keys:kind==='pip'?[['down','attack'],['right']]:[['down','attack']]};
+      const edge=kind==='clover',x=edge?deck.x2-18:520;
+      const gap={pip:34,brisket:54+r.stats.width,noodle:47,clover:46}[kind];
+      const height={pip:95,brisket:76,noodle:136,clover:120}[kind];
+      Object.assign(f,{x,y:deck.y-height,ground:-1,face:1,jumps:1,vx:kind==='pip'?112:0,vy:28});
+      Object.assign(r,{x:x+gap,y:deck.y-(edge?37:0),ground:edge?-1:0,face:-1,vx:0,vy:0,damage:edge?105:0,shield:kind==='pip'});
+    }
+    canStep(input){
+      if(this.done || this.missed || !this.ticks && !(input.attack || input.tapped?.attack || input.aimStick || input.tapped?.aimStick))return false;
+      this.ticks++;return true;
+    }
+    partner(){return this.course==='pip'?{...idleInput,shield:true}:idleInput;}
+    contact(name,e){
+      if(name==='ko' && e.f.index===0)this.missed=true;
+      if(name==='pogoShield' && e.f.index===0){this.connected=true;this.note='Steer right over the shield.';}
+      if(name!=='hit' || e.owner?.index!==0 || e.f?.index!==1 || e.moveId!==e.owner.kit.air.down)return;
+      if(this.course==='brisket')this.done=!!e.owner.attack?.landed;
+      if(this.course==='noodle')this.done=e.f.vy<0;
+      if(this.course==='clover' && e.meteor){this.connected=true;this.note='Let Clover land on the roof.';}
+    }
+    afterStep(world){
+      if(this.done || this.missed)return;
+      const [f,r]=world.dogs;
+      if(f.ground>=0){
+        if(this.connected && (this.course==='clover' || this.course==='pip' && f.x>r.x))this.done=true;
+        else if(!f.attack || this.course!=='brisket')this.missed=true;
+      }
+      if(this.ticks>=150 && !this.done)this.missed=true;
+    }
   }
   class SpecialTrial {
     constructor(index,world){
@@ -308,7 +353,7 @@
       ctx.restore();
     }
   }
-  const makeTrial=(index,world,storage)=>index===-1?new Shuttle(world,storage):index<2?new Trial(index,world):new SpecialTrial(index,world);
+  const makeTrial=(index,world,storage)=>index===-1?new Shuttle(world,storage):index===4?new DownAirTrial(world):index<2?new Trial(index,world):new SpecialTrial(index,world);
   // Durations are in fight frames. A short hold before each new input lets the
   // viewer read the cue without changing the timing between real inputs.
   const examples={
@@ -345,7 +390,8 @@
       const [kind,index]=id.split('-');
       const extra=extraStudies[kind]?.[Number(index)-2];
       if(id==='shuttle')this.shuttle=lesson;
-      const sequence=this.shuttle?[[600,'right','Run to the gold post.'],[600,'left','Reverse and run across the start line.']]:
+      const sequence=index==='4'?[[1,'down attack',downAirTasks[kind][0]],[150,kind==='pip'?'right':'',kind==='pip'?'Carry the bounce past Brisket.':'Watch where the attack connects.']]:
+        this.shuttle?[[600,'right','Run to the gold post.'],[600,'left','Reverse and run across the start line.']]:
         extra?[[1,extra[3].join(' '),extra[1]],[180,'','Release the controls and watch the exchange.']]:examples[id];
       this.cues=sequence.map(([frames,chord,caption])=>{
         const keys=chord?chord.split(' '):[];
@@ -454,7 +500,15 @@
       this.ended=this.tail>=45 || this.frame>=300;
     }
   }
-  function preview({kind,side,coat,root,shake,reduced,device,keyFor,padFor}){
+  function preview({kind,side,coat,root,shake,reduced,device,keyFor,padFor,showDialog,title,input,canPractice}){
+    const name=window.DogFight.fighters[kind].name;
+    showDialog('special-preview',title,'<p class="clip-caption">'+name+' · '+input+'</p>'+
+      '<canvas id="move-arena" width="720" height="405" role="img" aria-label="'+name+' demonstrates '+title+'"></canvas>'+
+      '<div class="clip-status"><strong id="move-cue"></strong><output id="move-frame"></output></div><p id="move-caption"></p>'+
+      '<div class="dialog-actions"><button class="utility" id="move-play">Play</button><button class="utility" id="move-step">Step 1 frame</button>'+
+      '<button class="utility" id="move-speed">Speed · ½×</button><button class="utility" id="move-restart">Restart</button></div>'+
+      '<div class="dialog-actions">'+(canPractice?'<button class="primary" id="move-try">Try this move</button>':'')+
+      '<button class="utility" id="move-back">Back to moves</button></div>');
     const el=id=>root.querySelector('#move-'+id);
     const canvas=el('arena'),toggle=el('play'),speed=el('speed'),output=el('frame'),cue=el('cue'),caption=el('caption');
     let demo,view,playing=!reduced,rate=.5,carry=0;

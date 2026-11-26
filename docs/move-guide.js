@@ -25,7 +25,7 @@
     pipDiveKick: 'The extended heel kicks the rival away. The trailing paw pops them up for Quick Paw on landing.',
     pipBackKick: 'A quick heel strike behind you with a low launch.',
     pipFlip: 'Catch the rival high over your forehead with the heel to launch almost straight up.',
-    pipPogo: 'Kick down. A clean hit bounces Pip upward once per airtime.',
+    pipPogo: 'Kick down. Pip springs off a rival once per airtime. An intact shield gives a lower bounce. Steer across it or drift back. A parry stops the spring.',
     brisketCurl: 'Tuck into a broad body hit on both sides. The windup leaves time to dodge.',
     brisketRam: 'The leading shoulder launches hard. Clip them with the falling body to land close enough for Body Check.',
     brisketHip: 'Back into them at close range for a heavy hip check. Grazing them at full reach gives a softer bump.',
@@ -159,7 +159,9 @@
       (move.landingWindow ? ' Landing on frames ' + move.landingWindow[0] + '–' + (move.landingWindow[1] - 1) +
         ' takes ' + move.land + ' frames to recover. A timed Shield press cuts it to ' + Math.ceil(move.land / 2) +
         '. Elsewhere in the move it takes 2.' : '') +
-      '</span>'+(category==='specials'?'<button type="button" class="utility" data-watch-special="'+direction+'" aria-label="Watch '+move.label+'">Watch move</button>':'')+'</div></li>'
+      '</span>'+((category==='specials' || category==='air' && direction==='down')?
+        '<button type="button" class="utility" '+(category==='specials'?'data-watch-special="'+direction+'" ':'')+
+        'data-watch-move="'+(category==='specials'?direction:'down-air')+'" aria-label="Watch '+move.label+'">Watch move</button>':'')+'</div></li>'
     );
   }
   function moveGuide(kind,section,{keyFor,padFor,strikeKeys,specialInputs}) {

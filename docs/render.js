@@ -2482,7 +2482,7 @@
       }
       if (name === 'jump' || name === 'recover')
         this.add('ring', f.x, f.y, name === 'jump' ? cream : teamColor(f), 0.23, 21);
-      if (name === 'footstool') this.add('ring', e.point.x, e.point.y, mint, .18, 22);
+      if (name === 'footstool' || name === 'pogoShield') this.add('ring', e.point.x, e.point.y, mint, .18, 22);
       if (name === 'hit' || name === 'block') {
         const face = e.face || 1;
         const point = e.point || { x: f.x - face * f.stats.width * 0.7, y: f.y - f.stats.height * 0.54 };

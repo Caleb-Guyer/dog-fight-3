@@ -2670,6 +2670,7 @@
       this.cpuLevel = config.mode === 'solo' && Object.hasOwn(cpuLevels, config.cpuLevel) ? config.cpuLevel : 'arcade';
       this.fetch = config.fetch;
       this.itemDrops=config.itemDrops!==false;
+      if(config.shieldPogo!==false)this.shieldPogo=true;
       this.time = 0;
       this.end = null;
       this.endReason = '';
@@ -3180,6 +3181,7 @@
       // Copy one graph so both ends of a grab and fighter keys in hit ledgers stay linked.
       Object.assign(this, structuredClone(state));
       if (!('itemDrops' in state)) delete this.itemDrops;
+      if (!('shieldPogo' in state)) delete this.shieldPogo;
       if (!('closingHeight' in state)) delete this.closingHeight;
       this.random.state = random.state;
     }
@@ -8837,6 +8839,7 @@
         this.swat(winner.f, winner.aim, winner.face);
       }
       const connectedHits = [];
+      let shieldSprings;
       for (const hit of hits) {
         const { f, rival, attack, beat, face } = hit;
         // Other attackers may have shrunk or broken this shield on the same tick.
@@ -8866,6 +8869,11 @@
           sweet,
         );
         if (attack.connected) connectedHits.push(hit);
+        else if(attack.springPoint){
+          hit.springPoint=attack.springPoint;
+          delete attack.springPoint;
+          (shieldSprings ??= []).push(hit);
+        }
         if (sweet && attack.connected) this.emit('sweetSpot', { f, point, face, moveId: attack.moveId });
         if (attack.connected && attack.name === 'rope') {
           rival.vx = -face * Math.max(185, Math.abs(rival.vx) * 0.8);
@@ -8877,15 +8885,17 @@
           attack.reelEnd = attack.time + 0.17;
         }
       }
-      for (const { f, attack } of connectedHits) {
-        attack.connected = true;
+      // A body hit takes precedence if the same kick also touches another dog's shield.
+      for (const {f,attack,springPoint} of shieldSprings ? connectedHits.concat(shieldSprings) : connectedHits) {
+        if(!springPoint)attack.connected = true;
         if (f.attack !== attack) continue;
         if (attack.pogo && !attack.landed && !f.usedPogo) {
           f.usedPogo = true;
           f.fastFall = false;
           f.cutJump = false;
-          f.vy = -465;
+          f.vy = springPoint ? -340 : -465;
           f.reboundPose = attack.moveId;
+          if(springPoint)this.emit('pogoShield',{f,point:springPoint,moveId:attack.moveId});
         } else if (attack.name === 'pounce') {
           f.vy = -300;
           f.vx *= 0.48;
@@ -9100,6 +9110,8 @@
       }
       target.shieldHP -= damage * 0.027;
       const broken = target.shieldHP <= 0;
+      if(this.shieldPogo && !broken && use?.pogo && !use.landed && owner.ground<0 && !owner.usedPogo)
+        use.springPoint=point;
       if (target.index === 1 && owner.index === 0 &&
           (this.cpuLevel === 'rival' || (!this.comboPractice?.defending && this.comboPractice?.reply === 'punish')))
         this.bot.blockedSwing = !broken && !projectile && (use?.airSide || use?.smashSide) ? use : null;
