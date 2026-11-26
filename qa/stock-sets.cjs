@@ -88,6 +88,31 @@ async function leaveThreeStocks(device,slot,resultSelector='#set-score') {
     }
   }finally{await direction('');if(touch)await touch.detach();}
 }
+async function counterweightOpening(browser){
+  const page=await browser.newPage({viewport:{width:1160,height:760},reducedMotion:'reduce'});
+  try{
+    page.on('pageerror',e=>errors.push(e.message));
+    await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+    await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+    await page.goto(root+'#solo/canal/counterweights');
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      window.liftRide=[];
+      DogFight.Battle.prototype.step=function(...args){
+        const result=step.apply(this,args),f=this.dogs[0];
+        if(f.ground===1)liftRide.push([f.y,this.terrain[1].y]);
+        return result;
+      };
+    });
+    assert.deepEqual(await page.locator('#hud .lives').evaluateAll(es=>es.map(el=>el.getAttribute('aria-label'))),['3 stocks','3 stocks']);
+    await page.clock.runFor(2530);
+    await page.keyboard.down('Space');await page.clock.runFor(430);await page.keyboard.up('Space');
+    await page.clock.runFor(960);
+    const ride=await page.evaluate(()=>liftRide);
+    assert(ride.length>=8);assert(ride.every(([feet,top])=>feet===top));
+    assert(Math.abs(ride[0][0]-ride.at(-1)[0])>1);
+  }finally{await page.close();}
+}
 async function soloAndLocal(browser){
   const d=await device(browser,false,'#solo'),{page,press}=d;
   const lips=await page.evaluate(()=>{
@@ -95,10 +120,12 @@ async function soloAndLocal(browser){
     canvas.width=1200;canvas.height=675;
     const ctx=canvas.getContext('2d',{willReadFrequently:true}), result=[];
     const color=(x,y)=>[...ctx.getImageData(x,y,1,1).data.slice(0,3)].map(n=>n.toString(16).padStart(2,'0')).join('');
-    for(const stage of Object.keys(DogFight.arenas)) for(const form of ['flat','trio']){
-      const floors=DogFight.platforms(DogFight.stageGeometry(stage,form),0);
-      ArenaArt.draw(ctx,stage,1.7,undefined,form);
-      for(const f of floors) result.push([stage,form,color(f.x1+1,f.y),color(f.x2-2,f.y)]);
+    for(const stage of Object.keys(DogFight.arenas)) for(const form of ['flat','trio','counterweights']){
+      for(const time of form==='counterweights'?[0,2,6]:[1.7]){
+        const floors=DogFight.platforms(DogFight.stageGeometry(stage,form),time);
+        ArenaArt.draw(ctx,stage,time,undefined,form);
+        for(const f of floors) result.push([stage,form,color(f.x1+1,f.y),color(f.x2-2,f.y)]);
+      }
     }
     return result;
   });
@@ -108,6 +135,11 @@ async function soloAndLocal(browser){
     assert.deepEqual([left,right],[expected,expected],stage+' '+form+' art lines up with both collision edges');
   }
   await press('[data-mode=local]');await press('#choose-stage');
+  await press('[data-stage-form=counterweights]');await press('[data-stage=canal]');
+  assert.match(await page.locator('#stage-title').textContent(),/Canal Lock · Counterweights/);
+  await page.reload();await observe(page);
+  assert.match(await page.locator('#stage-title').textContent(),/Canal Lock · Counterweights/);
+  await press('#choose-stage');
   await press('[data-stage-form=trio]');await press('[data-stage=laundry]');
   await press('#choose-stage');await press('[data-stage-form=flat]');await page.keyboard.press('Escape');
   assert.match(await page.locator('#stage-title').textContent(),/Laundry Line · Three platforms/);
@@ -649,13 +681,13 @@ async function versusRules(browser){
   await q.close();console.log('Named rules survived a reload, a complete two-stock fight, rematch, and transfer to a fresh touch/controller lobby.');
 }
 async function friendRules(browser,phone){
-  const host=await device(browser,false,'#local/rules/stock/2/0/single/flat/off'), a=host.page;
-  await a.locator('#rules-name').fill('Friday flat');await host.press('#rules-save');
+  const host=await device(browser,false,'#local/rules/stock/2/0/single/counterweights/off'), a=host.page;
+  await a.locator('#rules-name').fill('Friday lifts');await host.press('#rules-save');
   const saved=await a.locator('#rules-choice').inputValue();
   await a.goto(root+'?room#online');await observe(a);
   await host.press('#online-rulebook');await a.selectOption('#rules-choice',saved);
   await host.press('#rules-share');
-  assert.equal(new URL(await a.locator('#rules-link').inputValue()).hash,'#online/rules/stock/2/0/single/flat/off');
+  assert.equal(new URL(await a.locator('#rules-link').inputValue()).hash,'#online/rules/stock/2/0/single/counterweights/off');
   await host.press('#rules-use');await a.selectOption('#online-stage','picnic');
   assert.equal(await a.locator('#online-custom-rules').textContent(),'2 stocks · No clock · Single game · Fetch Ball off');
   await host.press('#online-create');await a.locator('#online-invite').waitFor();
@@ -665,7 +697,7 @@ async function friendRules(browser,phone){
   await b.locator('#room-ready').waitFor();
   for(const p of [a,b]){
     assert.equal(await p.locator('#room-terms').textContent(),'2 stocks · No clock · Single game · Fetch Ball off');
-    assert.match(await p.locator('#room-arena').textContent(),/Picnic Table · Flat/);
+    assert.match(await p.locator('#room-arena').textContent(),/Picnic Table · Counterweights/);
     assert.match(await p.locator('#room-pair').textContent(),/Pip vs. Clover/);assert(await p.locator('#match').isHidden());
   }
   await guest.press('#online-cancel');
@@ -682,7 +714,7 @@ async function friendRules(browser,phone){
   for(const p of [a,b]){
     await p.waitForFunction(()=>window.observedBattle?.mode==='local' && observedBattle.matchFrames>0);
     assert.deepEqual(await p.evaluate(()=>[observedBattle.dogs.map(f=>f.stocks),observedBattle.fetch,observedBattle.clockFrames,observedBattle.form]),
-      [[2,2],false,null,'flat']);
+      [[2,2],false,null,'counterweights']);
     assert.equal(await p.locator('#hud .lives i').count(),4);assert(await p.locator('#match-clock').isHidden());
   }
   await a.keyboard.down('a');
@@ -710,7 +742,7 @@ async function friendRules(browser,phone){
   for(const p of [a,b]){
     await p.waitForFunction(()=>observedBattle?.stage!=='picnic' && observedBattle?.matchFrames>1);
     assert.deepEqual(await p.evaluate(()=>[observedBattle.form,observedBattle.fetch,observedBattle.clockFrames,...observedBattle.dogs.map(f=>f.stocks)]),
-      ['flat',false,null,2,2]);
+      ['counterweights',false,null,2,2]);
     assert.deepEqual(await p.evaluate(()=>observedBattle.dogs.map((f,i)=>[f.kind,observedBattle.coatFor(i)])),[['clover',2],['clover',3]]);
   }
   await b.close();await a.close();console.log('Private WebRTC rules, guest review and cancellation, an unchanged room code, warm-up, two KOs and a fresh rematch passed.');
@@ -732,6 +764,7 @@ async function main(){
       try{await timedBattles(browser,phone);assert.deepEqual(errors,[]);}finally{await phone.close();}
       return;
     }
+    await counterweightOpening(browser);
     await rivalSet(browser);
     await soloAndLocal(browser);
     const phone=await chromium.launch(options);

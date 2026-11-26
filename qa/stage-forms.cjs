@@ -82,3 +82,93 @@ test('room hosts choose the form once and quickplay uses original arenas',()=>{
   assert.equal(make({mode:'training',form:'trio'}).form,'original');
   assert.equal(make({mode:'local',form:'flat',lesson:0}).form,'original');
 });
+
+function lifts(extra={}) {return make({stage:'canal',mode:'local',form:'counterweights',...extra});}
+function advance(w,count,input=idleInput) {
+  for(let n=0;n<count;n++)w.step(dt,{...idleInput,...(typeof input==='function'?input(n):input)},idleInput);
+}
+test('each arena keeps both recovery ledges and a fixed main deck under two opposing lifts',()=>{
+  for(const stage of Object.keys(arenas)){
+    const w=lifts({stage}),[deck]=w.terrain, dog=w.dogs[0];
+    const heights=[];
+    for(let side of [-1,1]){
+      dog.x=side<0?deck.x1-12:deck.x2+12;dog.y=deck.y+25;
+      assert.equal(w.nearestLedge(dog,40,0,45).left, side<0);
+    }
+    w.spawn(dog,false);
+    for(let n=0;n<=480;n++){
+      const [floor,left,right]=w.terrain;
+      assert.deepEqual(floor,deck);
+      assert(Math.abs(left.y+right.y-756)<1e-7);
+      if(n%120===0)heights.push(Math.round(left.y));
+      advance(w,1);
+    }
+    assert.deepEqual(heights,[378,445,378,311,378]);
+    w.knockouts([dog]);
+    assert.equal(dog.stockLift.landing,0);assert.equal(dog.stocks,2);
+  }
+});
+for(const kind of Object.keys(kits))test(kind+' can short-hop onto the low lift and needs an air jump at the high point',()=>{
+  for(const [start,low,double,ground] of [[96,true,false,1],[335,false,false,0],[335,false,true,1]]){
+    const w=lifts({p1:kind}),f=w.dogs[0];
+    advance(w,start);
+    advance(w,100,n=>({shortHop:low&&n===0,jump:!low&&(n<19||double&&n>=20&&n<38)}));
+    assert.equal(f.ground,ground);
+    if(low){
+      for(let n=0;n<130;n++){advance(w,1);assert.equal(f.y,w.terrain[1].y);}
+      advance(w,1,{shield:true});
+      advance(w,1,{shield:true,x:.72,y:.72});
+      assert.equal(f.ground,-1);assert.equal(f.dropPlatform,1);
+      advance(w,60);assert.equal(f.ground,0);
+    }
+  }
+});
+test('a rising lift intercepts a fall sooner than a retreating one and carries dogs through hitstop',()=>{
+  for(const ground of [1,2]){
+    const w=lifts(),f=w.dogs[0],p=w.terrain[ground];
+    Object.assign(f,{x:(p.x1+p.x2)/2,y:p.y-8,ground:-1,vy:55});
+    const soon=w.floorAhead(f,4*dt);
+    assert.equal(soon,ground===2?2:-1);
+    advance(w,4);
+    assert.equal(f.ground,soon);
+    advance(w,8);assert.equal(f.ground,ground);
+    f.impactLag=6*dt;
+    for(let n=0;n<6;n++){advance(w,1);assert.equal(f.y,w.terrain[ground].y);}
+    Object.assign(f,{ground:-1,y:w.terrain[ground].y+7,vy:100});
+    advance(w,40);assert.equal(f.ground,0);
+  }
+});
+test('a resting Fetch Ball follows either cable through both turnarounds',()=>{
+  for(const ground of [1,2]){
+    const w=lifts(),p=w.terrain[ground];
+    w.ball={x:(p.x1+p.x2)/2,y:p.y-12,vx:0,vy:0,hits:0,owner:-1,age:0};
+    for(let n=0;n<485;n++){advance(w,1);assert.equal(w.ball.y,w.terrain[ground].y-12);}
+  }
+});
+test('delayed room inputs reconcile a jump, cable ride and drop to the offline match',()=>{
+  const peers=[0,1].map(side=>{
+    const sent=[];let world;
+    const session=new window.DogOnline.OnlineSession({start(options,rng){world=new Battle(options,undefined,rng);}});
+    Object.assign(session,{side,round:0,action:side?'join':'create',kind:side?'brisket':'pip'});
+    session.send=msg=>{if(msg[0]==='input')sent[msg[2]]=msg[3];};
+    const start=['start',1,'pip','brisket','canal',78,1,'counterweights'];
+    if(side)assert(session.validStart(start));
+    session.beginRound(start);
+    return {world,net:session.match,sent};
+  });
+  const ref=lifts(),sample=w=>[...state(w),w.terrain.map(p=>p.y)],history=[sample(ref)],visited=new Set();
+  for(let n=0;n<260;n++){
+    const inputs=[{...idleInput,jump:n<22,y:n===145?1:0}, {...idleInput,jump:n>=22&&n<44 || n>=45&&n<65}];
+    ref.step(dt,...inputs);history.push(sample(ref));visited.add(ref.dogs[0].ground);
+    for(const [i,p] of peers.entries()){
+      if(n>=8)assert(p.net.receive(n-8,peers[1-i].sent[n-8]));
+      p.net.tick(()=>inputs[i],p.world);
+      assert.deepEqual(sample(p.net.confirmedWorld),history[p.net.confirmed]);
+    }
+  }
+  assert.deepEqual([...visited].sort(),[-1,0,1]);assert.equal(ref.dogs[0].ground,0);
+  for(const [i,p] of peers.entries()){
+    for(let n=p.net.received;n<260;n++)assert(p.net.receive(n,peers[1-i].sent[n]));
+    p.net.confirm(p.world);assert.deepEqual(sample(p.world),sample(ref));
+  }
+});
