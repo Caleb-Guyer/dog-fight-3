@@ -195,7 +195,7 @@
     return {config,battle,tape};
   }
   function landingActions(review){
-    const back=review.clinic?'Back to Fight School':review.from==='pause'?'Back to fight':
+    const back=review.moment?'Back to full match':review.clinic?'Back to Fight School':review.from==='pause'?'Back to fight':
       ['archive','card'].includes(review.from)?'Back to match stats':'Back to results';
     return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Retry landing</button>'+
       (review.guided?'<button class="utility" data-do="landing-speed">Try at match speed</button>':'')+
@@ -222,7 +222,7 @@
       '<button class="utility" data-live>Try at match speed</button><button class="utility" data-original>Watch original fall</button></div>';
     nav.before(panel);
     const find=s=>panel.querySelector(s),select=find('select'),slider=find('input'),canvas=find('canvas');
-    let selected=landings.findLast(l=>l.type==='downed') || landings.at(-1),dir=0;
+    let selected=landings.find(l=>l.slot===opened?.slot && l.frame===opened.at) || landings.findLast(l=>l.type==='downed') || landings.at(-1),dir=0;
     for(const [i,l] of landings.entries())select.add(new Option('P'+(l.slot+1)+' '+l.dog+' · frame '+l.frame,String(i)));
     select.selectedIndex=landings.indexOf(selected);
     function compare(){
@@ -556,13 +556,25 @@
       worker.postMessage({type:'start',width:out.width,height:out.height});
     });
   }
+  function chooseFighter({opening,result,start,review,tape,cursor,portrait,showDialog,slot,pick,back}){
+    const choices=opening.dogs.map((f,i)=>'<button type="button" class="coat-option" data-finish-slot="'+i+'">'+
+      '<img alt="" src="'+portrait(f.kind,opening.coatFor(i))+'"><strong>P'+(i+1)+' · '+f.stats.name+'</strong><small>'+
+      (result.mode==='solo' && i===0?'Against '+window.DogFight.cpuLevels[result.cpuLevel].name+' CPU':'Against recorded inputs')+'</small></button>').join('');
+    showDialog('finish-picker',review?.instant?'Practice the exchange':review?.returning?'Play the stock return':review && !review.finish?'Practice the knockout':'Practice the finish','<p>Take over a fighter with your P1 controls. Play from frame '+start+
+      ' to '+tape.length+', then compare the ending.</p><div class="coat-grid finish-picks">'+choices+
+      '</div><div class="dialog-actions"><button class="utility" id="finish-picker-back">'+(cursor===null?'Back to results':'Back to replay')+'</button></div>');
+    for(const button of document.querySelectorAll('[data-finish-slot]'))button.onclick=()=>pick(Number(button.dataset.finishSlot));
+    document.getElementById('finish-picker-back').onclick=back;
+
+    document.querySelector('[data-finish-slot="'+slot+'"]').focus();
+  }
   function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,clinic}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
     const {marks,escape,launch,contact,landings}=analyze(tape,slot,follow,!!retryMoment);
     escapeReady?.(escape);
     if(contact && practiceLaunch)defensePanel(nav,tape,contact,jump,practiceLaunch,signal);
     if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch,signal);
-    if(landings.length && practiceLanding)landingPanel(nav,tape,landings,jump,practiceLanding,!!clinic,signal);
+    if(landings.length && practiceLanding)landingPanel(nav,tape,landings,jump,practiceLanding,clinic,signal);
     let selected=null,panel,line,lead;
     if(retryMoment && marks.length){
       panel=document.createElement('section');panel.id='clip-retry';panel.hidden=true;
@@ -612,5 +624,5 @@
     const sync=inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump,signal});
     return ()=>{sync();if(panel && selected)panel.hidden=frame()!==selected.frame;};
   }
-  window.FinishTools={install,moments,analyze,inputFrame,launchFlight,defenseReply,returnTrace,returnComparison,landingDemo,landingTry,landingPreview,landingName,timing,landingActions,landingReport};
+  window.FinishTools={chooseFighter,install,moments,analyze,inputFrame,launchFlight,defenseReply,returnTrace,returnComparison,landingDemo,landingTry,landingPreview,landingName,timing,landingActions,landingReport};
 })();
