@@ -10,6 +10,62 @@ function fight(kind,extra={}){
 }
 const tick=(w,p={})=>w.step(1/60,{...idleInput,...p},idleInput);
 const first=events=>events.find(e=>['hit','block','grabCatch'].includes(e.name));
+function perch(rival,returner='pip',extra={}){
+  const events=[];
+  const w=new Battle({mode:'solo',cpuLevel:'rival',stage:'bandstand',p1:returner,p2:rival,
+    stockCount:3,fetch:false,liftOpening:'perch',...extra},(name,e)=>events.push({name,slot:e.f?.index,
+      move:e.moveId,platform:e.platform,frames:e.frames}),seededRandom(42));
+  return {w,events};
+}
+test('every Rival yields a raised perch to a quick protected drop and jabs an unattended late return',()=>{
+  for(const rival of Object.keys(kits))for(const returner of Object.keys(kits))for(const quick of [true,false]){
+    const {w,events}=perch(rival,returner),[hero,guard]=w.dogs;
+    assert.deepEqual(w.dogs.map(f=>f.stocks),[2,3]);assert.equal(hero.stockLift.landing,3);
+    for(let n=0;n<(quick?67:169);n++)tick(w,{y:quick && n===24?1:0});
+    if(quick){
+      assert.equal(hero.ground,3);assert(w.bot.gavePerch);assert.equal(guard.ground,0);
+      assert(events.some(e=>e.name==='platformDrop' && e.slot===1 && e.platform===3));
+      assert.equal(hero.damage,0);
+    }else{
+      assert(w.bot.challengedReturn);assert(!w.bot.gavePerch);
+      const open=events.findIndex(e=>e.name==='stockOpen' && e.slot===0);
+      assert(open>=0);
+      assert.equal(events.findIndex(e=>e.name==='hit' && e.slot===0),open+1);
+      assert.equal(events[open+1].move,kits[rival].ground[0]);
+    }
+  }
+});
+test('the jab remains blockable and a shield grab turns a late return around',()=>{
+  const {w,events}=perch('brisket');
+  for(let n=0;n<190;n++)tick(w,{shield:n>=165,tapped:{grab:n===169}});
+  assert(events.some(e=>e.name==='block' && e.move==='brisketCheck'));
+  assert.equal(w.grapple.owner,0);assert.equal(w.dogs[0].damage,0);assert.equal(w.dogs[1].stocks,3);
+});
+test('a normal KO enables the platform read, but a gap, a rising jump or a different landing keeps it out',()=>{
+  for(const reason of ['return','gap','jump','drift','rookie','legacy']){
+    const {w}=perch('noodle','pip',{stage:reason==='gap'?'laundry':'bandstand',liftOpening:false,cpuLevel:reason==='rookie'?'rookie':'rival'});
+    const [hero,guard]=w.dogs;hero.x=-400;tick(w);assert(hero.stockLift && hero.stocks===2);
+    const index=reason==='gap'?2:3,p=w.terrain[index];
+    Object.assign(guard,{ground:index,x:reason==='gap'?600:581,y:p.y,face:-1,vx:0});
+    Object.assign(hero,{stockLift:null,respawning:0,stockGuard:1.5,ground:-1,x:guard.x-38,
+      y:p.y-48,vy:reason==='jump'?-260:310,vx:reason==='drift'?-1000:0});
+    if(reason==='legacy')delete w.bot.returnPerches;
+    for(let n=0;n<4;n++)tick(w);
+    assert.equal(!!w.bot.gavePerch,reason==='return',reason);
+  }
+});
+test('seeking through the platform drop preserves the route, the protected frames and the next CPU decision',()=>{
+  const {w}=perch('clover'),tape=new FinishTape(),states=[];
+  const sample=b=>[b.random.state,b.bot.gavePerch,b.bot.perchExit&&{...b.bot.perchExit},b.dogs.map(f=>[f.ground,f.x,f.y,f.stockGuard])];
+  for(let n=0;n<100;n++){
+    states.push(sample(w));const i={...idleInput,y:n===24?1:0};
+    tape.record(w,i,idleInput);tick(w,i);
+  }
+  for(const frame of [0,24,27,32,59,88]){
+    const play=tape.playback(frame);assert.deepEqual(sample(play.battle),states[frame]);
+    while(play.step()){}assert.deepEqual(sample(play.battle),sample(w));
+  }
+});
 test('all four returning Rivals connect with their own down air on every arena and stage form',()=>{
   for(const kind of Object.keys(kits))for(const stage of Object.keys(arenas))for(const form of ['flat','trio','original']){
     for(const p1 of Object.keys(kits)){

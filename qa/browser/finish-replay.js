@@ -60,6 +60,10 @@ async function reviewMidMatch(page,mobile,press){
     window.position=w=>[w.matchFrames,w.clockFrames,w.random.state,...w.dogs.map(f=>[f.x,f.y,f.damage,f.stocks])];
     DogFight.Battle.prototype.step=function(){
       if(this.mode==='local')window.liveFight ||= this;
+      if(this!==window.liveFight && document.querySelector('#match-mode').textContent==='Stock return · Local versus'){
+        if(this!==window.returnFight){window.returnFight=this;window.startPosition=position(this);}
+        window.returnInput=arguments[2];
+      }
       if(this===window.liveFight && window.checkResume && !window.resumedAt)window.resumedAt=position(this);
       return step.apply(this,arguments);
     };
@@ -80,6 +84,22 @@ async function reviewMidMatch(page,mobile,press){
   }
   await page.keyboard.down('/');await page.clock.runFor(120);await page.keyboard.up('/');await page.clock.runFor(80);
   await fall(1);await page.clock.runFor(4500);await press('#pause');
+  const parked=await page.evaluate(()=>position(liveFight));
+  await press('[data-do=ko-replays]');await press('[data-return-fight="0"]');
+  await page.clock.runFor(80);
+  const initial=await page.evaluate(()=>startPosition);
+  assert(initial[0]<parked[0]);assert.equal(await page.evaluate(()=>!!returnFight.dogs[0].stockLift),true);
+  await page.keyboard.down('ArrowLeft');await page.clock.runFor(110);
+  assert.equal(await page.evaluate(()=>returnInput.x),-1);
+  await page.keyboard.up('ArrowLeft');await page.clock.runFor(4300);
+  assert(await page.evaluate(()=>returnFight.matchFrames-startPosition[0]>240));
+  await press('#pause');await press('[data-do=rehearse]');await page.clock.runFor(80);
+  assert.deepEqual(await page.evaluate(()=>startPosition),initial);
+  assert.deepEqual(await page.evaluate(()=>position(liveFight)),parked);
+  await press('#pause');await page.evaluate(()=>window.checkResume=true);
+  await press('[data-do=return-fight]');await page.clock.runFor(50);
+  assert.deepEqual(await page.evaluate(()=>resumedAt),parked);
+  await page.evaluate(()=>{window.checkResume=false;window.resumedAt=null;});await press('#pause');
   const original=await page.evaluate(()=>position(liveFight));
   await press('[data-do=ko-replays]');await press('[data-ko="0"]');
   await page.getByText(/Before leaving the stage · frame/).waitFor();
@@ -112,6 +132,11 @@ async function reviewMidMatch(page,mobile,press){
   await press('[data-do=clip-back]');assert.equal(await page.locator('[data-card-ko]').count(),3);
   await press('[data-do=card-back]');await press('[data-do=ko-replays]');
   assert.deepEqual(await page.locator('[data-ko]').evaluateAll(el=>el.map(e=>e.dataset.ko)),['2','1','0']);
+  assert.equal(await page.locator('[data-return-fight]').count(),2);
+  await press('[data-return-fight="1"]');await page.clock.runFor(130);
+  assert.equal(await page.evaluate(()=>returnFight.dogs[0].stocks),1);
+  await press('#pause');await press('[data-do=return-fight]');
+  await page.locator('[data-do=ko-replays]').waitFor();await press('[data-do=ko-replays]');
   await press('#ko-list-back');
   if(cdp)await cdp.detach();
 }

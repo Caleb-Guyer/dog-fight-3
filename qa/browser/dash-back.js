@@ -8,7 +8,7 @@ async function play(browser,device) {
   const page=await browser.newPage({viewport:touch?{width:390,height:844}:{width:1280,height:720},isMobile:touch,hasTouch:touch});
   const errors=[]; page.on('pageerror',e=>errors.push(e.message));
   const choose=selector=>touch?page.locator(selector).tap():page.locator(selector).click();
-  const keys={left:'a',right:'d',attack:'j',smash:'i',shield:'l',jump:'Space',hop:'e'};
+  const keys={left:'a',right:'d',attack:'j',smash:'i',shield:'l',jump:'Space',hop:'e',down:'s'};
   const fingers=new Map();
   try {
     if(pad) await page.addInitScript(()=>{
@@ -17,6 +17,7 @@ async function play(browser,device) {
       Object.defineProperty(navigator,'getGamepads',{value:()=>[gamepad]});
       window.padInput=(action,on)=>{
         if(action==='left'||action==='right') gamepad.axes[0]=on?(action==='left'?-1:1):0;
+        else if(action==='down')gamepad.axes[1]=on?1:0;
         else Object.assign(gamepad.buttons[{attack:2,smash:7,shield:4,jump:0,hop:6}[action]],{pressed:on,value:Number(on)});
       };
     });
@@ -87,6 +88,15 @@ async function play(browser,device) {
     await page.evaluate(()=>{window.live=null;});await page.clock.runFor(2050);await advanceTo(2);
     await hold('shield',true);await advanceTo(55);await hold('shield',false);
     assert.deepEqual(await page.evaluate(()=>contacts[0]),await page.evaluate(()=>['grabCatch',live.dogs[1].kit.grab]),device+' early shield');
+    await choose('#pause');await choose('[data-do=lobby]');await choose('#cpu-level');await choose('[data-do=return-perch]');
+    await page.evaluate(()=>{window.live=null;});await page.clock.runFor(2050);await advanceTo(24);
+    assert.deepEqual(await page.evaluate(()=>live.dogs.map(f=>f.stocks)),[2,3]);
+    await hold('down',true);await advanceTo(26);await hold('down',false);await advanceTo(71);
+    assert.deepEqual(await page.evaluate(()=>[live.dogs[0].ground,live.dogs[1].ground,live.bot.gavePerch]),[3,0,true],device+' took high ground');
+    await choose('#pause');assert.match(await page.locator('#dialog-body').textContent(),/dropped through the platform/);
+    await choose('[data-do=rematch]');await page.clock.runFor(5400);
+    assert.equal(await page.evaluate(()=>live.bot.challengedReturn),true);
+    assert((await damage())[0]>0);
     await page.goto('http://127.0.0.1:8080/?return#solo/stock-return/noodle');
     assert.match(await page.locator('#match-mode').textContent(),/Rival/);
     await page.goto('http://127.0.0.1:8080/?closing#solo/sudden-death/perch');

@@ -146,6 +146,36 @@ async function run(browser,phone){
     await press('[data-do=match-card]');
     assert.deepEqual(await row('Opening points'),['0','-1']);
     assert.deepEqual(await row('Regulation points'),['-1','0']);
+    await page.goto('http://127.0.0.1:8080/?branch#solo/throw-read/perch');
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      window.sample=w=>[w.matchFrames,w.clockFrames,w.random.state,w.bot.timer,...w.dogs.map(f=>[f.x,f.y,f.damage,f.stocks])];
+      DogFight.Battle.prototype.step=function(...args){
+        if(this.mode==='solo'){
+          window.original ||= this;
+          if(this!==original && document.getElementById('match-mode').textContent.startsWith('Stock return')){
+            if(this!==window.branch){window.branch=this;window.atLift=sample(this);}
+          }
+          if(window.returning && this===original && !window.backAt)window.backAt=sample(this);
+        }
+        return step.apply(this,args);
+      };
+    });
+    for(let n=0;n<100 && !await page.evaluate(()=>window.original?.matchCard.losses.length);n++)await page.clock.runFor(70);
+    await page.clock.runFor(100);await press('#pause');
+    const saved=await page.evaluate(()=>sample(original));
+    await press('[data-do=ko-replays]');await press('[data-return-fight="0"]');
+    await page.clock.runFor(90);
+    const lift=await page.evaluate(()=>atLift);
+    assert(saved[0]-lift[0]<18 && saved[0]>lift[0]);
+    assert.equal(await page.evaluate(()=>branch.dogs[0].stockLift.ready),false);
+    await page.clock.runFor(4700);
+    assert(await page.evaluate(()=>branch.matchFrames-atLift[0]>240 && branch.cpuLevel==='rival'));
+    assert.deepEqual(await page.evaluate(()=>sample(original)),saved);
+    await press('#pause');await press('[data-do=rehearse]');await page.clock.runFor(100);
+    assert.deepEqual(await page.evaluate(()=>atLift),lift);
+    await press('#pause');await page.evaluate(()=>window.returning=true);await press('[data-do=return-fight]');
+    await page.clock.runFor(70);assert.deepEqual(await page.evaluate(()=>backAt),saved);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
