@@ -929,7 +929,7 @@
   function showDialog(kind, title, html, close = true) {
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=launch-study-1';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=defend-contact-1';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
@@ -5350,7 +5350,7 @@
     VersusRulebook:'versus-rules.js?v=throw-reads-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
-    ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=stock-returns-1',
+    ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=defend-contact-1',
     MoveGuide:'move-guide.js?v=1', FighterSchool:'fighter-lessons.js?v=sparring-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',

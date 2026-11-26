@@ -1,7 +1,11 @@
 (() => {
   'use strict';
   const workerURL=new URL('finish-gif.js?v=finish-gif-1',document.currentScript.src);
-  const {moves,specials,throws,smashes,pummels}=window.DogFight;
+  const {moves,specials,throws,smashes,pummels,grabs,idleInput}=window.DogFight;
+  function moveName(id,fallback) {
+    return (moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id] || grabs[id])?.label ||
+      (fallback==='ball'?'Fetch Ball':fallback || 'Hit');
+  }
   const exitNames={drop:'Drop',step:'Step off',jump:'Jump',action:'Action exit',auto:'Automatic drop'};
   function returnTrace(){
     return {exits:[null,null],marks:[],firstHit:null,observe(event,e,frame){
@@ -32,18 +36,33 @@
   }
   function analyze(tape,slot,follow){
     const list=[];
-    let player,escape=null,knockedOut=false,lifeStart=0,launch=null;
+    let player,escape=null,knockedOut=false,lifeStart=0,launch=null,contact=null,grip=null;
     const markEscape=(frame,label)=>{escape={frame:Math.max(lifeStart,frame-15),label};};
     player=tape.playback(0,(event,e)=>{
       const frame=player.frame+1;
       if(follow){follow.observe(event,e,frame);return;}
       let label;
-      if(event==='hit' || event==='throwRelease'){
+      if(event==='grabCatch' && e.target.index===slot){
+        grip={frame,slot,owner:e.f.index,kind:'grab',move:moveName(e.moveId,'Grab'),from:lifeStart};
+        contact=grip;
+      }else if(event==='grabEscape' && e.f.index===slot){
+        contact=grip=null;
+      }else if(event==='hit' || event==='throwRelease'){
         const who=event==='hit'?e.owner:e.f, id=e.moveId;
-        const move=(moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id])?.label || e.name || 'Hit';
+        const move=moveName(id,e.name);
         label=(who?who.stats.name+' · ':'')+move;
         const target=event==='hit'?e.f:e.target;
-        if(target?.index===slot){launch=null;markEscape(frame,'Before '+move);}
+        if(target?.index===slot){
+          launch=null;markEscape(frame,'Before '+move);
+          if(event==='throwRelease' || e.name==='throw' || pummels[id]){
+            contact=grip;
+            if(grip)markEscape(grip.frame,'Before '+grip.move);
+            if(event==='throwRelease')grip=null;
+          }else{
+            grip=null;
+            contact=who?{frame,slot,owner:who.index,kind:'hit',move,from:lifeStart}:null;
+          }
+        }
       }else if(event==='launchDI' && e.f.index===slot){
         launch={frame,slot,raw:e.raw};
       }else if(event==='ko'){
@@ -62,15 +81,17 @@
       knockedOut=false;
       player.step();
       if(knockedOut){
-        if(player.frame<player.length){escape=null;launch=null;lifeStart=player.frame;}
+        if(player.frame<player.length){escape=null;launch=null;contact=grip=null;lifeStart=player.frame;}
       }else if(dog && (dog.ground>=0 || dog.ledge || dog.grip)){
         launch=null;
+        if(!dog.grip && !dog.stun && !dog.reaction && !dog.tumble && !dog.impactLag)contact=grip=null;
       }else if(planted && dog.ground<0 && !dog.ledge && !dog.tumble && !dog.stun && !dog.grip && !dog.reaction){
-        markEscape(player.frame,'Before leaving the stage');
+        markEscape(player.frame,'Before leaving the stage');contact=grip=null;
       }
     }
     // A solo CPU has no recorded stick to substitute. Both seats of a two-player tape do.
     return {marks:follow?follow.marks:list.slice(-4),launch:knockedOut && (slot===0 || player.battle.mode==='local') ? launch : null,
+      contact:knockedOut && (slot===0 || player.battle.mode==='local')?contact:null,
       escape:escape || {frame:Math.max(lifeStart,player.length-90),label:'Before the knockout'}};
   }
   const moments=tape=>analyze(tape).marks;
@@ -169,6 +190,107 @@
     panel.ontoggle=()=>{if(panel.isConnected && panel.open){jump(launch.frame-1);compare(selected);}};
     pad.forEach((b,i)=>b.onclick=()=>compare(i));
     panel.querySelector('[data-fly]').onclick=()=>practice(launch.frame-1,launch.slot);
+  }
+  function defenseChoices(dog) {
+    return dog.ground>=0
+      ? [['guard','Hold Shield'],['spot','Spot-dodge'],['jump','Jump'],['attack','Tap Attack']]
+      : [['guard','Air dodge'],['jump','Jump'],['attack','Tap Attack']];
+  }
+  function defenseInput(action,tick) {
+    if(action==='guard')return {...idleInput,shield:true,tapped:tick===0?{shield:true}:undefined};
+    if(action==='jump')return {...idleInput,jump:true,tapped:tick===0?{jump:true}:undefined};
+    if(tick>0)return idleInput;
+    if(action==='spot')return {...idleInput,y:1,shield:true,tapped:{shield:true}};
+    return {...idleInput,attack:true,tapped:{attack:true}};
+  }
+  function defenseReply(tape,contact,lead,action='recorded',emit=()=>{}) {
+    const start=Math.max(contact.from,contact.frame-lead),end=Math.min(tape.length,contact.frame+18);
+    const slot=contact.slot,events=[];
+    let player;
+    function observe(name,e){
+      emit(name,e);
+      const frame=player.frame+1;
+      if(name==='grabCatch')events.push({frame,text:e.f.stats.name+' caught '+e.target.stats.name+' with '+moveName(e.moveId,'Grab')});
+      if(name==='hit')events.push({frame,text:e.owner.stats.name+' hit '+e.f.stats.name+' with '+moveName(e.moveId,e.name)});
+      if(name==='block')events.push({frame,text:e.f.stats.name+' blocked '+moveName(e.moveId,e.attackName)});
+      if(name==='parry')events.push({frame,text:e.f.stats.name+' parried'});
+      if(name==='ko')events.push({frame,text:e.f.stats.name+' lost a stock'});
+    }
+    player=tape.playback(start,observe,action==='recorded'?null:slot);
+    return {player,start,end,events,step(){
+      if(player.frame>=end || player.battle.end!==null)return false;
+      return player.step(action==='recorded'?undefined:defenseInput(action,player.frame-start));
+    }};
+  }
+  function defensePanel(nav,tape,contact,jump,practice,signal) {
+    const panel=document.createElement('details');
+    panel.id='clip-defense';
+    panel.innerHTML='<summary>Defend the '+contact.kind+' · '+contact.move+'</summary>'+
+      '<p class="defense-prompt"></p><div class="defense-timing" role="group" aria-label="Start before contact"></div>'+
+      '<div class="defense-choices" role="group" aria-label="Defensive reply"></div>'+
+      '<canvas width="512" height="288" role="img" aria-label="Preview of the selected reply"></canvas>'+
+      '<p class="defense-result" role="status"></p><div class="dialog-actions">'+
+      '<button type="button" class="utility" data-watch-reply>Watch at half speed</button>'+
+      '<button type="button" class="primary" data-play-defense>Try it myself</button></div>';
+    nav.before(panel);
+    const timing=panel.querySelector('.defense-timing'),choices=panel.querySelector('.defense-choices');
+    const canvas=panel.querySelector('canvas'),info=panel.querySelector('.defense-result');
+    const timings=[...new Set([3,8,15].map(n=>Math.min(n,contact.frame-contact.from)))];
+    let lead=timings[Math.min(1,timings.length-1)],action='recorded',start=0,animation=0;
+    function stop(){cancelAnimationFrame(animation);animation=0;}
+    function button(root,text,key,value,select){
+      const b=document.createElement('button');b.type='button';b.className='utility';
+      b.textContent=text;b.dataset[key]=value;b.onclick=select;root.append(b);
+    }
+    function preview(animate){
+      stop();
+      const view=new window.DogFightView.FightView();view.shakeEnabled=false;
+      const reply=defenseReply(tape,contact,lead,action,(name,e)=>view.event(name,e));
+      const {player}=reply;
+      function draw(dt){view.draw(canvas,player.battle,dt,player.battle.time);}
+      function report(){
+        info.textContent=reply.events.length?reply.events.slice(0,3).map(e=>e.text+' · frame '+e.frame).join('. '):
+          'No contact through frame '+player.frame+'.';
+      }
+      if(!animate){while(reply.step()){}draw(0);report();return;}
+      info.textContent='Playing from frame '+reply.start+'.';
+      draw(0);let last=null,carry=0;
+      function tick(now){
+        if(!panel.open || !panel.isConnected || signal.aborted)return;
+        if(last!==null)carry+=Math.min(now-last,100)*.03;
+        last=now;let steps=0;
+        while(carry>=1 && reply.step()){carry--;steps++;}
+        if(steps)draw(steps/60);
+        if(player.frame>=reply.end || player.battle.end!==null){report();return;}
+        animation=requestAnimationFrame(tick);
+      }
+      animation=requestAnimationFrame(tick);
+    }
+    function show(){
+      start=contact.frame-lead;
+      const battle=tape.playback(start).battle,defender=battle.dogs[contact.slot],attacker=battle.dogs[contact.owner];
+      panel.querySelector('.defense-prompt').textContent=attacker.stats.name+(contact.kind==='grab'?' caught ':' hit ')+defender.stats.name+
+        ' with '+contact.move+' on frame '+contact.frame+'. Try a reply as '+defender.stats.name+'.';
+      jump(start);
+      for(const b of timing.children)b.setAttribute('aria-pressed',String(Number(b.dataset.lead)===lead));
+      const options=[['recorded','Recorded'],...defenseChoices(defender)];
+      if(!options.some(([key])=>key===action))action='recorded';
+      choices.replaceChildren();
+      for(const [key,label] of options){
+        button(choices,label,'reply',key,()=>{
+          action=key;
+          for(const b of choices.children)b.setAttribute('aria-pressed',String(b.dataset.reply===key));
+          preview(false);
+        });
+        choices.lastElementChild.setAttribute('aria-pressed',String(action===key));
+      }
+      preview(false);
+    }
+    for(const frames of timings)button(timing,frames+' frames before','lead',String(frames),()=>{lead=frames;show();});
+    panel.ontoggle=()=>panel.open && panel.isConnected?show():stop();
+    panel.querySelector('[data-play-defense]').onclick=()=>practice(start,contact.slot);
+    panel.querySelector('[data-watch-reply]').onclick=()=>preview(true);
+    signal.addEventListener('abort',stop,{once:true});
   }
   function inputFrame(tape,frame,slot){
     const input=controlsAt(tape,frame,slot),previous=frame?controlsAt(tape,frame-1,slot):input;
@@ -272,8 +394,9 @@
   }
   function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
-    const {marks,escape,launch}=analyze(tape,slot,follow);
+    const {marks,escape,launch,contact}=analyze(tape,slot,follow);
     escapeReady?.(escape);
+    if(contact && practiceLaunch)defensePanel(nav,tape,contact,jump,practiceLaunch,signal);
     if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch);
     for(const {frame,label} of marks){
       const b=document.createElement('button');b.type='button';b.className='utility';
@@ -308,5 +431,5 @@
     };
     return inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump});
   }
-  window.FinishTools={install,moments,analyze,inputFrame,launchFlight,returnTrace,returnComparison};
+  window.FinishTools={install,moments,analyze,inputFrame,launchFlight,defenseReply,returnTrace,returnComparison};
 })();
