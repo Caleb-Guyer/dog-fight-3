@@ -130,6 +130,22 @@ async function run(browser,phone){
     await page.clock.runFor(900);
     if(phone)assert.match(await page.locator('#match-clock').textContent(),/SD/);
     else assert(await page.locator('[data-do=match-card]').isVisible());
+    await page.goto('http://127.0.0.1:8080/?clock-read#solo/final-count/chase');
+    const lives=()=>page.locator('#hud .lives').allTextContents();
+    assert.deepEqual(await lives(),['-1 point','0 points']);
+    await page.clock.runFor(13800);
+    assert.match(await page.locator('#dialog-body').innerText(),/Rival played for center stage/);
+    await press('[data-do=match-card]');
+    const row=title=>page.locator('.card-stats tr').filter({hasText:title}).locator('td').allTextContents();
+    assert.deepEqual(await row('Opening points'),['-1','0']);assert.deepEqual(await row('Falls'),['0','0']);
+    await press('[data-do=card-back]');await press('[data-do=swap-clock]');
+    assert.deepEqual(await lives(),['0 points','-1 point']);
+    await page.clock.runFor(3800);await press('#pause');
+    assert.match(await page.locator('#dialog-body').innerText(),/straight in on foot/);
+    await press('[data-do=resume]');await page.clock.runFor(10600);
+    await press('[data-do=match-card]');
+    assert.deepEqual(await row('Opening points'),['0','-1']);
+    assert.deepEqual(await row('Regulation points'),['-1','0']);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

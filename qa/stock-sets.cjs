@@ -490,7 +490,14 @@ async function timedBattles(browser,phone){
   await local.press('[data-mode=local]');
   await local.press('#rules-label');await local.press('[data-scoring=time]');
   assert(await local.page.locator('[data-do=final-count]').isVisible());
+  assert(await local.page.locator('[data-opening=defend]').isVisible());
+  assert(await local.page.locator('[data-opening=chase]').isVisible());
   assert.equal(await local.page.locator('[data-minutes="0"]').count(),0);
+  await local.press('[data-opening=chase]');
+  await expectHud(local,['-1 point','0 points']);
+  assert.equal(await local.page.locator('#match-clock').textContent(),'0:10');
+  await local.page.goto(root+'?after-clock-opening#solo');await observe(local.page);
+  await local.press('[data-mode=local]');await local.press('#rules-label');
   await local.press('[data-minutes="1"]');
   await local.page.reload();await observe(local.page);
   assert.match(await local.page.locator('#rules-label').innerText(),/Time Battle · 1 min/);

@@ -4,6 +4,7 @@ global.window = {};
 require('../docs/engine.js');
 require('../docs/online.js');
 require('../docs/fight-records.js');
+require('../docs/match-review.js');
 const {Battle,idleInput,seededRandom} = window.DogFight;
 const settings = {mode:'local',p1:'pip',p2:'brisket',stage:'picnic',fetch:false,timeBattle:true,minutes:1};
 const create = (overrides={}) => new Battle({...settings,...overrides},undefined,seededRandom(17));
@@ -21,15 +22,63 @@ test('the same ten-second opening can end in a win, a loss or Sudden Death again
     assert.equal(w.clockFrames,600);assert.deepEqual(w.dogs.map(f=>f.damage),[135,135]);
     assert.deepEqual(w.matchCard.points,[0,0]);assert.equal(w.matchCard.losses.length,0);
     for(let i=0;i<600;i++){
-      const [p,cpu]=w.dogs, smash=i===0 && plan!=='wait',defend=plan==='defend' && i>43;
-      w.step(1/60,{...idleInput,smash,smashX:smash?1:0,x:defend && i<67?-1:0,
-        shield:defend && i>=67 && Math.abs(cpu.x-p.x)<140},idleInput);
+      const [p,cpu]=w.dogs, smash=i===0 && plan!=='wait',defend=plan==='defend' && i>=30, gap=cpu.x-p.x;
+      const x=defend && i<50?-1:defend && Math.abs(gap)<145?-Math.sign(gap):0;
+      w.step(1/60,{...idleInput,smash,smashX:smash?1:0,x},idleInput);
     }
     assert.deepEqual(beats,[5,4,3,2,1]);
     if(plan==='stop'){assert.equal(w.suddenDeath.cause,'time');assert.deepEqual(w.matchCard.points,[0,0]);}
     else{assert.equal(w.end,plan==='defend'?0:1);assert.equal(w.endReason,'time');}
   }
   assert.equal(create().clockFrames,3600);assert.equal(create({...bellConfig,timeBattle:false}).clockFrames,3600);
+});
+
+test('with the same positions and damage each Rival dog holds center ahead and closes on foot behind',()=>{
+  for(const kind of Object.keys(fighters)){
+    const start=role=>create({...bellConfig,mode:'solo',p2:kind,finalCount:role});
+    const holding=start('chase'),chasing=start('defend');
+    assert.deepEqual(holding.dogs,chasing.dogs);
+    for(let n=0;n<120;n++){step(holding);step(chasing);}
+    assert(holding.bot.heldCenter && !holding.bot.chasedLead);
+    assert(chasing.bot.chasedLead && !chasing.bot.heldCenter);
+    assert(Math.abs(holding.dogs[1].x-600)<45);
+    assert.equal(holding.matchCard.players[1].hits,0);
+    assert(chasing.matchCard.players[1].hits>0,kind+' reached and hit a stationary player');
+  }
+});
+
+test('a playable comeback changes the leader, survives the bell and reproduces from the first frame of the film',()=>{
+  const w=create({...bellConfig,mode:'solo',finalCount:'chase'}),tape=new FinishTape(true);
+  assert.deepEqual(w.matchCard.openingPoints,[-1,0]);assert.equal(w.matchCard.losses.length,0);
+  for(let i=0;i<600;i++){
+    const [p,cpu]=w.dogs,scored=w.matchCard.losses.some(l=>l.slot===1);
+    const x=scored?(p.x<470?1:p.x>740?-1:0):i<15 || i===21?1:0;
+    const input={...idleInput,x,special:i===21,shield:scored && Math.abs(cpu.x-p.x)<140};
+    tape.record(w,input,idleInput);w.step(1/60,input,idleInput);
+  }
+  assert.equal(w.end,0);assert.equal(w.endReason,'time');assert.deepEqual(w.matchCard.points,[0,-1]);
+  assert(w.bot.heldCenter && w.bot.chasedLead);
+  assert.deepEqual(w.matchCard.losses.map(l=>l.lastHit.id),['brisketCharge']);
+  const film=new window.MatchReview.MatchFilm(tape.fullMatch()), replay=film.playback(0);
+  assert.deepEqual(replay.battle.matchCard.points,[-1,0]);while(replay.step()){}
+  assert.deepEqual(replay.battle.matchCard,w.matchCard);assert.deepEqual(replay.battle.bot,w.bot);
+  assert.equal(film.playback(600).battle.end,0);
+});
+
+test('clock positioning respects stock counts, regulation time, difficulty and older replay checkpoints',()=>{
+  const make=(cpuLevel='rival')=>create({...bellConfig,mode:'solo',timeBattle:false,finalCount:false,cpuLevel});
+  for(const situation of ['ahead','behind','tied','early','arcade','old']){
+    const w=make(situation==='arcade'?'arcade':'rival');
+    w.clockFrames=situation==='early'?730:600;
+    if(situation!=='tied')w.dogs[situation==='behind'?1:0].stocks--;
+    if(situation==='old'){
+      const old=make();delete old.bot.clockAware;old.dogs[0].stocks--;old.clockFrames=600;
+      w.copyFightFrom(old);
+    }
+    for(let n=0;n<35;n++)step(w);
+    assert.equal(!!w.bot.heldCenter,situation==='ahead');
+    assert.equal(!!w.bot.chasedLead,situation==='behind');
+  }
 });
 
 test('late remote inputs confirm each clock bell once on both peers',()=>{
