@@ -3,8 +3,67 @@ const assert=require('node:assert/strict');
 global.window={};
 require('../docs/engine.js');
 require('../docs/fight-school.js');
+require('../docs/lesson-guide.js');
 const {Battle,idleInput}=window.DogFight;
 const {Lesson,lessons}=window.FightSchool;
+function guided(id){
+  let lesson;
+  const events=[],w=new Battle({mode:'local',p1:'pip',p2:'brisket',form:'original',fetch:false,minutes:0,
+    stage:id==='platform'?'picnic':'nightmail'},(name,e)=>{lesson?.contact(name,e);events.push(name);});
+  lesson=new Lesson(lessons.findIndex(l=>l.id===id),w);
+  const guide=lesson.guide=new window.LessonGuide.Guide(id,w.terrain);
+  const tick=(input={})=>{
+    const p={...idleInput,...input};
+    if(lesson.canStep(p)){w.step(1/60,p,lesson.partner(p));lesson.afterStep(w);return true;}
+    return false;
+  };
+  return {w,lesson,guide,events,tick};
+}
+test('every core lesson waits for physical inputs, then clears through the actual battle with either ground Attack layout',()=>{
+  for(const {id} of lessons)for(const quickAttack of [false,true]){
+    const {w,lesson,guide:g,tick}=guided(id),start=w.dogs[0].x;
+    for(let i=0;i<100;i++)assert.equal(tick({x:-1,special:true}),false,id);
+    assert.equal(w.matchFrames,0);assert.equal(w.dogs[0].x,start);assert(!lesson.done);
+    for(let n=0;n<240 && !lesson.done;n++){
+      const p={quickAttack};
+      if(!g.running || g.step.hold)for(const k of g.step.keys){
+        if(k==='right')p.x=1;else if(k==='up')p.y=-1;else if(k==='down')p.y=1;
+        else if(k!=='center' && k[0]!=='!')p[k]=true;
+      }
+      tick(p);
+    }
+    assert(lesson.done && !lesson.missed,id);assert(w.matchFrames>0);
+    if(id==='stock')assert.equal(w.dogs[1].stocks,2);
+  }
+});
+test('Pip stays airborne at the second jump and keeps the exact charge until the requested release',()=>{
+  const p=guided('platform');
+  for(let i=0;i<200;i++)p.tick({jump:true});
+  assert.equal(p.guide.index,1);assert.equal(p.w.matchFrames,16);
+  for(let i=0;i<200;i++)p.tick();
+  assert.equal(p.guide.index,2);assert.equal(p.w.matchFrames,20);
+  assert(p.w.dogs[0].ground<0);p.tick({jump:true});
+  for(let i=0;i<80;i++)p.tick();assert(p.lesson.done);
+  const r=guided('stock');
+  for(let i=0;i<120;i++)r.tick({x:1,smash:true,y:1});
+  assert.equal(r.w.matchFrames,0);
+  for(let i=0;i<120;i++)r.tick({x:1,smash:true});
+  assert.equal(r.guide.index,1);const charge=r.w.dogs[0].charge;
+  assert(charge>=.48 && charge<.55);
+  for(let i=0;i<120;i++)r.tick({x:1,smash:true});
+  assert.equal(r.w.dogs[0].charge,charge);
+  for(let i=0;i<100;i++)r.tick();
+  assert(r.events.includes('hit'));assert(r.events.includes('ko'));assert(r.lesson.done);
+});
+test('a partial chord or a competing button leaves both fighters and the clock in place',()=>{
+  const {w,guide,tick}=guided('air'),[p,r]=w.dogs;
+  for(let i=0;i<60;i++)tick({jump:true});
+  assert.equal(guide.mask,1);assert.equal(w.matchFrames,0);assert(p.ground>=0);
+  tick({jump:true,attack:true,special:true});assert.equal(guide.extra,'special');assert.equal(w.matchFrames,0);
+  tick({jump:true,attack:true});assert.equal(w.matchFrames,1);
+  for(let i=0;i<50;i++)tick();
+  assert(r.damage>0);
+});
 
 function cornerFight(){
   const world=new Battle({mode:'solo',stage:'picnic',p1:'pip',p2:'brisket',fetch:false,minutes:7});

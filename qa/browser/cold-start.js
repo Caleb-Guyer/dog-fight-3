@@ -38,6 +38,7 @@ async function sample(browser,url,candidate){
         return result;
       };
       const scripts=performance.getEntriesByType('resource').filter(r=>new URL(r.name).pathname.endsWith('.js'));
+      if(candidate && scripts.some(r=>/\/(score|lesson-guide)\.js$/.test(new URL(r.name).pathname)))throw Error('Optional music and input coaching loaded before first input');
       return {hash,png:candidate?null:canvas.toDataURL('image/png').split(',')[1],ready:performance.getEntriesByType('navigation')[0].domContentLoadedEventEnd,
         scripts:scripts.length,js:scripts.reduce((n,r)=>n+r.decodedBodySize,0),
         payload:performance.getEntriesByType('resource').reduce((n,r)=>n+r.encodedBodySize,0)+performance.getEntriesByType('navigation')[0].encodedBodySize};
@@ -136,7 +137,7 @@ async function recovery(browser,url){
     const result=Object.fromEntries(Object.entries(rows).map(([build,r])=>[build,Object.fromEntries(
       ['ready','move','scripts','js','payload'].map(k=>[k,median(r,k)]))]));
     console.log('::notice title=Cold start::'+JSON.stringify(result));
-    assert.equal(result.old.scripts-result.new.scripts,7);
+    assert.equal(result.old.scripts-result.new.scripts,8);
     assert(result.old.payload-result.new.payload>35000);
     if(rows.old[0].hash!==rows.new[0].hash)console.log('Reference-title '+rows.old[0].png);
     assert.equal(rows.old[0].hash,rows.new[0].hash,'home cover pixels');

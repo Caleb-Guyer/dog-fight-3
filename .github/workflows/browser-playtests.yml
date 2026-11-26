@@ -209,6 +209,7 @@ jobs:
           trap 'kill "$game_pid" "$base_pid"' EXIT
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/winner-stays.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/first-fight.js
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/guided-school.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fighter-lessons.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/layouts.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/coats.js
