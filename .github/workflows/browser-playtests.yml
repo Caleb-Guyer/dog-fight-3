@@ -149,6 +149,11 @@ jobs:
           ref: f70d30b411e5a321a2ffdd9278668f000f687cba
           path: prior-release
           persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 56d95af779ec563a8f6b04244e00592193077de7
+          path: before-first-press
+          persist-credentials: false
       - name: Compare first movement on a cold phone visit and play through a mission load retry
         run: |
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1

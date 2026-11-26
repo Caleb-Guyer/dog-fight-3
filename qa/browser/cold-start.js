@@ -164,6 +164,7 @@ async function recovery(browser,url){
 }
 (async()=>{
   const files=new Map();assets('docs','/new',files);assets('previous/docs','/old',files);assets('prior-release/docs','/prior',files);
+  assets('before-first-press/docs','/before',files);
   const server=http.createServer((req,res)=>{
     const path=new URL(req.url,'http://localhost').pathname;
     const file=files.get(path.endsWith('/')?path+'index.html':path);
@@ -191,5 +192,16 @@ async function recovery(browser,url){
     assert.equal(rows.old[0].hash,rows.new[0].hash,'home cover pixels');
     await recovery(browser,origin+'/new/');
     await optionalModes(browser,origin+'/new/');
+    const {firstPress,timeFirstPress}=require('./first-press.js');
+    await firstPress(browser,origin+'/new/');
+    const timings={before:[],new:[]};
+    for(const order of [['before','new'],['new','before'],['before','new']]){
+      for(const build of order)timings[build].push(await timeFirstPress(browser,origin+'/'+build+'/'));
+    }
+    const first=Object.fromEntries(Object.entries(timings).map(([build,r])=>[build,
+      Object.fromEntries(['press','ready','move'].map(k=>[k,median(r,k)]))]));
+    assert(timings.before.every(r=>r.press>=r.ready),'Previous release offered Play tutorial at startup completion');
+    assert(timings.new.every(r=>r.press>0 && r.move>=r.press && r.ready>0));
+    console.log('::notice title=First press::'+JSON.stringify(first));
   }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});
