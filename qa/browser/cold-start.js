@@ -17,7 +17,7 @@ function assets(directory,prefix,files){
 }
 const deferred=['dispatch-actors','dispatch-bridge','dispatch-covers','dispatch-film','dispatch-run','dispatch-view','yard-art'];
 async function sample(browser,url,build){
-  const candidate=build==='new', modern=build!=='old';
+  const candidate=build==='new', modern=build!=='old', recent=candidate||build==='shipping';
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   try{
     const page=await context.newPage(), cdp=await context.newCDPSession(page),errors=[];
@@ -57,7 +57,7 @@ async function sample(browser,url,build){
     assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.ttf')),!modern);
     if(modern)assert(!resources.some(p=>p.endsWith('/online.css')),'Online room styling stays out of first launch');
     for(const name of deferred)assert.equal(resources.some(p=>p.endsWith('/'+name+'.js')),!modern,name);
-    assert.equal(resources.some(p=>p.endsWith('/online.js')),!candidate,'rollback transport');
+    assert.equal(resources.some(p=>p.endsWith('/online.js')),!recent,'rollback transport');
     assert(!resources.some(p=>p.endsWith('/practice-feedback.js')),'Fight School loads independently of advanced training readouts');
     assert.deepEqual(errors,[]);
     return {...boot,move:await page.evaluate(()=>window.walkedAt)};
@@ -168,6 +168,7 @@ async function recovery(browser,url){
 (async()=>{
   const files=new Map();assets('docs','/new',files);assets('previous/docs','/old',files);assets('prior-release/docs','/prior',files);
   assets('before-first-press/docs','/before',files);
+  assets('before-runtime/docs','/shipping',files);
   const server=http.createServer((req,res)=>{
     const path=new URL(req.url,'http://localhost').pathname;
     const file=files.get(path.endsWith('/')?path+'index.html':path);
@@ -178,8 +179,8 @@ async function recovery(browser,url){
   const origin='http://127.0.0.1:'+server.address().port;
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
   try{
-    const rows={old:[],prior:[],new:[]};
-    for(const order of [['old','prior','new'],['prior','new','old'],['new','old','prior']]){
+    const rows={old:[],prior:[],shipping:[],new:[]};
+    for(const order of [['old','prior','shipping','new'],['new','shipping','old','prior'],['prior','old','shipping','new']]){
       for(const build of order)rows[build].push(await sample(browser,origin+'/'+build+'/',build));
     }
     const median=(rows,k)=>Math.round(rows.map(r=>r[k]).sort((a,b)=>a-b)[1]);
@@ -191,14 +192,17 @@ async function recovery(browser,url){
     assert(result.old.payload-result.new.payload>55000);
     assert(result.prior.payload-result.new.payload>24000);
     assert(result.prior.js-result.new.js>100000);
+    assert.equal(result.shipping.scripts,result.new.scripts);
+    assert(result.shipping.js-result.new.js>500000,'Reduce eager JavaScript by at least 500 kB');
+    assert(result.shipping.payload-result.new.payload>75000,'Save at least 75 kB on a cold compressed visit');
     if(rows.old[0].hash!==rows.new[0].hash)console.log('Reference-title '+rows.old[0].png);
     assert.equal(rows.old[0].hash,rows.new[0].hash,'home cover pixels');
     await recovery(browser,origin+'/new/');
     await optionalModes(browser,origin+'/new/');
     const {firstPress,timeFirstPress}=require('./first-press.js');
     await firstPress(browser,origin+'/new/');
-    const timings={before:[],new:[]};
-    for(const order of [['before','new'],['new','before'],['before','new']]){
+    const timings={before:[],shipping:[],new:[]};
+    for(const order of [['before','shipping','new'],['new','before','shipping'],['shipping','new','before']]){
       for(const build of order)timings[build].push(await timeFirstPress(browser,origin+'/'+build+'/'));
     }
     const first=Object.fromEntries(Object.entries(timings).map(([build,r])=>[build,

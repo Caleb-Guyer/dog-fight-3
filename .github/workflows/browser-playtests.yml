@@ -154,6 +154,16 @@ jobs:
           ref: 56d95af779ec563a8f6b04244e00592193077de7
           path: before-first-press
           persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: 136623803ae037ef0a2c7f1f9f887738ef2a2e96
+          path: before-runtime
+          persist-credentials: false
+      - name: Rebuild the browser scripts and compare a mixed-version rollback replay
+        run: |
+          npm ci --prefix tools --no-audit --no-fund --ignore-scripts
+          npm run check --prefix tools
+          node --test qa/runtime-parity.cjs
       - name: Compare first movement on a cold phone visit and play through a mission load retry
         run: |
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
