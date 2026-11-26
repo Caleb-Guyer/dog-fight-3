@@ -517,7 +517,7 @@
     } else if (name === 'meteorBounce') {
       tone(143, 43, 0.12, 0, 'triangle', 0.15);
       tone(296, 130, 0.055, 0.012, 'square', 0.035);
-    } else if (name === 'footstool') {
+    } else if (name === 'footstool' || name === 'pogoShield') {
       tone(165, 95, .06, 0, 'triangle', .08);
       tone(310, 620, .09, .025, 'triangle', .06);
     } else if (name === 'tumbleWiggle') {
@@ -1128,6 +1128,7 @@
     side: 'Side + Special',
     up: 'Up + Special',
     down: 'Down + Special',
+    'down-air': 'Down + Attack in midair',
   };
   function showMoves(kind, section='air', fromPause=dialogType==='moves'?backToPause:dialogType==='pause',focusSide) {
     if(!window.MoveGuide)return waitForDispatch(fighters[kind].name+' moves',()=>loadDispatch('MoveGuide'),
@@ -1136,12 +1137,12 @@
     showDialog('moves',fighters[kind].name+' moves',window.MoveGuide.sheet(kind,section,{keyFor,padFor,strikeKeys,specialInputs}));
     for(const canvas of document.querySelectorAll('[data-direction]'))
       drawMoveThumbnail(canvas,kind,canvas.dataset.direction,canvas.dataset.category);
-    if(focusSide)document.querySelector('[data-watch-special="'+focusSide+'"]').focus();
+    if(focusSide)document.querySelector('[data-watch-move="'+focusSide+'"]').focus();
   }
   $('lobby-moves').onclick = () => showMoves(settings[editing ? 'p2' : 'p1']);
   $('training-moves').onclick = () => showMoves(world.dogs[world.trainingPlayerSlot].kind);
   function backToMoveCard(source){
-    showMoves(source.kind,'specials',source.paused,source.side);
+    showMoves(source.kind,source.side==='down-air'?'air':'specials',source.paused,source.side);
   }
   function showSpecialPreview(source){
     const {kind,side}=source,school=window.FighterSchool;
@@ -1149,17 +1150,10 @@
       ()=>Promise.all([loadDispatch('FighterSchool'),loadDispatch('MoveGuide')]),
       ()=>showSpecialPreview(source),()=>backToMoveCard(source));
     const move=school.study(kind,side),canPractice=page==='home' || page==='lobby';
-    showDialog('special-preview',move.title,'<p class="clip-caption">'+fighters[kind].name+' · '+specialInputs[side]+'</p>'+
-      '<canvas id="move-arena" width="720" height="405" role="img" aria-label="'+fighters[kind].name+' demonstrates '+move.title+'"></canvas>'+
-      '<div class="clip-status"><strong id="move-cue"></strong><output id="move-frame"></output></div><p id="move-caption"></p>'+
-      '<div class="dialog-actions"><button class="utility" id="move-play">Play</button><button class="utility" id="move-step">Step 1 frame</button>'+
-      '<button class="utility" id="move-speed">Speed · ½×</button><button class="utility" id="move-restart">Restart</button></div>'+
-      '<div class="dialog-actions">'+(canPractice?'<button class="primary" id="move-try">Try this move</button>':'')+
-      '<button class="utility" id="move-back">Back to moves</button></div>');
     const coat=page==='lobby' && settings[editing?'p2':'p1']===kind?lobbyCoats[editing?1:0]:
       page==='match' && world.dogs.some(d=>d.kind===kind)?world.coatFor(world.dogs.findIndex(d=>d.kind===kind)):savedCoat(0,kind);
     movePreview=school.preview({kind,side,coat,root:$('dialog-body'),shake:settings.shake,reduced:reducedReplays.matches,
-      device:()=>promptDevice(getPads()),keyFor,padFor});
+      device:()=>promptDevice(getPads()),keyFor,padFor,showDialog,title:move.title,input:specialInputs[side],canPractice});
     $('move-back').onclick=()=>backToMoveCard(source);
     if(canPractice && school.cleared(storage,kind+'-'+move.index))$('move-try').textContent='Practice again · ✓';
     if(canPractice)$('move-try').onclick=()=>{
@@ -2989,9 +2983,9 @@
       story(key, () => showRoute(()=>showReels(key)), true);
       return;
     }
-    const watch=e.target.closest('[data-watch-special]');
+    const watch=e.target.closest('[data-watch-move]');
     if(watch)return showSpecialPreview({kind:document.querySelector('[data-guide-kind][aria-pressed=true]').dataset.guideKind,
-      side:watch.dataset.watchSpecial,page,paused:backToPause});
+      side:watch.dataset.watchMove,page,paused:backToPause});
     const guide = e.target.closest('[data-guide-kind]');
     if (guide) {
       const kind = guide.dataset.guideKind;
@@ -5473,7 +5467,7 @@
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
     ComboLab:'combo-lab.js?v=hit-confirm-1', FinishTools:'finish-tools.js?v=instant-replay-1',
-    MoveGuide:'move-guide.js?v=descriptions-1', FighterSchool:'fighter-lessons.js?v=sparring-1',
+    MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=down-air-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=bell-wave-1',
@@ -7784,7 +7778,7 @@
     const hash = location.hash;
     const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
     const [,arena,form] = hash.split('/');
-    if(Object.hasOwn(fighters,arena) && ['neutral','side','up','down'].includes(form) && hash==='#moves/'+arena+'/'+form){
+    if(Object.hasOwn(fighters,arena) && Object.hasOwn(specialInputs,form) && hash==='#moves/'+arena+'/'+form){
       showHome(false);showSpecialPreview({kind:arena,side:form,page:'home',paused:false});
     }else if(/^#(solo|local)\/matchup(?:\/|$)/.test(hash)){
       showHome(false);showMatchup(hash,'shared');
