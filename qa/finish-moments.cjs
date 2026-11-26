@@ -96,6 +96,36 @@ for(const [action,label,event] of [['jab','Pip · Quick Paw','hit'],['throw','Pi
 test('a hit before the rolling clip starts has no jump button',()=>{
   assert.deepEqual(window.FinishTools.moments(play('jab',305)),[]);
 });
+for(const [kind,label] of [['jab','Attack clash'],['grab','Grab clash'],['air','Traded hits']]){
+  test('instant replay finds the '+kind+' exchange from real inputs in either facing, including after a block rolls over',()=>{
+    for(const before of [0,245])for(const dir of [-1,1]){
+      const w=new Battle({mode:'local',p1:'pip',p2:'pip',stage:'picnic',fetch:false},undefined,seededRandom(42));
+      const tape=new FinishTape(true),events=[];
+      w.dogs.forEach((f,i)=>Object.assign(f,{x:480+i*dir*(kind==='jab'?100:39),face:i?-dir:dir,ground:0,y:w.terrain[0].y}));
+      w.emit=(name,e)=>{if(['attackClash','hit','grabClash'].includes(name))events.push({at:tape.count,name,slot:e.f.index});};
+      for(let n=-before;n<90;n++){
+        const a={...idleInput,attack:(kind==='jab' && n===44) || (kind==='air' && n===51),
+          grab:kind==='grab' && n===44,jump:kind==='air' && n===43,quickAttack:true};
+        tape.record(w,a,a);w.step(1/60,a,a);
+      }
+      const [mark,...rest]=window.FinishTools.analyze(tape,null,null,true).marks;
+      assert.equal(rest.length,0);assert.equal(mark.label,label);
+      assert.equal(mark.frame,events[0].at-(tape.count-tape.length));assert(mark.frame>30);
+      if(kind==='air'){
+        assert.equal(events.length,2);assert.equal(events[0].at,events[1].at);
+        assert.match(mark.detail,/P1 Pip landed Scramble for 5.1%/);assert.match(mark.detail,/P2 Pip landed Scramble for 5.1%/);
+      }
+      const original=structuredClone(w.matchCard);
+      for(const slot of [0,1]){
+        const attempt=tape.playback(mark.frame-30,undefined,slot);
+        while(attempt.step({...idleInput,shield:true})){}
+        assert.equal(attempt.battle.dogs[slot].damage,0);
+        assert.deepEqual(w.matchCard,original);
+        assert.deepEqual(tape.playback(tape.length).battle.matchCard,original);
+      }
+    }
+  });
+}
 
 test('an early stock can be saved from its actual stage departure after the fight has moved on',()=>{
   const w=new Battle({mode:'local',stage:'picnic',p1:'pip',p2:'clover',stockCount:5,fetch:false},undefined,seededRandom(9));

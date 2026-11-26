@@ -18,12 +18,25 @@ async function match(browser,device){
       const el=page.locator(selector);await el.waitFor();
       if(touch)return el.tap();
       if(!pad)return el.click();
+      if(selector==='#pause'){
+        for(const pressed of [true,false]){
+          await page.evaluate(v=>Object.assign(pad.buttons[9],{pressed:v,value:Number(v)}),pressed);
+          await page.clock.runFor(48);
+        }
+        return;
+      }
       await el.focus();
       await page.evaluate(()=>Object.assign(pad.buttons[0],{pressed:true,value:1}));await page.clock.runFor(48);
       await page.evaluate(()=>Object.assign(pad.buttons[0],{pressed:false,value:0}));await page.clock.runFor(48);
     };
     await page.goto(root+'#solo');await choose('[data-mode=local]');await choose('#start');
     await page.clock.runFor(7800);
+    await choose('#pause');await choose('[data-do=instant-replay]');
+    assert.equal(await page.locator('#clip-seek').getAttribute('max'),'240');
+    await choose('#clip-exchange');assert.equal(await page.locator('[data-finish-slot]').count(),2);
+    await choose('#finish-picker-back');await choose('[data-do=clip-back]');
+    assert.equal(await page.locator('#dialog-title').textContent(),'Paused');
+    await choose('[data-do=resume]');
     const cdp=touch && await page.context().newCDPSession(page);
     const move=async(on,practice=false)=>{
       if(practice && pad)return page.evaluate(on=>{pad.axes[0]=on?-1:0;},on);
@@ -61,6 +74,43 @@ async function match(browser,device){
     await choose('[data-do=trial-replay]');assert.equal(await seek.inputValue(),savedFrame);
     await choose('#film-back');await page.waitForFunction(()=>document.activeElement.dataset.savedClip==='full');
     assert(await page.locator('#dialog').evaluate(node=>node.scrollWidth<=node.clientWidth+1));
+    await page.goto(root+'?instant#solo/shoulder-charge');
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(...args){
+        window.originalFight ||= this;
+        if(this===originalFight && window.resuming && !window.firstResumed)window.firstResumed=fingerprint();
+        return step.apply(this,args);
+      };
+      window.fingerprint=()=>JSON.stringify([originalFight.matchFrames,originalFight.clockFrames,originalFight.random.state,
+        originalFight.matchCard,originalFight.dogs.map(f=>[f.x,f.y,f.stocks,f.damage])]);
+    });
+    await choose('[data-do=resume]');await page.clock.runFor(420);await choose('#pause');
+    const frozen=await page.evaluate(()=>fingerprint());
+    await choose('[data-do=instant-replay]');
+    const shoulder='[data-clip-moment]:has-text("Shoulder Charge")';
+    await choose(shoulder);
+    const contact=await page.locator('#clip-seek').inputValue();
+    assert.match(await page.locator('#clip-retry p').textContent(),/P2 Brisket landed Shoulder Charge for 15%/);
+    await choose('#clip-retry button:first-child');
+    if(touch){
+      const rect=await page.locator('[data-touch=shield]').boundingBox();
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:rect.x+rect.width/2,y:rect.y+rect.height/2}]});
+    }else if(pad)await page.evaluate(()=>Object.assign(pad.buttons[4],{pressed:true,value:1}));
+    else await page.keyboard.down('l');
+    await page.clock.runFor(2200);
+    if(touch)await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    else if(pad)await page.evaluate(()=>Object.assign(pad.buttons[4],{pressed:false,value:0}));
+    else await page.keyboard.up('l');
+    const taken=page.getByRole('row',{name:/Damage taken/});
+    assert.deepEqual(await taken.locator('td').allTextContents(),['15%','0%'],device);
+    assert.equal(await page.evaluate(()=>fingerprint()),frozen);
+    await choose('[data-do=trial-replay]');assert.equal(await seek.inputValue(),contact);
+    await choose(shoulder);await choose('#clip-retry button:last-child');
+    assert.match(await page.locator('#match-mode').textContent(),/P2 Brisket/);
+    await page.clock.runFor(2400);await page.evaluate(()=>{window.resuming=true;});
+    await choose('[data-do=trial-results]');await page.clock.runFor(100);
+    assert.equal(await page.evaluate(()=>firstResumed),frozen);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
