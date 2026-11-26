@@ -22,7 +22,17 @@ async function story(browser,mobile){
   await visible('#route-stops button');
   assert.equal(await page.locator('#route-switch').isVisible(),false);
   await page.evaluate(key=>localStorage.setItem(key,JSON.stringify({version:2,started:true,complete:true,room:4,stamps:31,pending:'ending'})),yard);
-  await page.reload();await act('#dispatch-start');await act('#story-skip');
+  await page.reload();
+  if(mobile){await act('#dispatch-start');await act('#story-skip');}
+  else{
+    // The film may arrive after a keyboard player has chosen Skip.
+    let release;const held=new Promise(resolve=>{release=resolve;});
+    await page.route('**/film-ending.js*',async r=>{await held;await r.continue();},{times:1});
+    await act('#dispatch-start');await page.locator('#story-skip').focus();release();
+    await page.waitForFunction(()=>!document.querySelector('#story-next').disabled);
+    assert.equal(await page.evaluate(()=>document.activeElement.id),'story-skip');
+    await page.keyboard.press('Enter');
+  }
   await act('#next-chapter');
   assert.equal(await get('#route-runner-name'),'Clover');assert.equal(await page.locator('#route-stops button').count(),2);
   await act('#dispatch-start');

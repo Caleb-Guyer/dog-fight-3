@@ -50,6 +50,7 @@ async function sample(browser,url,candidate){
     const resources=await page.evaluate(()=>performance.getEntriesByType('resource').map(r=>new URL(r.name).pathname));
     assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.woff2')),candidate);
     assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.ttf')),!candidate);
+    if(candidate)assert(!resources.some(p=>p.endsWith('/online.css')),'Online room styling stays out of first launch');
     for(const name of deferred)assert.equal(resources.some(p=>p.endsWith('/'+name+'.js')),!candidate,name);
     assert.deepEqual(errors,[]);
     return {...boot,move:await page.evaluate(()=>window.walkedAt)};

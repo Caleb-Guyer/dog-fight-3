@@ -72,7 +72,42 @@ async function play(browser,device){
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
+async function timedOpening(browser,animated){
+  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+  try{
+    const cdp=await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});
+    // Same build and stage. Missing entrance art exercises the standard in-game fallback.
+    await page.route('**/fighter-entrances.js*',r=>animated?r.continue():r.abort());
+    await page.goto(root+'#solo');
+    await page.locator('[data-kind=noodle]').tap();
+    await page.locator('[data-index="1"]').tap();await page.locator('[data-kind=clover]').tap();
+    await page.evaluate(()=>{
+      const draw=DogFightView.FightView.prototype.draw;window.costs=[];window.finished=false;
+      DogFightView.FightView.prototype.draw=function(canvas,...args){
+        const active=!!this.entrance && canvas.id==='game',start=performance.now();
+        const result=draw.call(this,canvas,...args);
+        if(active)costs.push([start,performance.now()-start]);
+        else if(costs.length)window.finished=true;
+        return result;
+      };
+    });
+    await page.locator('#start').tap();await page.waitForFunction(()=>window.finished);
+    return await page.evaluate(()=>{
+      const p95=xs=>Number(xs.sort((a,b)=>a-b)[Math.floor(xs.length*.95)].toFixed(1));
+      return {frames:costs.length,work:p95(costs.map(r=>r[1])),interval:p95(costs.slice(1).map((r,i)=>r[0]-costs[i][0]))};
+    });
+  }finally{await page.close();}
+}
 (async()=>{
   const b=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{for(const device of ['keyboard','touch','pad','reduced'])await play(b,device);}finally{await b.close();}
+  try{
+    for(const device of ['keyboard','touch','pad','reduced'])await play(b,device);
+    const groups=[[],[]];
+    for(const mode of [0,1,1,0,0,1])groups[mode].push(await timedOpening(b,!!mode));
+    const mid=(rows,field)=>rows.map(r=>r[field]).sort((a,b)=>a-b)[1];
+    const [base,opening]=groups.map(rows=>Object.fromEntries(['frames','work','interval'].map(f=>[f,mid(rows,f)])));
+    console.log('::notice title=Opening frame delivery::'+JSON.stringify({base,opening}));
+    assert(opening.frames>=90 && opening.work<=Math.max(14,base.work+4) && opening.interval<=Math.max(26,base.interval+5));
+  }finally{await b.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});
