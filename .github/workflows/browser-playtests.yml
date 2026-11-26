@@ -5,6 +5,21 @@ on:
 permissions:
   contents: read
 jobs:
+  rival-footwork:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Dodge Haymaker, punish the recovery and catch the Rival stepping in
+        run: |
+          node --test qa/dash-back.cjs
+          npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
+          python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/footwork-http.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid"' EXIT
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/dash-back.js
   menu-navigation:
     runs-on: ubuntu-24.04
     timeout-minutes: 4
