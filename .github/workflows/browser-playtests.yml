@@ -68,7 +68,7 @@ jobs:
       - name: Verify fighter pixels and measure match rendering
         run: |
           DF3_ART_REFERENCE=previous/docs/fighters-art.js node --test qa/fighter-pixels.cjs
-          node --test qa/stock-calls.cjs qa/fight-camera.cjs
+          node --test qa/stock-calls.cjs qa/fight-camera.cjs qa/fighter-entrances.cjs
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
           python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/render-http.log" 2>&1 &
           game_pid=$!
@@ -78,6 +78,14 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fight-render.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/stock-calls.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fight-camera.js
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fighter-entrances.js
+      - name: Keep match opening frames
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: entrance-frames
+          path: entrance-*.png
+          retention-days: 3
       - name: Keep both camera angles from the same ledge exchange
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
