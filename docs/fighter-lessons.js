@@ -20,11 +20,12 @@
     ]},
   };
   class Trial {
-    constructor(index,world){
+    constructor(index,world,placeFighters=true){
       const [f,rival]=world.dogs, deck=world.terrain[0];
       this.course=f.kind;this.index=index;this.id=f.kind+'-'+index;
       this.info=courses[f.kind].lessons[index];
       this.ticks=0;this.note='';this.started=this.done=this.missed=false;
+      if(!placeFighters)return;
       const gap={pip:62,brisket:56,noodle:110,clover:490}[f.kind];
       const x=deck.x1+(deck.x2-deck.x1)*.32;
       for(const [i,d] of world.dogs.entries())Object.assign(d,{x:i?Math.min(deck.x2-32,x+gap):x,y:deck.y,
@@ -105,6 +106,67 @@
         this.done=!!this.technique;
         this.missed=!this.done;
       }
+    }
+  }
+  const sparTips={
+    pip:['Aim toward the rival and press {special}. On the bounce, release and press it again.','Aim up and press {special}. Release, then aim toward the stage and use the second hop.'],
+    brisket:['When the rival swings, aim down and tap {special} to counter.','Aim up and hold {special} for at least half a charge. Release toward the stage.'],
+    noodle:['Tap {special} to reel the rival in, then tap {attack} for a jab.','Aim up and tap {special} within lasso range. Catch the ledge and climb.'],
+    clover:['Tap {special} to throw the disc. Aim after it and tap {special} again to catch it.','Aim up and hold {special} to sail. Release over the stage and land.']
+  };
+  class Sparring {
+    constructor(world){
+      this.kind=world.dogs[0].kind;
+      this.earned=[false,false];
+      this.signature=new Trial(0,world,false);
+      this.recovery=null;
+      this.last=-1;this.until=0;
+    }
+    contact(name,event,world){
+      if(name==='ko'){
+        if(!this.earned[0])this.signature=new Trial(0,world,false);
+        if(event.f.index===0)this.recovery=null;
+        return;
+      }
+      if(!this.earned[0]){
+        this.signature.ticks=world.matchFrames+1;
+        this.signature.contact(name,event);
+        if(this.signature.done)this.credit(0,world.matchFrames);
+      }
+      this.recovery?.contact(name,event);
+    }
+    credit(index,frame){
+      this.earned[index]=true;this.last=index;this.until=frame+150;
+    }
+    step(world){
+      if(this.earned[1])return;
+      const f=world.dogs[0],deck=world.terrain[0];
+      if(!f.stocks || f.stockLift || f.respawning){this.recovery=null;return;}
+      if(!this.recovery && f.ground<0 && (f.x<deck.x1 || f.x>deck.x2))this.recovery=new Trial(1,world,false);
+      if(!this.recovery)return;
+      this.recovery.afterStep(world);
+      if(this.recovery.done)this.credit(1,world.matchFrames);
+      if(this.recovery.missed || this.recovery.done)this.recovery=null;
+    }
+    save(storage,winner){
+      for(const [i,earned] of [...this.earned,winner===0].entries())if(earned)mark(storage,this.kind+'-spar-'+i);
+    }
+    goals(practice=false){
+      return '<h3 class="card-stage">Sparring goals</h3>'+courses[this.kind].lessons.map((l,i)=>
+        '<p>'+l.title+' · '+(this.earned[i]?'Landed in this fight':'Still to land')+'</p>').join('')+
+        (practice?'<div class="dialog-actions">'+courses[this.kind].lessons.map((l,i)=>'<button class="utility" data-spar-lesson="'+i+'">Practice · '+l.title+'</button>').join('')+'</div>':'');
+    }
+    coach(frame,device,keyFor,padFor,tip,title,line){
+      const landed=frame<this.until, index=landed?this.last:this.recovery?1:frame<300 && !this.earned[0]?0:-1;
+      if(index<0){if(!tip.hidden)tip.hidden=true;return;}
+      const key='spar/'+index+'/'+landed+'/'+device;
+      if(tip.dataset.cue!==key){
+        title.textContent=(landed?'Landed · ':'')+courses[this.kind].lessons[index].title;
+        line.textContent=landed?'Counted toward this fighter’s sparring goals.':sparTips[this.kind][index].replace(/\{(\w+)\}/g,
+          (_,action)=>hint({keys:[[action]]},device,keyFor,padFor));
+        tip.dataset.cue=key;
+      }
+      if(tip.hidden)tip.hidden=false;
     }
   }
   const directions={pip:['side','up','neutral','down'],brisket:['down','up','neutral','side'],
@@ -327,7 +389,7 @@
     if(cleared(storage,id))return;
     try{storage.setItem(prefix+id,'1');}catch{temporary.add(id);}
   }
-  function sheet(kind,{storage,fighters,portrait,savedCoat,showDialog,root,choose,start,cup,back,backLabel}){
+  function sheet(kind,{storage,fighters,portrait,savedCoat,showDialog,root,choose,start,spar,cup,back,backLabel}){
     const {lessons}=courses[kind], name=fighters[kind].name;
     const dogs=Object.keys(courses).map(id=>'<button class="cup-dog" data-class-dog="'+id+'" aria-pressed="'+(id===kind)+
       '"><img alt="" src="'+portrait(id,savedCoat(0,id))+'"><strong>'+fighters[id].name+'</strong></button>').join('');
@@ -336,11 +398,14 @@
     showDialog('fighter-school','Fighter lessons','<div class="cup-dogs" role="group" aria-label="Choose a fighter">'+dogs+
       '</div><h3 class="card-stage">'+name+'</h3><div class="dialog-actions">'+buttons+'</div>'+
       (temporary.size?'<p>Lesson clears are saved for this tab while storage is unavailable.</p>':'')+
-      '<div class="dialog-actions"><button class="primary" data-class-cup>'+name+'’s Arcade Cup</button>'+
+      '<h3 class="card-stage">Sparring match</h3><p>Three stocks against Rookie '+fighters[courses[kind].rival].name+'. Try both lessons in the fight.</p>'+
+      '<p data-spar-record>'+['Signature','Recovery','Match win'].map((label,i)=>label+' '+(cleared(storage,kind+'-spar-'+i)?'✓':'—')).join(' · ')+'</p>'+
+      '<div class="dialog-actions"><button class="primary" data-class-spar>Spar as '+name+'</button><button class="utility" data-class-cup>'+name+'’s Arcade Cup</button>'+
       '<button class="utility" data-class-back>'+backLabel+'</button><button class="utility" data-do="home">Main menu</button></div>');
     for(const b of root.querySelectorAll('[data-class-dog]'))b.onclick=()=>choose(b.dataset.classDog);
     for(const b of root.querySelectorAll('[data-fighter-lesson]'))b.onclick=()=>start(kind,Number(b.dataset.fighterLesson));
     root.querySelector('[data-class-cup]').onclick=()=>cup(kind);
+    root.querySelector('[data-class-spar]').onclick=()=>spar(kind);
     root.querySelector('[data-class-back]').onclick=back;
     root.querySelector('[data-class-dog][aria-pressed=true]').focus({preventScroll:true});
   }
@@ -424,5 +489,5 @@
       paint(frames/60);
     }};
   }
-  window.FighterSchool={courses,Trial,Example,hint,sheet,tryoutSheet,mark,cleared,study,makeTrial,Demonstration,preview};
+  window.FighterSchool={courses,Trial,Sparring,Example,hint,sheet,tryoutSheet,mark,cleared,study,makeTrial,Demonstration,preview};
 })();
