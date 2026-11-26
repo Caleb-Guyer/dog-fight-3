@@ -1137,7 +1137,9 @@
   }
   function showSpecialPreview(source){
     const {kind,side}=source,school=window.FighterSchool;
-    if(!school)return waitForDispatch('Move demonstration',()=>loadDispatch('FighterSchool'),()=>showSpecialPreview(source),()=>backToMoveCard(source));
+    if(!school || !window.MoveGuide)return waitForDispatch('Move demonstration',
+      ()=>Promise.all([loadDispatch('FighterSchool'),loadDispatch('MoveGuide')]),
+      ()=>showSpecialPreview(source),()=>backToMoveCard(source));
     const move=school.study(kind,side),canPractice=page==='home' || page==='lobby';
     showDialog('special-preview',move.title,'<p class="clip-caption">'+fighters[kind].name+' · '+specialInputs[side]+'</p>'+
       '<canvas id="move-arena" width="720" height="405" role="img" aria-label="'+fighters[kind].name+' demonstrates '+move.title+'"></canvas>'+
