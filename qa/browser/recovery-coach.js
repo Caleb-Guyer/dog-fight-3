@@ -131,7 +131,7 @@ async function check(browser,device) {
       await page.locator('[data-saved-clip="0"][data-ko-slot="0"]').waitFor();
       await page.goto('http://127.0.0.1:8080/?stock-archive#records');
       await choose('[data-record-id]');await choose('[data-saved-clip=full]');
-      await choose('#film-marks summary');await choose('[data-stock-at]');
+      await choose('#film-knockouts summary');await choose('[data-stock-at]');
       assert.equal(await page.locator('#dialog-title').textContent(),'Retry stock 1');
       await choose('#stock-try');await page.clock.runFor(3100);
       assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!');

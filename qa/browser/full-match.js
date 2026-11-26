@@ -56,8 +56,8 @@ async function match(browser,device){
     const frame=Number(await seek.inputValue());assert(frame>=60 && frame<100);
     await choose('#film-step');assert.equal(Number(await seek.inputValue()),frame+1);
     await choose('#film-speed');assert.match(await page.locator('#film-speed').textContent(),/2×/);
-    await choose('#film-marks summary');assert.equal(await page.locator('#film-marks button').count(),3);
-    await choose('#film-marks button:last-child');assert(Number(await seek.inputValue())>360);
+    await choose('#film-knockouts summary');assert.equal(await page.locator('#film-knockouts button').count(),3);
+    await choose('#film-knockouts button:last-child');assert(Number(await seek.inputValue())>360);
     await seek.press('Home');assert.equal(await seek.inputValue(),'0');
     await choose('#film-p1');await page.clock.runFor(850);await move(true,true);
     await page.clock.runFor(4300);await move(false,true);
@@ -134,7 +134,8 @@ async function match(browser,device){
     console.log(device+' passed guided and match-speed landing comparison from a recorded throw.');
     await page.goto(root+'?defense#records');await page.locator('#record-example').waitFor();
     const recordCount=await page.locator('[data-record-id]').count();
-    await choose('#record-example');
+    if(device==='keyboard'){await page.goto(root+'?direct#records/study');await page.waitForLoadState('networkidle');}
+    else await choose('#record-example');
     const defense=page.locator('#film-defense'),go='#film-defense [data-study]';
     await page.clock.runFor(900);
     await defense.locator('[data-study]').waitFor();
@@ -163,6 +164,28 @@ async function match(browser,device){
     assert.deepEqual(await damage.locator('td').allTextContents(),['0%','20.5%']);
     await choose('[data-do=trial-results]');await page.clock.runFor(120);
     assert.equal(await seek.inputValue(),'1051');
+    await choose('#film-defense [data-prev]');await choose(go);
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(...args){
+        const value=step.apply(this,args);
+        if(document.querySelector('#match-mode')?.textContent.startsWith('Defense practice'))window.defenseFrame=this.matchFrames;
+        return value;
+      };
+    });
+    async function shield(pressed){
+      if(pad)return page.evaluate(v=>Object.assign(pad.buttons[4],{pressed:v,value:Number(v)}),pressed);
+      if(!touch)return pressed?page.keyboard.down('l'):page.keyboard.up('l');
+      if(!pressed)return cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      const b=await page.locator('[data-touch=shield]').boundingBox();
+      return cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:b.x+b.width/2,y:b.y+b.height/2}]});
+    }
+    await shield(true);await page.clock.runFor(900);
+    for(let i=0;i<70 && !await page.evaluate(()=>window.defenseFrame>=819);i++)await page.clock.runFor(12);
+    assert.equal(await page.evaluate(()=>window.defenseFrame),819,device);
+    await shield(false);await page.clock.runFor(2000);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Parry landed',device);
+    await choose('[data-do=trial-results]');await page.clock.runFor(100);
     await choose('#film-back');assert.equal(await page.locator('#dialog-title').textContent(),'Fight Records');
     assert.equal(await page.locator('[data-record-id]').count(),recordCount,'sample practice must not create fight records');
     // Save a real, newly finished couch fight in which P2 missed the landing.
