@@ -123,6 +123,8 @@
       '<p>In a set, the loser picks the next arena. First to two wins takes the set.</p>' +
       (settings.mode==='training'?'':'<div class="dialog-actions"><button class="utility" data-do="strike-set">Play a stage strike set</button></div>')+
       '<h3>Match clock</h3><div class="dialog-actions">' + choices + '</div>' +
+      (settings.timed && settings.mode!=='training'?'<p>Ten seconds left, tied at zero. Both dogs are at 135% by the Night Mail ledge. Take the lead before the bell or fight the tiebreak.</p>'+
+      '<div class="dialog-actions"><button class="utility" data-do="final-count">Play the final ten seconds</button></div>':'')+
       '<p>Play the last stock with both dogs at 125%. When a hit threatens the match, steer during the close-up to change your launch.</p>' +
       '<div class="dialog-actions"><button class="utility" data-do="last-stock-start">Play last stock</button></div>' +
       '<h3>Sudden Death</h3><p>One stock at 300%. The sides start closing after five seconds. The ceiling and floor follow at ten seconds.</p>' +
