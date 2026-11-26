@@ -6193,13 +6193,12 @@
     updateMusic();refreshAudition();
   }
   function backFromSoundTest(){
-    showOptions();
-    $('open-sound-test').focus();
+    showOptions('sound-test');
   }
-  function showOptions() {
-    if(!window.VersusRulebook)return waitForDispatch('Options',()=>loadDispatch('VersusRulebook'),showOptions,()=>$('home-options').focus());
+  function showOptions(focus) {
+    if(!window.VersusRulebook)return waitForDispatch('Options',()=>loadDispatch('VersusRulebook'),()=>showOptions(focus),()=>$('home-options').focus());
     showDialog('options','Options',window.VersusRulebook.options(settings,cameraButton));
-    document.querySelector('[data-do=option-sound]').focus();
+    (focus==='sound-test'?$('open-sound-test'):document.querySelector('[data-do=option-sound]')).focus();
   }
   $('dialog-body').addEventListener('click',e=>{if(e.target.closest('#open-sound-test'))showSoundTest();});
   $('dialog-body').addEventListener('input', (e) => {
