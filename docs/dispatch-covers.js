@@ -1607,7 +1607,30 @@
     }
     return filmLoads.get(key);
   }
-  window.DispatchCovers = Object.freeze({draw,routeBoard,reelShelf,loadFilm});
+  function chapterClear(campaign,night,marks,portrait,showDialog) {
+    showDialog(
+      'dispatch-clear',
+      'Chapter clear',
+      '<div class="winner"><img alt="" src="' +
+        portrait('clover') +
+        '"><div><span class="mode-label">The Last Dispatch</span><h3>'+campaign.title+'</h3><p>' +
+        marks +
+        ' of ' + campaign.rooms.length + ' postmarks collected.</p></div></div><p>' +
+        (night?'The night mail is safe. Both chapters are open for replay.':'The bell is back in service. Clover has the next dispatch.') +
+        '</p><div class="dialog-actions">'+(night?'':'<button class="primary" id="next-chapter">Chapter 02 · The Night Mail</button>')+
+        '<button class="'+(night?'primary':'utility')+'" data-do="close">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
+    );
+  }
+  function liftTicket(bonus,open,label,score,best,showDialog) {
+    showDialog('lift-ticket',score?'Dead Letter Lift clear':bonus.name,
+      (open?'<p>The bridge postmark fits the brass slot. Noodle, Brisket and Clover are waiting, one on each landing. Take all three stocks before Pip loses his last.</p>':
+      '<p>The lift takes a Sorting Bridge postmark. Look above the Crane House checkpoint, where the short shelves lead up to the gantry.</p>')+
+      (score?'<p>Your delivery · '+score+'</p>':'')+
+      (best?'<p>Personal best · '+best+'</p>':'')+
+      '<div class="dialog-actions"><button class="primary" id="lift-enter">'+label+
+      '</button><button class="utility" data-do="route">Route map</button></div>');
+  }
+  window.DispatchCovers = Object.freeze({draw,routeBoard,reelShelf,loadFilm,chapterClear,liftTicket});
   // The films and the printed route map share the same native pixel grid and props.
   function ease(start, end, time) {
     const t = Math.max(0, Math.min(1, (time - start) / (end - start)));

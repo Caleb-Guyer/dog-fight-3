@@ -231,9 +231,16 @@
   function cpuSheet(cpuLevels,level,restart,showGuards) {
     const tells={pip:'Catches jumps with Scissor Kick',brisket:'Meets early climbs with Haymaker',
       noodle:'Spaces Lead Snap to hit with the knot',clover:'Fires Line Drive across the ledge'};
-    const ledgeChoices=showGuards?'<h3>Ledge guards</h3><p>Start a three-stock fight hanging from the ledge at 120%. Choose your Rival.</p><div class="cpu-choices">'+
-      Object.entries(tells).map(([kind,tell])=>'<button type="button" data-ledge-guard="'+kind+'"><strong>'+
-        window.DogFight.fighters[kind].name+'</strong><span>'+tell+'</span></button>').join('')+'</div>':'';
+    const returns={pip:'Jump in place and tap Attack to meet Double Pounce.',
+      brisket:'Hold Shield at the lip as Shoulder Charge comes through.',
+      noodle:'Wait for the rope to catch. Jumping out puts you in Slingshot range.',
+      clover:'Watch the disc. Clover can follow it past the ledge.'};
+    const dogs=(tips,attribute)=>'<div class="cpu-choices">'+Object.entries(tips).map(([kind,tell])=>
+      '<button type="button" '+attribute+'="'+kind+'"><strong>'+window.DogFight.fighters[kind].name+
+      '</strong><span>'+tell+'</span></button>').join('')+'</div>';
+    const ledgeChoices=showGuards?'<h3>Ledge guards</h3><p>Start a three-stock fight hanging from the ledge at 120%. Choose your Rival.</p>'+
+      dogs(tells,'data-ledge-guard')+'<h3>Guard the return</h3><p>You hold the ledge. Your Rival starts far offstage at 60% with a jump in reserve. Both dogs have three stocks.</p>'+
+      dogs(returns,'data-returner'):'';
     const choices = Object.entries(cpuLevels).map(([id, cpu]) =>
       '<button type="button" data-cpu="' + id + '" aria-pressed="' + (level === id) + '">' +
       '<strong>' + cpu.name + '</strong><span>' + cpu.tip + '</span></button>').join('');
