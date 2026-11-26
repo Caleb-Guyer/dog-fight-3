@@ -1963,6 +1963,11 @@
     startMatch({mode:'solo',p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:perch?'bandstand':'picnic',form:perch?'original':'flat',
       cpuLevel:'rival',stockCount:3,minutes:7,fetch:false,liftOpening:perch?'perch':true},undefined,42);
   }
+  function startPerchFight(p2=settings.p2,p1=settings.p1){
+    leaveOnline();afterStory=null;
+    startMatch({mode:'solo',p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:'picnic',form:'original',
+      cpuLevel:'rival',stockCount:3,minutes:7,fetch:false,perchApproach:true},undefined,42);
+  }
   function fightRivalPip() {
     leaveOnline();
     afterStory = null;
@@ -3229,6 +3234,7 @@
     if (action === 'cpu-level') showCpuLevels();
     if (action === 'shield-read-match') startShieldReadMatch();
     if (action === 'throw-read-perch' || action === 'throw-read-edge') startThrowRead(action.slice('throw-read-'.length));
+    if (action === 'perch-fight') startPerchFight();
     if (['dash-back-bait','dash-back-watch','dash-back-delay'].includes(action)) startDashBack(action.slice('dash-back-'.length));
     if (action==='lift-fight')startLiftFight();
     if (action==='return-perch')startLiftFight(settings.p2,settings.p1,true);
@@ -4201,7 +4207,7 @@
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PlayerProfiles:'player-profiles.js?v=button-check-1',
-    VersusRulebook:'versus-rules.js?v=return-perch-1',
+    VersusRulebook:'versus-rules.js?v=platform-read-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=button-check-1',StageStrike:'stage-strike.js?v=button-check-1',
     ComboLab:'combo-lab.js?v=ground-space-1', FinishTools:'finish-tools.js?v=launch-rescue-1',
@@ -5097,7 +5103,7 @@
     }
     if(corner.practice==='launch-escape' && world.matchFrames-corner.landingAt<finishTape?.length)
       return showFinishReplay(null,{instant:true,finish:true,landingFocus:true,from:'pause',result:world,clip:{tape:finishTape,losses:[]}});
-    if(corner.practice.startsWith('launch-')){
+    if(corner.practice.startsWith('launch-') || corner.practice==='platform-below'){
       if(!window.PracticeFeedback)return waitForDispatch('Practice instructions',()=>loadDispatch('PracticeFeedback'),startCornerLesson,showPause);
       return startExercise(corner.practice);
     }
@@ -6416,6 +6422,8 @@
       startMatch({...settings,p1:'pip',p2:'brisket',mode:'solo',stage:'picnic',cpuLevel:'rival',minutes:1,fetch:false,timeBattle:true},undefined,42);
     } else if (/^#solo\/throw-read\/(perch|edge)$/.test(hash)) {
       startThrowRead(hash.split('/').pop());
+    } else if (/^#solo\/platform-read\/(pip|brisket|noodle|clover)$/.test(hash)) {
+      startPerchFight(hash.split('/').pop(),'pip');
     } else if (hash==='#solo/stock-return/perch') {
       startLiftFight('brisket','pip',true);
     } else if (/^#solo\/stock-return\/(pip|brisket|noodle|clover)$/.test(hash)) {

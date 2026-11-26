@@ -2792,6 +2792,11 @@
           face:-returner.face,damage:55});
       }
       if (config.runoffTrump && this.mode === 'solo') this.placeRunoffTrump(config.runoffTrump,1);
+      if(config.perchApproach && this.mode==='solo' && this.geometryStage==='picnic'){
+        const [guard,rival]=this.dogs,bench=this.terrain[1],x=(bench.x1+bench.x2)/2;
+        Object.assign(rival,{x,y:bench.y,ground:1,face:1,landingLag:8/60,landTime:8/60});
+        Object.assign(guard,{x:x+guard.stats.width+rival.stats.width,y:this.terrain[0].y,ground:0,face:-1});
+      }
       if(config.scoutedRoll && this.mode==='solo' && this.cpuLevel==='rival'){
         const left=config.scoutedRoll.side!=='right', floors=this.terrain.filter(p=>!p.thin);
         const floor=left?floors[0]:floors.at(-1);
@@ -2862,6 +2867,7 @@
       if (this.mode==='solo' && this.cpuLevel==='rival'){
         this.bot.liftReadEnabled=true;
         this.bot.returnPerches=true;
+        this.bot.readPlatforms=true;
         this.bot.clockAware=true;
       }
       this.matchCard = versus && config.lesson === undefined ? {
@@ -2886,7 +2892,7 @@
     resetCpu() {
       const memory = this.bot;
       this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
-      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','liftReadEnabled','returnPerches','gavePerch','challengedReturn','clockAware','heldCenter','chasedLead'])
+      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','liftReadEnabled','returnPerches','readPlatforms','gavePerch','challengedReturn','clockAware','heldCenter','chasedLead'])
         if (memory[key] !== undefined) this.bot[key] = memory[key];
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
@@ -2901,6 +2907,7 @@
         delete this.bot.dashBack;
         delete this.bot.missedSmash;
         delete this.bot.perchExit;
+        delete this.bot.perchGrab;
         this.bot.shieldWatch = 0;
         this.bot.rookieNext = 0;
       }
@@ -10591,13 +10598,40 @@
       }
       return input;
     }
+    platformGrabInput(f, foe) {
+      const brain=this.bot;
+      let plan=brain.perchGrab;
+      if(f.stun || f.tumble || f.grip || f.floorAction || f.ledge || f.airDodge || f.stockLift ||
+          foe.stockLift || foe.respawning || protectionTime(foe) || (plan && this.time>plan.until)){
+        if(plan)delete brain.perchGrab;
+        return null;
+      }
+      if(!plan){
+        const perch=this.terrain[f.ground],floor=this.terrain[foe.ground];
+        if(!foe.shield || !perch?.thin || !floor || f.shield || f.attack || f.jumpSquat || f.command ||
+            f.charge>=0 || f.landingLag || f.shieldDrop || f.shieldStun || Math.abs(f.vx)>60)return null;
+        const height=floor.y-perch.y,gap=(foe.x-f.x)*f.face;
+        if(height<55 || height>200 || gap<0 || gap>grabs[f.kit.grab].box[0]+foe.stats.width+20 ||
+            f.x<floor.x1+25 || f.x>floor.x2-25)return null;
+        // A second shelf in this lane would catch the drop before the shield.
+        if(this.terrain.some(p=>p.y>perch.y && p.y<floor.y && f.x>=p.x1-6 && f.x<=p.x2+6))return null;
+        plan=brain.perchGrab=this.planJumpIn(f,foe,true);
+        plan.from=f.ground;plan.ground=foe.ground;plan.jumped=true;plan.until=this.time+.9;
+        brain.platformRoute=brain.hop=null;brain.jumpHold=brain.guard=brain.hold=0;
+      }
+      if(f.ground===plan.from && !plan.airborne)return perchDropInput(f);
+      const input=this.jumpInInput(f,plan);
+      if(!input)delete brain.perchGrab;
+      return input;
+    }
     cpuPlatformInput(f, foe) {
       const brain = this.bot;
       const floor = this.terrain[foe.ground];
       const strike = moves[f.kit.air.down], [x, y, rx, ry] = strike.box;
       const targetX = foe.x + foe.vx * strike.start;
       const reach = Math.abs(targetX - (f.x + f.vx * strike.start + f.face * x));
-      if (!floor || foe.shield || protectionTime(foe) || f.stun || f.attack || f.grip || f.dodge ||
+      const committed=brain.readPlatforms && brain.platformRoute && !brain.platformRoute.descending && f.ground<0;
+      if (!floor || (foe.shield && !committed) || protectionTime(foe) || f.stun || f.attack || f.grip || f.dodge ||
           f.shield || f.shieldDrop || f.charge >= 0 || f.landingLag ||
           f.x < floor.x1 + 10 || f.x > floor.x2 - 10 || reach > rx + foe.stats.width) {
         brain.platformRoute = null;
@@ -11539,6 +11573,9 @@
       if (brain.liftApproach) {
         const input=this.cpuPressReturn(f);
         if(input)return input;
+      }
+      if(brain.readPlatforms && (brain.perchGrab || (foe.shield && this.terrain[f.ground]?.thin))){
+        const drop=this.platformGrabInput(f,foe);if(drop)return drop;
       }
       // A direction held through the catch would queue a throw before Rival can assess the hold.
       if (this.cpuLevel === 'rival' && foe.damage >= 65 && f.ground >= 0 && f.attack?.grabAttempt &&
