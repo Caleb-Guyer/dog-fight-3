@@ -26,11 +26,11 @@ async function renderScores(page){
     }
     return levels;
   });
-  assert.equal(levels.length,11);
+  assert.equal(levels.length,16);
   for(const [id,peak,rms,tail] of levels){
     assert(peak>.04 && peak<.94 && rms>.009 && tail<.0001,[id,peak,rms,tail].join('/'));
   }
-  console.log('::notice title=Sound render::Rendered all 10 scores. Largest full-volume peak '+Math.max(...levels.map(x=>x[1])).toFixed(3)+'.');
+  console.log('::notice title=Sound render::Rendered all '+levels.length+' scores. Largest full-volume peak '+Math.max(...levels.map(x=>x[1])).toFixed(3)+'.');
 }
 async function observe(context) {
   await context.addInitScript(()=>{
@@ -55,7 +55,8 @@ async function playtest(browser,mobile){
   const playing=id=>page.waitForFunction(key=>window.band?.track===key && band.bus && band.step>0,id);
   try {
     await page.goto(root+'#sound-test');
-    assert.equal(await page.locator('#audition-track option').count(),11);
+    await page.locator('#audition-track').waitFor();
+    assert.equal(await page.locator('#audition-track option').count(),16);
     assert.equal(await page.evaluate(()=>!!window.band),false);
     if(!mobile)await renderScores(page);
     await press('audition-play'); await playing('picnic');
@@ -74,6 +75,21 @@ async function playtest(browser,mobile){
     assert.match(await page.locator('#audition-status').textContent(),/Muted/);
     await press('audition-back');assert.equal(await page.locator('#option-music').inputValue(),'0');
     await page.locator('#option-music').press('End');
+    await page.goto(root+'?music#music/nightmail');
+    const track=page.locator('#music-track'), weight=page.locator('#music-frequency');
+    await track.selectOption('nightmail');await weight.selectOption('0');
+    await page.reload();await track.waitFor();assert.equal(await weight.inputValue(),'0');
+    await track.selectOption('brake-van');await press('audition-mix');await playing('brake-van');
+    await page.waitForFunction(()=>band.urgent);
+    await press('audition-stop');await page.waitForFunction(()=>!band.bus);
+    await track.selectOption('lantern-swing');assert.equal(await weight.inputValue(),'0');
+    await press('music-fight');await playing('lantern-swing');
+    await press('pause');await page.waitForFunction(()=>!band.bus);
+    assert.equal(await page.locator('#music-credit').textContent(),'Lantern Swing');
+    await page.locator('[data-do=resume]').click();await playing('lantern-swing');
+    await press('pause');await page.locator('[data-do=rematch]').click();await playing('brake-van');
+    await page.goto(root+'?restore#music/nightmail');await press('music-reset');assert.equal(await weight.inputValue(),'2');
+    await press('music-back');await page.locator('#audition-track').waitFor();
     if(!mobile){
       await page.goto(root+'?set#solo/night-mail');await page.keyboard.press('j');await playing('nightmail');
       await page.keyboard.press('p');await page.waitForFunction(()=>!band.bus);

@@ -1,11 +1,14 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
-global.window={};require('../docs/engine.js');require('../docs/score.js');
+global.window={};require('../docs/engine.js');require('../docs/score.js');require('../docs/stage-music.js');
 const {scores,playStep,Player}=window.YardScore;
+const {Rotation,tracks,home}=window.StageMusic;
 const {arenas,kits}=window.DogFight;
 
 test('all arenas have full metered scores, a last-stock arrangement and a unique melody',()=>{
-  assert.deepEqual(Object.keys(scores).sort(),['menu','deadletter',...Object.keys(arenas),...Object.keys(kits).map(k=>'win-'+k)].sort());
+  assert.equal(tracks.length,2*Object.keys(arenas).length);
+  for(const stage of Object.keys(arenas))assert.equal(tracks.filter(t=>home(t)===stage).length,2);
+  assert.deepEqual(Object.keys(scores).sort(),['menu','deadletter',...tracks,...Object.keys(kits).map(k=>'win-'+k)].sort());
   const melodies=new Set();
   for(const s of Object.values(scores)){
     assert(s.form.every(n=>s.bars[n]));
@@ -24,10 +27,38 @@ test('all arenas have full metered scores, a last-stock arrangement and a unique
         });
       counts.push(count);
     }
-    if(arenas[s.id])assert(s.form.length===16 && counts[1]>counts[0]);
+    if(home(s.id))assert(s.form.length===16 && counts[1]>counts[0]);
     if(s.id.startsWith('win-'))assert(!s.loop && s.form.length===2);
   }
   assert.equal(melodies.size,Object.keys(scores).length);
+});
+test('each fresh arena opens with its own tune and honors frequencies within a rotation',()=>{
+  const rotation=new Rotation(undefined,()=>.9);
+  for(const stage of Object.keys(arenas)){
+    const alt=tracks.find(t=>home(t)===stage && t!==stage);
+    assert.deepEqual(Array.from({length:3},()=>rotation.pick(stage)),[stage,alt,stage]);
+    rotation.set(stage,'low-water',4);
+    const count=Array.from({length:stage==='canal'?6:7},()=>rotation.pick(stage));
+    assert.equal(count.filter(t=>t==='low-water').length,4);
+  }
+});
+test('custom mixes survive reload, can cross arenas or go silent, and reset one arena only',()=>{
+  const data=new Map(),storage={getItem:k=>data.get(k),setItem:(k,v)=>data.set(k,v)};
+  let r=new Rotation(storage);
+  for(const id of tracks)r.set('nightmail',id,0);
+  r.set('picnic','crosswind',4);
+  r=new Rotation(storage);assert.equal(r.pick('nightmail'),null);
+  r.set('nightmail','low-water',1);
+  assert.deepEqual(Array.from({length:4},()=>r.pick('nightmail')),Array(4).fill('low-water'));
+  r.reset('nightmail');r=new Rotation(storage);
+  assert.equal(r.pick('nightmail'),'nightmail');assert.equal(r.weight('picnic','crosswind'),4);
+});
+test('unavailable storage keeps a session mix; damaged weights cannot enter a draw',()=>{
+  const r=new Rotation({getItem:()=>'{"picnic":{"ant-parade":9000,"unknown":2},"bogus":{}}',setItem(){throw Error();}});
+  assert.equal(r.weight('picnic','ant-parade'),1);
+  assert.equal(r.set('picnic','picnic',0),false);
+  assert.equal(r.pick('picnic'),'ant-parade');
+  assert.equal(r.set('picnic','__proto__',4),false);
 });
 function transport(){
   const ctx={currentTime:0,state:'running',sampleRate:24000,createPeriodicWave(){return {};},
