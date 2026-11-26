@@ -309,7 +309,7 @@
     }
     path(recorded.points,true);path(attempt.points,false);
   }
-  function launchPanel(nav,tape,launch,jump,practice,signal) {
+  function launchPanel(nav,tape,launch,jump,practice,signal,rescueLaunch) {
     const choices=[
       ['Up-left','↖',-1,-1],['Up','↑',0,-1],['Up-right','↗',1,-1],
       ['Left','←',-1,0],['Center','•',0,0],['Right','→',1,0],
@@ -321,7 +321,8 @@
       '<div class="flight-study"><div class="flight-stick" role="group" aria-label="Launch direction">'+
       choices.map(([name,glyph])=>'<button type="button" class="utility" aria-label="'+name+'" title="'+name+'">'+glyph+'</button>').join('')+
       '</div><canvas width="360" height="206" role="img"></canvas></div>'+
-      '<p class="flight-key"></p><p class="flight-result" role="status"></p><button type="button" class="utility" data-fly>Play from impact</button>';
+      '<p class="flight-key"></p><p class="flight-result" role="status"></p><div class="dialog-actions"><button type="button" class="utility" data-fly>Play from impact</button>'+
+      (rescueLaunch?'<button type="button" class="utility" data-save-launch>Find a route back onstage</button>':'')+'</div>';
     nav.before(panel);
     const pad=[...panel.querySelectorAll('.flight-stick button')],canvas=panel.querySelector('canvas');
     const key=panel.querySelector('.flight-key'),info=panel.querySelector('.flight-result');
@@ -343,6 +344,7 @@
     panel.addEventListener('toggle',()=>{if(panel.isConnected && panel.open){jump(launch.frame-1);compare(selected);}}, {signal});
     pad.forEach((b,i)=>b.onclick=()=>compare(i));
     panel.querySelector('[data-fly]').onclick=()=>practice(launch.frame-1,launch.slot);
+    if(rescueLaunch)panel.querySelector('[data-save-launch]').onclick=()=>rescueLaunch(launch);
   }
   function defenseChoices(dog) {
     return dog.ground>=0
@@ -568,12 +570,12 @@
 
     document.querySelector('[data-finish-slot="'+slot+'"]').focus();
   }
-  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,clinic}){
+  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,clinic,rescueLaunch}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
     const {marks,escape,launch,contact,landings}=analyze(tape,slot,follow,!!retryMoment);
     escapeReady?.(escape);
     if(contact && practiceLaunch)defensePanel(nav,tape,contact,jump,practiceLaunch,signal);
-    if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch,signal);
+    if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch,signal,rescueLaunch);
     if(landings.length && practiceLanding)landingPanel(nav,tape,landings,jump,practiceLanding,clinic,signal);
     let selected=null,panel,line,lead;
     if(retryMoment && marks.length){
