@@ -150,11 +150,13 @@
   }
   function landingTry(tape,landing,start,emit=()=>{}){
     const slot=landing.slot;
-    let result=null,press=null,locked=false;
+    let result=null,press=null,locked=false,dodged=false;
     const record=(type,dir,frame)=>{result??={type,dir,frame,press,locked};};
     const replay=tape.playback(start,(event,e)=>{
       if(e.f?.index===slot){
-        if(event==='tech' || event==='knockdown')record(e.type,e.dir,replay.frame+1);
+        if(event==='dodge' && ['neutralAirDodge','directionalAirDodge'].includes(e.type))dodged=true;
+        else if(event==='hit')dodged=false;
+        else if(event==='tech' || event==='knockdown')record(e.type,e.dir,replay.frame+1);
         else if(event==='floorBounce' || event==='meteorBounce')record('bounce',0,replay.frame+1);
         else if(['ko','ledge','airDodgeLand'].includes(event))record(event,0,replay.frame+1);
       }
@@ -167,7 +169,7 @@
         if(this.outcome || replay.frame>=length)return false;
         if(!result && (input.tapped?.shield || input.shield && !dog.prev.shield)){press=replay.frame+1;locked=dog.techLock>1e-8;}
         replay.step(input);
-        if(!result && dog.ground>=0)record('land',0,replay.frame);
+        if(!result && dog.ground>=0)record(dodged?'airDodgeLand':'land',0,replay.frame);
         if(!result && (replay.frame>=length || battle.end!==null))record('end',0,replay.frame);
         if(result && (replay.frame>=result.frame+18 || replay.frame>=length || battle.end!==null))this.outcome=result.type;
         return true;
