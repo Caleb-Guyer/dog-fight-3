@@ -24,6 +24,10 @@ async function run(browser,phone){
           const p=new DOMPoint(x,y).matrixTransform(this.getTransform());
           if(p.x<0 || p.x>this.canvas.width || p.y<0 || p.y>this.canvas.height)throw Error('Offscreen score '+txt);
           sample.labels.push(txt);
+          if(txt==='2' && this.canvas.id==='game'){
+            sample.row=p.y/this.canvas.height;
+            sample.textPx=parseFloat(this.font)*this.getTransform().a*this.canvas.clientWidth/this.canvas.width;
+          }
         }
         return print.call(this,txt,x,y,...rest);
       };
@@ -37,6 +41,7 @@ async function run(browser,phone){
     const call=await page.evaluate(()=>calls.filter(c=>c.canvas==='game').at(-1));
     await page.screenshot({path:'stock-calls-'+(phone?'phone':'desktop')+'.png'});
     assert(call);assert.equal(call.steady,phone);
+    assert(call.row>.65 && call.row<.85);assert(call.textPx>=20,'Legible score at the actual viewport size');
     assert.deepEqual(call.labels,['STOCKS','2','P1','3','CPU']);
     assert.deepEqual(call.dogs,phone?[]:[['pip','tumble',0]]);
     assert.match(await page.locator('#announce').textContent(),/Pip out at the top blast line.*P1 2, P2 3/);
