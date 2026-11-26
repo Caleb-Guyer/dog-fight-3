@@ -118,6 +118,13 @@ async function play(browser, device) {
     const bounds=await figure.boundingBox();
     assert(bounds.width>110 && bounds.x>=0 && bounds.x+bounds.width<=page.viewportSize().width+1);
     assert(Math.abs(bounds.width/bounds.height-360/206)<.02);
+    await select('[data-save-launch]');await page.locator('#recovery-back').waitFor();
+    for(let n=0;n<40 && !await page.locator('#recovery-play').isVisible();n++)await page.clock.runFor(80);
+    assert.match(await page.locator('#recovery-position').textContent(),/Impact to landing/);
+    await select('#recovery-demo');await page.clock.runFor(6000);
+    assert.match(await page.locator('#recovery-cue').textContent(),/Landed onstage/);
+    assert(await page.evaluate(()=>JSON.stringify(liveStock.matchCard)===beforeStudy));
+    await select('#recovery-back');await select('#clip-launch summary');
     await select('[data-fly]');
     if(pad)await page.evaluate(()=>steer(1));
     else if(touch){

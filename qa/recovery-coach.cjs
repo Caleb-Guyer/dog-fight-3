@@ -8,6 +8,53 @@ require('../docs/fight-school.js');
 const {Battle,FinishTape,kits,seededRandom,idleInput}=window.DogFight;
 const coach=window.RecoveryCoach;
 
+function landingRoute(clip,launch){
+  const search=coach.searchLaunch(clip.tape,launch,clip.returnTape);
+  let next;
+  do{next=search.next();}while(!next.done);
+  return next.value;
+}
+for(const wide of [false,true])test('a real '+(wide?'edge':'perch')+' throw gets a playable return beyond the original knockout',()=>{
+  const {clip,battle,launch}=coach.example(wide,true), plan=landingRoute(clip,launch);
+  assert.equal(plan.start,launch.frame-1);assert(plan.end>clip.tape.length);
+  assert.equal(clip.losses[0].zone,wide?'left':'top');
+  const active=structuredClone(battle.matchCard), seed=battle.random.state;
+  for(const good of [false,true]){
+    const trial=coach.attempt(clip.tape,plan,undefined,clip.returnTape);
+    const gate=input=>coach.gate(plan,trial.frame-plan.start,input,a=>a,trial.battle.dogs[plan.slot]);
+    assert.match(gate(idleInput),/Steer the launch/);
+    while(!trial.outcome){
+      const t=trial.frame-plan.start, input=coach.controls(plan,t);
+      if(t===(wide?plan.upAt:plan.dodgeAt))assert.match(gate(idleInput),wide?/special/:/down.*shield/);
+      assert.equal(gate(input),'');
+      trial.step(good?input:idleInput);
+    }
+    assert.equal(trial.outcome,good?'landed':'fell');
+    assert.equal(trial.battle.dogs[0].stocks,good?3:2);
+    if(good){assert.equal(trial.frame,plan.end);assert(wide?trial.cast:trial.dodged);}
+  }
+  assert.deepEqual(battle.matchCard,active);assert.equal(battle.random.state,seed);
+});
+for(const damage of [105,125])test('P2 recovery at '+damage+'% only offers a route when the landing was verified',()=>{
+  const b=new Battle({mode:'local',p1:'brisket',p2:'pip',stage:'nightmail',form:'trio',stockCount:3,fetch:false},undefined,seededRandom(31));
+  const [brisket,pip]=b.dogs, y=b.terrain[3].y;
+  Object.assign(brisket,{x:600,y,ground:3,face:1});Object.assign(pip,{x:644,y,ground:3,face:-1,damage});
+  const tape=new FinishTape(true);let launch,exit;
+  b.emit=(name,e)=>{if(name==='launchDI' && e.f.index===1)launch={slot:1,frame:tape.count};};
+  for(let tick=0;tick<240 && (exit===undefined || tick<exit+95);tick++){
+    const guard=exit===undefined?{...idleInput,grab:tick===0,y:b.grapple?.phase==='hold'?-1:0}:{...idleInput,x:.4};
+    tape.record(b,guard,idleInput);b.step(1/60,guard,idleInput);tape.captureKnockouts(b);
+    if(tape.knockouts.length && exit===undefined)exit=tick;
+  }
+  const clip=tape.knockouts[0], plan=landingRoute(clip,launch);
+  if(damage===125){assert.equal(plan,null);return;}
+  assert.equal(plan.slot,1);
+  const practice=coach.attempt(clip.tape,plan,undefined,clip.returnTape);
+  while(!practice.outcome)practice.step(coach.controls(plan,practice.frame-plan.start));
+  assert.equal(practice.outcome,'landed');assert.equal(practice.battle.dogs[1].stocks,3);
+  assert.deepEqual(clip.losses,b.matchCard.losses.slice(0,1));assert.equal(b.dogs[1].stocks,2);
+});
+
 for(const kind of Object.keys(kits))test(kind+' saves exhausted low and wide falls from either edge and either seat',()=>{
   for(const slot of [0,1])for(const side of ['left','right'])for(const wide of [false,true]){
     const battle=new Battle({mode:'local',p1:slot?'brisket':kind,p2:slot?kind:'brisket',stage:'picnic',fetch:false},undefined,seededRandom(42));

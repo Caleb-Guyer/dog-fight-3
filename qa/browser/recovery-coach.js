@@ -24,19 +24,19 @@ async function check(browser,device) {
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
     const client=touch && await page.context().newCDPSession(page);
     let previous=[];
-    async function hold(x,jump=false,up=false,shield=false){
-      if(pad)return page.evaluate(args=>controls(...args),[x,jump,up?-1:0,shield]);
-      const next=[...(x?[x<0?'left':'right']:[]),...(jump?['jump']:[]),...(up?['up']:[]),...(shield?['shield']:[])];
+    async function hold(x,jump=false,up=false,shield=false,down=false){
+      if(pad)return page.evaluate(args=>controls(...args),[x,jump,up?-1:down?1:0,shield]);
+      const next=[...(x?[x<0?'left':'right']:[]),...(jump?['jump']:[]),...(up?['up']:down?['down']:[]),...(shield?['shield']:[])];
       if(touch){
         const points=[];
         for(const action of next){
           const b=await page.locator('[data-touch='+action+']').boundingBox();assert(b,action);
-          points.push({id:{left:1,right:1,jump:2,up:3,shield:4}[action],x:b.x+b.width/2,y:b.y+b.height/2});
+          points.push({id:{left:1,right:1,jump:2,up:3,down:3,shield:4}[action],x:b.x+b.width/2,y:b.y+b.height/2});
         }
         if(previous.some(a=>!next.includes(a)))await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
         if(points.length)await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points});
       }else{
-        const keys={left:'a',right:'d',jump:'q',up:'w',shield:'l'};
+        const keys={left:'a',right:'d',jump:'q',up:'w',down:'s',shield:'l'};
         for(const a of previous)if(!next.includes(a))await page.keyboard.up(keys[a]);
         for(const a of next)if(!previous.includes(a))await page.keyboard.down(keys[a]);
       }
@@ -176,6 +176,22 @@ async function check(browser,device) {
       await choose('[data-do=trial-results]');
       assert.deepEqual(await page.evaluate(()=>[firstFight.matchFrames,firstFight.random.state,firstFight.dogs[0].y]),before);
     }
+    await page.goto(root+'#tutorial/launch-survival');await route();
+    assert.match(await page.locator('#recovery-position').textContent(),/Pip.+Impact to landing/);
+    await choose('#recovery-demo');await page.clock.runFor(4500);
+    assert.match(await page.locator('#recovery-cue').textContent(),/Landed onstage/);
+    await choose('#recovery-guide');await page.clock.runFor(1500);
+    assert.match(await page.locator('#countdown').textContent(),/Steer the launch/);
+    const launchClock=await page.locator('#match-clock').textContent();
+    await hold(1);await page.clock.runFor(200);assert.equal(await page.locator('#match-clock').textContent(),launchClock);
+    await hold(-1);await page.clock.runFor(100);await hold(1);await page.clock.runFor(1200);
+    assert.match(await page.locator('#countdown').textContent(),/\+/);
+    await hold(0,false,false,true,true);await page.clock.runFor(100);
+    await hold(1);await page.clock.runFor(2300);await hold(0);
+    assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!');
+    await choose('[data-do=trial-replay]');await route();await choose('#recovery-swap');await route();
+    assert.match(await page.locator('#recovery-route').textContent(),/recover/);
+    await choose('#recovery-back');await choose('#dialog-body button:text-is("Launch survival")');await route();
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
