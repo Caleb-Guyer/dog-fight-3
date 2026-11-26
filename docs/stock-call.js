@@ -13,7 +13,7 @@
   function exitMark(ctx,d,age,scale,left,top,zoom,steady){
     const {width:w,height:h}=ctx.canvas;
     const x=Math.round(clamp((d.x-left)*zoom,19*scale,w-19*scale));
-    const y=Math.round(clamp((d.y-top)*zoom,19*scale,h-19*scale));
+    const y=Math.round(clamp((d.y-top)*zoom,d.zone==='top'?48*scale:19*scale,h-19*scale));
     const tint=teams[d.slot];
     ctx.save();ctx.translate(x,y);ctx.scale(scale,scale);
     if(steady){
@@ -51,7 +51,7 @@
   }
   function tally(ctx,call,age,scale,steady,solo){
     const {width,height}=ctx.canvas, center=Math.round(width/2);
-    const y=Math.round(height*.265);
+    const y=Math.round(height*(call.exits.some(d=>d.zone==='top')?.74:.265));
     ctx.save();ctx.translate(center,y);ctx.scale(scale,scale);ctx.textAlign='center';ctx.textBaseline='middle';
     const offset=steady?0:Math.round(12*Math.max(0,1-age/8)**2);
     const caption=call.exits.length===2?'DOUBLE KO':call.points?(call.exits[0].credited?'KO':'SELF-DESTRUCT'):'STOCKS';
@@ -73,7 +73,8 @@
   function draw(ctx,world,age,left,top,zoom,steady){
     if(age<0 || age>=72)return;
     const call=world.stockCall,{width,height}=ctx.canvas;
-    const scale=clamp(Math.min(width/580,height/540),.58,2);
+    const cssScale=ctx.canvas.clientWidth?width/ctx.canvas.clientWidth:1;
+    const scale=clamp(Math.max(cssScale,Math.min(width/580,height/540)),.58,Math.min(2.5,width/215,height/150));
     ctx.save();
     if(age<46){
       ctx.globalAlpha*=clamp((46-age)/10,0,1);
