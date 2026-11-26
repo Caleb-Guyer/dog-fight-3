@@ -1512,6 +1512,7 @@
     });
   }
   let matchConfig, soloSeed, localSet = null, practiceFight = null, corner=null, spar=null;
+  const schoolRuns=new WeakMap();
   let finishTape=null, clipScreen=null, victoryShot=null, finishTrial=null;
   let bellChoice='pip', bellLoad;
   async function bellSheet(kind=bellChoice) {
@@ -2033,6 +2034,15 @@
       }
       if (name === 'win') resultDelay = 0.7;
     }, random);
+    if(resume?.checkpoint){
+      Object.assign(world,resume.checkpoint.state);
+      world.random.state=resume.checkpoint.seed;
+    }
+    if(corner && !schoolRuns.has(world)){
+      schoolRuns.set(world,{previous:resume?.checkpoint?.header,began:Date.now(),writes:Promise.resolve(),
+        losses:world.matchCard.losses.length,nextSave:world.matchFrames+900});
+      loadDispatch('DispatchSuspend').catch(()=>{});
+    }
     if(config.sparring && !visit)spar=resume?.spar || new window.FighterSchool.Sparring(world);
     if (config.lesson !== undefined) world.lesson = config.fighterCourse ?
       window.FighterSchool.makeTrial(config.lesson,world,storage) : new window.FightSchool.Lesson(config.lesson,world);
@@ -2188,7 +2198,8 @@
         'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + cameraButton() + '</div>' +
         targetRecap() + (spar?spar.goals(true):'') + (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
           (corner?'<button class="utility" data-do="corner-practice">Practice · '+(schoolLessons.find(l=>l.id===corner.practice)?.title || $(corner.practice).textContent)+'</button>'+
-            '<button class="utility" data-do="corner-toggle" aria-pressed="'+settings.cornerTips+'">Ringside tips · '+(settings.cornerTips?'On':'Off')+'</button>':'')+
+            '<button class="utility" data-do="corner-toggle" aria-pressed="'+settings.cornerTips+'">Ringside tips · '+(settings.cornerTips?'On':'Off')+'</button>'+
+            '<button class="utility" data-do="school-suspend">Save &amp; quit</button>':'')+
           (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight ? 'Retry position' : 'Practice this position') + '</button>' : '') +
           '<button class="utility" data-do="practice">Find a drill</button>' +
           (practiceFight ? '<button class="utility" data-do="return-fight">'+$('return-fight').textContent+'</button>' : '') + '</div>' : '') +
@@ -2198,6 +2209,7 @@
         '<button class="utility" data-do="lobby">Fighter select</button><button class="utility" data-do="home">Main menu</button></div>',
     );
     document.querySelector('[data-do=resume]').focus();
+    if(corner && !practiceFight)saveFirstPosition(pausedFight()).catch(()=>{});
   }
   function startNextSetGame(stage) {
     if (localSet?.advance(stage)) startMatch({...matchConfig, stage}, undefined, undefined, localSet);
@@ -2560,6 +2572,11 @@
       task.catch(()=>{}).finally(()=>replayWrites.delete(ticket));
     }
     if(matchConfig.schoolFinal){
+      const slot=schoolRuns.get(result);
+      if(slot){
+        slot.finished=true;
+        loadDispatch('DispatchSuspend').then(()=>window.DispatchSuspend.writeSchool(slot,null)).then(readMissionSaves).catch(()=>{});
+      }
       schoolSave.firstFightDone=true;
       saveSchool(result.end===0?{won:true}:{loss:window.FightSchool.rematchLesson(result.matchCard).id,ticket});
     }
@@ -2929,6 +2946,7 @@
     if (action === 'route') showRoute();
     if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.atCheckpoint);
     if (action === 'suspend-mission') return suspendMission();
+    if (action === 'school-suspend') return suspendFirstFight();
     if (action === 'dispatch-rematch') beginRun(world.roomIndex, 0);
     if (['option-sound', 'option-shake', 'option-tiltStick','option-tiltStick2','option-flickJump1','option-flickJump2','option-quickAttack1','option-quickAttack2'].includes(action)) {
       const key = action.slice('option-'.length);
@@ -4891,56 +4909,6 @@
       undefined,undefined,null,{visit});
     startExercise(tip.id);
   }
-  const practiceGroups = [
-    ['Movement','Footwork','footwork', footworkPatterns],
-    ['Movement','Wavedash','wave',['back','platform']],
-    ['Movement','Platforms','platform',['below','top','hold','ferry','shield-drop','layers']],
-    ['Attack','Combo practice','combo',['example','confirm','throwChase','late','record','defend','mix','flurry','escapeFlurry']],
-    ['Attack','Aerial spacing','spacing',['approach','retreat','landing','airPower','fastfall','sweet','cancel','footstool','footstoolTech','reverse','wavebounce']],
-    ['Attack','Knockdowns','launch',['lock','bait','read','floor-spike','edge-spike']],
-    ['Attack','Move freshness','freshness',['training','ko','rage','drive']],
-    ['Defense','Combo escape','escape',['tip','close','counter','break','gripEscape','gripThrow','carry']],
-    ['Defense','Shield pressure','shield',['kick','drop','crossup','strike','grab','counterGrab','dodgeTiming','breakEscape','breakPunish','jumpIn','low','high','poke']],
-    ['Defense','Launch & survival','launch',['throw','juggle','breakaway','survival','last-stock','escape','stock-return','stock-catch']],
-    ['Defense','Air dodge','air',['neutral','edge','lastDodge','interrupted','highReturn']],
-    ['Recovery','Edgeguarding','edge',['lip','shortCatch','longCatch','tip','deep','corner','inside']],
-    ['Recovery','Ledge recovery','ledge',['training','right','attack-training']],
-    ['Recovery','Ledge timing','climb',['escape','trap','rise','coverRise','patience']],
-    ['Recovery','Ledge roll','roll',['guard','read','scout']],
-    ['Recovery','Contested ledge','trump',['take','defend','runoff','escape']],
-    ['Recovery','Stage techs & wall jumps','wall',['training','impact','ceiling','pip','noodle']],
-    ['Movement','Free practice','',['reset-training','partner-training']],
-  ];
-  const practiceAliases = {
-    'footwork-crawl':'Noodle Clover duck boomerang projectile skip serve', 'footwork-antiAir':'anti-air',
-    'footwork-angleHigh':'up angled forward tilt', 'footwork-angleLow':'down angled forward tilt',
-    'footwork-reflect':'Pip bark projectile Clover', 'footwork-returnFire':'Clover Pip projectile reflect',
-    'footwork-armor':'Brisket Haymaker armor', 'footwork-armorGrab':'Brisket armor grab',
-    'footwork-cancelDash':'attack cancel', 'footwork-cancelTurn':'attack cancel',
-    'spacing-landing':'short hop full jump flick', 'spacing-fastfall':'fast fall shield',
-    'platform-layers':'fall through platform drop fast fall aerial landing',
-    'escape-tip':'SDI smash directional influence', 'escape-close':'SDI smash directional influence',
-    'launch-survival':'directional influence DI knockout', 'launch-breakaway':'hitstun cancel tumble combo escape',
-    'launch-escape':'jab lock tech', 'launch-bait':'getup attack tech chase', 'launch-read':'tech chase roll reaction read mixup landing grab punish',
-    'launch-stock-return':'respawn invincibility angel platform', 'launch-stock-catch':'respawn invincibility angel platform',
-    'shield-kick':'Clover Disc Hook out of shield counter', 'shield-drop':'Clover Disc Hook out of shield counter',
-    'shield-grab':'spot dodge roll', 'shield-strike':'perfect shield release',
-    'shield-crossup':'shield grab back air out of shield cross up landing punish',
-    'shield-jumpIn':'empty hop falling aerial grab', 'freshness-training':'stale moves staling',
-    'freshness-drive':'launch height angle ground slide ledge side smash back air',
-    'air-lastDodge':'recovery low wide directional air dodge edgeguard',
-    'air-interrupted':'up special recovery hit reset return edgeguard',
-    'air-highReturn':'offstage high recovery short hop forward aerial edgeguard rival',
-    'trump-runoff':'ledge trump run off back aerial edgeguard follow up',
-    'trump-escape':'ledge trump run off roll jump avoid edgeguard',
-    'partner-training':'local two players sparring', 'reset-training':'free training dummy',
-    'wall-ceiling':'ceiling tech under stage recovery Noodle Pip',
-  };
-  const practiceTitles = {'roll-scout':'Teach the guard your ledge roll','reset-training':'Free training', 'shield-drop':'Punish Brisket’s Belly Drop',
-    'shield-strike':'Parry or roll through a strike', 'shield-grab':'Dodge an incoming grab', 'wall-impact':'Tech a heavy impact'};
-  function searchWords(value) {
-    return value.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-  }
   function startExercise(id) {
     if (world.mode === 'solo') {
       const visit = pausedFight();
@@ -4954,65 +4922,14 @@
       $(id).click();
     }
   }
-  function showPractice() {
-    backToPause = dialogType === 'pause';
-    const lanes = ['All', ...new Set(practiceGroups.map(group => group[0]))];
-    showDialog('practice', 'Find a drill',
-      '<label class="practice-search">Search drills<input id="practice-query" type="search" placeholder="Try jab lock, crawl, or parry" autocomplete="off"></label>' +
-      '<div class="practice-lanes" aria-label="Drill categories" role="group">' +
-      lanes.map(lane => '<button type="button" class="utility" data-lane="' + lane + '">' + lane + '</button>').join('') +
-      '</div><div id="practice-count" role="status"></div><div id="practice-results"></div>');
-    const query = $('practice-query'), results = $('practice-results');
-    let lane = 'All';
-    function refresh() {
-      const words = searchWords(query.value).split(' ').filter(Boolean);
-      let count = 0;
-      results.replaceChildren();
-      for (const [category, family, prefix, names] of practiceGroups) {
-        if (lane !== 'All' && lane !== category) continue;
-        const section = document.createElement('section');
-        const title = document.createElement('h3');
-        title.textContent = family;
-        section.append(title);
-        for (const name of names) {
-          const id = prefix ? prefix + '-' + name : name;
-          const label = practiceTitles[id] || $(id).textContent.trim();
-          const searchable = searchWords([category, family, label, practiceAliases[id] || '', id].join(' '));
-          if (!words.every(word => searchable.includes(word))) continue;
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.dataset.exercise = id;
-          button.textContent = label;
-          section.append(button);
-          count++;
-        }
-        if (section.children.length > 1) results.append(section);
-      }
-      $('practice-count').textContent = count ? count + (count === 1 ? ' drill' : ' drills') : 'No drills found.';
-      if (!count) {
-        const reset = document.createElement('button');
-        reset.className = 'utility'; reset.textContent = 'Show all drills';
-        reset.onclick = () => { lane = 'All'; query.value = ''; refresh(); document.querySelector('[data-lane="All"]').focus(); };
-        results.append(reset);
-      }
-      for (const button of document.querySelectorAll('[data-lane]')) button.setAttribute('aria-pressed', String(lane === button.dataset.lane));
-      results.scrollTop = 0;
-    }
-    query.oninput = refresh;
-    query.onkeydown = e => {
-      if (e.isComposing || !['ArrowDown','Enter'].includes(e.key)) return;
-      e.preventDefault();
-      const first = results.querySelector('button');
-      if (e.key === 'ArrowDown') first?.focus();
-      else first?.click();
+  function showPractice(){
+    const pauseMenu=dialogType==='pause';
+    const open=()=>{
+      backToPause=pauseMenu;
+      window.PracticeDirectory.show(footworkPatterns,showDialog,startExercise);
     };
-    for (const button of document.querySelectorAll('[data-lane]')) button.onclick = () => { lane = button.dataset.lane; refresh(); };
-    results.onclick = e => {
-      const entry = e.target.closest('[data-exercise]');
-      if (entry) startExercise(entry.dataset.exercise);
-    };
-    refresh();
-    document.querySelector('[data-lane="All"]').focus();
+    if(window.PracticeDirectory)return open();
+    waitForDispatch('Find a drill',()=>loadDispatch('PracticeDirectory'),open,pauseMenu?showPause:dismiss);
   }
   $('practice-menu').onclick = showPractice;
   $('return-fight').onclick = returnToFight;
@@ -5342,7 +5259,7 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
-    MatchReview:'match-review.js?v=stock-returns-1',
+    MatchReview:'match-review.js?v=first-stock-1',
     StockCall:'stock-call.js?v=1',
     FightCamera:'fight-camera.js?v=1',
     FighterEntrances:'fighter-entrances.js?v=1',
@@ -5355,7 +5272,7 @@
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=bell-wave-1',
-    DispatchSuspend:'dispatch-suspend.js?v=1',
+    DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -5509,6 +5426,49 @@
     await readMissionSaves();
     showHome();
   }
+  function saveFirstPosition(position){
+    const slot=schoolRuns.get(position.battle);
+    const save=()=>{
+      if(!slot || slot.finished || position.battle.end!==null)return Promise.resolve();
+      const key=position.tape.count+'/'+position.countdown;
+      if(slot.key===key)return slot.pending;
+      const record=window.DispatchSuspend.schoolCapture(position);
+      slot.key=key;
+      slot.pending=window.DispatchSuspend.writeSchool(slot,record).catch(error=>{
+        if(slot.key===key)slot.key=null;
+        throw error;
+      });
+      return slot.pending;
+    };
+    return window.MatchReview && window.DispatchSuspend?Promise.resolve().then(save):
+      Promise.all(['DispatchSuspend','MatchReview'].map(loadDispatch)).then(save);
+  }
+  async function suspendFirstFight(){
+    const position=pausedFight();
+    showDialog('mission-saving','Saving first match','<p role="status">Saving this fight…</p>',false);
+    try{await saveFirstPosition(position);}
+    catch(error){
+      showPause();
+      const alert=document.createElement('p');alert.setAttribute('role','alert');
+      alert.textContent=error.message==='Another tab has a newer first match.'?error.message:
+        'This browser could not save your fight. Keep playing or try again.';
+      $('dialog-body').prepend(alert);return;
+    }
+    await readMissionSaves();showHome();
+  }
+  function resumeFirstPosition(){
+    let resume;
+    waitForDispatch('Resume first match',async()=>{
+      await Promise.all(['DispatchSuspend','MatchReview'].map(loadDispatch));
+      resume=window.DispatchSuspend.schoolPosition(await window.DispatchSuspend.load('school-stock'));
+    },()=>{
+      leaveOnline();afterStory=null;
+      startMatch(firstFightConfig(resume.corner.target?.id),undefined,resume.checkpoint.openingSeed,null,{resume});
+      showDialog('pause','First match ready','<p>'+window.DispatchSuspend.schoolCard(resume.checkpoint.header).detail+'</p>'+
+        '<div class="dialog-actions"><button class="primary" data-do="resume">Resume fight</button></div>');
+      document.querySelector('[data-do=resume]').focus();
+    },showHome);
+  }
   function resumeMission(id){
     let record;
     waitForDispatch('Resume mission',async()=>{
@@ -5584,8 +5544,11 @@
   }
   function resumeSavedGame(id) {
     if (!savedGames().some(g=>g.id===id)) return showHome();
+    if (id==='school-stock')return resumeFirstPosition();
     if (missionSaves.some(s=>s.id===id))return resumeMission(id);
-    if (id==='school') return resumeCourse();
+    if (id==='school') return readMissionSaves().then(()=>{
+      if(page==='home')missionSaves.some(s=>s.id==='school-stock')?resumeFirstPosition():resumeCourse();
+    });
     if (id==='adventure') { selectChapter(nightUnlocked()?nightChapter:yardChapter); return continueAdventure(); }
     // Use the route card's checked transaction, including its cross-tab retry guard.
     cupSheet(id);
@@ -6339,8 +6302,11 @@
     afterStory=null;
     schoolSave.started=true;
     saveSchool({fight:target && schoolSave.rematch?.id===target?schoolSave.rematch.ticket:null});
-    startMatch({...settings,mode:'solo',schoolFinal:true,schoolTarget:target,p1:'pip',p2:'brisket',cpuLevel:'rookie',
-      stage:'picnic',form:'original',stockCount:3,timeBattle:false,fetch:false,minutes:7});
+    startMatch(firstFightConfig(target));
+  }
+  function firstFightConfig(target){
+    return {...settings,mode:'solo',schoolFinal:true,schoolTarget:target,p1:'pip',p2:'brisket',cpuLevel:'rookie',
+      stage:'picnic',form:'original',stockCount:3,timeBattle:false,fetch:false,minutes:7};
   }
   function startCornerLesson(){
     if(corner.practice.startsWith('launch-'))return startExercise(corner.practice);
@@ -7101,7 +7067,7 @@
     if (page === 'match' && !online.match && !paused && world?.end === null) showPause();
   }
   window.addEventListener('blur', onBlur);
-  window.addEventListener('focus',()=>{musicFocused=true;});
+  window.addEventListener('focus',()=>{musicFocused=true;if(page==='home')readMissionSaves();});
   const redrawPausedStage = () => {
     if(finishTrial)return drawFinishTrial(0);
     if (page === 'match' && world && view && (paused || frameLab.mode === 'frozen'))
@@ -7552,7 +7518,14 @@
         if (world.end!==null && !online.match) recordFight(world);
         if (world.endReason === 'time') $('countdown').textContent = 'Time!';
         if (world.lesson) renderSchool(pads);
-        if(corner)renderCorner(pads);
+        if(corner){
+          renderCorner(pads);
+          const slot=schoolRuns.get(world);
+          if(slot && world.end===null && (slot.losses!==world.matchCard.losses.length || world.matchFrames>=slot.nextSave)){
+            slot.losses=world.matchCard.losses.length;slot.nextSave=world.matchFrames+900;
+            saveFirstPosition(pausedFight()).catch(()=>{});
+          }
+        }
         if(spar && settings.cornerTips)spar.coach(world.matchFrames,promptDevice(pads),keyFor,padFor,$('corner-tip'),$('corner-title'),$('corner-line'));
         updateHUD();
       } else {

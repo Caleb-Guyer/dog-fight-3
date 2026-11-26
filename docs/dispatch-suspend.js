@@ -28,6 +28,58 @@
       s.mode==='adventure' && !s.finished && Number.isInteger(record.seed) && s.dogs?.[0]?.kind===book.chapterFighter &&
       Array.isArray(s.terrain) && Array.isArray(s.foes);
   }
+  const schoolId='school-stock';
+  function schoolCapture(position){
+    const {battle,tape,corner,countdown,lastCount,call,seed:openingSeed}=position;
+    if(battle.mode!=='solo' || battle.end!==null || !position.config.schoolFinal || !corner || !tape)
+      throw Error('First match unavailable');
+    tape.captureKnockouts(battle);
+    const {emit,random,...state}=battle;
+    const [pip,brisket]=battle.dogs;
+    const header={format,id:schoolId,token:crypto.randomUUID(),playedAt:Date.now(),stocks:pip.stocks,
+      damage:pip.damage,rivalStocks:brisket.stocks,rivalDamage:brisket.damage,coat:battle.coatFor(0)};
+    return structuredClone({header,state,openingSeed,seed:random.state,corner,countdown,lastCount,call,
+      packed:tape.length?window.MatchReview.pack(tape):null,
+      returning:tape.returning?tape.knockouts.find(c=>c.returnTape===tape.returning)?.first:null});
+  }
+  function schoolPosition(record){
+    const {state,corner,header}=record;
+    if(header?.id!==schoolId || header.format!==format || state?.end!==null || state?.mode!=='solo' ||
+        state.stage!=='picnic' || state.dogs?.[0]?.kind!=='pip' || state.dogs?.[1]?.kind!=='brisket' ||
+        !Number.isInteger(record.seed) || !Number.isInteger(record.openingSeed) || !(corner?.seen instanceof Set))
+      throw Error('Saved first match unavailable');
+    const coach=new window.FightSchool.Corner(corner.target?.id);
+    const target=coach.target && Object.assign(coach.target,corner.target);
+    Object.assign(coach,corner,{target});
+    return {checkpoint:record,corner:coach,tape:window.MatchReview.resumeTape(record.packed,state.matchCard.losses,record.returning),
+      countdown:record.countdown,lastCount:record.lastCount,call:record.call};
+  }
+  function writeSchool(slot,record){
+    const write=slot.writes.then(()=>transact('readwrite',(headers,runs,done)=>{
+      const read=headers.get(schoolId);
+      read.onsuccess=()=>{
+        const current=read.result;
+        const owned=slot.previous?current?.token===slot.previous.token:!current || current.playedAt<slot.began;
+        if(!owned){done(false);return;}
+        if(record){headers.put(record.header);runs.put(record,schoolId);}
+        else {headers.delete(schoolId);runs.delete(schoolId);}
+        done(true);
+      };
+    })).then(written=>{
+      if(!written){
+        if(record)throw Error('Another tab has a newer first match.');
+        return;
+      }
+      slot.previous=record?.header || null;
+    });
+    slot.writes=write.catch(()=>{});
+    return write;
+  }
+  function schoolCard(h){
+    const score=(n,p)=>n+(n===1?' stock':' stocks')+' · '+Math.round(p)+'%';
+    return {...h,kind:'pip',title:'First stock match',action:'Resume fight',
+      detail:'Pip '+score(h.stocks,h.damage)+' / Brisket '+score(h.rivalStocks,h.rivalDamage)};
+  }
   function transact(mode,operation){
     return new Promise((resolve,reject)=>{
       const opening=indexedDB.open(database,1);
@@ -59,7 +111,8 @@
   function list(){
     return transact('readonly',(headers,runs,done)=>{
       const read=headers.getAll();
-      read.onsuccess=()=>done(read.result.filter(h=>h.format===format && mission(h.chapter,h.room)).map(h=>{
+      read.onsuccess=()=>done(read.result.filter(h=>h.format===format && (h.id===schoolId || mission(h.chapter,h.room))).map(h=>{
+        if(h.id===schoolId)return schoolCard(h);
         const book=window.DispatchScript.chapters[h.chapter-1];
         return {...h,kind:book.chapterFighter,title:mission(h.chapter,h.room).name,action:'Resume mission',
           detail:'Suspended · '+h.stocks+(h.stocks===1?' stock':' stocks')+' · '+Math.round(h.damage)+'%'};
@@ -70,6 +123,7 @@
     const record=await transact('readonly',(headers,runs,done)=>{
       const read=runs.get(id);read.onsuccess=()=>done(read.result);
     });
+    if(id===schoolId && record?.header?.id===schoolId)return record;
     if(!valid(record))throw Error('Saved mission unavailable');
     return record;
   }
@@ -79,5 +133,5 @@
       read.onsuccess=()=>{if(read.result?.token===header.token){headers.delete(header.id);runs.delete(header.id);}};
     });
   }
-  window.DispatchSuspend={capture,restore,save,list,load,clear};
+  window.DispatchSuspend={capture,restore,save,list,load,clear,schoolCapture,schoolPosition,schoolCard,writeSchool};
 })();
