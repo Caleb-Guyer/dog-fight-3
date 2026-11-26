@@ -215,7 +215,9 @@ async function match(browser,device){
     await choose('[data-do=clip-back]');await page.clock.runFor(100);await choose('#film-back');
     assert.equal(await page.locator('#dialog').getAttribute('data-view'),'record-card');
     await choose('[data-saved-clip=full]');await choose('#film-knockouts summary');
-    await choose('[data-stock-at][data-stock-slot="1"]');
+    const pipStocks='[data-stock-at][data-stock-slot="1"]';
+    assert.equal(await page.locator(pipStocks).count(),3);
+    await choose(pipStocks+' >> nth=0');
     assert.equal(await page.locator('#dialog-title').textContent(),'Retry P2’s stock 1');
     await choose('#stock-together');
     assert.match(await page.locator('#match-mode').textContent(),/P2 Pip · Play together/);
