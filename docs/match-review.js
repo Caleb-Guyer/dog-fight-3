@@ -284,6 +284,10 @@
     const pauseAt=frame=>{stop();jump(frame);};
     jump(at??0);
     el('film-stage').textContent=stageName(player.battle.stage,player.battle.form);
+    // Scrubbing pauses immediately, even if Home lands on the current frame.
+    function holdTimeline(){if(playing){stop();paint(0);}}
+    seek.onpointerdown=holdTimeline;
+    seek.onkeydown=e=>{if(['Home','End','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key))holdTimeline();};
     seek.oninput=()=>pauseAt(Number(seek.value));
     el('film-rewind').onclick=()=>pauseAt(Math.max(0,player.frame-300));
     el('film-forward').onclick=()=>pauseAt(Math.min(player.length,player.frame+300));
