@@ -2752,6 +2752,14 @@
         this.setLedgeTrap({index:this.terrain.indexOf(floor),left,x:left?floor.x1:floor.x2,y:floor.y});
       }
       if (config.highReturn && this.mode === 'solo') this.placeHighReturn(config.highReturn);
+      if (config.liftOpening && this.mode === 'solo') {
+        const [guard,returner]=this.dogs;
+        returner.stocks=Math.max(1,returner.stocks-1);
+        this.beginStockReturn(returner);
+        const lift=returner.stockLift;
+        Object.assign(guard,{ground:lift.landing,x:lift.x+returner.face*43,y:this.terrain[lift.landing].y,
+          face:-returner.face,damage:55});
+      }
       if (config.runoffTrump && this.mode === 'solo') this.placeRunoffTrump(config.runoffTrump,1);
       if(config.scoutedRoll && this.mode==='solo' && this.cpuLevel==='rival'){
         const left=config.scoutedRoll.side!=='right', floors=this.terrain.filter(p=>!p.thin);
@@ -2811,6 +2819,7 @@
       }
       // Solo replays reconstruct the CPU. Older checkpoints retain the footwork they recorded.
       if (this.cpuLevel === 'rival') this.bot.dashBackEnabled = true;
+      if (this.mode==='solo' && this.cpuLevel==='rival')this.bot.liftReadEnabled=true;
       this.matchCard = versus && config.lesson === undefined ? {
         players:this.dogs.map(f => ({kind:f.kind, coat:this.coatFor(f.index), damage:0, hits:0, blocks:0, parries:0,
           techs:0, knockdowns:0, shieldBreaks:0, lastHit:null})),
@@ -2829,7 +2838,7 @@
     resetCpu() {
       const memory = this.bot;
       this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
-      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled'])
+      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','liftReadEnabled'])
         if (memory[key] !== undefined) this.bot[key] = memory[key];
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
@@ -2891,6 +2900,7 @@
           !f.absent && !f.stockLift && !f.attack && !f.grip && !f.vx && !f.vy);
     }
     beginStockReturn(f, lane = f.index) {
+      if(f.index===1)delete this.bot.liftApproach;
       const ground = this.layout?.spawns[lane]?.ground ?? (this.geometryStage === 'laundry' && lane === 1 ? 1 : 0);
       const floor = this.terrain[ground], middle = (floor.x1 + floor.x2) / 2;
       const x = this.terrain.filter(p => !p.thin).length > 1 ? middle :
@@ -10928,12 +10938,43 @@
       if (!lift.ready) return idleInput;
       const dx = foe.x - f.x, move = foe.attack;
       const camping = Math.abs(dx) < 145 && foe.y > f.y && foe.y - f.y < 195;
+      if (this.cpuLevel==='rival' && this.bot.liftReadEnabled && foe.ground===lift.landing && camping && !protectionTime(foe) &&
+          dx*f.face>=0 && dx*f.face<=58 && Math.abs(foe.vx)<70 && !foe.dodge && !foe.floorAction) {
+        // Read the landing once. The defender can still move or shield after the lift leaves.
+        this.bot.liftApproach={floor:lift.landing,grab:foe.shield,target:foe.x,height:bodyHeight(foe),until:this.time+.9};
+        this.bot.hop=null;this.bot.hold=this.bot.guard=this.bot.jumpHold=0;
+        return {...idleInput,y:1};
+      }
       if (camping && (foe.smashCharge || (move && move.time < move.start + move.active)) &&
           lift.time < liftArrival + 0.38) return idleInput;
       const floor = this.terrain[lift.landing], space = floor.x2 - f.x > f.x - floor.x1 ? 1 : -1;
       let side = dx ? -Math.sign(dx) : space;
       if (f.x + side * 82 < floor.x1 + 12 || f.x + side * 82 > floor.x2 - 12) side = space;
       return { ...idleInput, y: 1, x: camping ? side * 0.84 : 0 };
+    }
+    cpuPressReturn(f) {
+      const plan=this.bot.liftApproach;
+      if (!plan)return null;
+      if (!f.stockGuard || this.time>plan.until || f.stun || f.tumble || f.grip || f.ledge ||
+          f.airDodge || (f.ground>=0 && f.ground!==plan.floor)) {
+        delete this.bot.liftApproach;return null;
+      }
+      if(f.ground>=0){
+        if(f.landingLag || f.attack)return idleInput;
+        delete this.bot.liftApproach;
+        if(plan.grab)return {...idleInput,grabX:Math.sign(plan.target-f.x)||f.face,tapped:{grab:true}};
+        return null;
+      }
+      if(!plan.grab && !plan.swung){
+        const move=moves[f.kit.air.down], t=move.start;
+        const y=move.plunge?f.y:f.y+f.vy*t+770*f.kit.gravity*t*t;
+        const center=this.terrain[plan.floor].y-plan.height*.52;
+        if(y+move.box[1]+move.box[3]+plan.height*.4>=center){
+          plan.swung=true;
+          return {...idleInput,aimStick:true,smashY:1,tapped:{aimStick:true}};
+        }
+      }
+      return idleInput;
     }
     cpuWaitForReturn(f, foe) {
       if ((!foe.stockLift && !foe.stockGuard) || f.ground < 0 || f.stun || f.dodge || f.floorAction || f.grip) return null;
@@ -11237,6 +11278,10 @@
         if (f.attack?.dashAttack && cancelableWindup(f)) return {...idleInput,x:dir,grab:true};
       }
       if (f.stockLift) return this.cpuLiftExit(f, foe);
+      if (brain.liftApproach) {
+        const input=this.cpuPressReturn(f);
+        if(input)return input;
+      }
       // A direction held through the catch would queue a throw before Rival can assess the hold.
       if (this.cpuLevel === 'rival' && foe.damage >= 65 && f.ground >= 0 && f.attack?.grabAttempt &&
           f.attack.time < f.attack.start + f.attack.active && !f.grip) return idleInput;
