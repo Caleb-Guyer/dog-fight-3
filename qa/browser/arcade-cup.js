@@ -74,6 +74,18 @@ async function playCup(browser) {
   await assertRound('pip','rival');await finish(1,'Round 3 clear');await tap('cup-next');
   await page.waitForFunction(()=>window.fight?.mode==='adventure');
   assert.deepEqual(await page.evaluate(()=>[fight.dogs[0].kind,fight.dogs[0].stocks,fight.foes[0].hp]),['noodle',3,170]);
+  // Set up the second phase and play its first attack through the regular keyboard handler.
+  await page.keyboard.down('l');
+  await page.evaluate(()=>{
+    const boss=fight.foes[0],hero=fight.dogs[0];
+    boss.hp=boss.maxHP/2;boss.phase='approach';boss.time=0;
+    hero.x=boss.f.x-165;
+  });
+  await page.waitForFunction(()=>document.querySelector('#dispatch-objective').textContent.includes('Bell winding up'));
+  await page.waitForFunction(()=>fight.foes[0].wavefront?.spent);
+  assert.deepEqual(await page.evaluate(()=>[fight.dogs[0].damage,fight.dogs[0].stocks,fight.dogs[0].shieldHP<1]),[0,3,true]);
+  await page.keyboard.up('l');
+  await page.waitForFunction(()=>document.querySelector('#dispatch-objective').textContent.includes('Lamp open'));
   await page.locator('#pause').click(); await tap('cup-sheet');
   assert.match(await page.locator('[data-do=cup-start]').textContent(),/Retry round 4/);
   await tap('cup-start'); await finish(1,'Arcade Cup clear!');
