@@ -92,7 +92,10 @@
     const get=id=>root.querySelector('#tourney-'+id);
     const state=line.bracket(),champ=line.players[state.champion];
     const icon=(p)=>{const img=new Image();img.alt='';img.src=portrait(p.kind,p.coat);return img;};
-    const persist=()=>{const ok=save();get('status').textContent=ok?'Progress saved in this tab. An interrupted pairing restarts from game one.':'Progress lasts until you leave this page.';};
+    const persist=()=>{
+      const message=champ?'Results saved in this tab.':line.started?'Progress saved in this tab. An interrupted pairing restarts from game one.':'Signup saved in this tab.';
+      get('status').textContent=save()?message:'Progress lasts until you leave this page.';
+    };
     const redraw=()=>board(root,line,{portrait,save,play,back,end});
     root.innerHTML=(line.started?'':'<p>Enter two to eight players in seed order. Higher seeds receive first-round byes.</p><ol class="rotation-line" id="tourney-roster"></ol>'+
       '<div class="dialog-actions">'+btn('add','Add player')+btn('shuffle','Shuffle seeds')+btn('format',line.sets?'Best of three':'Single game')+'</div>')+
