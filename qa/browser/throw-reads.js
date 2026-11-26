@@ -80,6 +80,32 @@ async function play(browser, device) {
         }else await page.keyboard.press('Enter');
       }
     };
+    await select('#clip-defense summary');
+    await page.locator('.defense-result').filter({hasText:/Brisket caught Pip with Bear Hug/}).waitFor();
+    await select('[data-reply=guard]');
+    assert.match(await page.locator('.defense-result').textContent(),/Brisket caught Pip/);
+    await select('[data-lead="3"]');await select('[data-reply=spot]');
+    assert.match(await page.locator('.defense-result').textContent(),/No hit or grab/);
+    await select('[data-reply=attack]');
+    assert.match(await page.locator('.defense-result').textContent(),/Pip hit Brisket with Quick Paw/);
+    const picture=page.locator('#clip-defense canvas'),box=await picture.boundingBox();
+    assert(box.width>150 && box.x>=0 && box.x+box.width<=page.viewportSize().width+1);
+    await select('[data-watch-reply]');await page.clock.runFor(1100);
+    assert.match(await page.locator('.defense-result').textContent(),/Pip hit Brisket/);
+    await select('[data-play-defense]');
+    if(pad)await page.evaluate(()=>attackButton(true));
+    else if(touch){
+      const a=await page.locator('[data-touch=attack]').boundingBox();
+      await finger.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:a.x+a.width/2,y:a.y+a.height/2}]});
+    }else await page.keyboard.down('j');
+    await page.clock.runFor(915);
+    if(pad)await page.evaluate(()=>attackButton(false));
+    else if(touch)await finger.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    else await page.keyboard.up('j');
+    await page.clock.runFor(2500);
+    assert.match(await page.locator('#dialog-body').textContent(),/You survived the original knockout/);
+    assert(await page.evaluate(()=>JSON.stringify(liveStock.matchCard)===beforeStudy));
+    await press('[data-do=trial-replay]');
     await select('#clip-launch summary');
     await select('#clip-launch button[aria-label=Center]');
     await page.locator('.flight-result').filter({hasText:/Center · KO at the left line/}).waitFor();

@@ -142,3 +142,65 @@ test('double KOs share a clip and long Time Battles retain the latest twelve dis
     assert.deepEqual(after.losses.at(-1),w.matchCard.losses[c.first+c.losses.length-1]);
   }
 });
+for(const [opening,slot] of [['edge',0],['perch',0],['perch',1]]){
+  test('rewinding the throw on '+opening+' gives P'+(slot+1)+' control before the actual grab',()=>{
+    const {clip}=launchRecording(opening,slot),f=window.FinishTools;
+    const saved=clip.playback(clip.length).battle.matchCard;
+    const {escape,contact}=f.analyze(clip,slot);
+    assert.equal(contact.kind,'grab');assert.equal(contact.move,'Bear Hug');
+    assert.equal(escape.label,'Before Bear Hug');assert(escape.frame<contact.frame);
+    assert.equal(clip.playback(escape.frame).battle.grapple,null);
+    const run=(key,lead)=>{
+      const r=f.defenseReply(clip,contact,lead,key);
+      while(r.step()){}
+      return r;
+    };
+    const recorded=run('recorded',8);
+    assert.deepEqual(recorded.player.battle.dogs,clip.playback(recorded.end).battle.dogs);
+    assert.match(recorded.events[0].text,/Brisket caught Pip with Bear Hug/);
+    assert.equal(recorded.events[0].frame,contact.frame);
+    assert.match(run('guard',8).events[0].text,/Brisket caught Pip/);
+    assert.match(run('attack',3).events[0].text,/Pip hit Brisket with Quick Paw/);
+    const dodge=run('spot',3);assert(!dodge.events.some(e=>e.text.includes('caught Pip')));
+    assert.deepEqual(clip.playback(clip.length).battle.matchCard,saved);
+    assert.equal(f.analyze(clip,1-slot).contact,null);
+  });
+}
+test('block, parry, clash and jump previews match an independent fight at both timings',()=>{
+  const options={stage:'nightmail',form:'trio',mode:'local',p1:'pip',p2:'brisket',stockCount:3,fetch:false};
+  function setup(){
+    const w=new Battle(options,undefined,seededRandom(31)),p=w.terrain[0];
+    Object.assign(w.dogs[0],{x:p.x1+3,y:p.y,ground:0,face:1,damage:420});
+    Object.assign(w.dogs[1],{x:p.x1+45,y:p.y,ground:0,face:-1});return w;
+  }
+  const original=setup(),tape=new FinishTape();
+  const rival=n=>n===14?{...idleInput,tapped:{attack:true}}:idleInput;
+  for(let n=1;n<=180 && !original.matchCard.losses.length;n++){
+    tape.record(original,idleInput,rival(n));original.step(1/60,idleInput,rival(n));
+  }
+  const contact=window.FinishTools.analyze(tape,0).contact;
+  assert.equal(contact.kind,'hit');assert.equal(contact.move,'Body Check');assert.equal(contact.frame,18);
+  for(const lead of [3,8,15])for(const key of ['guard','parry','jump','spot','attack','recorded']){
+    const r=window.FinishTools.defenseReply(tape,contact,lead,key),w=setup();
+    while(r.step()){}
+    for(let n=1;n<=r.end;n++){
+      const first=n===r.start+1,live=n>r.start;
+      let a=idleInput;
+      if(live){
+        if(key==='jump')a={...idleInput,jump:true,tapped:first?{jump:true}:undefined};
+        if(key==='guard' || key==='parry' && first)a={...idleInput,shield:true,tapped:first?{shield:true}:undefined};
+        if(key==='attack' && first)a={...idleInput,attack:true,tapped:{attack:true}};
+        if(key==='spot' && first)a={...idleInput,y:1,shield:true,tapped:{shield:true}};
+      }
+      w.step(1/60,a,rival(n));
+    }
+    assert.deepEqual(r.player.battle.dogs,w.dogs,key+' at '+lead);
+    if(key==='parry')assert.equal(r.events.some(e=>e.text==='Pip parried'),lead===3);
+    if(key==='guard')assert.match(r.events[0].text,/Pip blocked Body Check/);
+    if(key==='attack' && lead===3)assert.match(r.events[0].text,/clashed/);
+  }
+});
+test('a fall without a recorded attack or a time win offers no defensive reply',()=>{
+  assert.equal(window.FinishTools.analyze(play('ko',15),1).contact,null);
+  assert.equal(window.FinishTools.analyze(play('clock',30),0).contact,null);
+});
