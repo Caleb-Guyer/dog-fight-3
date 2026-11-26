@@ -26,11 +26,18 @@ async function observe(page) {
       if(ctx.canvas.classList?.contains('victory-shot')) window.lastPodium={kind,coat:options.coat};
       return art.draw(ctx,kind,x,y,options);
     }};
-    const update=YardScore.Player.prototype.update;
-    YardScore.Player.prototype.update=function(...args){
-      window.observedScore=this;
-      return update.apply(this,args);
-    };
+    function observeScore(score){
+      const update=score.Player.prototype.update;
+      score.Player.prototype.update=function(...args){
+        window.observedScore=this;
+        return update.apply(this,args);
+      };
+    }
+    if(window.YardScore)observeScore(window.YardScore);
+    else Object.defineProperty(window,'YardScore',{configurable:true,set(score){
+      Object.defineProperty(window,'YardScore',{value:score,writable:true,configurable:true});
+      observeScore(score);
+    }});
     const proto=DogFight.Battle.prototype,step=proto.step,cpu=proto.cpu;
     proto.step=function(...args){
       window.observedBattle=this;
