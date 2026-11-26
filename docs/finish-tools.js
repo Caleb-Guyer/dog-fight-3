@@ -34,14 +34,16 @@
       return row(dog+' exit',exit(a),exit(b))+row(dog+' protection',protection(a),protection(b));
     }).join('')+row('First hit',recorded.firstHit || 'No hit',attempt.firstHit || 'No hit');
   }
-  function analyze(tape,slot,follow){
+  function analyze(tape,slot,follow,allMoments=false){
     const list=[];
+    const seat=f=>'P'+(f.index+1)+' '+f.stats.name;
+    const percent=n=>(Math.round(n*10)/10)+'%';
     let player,escape=null,knockedOut=false,lifeStart=0,launch=null,contact=null,grip=null;
     const markEscape=(frame,label)=>{escape={frame:Math.max(lifeStart,frame-15),label};};
     player=tape.playback(0,(event,e)=>{
       const frame=player.frame+1;
       if(follow){follow.observe(event,e,frame);return;}
-      let label;
+      let label,detail,hit;
       if(event==='grabCatch' && e.target.index===slot){
         grip={frame,slot,owner:e.f.index,kind:'grab',move:moveName(e.moveId,'Grab'),from:lifeStart};
         contact=grip;
@@ -52,6 +54,10 @@
         const move=moveName(id,e.name);
         label=(who?who.stats.name+' · ':'')+move;
         const target=event==='hit'?e.f:e.target;
+        if(event==='hit' && who && target && who.index!==target.index){
+          hit={owner:who.index,target:target.index};
+          detail=seat(who)+' landed '+move+' for '+percent(e.damage)+'.';
+        }
         if(target?.index===slot){
           launch=null;markEscape(frame,'Before '+move);
           if(event==='throwRelease' || e.name==='throw' || pummels[id]){
@@ -69,11 +75,27 @@
         label=e.f.stats.name+' · KO';
         if(e.f.index===slot)knockedOut=true;
       }
+      else if(event==='attackClash'){
+        label=e.projectile?'Disc clash':'Attack clash';
+        if(e.winner!=null){
+          const winner=player.battle.dogs[e.winner];
+          label=winner.stats.name+' · Breakthrough';
+          detail=seat(winner)+' won the clash and the attack carried through.';
+        }else detail=e.projectile?'The swing knocked the disc out of play.':'Both attacks recoiled when their hitboxes met.';
+      }
+      else if(event==='grabClash'){label='Grab clash';detail='Both dogs grabbed on the same frame and pushed apart.';}
       else if(event==='parry')label=e.f.stats.name+' · Parry';
       else if(event==='win' && player.battle.endReason==='time')label='Time expired';
       if(!label)return;
-      if(list.at(-1)?.frame===frame && list.at(-1).label===label)return;
-      list.push({frame,label});
+      if(hit){
+        const other=list.findLast(m=>m.frame===frame && m.hit?.owner===hit.target && m.hit.target===hit.owner);
+        if(other){
+          other.label='Traded hits';other.detail+=' '+detail;delete other.hit;return;
+        }
+      }
+      const last=list.at(-1);
+      if(last?.frame===frame && last.label===label && (!hit || last.hit?.owner===hit.owner))return;
+      list.push({frame,label,...(detail?{detail}:{}),...(hit?{hit}:{})});
     });
     while(player.frame<player.length){
       const dog=player.battle.dogs[slot];
@@ -90,7 +112,7 @@
       }
     }
     // A solo CPU has no recorded stick to substitute. Both seats of a two-player tape do.
-    return {marks:follow?follow.marks:list.slice(-4),launch:knockedOut && (slot===0 || player.battle.mode==='local') ? launch : null,
+    return {marks:follow?follow.marks:allMoments?list:list.slice(-4),launch:knockedOut && (slot===0 || player.battle.mode==='local') ? launch : null,
       contact:knockedOut && (slot===0 || player.battle.mode==='local')?contact:null,
       escape:escape || {frame:Math.max(lifeStart,player.length-90),label:'Before the knockout'}};
   }
@@ -406,17 +428,32 @@
       worker.postMessage({type:'start',width:out.width,height:out.height});
     });
   }
-  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow}){
+  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
-    const {marks,escape,launch,contact}=analyze(tape,slot,follow);
+    const {marks,escape,launch,contact}=analyze(tape,slot,follow,!!retryMoment);
     escapeReady?.(escape);
     if(contact && practiceLaunch)defensePanel(nav,tape,contact,jump,practiceLaunch,signal);
     if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch,signal);
-    for(const {frame,label} of marks){
+    let selected=null,panel,line,lead;
+    if(retryMoment && marks.length){
+      panel=document.createElement('section');panel.id='clip-retry';panel.hidden=true;
+      panel.innerHTML='<p aria-live="polite"></p><div class="dialog-actions"><button type="button" class="utility">Try as P1</button><button type="button" class="utility">Try as P2</button></div>';
+      nav.after(panel);line=panel.querySelector('p');
+      panel.querySelectorAll('button').forEach((b,i)=>{b.onclick=()=>retryMoment(lead,i,selected.frame);});
+    }
+    function select(mark){
+      if(!panel)return;
+      selected=mark;lead=Math.max(0,mark.frame-30);
+      line.textContent=(mark.detail || mark.label+'.')+' Try again from '+(mark.frame-lead)+' frame'+(mark.frame-lead===1?'':'s')+' before contact.';
+      panel.hidden=false;
+    }
+    for(const mark of marks){
+      const {frame,label}=mark;
       const b=document.createElement('button');b.type='button';b.className='utility';
       b.textContent=label;b.dataset.clipMoment=frame;b.title='Jump to frame '+frame;
-      b.onclick=()=>jump(frame);nav.append(b);
+      b.onclick=()=>{jump(frame);select(mark);};nav.append(b);
     }
+    if(panel && marks.some(m=>m.frame===frame()))select(marks.find(m=>m.frame===frame()));
     nav.hidden=marks.length===0;
     let url=null,active=null;
     signal.addEventListener('abort',()=>{active?.abort();if(url)URL.revokeObjectURL(url);},{once:true});
@@ -443,7 +480,8 @@
         status.textContent=e.name==='AbortError'?'GIF cancelled.':'Could not make the GIF. Try again.';
       }finally{active=null;}
     };
-    return inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump,signal});
+    const sync=inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump,signal});
+    return ()=>{sync();if(panel && selected)panel.hidden=frame()!==selected.frame;};
   }
   window.FinishTools={install,moments,analyze,inputFrame,launchFlight,defenseReply,returnTrace,returnComparison};
 })();
