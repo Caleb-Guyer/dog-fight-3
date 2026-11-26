@@ -2894,7 +2894,8 @@
       }
       if (this.launchTrace) launchDirections(ctx, this.launchTrace);
       if (Math.abs(a.x-b.x) > 14) this.leftFighter = a.x < b.x ? 0 : 1;
-      fighterTags(ctx, world, this.leftFighter);
+      const entrance=this.entrance && window.FighterEntrances;
+      if(!entrance)fighterTags(ctx, world, this.leftFighter);
       for (const f of world.dogs) {
         const speed = Math.hypot(f.vx, f.vy);
         if (!reduced.matches && f.stun > 0 && speed > 460 && world.time - this.lastTrail[f.index] > 0.052) {
@@ -2911,7 +2912,10 @@
       }
       for (const e of this.effects) if (e.behind) drawEffect(ctx, e);
       const poseTime = world.end === null ? world.time : time;
-      if (world.grapple) {
+      if(entrance){
+        for(const dog of world.dogs)entrance.draw(ctx,dog,world,this.entrance.remaining,reduced.matches || this.entrance.still);
+        entrance.names(ctx,world,this.entrance.seats);
+      }else if (world.grapple) {
         const grip = world.grapple,
           holder = world.dogs[grip.owner],
           captive = world.dogs[grip.target];

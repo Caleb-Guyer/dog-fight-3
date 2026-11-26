@@ -2955,6 +2955,12 @@
       }
       if (this.mode === 'training' && f.index === 1) f.damage = this.trainingDamage;
     }
+    atStartingMarks() {
+      const marks=stageLayouts[this.geometryStage]?.spawn;
+      return (this.mode==='local' || this.mode==='solo') && !this.matchFrames && !this.suddenDeath && !!marks &&
+        this.dogs.every((f,i)=>f.x===marks[i] && f.ground>=0 && f.y===this.terrain[f.ground].y &&
+          !f.absent && !f.stockLift && !f.attack && !f.grip && !f.vx && !f.vy);
+    }
     beginStockReturn(f, lane = f.index) {
       const ground = this.layout?.spawns[lane]?.ground ?? (this.geometryStage === 'laundry' && lane === 1 ? 1 : 0);
       const floor = this.terrain[ground], middle = (floor.x1 + floor.x2) / 2;

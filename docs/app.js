@@ -2074,6 +2074,12 @@
     $('pause-label').textContent = world.warmupPartner ? 'Warm-up menu' : online.match ? 'Match menu' : 'Pause';
     const position = rehearsal ? visit : resume;
     countdown = position ? position.countdown : world.lesson || config.mode === 'training' || world.suddenDeath || leadInFrames ? 0 : 2.4;
+    if(!position && countdown && world.atStartingMarks?.()){
+      const intro={remaining:countdown,seats:[labelFor(0),labelFor(1)],still:false};
+      view.entrance=intro;
+      // A late asset can still identify the matchup without starting a walk-in halfway through.
+      loadDispatch('FighterEntrances').then(()=>{intro.still=intro.remaining<1.95;}).catch(()=>{});
+    }else if(!position || !countdown)view.entrance=null;
     lastCount = position?.lastCount || 0;
     resultDelay = 0;
     hudKey = '';
@@ -2085,7 +2091,8 @@
     view.draw($('game'), world, 0, 0);
     $('game').focus({ preventScroll: true });
     window.scrollTo(0, 0);
-    announce(matchName + ' on ' + stageName(config.stage,world.form));
+    const matchup=view.entrance?world.dogs.map((f,i)=>view.entrance.seats[i]+' '+f.stats.name).join(' versus ')+'. ':'';
+    announce(matchup + matchName + ' on ' + stageName(config.stage,world.form));
   }
   function toLobby() {
     corner=spar=null;
@@ -5323,6 +5330,7 @@
     MatchReview:'match-review.js?v=stock-returns-1',
     StockCall:'stock-call.js?v=1',
     FightCamera:'fight-camera.js?v=1',
+    FighterEntrances:'fighter-entrances.js?v=1',
     PlayerProfiles:'player-profiles.js?v=1',
     VersusRulebook:'versus-rules.js?v=throw-reads-1',
     PackRelay:'pack-relay.js?v=1',
@@ -7280,7 +7288,7 @@
           const held=pad.buttons.slice(0,8).reduce((mask,b,i)=>b.pressed?mask|(1<<i):mask,0);
           if(held)menuPadButtons.set(pad.index,held);
         }
-        dismiss();countdown=2.4;lastCount=0;
+        dismiss();view.entrance=null;countdown=2.4;lastCount=0;
       };
       $('pad-resume').focus({preventScroll:true});
     }else if(before===seats.present && lost===seats.lost)return;
@@ -7440,6 +7448,15 @@
       let steppedFrame = false;
       if (countdown > 0) {
         countdown = Math.max(0, countdown - dt);
+        if(view.entrance){
+          const intro=view.entrance;
+          for(const f of world.dogs){
+            const mark=1.96-.40*f.index;
+            if(intro.remaining>mark && countdown<=mark)window.FighterEntrances?.cue(f.kind,tone);
+          }
+          intro.remaining=countdown;
+          if(!countdown)view.entrance=null;
+        }
         const number = Math.ceil(countdown / 0.8);
         if (number !== lastCount) {
           lastCount = number;

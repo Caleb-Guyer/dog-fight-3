@@ -64,6 +64,8 @@ Choose **Find a drill** in Training or from a paused Solo fight. Search for a si
 
 Hold a direction during the opening countdown to start moving on **GO!**. A button tapped and released before the bell leaves your dog free to act.
 
+During the countdown, Pip chases an airmail letter, Brisket rides a handcart, Noodle swings down on a lead and Clover catches her disc. The plates beneath their feet show each dog's name and player slot, including your seat in an online room. Reduced motion shows a still lineup. [See the Night Mail opening](https://caleb-guyer.github.io/dog-fight-3/#solo/night-mail)
+
 After a knockout, your next stock arrives on an airmail lift. When its lamps turn mint, tap **Down** to drop, a **side** to step off, or **Jump** to spring away with an air jump in reserve. An aerial attack, Special or air dodge can also take you off the lift. Four mail tags show how much protection you carry. Leave as it docks for up to 96 frames of protection. Wait the full two seconds and it drops you with 24 frames. Both players can see the last tag go out.
 
 Open a **KO replay → Watch stock return** to see what both dogs did after the knockout. The recording runs for up to four seconds, until the next knockout or the end of the fight. Jump to the lift exit, the end of protection, or the first hit. **Play the return** puts either dog under your P1 controls from the moment the lift appears. Compare your exit, protection frames and first hit with the recording, then retry the same position. Fight Records keeps these return clips with newly saved matches. To try it, [play the Night Mail throw](https://caleb-guyer.github.io/dog-fight-3/#solo/throw-read/perch), let Brisket take the stock, play for four more seconds, then open **Pause → KO replays**.
