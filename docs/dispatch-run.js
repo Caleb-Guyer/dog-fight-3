@@ -70,6 +70,17 @@
       return clamp(hero.x + lead - this.cameraWidth / 2, 0, travel);
     }
     coatFor(slot) { return slot === 0 ? this.cupCoat : 0; }
+    rehearseBoss(move, emit) {
+      if (this.layout.rules !== 'boss' || !['stamp', 'charge', 'bell'].includes(move)) return null;
+      const run = new DispatchRun({chapter: this.chapter, room: this.roomIndex}, emit);
+      const boss = run.foes[0], pip = run.dogs[0];
+      run.bossLesson = {move, opened: false, countered: false};
+      pip.x = boss.f.x - ({stamp: 92, charge: 200, bell: 135})[move];
+      if (move === 'charge') boss.cycle = 1;
+      if (move === 'bell') boss.hp = boss.maxHP / 2;
+      run.cameraX = run.cameraTarget();
+      return run;
+    }
     setCameraWidth(width) {
       if (width === this.cameraWidth) return;
       this.cameraWidth = width;
@@ -86,6 +97,8 @@
       const boss = this.foes[0];
       if (boss?.kind === 'conductor') {
         if (boss.phase === 'windup' && boss.move === 'bell') return 'Bell winding up · Jump the floor wave or shield.';
+        if (boss.phase === 'windup' && boss.move === 'stamp') return 'Paw raised · Shield the stamp or step out of reach.';
+        if (boss.phase === 'windup' && boss.move === 'charge') return 'Charge winding up · Jump the rush or hold Shield.';
         const wave = boss.wavefront, hero = this.dogs[0];
         if (wave && !wave.spent && wave.radius <= Math.abs(hero.x - wave.x) + hero.stats.width + 10)
           return 'Floor wave · Jump over the brass crest.';
@@ -147,6 +160,10 @@
     }
     knockouts(out) {
       const hero = this.dogs[0];
+      if (this.bossLesson) {
+        this.finished = out.includes(hero) ? 'fell' : this.bossLesson.countered ? 'countered' : 'missed';
+        return;
+      }
       if (this.bridge) { this.finished = 'fallen'; return; }
       // Resolve the whole physics tick before choosing a winner, including simultaneous last stocks.
       for (const f of out) {
@@ -177,7 +194,10 @@
           this.park(f);
           this.emit('machineDown', { f, kind: f.encounter.kind });
         } else if (f.index) this.placeOpponent(f.encounter, true);
-        else this.spawn(hero, true);
+        else {
+          this.spawn(hero, true);
+          delete this.lastBossHit;
+        }
       }
       if (tie) this.emit('stockTie', { f: hero });
     }
@@ -187,6 +207,7 @@
       const applied = super.dealDamage(target, boss ? Math.round(amount * scale * 10) / 10 : amount, preserveCombo);
       if (e) e.hurt = 0.13;
       if (boss) {
+        if (this.bossLesson && e.phase === 'stun' && applied > 0) this.bossLesson.countered = true;
         e.hp = Math.max(0, e.hp - applied);
         target.damage = Math.min(target.damage, 45);
       }
@@ -196,6 +217,11 @@
       const planted = target.encounter?.kind === 'conductor' && target.ground >= 0 && !target.grip;
       const floor = target.ground, feet = target.y;
       const connected = super.hit(target, ...args);
+      const attacker = args[0].encounter;
+      if (connected && target.index === 0 && attacker?.kind === 'conductor') {
+        this.lastBossHit = args[8]?.projectile ? 'bell' : attacker.move;
+        if (this.bossLesson) this.finished = 'caught';
+      }
       if (connected && planted) {
         target.ground = floor;
         target.y = feet;
@@ -362,6 +388,13 @@
           if (e.wavefront) this.advanceBell(e, dt);
           this.machineContact(e);
         }
+      }
+      if (this.bossLesson) {
+        const lesson = this.bossLesson, boss = this.foes[0];
+        if (boss.phase === 'stun') lesson.opened = true;
+        if (!this.finished && ((lesson.opened && boss.phase === 'approach') || boss.hp <= 0 || this.time > 6))
+          this.finished = lesson.countered ? 'countered' : 'missed';
+        return;
       }
       if (this.foes.some((e) => e.f.stocks > 0)) return;
       if (this.wave + 1 === l.waves.length) {
