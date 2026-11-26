@@ -370,7 +370,17 @@ async function onlineSet(browser,phoneBrowser) {
     if(i===0){
       const scores=[];
       const firstFalls=[];
+      const fullScores=[];
       for(const d of [host,guest]){
+        await d.press('[data-do=watch-match]');
+        await d.page.locator('#clip-seek').press('Home');
+        await d.press('#film-forward');
+        assert.equal(await d.page.locator('#clip-seek').inputValue(),'300');
+        const early=await d.page.locator('#clip-scores').textContent();
+        await d.page.locator('#clip-seek').press('End');
+        assert.equal(await d.page.locator('#film-marks button').count(),3);
+        fullScores.push([early,await d.page.locator('#clip-seek').inputValue(),await d.page.locator('#clip-scores').textContent()]);
+        await d.press('#film-back');
         await d.press('[data-do=ko-replays]');
         assert.equal(await d.page.locator('[data-ko]').count(),3);
         await d.press('[data-ko="0"]');
@@ -386,6 +396,7 @@ async function onlineSet(browser,phoneBrowser) {
         await d.press('[data-do=clip-back]');
       }
       assert.equal(scores[0],scores[1]);
+      assert.deepEqual(fullScores[0],fullScores[1]);
       assert.equal(firstFalls[0],firstFalls[1]);
       await guest.press('[data-do=practice-finish]');
       await guest.press('[data-finish-slot="1"]');
