@@ -112,6 +112,17 @@ async function counterweightOpening(browser){
     assert(ride.length>=8);assert(ride.every(([feet,top])=>feet===top));
     assert(Math.abs(ride[0][0]-ride.at(-1)[0])>1);
   }finally{await page.close();}
+  const phone=await device(browser,true,'#solo');
+  try{
+    await phone.press('#choose-stage');await phone.press('[data-stage-form=counterweights]');
+    const boxes=await phone.page.locator('[data-stage-form]').evaluateAll(els=>els.map(el=>{
+      const range=document.createRange();range.selectNodeContents(el);
+      const text=range.getBoundingClientRect(),box=el.getBoundingClientRect();
+      return {fits:text.left>=box.left && text.right<=box.right,height:box.height,top:box.top};
+    }));
+    assert.equal(boxes.length,4);assert(boxes.every(b=>b.fits && b.height>=44));assert(boxes[2].top>boxes[0].top);
+    await phone.press('[data-stage=canal]');assert.match(await phone.page.locator('#stage-title').textContent(),/Counterweights/);
+  }finally{await phone.page.close();}
 }
 async function soloAndLocal(browser){
   const d=await device(browser,false,'#solo'),{page,press}=d;
