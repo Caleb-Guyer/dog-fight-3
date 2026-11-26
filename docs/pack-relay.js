@@ -65,5 +65,32 @@
     };
     root.querySelector('[data-relay-slot][aria-pressed=true]').focus({preventScroll:true});
   }
-  window.PackRelay={openingTeams,pick,sheet};
+  function cupSheet(kind,round,coat,exhibition,{showDialog,root,portrait,drawStageTile,stageName,back,start}){
+    const opening=window.YardCup.relay(kind,round),[allies,rivals]=opening.relayTeams;
+    const coats=relayCoats(opening.relayTeams,[{[kind]:coat},{}]);
+    let lead=kind;
+    const face=(id,coat)=>'<img alt="" src="'+portrait(id,coat)+'"><strong>'+fighters[id].name+'</strong>';
+    const venue=stageName(opening.stage,opening.form);
+    showDialog('cup-relay',exhibition?'Relay exhibition':'Round '+(round+1)+' · Pack Relay',
+      '<figure class="cup-relay-arena"><canvas width="320" height="180" aria-hidden="true"></canvas><figcaption>'+venue+'</figcaption></figure>'+
+      '<p>Three dogs, one stock each. '+(exhibition?'Practice the round '+(round+1)+' detour from '+fighters[kind].name+'’s Cup. Earn its stamp during a scored run.':'Beat the Rival pack to stamp this stop on '+fighters[kind].name+'’s route.')+'</p>'+
+      '<h3 id="cup-lead-label">Choose your lead</h3><div class="cup-relay-team" role="group" aria-labelledby="cup-lead-label">'+
+      allies.map((id,i)=>'<button type="button" class="cup-dog" data-cup-lead="'+id+'" aria-pressed="'+(i===0)+'">'+face(id,coats[0][i])+'</button>').join('')+
+      '</div><p id="cup-relay-order" aria-live="polite"></p><h3>Rival lineup</h3><ol class="cup-relay-team">'+
+      rivals.map((id,i)=>'<li>'+face(id,coats[1][i])+'</li>').join('')+'</ol>'+
+      '<div class="dialog-actions"><button id="cup-relay-start" class="primary">Start relay</button>'+
+      '<button id="cup-relay-back" class="utility">Back</button></div>');
+    drawStageTile(root.querySelector('canvas'),opening.stage,opening.form);
+    const buttons=root.querySelectorAll('[data-cup-lead]');
+    function select(id){
+      lead=id;
+      for(const b of buttons)b.setAttribute('aria-pressed',String(b.dataset.cupLead===id));
+      root.querySelector('#cup-relay-order').textContent='Fight order · '+window.YardCup.relay(kind,round,id).relayTeams[0].map(k=>fighters[k].name).join(' → ');
+    }
+    for(const b of buttons)b.onclick=()=>select(b.dataset.cupLead);
+    root.querySelector('#cup-relay-start').onclick=()=>start(lead);
+    root.querySelector('#cup-relay-back').onclick=back;
+    select(lead);buttons[0].focus({preventScroll:true});
+  }
+  window.PackRelay={openingTeams,pick,sheet,cupSheet};
 })();

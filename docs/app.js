@@ -1003,6 +1003,7 @@
     if(dialogType==='matchup-card')return $('matchup-back').click();
     if(dialogType==='practice-tapes')return $('tape-back').click();
     if(dialogType==='pack-relay')return backFromRelay();
+    if(dialogType==='cup-relay')return $('cup-relay-back').click();
     if(dialogType==='finish-picker')return $('finish-picker-back').click();
     if(dialogType==='ko-replays')return $('ko-list-back').click();
     if(dialogType==='finish-film')return $('film-back').click();
@@ -1616,6 +1617,21 @@
     return run.retries + (run.retries === 1 ? ' retry' : ' retries') + ' · ' +
       cup.stocks(run) + '/12 stocks kept · ' + cardTime(cup.frames(run));
   }
+  function relayOffer(entry){
+    const run=entry.active;
+    return run && !run.started && (run.wins.length===1 || run.wins.length===2)?
+      '<button type="button" class="utility" data-do="cup-relay">Take the relay detour</button>':'';
+  }
+  const relayRouteName=mask=>mask===3?'Both relay detours':'Round '+(mask===1?2:3)+' relay';
+  function cupRecords(entry){
+    const mask=cup.stamps(entry);
+    const relayBests=Object.entries(entry.relayBests || {});
+    return (mask?'<p>Relay stamps · Round 2 '+(mask&1?'✓':'—')+' · Round 3 '+(mask&2?'✓':'—')+'</p>':'')+
+      (entry.clears?'<p>'+entry.clears+(entry.clears===1?' clear':' clears')+'</p>':'')+
+      (entry.best?'<p><strong>Personal best</strong> · Standard route · '+cupRecord(entry.best)+'</p>':'')+
+      (relayBests.length?'<details><summary>Relay personal bests</summary>'+relayBests.map(([m,run])=>
+        '<p>'+relayRouteName(Number(m))+' · '+cupRecord(run)+'</p>').join('')+'</details>':'');
+  }
   function cupSheet(kind = cupChoice) {
     if (!Object.hasOwn(cup.courses,kind)) return;
     if (page !== 'home') showHome(false);
@@ -1625,24 +1641,39 @@
     const selectors = Object.keys(cup.courses).map(id=>'<button class="cup-dog" data-cup-dog="'+id+'" aria-pressed="'+(id===kind)+
       '"><img alt="" src="'+portrait(id,id===kind && run ? run.coat : savedCoat(0,id))+'"><strong>'+fighters[id].name+'</strong></button>');
     const stops = [...course.bouts,[null]].map(([dog,stage,form],i)=>{
-      const title = dog ? fighters[dog].name : 'Copper Hound', venue = dog ? stageName(stage,form) : 'Bell Depot';
+      const lead=run?.wins[i]?.relayLead || (i===round && run?.relayLead);
+      const detour=lead && cup.relay(kind,i,lead);
+      const title = dog ? fighters[dog].name : 'Copper Hound', venue = detour ? 'Pack Relay · '+stageName(detour.stage,detour.form) : dog ? stageName(stage,form) : 'Bell Depot';
       return '<li'+(round===i?' aria-current="step"':'')+'><span>'+(i+1)+'</span><div><strong>'+title+
         '</strong><small>'+venue+'</small></div><b>'+(i<round ? stockLabel(run.wins[i].stocks)+' kept' :
           i===round ? 'Up next' : dog ? cpuLevels[cup.levels[i]].name : 'Boss')+'</b></li>';
     }).join('');
-    const tip = course.bouts[round]?.[3] || yardChapter.rooms[yardChapter.lastRoom].objective;
+    const activeRelay=run?.relayLead && cup.relay(kind,round,run.relayLead);
+    const tip = activeRelay?'Relay lineup · '+activeRelay.relayTeams[0].map(id=>fighters[id].name).join(' → '):course.bouts[round]?.[3] || yardChapter.rooms[yardChapter.lastRoom].objective;
     showDialog('cup','Arcade Cup','<div class="cup-dogs" role="group" aria-label="Choose a route">'+selectors.join('')+
       '</div><h3 class="card-stage">'+course.name+'</h3><ol class="cup-stops">'+stops+'</ol><p>'+tip+'</p>'+
       (unsavedCup.has(kind)?'<p>Progress lasts for this tab while storage is unavailable.</p>':'')+
-      (entry.best ? '<p><strong>Personal best</strong> · '+cupRecord(entry.best)+' · '+entry.clears+
-        (entry.clears===1?' clear':' clears')+'</p>' : '')+
+      cupRecords(entry)+
       '<div class="dialog-actions"><button class="primary" data-do="cup-start">'+
       (run ? run.started ? 'Retry round '+(round+1) : 'Continue to round '+(round+1) : 'Start '+fighters[kind].name+'’s run')+
-      '</button></div>');
+      '</button>'+(relayOffer(entry) || '<button class="utility" data-do="cup-exhibition">Play a relay exhibition</button>')+'</div>');
     document.querySelector('[data-do=cup-start]').focus({preventScroll:true});
   }
-  async function startCupRound(kind) {
-    const button = document.querySelector('[data-do=cup-start],[data-do=cup-next]');
+  function openCupRelay(kind,exhibitionRound=null,fromResult=dialogType==='result'){
+    const back=()=>{
+      if(fromResult)showResult();else cupSheet(kind);
+      document.querySelector(exhibitionRound?'[data-do=cup-exhibition]':'[data-do=cup-relay]')?.focus();
+    };
+    if(!window.PackRelay || !versusStyled)return waitForDispatch('Pack Relay',()=>loadVersusPanel('PackRelay'),()=>openCupRelay(kind,exhibitionRound,fromResult),back);
+    const run=exhibitionRound?cupEntry(kind).active:cupShown.active;
+    const round=exhibitionRound ?? run?.wins.length,coat=run?.coat ?? savedCoat(0,kind);
+    if((!exhibitionRound && run?.started) || !cup.relay(kind,round))return cupSheet(kind);
+    window.PackRelay.cupSheet(kind,round,coat,!!exhibitionRound,{showDialog,root:$('dialog-body'),portrait,drawStageTile,stageName,back,
+      start:lead=>exhibitionRound?startMatch(cup.stockBout(kind,round,coat,lead),undefined,17+round*31,null,
+        {cupRound:{kind,round,coat,exhibition:true}}):startCupRound(kind,lead)});
+  }
+  async function startCupRound(kind,lead) {
+    const button = document.querySelector(lead?'#cup-relay-start':'[data-do=cup-start],[data-do=cup-next]');
     if (!button || button.disabled) return;
     button.disabled = true;
     audioReady();
@@ -1662,21 +1693,27 @@
       if (!current() || latest.clears!==expected.clears || run?.id!==shown?.id ||
           run?.retries!==shown?.retries || run?.wins.length!==shown?.wins.length || run?.started!==shown?.started) return null;
       const id = run?.id || Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
-      return cup.begin(latest,id,savedCoat(0,kind));
+      return cup.begin(latest,id,savedCoat(0,kind),kind,lead);
     });
     if (!current()) return;
     if (!entry) return cupSheet(kind);
     const run = entry.active, round = run.wins.length;
-    const attempt = {kind,id:run.id,retries:run.retries,round,coat:run.coat};
-    const bout = cup.courses[kind].bouts[round];
+    const attempt = {kind,id:run.id,retries:run.retries,round,coat:run.coat,relayLead:run.relayLead};
+    const bout = cup.stockBout(kind,round,run.coat,run.relayLead);
     if (!bout) return beginRun(yardChapter.lastRoom,0,null,attempt);
-    const [p2,stage,form] = bout;
-    startMatch({...settings,mode:'solo',p1:kind,p2,stage,form,coats:[run.coat,0],
-      cpuLevel:cup.levels[round],fetch:false,minutes:7},undefined,17+round*31,null,{cupRound:attempt});
+    startMatch(bout,undefined,17+round*31,null,{cupRound:attempt});
   }
   async function cupResult(won) {
     const attempt = cupAttempt;
     if (!attempt || attempt.saving) return;
+    if(attempt.exhibition){
+      const dog=world.dogs[world.end];
+      showDialog('result',won?'Relay exhibition won':'Relay exhibition lost','<div class="winner"><img alt="" src="'+portrait(dog.kind,world.coatFor(dog.index))+
+        '"><div><h3>'+dog.stats.name+' wins</h3><p>'+stockLabel(dog.stocks)+' kept</p></div></div>'+
+        '<div class="dialog-actions"><button class="primary" data-do="cup-exhibition">Choose another lead</button>'+
+        '<button class="utility" data-do="cup-sheet">Cup route card</button>'+cardButton+'</div>',false);
+      document.querySelector('[data-do=cup-exhibition]').focus();return;
+    }
     if (!attempt.settled) {
       attempt.saving = true;
       const lives = world.dogs[0].stocks, elapsed = world.matchFrames;
@@ -1695,10 +1732,11 @@
       'Retry this round with three fresh stocks.';
     showDialog('result',title,'<div class="winner"><img alt="" src="'+portrait(kind,attempt.coat)+'"><div><h3>'+
       cup.courses[kind].name+'</h3><p>'+line+'</p></div></div>'+
-      (clear ? '<p><strong>Personal best</strong> · '+cupRecord(entry.best)+'</p>' : '')+
+      (won && attempt.relayLead?'<p>Round '+next+' relay stamp earned.</p>':'')+
+      (clear ? '<p><strong>Personal best</strong> · '+(cup.routeMask(entry.last)?relayRouteName(cup.routeMask(entry.last)):'Standard route')+' · '+cupRecord(cup.bestFor(entry,entry.last))+'</p>' : '')+
       '<div class="dialog-actions"><button class="primary" data-do="'+(clear?'cup-sheet':'cup-next')+'">'+
       (clear ? 'Choose a route' : won ? 'Play round '+(next+1) : 'Retry round '+next)+'</button>'+
-      (!clear?'<button class="utility" data-do="cup-sheet">Route card</button>':'')+
+      relayOffer(entry)+(!clear?'<button class="utility" data-do="cup-sheet">Route card</button>':'')+
       (world.matchCard ? cardButton : '')+'<button class="utility" data-do="home">Main menu</button></div>',false);
     document.querySelector('#dialog-body .primary').focus();
     announce(title+'. '+line);
@@ -2165,7 +2203,7 @@
     const matchName = world.warmupPartner ? 'Online warm-up' : online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
       (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : world.bells ? 'Bell Break' : modes[config.mode];
     $('match-mode').textContent = rehearsal && visit.returnStart ? 'Stock return · '+(config.mode==='local'?'Local versus':cpuLevels[world.cpuLevel].name+' CPU') :
-      cupAttempt ? 'Arcade Cup · Round '+(cupAttempt.round+1)+'/4' :
+      cupAttempt ? cupAttempt.exhibition?'Relay exhibition':'Arcade Cup · Round '+(cupAttempt.round+1)+'/4'+(world.relayTeams?' · Pack Relay':'') :
       config.rotationRound?(config.tourneyRound || 'Bout '+config.rotationRound)+' · P1 '+config.rotationTags[0]+' / P2 '+config.rotationTags[1]:
       world.lesson ? 'Fight School' : spar?'Sparring · '+world.dogs[0].stats.name:matchName + (world.relayTeams?' · Pack Relay':world.matchCard?.points?' · Time Battle':config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = stageName(config.stage,world.form);
@@ -2276,8 +2314,8 @@
     const reviewButton=(!online.match && finishTape?.length?'<button class="utility" data-do="instant-replay">Instant replay</button>':'')+
       (clips.length?stockRetryButton(world)+recoveryButtons(world,clips)+knockoutButton:'');
     if (cupAttempt) {
-      showDialog('pause','Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+(cupAttempt.round+1)+
-        ' of 4. Leaving now restarts this round on your next attempt.</p><div class="dialog-actions">'+
+      showDialog('pause',cupAttempt.exhibition?'Exhibition paused':'Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+(cupAttempt.round+1)+
+        (cupAttempt.exhibition?' exhibition.':' of 4. Leaving now restarts this round on your next attempt.')+'</p><div class="dialog-actions">'+
         '<button class="primary" data-do="resume">Resume</button>'+reviewButton+'<button class="utility" data-do="moves">Move list</button>'+
         '<button class="utility" data-do="controls">Controls</button><button class="utility" data-do="cup-sheet">Leave to route card</button></div>');
       document.querySelector('[data-do=resume]').focus();
@@ -2841,13 +2879,13 @@
   const recordModes={solo:'Solo',local:'Local versus',online:'Online versus',cup:'Arcade Cup',school:'Fight School'};
   let reviewCard=null;
   function recordMode() {
-    return online.match?'online':cupAttempt?'cup':matchConfig?.schoolFinal || spar?'school':world.mode;
+    return online.match?'online':cupAttempt && !cupAttempt.exhibition?'cup':matchConfig?.schoolFinal || spar?'school':world.mode;
   }
   function recordFight(result) {
     if (!result?.matchCard || result.end===null || practiceFight || recordedFights.has(result)) return;
     const series=online.series || localSet;
     const entry={time:Date.now(),mode:recordMode(),side:online.match?online.side:0,stage:result.stage,form:result.form,
-      round:series?.games.length || (cupAttempt?cupAttempt.round+1:0),winner:result.end,card:structuredClone(result.matchCard)};
+      round:series?.games.length || (cupAttempt && !cupAttempt.exhibition?cupAttempt.round+1:0),winner:result.end,card:structuredClone(result.matchCard)};
     const tape=finishTape;
     if(tape?.length){tape.captureKnockouts(result);entry.replay=true;}
     const ticket=records.add(entry);
@@ -3207,6 +3245,8 @@
       return;
     }
     if (action === 'cup-sheet') return cupSheet(cupAttempt?.kind || cupChoice);
+    if (action === 'cup-relay') return openCupRelay(cupAttempt?.kind || cupChoice);
+    if (action === 'cup-exhibition') return openCupRelay(cupAttempt?.kind || cupChoice,cupAttempt?.exhibition?cupAttempt.round:1);
     if (action === 'cup-start' || action === 'cup-next') return startCupRound(cupAttempt?.kind || cupChoice);
     if (action === 'match-card') return showMatchCard();
     if (action === 'card-back') return exitDialog();
@@ -4214,7 +4254,7 @@
     PadFeedback:'pad-feedback.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
     VersusRulebook:'versus-rules.js?v=rumble-1',
-    PackRelay:'pack-relay.js?v=1',
+    PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=button-check-1',StageStrike:'stage-strike.js?v=button-check-1',
     ComboLab:'combo-lab.js?v=ground-space-1', FinishTools:'finish-tools.js?v=ledge-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
@@ -4230,7 +4270,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=button-check-1';
+        link.href='./versus-select.css?v=cup-relay-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -4472,7 +4512,7 @@
       if (!run) continue;
       const round=run.wins.length, opponent=course.bouts[round]?.[0];
       items.push({id:kind,title:fighters[kind].name+'’s Arcade Cup',kind,coat:run.coat,playedAt:entry.playedAt,
-        detail:'Round '+(round+1)+' of 4 · '+(opponent?fighters[opponent].name:'Copper Hound'),action:run.started?'Retry round':'Continue'});
+        detail:'Round '+(round+1)+' of 4 · '+(run.relayLead?'Pack Relay · ':'')+(opponent?fighters[opponent].name:'Copper Hound'),action:run.started?'Retry round':'Continue'});
     }
     return items.sort((a,b)=>(b.playedAt||0)-(a.playedAt||0));
   }
@@ -6354,6 +6394,8 @@
     } else if (hash==='#bells' || (hash==='#bells/'+arena && Object.hasOwn(fighters,arena))) {
       showHome(false);
       bellSheet(arena || 'pip');
+    } else if (/^#arcade\/(pip|brisket|noodle|clover)\/relay\/[23]$/.test(hash)) {
+      showHome(false);cupChoice=arena;openCupRelay(arena,Number(hash.at(-1))-1,false);
     } else if (hash === '#arcade' || (hash === '#arcade/'+arena && Object.hasOwn(cup.courses,arena))) {
       showHome(false);
       cupSheet(arena || settings.p1);
