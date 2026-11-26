@@ -2301,17 +2301,7 @@
       return;
     }
     if (world.mode === 'adventure') {
-      if (world.finished) return;
-      showDialog(
-        'pause',
-        'Adventure paused',
-        '<p>' +
-          world.layout.name +
-          ' · ' +
-          world.objective +
-          '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button><button class="utility" data-do="suspend-mission">Suspend &amp; quit</button><button class="utility" data-do="dispatch-retry">Retry</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + '</div><div class="dialog-actions"><button class="utility" data-do="route">Route map</button><button class="utility" data-do="home">Main menu</button></div>'+window.DispatchView.patternChoices(world),
-      );
-      document.querySelector('[data-do=resume]').focus();
+      if (!world.finished) window.DispatchView.pausePanel(world,showDialog,screenAction());
       return;
     }
     showDialog(
@@ -2358,9 +2348,9 @@
     const back=()=>review.rescue?closeRecoveryClinic():review.fromClip?showFinishReplay(null,review):review.from==='pause'?showPause():showResult();
     if(!window.RecoveryCoach)return waitForDispatch('Practice this recovery',()=>loadDispatch('RecoveryCoach'),()=>recoverySheet(review,plan),back);
     const device=promptDevice(getPads());
-    const label=a=>device===0?keyFor(0,a):device===1 && !['left','right','up'].includes(a)?padFor(0,a):a[0].toUpperCase()+a.slice(1);
-    window.RecoveryCoach.sheet(review.clip.tape,{showDialog,back,label,shake:settings.shake,slot:review.slot,follow:review.clip.returnTape,projection:review.rescue || review.projection,
-      swap:review.rescue && {title:review.wide?'Try the low fall':'Try the wide fall',open:()=>recoveryClinic(!review.wide)},
+    const label=a=>device===0?keyFor(0,a):device===1 && !['left','right','up','down'].includes(a)?padFor(0,a):a[0].toUpperCase()+a.slice(1);
+    window.RecoveryCoach.sheet(review.clip.tape,{showDialog,back,label,shake:settings.shake,slot:review.slot,follow:review.clip.returnTape,projection:review.rescue || review.projection,launch:review.launch,
+      swap:review.rescue && {title:review.launch?(review.wide?'Try the high throw':'Try the edge throw'):review.wide?'Try the low fall':'Try the wide fall',open:()=>recoveryClinic(!review.wide,!!review.launch)},
       play:(route,guided=false)=>startFinishTrial(route.start,route.slot,{...review,coach:route,guided,coachLabel:label,
         coachLine:window.RecoveryCoach.instruction(route,label)})},plan);
   }
@@ -2510,6 +2500,7 @@
           clinic:review?.moment || review?.clinic || review?.landingFocus,practiceLanding:(landing,start,guided)=>startFinishTrial(start,landing.slot,{
             ...(review || {finish:true,from:'result',clip:{tape,losses:[]},result}),landing,guided,replayFrame:landing.frame}),
           retryMoment:review?.instant?(frame,slot,contact)=>startFinishTrial(frame,slot,{...review,replayFrame:contact}):null,
+          rescueLaunch:ko?launch=>recoverySheet({...review,launch,slot:launch.slot,fromClip:true}):null,
           twoPlayers:result.mode==='local',initialSeat:review?.slot ?? loss?.slot ?? 0,frame:()=>clipScreen.player.frame,
           slot:loss?.slot,practiceLaunch:(frame,slot)=>startFinishTrial(frame,slot,review),escapeReady:ko?mark=>{
             $('clip-escape-start').textContent=mark.label+' · frame '+mark.frame;
@@ -2692,7 +2683,7 @@
           taps.clear();touchTaps.clear();trial.carry=0;return;
         }
         $('countdown').textContent='';
-      }else if(trial.review?.coach && player.frame===trial.start){
+      }else if(trial.review?.coach && !trial.review.coach.aim && player.frame===trial.start){
         if(!input.x && !input.y && !input.jump && !input.special && !input.shield && !input.attack && !input.shortHop){
           $('countdown').textContent='Your move';trial.carry=0;return;
         }
@@ -5386,7 +5377,7 @@
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=ledge-rescue-2', MatchReview:'match-review.js?v=return-perch-1',
+    RecoveryCoach:'recovery-coach.js?v=launch-rescue-1', MatchReview:'match-review.js?v=return-perch-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
@@ -5394,11 +5385,11 @@
     VersusRulebook:'versus-rules.js?v=return-perch-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=button-check-1',StageStrike:'stage-strike.js?v=button-check-1',
-    ComboLab:'combo-lab.js?v=ground-space-1', FinishTools:'finish-tools.js?v=defensive-moments-1',
+    ComboLab:'combo-lab.js?v=ground-space-1', FinishTools:'finish-tools.js?v=launch-rescue-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-practice-1', DispatchView:'dispatch-view.js?v=depot-practice-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-practice-1', DispatchView:'dispatch-view.js?v=launch-rescue-1',
     ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=ground-space-1',
   };
   const dispatchLoads=new Map();
@@ -6311,6 +6302,7 @@
     const clinic=document.createElement('button');clinic.type='button';clinic.className='utility';clinic.textContent='Landing clinic';
     $('syllabus-guide').after(clinic);clinic.onclick=landingClinic;
     const rescue=clinic.cloneNode(false);rescue.textContent='Recovery clinic';clinic.after(rescue);rescue.onclick=()=>recoveryClinic(false);
+    const launch=clinic.cloneNode(false);launch.textContent='Launch survival';rescue.after(launch);launch.onclick=()=>recoveryClinic(false,true);
     $('syllabus-guide').onclick=toggleGuide;
     $('school-syllabus').onclick=e=>{const button=e.target.closest('[data-lesson]');if(button) startLesson(Number(button.dataset.lesson));};
     $('school-resume').onclick=()=>world?.lesson?dismiss():resumeCourse();
@@ -6327,11 +6319,11 @@
     if(matchConfig?.recoveryClinic)showHome(false);
     schoolList();
   }
-  function recoveryClinic(wide){
-    if(!window.RecoveryCoach)return waitForDispatch('Recovery clinic',()=>loadDispatch('RecoveryCoach'),()=>recoveryClinic(wide),schoolList);
-    const {config,battle,tape,clip}=window.RecoveryCoach.example(wide);
+  function recoveryClinic(wide,fromLaunch=false){
+    if(!window.RecoveryCoach)return waitForDispatch(fromLaunch?'Launch survival':'Recovery clinic',()=>loadDispatch('RecoveryCoach'),()=>recoveryClinic(wide,fromLaunch),schoolList);
+    const {config,battle,tape,clip,launch}=window.RecoveryCoach.example(wide,fromLaunch);
     if(page!=='match')startMatch({...config,recoveryClinic:true},undefined,undefined,null,{resume:{battle,tape,countdown:0,call:''}});
-    recoverySheet({rescue:true,wide,clip,result:battle,from:'school'});
+    recoverySheet({rescue:true,wide,clip,launch,result:battle,from:'school'});
   }
   function leaveFighterSheet(){
     if(page==='match' && (matchConfig?.schoolFinal || spar) && world?.end!=null)return showResult();
@@ -7640,6 +7632,8 @@
       settings.guidedLessons=true;save();
       const index=schoolLessons.findIndex(l=>l.id===hash.split('/')[2]);
       if(index<0)resumeCourse();else startLesson(index);
+    } else if (hash==='#tutorial/launch-survival') {
+      recoveryClinic(false,true);
     } else if (hash==='#tutorial/recovery' || hash==='#tutorial/recovery/wide') {
       recoveryClinic(hash.endsWith('/wide'));
     } else if (hash === '#tutorial/landings') {

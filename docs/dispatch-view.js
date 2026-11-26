@@ -157,6 +157,12 @@
         else sound(name, e);
       };
     }
+    static pausePanel(world,showDialog,screenAction) {
+      showDialog('pause','Adventure paused','<p>'+world.layout.name+' · '+world.objective+
+        '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button><button class="utility" data-do="suspend-mission">Suspend &amp; quit</button><button class="utility" data-do="dispatch-retry">Retry</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="moves">Move list</button>'+screenAction+
+        '</div><div class="dialog-actions"><button class="utility" data-do="route">Route map</button><button class="utility" data-do="home">Main menu</button></div>'+this.patternChoices(world));
+      document.querySelector('[data-do=resume]').focus();
+    }
     static fallPanel(world,fightStocks,showDialog,stockLabel){
       showDialog(
         'dispatch-fall',
