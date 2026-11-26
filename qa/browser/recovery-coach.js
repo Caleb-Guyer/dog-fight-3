@@ -211,6 +211,25 @@ async function check(browser,device) {
     await choose('#clip-ledge [data-play]');await hold(1);await page.clock.runFor(2400);await hold(0);
     assert.match(await page.locator('#dialog-body').textContent(),/Your get-up · Lost the stock/);
     await choose('[data-do=trial-results]');assert.equal(await page.locator('#dialog-title').textContent(),'Fight School');
+    if(device==='keyboard'){
+      await page.goto(root+'#solo/ledge-trap/brisket/left');
+      await page.evaluate(()=>{
+        const step=DogFight.Battle.prototype.step;
+        DogFight.Battle.prototype.step=function(...args){window.originalFight??=this;return step.apply(this,args);};
+        window.stockState=()=>JSON.stringify([originalFight.matchFrames,originalFight.matchCard,originalFight.random.state]);
+      });
+      await hold(1);await page.clock.runFor(3500);await hold(0);
+      await choose('#pause');
+      const frozen=await page.evaluate(()=>stockState());
+      await choose('[data-do=ko-replays]');await choose('[data-ko="0"]');
+      await choose('#clip-ledge summary');await ledge.locator('[data-play]').waitFor();
+      await ledge.locator('[data-delay]').selectOption('60');
+      assert.match(await ledge.locator('[data-outcome]').textContent(),/Onstage after 100 frames/);
+      await choose('#clip-ledge [data-watch]');await page.clock.runFor(4800);
+      assert.equal(await page.locator('#dialog-title').textContent(),'Onstage');
+      assert.equal(await page.evaluate(()=>stockState()),frozen);
+      await choose('[data-do=trial-results]');assert(await page.locator('#dialog').isHidden());
+    }
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

@@ -24,6 +24,9 @@ test('replaying the lost stock and delaying the same climb produce different rea
   for(const option of ['climb','roll'])assert.deepEqual(branch(option,60),{text:'Onstage',contact:'',frames:100});
   assert.deepEqual(battle.matchCard,saved);
   assert.deepEqual(tape.playback(tape.length).battle.matchCard,saved);
+  const clip=tape.knockouts[0],catchFrame=analyze(clip.tape).ledges[0];
+  assert(clip.tape.length<60);
+  assert.deepEqual(ledgePreview(clip.tape,catchFrame,'climb',60,clip.returnTape),branch('climb',60));
 });
 
 test('a right-side catch from either local seat lets each fighter climb through carried drift or use its own get-up attack', () => {
@@ -51,7 +54,16 @@ test('a right-side catch from either local seat lets each fighter climb through 
     const tiny=new FinishTape();
     short.hangLedge(short.dogs[slot],{index:0,left:false,x:floor.x2,y:floor.y});
     tiny.record(short,idleInput,idleInput);
-    const end=ledgePreview(tiny,analyze(tiny).ledges.find(m=>m.slot===slot),'hang',0);
-    assert.equal(end.frames,1);assert.equal(end.text,'Hanging at the ledge');
+    const catchFrame=analyze(tiny).ledges.find(m=>m.slot===slot);
+    assert.equal(ledgePreview(tiny,catchFrame,'recorded',0).frames,1);
+    const next=new FinishTape();next.from=1;next.count=4;
+    const pair=[idleInput,idleInput];pair[1-slot]={...idleInput,jump:true};
+    next.blocks=[{start:0,inputs:[pair,pair,pair,pair]}];
+    assert.equal(next.inputAt(0,1-slot),idleInput);
+    assert.equal(next.inputAt(4,1-slot),idleInput);
+    const continuing=ledgeAttempt(tiny,catchFrame,false,undefined,next);
+    const released=ledgeAttempt(tiny,catchFrame);
+    for(let n=0;n<20;n++){continuing.step(idleInput);released.step(idleInput);}
+    assert(continuing.battle.dogs[1-slot].y<released.battle.dogs[1-slot].y);
   }
 });
