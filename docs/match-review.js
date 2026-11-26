@@ -241,7 +241,8 @@
       '<div class="clip-status"><span id="clip-scores"></span><output id="film-time"></output></div>'+
       '<input id="clip-seek" type="range" min="0" max="'+film.length+'" aria-label="Match timeline">'+
       '<div class="dialog-actions"><button class="primary" id="film-play"></button><button class="utility" id="film-speed">Speed · 1×</button>'+
-      '<button class="utility" id="film-rewind">Back 5 seconds</button><button class="utility" id="film-step">Step 1 frame</button></div>'+
+      '<button class="utility" id="film-rewind">Back 5 seconds</button><button class="utility" id="film-forward">Forward 5 seconds</button>'+
+      '<button class="utility" id="film-step">Step 1 frame</button></div>'+
       '<div id="film-marks" class="dialog-actions"></div><div class="dialog-actions"><button class="utility" id="film-p1"></button>'+
       '<button class="utility" id="film-p2"></button><button class="utility" id="film-back">Back</button></div>',false);
     const el=id=>document.getElementById(id),canvas=el('clip-arena'),seek=el('clip-seek');
@@ -257,6 +258,7 @@
       write('film-time',time(frame)+' / '+time(film.length)+' · Frame '+frame);
       seek.value=frame;seek.setAttribute('aria-valuetext',time(frame)+', frame '+frame);
       el('film-step').disabled=end;el('film-rewind').disabled=!frame;
+      el('film-forward').disabled=end;
       for(const i of [0,1]){
         const id='film-p'+(i+1);
         write(id,'Practice as P'+(i+1)+' '+fight.dogs[i].stats.name);el(id).disabled=end;
@@ -284,6 +286,7 @@
     el('film-stage').textContent=stageName(player.battle.stage,player.battle.form);
     seek.oninput=()=>pauseAt(Number(seek.value));
     el('film-rewind').onclick=()=>pauseAt(Math.max(0,player.frame-300));
+    el('film-forward').onclick=()=>pauseAt(Math.min(player.length,player.frame+300));
     el('film-step').onclick=()=>{stop();if(player.step())paint(1/60);};
     el('film-play').onclick=()=>{
       if(playing)stop();
