@@ -501,6 +501,8 @@ To practice your own mix-up, choose **Take A** or **Take B**, then **Record your
 
 **Hit confirm** gives you six exchanges with your chosen dog. Center your direction, tap Attack, and release. If the jab lands, tap Attack again to connect a follow-up. If the shield flashes, close the gap and grab. The rival shields three times in a shuffled order. Each new exchange starts at 0%. Tap Attack after a result to start the next jab. At the end, check how many hits you confirmed and how many shields you grabbed. Turn off **Half speed** to try the same decisions at match speed. [Play Hit confirm](https://caleb-guyer.github.io/dog-fight-3/#training/hit-confirm)
 
+When an opponent repeatedly shields your attacks, the match card can offer **Practice hit confirms**. It takes both dogs into the drill. **Back to fight** returns you to the same result or saved card.
+
 ## Ground tilts
 
 All four forward tilts can hit high, level or low. Hold mostly sideways on a stick and add a little vertical aim, then tap Attack. On keyboard, hold Walk (P1 Left Shift, P2 Right Ctrl) and a diagonal as you tap Attack. On touch, slide from the center dot to a diagonal before tapping Attack. With Tilt stick enabled you can also hold Up or Down on the movement controls and flick the aim stick sideways. A high tilt reaches a jumper and launches them higher. A low tilt reaches under the lip and sends them farther sideways.
