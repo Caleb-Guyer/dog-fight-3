@@ -2166,7 +2166,7 @@
         icon('keyboard') +
         'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + cameraButton() + '</div>' +
         targetRecap() + (spar?spar.goals(true):'') + (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
-          (corner?'<button class="utility" data-do="corner-practice">Practice · '+schoolLessons.find(l=>l.id===corner.practice).title+'</button>'+
+          (corner?'<button class="utility" data-do="corner-practice">Practice · '+(schoolLessons.find(l=>l.id===corner.practice)?.title || $(corner.practice).textContent)+'</button>'+
             '<button class="utility" data-do="corner-toggle" aria-pressed="'+settings.cornerTips+'">Ringside tips · '+(settings.cornerTips?'On':'Off')+'</button>':'')+
           (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight ? 'Retry position' : 'Practice this position') + '</button>' : '') +
           '<button class="utility" data-do="practice">Find a drill</button>' +
@@ -6216,7 +6216,7 @@
       const label=action=>{
         if(device===0)return keyFor(0,action);
         if(device===2)return action[0].toUpperCase()+action.slice(1);
-        return ['left','right','up'].includes(action)?'stick '+action:padFor(0,action);
+        return ['left','right','up','down'].includes(action)?'stick '+action:padFor(0,action);
       };
       const [title,line]=goal?[t.title,t.line]:window.FightSchool.cornerLine(cue,label);
       $('corner-title').textContent=title;$('corner-line').textContent=line;tip.dataset.cue=key;
@@ -6314,6 +6314,7 @@
       stage:'picnic',form:'original',stockCount:3,timeBattle:false,fetch:false,minutes:7});
   }
   function startCornerLesson(){
+    if(corner.practice.startsWith('launch-'))return startExercise(corner.practice);
     const visit=pausedFight(), index=schoolLessons.findIndex(l=>l.id===corner.practice);
     startMatch({...settings,mode:'local',stage:'nightmail',form:'original',p1:'pip',p2:'brisket',fetch:false,minutes:0,
       lesson:index,cornerLesson:true},undefined,undefined,null,{visit});
