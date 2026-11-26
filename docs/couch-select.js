@@ -243,5 +243,15 @@
     render();poll(pads,0);cards[pick.picker??0].lock.focus({preventScroll:true});
     return {poll,keyboard,bindings(next){keys=next;render();}};
   }
-  window.CouchSelect={Selection,panel};
+  function eventConfig(settings,event,seats){
+    const pair=event.pair;
+    return {...settings,...event.rules,handicap:event.rules?.handicap,p1:pair[0].kind,p2:pair[1].kind,
+      coats:pair.map(p=>p.coat),coatBook:pair.map(p=>({[p.kind]:p.coat})),rotationRound:event.bout,
+      rotationTags:pair.map(p=>p.name),tourneyRound:event.roundName,bestOfThree:event.sets,couchSeats:seats};
+  }
+  function finishEvent(event,bout,set,winner){
+    const score=set?.score.slice() || [0,0];score[winner]++;
+    return (!set || score[winner]===2) && event.finish(bout,winner,score);
+  }
+  window.CouchSelect={Selection,panel,eventConfig,finishEvent};
 })();
