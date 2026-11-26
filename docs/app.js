@@ -715,7 +715,7 @@
     const config=counter?{...matchConfig,stage:world.stage,stageForm:world.form,coats:[world.coatFor(0),world.coatFor(1)]}:
       pair?window.CouchSelect.eventConfig(settings,rotation,eventPads.get(rotation)):settings;
     couchPanel=window.CouchSelect.panel($('dialog-body'),strikes?{...config,bestOfThree:true}:config,keys,getPads(),{
-      sound,announce,drawStageTile,leave:exitDialog,between:counter?{picker:localSet.picker,game:localSet.games.length+1}:null,
+      sound,announce,drawStageTile,padNames,leave:exitDialog,between:counter?{picker:localSet.picker,game:localSet.games.length+1}:null,
       lineupReady:strikes?(pick,seats)=>{
         for(const [i,kind] of pick.dogs.entries())pick.coats[i][kind]=pick.colors[i];
         beginStageStrike({...config,p1:pick.dogs[0],p2:pick.dogs[1],coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats,
@@ -763,7 +763,7 @@
   function showStrikeBoard(entry,series){
     const {draft,config,seats}=entry;
     showDialog('stage-strike','Stage strike set','');
-    couchPanel=window.StageStrike.panel($('dialog-body'),{draft,seats,keys,pads:getPads(),drawStageTile,sound,leave:strikeBack,
+    couchPanel=window.StageStrike.panel($('dialog-body'),{draft,seats,keys,pads:getPads(),padNames,drawStageTile,sound,leave:strikeBack,
       dogs:[config.p1,config.p2],form:config.form,solo:config.mode==='solo',game:series?series.games.length+1:1,
       previous:series?.current.stage,start(stage){
         if(series && !series.advance(stage))return;
@@ -1127,13 +1127,16 @@
     document.querySelector('[data-stage="' + current + '"]').focus({preventScroll:true});
   }
   $('choose-stage').onclick = () => chooseArena();
+  let controlsShown=[];
+  function controlTable(){
+    controlsShown=[padNames(0,seatPad(0)),padNames(1,seatPad(1)),layout];
+    return window.VersusRulebook.controlsTable(!!online.match || page==='online-lobby',settings,keyFor,padFor,strikeKeys,nativeScreen,i=>controlsShown[i][9]);
+  }
   function showControls() {
     if (!window.VersusRulebook) return waitForDispatch('Controls', () => loadDispatch('VersusRulebook'), showControls,
       () => page === 'match' ? showPause() : $('controls').focus());
     backToPause = page === 'match';
-    const rules=window.VersusRulebook,networkGame=!!online.match || page==='online-lobby';
-    const table=rules.controlsTable(networkGame,settings,keyFor,padFor,strikeKeys,nativeScreen);
-    showDialog('controls','Controls','<div class="dialog-actions"><button class="primary" data-do="bindings">Customize controls</button></div>'+table+rules.controlsGuide);
+    showDialog('controls','Controls','<div class="dialog-actions"><button class="primary" data-do="bindings">Customize controls</button><button class="utility" data-do="pad-check">Check controller</button></div>'+controlTable()+window.VersusRulebook.controlsGuide);
   }
   $('controls').onclick = showControls;
   const specialInputs = {
@@ -3144,6 +3147,7 @@
     if (action === 'cup-start' || action === 'cup-next') return startCupRound(cupAttempt?.kind || cupChoice);
     if (action === 'match-card') return showMatchCard();
     if (action === 'card-back') return exitDialog();
+    if(action==='pad-check')return controllerCheck(dialogType);
     if (action==='bindings') openLayouts(dialogType);
     if (action === 'practice') showPractice();
     if (action === 'rehearse') rehearsePosition();
@@ -5506,17 +5510,17 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
-    LessonGuide:'lesson-guide.js?v=1',
+    LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
     RecoveryCoach:'recovery-coach.js?v=ledge-rescue-2', MatchReview:'match-review.js?v=defensive-moments-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
-    PlayerProfiles:'player-profiles.js?v=1',
-    VersusRulebook:'versus-rules.js?v=wide-return-1',
+    PlayerProfiles:'player-profiles.js?v=button-check-1',
+    VersusRulebook:'versus-rules.js?v=button-check-1',
     PackRelay:'pack-relay.js?v=1',
-    WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
+    WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=button-check-1',StageStrike:'stage-strike.js?v=button-check-1',
     ComboLab:'combo-lab.js?v=disc-range-1', FinishTools:'finish-tools.js?v=defensive-moments-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
@@ -5531,7 +5535,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=stage-music-1';
+        link.href='./versus-select.css?v=button-check-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -6235,7 +6239,7 @@
     const t=corner.target;
     const goal=t && (t.doneAt!==null?world.matchFrames-t.doneAt<160:(!cue || cue==='opening') && world.matchFrames<300);
     if(!settings.cornerTips || (!cue && !goal)){if(!tip.hidden)tip.hidden=true;return;}
-    const key=(goal?t.id+'/'+t.title:cue)+'/'+device;
+    const key=(goal?t.id+'/'+t.title:cue)+'/'+device+(device===1?padNames(0,pads[0])[0]:'');
     if(tip.dataset.cue!==key){
       const label=action=>{
         if(device===0)return keyFor(0,action);
@@ -6266,7 +6270,8 @@
     const example=lesson.example;
     const state=example?(lesson.done || lesson.missed?'example-ended':'example'):lesson.missed?'retry':lesson.done?'passed':
       lesson.guide?'guided':lesson.guideLoading?'loading-guide':'playing';
-    const key=lesson.id+'/'+state+'/'+device+'/'+(example?example.index:lesson.guide?.revision ?? lesson.note ?? '');
+    const names=padNames(0,pads[0]);
+    const key=lesson.id+'/'+state+'/'+device+'/'+(device===1?names[0]+names[8]:'')+'/'+(example?example.index:lesson.guide?.revision ?? lesson.note ?? '');
     if ($('school-coach').dataset.key===key) return;
     $('school-coach').dataset.key=key;
     $('school-coach').dataset.state=state;
@@ -6275,7 +6280,7 @@
       (lesson.pace?' · Pace '+fighters[lesson.pace.kind].name:''):matchConfig.specialStudy?fighters[lesson.course].name+' · '+specialInputs[matchConfig.specialStudy.side]:
       matchConfig.cornerLesson?(lesson.course?'Sparring practice':'First fight practice'):matchConfig.schoolReview?'Rematch practice · Pip vs. Brisket':
       (lesson.course?fighters[lesson.course].name+' · Fighter lessons':'Fight School')+' · '+(lesson.index+1)+' / '+count;
-    $('school-list').textContent=(device===1?'Start · ':'')+(matchConfig.tryout?'Tryout card':matchConfig.specialStudy?'Back to moves':matchConfig.cornerLesson?'Back to fight':'Lessons');
+    $('school-list').textContent=(device===1?names[9]+' · ':'')+(matchConfig.tryout?'Tryout card':matchConfig.specialStudy?'Back to moves':matchConfig.cornerLesson?'Back to fight':'Lessons');
     $('school-title').textContent=info.title;
     const watch=$('school-example'),next=$('school-next');
     const guideButton=$('school-guide');
@@ -6283,7 +6288,7 @@
     guideButton.textContent=lesson.guide || lesson.guideLoading?'Restart at match speed':lesson.guideError?'Retry guided practice':'Guide my inputs';
     $('school-retry').hidden=!!example;
     watch.hidden=!!example && !lesson.done && !lesson.missed;
-    watch.textContent=(device===1?'View · ':'')+(example?'Watch again':'Watch example');
+    watch.textContent=(device===1?names[8]+' · ':'')+(example?'Watch again':'Watch example');
     watch.title=device===0 && !lesson.done && !example?'Press Enter to watch this lesson':watch.textContent;
     if(example){
       const {keys,caption}=example.cue;
@@ -6292,14 +6297,15 @@
       $('school-bindings').textContent=lesson.done || lesson.missed ? (lesson.course?window.FighterSchool.hint(info,device,keyFor,padFor):schoolHint(info.id,device)) :
         keys.length?window.FighterSchool.hint({keys:[keys]},device,keyFor,padFor):'Release the controls';
       next.hidden=false;
-      next.textContent=(device===1?'A · ':device===0?'Enter · ':'')+'Try it';
+      next.textContent=(device===1?names[0]+' · ':device===0?'Enter · ':'')+'Try it';
       return;
     }
     $('school-task').textContent=lesson.missed?(info.miss || (lesson.course?'Retry to practice the technique from the starting position.':'The stock ended. Retry to return to the starting position.')):
       lesson.done?info.success:lesson.note || info.task;
-    $('school-bindings').textContent=lesson.done ? (device===1?'A to continue':device===0?'Enter to continue':'') :
+    $('school-bindings').textContent=lesson.done ? (device===1?names[0]+' to continue':device===0?'Enter to continue':'') :
       lesson.missed?'':lesson.course?window.FighterSchool.hint(info,device,keyFor,padFor):schoolHint(info.id,device);
     $('school-next').hidden=!lesson.done;
+    lesson.guide?.touchPrompts(touchButtons,state==='guided' && device===2);
     if(state==='guided')lesson.guide.render($('school-task'),$('school-bindings'),action=>device===0?keyFor(0,action):
       device===1 && !['right','up','down','left'].includes(action)?padFor(0,action):(device===1?'Stick ':'')+action[0].toUpperCase()+action.slice(1));
     else if(state==='loading-guide')$('school-task').textContent='Loading guided practice…';
@@ -6389,7 +6395,7 @@
         (schoolSave.passed.includes(l.id)?' ✓':'')+'</button>').join('')+'</div><div class="dialog-actions"><button class="primary" id="school-resume">'+
       (world?.lesson?'Back to lesson':schoolSave.rematch?(schoolSave.rematch.fight?'Rematch Brisket':'Continue rematch practice'):unfinishedLesson()<0?(schoolSave.firstFightDone?'Replay course':'Play first match'):
         schoolSave.started?'Continue course':'Start course')+'</button><button class="utility" id="syllabus-guide">'+
-      (settings.guidedLessons && !world?.lesson?.guideError?'Practice at match speed':'Guide my inputs')+'</button><button class="utility" data-do="fighter-classes">Fighter lessons</button><button class="utility" data-do="home">Main menu</button></div>');
+      (settings.guidedLessons && !world?.lesson?.guideError?'Practice at match speed':'Guide my inputs')+'</button><button class="utility" data-do="fighter-classes">Fighter lessons</button><button class="utility" data-do="pad-check">Check controller</button><button class="utility" data-do="home">Main menu</button></div>');
     const clinic=document.createElement('button');clinic.type='button';clinic.className='utility';clinic.textContent='Landing clinic';
     $('syllabus-guide').after(clinic);clinic.onclick=landingClinic;
     const rescue=clinic.cloneNode(false);rescue.textContent='Recovery clinic';clinic.after(rescue);rescue.onclick=()=>recoveryClinic(false);
@@ -6714,27 +6720,9 @@
       const dog=online.roster[online.side];
       roomDraft={...dog,colors:{[dog.kind]:dog.coat}};
     }
-    const {kind,coat,colors}=roomDraft, rival=online.roster[1-online.side];
-    const roster=Object.entries(fighters).map(([id,f])=>{
-      const chosen=colors[id]??savedCoat(0,id);
-      const color=!free && id===rival.kind && chosen===rival.coat?(chosen+1)%4:chosen;
-      return '<button type="button" class="coat-option" data-room-dog="'+id+'" aria-pressed="'+(kind===id)+'"><img alt="" src="'+
-        portrait(id,color)+'"><strong>'+f.name+'</strong><small>'+f.style+'</small></button>';
-    }).join('');
-    const coats=coatNames[kind].map((name,i)=>{
-      const taken=!free && kind===rival.kind && i===rival.coat;
-      return '<button class="utility" data-room-coat="'+i+'" aria-pressed="'+(coat===i)+'"'+(taken?' disabled':'')+'>'+
-        name+(taken?' · Opponent':'')+'</button>';
-    }).join('');
-    const action=free?'ready-fighter':'room-stage';
-    showDialog('room-fighters',free?'Choose your next fighter':'Counterpick · Game '+(online.series.games.length+1),
-      (free?'<p>Both players pick independently. If you pick the same dog and coat, P2 wears the next color.</p>':
-        '<p>Your opponent keeps '+coatNames[rival.kind][rival.coat]+' '+fighters[rival.kind].name+'.</p>')+
-      '<div class="coat-grid" role="group" aria-label="Choose your fighter">'+roster+'</div>'+
-      '<h3 class="card-stage">'+fighters[kind].name+' · Coat</h3><div class="form-choices room-coats" role="group" aria-label="Choose coat">'+coats+'</div>'+
-      '<p id="net-pick-ready" role="status"></p><div class="dialog-actions"><button class="primary" data-do="'+action+'">'+
-      (free?'Ready as '+fighters[kind].name:'Choose arena')+'</button>'+
-      '<button class="utility" data-do="card-back">Back to results</button></div>');
+    if(!window.VersusRulebook)return waitForDispatch('Choose fighter',()=>loadDispatch('VersusRulebook'),()=>showRoomFighters(focus),showResult);
+    const action=window.VersusRulebook.roomFighters(roomDraft,online.roster[1-online.side],free,online.series?.games.length,
+      {portrait,savedCoat,showDialog,coatNames});
     updateVotes();
     document.querySelector(focus==='dog'?'[data-room-dog][aria-pressed=true]':focus==='coat'?'[data-room-coat][aria-pressed=true]':'[data-do='+action+']').focus({preventScroll:true});
   }
@@ -6768,41 +6756,8 @@
   $('online-quick').onclick = () => seekOpponent('quick');
   $('online-warmup').onclick=()=>startWarmup();
   function showCodePad(){
-    const {roomAlphabet,validCode}=window.DogOnline;
-    const field=$('online-code');
-    let draft=[...field.value.toUpperCase()].filter(c=>roomAlphabet.includes(c)).slice(0,6).join('');
-    showDialog('code-pad','Enter room code','<output id="room-digits" aria-live="polite"></output>'+
-      '<div class="code-letters" role="group" aria-label="Room code characters">'+[...roomAlphabet].map(c=>
-        '<button data-letter="'+c+'" type="button">'+c+'</button>').join('')+'</div>'+
-      '<div class="dialog-actions"><button id="code-erase" class="utility" type="button">Erase<span class="pad-legend"> · X</span></button>'+
-      '<button id="code-cancel" class="utility" type="button">Cancel</button><button id="code-join" class="primary" type="button">Join room</button></div>');
-    const grid=document.querySelector('.code-letters'), digits=$('room-digits'), erase=$('code-erase'), join=$('code-join');
-    const update=()=>{
-      digits.replaceChildren(...Array.from({length:6},(_,i)=>{
-        const cell=document.createElement('span');cell.textContent=draft[i]||'·';return cell;
-      }));
-      digits.setAttribute('aria-label',(draft.split('').join(' ')||'Empty')+' · '+draft.length+' of 6 characters');
-      erase.disabled=!draft;
-      join.disabled=!validCode(draft);
-      for(const button of grid.children)button.disabled=draft.length===6;
-    };
-    grid.onclick=e=>{
-      const button=e.target.closest('[data-letter]');
-      if(!button || button.disabled)return;
-      draft+=button.dataset.letter;update();
-      if(!join.disabled)join.focus();
-    };
-    erase.onclick=()=>{
-      const removed=draft.slice(-1);
-      draft=draft.slice(0,-1);update();
-      if(removed)grid.querySelector('[data-letter="'+removed+'"]').focus();
-    };
-    $('code-cancel').onclick=exitDialog;
-    join.onclick=()=>{
-      if(!validCode(draft))return;
-      field.value=draft;dismiss();$('online-join-form').requestSubmit();
-    };
-    update();(join.disabled?grid.firstElementChild:join).focus();
+    if(!window.VersusRulebook)return waitForDispatch('Enter room code',()=>loadDispatch('VersusRulebook'),showCodePad,()=>$('open-code-pad').focus());
+    window.VersusRulebook.codePad({showDialog,dismiss,exitDialog,legend:padNames(0,currentPads[0])});
   }
   $('open-code-pad').onclick=showCodePad;
   $('online-create').onclick = () => seekOpponent('create');
@@ -6842,11 +6797,12 @@
   const layoutStore='dog-fight-3.controls';
   const prefKeys=i=>['quickAttack'+(i+1),'flickJump'+(i+1),i?'tiltStick2':'tiltStick'];
   const seatPrefs=i=>prefKeys(i).map(key=>settings[key]);
-  let profileTags=['',''];
+  let profileTags=['',''], labelStyles=['auto','auto'];
   let layout=controls.load();
   function readLayouts(){
     const raw=JSON.parse(localStorage.getItem(layoutStore));
     layout=controls.load(raw);
+    labelStyles=[0,1].map(i=>Object.hasOwn(controls.labelStyles,raw?.labelStyles?.[i])?raw.labelStyles[i]:'auto');
     profileTags=[0,1].map(i=>typeof raw?.tags?.[i]==='string'?raw.tags[i].slice(0,16):'');
     for(const i of [0,1])prefKeys(i).forEach((key,n)=>{
       if(typeof raw?.prefs?.[i]?.[n]==='boolean')settings[key]=raw.prefs[i][n];
@@ -6856,7 +6812,19 @@
   let keys=layout.keyboard;
   let matchKeys=new Set(keys.flatMap(map=>Object.values(map)));
   const keyFor=(i,action)=>controls.keyName(keys[i][action]);
-  const padFor=(i,action)=>controls.buttons[layout.pad[i][action]];
+  let currentPads=[];
+  const labelCache=[{},{}];
+  function padNames(i,pad){
+    const c=labelCache[i],id=pad?.id,mapping=pad?.mapping,style=labelStyles[i];
+    if(c.names && c.id===id && c.mapping===mapping && c.style===style)return c.names;
+    Object.assign(c,{id,mapping,style,names:controls.padLegend(pad,style)});
+    return c.names;
+  }
+  function seatPad(i,pads=currentPads){
+    if(page==='match' && matchConfig?.couchSeats && !finishTrial)return matchConfig.couchSeats.get(i,pads);
+    return pads[i] || (pads.length===1?pads[0]:null);
+  }
+  const padFor=(i,action)=>padNames(i,seatPad(i))[layout.pad[i][action]];
   const strikeKeys=i=>['aimLeft','aimRight','aimUp','aimDown'].map(a=>keyFor(i,a)).join(' / ');
   const edit={slot:0,device:'keyboard',mode:'idle',source:'home',action:'',value:null,down:new Set(),last:''};
   function applyLayouts(persist) {
@@ -6867,7 +6835,7 @@
     delete $('school-coach').dataset.key;
     delete $('corner-tip').dataset.cue;
     hudKey='';
-    if(persist)try {localStorage.setItem(layoutStore,JSON.stringify({...layout,tags:profileTags,prefs:[seatPrefs(0),seatPrefs(1)]}));} catch {return false;}
+    if(persist)try {localStorage.setItem(layoutStore,JSON.stringify({...layout,tags:profileTags,labelStyles,prefs:[seatPrefs(0),seatPrefs(1)]}));} catch {return false;}
     return true;
   }
   function openProfiles(source,slot){
@@ -6878,7 +6846,7 @@
     if(!window.PlayerProfiles)return waitForDispatch('Player profiles',()=>loadDispatch('PlayerProfiles'),()=>openProfiles(source,slot),back);
     showDialog('profiles','Player profiles','');
     window.PlayerProfiles.open($('dialog-body'),{
-      storage,slot,back,layout:()=>layout,prefs:seatPrefs,tags:()=>profileTags,
+      storage,slot,back,padNames:i=>padNames(i,seatPad(i)),layout:()=>layout,prefs:seatPrefs,tags:()=>profileTags,
       apply(i,next,prefs,tag,displaced){
         layout=next;profileTags[i]=tag;
         if(displaced)profileTags[1-i]='';
@@ -6890,6 +6858,9 @@
     });
   }
   $('lobby-profiles').onclick=()=>openProfiles('lobby',settings.mode==='local'?editing:0);
+  function controllerCheck(source){
+    Object.assign(edit,{source,slot:0,device:'pad',mode:'test',last:null});edit.down.clear();drawLayouts();
+  }
   function openLayouts(source) {
     edit.source=source;edit.mode='idle';edit.down.clear();
     drawLayouts();
@@ -6898,7 +6869,8 @@
     if(edit.mode!=='idle'){
       edit.mode='idle';edit.down.clear();drawLayouts();return;
     }
-    if(edit.source==='controls') showControls();
+    if(edit.source==='school')schoolList();
+    else if(edit.source==='controls') showControls();
     else if(edit.source==='options') showOptions();
     else if(edit.source==='lobby')openProfiles('lobby',edit.slot);
     else dismiss();
@@ -6918,55 +6890,22 @@
     const other=controls.occupant(layout,edit.device,edit.slot,value);
     if(!other){assignControl();return;}
     edit.mode='swap';
-    const old=edit.device==='keyboard'?controls.keyName(map[action]):controls.buttons[map[action]];
-    const name=edit.device==='keyboard'?controls.keyName(value):controls.buttons[value];
+    const old=edit.device==='keyboard'?controls.keyName(map[action]):padNames(edit.slot,seatPad(edit.slot))[map[action]];
+    const name=edit.device==='keyboard'?controls.keyName(value):padNames(edit.slot,seatPad(edit.slot))[value];
     drawLayouts('Swap '+name+' and '+old+'? P'+(other.slot+1)+' '+controls.names[other.action]+' will move to '+old+'.');
   }
   function showTestInputs(pads) {
-    const map=layout[edit.device][edit.slot], pad=pads.length===1?pads[0]:pads[edit.slot];
-    const pressed=Object.keys(map).filter(a=>edit.device==='keyboard'?edit.down.has(map[a]):down(pad,map[a]));
-    const key=pressed.join(' ');
-    if(key===edit.last)return;
-    edit.last=key;
-    for(const el of $('layout-grid').querySelectorAll('[data-action]'))
-      el.classList.toggle('pressed',pressed.includes(el.dataset.action));
-    $('layout-status').textContent=pressed.length?pressed.map(a=>controls.names[a]).join(' + '):
-      edit.device==='pad' && !pad?'Connect a controller and press a button.':'Press or hold controls together.';
+    const pad=seatPad(edit.slot,pads);
+    window.VersusRulebook.testInputs(edit,layout,pad,padNames(edit.slot,pad));
   }
   function drawLayouts(message='') {
     const {device,slot,mode}=edit,keyboard=device==='keyboard',testing=mode==='test',pending=mode==='swap'||mode==='reset';
-    if(!window.VersusRulebook)return waitForDispatch('Customize controls',()=>loadDispatch('VersusRulebook'),()=>drawLayouts(message),leaveLayouts);
-    showDialog('bindings','Customize controls',window.VersusRulebook.layoutSheet(edit,layout,settings,prefKeys,message));
-    $('layout-slot').value=String(slot);$('layout-device').value=device;
-    $('layout-slot').onchange=e=>{edit.slot=Number(e.target.value);edit.mode='idle';drawLayouts();$('layout-slot').focus();};
-    $('layout-device').onchange=e=>{edit.device=e.target.value;edit.mode='idle';drawLayouts();$('layout-device').focus();};
-    $('layout-grid').onclick=e=>{
-      const b=e.target.closest('[data-key]');
-      if(b){edit.mode='capture';edit.action=b.dataset.key;drawLayouts();}
-    };
-    $('layout-grid').onchange=e=>{if(e.target.dataset.pad)chooseBinding(e.target.dataset.pad,Number(e.target.value));};
-    $('layout-back').onclick=leaveLayouts;
-    if(mode==='idle'){
-      for(const b of $('dialog-body').querySelectorAll('[data-playstyle]'))b.onclick=()=>{
-        const key=b.dataset.playstyle;
-        settings[key]=!settings[key];profileTags[slot]='';
-        const stored=applyLayouts(true);
-        drawLayouts(stored?'P'+(slot+1)+' controls saved.':'Controls updated for this visit.');
-        $('dialog-body').querySelector('[data-playstyle="'+key+'"]').focus();
-      };
-      $('layout-profiles').onclick=()=>openProfiles('bindings',edit.slot);
-      $('layout-test').onclick=()=>{edit.mode='test';edit.down.clear();edit.last=null;drawLayouts();showTestInputs(getPads());};
-      $('layout-reset').onclick=()=>{edit.mode='reset';drawLayouts();};
-    }
-    if(pending) $('layout-confirm').onclick=()=>{
-      if(mode==='swap')return assignControl();
-      if(keyboard) layout.keyboard=controls.defaults('keyboard');
-      else layout.pad[slot]=controls.defaults('pad')[slot];
-      if(keyboard)profileTags=['',''];else profileTags[slot]='';
-      applyLayouts(true);edit.mode='idle';drawLayouts('Default assignments restored.');
-    };
-    const row=$('layout-grid').querySelector('[data-action="'+edit.action+'"] button, [data-action="'+edit.action+'"] select');
-    (pending || testing ? $('layout-back') : row || $('layout-slot')).focus({preventScroll:true});
+    if(!window.VersusRulebook || !versusStyled)return waitForDispatch('Customize controls',()=>loadVersusPanel('VersusRulebook'),()=>drawLayouts(message),leaveLayouts);
+    edit.legend=padNames(slot,seatPad(slot));
+    showDialog('bindings','Customize controls',window.VersusRulebook.layoutSheet(edit,layout,settings,prefKeys,message,padNames(slot,seatPad(slot)),labelStyles[slot]));
+    window.VersusRulebook.wireLayout(edit,layout,settings,profileTags,{drawLayouts,leaveLayouts,chooseBinding,assignControl,applyLayouts,openProfiles,
+      style:value=>{labelStyles[slot]=value;applyLayouts(true);drawLayouts();$('pad-label-style').focus();}});
+    if(testing){edit.last=null;showTestInputs(currentPads);}
   }
   window.addEventListener('keydown',e=>{
     if(dialogType!=='bindings')return;
@@ -7361,7 +7300,13 @@
   }
   const menuRepeat=new window.FightControls.MenuRepeat();
   function padMenu(pads,time) {
-    if(dialogType==='bindings' && edit.mode==='test' && edit.device==='pad')showTestInputs(pads);
+    if(dialogType==='controls' && (controlsShown[0]!==padNames(0,seatPad(0)) || controlsShown[1]!==padNames(1,seatPad(1)) || controlsShown[2]!==layout)){
+      $('dialog-body').querySelector('.control-table').outerHTML=controlTable();
+    }
+    if(dialogType==='bindings' && edit.device==='pad'){
+      const names=padNames(edit.slot,seatPad(edit.slot,pads));
+      if(names!==edit.legend){drawLayouts();}else if(edit.mode==='test')showTestInputs(pads);
+    }
     if (!pads.length) {
       if (oldPad!==idlePad) { oldPad=idlePad; menuPadButtons.clear();menuRepeat.poll('','',time); }
       return;
@@ -7396,7 +7341,12 @@
     };
     const move=menuRepeat.poll(direction,menuOpen && !document.hidden ? dialogType || page : '',time);
     const back=now.back && !oldPad.back, confirm=now.confirm && !oldPad.confirm;
-    if(menuOpen && (move || back || confirm || now.pause && !oldPad.pause))document.body.classList.add('pad-navigation');
+    if(menuOpen && (move || back || confirm || now.pause && !oldPad.pause)){
+      document.body.classList.add('pad-navigation');
+      const pad=pads.find(p=>p.index===padIndex || down(p,0) || down(p,1) || down(p,9)) || pads[0];
+      const names=padNames(Math.min(1,pads.indexOf(pad)),pad);
+      $('pad-legend').textContent='D-pad · Choose   '+names[0]+' · Select   '+names[1]+' · Back';
+    }
     if(dialogType==='couch' || dialogType==='stage-strike'){oldPad=now;return;}
     if(dialogType==='bindings' && edit.mode==='test' && edit.device==='pad'){
       if(now.pause && !oldPad.pause)leaveLayouts();
@@ -7480,7 +7430,7 @@
     const now = timestamp / 1000,
       dt = Math.min(0.09, Math.max(0, now - before));
     before = now;
-    const pads = getPads();
+    const pads = currentPads = getPads();
     if(page==='match' && world?.mode==='local')checkLocalPads(pads);
     padMenu(pads,now);
     if(page==='match' && world?.mode==='local' && matchConfig?.couchSeats?.lost && !dialogType)checkLocalPads(pads);
@@ -7766,6 +7716,8 @@
       showHome(false);openStageMusic(hash.split('/')[1]);
     } else if (hash === '#sound-test') {
       showHome(false);showSoundTest();
+    } else if(hash==='#controls/controller'){
+      showHome(false);controllerCheck('controls');
     } else if (hash === '#controls') {
       showHome(false);openLayouts('home');
     } else if (hash === '#local/profiles') {

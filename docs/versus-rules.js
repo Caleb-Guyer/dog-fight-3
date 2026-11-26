@@ -261,7 +261,7 @@
         '<div class="dialog-actions"><button class="utility" data-do="throw-read-perch">Top platform · 110%</button>' +
         '<button class="utility" data-do="throw-read-edge">Left ledge · 80%</button></div>') + ledgeChoices;
   }
-  function controlsTable(networkGame,settings,keyboard,padFor,strikeKeys,nativeScreen) {
+  function controlsTable(networkGame,settings,keyboard,padFor,strikeKeys,nativeScreen,startName=()=>"Start") {
     const row=(title,key,pad)=>{
       const label=i=>typeof pad==='function'?pad(i):pad;
       const p=label(0), q=label(1);
@@ -276,7 +276,7 @@
       row('Smash / charge',i=>keyboard(i,'smash'),i=>padFor(i,'smash')+(settings[i?'tiltStick2':'tiltStick']?'':' / right stick')),
       simple('Special','special'),row('Shield / air dodge / tech',i=>keyboard(i,'shield'),i=>padFor(i,'shield')+' / '+padFor(i,'shieldAlt')),
       row('Tilt shield',i=>keyboard(i,'shield')+' + '+keyboard(i,'walk')+' + direction',i=>'Gentle stick / '+padFor(i,'shield')+' + '+padFor(i,'shieldAlt')+' + stick'),
-      simple('Grab / throw','grab'),[networkGame ? 'Match menu' : 'Pause','Esc','Esc','Start'],
+      simple('Grab / throw','grab'),row(networkGame?'Match menu':'Pause',()=>'Esc',startName),
     ];
     if (nativeScreen) rows.push(['Fullscreen', 'F', 'F', '—']);
     return '<table class="control-table"><thead><tr><th>Action</th>' +
@@ -329,22 +329,64 @@
         }).join('') +
         '<p>Flick the left stick up or tap Up to jump. For an up tilt, aim gently, hold Walk, or slide from the center dot on touch. Online uses your P1 controls.</p></div><div class="dialog-actions"><button class="primary" data-do="close">Done</button></div>';
   }
-  function layoutSheet(edit,layout,settings,prefKeys,message){
+  function padDiagram(map,legend){
+    const actions=Object.keys(map),names=window.FightControls.names;
+    const key=(n,other)=>{
+      const action=names[actions.find(a=>map[a]===n)] || other;
+      return '<span data-pad-key="'+n+'" title="'+legend[n]+' · '+action+'">'+legend[n]+'</span>';
+    };
+    const stick=(n,name)=>'<div class="check-stick" data-stick="'+n+'" title="'+name+'"><i></i></div>';
+    return '<div class="check-pad'+(legend[0]==='Button 1'?' numbered':'')+'" role="img" aria-label="Live controller inputs">'+
+      [6,4,7,5].map(n=>key(n)).join('')+
+      [8,9].map((n,i)=>key(n,i?'Pause':'Watch example')).join('')+
+      [0,1,2,3].map(n=>key(n)).join('')+stick(0,'Move and aim')+stick(2,'Strike stick')+
+      '<div class="check-dpad" aria-hidden="true">'+['▲','▼','◀','▶'].map((a,i)=>'<i data-pad-key="'+(12+i)+'">'+a+'</i>').join('')+'</div></div>';
+  }
+  function testInputs(edit,layout,pad,legend){
+    const keyboard=edit.device==='keyboard',map=layout[edit.device][edit.slot],names=window.FightControls.names;
+    const pressed=Object.keys(map).filter(k=>keyboard?edit.down.has(map[k]):pad?.buttons[map[k]]?.pressed);
+    const diagram=document.querySelector('.check-pad'),labels=pressed.map(k=>names[k]);
+    let next=pressed.join(' ');
+    if(diagram){
+      const axes=[0,1,2,3].map(i=>Math.round(Math.max(-1,Math.min(1,pad?.axes[i] || 0))*10));
+      const dirs=['Up','Down','Left','Right'];
+      const mask=(pad?.buttons || []).reduce((m,b,i)=>i<16 && b.pressed?m | (1<<i):m,0);
+      next+='/'+axes.join(',')+'/'+mask+'/'+(pad?.index??'-');
+      if(next===edit.last)return;
+      for(const key of diagram.querySelectorAll('[data-pad-key]'))key.classList.toggle('lit',!!(mask & (1<<Number(key.dataset.padKey))));
+      for(const stick of diagram.querySelectorAll('[data-stick]')){
+        const i=Number(stick.dataset.stick),x=axes[i],y=axes[i+1];
+        stick.firstElementChild.style.transform='translate('+x+'px,'+y+'px)';
+        const direction=[Math.abs(y)>2?dirs[Number(y>0)]:'',Math.abs(x)>2?dirs[2+Number(x>0)]:''].filter(Boolean).join('-');
+        if(direction)labels.push((i?'Strike stick ':'Move stick ')+direction.toLowerCase());
+      }
+      for(const [i,d] of dirs.entries())if(mask & (1<<(12+i)))labels.push('D-pad '+d.toLowerCase());
+      if(mask & 256)labels.push(legend[8]);
+    }else if(next===edit.last)return;
+    edit.last=next;
+    for(const row of document.querySelectorAll('#layout-grid [data-action]'))row.classList.toggle('pressed',pressed.includes(row.dataset.action));
+    const line=labels.join(' + ') || (!keyboard && !pad?'Connect a controller and press a button.':'Press or hold controls together.');
+    const status=document.getElementById('layout-status');if(status.textContent!==line)status.textContent=line;
+  }
+  function layoutSheet(edit,layout,settings,prefKeys,message,legend=window.FightControls.padLegend(null),style='auto'){
     const {device,slot,mode}=edit,keyboard=device==='keyboard',testing=mode==='test',pending=mode==='swap'||mode==='reset';
     const controls=window.FightControls;
     const map=layout[device][slot],actions=Object.keys(map);
-    const value=a=>keyboard?controls.keyName(map[a]):controls.buttons[map[a]];
+    const value=a=>keyboard?controls.keyName(map[a]):legend[map[a]];
     const rows=actions.map(a=>{
       const label=controls.names[a];
       const binding=testing?'<kbd>'+value(a)+'</kbd>':keyboard?
         '<button type="button" class="utility" data-key="'+a+'" aria-label="Change '+label+' key, currently '+value(a)+'">'+(mode==='capture' && edit.action===a?'Press a key…':value(a))+'</button>':
-        '<select data-pad="'+a+'" aria-label="'+label+' button">'+controls.buttons.map((text,n)=>'<option value="'+n+'"'+(n===map[a]?' selected':'')+'>'+text+'</option>').join('')+'</select>';
+        '<select data-pad="'+a+'" aria-label="'+label+' button">'+legend.slice(0,8).map((text,n)=>'<option value="'+n+'"'+(n===map[a]?' selected':'')+'>'+text+'</option>').join('')+'</select>';
       return '<div data-action="'+a+'"><span>'+label+'</span>'+binding+'</div>';
     }).join('');
     return '<div class="layout-switch"><label>Player <select id="layout-slot"><option value="0">P1</option><option value="1">P2</option></select></label>'+
       '<label>Device <select id="layout-device"><option value="keyboard">Keyboard</option><option value="pad">Controller</option></select></label></div>'+
-      '<p>'+(testing?(keyboard?'Press your keys to see which actions register.':'Press controller buttons to test them. Start leaves the test.') : keyboard?'Choose an action, then press its new key. Both players share this keyboard.':
-        'Choose a button for each action. A and B still select and go back in menus.')+'</p>'+
+      (!keyboard?'<label class="pad-style">Button labels <select id="pad-label-style">'+Object.entries(controls.labelStyles).map(([id,name])=>
+        '<option value="'+id+'"'+(id===style?' selected':'')+'>'+name+'</option>').join('')+'</select></label>':'')+
+      (!keyboard && testing?padDiagram(layout.pad[slot],legend):'')+
+      '<p>'+(testing?(keyboard?'Press your keys to see which actions register.':'Press buttons together or move either stick. '+legend[9]+' leaves the test.') : keyboard?'Choose an action, then press its new key. Both players share this keyboard.':
+        'Choose a button for each action. '+legend[0]+' selects and '+legend[1]+' goes back in menus.')+'</p>'+
       '<p id="layout-status" role="status">'+(message || (mode==='capture'?'Press a key for '+controls.names[edit.action]+'. Escape cancels.':
         mode==='reset'?keyboard?'Restore both keyboard layouts to their defaults?':'Restore the P'+(slot+1)+' controller defaults?':'Online uses your P1 layout.'))+'</p>'+
       '<div id="layout-grid"'+(pending?' hidden':'')+'>'+rows+'</div>'+
@@ -355,5 +397,102 @@
       (mode==='idle'?'<button type="button" class="primary" id="layout-test">Test layout</button><button type="button" class="utility" id="layout-profiles">Player profiles</button><button type="button" class="utility" id="layout-reset">'+(keyboard?'Restore keyboards':'Restore controller')+'</button>':'')+
       '<button type="button" class="utility" id="layout-back">'+(pending||mode==='capture'?'Cancel':testing?'Done testing':'Done')+'</button></div>';
   }
-  window.VersusRulebook={layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
+  function codePad({showDialog,dismiss,exitDialog,legend}){
+    const $=id=>document.getElementById(id);
+    const {roomAlphabet,validCode}=window.DogOnline;
+    const field=$('online-code');
+    let draft=[...field.value.toUpperCase()].filter(c=>roomAlphabet.includes(c)).slice(0,6).join('');
+    showDialog('code-pad','Enter room code','<output id="room-digits" aria-live="polite"></output>'+
+      '<div class="code-letters" role="group" aria-label="Room code characters">'+[...roomAlphabet].map(c=>
+        '<button data-letter="'+c+'" type="button">'+c+'</button>').join('')+'</div>'+
+      '<div class="dialog-actions"><button id="code-erase" class="utility" type="button">Erase<span class="pad-legend"> · '+legend[2]+'</span></button>'+
+      '<button id="code-cancel" class="utility" type="button">Cancel</button><button id="code-join" class="primary" type="button">Join room</button></div>');
+    const grid=document.querySelector('.code-letters'), digits=$('room-digits'), erase=$('code-erase'), join=$('code-join');
+    const update=()=>{
+      digits.replaceChildren(...Array.from({length:6},(_,i)=>{
+        const cell=document.createElement('span');cell.textContent=draft[i]||'·';return cell;
+      }));
+      digits.setAttribute('aria-label',(draft.split('').join(' ')||'Empty')+' · '+draft.length+' of 6 characters');
+      erase.disabled=!draft;
+      join.disabled=!validCode(draft);
+      for(const button of grid.children)button.disabled=draft.length===6;
+    };
+    grid.onclick=e=>{
+      const button=e.target.closest('[data-letter]');
+      if(!button || button.disabled)return;
+      draft+=button.dataset.letter;update();
+      if(!join.disabled)join.focus();
+    };
+    erase.onclick=()=>{
+      const removed=draft.slice(-1);
+      draft=draft.slice(0,-1);update();
+      if(removed)grid.querySelector('[data-letter="'+removed+'"]').focus();
+    };
+    $('code-cancel').onclick=exitDialog;
+    join.onclick=()=>{
+      if(!validCode(draft))return;
+      field.value=draft;dismiss();$('online-join-form').requestSubmit();
+    };
+    update();(join.disabled?grid.firstElementChild:join).focus();
+  }
+  function roomFighters(roomDraft,rival,free,played,{portrait,savedCoat,showDialog,coatNames}){
+    const {fighters}=window.DogFight;
+    const {kind,coat,colors}=roomDraft;
+    const roster=Object.entries(fighters).map(([id,f])=>{
+      const chosen=colors[id]??savedCoat(0,id);
+      const color=!free && id===rival.kind && chosen===rival.coat?(chosen+1)%4:chosen;
+      return '<button type="button" class="coat-option" data-room-dog="'+id+'" aria-pressed="'+(kind===id)+'"><img alt="" src="'+
+        portrait(id,color)+'"><strong>'+f.name+'</strong><small>'+f.style+'</small></button>';
+    }).join('');
+    const coats=coatNames[kind].map((name,i)=>{
+      const taken=!free && kind===rival.kind && i===rival.coat;
+      return '<button class="utility" data-room-coat="'+i+'" aria-pressed="'+(coat===i)+'"'+(taken?' disabled':'')+'>'+
+        name+(taken?' · Opponent':'')+'</button>';
+    }).join('');
+    const action=free?'ready-fighter':'room-stage';
+    showDialog('room-fighters',free?'Choose your next fighter':'Counterpick · Game '+(played+1),
+      (free?'<p>Both players pick independently. If you pick the same dog and coat, P2 wears the next color.</p>':
+        '<p>Your opponent keeps '+coatNames[rival.kind][rival.coat]+' '+fighters[rival.kind].name+'.</p>')+
+      '<div class="coat-grid" role="group" aria-label="Choose your fighter">'+roster+'</div>'+
+      '<h3 class="card-stage">'+fighters[kind].name+' · Coat</h3><div class="form-choices room-coats" role="group" aria-label="Choose coat">'+coats+'</div>'+
+      '<p id="net-pick-ready" role="status"></p><div class="dialog-actions"><button class="primary" data-do="'+action+'">'+
+      (free?'Ready as '+fighters[kind].name:'Choose arena')+'</button>'+
+      '<button class="utility" data-do="card-back">Back to results</button></div>');
+    return action;
+  }
+  function wireLayout(edit,layout,settings,profileTags,{drawLayouts,leaveLayouts,chooseBinding,assignControl,applyLayouts,openProfiles,style}){
+    const $=id=>document.getElementById(id),{mode,slot,device}=edit,keyboard=device==='keyboard',testing=mode==='test',pending=mode==='swap'||mode==='reset';
+    if($('pad-label-style'))$('pad-label-style').onchange=e=>style(e.target.value);
+    $('layout-slot').value=String(slot);$('layout-device').value=device;
+    $('layout-slot').onchange=e=>{edit.slot=Number(e.target.value);edit.mode='idle';drawLayouts();$('layout-slot').focus();};
+    $('layout-device').onchange=e=>{edit.device=e.target.value;edit.mode='idle';drawLayouts();$('layout-device').focus();};
+    $('layout-grid').onclick=e=>{
+      const b=e.target.closest('[data-key]');
+      if(b){edit.mode='capture';edit.action=b.dataset.key;drawLayouts();}
+    };
+    $('layout-grid').onchange=e=>{if(e.target.dataset.pad)chooseBinding(e.target.dataset.pad,Number(e.target.value));};
+    $('layout-back').onclick=leaveLayouts;
+    if(mode==='idle'){
+      for(const b of $('dialog-body').querySelectorAll('[data-playstyle]'))b.onclick=()=>{
+        const key=b.dataset.playstyle;
+        settings[key]=!settings[key];profileTags[slot]='';
+        const stored=applyLayouts(true);
+        drawLayouts(stored?'P'+(slot+1)+' controls saved.':'Controls updated for this visit.');
+        $('dialog-body').querySelector('[data-playstyle="'+key+'"]').focus();
+      };
+      $('layout-profiles').onclick=()=>openProfiles('bindings',edit.slot);
+      $('layout-test').onclick=()=>{edit.mode='test';edit.down.clear();edit.last=null;drawLayouts();};
+      $('layout-reset').onclick=()=>{edit.mode='reset';drawLayouts();};
+    }
+    if(pending) $('layout-confirm').onclick=()=>{
+      if(mode==='swap')return assignControl();
+      if(keyboard) layout.keyboard=window.FightControls.defaults('keyboard');
+      else layout.pad[slot]=window.FightControls.defaults('pad')[slot];
+      if(keyboard)profileTags.fill('');else profileTags[slot]='';
+      applyLayouts(true);edit.mode='idle';drawLayouts('Default assignments restored.');
+    };
+    const row=$('layout-grid').querySelector('[data-action="'+edit.action+'"] button, [data-action="'+edit.action+'"] select');
+    (pending || testing ? $('layout-back') : row || $('layout-slot')).focus({preventScroll:true});
+  }
+  window.VersusRulebook={codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
 })();

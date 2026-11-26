@@ -78,7 +78,7 @@
     '<small data-detail></small><button type="button" data-action="shuffle">Random dog</button><button type="button" data-action="coat"></button>'+
     '<button type="button" class="couch-lock" data-action="lock"></button><small data-keys></small></section>';
 
-  function panel(root,settings,keys,pads,{start,leave,sound,announce,drawStageTile,between,lineupReady}) {
+  function panel(root,settings,keys,pads,{start,leave,sound,announce,drawStageTile,between,lineupReady,padNames=(i,p)=>window.FightControls.padLegend(p)}) {
     const pick=new Selection(settings,Math.random,between?.picker,!!lineupReady);
     const seats=settings.couchSeats || new window.FightControls.Seats(pads), previous=[null,null];
     const reduced=matchMedia('(prefers-reduced-motion: reduce)');
@@ -134,7 +134,7 @@
         c.lock.textContent=locked?'Ready ✓ · Change':active?(lineupReady?'Lock fighter':choosing?'Choose arena':'Fight here'):'Ready for game '+between.game;
         c.lock.setAttribute('aria-pressed',String(locked));
         c.keys.textContent=(active?key(i,'left')+' / '+key(i,'right')+' choose · '+(choosing?key(i,'up')+' / '+key(i,'down')+' coat · ':''):'')+
-          key(i,'attack')+' confirm · '+key(i,'special')+' back'+(active && choosing?' · '+key(i,'grab')+' / pad X random':'');
+          key(i,'attack')+' confirm · '+key(i,'special')+' back'+(active && choosing?' · '+key(i,'grab')+' random':'');
         if(arena)drawStageTile(c.canvas,pick.stages[i],settings.stageForm);
       }
       call.textContent=pick.locked[picker]?(lineupReady?fighters[pick.dogs[picker]].name:arenas[pick.stages[picker]].name)+' selected. Waiting for P'+(2-picker)+' to ready up.':
@@ -158,11 +158,11 @@
         c.lock.setAttribute('aria-pressed',String(locked));
         for(const button of c.arrows)button.disabled=locked;
         c.keys.textContent=key(i,'left')+' / '+key(i,'right')+' choose · '+key(i,'attack')+(choosing?' ready':' vote')+
-          ' · '+key(i,'special')+' back'+(choosing?' · '+key(i,'up')+' / '+key(i,'down')+' coat · '+key(i,'grab')+' / pad X random':'');
+          ' · '+key(i,'special')+' back'+(choosing?' · '+key(i,'up')+' / '+key(i,'down')+' coat · '+key(i,'grab')+' random':'');
         if(!choosing)drawStageTile(c.canvas,pick.stages[i],settings.stageForm);
       });
       const who=pick.locked[0]?'P1':'P2';
-      call.textContent=winner ? (pick.stages[0]===pick.stages[1]?'Both chose ':'Split vote · P'+(pick.tieSlot+1)+' gets the pick · ')+arenas[winner].name+'. Press Start to play.' :
+      call.textContent=winner ? (pick.stages[0]===pick.stages[1]?'Both chose ':'Split vote · P'+(pick.tieSlot+1)+' gets the pick · ')+arenas[winner].name+'. Choose Start fight below.' :
         pick.locked.some(Boolean) ? who+(choosing?' is ready':' voted')+' · Waiting for '+(who==='P1'?'P2':'P1') :
         choosing?(lineupReady?'Ready both dogs to start striking arenas.':'Ready both dogs to open the arena vote.'):'Matching votes choose the arena. A split vote goes to a coin toss.';
       play.hidden=!winner;
@@ -215,8 +215,9 @@
       for(const [i,c] of cards.entries()){
         const pad=seats.get(i,pads), last=previous[i];
         const mask=padMask(pad,last?.mask||0), index=pad?.index??null;
-        if(last?.index!==index)c.device.textContent=pad?'Pad '+(index+1)+' · A ready / B back':'Keyboard';
-        previous[i]={index,mask};
+        const names=padNames(i,pad);
+        if(last?.index!==index || last.legend!==names)c.device.textContent=pad?'Pad '+(index+1)+' · '+names[0]+' ready / '+names[1]+' back / '+names[2]+' random':'Keyboard';
+        previous[i]={index,mask,legend:names};
         if(closed || (!between && phase!==pick.phase) || !pad || last?.index!==index)continue;
         const fresh=mask & ~last.mask;
         if(fresh & 32)act(i,'back');

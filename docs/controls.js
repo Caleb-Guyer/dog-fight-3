@@ -11,6 +11,27 @@
     attack:'Attack',smash:'Smash',special:'Special',shield:'Shield',shieldAlt:'Second shield',grab:'Grab',
     aimLeft:'Strike left',aimRight:'Strike right',aimUp:'Strike up',aimDown:'Strike down'};
   const buttons=['A','B','X','Y','LB','RB','LT','RT'];
+  const legends={
+    xbox:[...buttons,'View','Start'],
+    modern:[...buttons,'View','Menu'],
+    switch:['B','A','Y','X','L','R','ZL','ZR','−','+'],
+    ps:['Cross','Circle','Square','Triangle','L1','R1','L2','R2','Share','Options'],
+    sense:['Cross','Circle','Square','Triangle','L1','R1','L2','R2','Create','Options'],
+    positions:['Bottom','Right','Left','Top','Left bumper','Right bumper','Left trigger','Right trigger','Left menu','Right menu'],
+    numbered:Array.from({length:10},(_,i)=>'Button '+(i+1))
+  };
+  const labelStyles={auto:'Automatic',xbox:'Xbox',switch:'Nintendo Switch',ps:'PlayStation 4',sense:'PlayStation 5',positions:'Button positions'};
+  function padLegend(pad,style='auto'){
+    const id=pad?.id || '';
+    if(style==='xbox')return legends.modern;
+    if(style!=='auto' && Object.hasOwn(labelStyles,style))return legends[style];
+    if(pad?.mapping==='')return legends.numbered;
+    if(/dualsense|054c.*(?:0ce6|0df2)/i.test(id))return legends.sense;
+    if(/dualshock.?4|playstation.?4|054c.*(?:05c4|09cc)/i.test(id))return legends.ps;
+    if(/switch pro|nintendo.*pro controller|pro controller.*nintendo|057e.*2009/i.test(id))return legends.switch;
+    if(/xbox (?:one|series|wireless)/i.test(id))return legends.modern;
+    return legends.xbox;
+  }
   const symbols={ArrowLeft:'←',ArrowRight:'→',ArrowUp:'↑',ArrowDown:'↓',ShiftLeft:'Left Shift',ShiftRight:'Right Shift',
     ControlLeft:'Left Ctrl',ControlRight:'Right Ctrl',Comma:',',Period:'.',Slash:'/',Quote:"'",Backquote:'`',Backslash:'\\',
     Semicolon:';',Minus:'−',Equal:'=',BracketLeft:'[',BracketRight:']',Space:'Space'};
@@ -139,5 +160,5 @@
       return true;
     }
   }
-  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,Seats,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat};
+  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat};
 })();

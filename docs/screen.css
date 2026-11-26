@@ -117,6 +117,8 @@ body .topbar .wordmark {
 #school-coach[data-state="guided"] { border-color:#98dec8; }
 .guide-key { display:inline-block; padding:1px 5px; margin:1px 0; border:1px solid #b0b7bb; color:#fff2d0; }
 .guide-key[data-met="true"] { color:#20242e; background:#98dec8; border-color:#98dec8; }
+#match:has(#school-coach[data-state="guided"]:not([hidden])) [data-lesson-cue="press"] { outline:3px solid #f6cc73; outline-offset:-3px; }
+#match:has(#school-coach[data-state="guided"]:not([hidden])) [data-lesson-cue="release"] { outline:3px dashed #98dec8; outline-offset:-3px; }
 .rules-source,.rules-fields label { display:grid; gap:4px; }
 .rules-source { margin:10px 0; }
 .rules-fields { display:grid; gap:0; }
@@ -149,13 +151,6 @@ body .topbar .wordmark {
 #lobby-tryout { margin-left:auto; }
 @media(max-width:620px) { .signature { flex-wrap:wrap; } #signature { flex:1 1 calc(100% - 24px); } }
 .hud-name small { display:inline-block; max-width:15vw; overflow:hidden; text-overflow:ellipsis; vertical-align:baseline; }
-.layout-switch label { display:flex; align-items:center; gap:6px; }
-#layout-grid:not([hidden]) { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:3px 14px; }
-#layout-grid > div { display:flex; align-items:center; justify-content:space-between; gap:6px; padding:3px 2px; border-bottom:1px solid #62596a; }
-#layout-grid .pressed { background:#214d48; color:#f8f4db; }
-#layout-grid button,#layout-grid select,.layout-switch select,#layout-grid kbd { padding:4px 8px; font:inherit; }
-#layout-status { min-height:1.4em; }
-@media(max-width:480px){#layout-grid:not([hidden]) { grid-template-columns:1fr; }}
 @media (max-height:520px) and (orientation:landscape) {
   #school-coach { top:4px; left:4px; transform:none; width:34%; font-size:11px; padding:4px 7px; }
   #school-coach h2 { font-size:13px; }
