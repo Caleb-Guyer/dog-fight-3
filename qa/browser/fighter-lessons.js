@@ -10,6 +10,21 @@ async function clock(page){
 async function state(page,value){
   assert.equal(await page.locator('#school-coach').getAttribute('data-state'),value,await page.locator('#school-task').innerText());
 }
+async function startCloverSpar(page,mobile=false){
+  // Replay the same Rookie opening so each input device gets the same disc-catching window.
+  await page.evaluate(()=>{
+    const original=crypto.getRandomValues;
+    crypto.getRandomValues=function(array){
+      if(array instanceof Uint32Array && array.length===1){
+        delete crypto.getRandomValues;array[0]=7;return array;
+      }
+      return original.call(this,array);
+    };
+  });
+  const start=page.locator('[data-class-spar]');
+  if(mobile)await start.tap();else await start.click();
+  await page.clock.runFor(2490);
+}
 async function firstExample(browser){
   const page=await browser.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
@@ -111,8 +126,8 @@ async function touch(browser){
     await page.goto(root+'?direct#fighters/clover/recovery');
     await page.locator('#school-example').waitFor();
     assert.match(await page.locator('#school-title').textContent(),/Fold the sail/);
-    await page.goto(root+'?touch-spar#fighters/clover');await tap('[data-class-spar]');
-    await page.clock.runFor(2490);assert.match(await page.locator('#corner-line').textContent(),/Special/);
+    await page.goto(root+'?touch-spar#fighters/clover');await startCloverSpar(page,true);
+    assert.match(await page.locator('#corner-line').textContent(),/Special/);
     await press(['special'],32);await page.clock.runFor(330);await press(['right','special'],55);
     await page.clock.runFor(760);await tap('#pause');
     assert.match(await page.locator('#dialog-body').textContent(),/Chase the disc · Landed in this fight/);
@@ -144,8 +159,8 @@ async function controller(browser){
     await input(1,-1,1,320);await input(1,0,-1,1900);
     await state(page,'passed');await input(0,0,0,60);
     assert.match(await page.locator(lesson(1)).textContent(),/✓/);
-    await page.goto(root+'?pad-spar#fighters/clover');await page.locator('[data-class-spar]').click();
-    await page.clock.runFor(2490);await input(0,0,1,32);await input(0,0,-1,330);
+    await page.goto(root+'?pad-spar#fighters/clover');await startCloverSpar(page);
+    await input(0,0,1,32);await input(0,0,-1,330);
     await input(1,0,1,55);await input(0,0,-1,760);
     await page.locator('#pause').click();
     assert.match(await page.locator('#dialog-body').textContent(),/Chase the disc · Landed in this fight/);
@@ -166,7 +181,7 @@ async function sparring(browser){
         return result;
       };
     });
-    await click('[data-class-spar]');await time(2490);
+    await startCloverSpar(page);
     assert.equal(await page.locator('#match-mode').textContent(),'Sparring · Clover');
     assert.equal(await page.evaluate(()=>sparWorld.dogs.map(f=>f.stocks).join()),'3,3');
     await page.keyboard.down('k');await time(32);await page.keyboard.up('k');
@@ -178,9 +193,18 @@ async function sparring(browser){
     await click('[data-spar-lesson="1"]');await click('#school-example');await time(700);
     await click('#school-list');assert.equal(await page.locator('#match-mode').textContent(),'Sparring · Clover');
     assert.deepEqual(await position(),before);
-    await page.keyboard.down('a');
-    for(let i=0;i<16 && !await page.locator('[data-do=spar-card]').count();i++)await time(2400);
-    await page.keyboard.up('a');
+    let held='';
+    for(let i=0;i<135 && !await page.locator('[data-do=spar-card]').count();i++){
+      const key=await page.evaluate(()=>sparWorld.dogs[0].x<sparWorld.dogs[1].x?'a':'d');
+      if(key!==held){
+        if(held)await page.keyboard.up(held);
+        held=key;await page.keyboard.down(held);
+      }
+      await time(400);
+    }
+    if(held)await page.keyboard.up(held);
+    assert.equal(await page.locator('[data-do=spar-card]').count(),1,
+      JSON.stringify({position:await position(),dialog:await page.locator('#dialog-title').textContent(),errors}));
     await page.getByRole('heading',{name:'Sparring result'}).waitFor();
     assert.match(await page.locator('#dialog-body').textContent(),/Chase the disc · Landed in this fight/);
     await click('[data-do=match-card]');await page.locator('.card-stats').waitFor();
