@@ -2087,7 +2087,10 @@
           (world.edgePractice.corner && (name === 'cornerCue' || (name === 'shieldSlip' && e.f.index === 0))) ||
           name === 'edgeOpen' || (world.edgePractice.timeCatch && name === 'ledge' && e.f.index === 1) ||
           ((name === 'teeter' || name === 'edgeCancel') && e.f.index === 0))) edgeFeedback(name, e);
-      if (name === 'footworkCue' || name === 'footworkResult') window.PracticeDirectory?.footworkFeedback(world,e);
+      if (name === 'footworkCue' || name === 'footworkResult') {
+        if(window.PracticeDirectory)window.PracticeDirectory.footworkFeedback(world,e);
+        else footworkCues.push(e);
+      }
       if (name === 'waveContact' || name === 'waveResult') waveFeedback();
       if (world?.spacingPractice && (name === 'spacingContact' || name === 'spacingLand' || name === 'spacingJab' ||
           name === 'spacingCancelStart' || name === 'spacingCancelCue' || name === 'footstoolCue' || name === 'apexCue' ||
@@ -4482,10 +4485,19 @@
       tip.textContent = result[1];
     }
   }
+  let footworkCues=[];
+  function loadFootworkCues(battle,exercise) {
+    const current=()=>world===battle && world.footworkPractice===exercise;
+    const flush=()=>{
+      if(current())for(const e of footworkCues)window.PracticeDirectory.footworkFeedback(battle,e);
+      if(current())footworkCues=[];
+    };
+    loadDispatch('PracticeDirectory').then(flush,()=>{
+      if(current())waitForDispatch('Footwork readout',()=>loadDispatch('PracticeDirectory'),flush,()=>$('game').focus());
+    });
+  }
   function drill(ledge, fromHang = false, pattern = 'strike', direction, study) {
     if (!world) return;
-    if(ledge==='footwork' && !window.PracticeDirectory)return waitForDispatch('Footwork practice',()=>loadDispatch('PracticeDirectory'),
-      ()=>drill(ledge,fromHang,pattern,direction,study),()=>$('game').focus());
     if(ledge==='combo' && !window.ComboLab)return waitForDispatch('Combo practice',()=>loadDispatch('ComboLab'),
       ()=>drill(ledge,fromHang,pattern,direction,study),()=>$('game').focus());
     setFrameMode('live');
@@ -4548,8 +4560,12 @@
         pattern === 'guard' ? !lab.guard : pattern === 'ko' ? false : lab?.guard ?? false,
         pattern === 'ko' ? !lab?.koTest : lab?.koTest ?? false);
     }
-    else if (footwork) world.resetFootworkPractice(pattern, pattern === 'bait' ? 1 : direction ?? world.footworkPractice?.dir ?? 1,
-      world.footworkPractice?.pattern !== 'bait' ? world.footworkPractice?.slow ?? true : true,study ?? world.footworkPractice?.worn ?? false);
+    else if (footwork) {
+      world.resetFootworkPractice(pattern,pattern==='bait'?1:direction ?? world.footworkPractice?.dir ?? 1,
+        world.footworkPractice?.pattern!=='bait'?world.footworkPractice?.slow ?? true:true,study ?? world.footworkPractice?.worn ?? false);
+      footworkCues=[];
+      if(!window.PracticeDirectory)loadFootworkCues(world,world.footworkPractice);
+    }
     else if (spacing) {
       if ((pattern === 'sweet' || pattern === 'sweetAligned') && !isSweetPractice(world.spacingPractice)) showContactBoxes(true);
       world.resetSpacingPractice(pattern, direction ?? world.spacingPractice?.dir ?? 1,
