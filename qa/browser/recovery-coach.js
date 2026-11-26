@@ -164,8 +164,14 @@ async function check(browser,device) {
       await page.clock.runFor(18);
       assert.equal(await page.locator('#corner-title').textContent(),'Air dodge to the ledge');
       await choose('#pause');const before=await page.evaluate(()=>[firstFight.matchFrames,firstFight.random.state,firstFight.dogs[0].y]);
-      await choose('[data-do=corner-practice]');await route();await choose('#recovery-guide');await page.clock.runFor(1400);
-      await hold(1,false,true,true);await page.clock.runFor(140);await hold(1);await page.clock.runFor(2000);await hold(0);
+      await choose('[data-do=corner-practice]');await route();
+      assert.match(await page.locator('#recovery-route').textContent(),/roll onto the stage/);
+      await choose('#recovery-guide');await page.clock.runFor(1400);
+      await hold(1,false,true,true);await page.clock.runFor(140);
+      assert.match(await page.locator('#countdown').textContent(),/Release/);
+      await hold(1);await page.clock.runFor(450);
+      assert.match(await page.locator('#countdown').textContent(),/Roll/);
+      await hold(0,false,false,true);await page.clock.runFor(120);await hold(1);await page.clock.runFor(1600);await hold(0);
       assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!');
       await choose('[data-do=trial-results]');
       assert.deepEqual(await page.evaluate(()=>[firstFight.matchFrames,firstFight.random.state,firstFight.dogs[0].y]),before);

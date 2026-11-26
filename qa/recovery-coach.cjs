@@ -44,6 +44,19 @@ test('projecting an immediate dodge for Fight School keeps the actual stock, clo
     w.dogs[0].usedDodge=true;assert.equal(corner.read(w),'drift/'+(wide?'left':'right'));
   }
 });
+test('a guarded ledge requires a second Shield press after the dodge, while a normal climb loses the stock',()=>{
+  const w=new Battle({mode:'solo',p1:'pip',p2:'brisket',stage:'picnic',cpuLevel:'rookie',fetch:false},undefined,seededRandom(42));
+  w.placeLastDodge('left',false,0);w.step(1/60,idleInput,idleInput);
+  const {clip}=coach.recordFall(w), plan=find(clip.tape);
+  assert(plan.rollAt>1);
+  const held={...idleInput,shield:true,x:1,y:-1};
+  assert.match(coach.gate(plan,1,held,k=>k),/Release shield/);
+  assert.match(coach.gate(plan,plan.rollAt,idleInput,k=>k,{ledge:{left:true},prev:idleInput}),/shield.*Roll/);
+  const saved=play(clip.tape,plan,n=>coach.controls(plan,n));
+  assert(saved.rolled && saved.outcome==='landed');
+  const climbed=play(clip.tape,plan,n=>n===plan.rollAt?{...idleInput,x:1}:coach.controls(plan,n));
+  assert(climbed.caught && !climbed.rolled && climbed.outcome==='fell');
+});
 
 function firstMatchFilm(){
   const battle=new Battle({mode:'solo',p1:'pip',p2:'brisket',stage:'picnic',form:'original',minutes:7,
