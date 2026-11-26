@@ -663,6 +663,7 @@
       if(finished)eventPads.set(rotation,matchConfig.couchSeats);
     }
     rotationPicking=false;
+    if(tournament)rotation.syncRules(settings);
     showDialog(tournament?'tournament':'rotation',title,'');
     event.board($('dialog-body'),rotation,{portrait,save:saveRotation,back:rotationBack,
       play:()=>{if(page!=='lobby'){settings.mode='local';toLobby();}pickTogether(true);},
