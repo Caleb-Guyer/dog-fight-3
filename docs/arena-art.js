@@ -1534,7 +1534,7 @@
     }
     for (let x=Math.floor(area.left/1200)*1200;x<area.right;x+=1200) ctx.drawImage(bank,x,-192,1200,960);
     ctx.drawImage(bandstandPavilion(),0,0,1200,675);
-    const floors=form === 'flat' ? [] : window.DogFight.platforms('bandstand',0);
+    const floors=form === 'original' || form === 'trio' ? window.DogFight.platforms('bandstand',0) : [];
     for (const p of floors) {
       const w=p.x2-p.x1, art=bandstandDeck(w/3,p.thin);
       ctx.drawImage(art,p.x1,p.y,w,art.height*3);
@@ -1747,7 +1747,7 @@
       for (let i = 0; i < 46; i++) p.r(rng()*112,10+rng()*8,2,1,'#403e50');
     });
     repeat(ballast,596,160);
-    if (form === 'trio') return;
+    if (form !== 'original' && form !== 'flat') return;
     const [deck] = window.DogFight.platforms('nightmail',0), car = mailCar();
     const sx = (deck.x2-deck.x1)/car.width;
     ctx.drawImage(car,deck.x1,deck.y,deck.x2-deck.x1,car.height*3);
@@ -1898,7 +1898,7 @@
     const geometry = window.DogFight.stageGeometry(stage,form);
     return window.DogFight.platforms(geometry,0).map(floor => {
       const width = floor.x2-floor.x1, w = Math.round(width/3);
-      const h = floor.thin ? 6 : form === 'trio' ? 15 : 38;
+      const h = floor.thin ? 6 : form === 'flat' ? 38 : 15;
       const art = sprite('form-'+stage+'-'+w+'-'+h,w,h,p => {
         const [lip,top,side,dark,trim] = deckColors[stage];
         const bands = floor.thin ? [[0,0,2],[1,2,4],[3,4,6]] : form === 'flat' ?
@@ -1934,19 +1934,48 @@
       return {art,x:floor.x1,y:floor.y,width,height:h*3};
     });
   }
-  function drawFormDecks(ctx, stage, form) {
+  function counterweightRig() {
+    return sprite('counterweight-rig',198,99,p => {
+      // A single cable runs around two iron sheaves. Each stanchion is bolted to the deck.
+      p.r(8,3,182,1,'#584753');
+      for (const right of [false,true]) {
+        const x = right ? 187 : 10, out = right ? 1 : -1;
+        p.r(x-1,9,3,90,'#6a6163'); p.r(x+1,11,1,86,'#97877c');
+        p.line(x,84,x+out*8,98,'#766962');
+        p.r(x-3,96,7,3,'#504758');
+        for(let y=17;y<91;y+=17)p.r(x-2,y,5,1,'#514650');
+        p.disk(x,7,5,5,'#413b46'); p.disk(x,7,4,4,'#af8154');
+        p.disk(x,7,2,2,'#5c5054'); p.dot(x,7,'#efc57d');
+        p.r(x-2,3,4,1,'#e1b77a');
+      }
+    });
+  }
+  function drawFormDecks(ctx, stage, form, seconds, terrain) {
     if (form === 'original' || (stage === 'nightmail' && form === 'flat') ||
         (stage === 'bandstand' && form === 'trio')) return;
     const key = stage + '-' + form;
     if (!formDecks.has(key)) formDecks.set(key,buildFormDecks(stage,form));
-    for (const deck of formDecks.get(key)) ctx.drawImage(deck.art,deck.x,deck.y,deck.width,deck.height);
+    const lifting = form === 'counterweights';
+    if (lifting) {
+      terrain ||= window.DogFight.platforms(form,seconds);
+      ctx.drawImage(counterweightRig(),303,183,594,297);
+      for (const i of [1,2]) {
+        const x = i === 1 ? 318 : 879, y = terrain[i].y;
+        ctx.fillStyle='#4d424b'; ctx.fillRect(x,204,3,y-204);
+        ctx.fillStyle='#c29765'; ctx.fillRect(x+1,205,1,y-205);
+        ctx.fillStyle='#57434a'; ctx.fillRect(x-3,y-9,9,9);
+        ctx.fillStyle='#e0aa66'; ctx.fillRect(x,y-6,3,6);
+      }
+    }
+    for (const [i,deck] of formDecks.get(key).entries())
+      ctx.drawImage(deck.art,deck.x,lifting ? terrain[i].y : deck.y,deck.width,deck.height);
   }
-  function draw(ctx, stageId, seconds = 0, bounds, form = 'original') {
+  function draw(ctx, stageId, seconds = 0, bounds, form = 'original', terrain) {
     if (stageId === 'canal') {
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       drawCanal(ctx,seconds,bounds,form);
-      drawFormDecks(ctx,stageId,form);
+      drawFormDecks(ctx,stageId,form,seconds,terrain);
       ctx.restore();
       return;
     }
@@ -1954,7 +1983,7 @@
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       drawNightMail(ctx,seconds,bounds,form);
-      drawFormDecks(ctx,stageId,form);
+      drawFormDecks(ctx,stageId,form,seconds,terrain);
       ctx.restore();
       return;
     }
@@ -1962,7 +1991,7 @@
       ctx.save();
       ctx.imageSmoothingEnabled = false;
       drawBandstand(ctx,seconds,bounds,form);
-      drawFormDecks(ctx,stageId,form);
+      drawFormDecks(ctx,stageId,form,seconds,terrain);
       ctx.restore();
       return;
     }
@@ -1975,7 +2004,7 @@
     if (bounds && (bounds.left < 0 || bounds.top < 0 || bounds.right > 1200 || bounds.bottom > 675))
       surroundings(ctx, key, bounds, furniture);
     ctx.drawImage(scenes.get(sceneKey), 0, 0, 1200, 675);
-    if (!furniture) drawFormDecks(ctx,stageId,form);
+    if (!furniture) drawFormDecks(ctx,stageId,form,seconds,terrain);
     else if (laundry) {
       ctx.drawImage(roof(false), 130, 450, 390, 228);
       ctx.drawImage(roof(true), 680, 450, 390, 228);

@@ -92,7 +92,10 @@
     original: {name:'Original'},
     flat: {name:'Flat', geometry:'nightmail', description:'One wide deck with no upper platforms.'},
     trio: {name:'Three platforms', geometry:'bandstand', description:'Two low platforms and a high center perch.'},
+    counterweights: {name:'Counterweights', geometry:'counterweights', description:'Two lifts trade height. Hop onto the low one and ride it above your rival.'},
   };
+  const stageLayouts = {...arenas, counterweights:{spawn:[405,795]}};
+  const movingSurfaces = {laundry:[arenas.laundry.movingPlatform], canal:[arenas.canal.movingPlatform], counterweights:[1,2]};
   const stageGeometry = (stage, form) => stageForms[form]?.geometry || stage;
   const validCoat = value => Number.isInteger(value) && value >= 0 && value < 4;
   const validRelayTeams=teams=>Array.isArray(teams) && teams.length===2 && Array.from(teams).every(team=>
@@ -2060,7 +2063,10 @@
   }
   const verticalAim = (side) => (side === 'up' ? -1 : side === 'down' ? 1 : 0);
   const platform = (x1, x2, y, thin = false) => ({ x1, x2, y, thin });
+  const liftHeight = (index, time) => 378 + (index === 1 ? 67 : -67) * Math.sin(time * Math.PI / 4);
   function platforms(stage, time) {
+    if (stage === 'counterweights')
+      return [platform(210,990,480), platform(306,504,liftHeight(1,time),true), platform(696,894,liftHeight(2,time),true)];
     if (stage === 'canal') {
       const center = 600 - 444 * Math.sin(time * Math.PI / 4.8);
       return [platform(160, 1040, 455), platform(center - 96, center + 96, 365, true)];
@@ -2089,7 +2095,7 @@
           ]
         : stage === 'canal' ? [[0, 0, 15], [6, 15, 102], [15, 102, 126]]
         : stage === 'nightmail' ? [[0, 0, 12], [6, 12, 96], [18, 96, 114]]
-        : stage === 'bandstand' ? [[0, 0, 15], [3, 15, 24], [9, 24, 36], [18, 36, 45]] : [
+        : stage === 'bandstand' || stage === 'counterweights' ? [[0, 0, 15], [3, 15, 24], [9, 24, 36], [18, 36, 45]] : [
             [0, 0, 14],
             [5, 14, 22],
             [12, 22, 27],
@@ -2109,7 +2115,7 @@
     }
     return {walls, ceilings};
   }
-  const stageHulls = Object.fromEntries(Object.keys(arenas).map(stage => [stage, stageHull(stage)]));
+  const stageHulls = Object.fromEntries(Object.keys(stageLayouts).map(stage => [stage, stageHull(stage)]));
   function newFighter(kind, index) {
     return {
       kind,
@@ -2887,6 +2893,7 @@
       } : null;
     }
     get geometryStage() { return stageGeometry(this.stage, this.form); }
+    get movingSurfaces() { return this.layout ? undefined : movingSurfaces[this.geometryStage]; }
     coatFor(slot) {
       return this.mode === 'adventure' ? 0 : coatFor(slot,this.dogs[0].kind,this.dogs[1].kind,this.coats);
     }
@@ -2914,7 +2921,7 @@
       Object.assign(f, newFighter(f.kind, f.index));
       f.stocks = stocks;
       if(this.spawnDamage && !this.suddenDeath)f.damage=this.spawnDamage[f.index];
-      f.x = point?.x ?? arenas[this.geometryStage].spawn[f.index];
+      f.x = point?.x ?? stageLayouts[this.geometryStage].spawn[f.index];
       f.y = this.terrain[ground].y;
       f.ground = ground;
       if (f.index === 1) {
@@ -2955,7 +2962,7 @@
       for (const [i, p] of this.terrain.entries())
         if (x >= p.x1 && x <= p.x2) {
           clearance = Math.min(clearance, p.y - 78);
-          if (p.y < this.terrain[landing].y && (this.layout || i !== arenas[this.geometryStage]?.movingPlatform)) landing = i;
+          if (p.y < this.terrain[landing].y && !this.movingSurfaces?.includes(i)) landing = i;
         }
       const y = clearance;
       f.stockLift = { x, y, landing, time: 0, ready: false, exit: null };
@@ -5425,14 +5432,14 @@
         path.ticks = n;
         if (points) points.push({x:path.x, y:path.y});
         path.drop = Math.max(0, path.drop - dt);
-        const terrain = !this.layout && arenas[this.geometryStage]?.movingPlatform != null ? platforms(this.geometryStage, time) : this.terrain;
+        const terrain = this.movingSurfaces ? platforms(this.geometryStage, time) : this.terrain;
         const solid = this.solidContact(f, x, y, path.x, path.y);
         if (solid) {
           path.contact = solid.ceiling ? 'ceiling' : 'wall';
           path.hardImpact = Math.abs(solid.ceiling ? vy : vx) >= maxTechSpeed;
           break;
         }
-        if (vy >= 0 && this.landingSurface(path, y, x, f.tumble?.meteor ? dt : 0, terrain, time) >= 0) {
+        if (vy >= 0 && this.landingSurface(path, y, x, f.tumble?.meteor || this.form === 'counterweights' ? dt : 0, terrain, time) >= 0) {
           path.contact = 'floor';
           path.hardImpact = !f.throwBounce && floorImpactSpeed(vy, downLaunch, (f.tumble?.time || 0) + n * dt) >= maxTechSpeed;
           break;
@@ -5442,7 +5449,7 @@
         if (!path.dodgeFrame && (f.tumble?.pending || f.tumble?.fromHit) && !f.tumble.meteor && !f.usedDodge && !f.throwBounce &&
             fadeWindow(f.tumble.time+n*dt,Math.hypot(vx,vy),f.stun-n*dt,false)) {
           const future={...f,...path,vx,vy};
-          if (this.floorAhead(future,techWindow+dt)<0 && !this.solidAhead(future,techWindow+dt)) path.dodgeFrame=n+1;
+          if (this.floorAhead(future,techWindow+dt,time)<0 && !this.solidAhead(future,techWindow+dt)) path.dodgeFrame=n+1;
         }
       }
       return path;
@@ -5996,7 +6003,7 @@
       if (wave?.phase === 'active') wave.frame++;
       const old = this.terrain;
       if (this.layout) this.terrain = this.layout.terrain;
-      else if (this.mode === 'training' || arenas[this.geometryStage]?.movingPlatform != null)
+      else if (this.mode === 'training' || this.movingSurfaces)
         this.terrain = platforms(this.geometryStage, this.time);
       let second = input2;
       if (this.mode === 'solo') second = this.cpu(dt);
@@ -6020,6 +6027,7 @@
         }
         if (f.ground !== -1) {
           f.x += this.terrain[f.ground].x1 - old[f.ground].x1;
+          if (this.form === 'counterweights') f.y += this.terrain[f.ground].y - old[f.ground].y;
           if (f.impactLag > 1e-8 || f.shieldStun > 1e-8) f.y = this.terrain[f.ground].y;
         }
         this.captureInput(f, inputs[f.index]);
@@ -6517,17 +6525,30 @@
       return fadeWindow(t.time,Math.hypot(f.vx,f.vy),f.stun,aerial) &&
         this.floorAhead(f,techWindow+1/60)<0 && !this.solidAhead(f,techWindow+1/60);
     }
-    floorAhead(f, horizon) {
+    floorAhead(f, horizon, time = this.time) {
       if (f.vy < 0) return -1;
       let soonest = horizon + 1e-8,
         result = -1;
       for (const [i, p] of this.terrain.entries()) {
-        const height = p.y - f.y;
+        const lift = this.form === 'counterweights' && !this.layout && i > 0;
+        const height = (lift ? liftHeight(i,time) : p.y) - f.y;
         if (height < (f.drop > 0 ? -1e-8 : -2) || (p.thin && f.drop > 0 && f.dropPlatform === i)) continue;
-        const t = timeToFloor(f, height);
+        let t;
+        if (lift) {
+          // The descending dog gains on the cable under gravity. Find the crossing within this input window.
+          const gravity = 1540 * f.kit.gravity;
+          const gap = after => f.y + after * (f.vy + gravity * after / 2) - liftHeight(i,time+after);
+          if (gap(horizon) < 0) continue;
+          let low = 0, high = horizon;
+          for (let j=0;j<10;j++) {
+            const mid = (low+high)/2;
+            if (gap(mid)<0) low=mid; else high=mid;
+          }
+          t = high;
+        } else t = timeToFloor(f, height);
         if (t >= soonest) continue;
         const x = f.x + f.vx * t;
-        const atContact = !this.layout && i === arenas[this.geometryStage]?.movingPlatform ? platforms(this.geometryStage, this.time + t)[i] : p;
+        const atContact = !lift && this.movingSurfaces?.includes(i) ? platforms(this.geometryStage, time + t)[i] : p;
         if (x < atContact.x1 - 6 || x > atContact.x2 + 6) continue;
         soonest = t;
         result = i;
@@ -6546,7 +6567,7 @@
         path.y += vy*dt;
         path.drop = Math.max(0,path.drop-dt);
         const time = this.time + i * dt;
-        const terrain = i && !this.layout && arenas[this.geometryStage]?.movingPlatform != null ? platforms(this.geometryStage,time) : this.terrain;
+        const terrain = i && this.movingSurfaces ? platforms(this.geometryStage,time) : this.terrain;
         if (this.landingSurface(path,oldY,path.x-vx*dt,dt,terrain,time) >= 0) return true;
       }
       return false;
@@ -7730,7 +7751,8 @@
         }
         if (f.vy >= 0) {
           const meteor = f.tumble?.meteor;
-          let landing = meteor || f.airPassHold === 3 ? this.landingSurface(f, oldY, oldX, dt) : this.landingSurface(f, oldY);
+          let landing = meteor || f.airPassHold === 3 || this.form === 'counterweights' ?
+            this.landingSurface(f, oldY, oldX, dt) : this.landingSurface(f, oldY);
           if (f.airPassHold === 3 && this.terrain[landing]?.thin) {
             const platform = landing;
             f.drop = .24;
@@ -7752,7 +7774,7 @@
           if (landing >= 0) {
             const landingSpeed = f.vy;
             if (meteor) {
-              const floor = this.terrain[landing], t = floorCrossing(oldY, f.y, floor.y);
+              const floor = this.terrain[landing], t = this.floorCrossingTime(landing, oldY, f.y, floor.y, this.time, dt);
               f.x = clamp(oldX + (f.x - oldX) * t, floor.x1, floor.x2);
             }
             const speed = f.tumble && floorImpactSpeed(landingSpeed, f.tumble.downLaunch, f.tumble.time);
@@ -7863,15 +7885,21 @@
           f.invuln = Math.max(f.invuln, dt - 1e-8);
       }
     }
+    previousFloorY(i, y, time, dt) {
+      return dt && this.form === 'counterweights' && !this.layout && i > 0 ? liftHeight(i,time-dt) : y;
+    }
+    floorCrossingTime(i, oldY, y, top, time, dt) {
+      return floorCrossing(oldY-this.previousFloorY(i,top,time,dt), y-top, 0);
+    }
     landingSurface(f, oldY, oldX = f.x, dt = 0, terrain = this.terrain, time = this.time, solidOnly = false) {
       let landing = -1;
       for (const [i, p] of terrain.entries()) {
         if (p.thin && (solidOnly || (f.drop > 0 && f.dropPlatform === i))) continue;
-        if (oldY > p.y + (f.drop > 0 ? 1e-8 : 2) || f.y < p.y ||
+        if (oldY > this.previousFloorY(i,p.y,time,dt) + (f.drop > 0 ? 1e-8 : 2) || f.y < p.y ||
             (landing >= 0 && p.y >= terrain[landing].y)) continue;
-        const t = dt ? floorCrossing(oldY, f.y, p.y) : 1;
+        const t = dt ? this.floorCrossingTime(i,oldY,f.y,p.y,time,dt) : 1;
         const x = oldX + (f.x - oldX) * t;
-        const surface = dt && !this.layout && i === arenas[this.geometryStage]?.movingPlatform
+        const surface = dt && this.form !== 'counterweights' && this.movingSurfaces?.includes(i)
           ? platforms(this.geometryStage, time - (1 - t) * dt)[i] : p;
         if (x >= surface.x1 - 5 && x <= surface.x2 + 5) landing = i;
       }
@@ -9730,11 +9758,18 @@
       const b = this.ball, oldX = b.x, oldY = b.y;
       if(b.holder!=null){this.carryBall(this.dogs[b.holder]);return;}
       b.age += dt;
+      if (b.vy === 0 && this.form === 'counterweights') {
+        for (const i of this.movingSurfaces || []) {
+          const lift = this.terrain[i], before = this.previousFloorY(i,lift.y,this.time,dt);
+          if (Math.abs(oldY + 12 - before) < 1e-6 && b.x >= lift.x1 && b.x <= lift.x2)
+            b.y += lift.y - before;
+        }
+      }
       b.vy += (b.hits === 3 ? 280 : 840) * dt;
       b.x += b.vx * dt;
       b.y += b.vy * dt;
-      for (const p of this.terrain) {
-        if (b.vy <= 0 || b.x < p.x1 || b.x > p.x2 || oldY + 12 > p.y + 1 || b.y + 12 < p.y) continue;
+      for (const [i,p] of this.terrain.entries()) {
+        if (b.vy <= 0 || b.x < p.x1 || b.x > p.x2 || oldY + 12 > this.previousFloorY(i,p.y,this.time,dt) + 1 || b.y + 12 < p.y) continue;
         b.y = p.y - 12;
         b.vy = b.vy > 90 ? -b.vy * 0.52 : 0;
         b.vx *= b.hits === 3 ? 0.96 : 0.78;
@@ -10177,7 +10212,7 @@
       let previous = 0;
       for (let frame = kit.travel[0]; frame <= kit.travel[1]; frame++) {
         const travel = diagonal * kit.distance * dodgeProgress(kit, frame / 60);
-        const at = platform === arenas[this.geometryStage]?.movingPlatform && !this.layout ?
+        const at = this.movingSurfaces?.includes(platform) ?
           platforms(this.geometryStage, this.time + frame / 60)[platform] : floor;
         if (f.y + travel >= at.y) {
           const contact = f.x + dir * travel - at.x1;
@@ -10256,7 +10291,7 @@
         const from = floors[f.ground];
         if (!from || f.attack || f.charge >= 0) return null;
         const peak = f.stats.jump ** 2 / (2 * 1540 * f.kit.gravity) - f.stats.jump / 120;
-        const moving = !this.layout && goal.ground === arenas[this.geometryStage]?.movingPlatform;
+        const moving = this.movingSurfaces?.includes(goal.ground);
         let step = goal.ground;
         if (from.y - dest.y <= peak) {
           if (!moving) return null;
@@ -10286,7 +10321,7 @@
       const to = floors[route.step], from = floors[route.from];
       const inset = route.step === route.goal ? 24 : 50;
       let landing = clamp(goal.x, to.x1 + inset, to.x2 - inset);
-      if (!this.layout && route.step === arenas[this.geometryStage]?.movingPlatform) {
+      if (this.movingSurfaces?.includes(route.step)) {
         // Lead the ferry by this dog's remaining flight to its descending crossing.
         const airborne = f.ground < 0, gravity = 1540 * f.kit.gravity;
         const vy = airborne ? f.vy : -f.stats.jump;
