@@ -12279,6 +12279,11 @@
       if(full){this.reel=[];this.fallFrames=[];}
     }
     get length() { return Math.min(240,this.count-(this.from ?? 0)); }
+    inputAt(tick,slot) {
+      if(tick<(this.from ?? 0) || tick>=this.count)return idleInput;
+      const block=this.blocks.findLast(b=>b.start<=tick);
+      return block?.inputs[tick-block.start]?.[slot] || idleInput;
+    }
     copy(source) {
       const battle=Object.create(Battle.prototype);
       battle.emit=()=>{};

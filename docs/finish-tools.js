@@ -154,7 +154,7 @@
     // Frame n shows the result of tick n. A rolling clip can already have held controls at frame zero.
     const tick=tape.count-tape.length+frame-1;
     const block=tape.blocks.findLast(b=>b.start<=tick);
-    return block?.inputs[tick-block.start]?.[slot] || window.DogFight.idleInput;
+    return block?.inputs[tick-block.start]?.[slot] || idleInput;
   }
   function landingName(type,dir){
     if(type==='techRoll')return dir<0?'Rolled left':'Rolled right';
@@ -431,22 +431,23 @@
     if(focusFrame!=null)panel.open=true;
   }
   const ledgeReplies={climb:'Climb inward',roll:'Roll onto the stage',attack:'Get-up attack',jump:'Jump',drop:'Drop',hang:'Keep hanging'};
-  function ledgeAttempt(tape,mark,recorded=false,emit=()=>{}){
+  function ledgeAttempt(tape,mark,recorded=false,emit=()=>{},follow){
     const {slot}=mark;
-    const length=Math.min(tape.length,mark.frame+100);
+    let frame=mark.frame;
+    const length=recorded?Math.min(tape.length,frame+100):frame+100;
     const result={text:'',contact:'',frames:0};
     const replay=tape.playback(mark.frame,(event,e)=>{
       if(!result.contact && event==='hit' && e.owner)
-        result.contact=e.owner.stats.name+' landed '+moveName(e.moveId,e.name)+' on frame '+(replay.frame+1);
+        result.contact=e.owner.stats.name+' landed '+moveName(e.moveId,e.name)+' on frame '+(frame+1);
       if(!result.contact && event==='grabCatch')
-        result.contact=e.f.stats.name+' grabbed '+e.target.stats.name+' on frame '+(replay.frame+1);
+        result.contact=e.f.stats.name+' grabbed '+e.target.stats.name+' on frame '+(frame+1);
       if(event==='ko' && e.f.index===slot)result.text=replay.battle.matchCard.points && !replay.battle.suddenDeath?'Lost a point':'Lost the stock';
       emit(event,e);
     },recorded?null:slot);
     const dog=replay.battle.dogs[slot],edge=dog.ledge;
-    return {battle:replay.battle,length,result,get frame(){return replay.frame;},get outcome(){return result.text;},
+    return {battle:replay.battle,length,result,get frame(){return frame;},get outcome(){return result.text;},
       reply(action,delay){
-        const tick=replay.frame-mark.frame;
+        const tick=frame-mark.frame;
         if(tick<delay || dog.ledge!==edge)return idleInput;
         if(action==='climb')return {...idleInput,x:mark.left?1:-1};
         if(action==='drop')return tick===delay && dog.prev.y>.45?idleInput:{...idleInput,y:1};
@@ -454,9 +455,14 @@
         return key && tick===delay?{...idleInput,[key]:true,tapped:{[key]:true}}:idleInput;
       },
       step(input){
-        if(result.text || replay.frame>=length || !replay.step(input))return false;
-        result.frames=replay.frame-mark.frame;
-        if(!result.text && (replay.frame===length || replay.battle.end!==null)){
+        if(result.text || frame>=length)return false;
+        if(!replay.step(input)){
+          const tick=tape.count+frame-tape.length;
+          const other=replay.battle.mode==='local' && follow?follow.inputAt(tick,1-slot):idleInput;
+          replay.battle.step(1/60,slot===0?input:other,slot===1?input:other);
+        }
+        result.frames=++frame-mark.frame;
+        if(!result.text && (frame===length || replay.battle.end!==null)){
           const f=replay.battle.dogs[slot];
           result.text=f.grip?.target===slot?'Caught in a grab':f.ledge?'Hanging at the ledge':
             f.ground>=0?'Onstage':f.tumble?'Still in flight':'Airborne';
@@ -465,8 +471,8 @@
       }};
   }
   const ledgeLine=r=>r.text+' after '+r.frames+' frame'+(r.frames===1?'':'s')+'. '+(r.contact?r.contact+'.':'No hit or grab.');
-  function ledgePreview(tape,mark,action,delay){
-    const attempt=ledgeAttempt(tape,mark,action==='recorded');
+  function ledgePreview(tape,mark,action,delay,follow){
+    const attempt=ledgeAttempt(tape,mark,action==='recorded',undefined,follow);
     while(!attempt.outcome && attempt.frame<attempt.length)
       attempt.step(attempt.reply(action,delay));
     return attempt.result;
@@ -481,7 +487,7 @@
     }
     return {config,battle,tape};
   }
-  function ledgePanel(nav,tape,ledges,slot,jump,practice,focus){
+  function ledgePanel(nav,tape,ledges,slot,jump,practice,focus,follow){
     const panel=document.createElement('details');
     panel.id='clip-ledge';
     panel.innerHTML='<summary>Retry a ledge catch</summary><label>Catch <select data-catch></select></label>'+
@@ -504,17 +510,16 @@
         const battle=tape.playback(mark.frame).battle,other=battle.dogs[1-mark.slot],dog=battle.dogs[mark.slot];
         const protection=Math.round(window.DogFight.protectionTime(dog)*60);
         el('opponent').textContent=dog.stats.name+' has '+window.DogFight.gripFramesLeft(dog)+' frames of grip and '+protection+
-          ' frames of protection left. '+(battle.mode==='solo'?other.stats.name+' reacts to your get-up.':other.stats.name+' repeats the recorded inputs. Use P1 controls to take either side.');
+          ' frames of protection left. '+(battle.mode==='solo'?other.stats.name+' reacts to your get-up.':other.stats.name+' repeats the recorded inputs and releases the controls when they end. Use P1 controls to take either side.');
         el('original').textContent='Recorded · '+ledgeLine(original);
         timing.replaceChildren();
-        for(const n of [0,12,30,60])if(n<tape.length-mark.frame)
-          timing.add(new Option(n?'Wait '+n+' frames':'Go immediately',n));
+        for(const n of [0,12,30,60])timing.add(new Option(n?'Wait '+n+' frames':'Go immediately',n));
         if(focus?.delay!=null && [...timing.options].some(o=>Number(o.value)===focus.delay))timing.value=String(focus.delay);
         if(focus && Object.hasOwn(ledgeReplies,focus.action))options.value=focus.action;
       }
       timing.disabled=options.value==='hang';
       jump(mark.frame);
-      el('outcome').textContent='Chosen get-up · '+ledgeLine(ledgePreview(tape,mark,options.value,Number(timing.value)));
+      el('outcome').textContent='Chosen get-up · '+ledgeLine(ledgePreview(tape,mark,options.value,Number(timing.value),follow));
     }
     const play=watch=>{refresh();practice({mark,original,action:options.value,delay:Number(timing.value),watch});};
     catches.onchange=options.onchange=timing.onchange=panel.ontoggle=refresh;
@@ -745,11 +750,11 @@
 
     document.querySelector('[data-finish-slot="'+slot+'"]').focus();
   }
-  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,practiceHold,holdFocus,practiceLedge,ledgeFocus,clinic,rescueLaunch}){
+  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,practiceHold,holdFocus,practiceLedge,ledgeFocus,returnTape,clinic,rescueLaunch}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
     const {marks,escape,launch,contact,landings,holds,ledges}=analyze(tape,slot,follow,!!retryMoment);
     escapeReady?.(escape);
-    if(ledges.length && practiceLedge)ledgePanel(nav,tape,ledges,initialSeat,jump,practiceLedge,ledgeFocus);
+    if(ledges.length && practiceLedge)ledgePanel(nav,tape,ledges,initialSeat,jump,practiceLedge,ledgeFocus,returnTape);
     if(holds.length && practiceHold)holdPanel(nav,tape,holds,initialSeat,jump,practiceHold,holdFocus);
     if(contact && practiceLaunch)defensePanel(nav,tape,contact,jump,practiceLaunch,signal);
     if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch,signal,rescueLaunch);
