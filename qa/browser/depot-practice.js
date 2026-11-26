@@ -8,7 +8,7 @@ const root = 'http://127.0.0.1:8080/';
 async function play(browser,touch) {
   const page = await browser.newPage({viewport:touch?{width:390,height:844}:{width:1280,height:720},hasTouch:touch,isMobile:touch});
   const errors = [];
-  page.on('pageerror',e=>errors.push(e.message));
+  page.on('pageerror',e=>errors.push(e.stack || e.message));
   async function choose(selector) {
     const button=page.locator(selector);
     if(touch) await button.tap();
@@ -21,7 +21,13 @@ async function play(browser,touch) {
     await page.evaluate(()=>localStorage.setItem(DispatchScript.chapters[0].saveKey,
       JSON.stringify({version:2,started:true,room:4,stamps:15,checkpoint:0,pending:'boss'})));
     await page.goto(root+'?depot#adventure');
-    await choose('#dispatch-start');await choose('#story-skip');await page.locator('#dispatch-hud:visible').waitFor();
+    await page.route('**/dispatch-actors.js*',route=>route.abort(),{times:1});
+    await choose('#dispatch-start');
+    await page.getByRole('button',{name:'Retry cutscene'}).waitFor();
+    await choose('#story-next');
+    await page.waitForFunction(()=>!!window.DispatchActors && !document.querySelector('#film-pause').disabled);
+    await page.clock.runFor(200);
+    await choose('#story-skip');await page.locator('#dispatch-hud:visible').waitFor();
     await page.evaluate(()=>{
       const step=DispatchRun.prototype.step;
       window.pose = w=>[w.time,w.random.state,w.foes[0].phase,w.foes[0].time,w.foes[0].hp,
