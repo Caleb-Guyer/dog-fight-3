@@ -8,18 +8,20 @@ const {Trial,courses,cleared,mark,hint}=window.FighterSchool;
 
 function practice(kind,index,control){
   const course=courses[kind];
-  let lesson;
+  let lesson,spar;
   const battle=new Battle({mode:'local',p1:kind,p2:course.rival,stage:course.stage,minutes:0,lesson:index,fetch:false},
-    (name,event)=>lesson?.contact(name,event));
+    (name,event)=>{lesson?.contact(name,event);spar?.contact(name,event,battle);});
   lesson=new Trial(index,battle);
+  spar=new window.FighterSchool.Sparring(battle);spar.step(battle);
   const f=battle.dogs[0];
   for(let frame=0;frame<250 && !lesson.missed && !lesson.done;frame++){
     const input={...idleInput,...control(frame,f)};
     if(!lesson.canStep(input))continue;
     battle.step(1/60,input,lesson.partner(input));
     lesson.afterStep(battle);
+    spar.step(battle);
   }
-  return {battle,lesson};
+  return {battle,lesson,spar};
 }
 const ground={
   pip:n=>({x:1,special:n===0 || n===13}),
@@ -32,6 +34,18 @@ function recover(kind,n,f){
     special:n===0 || (kind==='pip' && n===12) || (kind==='brisket' && n<20) || (kind==='clover' && n<40)};
 }
 for(const kind of Object.keys(courses)){
+  test(kind+' sparring counts the real signature contact and a completed offstage return independently',()=>{
+    const first=practice(kind,0,ground[kind]),second=practice(kind,1,(n,f)=>recover(kind,n,f));
+    assert.deepEqual(first.spar.earned,[true,false]);
+    assert.deepEqual(second.spar.earned,[false,true]);
+    assert.deepEqual(practice(kind,0,n=>n===0?ground[kind](0):{}).spar.earned,[false,false]);
+    assert.deepEqual(practice(kind,1,n=>({special:n===0})).spar.earned,[false,false]);
+    const disk=new Map(),storage={getItem:k=>disk.get(k),setItem:(k,v)=>disk.set(k,v)};
+    first.spar.save(storage,1);
+    assert.equal(cleared(storage,kind+'-spar-2'),false);
+    second.spar.save(storage,0);
+    for(let i=0;i<3;i++)assert(cleared(storage,kind+'-spar-'+i));
+  });
   test(kind+' signature requires contact and the follow-up',()=>{
     const idle=practice(kind,0,()=>({}));assert.equal(idle.lesson.done,false);
     assert.equal(practice(kind,0,n=>n===0?ground[kind](0):{}).lesson.done,false);
@@ -46,6 +60,19 @@ for(const kind of Object.keys(courses)){
     assert.equal(correct.lesson.done,true);assert(correct.battle.dogs[0].ground>=0);
   });
 }
+test('sparring observes the live fight without moving fighters and drops unfinished attempts on a stock loss',()=>{
+  const w=new Battle({mode:'solo',stage:'canal',p1:'noodle',p2:'brisket'},undefined,window.DogFight.seededRandom(75));
+  const original=structuredClone(w.dogs),spar=new window.FighterSchool.Sparring(w);
+  assert.deepEqual(w.dogs,original);
+  const [f,rival]=w.dogs;spar.contact('hit',{f:rival,owner:f,moveId:'noodleTug'},w);
+  Object.assign(f,{ground:-1,x:w.terrain[0].x1-40});spar.step(w);
+  assert(spar.recovery);
+  spar.contact('ko',{f},w);
+  assert.equal(spar.recovery,null);
+  spar.contact('hit',{f:rival,owner:f,moveId:f.kit.ground[0]},w);
+  Object.assign(f,{ground:0,x:500});
+  spar.step(w);assert.deepEqual(spar.earned,[false,false]);
+});
 test('folding outside the deck does not count even if the sail carries Clover closer',()=>{
   const {lesson}=practice('clover',1,(n,f)=>({...recover('clover',n,f),special:n<12}));
   assert.equal(lesson.done,false);assert.equal(lesson.technique,false);

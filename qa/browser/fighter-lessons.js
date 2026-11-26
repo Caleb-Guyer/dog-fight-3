@@ -111,6 +111,13 @@ async function touch(browser){
     await page.goto(root+'?direct#fighters/clover/recovery');
     await page.locator('#school-example').waitFor();
     assert.match(await page.locator('#school-title').textContent(),/Fold the sail/);
+    await page.goto(root+'?touch-spar#fighters/clover');await tap('[data-class-spar]');
+    await page.clock.runFor(2490);assert.match(await page.locator('#corner-line').textContent(),/Special/);
+    await press(['special'],32);await page.clock.runFor(330);await press(['right','special'],55);
+    await page.clock.runFor(760);await tap('#pause');
+    assert.match(await page.locator('#dialog-body').textContent(),/Chase the disc · Landed in this fight/);
+    await tap('[data-spar-lesson="1"]');await tap('#school-list');
+    assert.equal(await page.locator('#match-mode').textContent(),'Sparring · Clover');
     assert.deepEqual(errors,[]);
   }finally{await ctx.close();}
 }
@@ -137,10 +144,58 @@ async function controller(browser){
     await input(1,-1,1,320);await input(1,0,-1,1900);
     await state(page,'passed');await input(0,0,0,60);
     assert.match(await page.locator(lesson(1)).textContent(),/✓/);
+    await page.goto(root+'?pad-spar#fighters/clover');await page.locator('[data-class-spar]').click();
+    await page.clock.runFor(2490);await input(0,0,1,32);await input(0,0,-1,330);
+    await input(1,0,1,55);await input(0,0,-1,760);
+    await page.locator('#pause').click();
+    assert.match(await page.locator('#dialog-body').textContent(),/Chase the disc · Landed in this fight/);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
+async function sparring(browser){
+  const page=await browser.newPage(),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));await clock(page);
+  const click=s=>page.locator(s).click(),time=ms=>page.clock.runFor(ms);
+  try{
+    await page.goto(root+'#fighters/clover');
+    await page.evaluate(()=>{
+      const proto=DogFight.Battle.prototype,step=proto.step;
+      proto.step=function(...args){
+        const result=step.apply(this,args);
+        if(this.mode==='solo')window.sparWorld=this;
+        return result;
+      };
+    });
+    await click('[data-class-spar]');await time(2490);
+    assert.equal(await page.locator('#match-mode').textContent(),'Sparring · Clover');
+    assert.equal(await page.evaluate(()=>sparWorld.dogs.map(f=>f.stocks).join()),'3,3');
+    await page.keyboard.down('k');await time(32);await page.keyboard.up('k');
+    await time(330);await page.keyboard.down('d');await page.keyboard.down('k');await time(55);
+    await page.keyboard.up('k');await page.keyboard.up('d');await time(760);
+    const position=()=>page.evaluate(()=>[sparWorld.matchFrames,sparWorld.clockFrames,...sparWorld.dogs.map(f=>[f.x,f.y,f.stocks,f.damage])]);
+    await click('#pause');const before=await position();
+    assert.match(await page.locator('#dialog-body').textContent(),/Chase the disc · Landed in this fight/);
+    await click('[data-spar-lesson="1"]');await click('#school-example');await time(700);
+    await click('#school-list');assert.equal(await page.locator('#match-mode').textContent(),'Sparring · Clover');
+    assert.deepEqual(await position(),before);
+    await page.keyboard.down('a');
+    for(let i=0;i<16 && !await page.locator('[data-do=spar-card]').count();i++)await time(2400);
+    await page.keyboard.up('a');
+    await page.getByRole('heading',{name:'Sparring result'}).waitFor();
+    assert.match(await page.locator('#dialog-body').textContent(),/Chase the disc · Landed in this fight/);
+    await click('[data-do=match-card]');await page.locator('.card-stats').waitFor();
+    await click('[data-do=card-back]');await click('[data-do=spar-card]');
+    assert.match(await page.locator('[data-spar-record]').textContent(),/Signature ✓ · Recovery — · Match win —/);
+    await click('[data-class-back]');await page.getByRole('heading',{name:'Sparring result'}).waitFor();
+    await page.goto(root+'?reload#fighters/clover');
+    assert.match(await page.locator('[data-spar-record]').textContent(),/Signature ✓/);
+    await click(dog('pip'));assert.doesNotMatch(await page.locator('[data-spar-record]').textContent(),/✓/);
+    await page.goto(root+'?link#fighters/noodle/spar');await page.locator('#pause').waitFor();
+    assert.equal(await page.locator('#match-mode').textContent(),'Sparring · Noodle');
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
 (async()=>{
   const b=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await firstExample(b);await keyboard(b);await touch(b);await controller(b);}finally{await b.close();}
+  try{await firstExample(b);await keyboard(b);await touch(b);await controller(b);await sparring(b);}finally{await b.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+e.stack.replaceAll('\n','%0A'));process.exitCode=1;});
