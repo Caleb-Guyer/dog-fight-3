@@ -1,4 +1,4 @@
-dialog[data-view='finish-replay'] { width:min(760px,calc(100% - 16px)); }
+dialog:is([data-view='finish-replay'],[data-view='finish-film']) { width:min(760px,calc(100% - 16px)); }
 #clip-arena { display:block; width:100%; aspect-ratio:16/9; height:auto; max-height:52dvh; border:2px solid var(--ink); image-rendering:pixelated; }
 
 .clip-status { display:flex; flex-wrap:wrap; justify-content:space-between; gap:3px 8px; font-size:13px; margin-top:5px; }
@@ -50,3 +50,7 @@ dialog[data-view='finish-replay'] { width:min(760px,calc(100% - 16px)); }
 .finish-comparison { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
 .finish-comparison :is(td,th) { padding:8px 5px; border-bottom:1px solid #82796d; text-align:left; }
 .finish-comparison td:last-child { font-weight:bold; }
+
+#film-marks summary { cursor:pointer; font-weight:bold; }
+#film-marks button { margin:4px 4px 0 0; }
+#film-time { font-variant-numeric:tabular-nums; }

@@ -11899,7 +11899,10 @@
   // Keep four seconds of controls plus the checkpoint that precedes their first tick.
   // A checkpoint owns its random generator and the complete shared graph of dogs and grabs.
   class FinishTape {
-    constructor() { this.blocks=[]; this.count=0; this.knockouts=[]; this.observedLosses=null; }
+    constructor(full=false) {
+      this.blocks=[]; this.count=0; this.knockouts=[]; this.observedLosses=null;
+      if(full){this.reel=[];this.fallFrames=[];}
+    }
     get length() { return Math.min(240,this.count-(this.from ?? 0)); }
     copy(source) {
       const battle=Object.create(Battle.prototype);
@@ -11912,7 +11915,10 @@
       this.captureKnockouts(battle);
       if (this.count%120===0) {
         this.blocks.push({start:this.count,battle:this.copy(battle),inputs:[]});
-        if (this.blocks.length>3) this.blocks.shift();
+        if (this.blocks.length>3) {
+          const oldest=this.blocks.shift();
+          if(this.reel)this.reel.push(this.filmBlock(oldest));
+        }
       }
       const block=this.blocks.at(-1);
       block.inputs.push([this.input(first),this.input(second)]);
@@ -11931,6 +11937,7 @@
       const first=this.observedLosses;
       this.observedLosses=losses.length;
       if(first===null || first>=losses.length || !this.count)return;
+      if(this.reel)this.fallFrames.push({at:this.count,first,slots:losses.slice(first).map(l=>l.slot)});
       // Inputs are recorded before the tick. Seal the window after the knockout tick has resolved.
       // Completed blocks stay immutable. Only the current block can still receive more inputs.
       const clip=new FinishTape();
@@ -11953,6 +11960,27 @@
       if (!value || value===idleInput) return idleInput;
       return value.tapped ? {...value,tapped:{...value.tapped}} : {...value};
     }
+    filmBlock(block) {
+      // Retain control changes and one existing checkpoint every six seconds.
+      const runs=[];
+      let last;
+      for(let i=0;i<block.inputs.length;i++){
+        const pair=block.inputs[i];
+        if(!last || !sameControls(last[0],pair[0]) || !sameControls(last[1],pair[1])){
+          runs.push([i,...pair]);last=pair;
+        }
+      }
+      const part={runs};
+      if(block.start%360===0){
+        const {emit,random,...state}=block.battle;
+        part.state=state;part.seed=random.state;
+      }
+      return part;
+    }
+    fullMatch(){
+      if(this.reel && this.count)return {count:this.count,falls:this.fallFrames.slice(),
+        parts:this.reel.concat(this.blocks.map(b=>this.filmBlock(b)))};
+    }
     playback(offset=0,emit=()=>{},liveSlot=null) {
       if (!this.length) return null;
       const frame=clamp(Math.trunc(offset),0,this.length), start=this.count-this.length;
@@ -11972,6 +12000,16 @@
         return true;
       }};
     }
+  }
+  function sameControls(a,b){
+    if(a===b)return true;
+    if(!a || !b)return false;
+    for(const key in a){
+      if(key==='tapped' && a.tapped && b.tapped){if(!sameControls(a.tapped,b.tapped))return false;}
+      else if(!Object.is(a[key],b[key]))return false;
+    }
+    for(const key in b)if(!Object.hasOwn(a,key))return false;
+    return true;
   }
   window.DogFight = {
     cpuLevels,
