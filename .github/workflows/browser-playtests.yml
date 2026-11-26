@@ -225,6 +225,7 @@ jobs:
       - name: Play a three-dog relay and review the team scorecard
         run: |
           node --test qa/pack-relay.cjs
+          node --test qa/runoff-trump.cjs
           node --test qa/fetch-catch.cjs
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
           python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/relay-http.log" 2>&1 &
@@ -232,6 +233,7 @@ jobs:
           trap 'kill "$server_pid"' EXIT
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/stock-sets.cjs --pack-relay
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fetch-catch.js
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/runoff-trump.js
   versus-rules:
     runs-on: ubuntu-24.04
     timeout-minutes: 4
