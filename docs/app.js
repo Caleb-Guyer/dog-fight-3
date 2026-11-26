@@ -5716,7 +5716,8 @@
     $('story-map').textContent = fromLibrary ? 'Cutscenes' : 'Route map';
     $('story-skip').hidden = fromLibrary;
     $('story-next').onclick = () => film?.next();
-    const loading=!window.DispatchFilms?.[key] || !window.DispatchFilm;
+    const needsActors = ['rescue','boss','ending'].includes(key) && !window.DispatchActors;
+    const loading=!window.DispatchFilms?.[key] || !window.DispatchFilm || needsActors;
     if (loading) {
       $('film-time').textContent = '';
       $('film-progress').style.transform = 'scaleX(0)';
@@ -5729,7 +5730,9 @@
         await loadDispatch('DispatchCovers');
         if (page!=='dispatch-story' || afterStory!==then) return;
         window.DispatchCovers.draw($('story-cover'),key);
-        await Promise.all([loadDispatch('DispatchFilm'),window.DispatchCovers.loadFilm(key)]);
+        const assets = [loadDispatch('DispatchFilm'),window.DispatchCovers.loadFilm(key)];
+        if (needsActors) assets.push(loadDispatch('DispatchActors'));
+        await Promise.all(assets);
       }
       catch {
         if (page!=='dispatch-story' || afterStory!==then) return;
