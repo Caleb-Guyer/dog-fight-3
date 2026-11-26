@@ -49,7 +49,6 @@
     if(other) layout[device][other.slot][other.action]=old;
     map[action]=value;
   }
-  // Keep a player's dog assigned to their pad when the other player unplugs.
   class FighterShuffle {
     constructor(roster,random=Math.random) {
       this.roster=roster;
@@ -74,11 +73,23 @@
       for (const pad of pads) {
         if (this.ids.includes(pad.index)) continue;
         const order=pads.length===1?[1,0]:[0,1];
-        const slot=order.find(i=>!this.get(i,pads));
+        const slot=order.find(i=>this.ids[i]!==null && !this.get(i,pads)) ?? order.find(i=>!this.get(i,pads));
         if(slot!==undefined) this.ids[slot]=pad.index;
       }
     }
     get(i,pads) { return pads.find(p=>p.index===this.ids[i]); }
+    beginMatch(pads) {
+      this.sync(pads);
+      this.present=this.connected(pads);
+      this.lost=0;
+    }
+    connected(pads) { return (this.get(0,pads)?1:0) | (this.get(1,pads)?2:0); }
+    track(pads) {
+      // Look for missing assigned devices before filling their seats with replacement pads.
+      this.lost |= this.present & ~this.connected(pads);
+      this.sync(pads);
+      this.present=this.connected(pads);
+    }
   }
   // Follow the lane where the player entered a wide card, such as the Adventure cover.
   function menuNeighbor(rects, current, direction, lane) {

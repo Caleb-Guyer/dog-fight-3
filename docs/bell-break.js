@@ -115,5 +115,45 @@
     window.DogArt.draw(ctx,kind,course.start,floor.y,{coat,face:1,scale:1,pose:'idle',time:0});
     ctx.restore();
   }
-  window.BellBreak = {Run,courses,formatTime,readBest,draw,preview};
+  const sessionBests=new Map();
+  const bellKey=kind=>'dog-fight-3.bells.1.'+kind;
+  function bellBest(kind) {
+    const tab=sessionBests.get(kind) || Infinity;
+    let disk;
+    try { disk=readBest(localStorage.getItem(bellKey(kind))); } catch {}
+    const best=Math.min(tab,disk || Infinity);
+    return Number.isFinite(best) ? best : null;
+  }
+  function saveBellTime(run) {
+    const kind=run.dogs[0].kind, key=bellKey(kind);
+    const commit=()=>{
+      const previous=bellBest(kind);
+      run.record=!previous || run.matchFrames<previous;
+      if (!run.record) return;
+      sessionBests.set(kind,run.matchFrames);
+      try { localStorage.setItem(key,String(run.matchFrames)); }
+      catch { run.tabOnly=true; }
+    };
+    return navigator.locks ? navigator.locks.request(key,commit).catch(commit) : Promise.resolve(commit());
+  }
+  function courseSheet(kind,portraitFor) {
+    const {fighters,arenas}=window.DogFight, course=courses[kind], best=bellBest(kind);
+    const rows=Object.keys(courses).map(id=>'<button class="cup-dog" data-bell-dog="'+id+'" aria-pressed="'+(id===kind)+
+      '"><img alt="" src="'+portraitFor(id)+'"><strong>'+fighters[id].name+'</strong></button>').join('');
+    return '<div class="cup-dogs" role="group" aria-label="Choose a dog and course">'+rows+
+      '</div><h3 class="card-stage">'+course.name+'</h3><canvas id="bell-map" width="540" height="177" role="img" aria-label="'+
+      course.name+' starting layout on '+arenas[course.stage].name+'"></canvas>'+
+      '<p>Strike all six bells in any order. Falling out ends the run. '+course.tip+'</p>'+
+      '<p id="bell-bindings"></p>'+
+      '<p>Personal best · <strong>'+(best?formatTime(best):'No clear yet')+'</strong></p>'+
+      '<div class="dialog-actions"><button class="primary" data-do="bells-start">Start course</button></div>';
+  }
+  function courseResult(run) {
+    const best=bellBest(run.dogs[0].kind);
+    return '<h3 class="card-stage">'+run.course.name+'</h3><p>'+run.cleared+' / '+run.bells.length+' bells · '+formatTime(run.matchFrames)+'</p>'+
+      '<p id="bell-record">'+(best?'Personal best · '+formatTime(best):'No clear yet')+'</p>'+
+      '<div class="dialog-actions"><button class="primary" data-do="bells-start">Run again</button>'+
+      '<button class="utility" data-do="bells-sheet">Choose course</button><button class="utility" data-do="home">Main menu</button></div>';
+  }
+  window.BellBreak = {Run,courses,formatTime,readBest,draw,preview,bellBest,saveBellTime,courseSheet,courseResult};
 })();

@@ -950,6 +950,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='pad-loss')return;
     if(dialogType==='fighter-tryout'){dismiss();if(page==='lobby')$('lobby-tryout').focus();return;}
     if(dialogType==='mission-saving')return;
     if(dialogType==='special-preview')return $('move-back').click();
@@ -1779,27 +1780,6 @@
   let matchConfig, soloSeed, localSet = null, practiceFight = null, corner=null;
   let finishTape=null, clipScreen=null, victoryShot=null, finishTrial=null;
   let bellChoice='pip', bellLoad;
-  const sessionBests=new Map();
-  const bellKey=kind=>'dog-fight-3.bells.1.'+kind;
-  function bellBest(kind) {
-    const tab=sessionBests.get(kind) || Infinity;
-    let disk;
-    try { disk=window.BellBreak.readBest(localStorage.getItem(bellKey(kind))); } catch {}
-    const best=Math.min(tab,disk || Infinity);
-    return Number.isFinite(best) ? best : null;
-  }
-  function saveBellTime(run) {
-    const kind=run.dogs[0].kind, key=bellKey(kind);
-    const commit=()=>{
-      const previous=bellBest(kind);
-      run.record=!previous || run.matchFrames<previous;
-      if (!run.record) return;
-      sessionBests.set(kind,run.matchFrames);
-      try { localStorage.setItem(key,String(run.matchFrames)); }
-      catch { run.tabOnly=true; }
-    };
-    return navigator.locks ? navigator.locks.request(key,commit).catch(commit) : Promise.resolve(commit());
-  }
   async function bellSheet(kind=bellChoice) {
     if (!Object.hasOwn(fighters,kind)) return;
     if (page!=='home') showHome(false);
@@ -1807,7 +1787,7 @@
       showDialog('bells-loading','Bell Break','<p role="status">Opening the bell yard…</p>');
       if (!bellLoad) bellLoad=new Promise((resolve,reject)=>{
         const script=document.createElement('script');
-        script.src='./bell-break.js?v=bell-yard-1';
+        script.src='./bell-break.js?v=course-sheet-1';
         script.onload=()=>window.BellBreak ? resolve() : reject();
         script.onerror=reject;
         document.head.append(script);
@@ -1821,17 +1801,8 @@
       if (dialogType!=='bells-loading') return;
     }
     bellChoice=kind;
-    const {courses,formatTime}=window.BellBreak, course=courses[kind], best=bellBest(kind);
     const device=getPads().length?1:matchMedia('(pointer:coarse)').matches?2:0;
-    const rows=Object.keys(courses).map(id=>'<button class="cup-dog" data-bell-dog="'+id+'" aria-pressed="'+(id===kind)+
-      '"><img alt="" src="'+portrait(id,savedCoat(0,id))+'"><strong>'+fighters[id].name+'</strong></button>').join('');
-    showDialog('bells','Bell Break','<div class="cup-dogs" role="group" aria-label="Choose a dog and course">'+rows+
-      '</div><h3 class="card-stage">'+course.name+'</h3><canvas id="bell-map" width="540" height="177" role="img" aria-label="'+
-      course.name+' starting layout on '+arenas[course.stage].name+'"></canvas>'+
-      '<p>Strike all six bells in any order. Falling out ends the run. '+course.tip+'</p>'+
-      '<p id="bell-bindings"></p>'+
-      '<p>Personal best · <strong>'+(best?formatTime(best):'No clear yet')+'</strong></p>'+
-      '<div class="dialog-actions"><button class="primary" data-do="bells-start">Start course</button></div>');
+    showDialog('bells','Bell Break',window.BellBreak.courseSheet(kind,id=>portrait(id,savedCoat(0,id))));
     $('bell-bindings').textContent=device===2 ? 'Tap Jump, then Attack to strike in the air.' :
       'Jump · '+schoolHint('platform',device)+'     Attack · '+schoolHint('jab',device);
     window.BellBreak.preview($('bell-map'),kind,savedCoat(0,kind));
@@ -1843,15 +1814,10 @@
   }
   function bellResult() {
     const run=world, {formatTime}=window.BellBreak, won=run.endReason==='clear';
-    const best=bellBest(run.dogs[0].kind);
-    showDialog('bell-result',won?'Course cleared!':'Missed the landing',
-      '<h3 class="card-stage">'+run.course.name+'</h3><p>'+run.cleared+' / '+run.bells.length+' bells · '+formatTime(run.matchFrames)+'</p>'+
-      '<p id="bell-record">'+(best?'Personal best · '+formatTime(best):'No clear yet')+'</p>'+
-      '<div class="dialog-actions"><button class="primary" data-do="bells-start">Run again</button>'+
-      '<button class="utility" data-do="bells-sheet">Choose course</button><button class="utility" data-do="home">Main menu</button></div>',false);
+    showDialog('bell-result',won?'Course cleared!':'Missed the landing',window.BellBreak.courseResult(run),false);
     if (won) run.saved.then(()=>{
       if (world===run && dialogType==='bell-result') $('bell-record').textContent=
-        (run.record?'New personal best':'Personal best')+' · '+formatTime(bellBest(run.dogs[0].kind))+(run.tabOnly?' · Saved for this tab':'');
+        (run.record?'New personal best':'Personal best')+' · '+formatTime(window.BellBreak.bellBest(run.dogs[0].kind))+(run.tabOnly?' · Saved for this tab':'');
     });
     document.querySelector('[data-do=bells-start]').focus({preventScroll:true});
   }
@@ -2208,8 +2174,11 @@
     corner=config.schoolFinal && !visit ? resume?.corner || new window.FightSchool.Corner(config.schoolTarget) : null;
     $('corner-tip').hidden=true;
     delete $('corner-tip').dataset.cue;
-    if((series || config.relayTeams) && config.mode==='local' && !online.match && config.lesson===undefined && !matchConfig.couchSeats)
-      matchConfig.couchSeats=new window.FightControls.Seats(getPads());
+    if(config.mode==='local' && !online.match && config.lesson===undefined){
+      const pads=getPads();
+      matchConfig.couchSeats ??= new controls.Seats(pads);
+      matchConfig.couchSeats.beginMatch(pads);
+    }
     $('school-coach').hidden = config.lesson === undefined;
     if (config.mode === 'solo') {
       soloSeed = opening ?? crypto.getRandomValues(new Uint32Array(1))[0];
@@ -2261,7 +2230,7 @@
       view.event(name, e);
       sound(name, e);
       if (name==='ringBell') announce(e.count+' of '+world.bells.length+' bells');
-      if (name==='win' && world?.bells) world.saved=saveBellTime(world);
+      if (name==='win' && world?.bells) world.saved=window.BellBreak.saveBellTime(world);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
       if (world?.meteorPractice && e.f?.index === 0) meteorFeedback(name, e);
       if (world?.survivalPractice && e.f?.index === 0) survivalFeedback(name, e);
@@ -7319,7 +7288,7 @@
   });
   function getPads() {
     try {
-      return navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(Boolean) : [];
+      return navigator.getGamepads ? Array.from(navigator.getGamepads()).filter(p=>p && p.connected!==false) : [];
     } catch {
       return [];
     }
@@ -7493,6 +7462,38 @@
   const idlePad={};
   let oldPad = idlePad;
   const menuPadButtons = new Map();
+  function checkLocalPads(pads) {
+    const seats=matchConfig?.couchSeats;
+    if(!seats || world.end!==null || online.match || finishTrial || clipScreen || victoryShot)return;
+    const before=seats.present, lost=seats.lost;
+    seats.track(pads);
+    if(!seats.lost || (dialogType && dialogType!=='pad-loss'))return;
+    if(dialogType!=='pad-loss'){
+      showDialog('pad-loss','Controller disconnected','<p id="pad-loss-info" role="status"></p><div id="pad-loss-seats"></div><div class="dialog-actions"><button id="pad-resume" class="primary"></button></div>',false);
+      $('pad-resume').onclick=()=>{
+        seats.lost=0;
+        for(const pad of getPads()){
+          const held=pad.buttons.slice(0,8).reduce((mask,b,i)=>b.pressed?mask|(1<<i):mask,0);
+          if(held)menuPadButtons.set(pad.index,held);
+        }
+        dismiss();countdown=2.4;lastCount=0;
+      };
+      $('pad-resume').focus({preventScroll:true});
+    }else if(before===seats.present && lost===seats.lost)return;
+    const labels=mask=>['P1','P2'].filter((_,i)=>mask & (1<<i)).join(' and ');
+    const missing=seats.lost & ~seats.present;
+    $('pad-loss-info').textContent=missing?labels(missing)+' lost controller input. Reconnect a pad or use the keyboard.':
+      'Both fighters are ready.';
+    $('pad-loss-seats').replaceChildren(...[0,1].map(i=>{
+      const line=document.createElement('p'), pad=seats.get(i,pads);
+      line.textContent='P'+(i+1)+' · '+(pad?'Pad '+(pad.index+1):'Keyboard · '+keyFor(i,'left')+' / '+keyFor(i,'right')+' move · '+
+        keyFor(i,'jump')+' jump · '+keyFor(i,'attack')+' attack · '+keyFor(i,'shield')+' shield');
+      return line;
+    }));
+    $('pad-resume').textContent=missing?'Use keyboard for '+labels(missing):'Resume match';
+    // A held activation button on a returning pad must not confirm its own reconnection.
+    oldPad={...oldPad,confirm:pads.some(p=>down(p,0)),back:pads.some(p=>down(p,1)),pause:pads.some(p=>down(p,9))};
+  }
   const menuRepeat=new window.FightControls.MenuRepeat();
   function padMenu(pads,time) {
     if(dialogType==='bindings' && edit.mode==='test' && edit.device==='pad')showTestInputs(pads);
@@ -7503,9 +7504,12 @@
     // A and B also fight. Consume menu presses until that particular pad releases them.
     const menuOpen = page !== 'match' || $('dialog').open;
     for (const pad of pads) {
-      const buttons = (down(pad, 0) ? 1 : 0) | (down(pad, 1) ? 2 : 0) | (down(pad, 2) ? 4 : 0);
       const claimed=menuOpen ? (dialogType==='code-pad'?7:3) : 0;
-      const used = ((menuPadButtons.get(pad.index) || 0) | claimed) & buttons;
+      let used=(menuPadButtons.get(pad.index) || 0) | claimed;
+      for(let mask=used;mask;mask&=mask-1){
+        const bit=mask & -mask;
+        if(!down(pad,31-Math.clz32(bit)))used &= ~bit;
+      }
       if (used) menuPadButtons.set(pad.index, used);
       else menuPadButtons.delete(pad.index);
     }
@@ -7611,10 +7615,11 @@
       dt = Math.min(0.09, Math.max(0, now - before));
     before = now;
     const pads = getPads();
+    if(page==='match' && world?.mode==='local')checkLocalPads(pads);
     padMenu(pads,now);
+    if(page==='match' && world?.mode==='local' && matchConfig?.couchSeats?.lost && !dialogType)checkLocalPads(pads);
     if(movePreview && !document.hidden)movePreview.tick(dt);
     if((dialogType==='couch' || dialogType==='stage-strike') && !document.hidden)couchPanel?.poll(pads,now);
-    if(page==='match' && world?.mode==='local')matchConfig?.couchSeats?.sync(pads);
     if (finishTrial) tickFinishTrial(dt,pads);
     else if (clipScreen) tickClip(dt);
     else if (victoryShot) { if (!document.hidden) drawVictory(dt); }
