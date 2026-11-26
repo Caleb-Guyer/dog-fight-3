@@ -387,7 +387,7 @@
     return '<div class="layout-switch"><label>Player <select id="layout-slot"><option value="0">P1</option><option value="1">P2</option></select></label>'+
       '<label>Device <select id="layout-device"><option value="keyboard">Keyboard</option><option value="pad">Controller</option></select></label></div>'+
       (!keyboard?'<label class="pad-style">Button labels <select id="pad-label-style">'+Object.entries(controls.labelStyles).map(([id,name])=>
-        '<option value="'+id+'"'+(id===style?' selected':'')+'>'+name+'</option>').join('')+'</select></label>':'')+
+        '<option value="'+id+'"'+(id===style?' selected':'')+'>'+name+'</option>').join('')+'</select></label><button class="utility" data-do="rumble">Controller rumble</button>':'')+
       (!keyboard && testing?padDiagram(layout.pad[slot],legend):'')+
       '<p>'+(testing?(keyboard?'Press your keys to see which actions register.':'Press buttons together or move either stick. '+legend[9]+' leaves the test.') : keyboard?'Choose an action, then press its new key. Both players share this keyboard.':
         'Choose a button for each action. '+legend[0]+' selects and '+legend[1]+' goes back in menus.')+'</p>'+
@@ -464,8 +464,28 @@
       '<button class="utility" data-do="card-back">Back to results</button></div>');
     return action;
   }
-  function wireLayout(edit,layout,settings,profileTags,{drawLayouts,leaveLayouts,chooseBinding,assignControl,applyLayouts,openProfiles,style}){
+  function wireLayout(edit,layout,settings,profileTags,{drawLayouts,leaveLayouts,applyLayouts,openProfiles,style}){
     const $=id=>document.getElementById(id),{mode,slot,device}=edit,keyboard=device==='keyboard',testing=mode==='test',pending=mode==='swap'||mode==='reset';
+    const controls=window.FightControls;
+    function assignControl() {
+      const other=controls.occupant(layout,edit.device,edit.slot,edit.value);
+      if(other)profileTags[other.slot]='';
+      profileTags[edit.slot]='';
+      controls.assign(layout,edit.device,edit.slot,edit.action,edit.value);
+      applyLayouts(true);edit.mode='idle';
+      drawLayouts(controls.names[edit.action]+' saved.');
+    }
+    function chooseBinding(action,value) {
+      const map=layout[edit.device][edit.slot];
+      edit.action=action;edit.value=value;
+      if(map[action]===value){edit.mode='idle';drawLayouts();return;}
+      const other=controls.occupant(layout,edit.device,edit.slot,value);
+      if(!other){assignControl();return;}
+      edit.mode='swap';
+      const old=edit.device==='keyboard'?controls.keyName(map[action]):edit.legend[map[action]];
+      const name=edit.device==='keyboard'?controls.keyName(value):edit.legend[value];
+      drawLayouts('Swap '+name+' and '+old+'? P'+(other.slot+1)+' '+controls.names[other.action]+' will move to '+old+'.');
+    }
     if($('pad-label-style'))$('pad-label-style').onchange=e=>style(e.target.value);
     $('layout-slot').value=String(slot);$('layout-device').value=device;
     $('layout-slot').onchange=e=>{edit.slot=Number(e.target.value);edit.mode='idle';drawLayouts();$('layout-slot').focus();};
@@ -497,6 +517,7 @@
     };
     const row=$('layout-grid').querySelector('[data-action="'+edit.action+'"] button, [data-action="'+edit.action+'"] select');
     (pending || testing ? $('layout-back') : row || $('layout-slot')).focus({preventScroll:true});
+    return chooseBinding;
   }
   window.VersusRulebook={codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
 })();

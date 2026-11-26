@@ -12,6 +12,7 @@
   }
   function valid(profile){
     return profile && !!cleanName(profile.name) && cleanName(profile.name)===profile.name &&
+      (profile.rumble===undefined || [0,1,2].includes(profile.rumble)) &&
       validMap(profile.keyboard,'keyboard') && validMap(profile.pad,'pad') &&
       Array.isArray(profile.prefs) && profile.prefs.length===3 && profile.prefs.every(v=>typeof v==='boolean');
   }
@@ -115,7 +116,8 @@
       if(profile){
         const [quick,flick,tilt]=profile.prefs;
         el('detail').textContent='Attack '+controls.keyName(profile.keyboard.attack)+' / '+(game.padNames?.(slot) || controls.buttons)[profile.pad.attack]+
-          ' · '+(quick?'Attack on press':'Hold Attack to smash')+' · Flick jump '+(flick?'on':'off')+' · '+(tilt?'Tilt stick':'Smash stick');
+          ' · '+(quick?'Attack on press':'Hold Attack to smash')+' · Flick jump '+(flick?'on':'off')+' · '+(tilt?'Tilt stick':'Smash stick')+
+          (profile.rumble===undefined?'':' · Rumble '+['off','light','full'][profile.rumble]);
         el('use').onclick=()=>use(profile,true);
         el('delete').onclick=()=>{pending={type:'delete',profile};draw();};
       }
@@ -126,6 +128,7 @@
         const name=cleanName(el('name').value);
         if(!name){el('status').textContent='Enter a player name.';focus('name');return;}
         const p=capture(game.layout(),slot,game.prefs(slot),name);
+        if(game.rumble)p.rumble=game.rumble(slot);
         if(library(game.storage).some(old=>keyFor(old.name)===keyFor(name))){pending={type:'replace',profile:p};draw();}
         else saveProfile(p);
       };
@@ -143,7 +146,7 @@
       if(changed.length && JSON.stringify(changed)!==JSON.stringify(confirmed)){
         pending={type:'apply',profile,changed};draw();return;
       }
-      const stored=game.apply(slot,next,profile.prefs,profile.name,!!changed.length);
+      const stored=game.apply(slot,next,profile.prefs,profile.name,!!changed.length,profile.rumble);
       pending=null;
       draw(profile.name+' applied to P'+(slot+1)+(stored?'':' for this visit')+'.'+(keyboard?'':' Both keyboards kept their keys.'),'back');
     }
