@@ -3779,7 +3779,7 @@
     clearInput();
     updateHUD();
     $('game').focus({ preventScroll: true });
-    announce(message);
+    announce($('recovery-tip').textContent);
   }
   // The original world is never stepped during a practice visit. Its CPU, shared grabs,
   // clock and best-of-three stay at the pause frame even if the practice fight ends.
@@ -3837,8 +3837,10 @@
       backToPause=pauseMenu;
       window.PracticeDirectory.show(footworkPatterns,showDialog,startExercise);
     };
-    if(window.PracticeDirectory)return open();
-    waitForDispatch('Find a drill',()=>loadDispatch('PracticeDirectory'),open,pauseMenu?showPause:dismiss);
+    if(window.PracticeDirectory && window.PracticeFeedback)return open();
+    waitForDispatch('Find a drill', () => Promise.all([
+      loadDispatch('PracticeDirectory'), loadDispatch('PracticeFeedback')
+    ]), open, pauseMenu ? showPause : dismiss);
   }
   $('practice-menu').onclick = showPractice;
   $('return-fight').onclick = returnToFight;
