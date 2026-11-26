@@ -54,12 +54,19 @@ async function lesson(browser,device){
     assert.equal(await page.evaluate(()=>ticks),0);
     assert.equal(await bindings.locator('[data-met=true]').count(),1);
     assert.match(await bindings.textContent(),touch?/Smash/:pad?/RT/:/V/);
+    if(touch){
+      const cues=page.locator('[data-lesson-cue="press"]');
+      assert.deepEqual((await cues.evaluateAll(nodes=>nodes.map(n=>n.dataset.touch))).sort(),['right','smash']);
+      assert.equal(await cues.first().evaluate(n=>getComputedStyle(n).outlineStyle),'solid');
+    }
     await hold('smash',true);await clock(840);
     assert.match(await page.locator('#school-task').textContent(),/kick is charged/);
+    if(touch)assert.equal(await page.locator('[data-touch="smash"][data-lesson-cue="release"]').evaluate(n=>getComputedStyle(n).outlineStyle),'dashed');
     const frozen=await page.evaluate(()=>ticks);assert(frozen>20 && frozen<40);
     await clock(650);assert.equal(await page.evaluate(()=>ticks),frozen);
     await hold('smash',false);await hold('right',false);await clock(1100);
     assert.equal(await coach.getAttribute('data-state'),'passed');
+    if(touch)assert.equal(await page.locator('[data-lesson-cue]').count(),0);
     assert((await page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.school')).passed)).includes('stock'));
     await page.goto(root+'?resume#tutorial');
     await page.waitForFunction(()=>!!window.LessonGuide,null,{polling:20});await clock(80);

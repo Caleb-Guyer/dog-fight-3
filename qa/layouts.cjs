@@ -4,6 +4,19 @@ require('../docs/controls.js');
 const {load,assign,occupant,allowed,keyName}=window.FightControls;
 require('../docs/player-profiles.js');
 const profiles=window.PlayerProfiles;
+test('controller legends use the reported mapping, model and vendor IDs',()=>{
+  const {padLegend}=window.FightControls;
+  const read=(id,mapping='standard',style='auto')=>padLegend({id,mapping},style);
+  for(const id of ['DualSense Wireless Controller','Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)']){
+    const names=read(id);assert.equal(names[2],'Square');assert.equal(names[8],'Create');
+  }
+  assert.equal(read('Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 09cc)')[8],'Share');
+  assert.deepEqual(read('Pro Controller (STANDARD GAMEPAD Vendor: 057e Product: 2009)').slice(0,4),['B','A','Y','X']);
+  assert.equal(read('Xbox Wireless Controller')[9],'Menu');
+  assert.equal(read('USB gamepad','')[0],'Button 1');
+  assert.equal(read('USB gamepad','','positions')[2],'Left');
+  assert.equal(read('DualSense Wireless Controller','standard','switch')[9],'+');
+});
 test('a saved player can take the other seat with an exact, reviewable shared-keyboard swap',()=>{
   const layout=load();assign(layout,'keyboard',0,'attack','KeyQ');assign(layout,'pad',0,'jump',2);
   const saved=profiles.capture(layout,0,[true,false,true],'  Pepper  ');

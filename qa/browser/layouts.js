@@ -111,6 +111,61 @@ async function run(browser){
   assert(!sample[0].attack && sample[1].attack);
   assert.deepEqual(errors,[]);await page.close();
 }
+async function controllerCheck(browser){
+  const page=await browser.newPage({viewport:{width:1100,height:800}}),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.addInitScript(()=>{
+    window.makeController=(index,id)=>({index,id,connected:true,mapping:'standard',axes:[0,0,0,0],
+      buttons:Array.from({length:17},()=>({value:0,pressed:false}))});
+    window.pads=[makeController(0,'DualSense Wireless Controller'),makeController(1,'Nintendo Switch Pro Controller')];
+    Object.defineProperty(navigator,'getGamepads',{value:()=>window.pads});
+  });
+  const tick=(ms=80)=>page.clock.runFor(ms);
+  const press=async(indices,axes=[0,0,0,0])=>{
+    await page.evaluate(([indices,axes])=>{
+      pads[0].axes=axes;
+      pads[0].buttons.forEach((b,i)=>{b.pressed=indices.includes(i);b.value=Number(b.pressed);});
+    },[indices,axes]);await tick();
+  };
+  const label=n=>page.locator('[data-pad-key="'+n+'"]').textContent();
+  const click=id=>page.locator('#'+id).click();
+  const hint=()=>page.locator('#school-bindings').textContent();
+  const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.controls')));
+  try{
+    await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+    await page.clock.pauseAt(new Date('2030-01-01T00:00:03Z'));
+    await page.goto(root+'#controls/controller');await page.locator('#pad-label-style').waitFor();await tick();
+    assert.equal(await label(0),'Cross');assert.equal(await label(6),'L2');
+    await press([0,2,4,12],[.75,-.6,-.5,.9]);
+    assert.match(await page.locator('#layout-status').textContent(),/Jump \+ Attack \+ Shield \+ Move stick up-right \+ Strike stick down-left \+ D-pad up/);
+    assert.deepEqual(await page.locator('[data-pad-key].lit').evaluateAll(nodes=>nodes.map(n=>Number(n.dataset.padKey)).sort((a,b)=>a-b)),[0,2,4,12]);
+    assert.deepEqual(await page.locator('[data-stick] i').evaluateAll(nodes=>nodes.map(n=>n.style.transform)),['translate(8px, -6px)','translate(-5px, 9px)']);
+    await press([]);assert.equal(await page.locator('[data-pad-key].lit').count(),0);
+    await page.selectOption('#layout-slot','1');await click('layout-test');
+    assert.equal(await label(0),'B');assert.equal(await label(2),'Y');assert.equal(await label(9),'+');
+    await page.selectOption('#pad-label-style','positions');assert.equal(await label(0),'Bottom');
+    await page.reload();await tick();assert.deepEqual((await stored()).labelStyles,['auto','positions']);
+    assert.equal(await label(0),'Cross');
+    await page.evaluate(()=>{window.pads=[];});await tick();assert.match(await page.locator('#layout-status').textContent(),/Connect a controller/);
+    await page.evaluate(()=>{window.pads=[makeController(0,'Switch Pro Controller')];});await tick();assert.equal(await label(0),'B');
+    await click('layout-back');await page.selectOption('[data-pad="attack"]','3');await click('layout-confirm');
+    assert.equal((await stored()).pad[0].attack,3);
+    await page.goto(root+'?mapped#tutorial/guided/air');
+    await page.waitForFunction(()=>!!window.LessonGuide,null,{polling:20});await tick();
+    assert.match(await hint(),/Cross.*Triangle/);
+    assert.equal(await page.locator('#school-example').textContent(),'Create · Watch example');
+    await press([0,3]);await press([]);await tick(1500);
+    assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'passed');
+    assert.match(await hint(),/Cross to continue/);
+    await press([0]);await press([]);assert.match(await hint(),/L1/);
+    await page.evaluate(()=>{pads[0]=makeController(0,'Switch Pro Controller');});await tick();
+    assert.equal(await page.locator('#school-list').textContent(),'+ · Lessons');
+    assert.equal(await page.locator('#school-example').textContent(),'− · Watch example');
+    await page.keyboard.down('l');await tick(20);await page.keyboard.up('l');
+    assert.equal(await page.locator('#school-example').textContent(),'Watch example');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
 (async()=>{const b=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await run(b);}finally{await b.close();}
+  try{await run(b);await controllerCheck(b);}finally{await b.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+e.stack.replaceAll('\n','%0A'));process.exitCode=1;});
