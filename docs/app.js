@@ -7513,6 +7513,7 @@
   function roundCall(w) {
     if (w.lesson) return '';
     if (w.endReason === 'time') return 'Time!';
+    if (w.end!==null) return '';
     if (w.suddenDeath) return w.suddenDeath.intro > 0 ? 'Sudden Death' : w.suddenDeath.frames-(w.suddenDeath.startFrame || 0) < 22 ? 'GO!' : '';
     return w.time < 0.37 && w.mode !== 'training' ? 'GO!' : '';
   }
@@ -7593,8 +7594,6 @@
       } else if (online.match && !online.finished) {
         runOnline(dt, pads);
       } else if (world.end === null) {
-        const call=roundCall(world);
-        if ($('countdown').textContent!==call) $('countdown').textContent=call;
         if (frameLab.mode === 'frozen') {
           accumulator = frameLab.pending > 0 ? 1 / 60 : 0;
           if (frameLab.pending > 0) frameLab.pending--;
@@ -7647,7 +7646,8 @@
           accumulator = Math.max(0, accumulator - 1 / 60);
         }
         if (world.end!==null && !online.match) recordFight(world);
-        if (world.endReason === 'time') $('countdown').textContent = 'Time!';
+        const call=roundCall(world);
+        if ($('countdown').textContent!==call) $('countdown').textContent=call;
         if (world.lesson) renderSchool(pads);
         if(corner){
           renderCorner(pads);
