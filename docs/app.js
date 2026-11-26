@@ -1811,7 +1811,7 @@
     if(!window.VersusRulebook)return waitForDispatch('CPU opponent',()=>loadDispatch('VersusRulebook'),showCpuLevels,
       ()=>restart?showPause():$('cpu-level').focus());
     showDialog('cpu-level',restart?'Replay the opening':'CPU opponent',
-      window.VersusRulebook.cpuSheet(cpuLevels,level,restart,!restart || matchConfig?.ledgeTrapStart));
+      window.VersusRulebook.cpuSheet(cpuLevels,level,restart,!restart || matchConfig?.ledgeTrapStart || matchConfig?.wideReturn));
     document.querySelector('[data-cpu="' + level + '"]').focus({preventScroll:true});
   }
   $('cpu-level').onclick = showCpuLevels;
@@ -1920,10 +1920,10 @@
     startMatch({...settings, mode:'solo', p1:'pip', p2:'clover', cpuLevel:'rival', stage:'picnic',
       fetch:false, minutes:7, openingFrames:49}, undefined, 7);
   }
-  function startLedgeFight(hero,guard,side='left'){
+  function startLedgeFight(hero,guard,side='left',wide=false){
     leaveOnline();afterStory=null;
     startMatch({mode:'solo',p1:hero,p2:guard,cpuLevel:'rival',stage:'nightmail',stockCount:3,
-      coats:[savedCoat(0,hero),savedCoat(1,guard)],minutes:7,fetch:false,ledgeTrapStart:side},undefined,42);
+      coats:[savedCoat(0,hero),savedCoat(1,guard)],minutes:7,fetch:false,[wide?'wideReturn':'ledgeTrapStart']:side},undefined,42);
   }
   function startThrowRead(position) {
     leaveOnline();
@@ -3199,9 +3199,12 @@
     }
     if (action === 'resume' || action === 'close') exitDialog();
     if (action === 'lobby') toLobby();
-    const guard=e.target.closest('[data-ledge-guard]')?.dataset.ledgeGuard;
-    if(guard)return startLedgeFight(page==='match'?world.dogs[0].kind:settings.p1,guard,
-      matchConfig?.ledgeTrapStart==='right' && page==='match'?'right':'left');
+    const pick=e.target.closest('[data-ledge-guard],[data-returner]');
+    if(pick) {
+      const side=page==='match' ? matchConfig?.wideReturn || matchConfig?.ledgeTrapStart : 'left';
+      return startLedgeFight(page==='match'?world.dogs[0].kind:settings.p1,
+        pick.dataset.returner || pick.dataset.ledgeGuard,side,!!pick.dataset.returner);
+    }
     if (action === 'cpu-level') showCpuLevels();
     if (action === 'shield-read-match') startShieldReadMatch();
     if (action === 'throw-read-perch' || action === 'throw-read-edge') startThrowRead(action.slice('throw-read-'.length));
@@ -5499,12 +5502,12 @@
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PlayerProfiles:'player-profiles.js?v=1',
-    VersusRulebook:'versus-rules.js?v=landing-review-1',
+    VersusRulebook:'versus-rules.js?v=wide-return-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=tourney-1',StageStrike:'stage-strike.js?v=2',
     ComboLab:'combo-lab.js?v=tapes-1', FinishTools:'finish-tools.js?v=landing-review-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=down-air-1',
-    DispatchCovers:'dispatch-covers.js?v=film-load-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
+    DispatchCovers:'dispatch-covers.js?v=wide-return-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=bell-wave-1',
     ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=tapes-1',
@@ -5902,18 +5905,7 @@
   }
   function showChapterClear() {
     const night = campaign===nightChapter;
-    showDialog(
-      'dispatch-clear',
-      'Chapter clear',
-      '<div class="winner"><img alt="" src="' +
-        portrait('clover') +
-        '"><div><span class="mode-label">The Last Dispatch</span><h3>'+campaign.title+'</h3><p>' +
-        countMarks(progress.stamps) +
-        ' of ' + campaign.rooms.length + ' postmarks collected.</p></div></div><p>' +
-        (night?'The night mail is safe. Both chapters are open for replay.':'The bell is back in service. Clover has the next dispatch.') +
-        '</p><div class="dialog-actions">'+(night?'':'<button class="primary" id="next-chapter">Chapter 02 · The Night Mail</button>')+
-        '<button class="'+(night?'primary':'utility')+'" data-do="close">Route map</button><button class="utility" data-do="home">Main menu</button></div>',
-    );
+    window.DispatchCovers.chapterClear(campaign,night,countMarks(progress.stamps),portrait,showDialog);
     if (!night) {
       $('next-chapter').onclick=()=>{selectChapter(nightChapter);showRoute();};
       $('next-chapter').focus();
@@ -5942,14 +5934,9 @@
     const bonus=yardChapter.bonus, open=yardChapter.liftUnlocked(progress);
     const bridge=yardChapter.rooms[bonus.stampRoom], checkpoint=progress.room>bonus.stampRoom?bridge.checkpoints.length:progress.checkpoint;
     liftBest=yardChapter.liftBest(storage,null,liftBest);
-    showDialog('lift-ticket',clear?'Dead Letter Lift clear':bonus.name,
-      (open?'<p>The bridge postmark fits the brass slot. Noodle, Brisket and Clover are waiting, one on each landing. Take all three stocks before Pip loses his last.</p>':
-      '<p>The lift takes a Sorting Bridge postmark. Look above the Crane House checkpoint, where the short shelves lead up to the gantry.</p>')+
-      (clear?'<p>Your delivery · '+liftScore(clear)+'</p>':'')+
-      (liftBest?'<p>Personal best · '+liftScore(liftBest)+'</p>':'')+
-      '<div class="dialog-actions"><button class="primary" id="lift-enter">'+(open?clear?'Ride again':'Ride the lift':
-        progress.room>=bonus.stampRoom?'Search '+(checkpoint?bridge.checkpoints[checkpoint-1].name:bridge.name):progress.started?'Continue chapter':'Begin chapter')+
-      '</button><button class="utility" data-do="route">Route map</button></div>');
+    const label=open?(clear?'Ride again':'Ride the lift'):progress.room>=bonus.stampRoom?
+      'Search '+(checkpoint?bridge.checkpoints[checkpoint-1].name:bridge.name):progress.started?'Continue chapter':'Begin chapter';
+    window.DispatchCovers.liftTicket(bonus,open,label,clear && liftScore(clear),liftBest && liftScore(liftBest),showDialog);
     $('lift-enter').onclick=()=>open?beginRun(bonus.id,0):progress.room>=bonus.stampRoom?enterStop(bonus.stampRoom,checkpoint):continueAdventure();
     $('lift-enter').focus();
   }
@@ -7744,8 +7731,8 @@
       document.querySelector('[data-do=rehearse]').focus();
     } else if (hash === '#solo/runoff-trump') {
       startRunoffFight('left','pip','brisket','nightmail','original');
-    } else if (/^#solo\/ledge-trap(?:\/(pip|brisket|noodle|clover)(?:\/(left|right))?)?$/.test(hash)) {
-      startLedgeFight('pip',form || 'brisket',hash.split('/')[3]);
+    } else if (/^#solo\/(?:ledge-trap|guard-the-return)(?:\/(pip|brisket|noodle|clover)(?:\/(left|right))?)?$/.test(hash)) {
+      startLedgeFight('pip',form || 'brisket',hash.split('/')[3],arena==='guard-the-return');
     } else if (hash === '#solo/under-the-table') {
       leaveOnline();
       afterStory = null;

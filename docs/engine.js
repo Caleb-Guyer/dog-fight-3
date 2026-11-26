@@ -2770,6 +2770,7 @@
         this.setLedgeTrap({index:this.terrain.indexOf(floor),left,x:left?floor.x1:floor.x2,y:floor.y});
       }
       if (config.highReturn && this.mode === 'solo') this.placeHighReturn(config.highReturn);
+      if (config.wideReturn && this.mode === 'solo') this.placeHighReturn(config.wideReturn, 1);
       if (config.liftOpening && this.mode === 'solo') {
         const [guard,returner]=this.dogs;
         returner.stocks=Math.max(1,returner.stocks-1);
@@ -5028,12 +5029,12 @@
         if (f.stun && !f.usedUp) break;
       }
     }
-    placeHighReturn(side) {
+    placeHighReturn(side, slot = 0) {
       const outward = side === 'right' ? 1 : -1, floors = this.terrain.filter(p => !p.thin);
       const floor = outward < 0 ? floors[0] : floors.at(-1), lip = outward < 0 ? floor.x1 : floor.x2;
-      const [returner, guard] = this.dogs;
-      Object.assign(returner, {x:lip+outward*108, y:floor.y-108, ground:-1, jumps:1,
-        vx:-outward*90, vy:25, face:-outward, damage:60});
+      const returner = this.dogs[slot], guard = this.dogs[1-slot];
+      Object.assign(returner, {x:lip+outward*(slot ? 205 : 108), y:floor.y-108, ground:-1, jumps:1,
+        vx:slot ? 0 : -outward*90, vy:25, face:-outward, damage:60});
       Object.assign(guard, {x:lip-outward*10, y:floor.y, ground:this.terrain.indexOf(floor), face:outward});
     }
     resetAirPractice(pattern = 'neutral', side = 'left', wide = false, kind) {
@@ -8423,6 +8424,25 @@
       this.emit('specialTurn', { f, moveId: f.attack.moveId, turn, face: f.face, vx: f.vx,
         point: { x: f.x, y: f.y - f.stats.height * 0.45 } });
     }
+    chaseDisc(f, face) {
+      let target = null;
+      let nearest = 275;
+      for (const disc of this.projectiles) {
+        if (
+          disc.owner !== f.index ||
+          disc.type !== 'return' ||
+          disc.caught ||
+          (disc.x - f.x) * face <= 0
+        )
+          continue;
+        const distance = Math.hypot(disc.x - f.x, disc.y - (f.y - 41));
+        if (distance < nearest) {
+          target = disc;
+          nearest = distance;
+        }
+      }
+      return target;
+    }
     special(f, command) {
       const side = ['forward', 'back'].includes(command.airSide) ? 'side' : command.airSide;
       const id = f.kit.specials[side];
@@ -8519,22 +8539,7 @@
           break;
         }
         case 'cloverChase': {
-          a.disc = null;
-          let nearest = 275;
-          for (const disc of this.projectiles) {
-            if (
-              disc.owner !== f.index ||
-              disc.type !== 'return' ||
-              disc.caught ||
-              (disc.x - f.x) * f.face <= 0
-            )
-              continue;
-            const distance = Math.hypot(disc.x - f.x, disc.y - (f.y - 41));
-            if (distance < nearest) {
-              a.disc = disc;
-              nearest = distance;
-            }
-          }
+          a.disc = this.chaseDisc(f, f.face);
           if (a.disc) {
             a.active = 0.5;
             a.end = a.start + a.active + 0.14;
@@ -10613,6 +10618,24 @@
       brain.ledgeTrap = {edge, deadline:this.time + ((f.kind==='clover'?18:52) + Math.floor(this.random()*18))/60};
       return {...idleInput,smash:true,smashX:f.face,smashY:verticalAim(side)};
     }
+    crossingSpecial(f, floor, dir) {
+      const gap = Math.max(floor.x1 - f.x, f.x - floor.x2), height = floor.y - f.y;
+      if (gap <= 60) return;
+      if (f.kind === 'clover') {
+        const disc = this.chaseDisc(f, dir);
+        if (disc && (disc.x-f.x)*dir > 20 && disc.y < floor.y-20 && height > -65) return dir;
+        if (!disc && f.face === dir && height > 90 && gap > 145 && f.vy < 90 &&
+            !this.projectiles.some(p => p.owner === f.index && p.type === 'return' && !p.caught)) return 0;
+      }
+      if (height < 8 || f.vy < -200) return;
+      if (f.kind === 'pip' && gap > 120) return dir;
+      if (f.kind === 'brisket' && gap > 120 && gap <= 210 && height >= 85) return dir;
+      if (f.kind === 'noodle') {
+        const foe = this.dogs[1-f.index], reach = (foe.x-f.x)*dir;
+        if (foe.ground < 0 && !foe.ledge && reach > 20 && reach < 155 &&
+            Math.abs(foe.y-f.y) < 35 && !protectionTime(foe)) return dir;
+      }
+    }
     cpuRecoveryInput(f, closest, inside, under, unsafe, result) {
       if (f.attack?.charging) {
         result.x = Math.sign(inside - f.x);
@@ -10643,6 +10666,11 @@
         if (!f.stun && !f.dodge) {
           const secondHop = f.kind === 'pip' && f.hopWindow > 0 && f.vy > -395;
           const canHook = f.kind === 'noodle' && !f.usedUp && this.nearestLedge(f, 180, -24, 155);
+          if (!canHook && this.cpuLevel === 'rival' && !f.attack && !f.usedAir && !f.usedUp &&
+              !f.command && !f.tumble && !f.airDodge && !f.wallAction && !f.impactLag) {
+            const aim = this.crossingSpecial(f, closest, result.x);
+            if (aim !== undefined) return {...idleInput, x:aim, special:true, tapped:{special:true}};
+          }
           if (
             secondHop ||
             (!f.attack && (canHook || (!f.usedUp && !f.jumps && f.y > closest.y + 5 && f.vy > -140)))
