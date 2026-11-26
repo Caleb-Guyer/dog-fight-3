@@ -44,3 +44,16 @@ test('rollback from a predicted elimination clears the presentation with the dis
   actual.dogs[1].x=1600;tick(actual);predicted.copyFightFrom(actual);
   assert.deepEqual(predicted.stockCall,actual.stockCall);
 });
+
+test('lead calls distinguish taking, keeping and tying the lead on signed points',()=>{
+  const describe=(points,score,exits,solo=false)=>window.StockCall.describe({points,score,
+    exits:exits.map(([slot,credited])=>({slot,credited,kind:slot?'pip':'brisket',zone:'right'}))},solo);
+  assert.match(describe(true,[0,1],[[0,true]],true),/CPU takes the lead\.$/); // P1 led 1–0 before the hit.
+  assert.match(describe(true,[-1,0],[[0,false]]),/P2 takes the lead\.$/);
+  assert.match(describe(true,[-1,-1],[[0,false]]),/All square\.$/);
+  assert.match(describe(true,[3,-2],[[0,true]]),/P1 leads\.$/);
+  assert.match(describe(true,[0,0],[[0,true],[1,true]]),/Still tied\.$/);
+  assert.match(describe(false,[1,1],[[1]]),/Last stock each\.$/);
+  assert.match(describe(false,[0,1],[[0]],true),/CPU wins\.$/);
+  assert.match(describe(false,[0,0],[[0],[1]]),/Sudden Death\.$/);
+});

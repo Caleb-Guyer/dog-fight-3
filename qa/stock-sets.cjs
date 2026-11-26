@@ -489,6 +489,7 @@ async function timedBattles(browser,phone){
   const local=await device(browser,false,'#solo');
   await local.press('[data-mode=local]');
   await local.press('#rules-label');await local.press('[data-scoring=time]');
+  assert(await local.page.locator('[data-do=final-count]').isVisible());
   assert.equal(await local.page.locator('[data-minutes="0"]').count(),0);
   await local.press('[data-minutes="1"]');
   await local.page.reload();await observe(local.page);

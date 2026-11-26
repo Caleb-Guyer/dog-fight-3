@@ -13,6 +13,45 @@ const {arenas,stageForms,platforms,fighters,FinishTape}=window.DogFight;
 const opening=(type,kind='pip')=>create({suddenStart:true,suddenOpening:type,p1:kind,stage:type==='gap'?'laundry':'bandstand'});
 const go=w=>{while(w.suddenDeath.intro>0)step(w);};
 
+const bellConfig={finalCount:true,p1:'brisket',p2:'pip',stage:'nightmail',form:'flat',cpuLevel:'rival'};
+test('the same ten-second opening can end in a win, a loss or Sudden Death against Rival',()=>{
+  for(const plan of ['defend','stop','wait']){
+    const beats=[];
+    const w=new Battle({...settings,...bellConfig,mode:'solo'},(name,e)=>{if(name==='clockBeat')beats.push(e.seconds);},seededRandom(17));
+    assert.equal(w.clockFrames,600);assert.deepEqual(w.dogs.map(f=>f.damage),[135,135]);
+    assert.deepEqual(w.matchCard.points,[0,0]);assert.equal(w.matchCard.losses.length,0);
+    for(let i=0;i<600;i++){
+      const [p,cpu]=w.dogs, smash=i===0 && plan!=='wait',defend=plan==='defend' && i>43;
+      w.step(1/60,{...idleInput,smash,smashX:smash?1:0,x:defend && i<67?-1:0,
+        shield:defend && i>=67 && Math.abs(cpu.x-p.x)<140},idleInput);
+    }
+    assert.deepEqual(beats,[5,4,3,2,1]);
+    if(plan==='stop'){assert.equal(w.suddenDeath.cause,'time');assert.deepEqual(w.matchCard.points,[0,0]);}
+    else{assert.equal(w.end,plan==='defend'?0:1);assert.equal(w.endReason,'time');}
+  }
+  assert.equal(create().clockFrames,3600);assert.equal(create({...bellConfig,timeBattle:false}).clockFrames,3600);
+});
+
+test('late remote inputs confirm each clock bell once on both peers',()=>{
+  const peers=[0,1].map(side=>{
+    const beats=[],out=[];let world;
+    const room=new window.DogOnline.OnlineSession({start(c,r){
+      world=new Battle(c,(name,e)=>{if(name==='clockBeat')beats.push(e.seconds);},r);
+    }});
+    room.side=side;room.send=m=>{out[m[2]]=m[3];};
+    room.beginRound(['start',1,'brisket','pip','nightmail',17,1,'flat']);
+    const w=create(bellConfig);w.clockFrames=304;
+    world.copyFightFrom(w);room.match.confirmedWorld.copyFightFrom(w);
+    return {beats,out,world,match:room.match};
+  });
+  for(let i=0;i<300;i++)for(const [side,p] of peers.entries()){
+    if(i>=8)p.match.receive(i-8,peers[1-side].out[i-8]);
+    p.match.tick(()=>({...idleInput,shield:side===1 && i%20<10}),p.world);
+    if(i===6){assert(p.world.clockFrames<300);assert.deepEqual(p.beats,[]);}
+  }
+  for(const peer of peers)assert.deepEqual(peer.beats,[5,4,3,2,1]);
+});
+
 test('all stage forms use the same boundary schedule and preserve a playable deck',()=>{
   const ordinary=create().blastBounds();
   for(const stage of Object.keys(arenas))for(const form of Object.keys(stageForms)){

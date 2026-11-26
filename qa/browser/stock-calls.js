@@ -42,9 +42,9 @@ async function run(browser,phone){
     await page.screenshot({path:'stock-calls-'+(phone?'phone':'desktop')+'.png'});
     assert(call);assert.equal(call.steady,phone);
     assert(call.row>.65 && call.row<.85);assert(call.textPx>=20,'Legible score at the actual viewport size');
-    assert.deepEqual(call.labels,['STOCKS','2','P1','3','CPU']);
+    assert.deepEqual(call.labels,['STOCKS','2','P1','3','CPU','CPU TAKES THE LEAD']);
     assert.deepEqual(call.dogs,phone?[]:[['pip','tumble',0]]);
-    assert.match(await page.locator('#announce').textContent(),/Pip out at the top blast line.*P1 2, P2 3/);
+    assert.match(await page.locator('#announce').textContent(),/Pip out at the top blast line.*P1 2, CPU 3.*CPU takes the lead/);
     assert.deepEqual(await page.evaluate(()=>[...new Set(ramps)]),[1460,1760]);
     await page.clock.runFor(4300);
     await page.locator('#pause').click();await page.locator('[data-do=ko-replays]').click();await page.locator('[data-ko="0"]').click();
@@ -77,7 +77,7 @@ async function run(browser,phone){
       confirmed.dogs[1].x=1800;confirmed.step(1/60);view.draw(canvas,predicted,1/60,0,confirmed);
       return [speculative,count(),calls.at(-1).labels];
     });
-    assert.deepEqual(gates,[0,1,['STOCKS','3','P1','2','P2']]);
+    assert.deepEqual(gates,[0,1,['STOCKS','3','P1','2','P2','P1 TAKES THE LEAD']]);
     if(!phone){
       await press('[data-do=clip-back]');await press('#ko-list-back');await press('[data-do=resume]');
       await page.keyboard.down('a');
@@ -94,6 +94,42 @@ async function run(browser,phone){
       await press('[data-do=trial-results]');await page.locator('[data-saved-clip="0"]:focus').waitFor();
       assert.equal(await page.evaluate(()=>new FightRecords.Book(localStorage).list().length),1);
     }
+    await page.goto('http://127.0.0.1:8080/?bell#local/final-count');
+    await page.waitForFunction(()=>!!window.StockCall,null,{polling:50});
+    assert.equal(await page.locator('#match-clock').textContent(),'0:10');
+    await page.evaluate(()=>{
+      window.secondsSeen=[];window.bellsHeard=[];
+      const draw=StockCall.drawClock,print=CanvasRenderingContext2D.prototype.fillText,ramp=AudioParam.prototype.exponentialRampToValueAtTime;
+      let counting=false;
+      StockCall.drawClock=function(...args){counting=true;try{return draw(...args);}finally{counting=false;}};
+      CanvasRenderingContext2D.prototype.fillText=function(txt,x,y,...args){
+        if(counting && this.canvas.id==='game'){
+          const point=new DOMPoint(x,y).matrixTransform(this.getTransform());
+          assertOnscreen(point,this.canvas,txt);
+          if(secondsSeen.at(-1)!==txt)secondsSeen.push(txt);
+        }
+        return print.call(this,txt,x,y,...args);
+      };
+      function assertOnscreen(p,canvas,txt){
+        if(p.x<0 || p.x>=canvas.width || p.y<0 || p.y>=canvas.height)throw Error('Offscreen countdown '+txt);
+      }
+      AudioParam.prototype.exponentialRampToValueAtTime=function(v,t){if(v===1174 || v===1760)bellsHeard.push(v);return ramp.call(this,v,t);};
+    });
+    await page.keyboard.press('Shift');
+    await page.clock.runFor(2800);
+    if(!phone){
+      await page.keyboard.down('i');await page.clock.runFor(64);await page.keyboard.up('i');await page.clock.runFor(850);
+      assert.match(await page.locator('#announce').textContent(),/P1 takes the lead/);
+    }
+    for(let n=0;n<14 && await page.locator('#match-clock').textContent()!=='0:05';n++)await page.clock.runFor(350);
+    assert.equal(await page.locator('#match-clock').textContent(),'0:05');
+    await press('#pause');await page.clock.runFor(1400);assert.equal(await page.locator('#match-clock').textContent(),'0:05');
+    await press('[data-do=resume]');await page.clock.runFor(4900);
+    assert.deepEqual(await page.evaluate(()=>secondsSeen),['5 SEC','4 SEC','3 SEC','2 SEC','1 SEC']);
+    assert.deepEqual(await page.evaluate(()=>bellsHeard.slice(-5)),[1174,1174,1174,1174,1760]);
+    await page.clock.runFor(900);
+    if(phone)assert.match(await page.locator('#match-clock').textContent(),/SD/);
+    else assert(await page.locator('[data-do=match-card]').isVisible());
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
