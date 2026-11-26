@@ -54,6 +54,64 @@ async function play(browser,phone){
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
+async function downAirs(browser,device){
+  const touch=device==='touch',controller=device==='controller';
+  const page=await browser.newPage({viewport:touch?{width:390,height:844}:{width:1200,height:740},isMobile:touch,hasTouch:touch,reducedMotion:'reduce'});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  try{
+    if(controller)await page.addInitScript(()=>{
+      window.pad={id:'Test controller',index:0,mapping:'standard',connected:true,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
+      Object.defineProperty(navigator,'getGamepads',{value:()=>[pad]});
+    });
+    await page.clock.install({time:new Date('2031-01-01T00:00:00Z')});await page.clock.pauseAt(new Date('2031-01-01T00:00:05Z'));
+    const client=touch && await page.context().newCDPSession(page);
+    const enter=async(id)=>{
+      const el=page.locator(id);await el.waitFor();
+      if(touch)return el.tap();
+      if(!controller)return el.press('Enter');
+      await el.focus();
+      for(const on of [true,false]){
+        await page.evaluate(v=>Object.assign(pad.buttons[0],{pressed:v,value:Number(v)}),on);
+        await page.clock.runFor(32);
+      }
+    };
+    for(const kind of ['pip','brisket','noodle','clover']){
+      await page.goto(root+'?'+kind+'#moves/'+kind+'/down-air');
+      await enter('#move-speed');await enter('#move-play');await page.clock.runFor(2600);
+      assert.equal(await page.locator('#move-play').textContent(),'Replay');
+      const clear=()=>page.evaluate(id=>FighterSchool.cleared(localStorage,id),kind+'-4');
+      assert.equal(await clear(),false);
+      await enter('#move-try');
+      const steer=async(actions)=>{
+        if(touch){
+          const points=[];
+          for(const [i,action] of actions.entries()){
+            const rect=await page.locator('[data-touch='+action+']').boundingBox();assert(rect,action);
+            points.push({id:i+1,x:rect.x+rect.width/2,y:rect.y+rect.height/2});
+          }
+          await client.send('Input.dispatchTouchEvent',{type:points.length?'touchStart':'touchEnd',touchPoints:points});
+        }else if(controller){
+          await page.evaluate(a=>{
+            pad.axes[0]=Number(a.includes('right'));pad.axes[1]=Number(a.includes('down'));
+            Object.assign(pad.buttons[2],{pressed:a.includes('attack'),value:Number(a.includes('attack'))});
+          },actions);
+        }else{
+          for(const [action,key] of [['down','s'],['attack','j'],['right','d']])
+            if(actions.includes(action))await page.keyboard.down(key);else await page.keyboard.up(key);
+        }
+      };
+      await steer(['down','attack']);await page.clock.runFor(40);await steer([]);
+      if(kind==='pip')await steer(['right']);
+      await page.clock.runFor(1250);
+      if(kind==='pip')await steer([]);
+      assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'passed',kind+' '+device);
+      assert(await clear());await enter('#school-next');
+      assert.equal(await page.evaluate(()=>document.activeElement.dataset.watchMove),'down-air');
+      assert.equal(await page.locator('[data-guide-section="air"]').getAttribute('aria-pressed'),'true');
+    }
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
 (async()=>{const b=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await play(b,false);await play(b,true);}finally{await b.close();}
+  try{await play(b,false);await play(b,true);for(const device of ['keyboard','touch','controller'])await downAirs(b,device);}finally{await b.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+e.stack.replaceAll('\n','%0A'));process.exitCode=1;});

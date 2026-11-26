@@ -186,6 +186,7 @@ test('friend rooms and quickplay negotiate air drops and closing boundaries acro
         if(old!==i){
           const world=peer.match.confirmedWorld;
           assert.equal(world.itemDrops,old===null);
+          assert.equal(!!world.shieldPogo,old===null);
           world.startSuddenDeath();
           assert.equal(world.blastBounds(1500).bottom<765,old===null);
         }
