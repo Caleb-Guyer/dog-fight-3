@@ -1955,10 +1955,10 @@
     startMatch({mode:'solo', p1, p2, coats:[savedCoat(0,p1),savedCoat(1,p2)], stage:'picnic', cpuLevel:'rival',
       stockCount:3, minutes:7, fetch:false, dashBackOpening:role}, undefined, 42);
   }
-  function startLiftFight(p2=settings.p2,p1=settings.p1) {
+  function startLiftFight(p2=settings.p2,p1=settings.p1,perch=false) {
     leaveOnline();afterStory=null;
-    startMatch({mode:'solo',p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:'picnic',form:'flat',
-      cpuLevel:'rival',stockCount:3,minutes:7,fetch:false,liftOpening:true},undefined,42);
+    startMatch({mode:'solo',p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:perch?'bandstand':'picnic',form:perch?'original':'flat',
+      cpuLevel:'rival',stockCount:3,minutes:7,fetch:false,liftOpening:perch?'perch':true},undefined,42);
   }
   function fightRivalPip() {
     leaveOnline();
@@ -1970,6 +1970,8 @@
     if (world.mode !== 'solo' || world.cpuLevel !== 'rival') return '';
     const {spotReads, spotPunishes, rollReads, rollPunishes, shieldHabit} = world.bot;
     let report = '';
+    if(world.bot.gavePerch)report+='<p>Rival dropped through the platform as you returned with protection. You can keep the high ground or follow through.</p>';
+    if(world.bot.challengedReturn)report+='<p>Rival held the platform and aimed a jab at the end of your protection. Shield when the jab starts to block it.</p>';
     if(world.bot.heldCenter)report+='<p>Rival played for center stage with a late lead. Dash in, then shield before you reach its attack range.</p>';
     if(world.bot.chasedLead)report+='<p>Rival came straight in on foot when it needed a KO. Step back and catch the approach with a tilt.</p>';
     if(world.bot.ledgeRollReads){
@@ -2004,7 +2006,7 @@
     cupAttempt = cupRound;
     music?.restart();
     practiceFight = visit || null;
-    const rehearsal = !!visit && config.mode === 'solo';
+    const rehearsal = !!visit && (config.mode==='solo' || config.mode==='local' && !!visit.returnStart);
     trainingMoment = null;
     $('moment-retry').disabled = true;
     $('moment-save').hidden = $('moment-retry').hidden = false;
@@ -2159,9 +2161,11 @@
       world.copyFightFrom(opener);
     }
     if (rehearsal) {
-      world.copyFightFrom(visit.battle);
-      const {cx, cy, zoom, leftFighter} = visit.view;
-      Object.assign(view, {cx, cy, zoom, leftFighter});
+      world.copyFightFrom(visit.returnStart || visit.battle);
+      if(!visit.returnStart){
+        const {cx,cy,zoom,leftFighter}=visit.view;
+        Object.assign(view,{cx,cy,zoom,leftFighter});
+      }
     }
     $('training-tools').hidden = config.mode !== 'training' || !!world.warmupPartner;
     $('return-fight').hidden = !visit;
@@ -2171,7 +2175,8 @@
     $('damage-output').textContent = '0%';
     const matchName = world.warmupPartner ? 'Online warm-up' : online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
       (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : world.bells ? 'Bell Break' : modes[config.mode];
-    $('match-mode').textContent = cupAttempt ? 'Arcade Cup · Round '+(cupAttempt.round+1)+'/4' :
+    $('match-mode').textContent = rehearsal && visit.returnStart ? 'Stock return · '+(config.mode==='local'?'Local versus':cpuLevels[world.cpuLevel].name+' CPU') :
+      cupAttempt ? 'Arcade Cup · Round '+(cupAttempt.round+1)+'/4' :
       config.rotationRound?(config.tourneyRound || 'Bout '+config.rotationRound)+' · P1 '+config.rotationTags[0]+' / P2 '+config.rotationTags[1]:
       world.lesson ? 'Fight School' : spar?'Sparring · '+world.dogs[0].stats.name:matchName + (world.relayTeams?' · Pack Relay':world.matchCard?.points?' · Time Battle':config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = stageName(config.stage,world.form);
@@ -2321,9 +2326,10 @@
           (corner?'<button class="utility" data-do="corner-practice">Practice · '+(schoolLessons.find(l=>l.id===corner.practice)?.title || $(corner.practice).textContent)+'</button>'+
             '<button class="utility" data-do="corner-toggle" aria-pressed="'+settings.cornerTips+'">Ringside tips · '+(settings.cornerTips?'On':'Off')+'</button>'+
             '<button class="utility" data-do="school-suspend">Save &amp; quit</button>':'')+
-          (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight ? 'Retry position' : 'Practice this position') + '</button>' : '') +
+          (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight?.returnStart?'Retry stock return':practiceFight?'Retry position':'Practice this position') + '</button>' : '') +
           '<button class="utility" data-do="practice">Find a drill</button>' +
           (practiceFight ? '<button class="utility" data-do="return-fight">'+$('return-fight').textContent+'</button>' : '') + '</div>' : '') +
+        (world.mode==='local' && practiceFight?.returnStart?'<div class="dialog-actions"><button class="utility" data-do="rehearse">Retry stock return</button><button class="utility" data-do="return-fight">'+$('return-fight').textContent+'</button></div>':'')+
         cpuReadReport() + '<div class="dialog-actions">' + reviewButton + (world.mode === 'solo' && !localSet && !practiceFight && !matchConfig.schoolFinal && !spar ?
           '<button class="utility" data-do="cpu-level">Replay with another CPU</button>' : '') +
         (practiceFight ? '' : '<button class="utility" data-do="rematch">' + icon('reset') + 'Restart match</button>') +
@@ -2374,7 +2380,11 @@
     };
     if(!window.MatchReview)return waitForDispatch('KO replays',()=>loadDispatch('MatchReview'),()=>showKnockouts(from,focus),back);
     window.MatchReview.koList(clips,from,focus,{showDialog,back,label:c=>cardTime(c.losses[0].frame)+' · '+knockoutLabel(c,battle),
-      open:clip=>showFinishReplay(null,{clip,from})});
+      open:clip=>showFinishReplay(null,{clip,from}),fight:online.match?null:clip=>{
+        const source=pausedFight(),visit={...source,returnStart:clip.returnTape.playback(0).battle};
+        if(from==='result')visit.returnResult=source;
+        startMatch(source.config,undefined,source.seed,null,{visit});
+      }});
   }
   function presentWinner() {
     const photo=document.querySelector('#dialog-body .winner img');
@@ -2902,7 +2912,7 @@
     const finish = result.matchCard?.points?(result.suddenDeath?'Sudden Death KO':'Time expired')+' · P1 '+pointLabel(result.matchCard.points[0])+' / P2 '+pointLabel(result.matchCard.points[1]):
       result.endReason === 'time' ? 'Time expired · ' + result.dogs.map(d=>d.stocks).join('–') + ' stocks (P1–P2)' :
       result.endReason === 'sudden' ? 'Sudden Death KO' : stockLabel(f.stocks);
-    if (practiceFight && world.mode === 'solo') {
+    if (practiceFight && (world.mode==='solo' || practiceFight.returnStart)) {
       showDialog('result', 'Practice finished', '<p>' + f.stats.name + ' wins this attempt. Your fight is paused.</p>' +
         '<div class="dialog-actions"><button class="primary" data-do="rehearse">Retry position</button>' +
         '<button class="utility" data-do="return-fight">'+(practiceFight.returnResult?'Back to results':'Back to fight')+'</button></div>', false);
@@ -3229,6 +3239,7 @@
     if (action === 'throw-read-perch' || action === 'throw-read-edge') startThrowRead(action.slice('throw-read-'.length));
     if (['dash-back-bait','dash-back-watch','dash-back-delay'].includes(action)) startDashBack(action.slice('dash-back-'.length));
     if (action==='lift-fight')startLiftFight();
+    if (action==='return-perch')startLiftFight(settings.p2,settings.p1,true);
     if (action === 'cut-off-clover') startCloverApproach();
     if (action === 'shield-read-set') startShieldReadMatch(true);
     if (action === 'rematch') {
@@ -5371,12 +5382,12 @@
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=ledge-rescue-2', MatchReview:'match-review.js?v=defensive-moments-1',
+    RecoveryCoach:'recovery-coach.js?v=ledge-rescue-2', MatchReview:'match-review.js?v=return-perch-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PlayerProfiles:'player-profiles.js?v=button-check-1',
-    VersusRulebook:'versus-rules.js?v=button-check-1',
+    VersusRulebook:'versus-rules.js?v=return-perch-1',
     PackRelay:'pack-relay.js?v=1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=button-check-1',StageStrike:'stage-strike.js?v=button-check-1',
     ComboLab:'combo-lab.js?v=ground-space-1', FinishTools:'finish-tools.js?v=defensive-moments-1',
@@ -7539,6 +7550,8 @@
       startMatch({...settings,p1:'pip',p2:'brisket',mode:'solo',stage:'picnic',cpuLevel:'rival',minutes:1,fetch:false,timeBattle:true},undefined,42);
     } else if (/^#solo\/throw-read\/(perch|edge)$/.test(hash)) {
       startThrowRead(hash.split('/').pop());
+    } else if (hash==='#solo/stock-return/perch') {
+      startLiftFight('brisket','pip',true);
     } else if (/^#solo\/stock-return\/(pip|brisket|noodle|clover)$/.test(hash)) {
       startLiftFight(hash.split('/').pop(),'pip');
     } else if (/^#solo\/dash-back\/(bait|watch|delay)$/.test(hash)) {

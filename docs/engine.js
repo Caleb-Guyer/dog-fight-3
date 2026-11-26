@@ -2159,6 +2159,11 @@
     const side = Math.abs(input.x);
     return side >= 0.58 && input.y >= 0.58 && Math.min(side, input.y) >= Math.max(side, input.y) * 0.65;
   }
+  function perchDropInput(f) {
+    if (f.shield) return shieldDropAngle(f.prev) ? {...idleInput,shield:true} :
+      {...idleInput,shield:true,x:f.face*.7,y:.7};
+    return f.prev.y>=.74 && !f.dropPrep?idleInput:{...idleInput,y:1};
+  }
   function dodgeProgress(kit, time) {
     const [first, last] = kit.travel;
     return smoothStep((time * 60 - first + 1) / (last - first + 1));
@@ -2778,7 +2783,8 @@
       if (config.highReturn && this.mode === 'solo') this.placeHighReturn(config.highReturn);
       if (config.wideReturn && this.mode === 'solo') this.placeHighReturn(config.wideReturn, 1);
       if (config.liftOpening && this.mode === 'solo') {
-        const [guard,returner]=this.dogs;
+        const platform=config.liftOpening==='perch';
+        const returner=this.dogs[platform?0:1],guard=this.dogs[1-returner.index];
         returner.stocks=Math.max(1,returner.stocks-1);
         this.beginStockReturn(returner);
         const lift=returner.stockLift;
@@ -2855,6 +2861,7 @@
       if (this.cpuLevel === 'rival') this.bot.dashBackEnabled = true;
       if (this.mode==='solo' && this.cpuLevel==='rival'){
         this.bot.liftReadEnabled=true;
+        this.bot.returnPerches=true;
         this.bot.clockAware=true;
       }
       this.matchCard = versus && config.lesson === undefined ? {
@@ -2879,7 +2886,7 @@
     resetCpu() {
       const memory = this.bot;
       this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
-      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','liftReadEnabled','clockAware','heldCenter','chasedLead'])
+      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','liftReadEnabled','returnPerches','gavePerch','challengedReturn','clockAware','heldCenter','chasedLead'])
         if (memory[key] !== undefined) this.bot[key] = memory[key];
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
@@ -2893,6 +2900,7 @@
         this.bot.jumpIn = null;
         delete this.bot.dashBack;
         delete this.bot.missedSmash;
+        delete this.bot.perchExit;
         this.bot.shieldWatch = 0;
         this.bot.rookieNext = 0;
       }
@@ -10611,8 +10619,7 @@
         brain.platformRoute = null;
         return null;
       }
-      if (f.ground === route.perch)
-        return f.prev.y >= 0.74 && !f.dropPrep ? idleInput : { ...idleInput, y: 1 };
+      if (f.ground === route.perch) return perchDropInput(f);
       if (route.descending) {
         const next = this.floorAhead(f,.24);
         if (this.terrain[next]?.thin && this.terrain[next].y < floor.y) return {...idleInput,y:1};
@@ -11160,6 +11167,49 @@
       }
       return idleInput;
     }
+    cpuReturnPerch(f,foe) {
+      const brain=this.bot,plan=brain.perchExit;
+      if (f.attack || f.grip || f.stun || f.floorAction || f.ledge || f.tumble || f.jumpSquat || f.stockLift ||
+          f.landingLag || f.shieldDrop || f.shieldStun || f.charge>=0 || (!foe.stockLift && !foe.stockGuard)) {
+        if(plan)delete brain.perchExit;
+        return null;
+      }
+      if(plan){
+        if(this.time>plan.until){delete brain.perchExit;return null;}
+        if(f.ground===plan.from)return perchDropInput(f);
+        if(f.ground<0 || f.ground===plan.to && foe.ground===plan.from){
+          brain.gavePerch=true;
+          const dx=plan.x-f.x;
+          return {...idleInput,x:Math.abs(dx)>8?Math.sign(dx)*.48:0};
+        }
+        delete brain.perchExit;
+        return null;
+      }
+      const floor=this.terrain[f.ground];
+      if(!floor?.thin || f.command || Math.abs(f.vx)>f.kit.footwork.walk || f.dodge || f.airDodge)return null;
+      const dx=foe.x-f.x,reach=Math.abs(dx);
+      if(reach>f.stats.width+foe.stats.width+32 || foe.stockLift && foe.stockLift.landing!==f.ground)return null;
+      if(!foe.stockLift && foe.ground!==f.ground &&
+          (foe.ground>=0 || foe.vy<0 || this.floorAhead(foe,.32)!==f.ground))return null;
+      // Only give up a perch with a real landing under the defender. The open laundry gap has none.
+      const margin=f.stats.width+8,below=this.terrain.findIndex(p=>!p.thin && p.y>floor.y+24 && p.y-floor.y<=240 &&
+        f.x>=p.x1+margin && f.x<=p.x2-margin);
+      if(below<0)return null;
+      if(foe.stockLift)return idleInput;
+      const jab=moves[f.kit.ground[0]],face=Math.sign(dx)||f.face;
+      if(foe.stockGuard<=.52){
+        if(f.face!==face)return {...idleInput,x:face*.4};
+        if(foe.ground===f.ground && !foe.shield && foe.stockGuard<=jab.start+1e-8 &&
+            Math.abs(dx+(foe.vx-f.vx)*jab.start)<=jab.box[0]+jab.box[2]+foe.stats.width-3){
+          brain.challengedReturn=true;return {...idleInput,tapped:{attack:true}};
+        }
+        return idleInput;
+      }
+      const deck=this.terrain[below],away=-face;
+      brain.perchExit={from:f.ground,to:below,x:clamp(f.x+away*40,deck.x1+margin,deck.x2-margin),until:this.time+.9};
+      brain.hop=null;brain.guard=brain.hold=brain.jumpHold=0;
+      return perchDropInput(f);
+    }
     cpuWaitForReturn(f, foe) {
       if ((!foe.stockLift && !foe.stockGuard) || f.ground < 0 || f.stun || f.dodge || f.floorAction || f.grip) return null;
       if (f.attack || f.command) return idleInput;
@@ -11483,6 +11533,9 @@
         if (f.attack?.dashAttack && cancelableWindup(f)) return {...idleInput,x:dir,grab:true};
       }
       if (f.stockLift) return this.cpuLiftExit(f, foe);
+      if (brain.returnPerches && (brain.perchExit || foe.stockLift || foe.stockGuard)){
+        const evade=this.cpuReturnPerch(f,foe);if(evade)return evade;
+      }
       if (brain.liftApproach) {
         const input=this.cpuPressReturn(f);
         if(input)return input;
