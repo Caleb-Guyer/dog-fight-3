@@ -328,7 +328,6 @@
   }
   let audioContext;
   let music=null, musicUnlocked=false, musicFocused=true;
-  let auditionTrack='picnic', auditionPlaying=false, auditionUrgent=false;
   const missionMusic=['picnic','bandstand','nightmail','canal','nightmail'];
   function unlockMusic() {
     musicUnlocked=true;
@@ -342,8 +341,10 @@
     if(!music && (!level || audioContext.state!=='running')) return;
     music ||= new window.YardScore.Player(audioContext);
     let id='menu', urgent=false, playing=musicFocused && !document.hidden, gain=level;
-    if(dialogType==='sound-test'){
-      id=auditionTrack;playing=playing && auditionPlaying;urgent=auditionUrgent;
+    const audition=dialogType==='sound-test' || dialogType==='stage-music';
+    if(audition){
+      const p=window.StageMusic.preview;
+      id=p.id;playing=playing && p.playing;urgent=p.urgent;
     } else if(page==='dispatch-story') id=null;
     else if(page==='match' && world){
       const fight=finishTrial?.player.battle || online.match?.confirmedWorld || world;
@@ -356,14 +357,15 @@
       } else if(fight.end!==null){
         id=dialogType && fight.endReason!=='fall' && fight.endReason!=='expired' && fight.dogs[fight.end] ? 'win-'+fight.dogs[fight.end].kind : null;
       } else {
-        id=fight.stage;playing=playing && !paused && countdown<=0;
+        id=matchConfig?.stageTrack===undefined?fight.stage:matchConfig.stageTrack;
+        playing=playing && !paused && countdown<=0;
         urgent=!world.lesson && fight.mode!=='training' && (fight.suddenDeath || fight.matchCard?.points && fight.clockFrames<=600 ||
           (fight.dogs[0].stocks===1 && fight.dogs[1].stocks===1));
         if(world.lesson || fight.mode==='training') gain*=.55;
       }
     }
     music.update(id,urgent,gain,playing);
-    if(dialogType==='sound-test') refreshAudition();
+    if(audition) refreshAudition();
   }
   function audioReady() {
     if (!settings.sound) return;
@@ -988,6 +990,7 @@
       return;
     }
     if(dialogType==='sound-test')return backFromSoundTest();
+    if(dialogType==='stage-music')return $('music-back').click();
     if(dialogType==='rotation' || dialogType==='tournament')return rotationBack();
     if(dialogType==='fighter-school')return leaveFighterSheet();
     if(dialogType==='dispatch-load')return $('dispatch-load-back').click();
@@ -1091,7 +1094,11 @@
     showDialog(picking ? 'set-pick' : 'arenas', picking ? 'Pick the next arena' : 'Choose arena',
       choice + forms + (description ? '<p>' + (picking ? stageForms[form].name + ' · ' : '') + description + '</p>' : '') +
       '<div class="stage-options" data-form="' + form + '">' + rows.join('') + '</div>'+
-      (room?'<p id="net-pick-ready" role="status"></p><button class="utility" data-do="room-fighter-back">Change fighter</button>':''));
+      (room?'<p id="net-pick-ready" role="status"></p><button class="utility" data-do="room-fighter-back">Change fighter</button>':'')+
+      (!picking && chooseForm?'<div class="dialog-actions"><button class="utility" id="arena-music">Stage music</button></div>':''));
+    if($('arena-music'))$('arena-music').onclick=()=>openStageMusic(current,()=>{
+      chooseArena(false,form);$('arena-music').focus();
+    },form);
     if(room)updateVotes();
     document.querySelectorAll('.stage-option').forEach((el) => {
       drawStageTile(el.querySelector('canvas'), el.dataset.stage,form);
@@ -1938,7 +1945,7 @@
       fetch:true,dropCatchOpening:defend?'defend':'drop',stockCount:3,timeBattle:false,minutes:7,
       coats:[savedCoat(0,settings.p1),savedCoat(1,settings.p2)]},undefined,42);
   }
-  function startMatch(config = settings, random = Math.random, opening, series = null, {visit, resume, leadInFrames = 0, cupRound = null} = {}) {
+  function startMatch(config = settings, random = Math.random, opening, series = null, {visit, resume, leadInFrames = 0, cupRound = null, song} = {}) {
     finishTrial=null;
     roomDraft=null;
     cupAttempt = cupRound;
@@ -2134,6 +2141,20 @@
     $('pause-label').textContent = world.warmupPartner ? 'Warm-up menu' : online.match ? 'Match menu' : 'Pause';
     const position = rehearsal ? visit : resume;
     countdown = position ? position.countdown : world.lesson || config.mode === 'training' || world.suddenDeath || leadInFrames ? 0 : 2.4;
+    if(['solo','local'].includes(config.mode) && !world.lesson && !corner && !spar){
+      const current=matchConfig,stage=world.stage;
+      current.stageTrack=stage;
+      const choose=()=>{
+        if(page!=='match' || matchConfig!==current)return;
+        const library=window.StageMusic;
+        if(position)current.stageTrack=config.stageTrack===null || library.tracks.includes(config.stageTrack)?config.stageTrack:stage;
+        else current.stageTrack=library.tracks.includes(song)?song:library.library(storage).pick(stage);
+      };
+      if(window.StageMusic)choose();
+      else loadDispatch('StageMusic').then(()=>{
+        if(countdown>0 || !music?.bus || music.track!==stage)choose();
+      }).catch(()=>{});
+    } else delete matchConfig.stageTrack;
     if(!position && countdown && world.atStartingMarks?.()){
       const intro={remaining:countdown,seats:[labelFor(0),labelFor(1)],still:false};
       view.entrance=intro;
@@ -2235,6 +2256,7 @@
         'Resume</button><button class="utility" data-do="controls">' +
         icon('keyboard') +
         'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + cameraButton() + '</div>' +
+        (matchConfig.stageTrack!==undefined?'<p id="music-credit">'+(window.YardScore.scores[matchConfig.stageTrack]?.title || 'Quiet arena')+'</p>':'')+
         targetRecap() + (spar?spar.goals(true):'') + (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
           (corner && latestFall()?recoveryButton:'') +
           (corner?'<button class="utility" data-do="corner-practice">Practice · '+(schoolLessons.find(l=>l.id===corner.practice)?.title || $(corner.practice).textContent)+'</button>'+
@@ -5350,6 +5372,7 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
+    StageMusic:'stage-music.js?v=1',
     RecoveryCoach:'recovery-coach.js?v=1', MatchReview:'match-review.js?v=match-film-1',
     StockCall:'stock-call.js?v=1',
     FightCamera:'fight-camera.js?v=1',
@@ -5372,7 +5395,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=tourney-1';
+        link.href='./versus-select.css?v=stage-music-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -6113,48 +6136,33 @@
       document.querySelector('[data-do=dispatch-retry]').focus();
     }
   }
-  function auditionLocation(id) {
-    if(id==='deadletter')return yardChapter.bonus.name;
-    if(arenas[id])return arenas[id].name;
-    return id==='menu'?'Main menu':'Victory';
-  }
   function refreshAudition() {
-    const notice=$('audition-status');
-    if(!notice)return;
+    const p=window.StageMusic.preview, notice=$('audition-status');
     const text=!settings.sound || !settings.volume || !settings.musicVolume ? 'Muted in Options' :
-      !auditionPlaying ? 'Stopped' : music?.finished ? 'Finished' :
+      !p.playing ? 'Stopped' : music?.finished ? 'Finished' :
       audioContext?.state!=='running' ? 'Press Play to enable audio' :
-      auditionUrgent && !music?.urgent ? 'Final-stock mix at the next bar' : auditionUrgent ? 'Final-stock mix' : 'Playing';
-    if(notice.textContent!==text)notice.textContent=text;
+      p.urgent && !music?.urgent ? 'Final-stock mix at the next bar' : p.urgent ? 'Final-stock mix' : 'Playing';
+    if(notice && notice.textContent!==text)notice.textContent=text;
   }
-  function showSoundTest() {
-    const tracks=window.YardScore.scores;
-    auditionPlaying=false;auditionUrgent=false;
-    showDialog('sound-test','Sound Test','<div class="option-list"><label for="audition-track">Track <select id="audition-track">'+
-      Object.values(tracks).map(t=>'<option value="'+t.id+'">'+auditionLocation(t.id)+' · '+t.title+'</option>').join('')+
-      '</select></label><button id="audition-mix" type="button" aria-pressed="false">Final-stock mix</button></div>'+
-      '<p id="audition-status" role="status">Stopped</p><div class="dialog-actions"><button id="audition-play" class="primary" type="button">Play from start</button>'+
-      '<button id="audition-stop" class="utility" type="button">Stop</button><button id="audition-back" class="utility" type="button">Options</button></div>');
-    const select=$('audition-track'),mix=$('audition-mix');
-    select.value=auditionTrack;
-    mix.hidden=!arenas[auditionTrack] && auditionTrack!=='deadletter';
-    const play=()=>{
-      unlockMusic();auditionPlaying=true;music?.restart();updateMusic();refreshAudition();
-    };
-    select.onchange=()=>{
-      auditionTrack=select.value;auditionUrgent=false;mix.hidden=!arenas[auditionTrack] && auditionTrack!=='deadletter';
-      mix.setAttribute('aria-pressed','false');play();
-    };
-    mix.onclick=()=>{
-      auditionUrgent=!auditionUrgent;
-      mix.setAttribute('aria-pressed',String(auditionUrgent));
-      if(!auditionPlaying)play();else updateMusic();
-    };
-    $('audition-play').onclick=play;
-    $('audition-stop').onclick=()=>{auditionPlaying=false;music?.restart();refreshAudition();};
-    $('audition-back').onclick=backFromSoundTest;
-    refreshAudition();
-    select.focus();
+  function playPreview(restart=true){
+    const p=window.StageMusic.preview;
+    if(restart || !p.playing)music?.restart();
+    p.playing=true;unlockMusic();updateMusic();refreshAudition();
+  }
+  function stopPreview(){window.StageMusic.preview.playing=false;music?.restart();updateMusic();refreshAudition();}
+  function openStageMusic(stage=settings.stage,back=()=>{showSoundTest();$('audition-editor')?.focus();},form=lobbyForm()){
+    if(!window.StageMusic || !versusStyled) return waitForDispatch('Stage music',()=>loadVersusPanel('StageMusic'),
+      ()=>openStageMusic(stage,back,form),back);
+    window.StageMusic.editor(stage,{arenas,storage,showDialog,draw:drawStageTile,play:playPreview,stop:stopPreview,back,
+      fight:(stage,song)=>startMatch({...settings,mode:page==='lobby' && settings.mode==='local'?'local':'solo',
+        stage,form,coats:lobbyCoats.slice(),stockCount:3,timeBattle:false},undefined,undefined,null,{song})});
+    updateMusic();refreshAudition();
+  }
+  function showSoundTest(){
+    if(!window.StageMusic)return waitForDispatch('Sound Test',()=>loadDispatch('StageMusic'),showSoundTest,backFromSoundTest);
+    window.StageMusic.soundTest({arenas,bonus:yardChapter.bonus.name,showDialog,play:playPreview,stop:stopPreview,
+      back:backFromSoundTest,editor:stage=>openStageMusic(stage)});
+    updateMusic();refreshAudition();
   }
   function backFromSoundTest(){
     showOptions();
@@ -7781,6 +7789,8 @@
       afterStory = null;
       startMatch({...settings,mode:'training',p1:hash.split('/')[2] || 'pip',p2:'brisket',stage:'nightmail',fetch:false});
       drill('shield',false,'crossup',undefined,{choice:'front',dir:1});
+    } else if (/^#music\/(picnic|laundry|bandstand|nightmail|canal)$/.test(hash)) {
+      showHome(false);openStageMusic(hash.split('/')[1]);
     } else if (hash === '#sound-test') {
       showHome(false);showSoundTest();
     } else if (hash === '#controls') {

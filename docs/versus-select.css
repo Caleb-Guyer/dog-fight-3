@@ -70,3 +70,8 @@ dialog[data-view='tournament'] { width:min(790px,calc(100% - 16px)); }
   .couch-seat { padding:5px; }
   .couch-seat button { min-height:44px; }
 }
+.record-sleeve { display:grid; grid-template-columns:minmax(80px,2fr) minmax(140px,3fr); gap:16px; align-items:center; }
+.record-sleeve canvas { width:100%; border:3px solid #574d59; image-rendering:pixelated; }
+.record-sleeve label { display:block; font:16px var(--pixel); color:#ffdb82; margin:5px 0; }
+.record-sleeve select { width:100%; min-width:0; }
+#music-rotation, #audition-status { font-size:15px; }

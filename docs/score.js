@@ -208,5 +208,5 @@
       }
     }
   }
-  window.YardScore={scores,Player,playStep};
+  window.YardScore={scores,score,Player,playStep};
 })();
