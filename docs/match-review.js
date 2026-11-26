@@ -92,6 +92,30 @@
     });
     return tape;
   }
+  function resumeTape(packed,losses,returning){
+    if(!packed)return new FinishTape();
+    const {catalog,blocks}=packed;
+    const read=span=>{
+      const selected=[];
+      for(let start=span.start;start<span.count;start+=120)selected.push(blocks.get(start));
+      return restore(span,selected);
+    };
+    const tape=read(catalog.finish);
+    tape.observedLosses=losses.length;
+    tape.knockouts=catalog.knockouts.map(span=>{
+      const clip={first:span.first,losses:losses.slice(span.first,span.first+span.losses),tape:read(span)};
+      if(span.follow)clip.returnTape=read(span.follow);
+      if(span.first===returning){
+        const follow=clip.returnTape || new FinishTape();
+        if(!clip.returnTape)follow.from=follow.count=tape.count;
+        // The next recorded input extends the live block already in this return.
+        follow.blocks=follow.blocks.map(b=>tape.blocks.find(live=>live.start===b.start) || b);
+        tape.returning=clip.returnTape=follow;
+      }
+      return clip;
+    });
+    return tape;
+  }
   const request=r=>new Promise((resolve,reject)=>{r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
   async function database() {
     const opening=indexedDB.open('dog-fight-3.replays',1);
@@ -180,5 +204,5 @@
       status.hidden=true;status.textContent='';
     }catch{if(card.isConnected)status.textContent='The replay is unavailable on this device. Your match stats are saved.';}
   }
-  window.MatchReview={cardHTML,save,attach,pack,restore};
+  window.MatchReview={cardHTML,save,attach,pack,restore,resumeTape};
 })();
