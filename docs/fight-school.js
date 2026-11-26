@@ -234,5 +234,13 @@
     if (!pip.hits) return {id:'jab',button:'Practice jabs',reason:'Pip finished without landing a hit. Try a jab when Brisket is within paw’s reach.'};
     return {id:'stock',button:'Practice knockouts',reason:'Practice charging a side smash to finish a stock near the edge.'};
   }
-  window.FightSchool={lessons,Lesson,Corner,cornerLine,readProgress,unfinished,rematchLesson,updateRematch};
+  function reviewLoss(entry,lesson){
+    if(entry?.mode!=='school' || entry.winner!==1 || !entry.replay || entry.card.players[0].kind!=='pip' || entry.card.players[1].kind!=='brisket')return -1;
+    const losses=entry.card.losses,own=l=>l.slot===0 && !l.suddenRound;
+    const matching=losses.findLastIndex(l=>own(l) && (lesson==='return'?l.zone==='bottom':
+      lesson==='jab'?l.lastHit && Object.hasOwn(window.DogFight.throws,l.lastHit.id) && l.frame-l.lastHit.frame<=90:
+      lesson==='guard'?l.lastHit && l.frame-l.lastHit.frame<=90:false));
+    return matching>=0?matching:losses.findLastIndex(own);
+  }
+  window.FightSchool={lessons,Lesson,Corner,cornerLine,readProgress,unfinished,rematchLesson,updateRematch,reviewLoss};
 })();
