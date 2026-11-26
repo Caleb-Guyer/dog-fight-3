@@ -150,7 +150,7 @@ Choose **Adventure → Begin chapter** to play **The Silent Yard**. You play as 
 | The Weigh House · Rival duel | Fight Brisket in a three-stock duel on the suspended scale. Only ring-outs take a stock. |
 | Freight Exchange · Horde | Carry three stocks through three waves. Each crew fields three stocks, for nine enemy ring-outs in all. The last three machines fight together. |
 | Sorting Bridge · Crossing | Strike the west signal, ride the cable ferry and take the freight lift to the east signal. Cable Dock and Crane House save your progress. The optional postmark hangs above the crane approach. |
-| Bell Depot · Boss | Break the Copper Hound’s armor before it takes your three stocks. Its lamp opens after a rush, a stuck stamp or a parry. It charges more often at half armor. |
+| Bell Depot · Boss | Break the Copper Hound’s armor before it takes your three stocks. At half armor it raises a brass bell. Jump the wave, shield the crest, or wait on a shelf. The lamp stays open after the bell strike, giving you time to land a counterattack. |
 
 Winning a fight earns its postmark. Sorting Bridge has a collectible postmark. Clearing each mission opens the next stop. Each combat mission starts you at **three stocks and 0% damage**. Higher damage makes you easier to launch. Crossing a blast boundary costs a stock, and respawning resets your damage. The Copper Hound has an armor meter. **Route map → Continue** restores your saved stop and checkpoint, including the stocks and damage you took into a saved wave. Older checkpoints start you with three fresh stocks. Replay any open mission from the route sheet. Saves from the original three-stop chapter carry forward, including postmarks and unlocked cutscenes.
 

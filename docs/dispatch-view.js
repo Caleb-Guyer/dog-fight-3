@@ -32,7 +32,7 @@
       if (phase === 'defeat') ctx.globalAlpha = Math.max(0, 1 - e.time / e.duration);
       drawFighter(ctx, f, world, time);
     } else {
-      if (phase === 'windup' && !f.stun && f.ground >= 0) {
+      if (phase === 'windup' && e.move !== 'bell' && !f.stun && f.ground >= 0) {
         const width = e.move === 'charge' ? (kind === 'conductor' ? 285 : 178) : f.stats.reach;
         ctx.save();
         ctx.translate(Math.round(f.x), Math.round(f.y));
@@ -62,8 +62,37 @@
       window.DispatchActors.draw(ctx, kind, Math.round(f.x), Math.round(f.y), {
         face: f.face, pose, phase: fraction, time,
       });
+      if (phase === 'windup' && e.move === 'bell') {
+        // A lifting bell and a travelling clapper count down to the strike, even with sound off.
+        const t = Math.min(1, e.time / e.duration), y = -f.stats.height - 7 - Math.round(t * 9);
+        ctx.translate(Math.round(f.x), Math.round(f.y + y));
+        ctx.fillStyle = '#302333';
+        ctx.fillRect(-15, -9, 30, 13); ctx.fillRect(-10, -17, 20, 12);
+        ctx.fillStyle = '#d98344';
+        ctx.fillRect(-8, -15, 16, 11); ctx.fillRect(-13, -7, 26, 6);
+        ctx.fillStyle = '#ffe69c';
+        ctx.fillRect(-6, -14, 4, 8); ctx.fillRect(-13, -3, 26, 3);
+        ctx.fillRect(reduced.matches ? -2 : Math.round(7 * Math.sin(t * 8)) - 2, 1, 5, 4);
+        ctx.fillRect(-15, 10, Math.round(t * 30), 2);
+      }
     }
     ctx.restore();
+  }
+  function drawBellWave(ctx, wave, floor) {
+    for (const face of [-1, 1]) {
+      const crest = Math.round(wave.x + face * wave.radius);
+      if (crest < floor.x1 || crest > floor.x2) continue;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(floor.x1, floor.y - 30, floor.x2 - floor.x1, 34); ctx.clip();
+      ctx.translate(crest, floor.y); ctx.scale(face, 1);
+      ctx.fillStyle = '#332337';
+      ctx.fillRect(-21, -6, 31, 7); ctx.fillRect(-9, -15, 17, 11); ctx.fillRect(-5, -22, 10, 8);
+      ctx.fillStyle = '#e48642';
+      ctx.fillRect(-18, -5, 26, 5); ctx.fillRect(-7, -13, 13, 9); ctx.fillRect(-3, -20, 6, 9);
+      ctx.fillStyle = '#fff0a1';
+      ctx.fillRect(0, -19, 3, 7); ctx.fillRect(3, -12, 3, 9); ctx.fillRect(-26, -3, 6, 2);
+      ctx.restore();
+    }
   }
   function drawHordeDamage(ctx, foes) {
     ctx.save();
@@ -139,6 +168,7 @@
       }
       for (const fx of this.effects) if (fx.behind) drawEffect(ctx, fx);
       const hero = world.dogs[0];
+      if (world.foes[0]?.wavefront) drawBellWave(ctx, world.foes[0].wavefront, world.terrain[0]);
       for (const enemy of world.foes) drawOpponent(ctx, enemy, world, t);
       drawFighter(ctx, hero, world, t);
       if (world.grapple) gripLead(ctx, world.dogs[world.grapple.owner], world.grapple);

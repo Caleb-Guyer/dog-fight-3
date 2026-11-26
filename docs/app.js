@@ -5570,7 +5570,7 @@
     FighterSchool:'fighter-lessons.js?v=tryouts-1',
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=suspend-mission-1', DispatchView:'dispatch-view.js?v=letter-lift-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=bell-wave-1',
     DispatchSuspend:'dispatch-suspend.js?v=1',
   };
   const dispatchLoads=new Map();
@@ -6125,7 +6125,8 @@
       else if (name === 'hoist') dispatchNotice('Gantry catch · Armor damaged');
       else if (name === 'dispatchVictory') dispatchNotice(cupRound ? 'Copper Hound defeated' : 'Mission clear');
       else if (name === 'machineWindup') {
-        tone(e.move === 'charge' ? 240 : 160, e.move === 'charge' ? 390 : 210, 0.18, 0, 'triangle', 0.07);
+        if (e.move === 'bell') { tone(540, 485, 0.22); tone(810, 735, 0.23, 0.36); }
+        else tone(e.move === 'charge' ? 240 : 160, e.move === 'charge' ? 390 : 210, 0.18, 0, 'triangle', 0.07);
       } else if (name === 'machineDown') {
         tone(215, 48, 0.18);
         tone(620, 435, 0.12, 0.1);
