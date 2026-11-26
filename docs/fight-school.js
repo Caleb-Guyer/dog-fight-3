@@ -84,6 +84,8 @@
     opening:['jab','First stock','Close in on Brisket. Release the direction and tap {attack} for a jab.'],
     guard:['guard','Under pressure','Hold {shield} before Brisket’s next swing to block it.'],
     grab:['throw','Brisket is shielding','Get within paw’s reach and tap {grab} to catch him through his shield.'],
+    perch:['platform-below','Brisket is below you','Tap {down} to drop through the bench. Once your paws pass through, aim {down} and tap {attack}.'],
+    perchGrab:['throw','Shield below','Tap {down} to drop beside Brisket. Keep your paws free and tap {grab} as you land.'],
     finish:['stock','At the edge','Face the edge. Hold {side} + {smash}, then release {smash} to launch Brisket.'],
     jump:['return','Air jump available','Steer {side} toward the ledge and tap {jump} for height.'],
     rise:['return','Recover with Fence Hopper','Aim {up} + {special}, then steer {side} toward the ledge.'],
@@ -118,6 +120,9 @@
     }
     if(brisket.stockLift || brisket.stockGuard)return 'landing';
     if(pip.ground<0 || brisket.ground<0 || world.grapple)return '';
+    if(world.terrain[pip.ground]?.thin && brisket.ground===0 && brisket.y>pip.y &&
+        Math.abs(pip.x-brisket.x)<=pip.stats.width+brisket.stats.width+15 && !pip.stun && !pip.attack)
+      return brisket.shield?'perchGrab':'perch';
     const near=Math.abs(pip.y-brisket.y)<60 && Math.abs(pip.x-brisket.x)<110;
     if(near && brisket.shield)return 'grab';
     if(near && brisket.damage>=105){

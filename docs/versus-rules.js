@@ -254,6 +254,8 @@
         '<button class="utility" data-do="lift-fight">Face the returning Rival</button>'+
         '<p>On Bandstand, you return above Rival. Drop as the lift lights up to take the high platform. Ride it to the end and watch for a jab as your last tag fades.</p>'+
         '<button class="utility" data-do="return-perch">Take the top platform</button>'+
+        '<h3>Under the picnic bench</h3><p>Your Rival is overhead. Show Shield early and they can drop to grab you. Shield after they drop to block an aerial. If they land empty, jump or dodge the grab.</p>'+
+        '<button class="utility" data-do="perch-fight">Fight under the bench</button>'+
         '<h3>Make Haymaker miss</h3><p>Brisket has already let his punch go. As Pip, dash left at GO, let the punch pass, then run back in and tap Attack. Switch dogs to see Rival Pip’s timing.</p>' +
         '<div class="dialog-actions"><button class="utility" data-do="dash-back-bait">Dodge the punch as Pip</button>' +
         '<button class="utility" data-do="dash-back-watch">Face Rival Pip as Brisket</button></div>' +
