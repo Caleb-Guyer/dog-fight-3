@@ -16,6 +16,10 @@ async function play(browser,device){
         const p={index:0,id:'Bench controller',mapping:'standard',connected:true,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
         Object.defineProperty(navigator,'getGamepads',{value:()=>[p]});
         window.steer=x=>{p.axes[0]=x;};
+        window.rangeInput=(x,y,smash)=>{
+          p.axes[0]=x;p.axes[1]=y;
+          Object.assign(p.buttons[7],{pressed:smash,value:Number(smash)});
+        };
         window.confirm=on=>Object.assign(p.buttons[0],{pressed:on,value:Number(on)});
       }
     },pad);
@@ -69,6 +73,44 @@ async function play(browser,device){
     assert.equal(await page.locator('#hud .lives[aria-label="5 stocks"]').count(),2);
     assert.match(await page.locator('#match-stage').textContent(),/Canal/);
     await page.reload();await page.locator('[data-try-dog=clover] small').waitFor();
+    await press('[data-try-dog=clover]');await press('[data-try-run="-2"]');
+    await page.clock.runFor(100);
+    assert.match(await page.locator('#school-title').textContent(),/Disc Range/);
+    await press('#school-example');await page.clock.runFor(14000);
+    assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'example-ended',device);
+    const best=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.disc-range.v1')));
+    assert.equal(await best(),null);
+    await press('#school-next');
+    async function throwDisc(pitch,charge){
+      const direction=pitch<0?'up':'down',key=pitch<0?'w':'s';
+      const contacts=[];
+      async function addContact(name){
+        const r=await page.locator('[data-touch='+name+']').boundingBox();
+        contacts.push({id:contacts.length+1,x:r.x+r.width/2,y:r.y+r.height/2});
+        await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:contacts});
+      }
+      if(pad)await page.evaluate(()=>rangeInput(1,0,true));
+      else if(touch){await addContact('right');await addContact('smash');}
+      else{await page.keyboard.down('d');await page.keyboard.down('i');}
+      await page.clock.runFor(80);
+      if(pitch){
+        if(pad)await page.evaluate(y=>rangeInput(1,y,true),pitch);
+        else if(touch)await addContact(direction);
+        else await page.keyboard.down(key);
+      }
+      await page.clock.runFor(charge);
+      if(pad)await page.evaluate(()=>rangeInput(0,0,false));
+      else if(touch)await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      else{await page.keyboard.up('i');await page.keyboard.up('d');if(pitch)await page.keyboard.up(key);}
+      await page.clock.runFor(1250);
+    }
+    await throwDisc(0,100);assert.match(await page.locator('#school-task').textContent(),/1 \/ 3 plates/,device+' level');
+    await throwDisc(-1,830);assert.match(await page.locator('#school-task').textContent(),/2 \/ 3 plates/,device+' high');
+    await throwDisc(1,460);
+    assert.match(await page.locator('#school-task').textContent(),/All three plates · 3 throws/,device+' low');
+    assert.equal((await best()).throws,3);
+    await press('#school-next');
+    assert.match(await page.locator('[data-try-run="-2"]').textContent(),/3 throws/);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
