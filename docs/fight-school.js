@@ -90,7 +90,7 @@
     hop:['return','Second hop available','Release {special}. Aim {up} and tap {special} again while steering {side}.'],
     drift:['return','Drift toward the ledge','Hold {side} to bring Pip back within reach.'],
     hang:['return','Ledge caught','Tap {side} to climb onto the stage, or tap {jump} to jump from the ledge.'],
-    lift:['launch-stock-return','Your next stock','When the lamps turn mint, tap {down} to drop or {jump} to spring off. Leaving early keeps more protection.'],
+    lift:['launch-stock-return','Your next stock','When the lamps turn mint, tap {down} to drop or {jump} to spring off. To replay the stock you lost, choose Retry my stock in Pause.'],
     landing:['launch-stock-catch','Brisket is protected','Make room for his landing. Once his last mail tag goes out, a hit or grab can connect.'],
   };
   function cornerSituation(world){
