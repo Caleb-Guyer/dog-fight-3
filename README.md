@@ -1,5 +1,7 @@
 # Dog Fight 3
 
+In **Solo → CPU**, try two three-stock openings as Pip against Brisket. From the top platform at 110%, steer sideways during the up throw, then air-dodge and aim for open ground. At 80% near the left ledge, Brisket can throw Pip backward for a knockout. Jab at GO to interrupt the grab. Pause and choose **Restart match** to try again. [Play the top platform](https://caleb-guyer.github.io/dog-fight-3/#solo/throw-read/perch) · [Play the left ledge](https://caleb-guyer.github.io/dog-fight-3/#solo/throw-read/edge)
+
 A cartoon platform fighter for one or two players. Play **The Last Dispatch** story adventure, or pick Pip, Brisket, Noodle, or Clover for a three-stock fight on Picnic Table, Laundry Line, Moonbell Bandstand, Night Mail, or Canal Lock.
 
 ## Play
