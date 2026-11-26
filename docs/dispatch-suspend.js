@@ -61,8 +61,10 @@
         const current=read.result;
         const owned=slot.previous?current?.token===slot.previous.token:!current || current.playedAt<slot.began;
         if(!owned){done(false);return;}
-        if(record){headers.put(record.header);runs.put(record,schoolId);}
-        else {headers.delete(schoolId);runs.delete(schoolId);}
+        try{
+          if(record){headers.put(record.header);runs.put(record,schoolId);}
+          else {headers.delete(schoolId);runs.delete(schoolId);}
+        }catch{read.transaction.abort();return;}
         done(true);
       };
     })).then(written=>{
