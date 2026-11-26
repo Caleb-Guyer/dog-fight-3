@@ -4213,6 +4213,30 @@
     const drill = world.trumpPractice;
     const player = world.dogs[0];
     const status = $('trump-status');
+    if (drill.guardSlot!==undefined) {
+      if (name!=='runoffCue') return;
+      const defend=drill.guardSlot===1, guard=world.dogs[drill.guardSlot], move=moves[guard.kit.air.back].label;
+      const outward=drill.side, inward=outward==='left'?'right':'left';
+      const lines={
+        go:defend ? ['Rival is running','Roll or jump before the other dog catches your ledge.'] :
+          ['Dash '+outward,'Run off the lip. Steer '+inward+' as you fall to take the ledge.'],
+        turn:['Steer '+inward,'Release '+outward+' and steer toward the stage to take the occupied ledge.'],
+        bump:defend ? ['Bumped off','Steer '+inward+'. Try to recover after the back air.'] :
+          ['Ledge taken','Press Down + Jump together, then aim '+outward+' and tap Attack.'],
+        aim:['Aim '+outward+' · Attack','Release Down, hold '+outward+' and press Attack. Steer '+inward+' during the swing.'],
+        backAir:[move+' hit',defend?'Steer '+inward+' and use your recovery.':'Steer '+inward+' to land on the stage.'],
+        landed:[defend?'Rival landed the follow-up':move+' · back onstage',defend?'Retry and tap Shield as Rival runs toward you.':'Try the opposite ledge, then turn off half speed.'],
+        escaped:[defend?'Escaped the run-off':'The rival got away','A roll or jump can clear the lip before it changes hands.'],
+        empty:['Ledge taken · no follow-up','Aim away from the stage and tap Attack immediately after the drop jump.'],
+        fell:[defend?'Rival fell':'Lost the stock','Steer back toward the deck as soon as the back air starts.'],
+        holderLost:[defend?'Lost the stock':'Rival fell before the back air','Retry to play the exchange again.'],
+        stranded:['Hit · still offstage','Land on the starting deck to finish the follow-up.'],
+        missed:['Missed the ledge','Start with a full dash. Turn inward as soon as your dog runs off.'],
+      };
+      const [label,tip]=lines[e.phase];
+      status.dataset.result=e.phase; status.textContent=label; $('recovery-tip').textContent=tip;
+      return;
+    }
     let result, label, tip;
     if (name === 'ledgeTrump') {
       if (e.target === player) {
@@ -4639,11 +4663,15 @@
         'You’re Noodle at 90%. Tap Shield when Pip’s Back Heel hits. Hold Jump at the wall to kick away.';
     } else if (trump) {
       const defend = pattern === 'defend';
-      $('trump-take').setAttribute('aria-pressed', String(!defend));
-      $('trump-defend').setAttribute('aria-pressed', String(defend));
+      for (const role of ['take','defend','runoff','escape'])
+        $('trump-'+role).setAttribute('aria-pressed',String(pattern===role));
+      const runoff=world.trumpPractice.guardSlot!==undefined;
+      $('trump-speed').hidden=$('trump-fight').hidden=!runoff;
+      $('trump-speed').setAttribute('aria-pressed',String(!!world.trumpPractice.slow));
       $('trump-status').dataset.result = 'ready';
       $('trump-status').textContent = (practiceSide === 'left' ? 'Left' : 'Right') + ' ledge';
-      message = defend
+      message = runoff ? (pattern==='escape'?'Tap Attack to start. You have the ledge. Roll or jump before Rival grabs it.' :
+        'Tap Attack to start. Dash '+practiceSide+' off the stage. Guided practice pauses for the turn, the drop jump and the back air.') : defend
         ? 'The rival is coming. Wait to feel the bump, or tap Shield to roll before they catch the lip.'
         : 'The rival has the ledge. Drift ' +
           (practiceSide === 'left' ? 'right' : 'left') +
@@ -4830,7 +4858,7 @@
     ['Recovery','Ledge recovery','ledge',['training','right','attack-training']],
     ['Recovery','Ledge timing','climb',['escape','trap','rise','coverRise','patience']],
     ['Recovery','Ledge roll','roll',['guard','read','scout']],
-    ['Recovery','Contested ledge','trump',['take','defend']],
+    ['Recovery','Contested ledge','trump',['take','defend','runoff','escape']],
     ['Recovery','Stage techs & wall jumps','wall',['training','impact','ceiling','pip','noodle']],
     ['Movement','Free practice','',['reset-training','partner-training']],
   ];
@@ -4854,6 +4882,8 @@
     'air-lastDodge':'recovery low wide directional air dodge edgeguard',
     'air-interrupted':'up special recovery hit reset return edgeguard',
     'air-highReturn':'offstage high recovery short hop forward aerial edgeguard rival',
+    'trump-runoff':'ledge trump run off back aerial edgeguard follow up',
+    'trump-escape':'ledge trump run off roll jump avoid edgeguard',
     'partner-training':'local two players sparring', 'reset-training':'free training dummy',
     'wall-ceiling':'ceiling tech under stage recovery Noodle Pip',
   };
@@ -5106,6 +5136,20 @@
   $('trump-training').onclick = () => drill('trump', false, world?.trumpPractice?.role || 'take');
   $('trump-take').onclick = () => drill('trump', false, 'take');
   $('trump-defend').onclick = () => drill('trump', false, 'defend');
+  for (const role of ['runoff','escape']) $('trump-'+role).onclick=()=>drill('trump',false,role);
+  $('trump-speed').onclick=()=>{
+    const d=world.trumpPractice;
+    d.slow=!d.slow; $('trump-speed').setAttribute('aria-pressed',String(d.slow));
+  };
+  $('trump-fight').onclick=()=>{
+    const {side,guardSlot}=world.trumpPractice;
+    startRunoffFight(side,world.dogs[1-guardSlot].kind,world.dogs[guardSlot].kind,world.stage,world.form);
+  };
+  function startRunoffFight(side,p1,p2,stage,form) {
+    leaveOnline(); afterStory=null;
+    startMatch({...settings,mode:'solo',p1,p2,stage,form,cpuLevel:'rival',stockCount:3,timeBattle:false,
+      fetch:false,minutes:7,runoffTrump:side},undefined,42);
+  }
   $('trump-side').onclick = () => {
     practiceSide = practiceSide === 'left' ? 'right' : 'left';
     drill('trump', false, world.trumpPractice.role);
@@ -7377,7 +7421,7 @@
         if (frameLab.mode === 'frozen') {
           accumulator = frameLab.pending > 0 ? 1 / 60 : 0;
           if (frameLab.pending > 0) frameLab.pending--;
-        } else accumulator += world.lesson?.example || world.wallPractice?.heavy || world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow || world.airPractice?.slow ? dt / 2 : dt;
+        } else accumulator += world.lesson?.example || world.wallPractice?.heavy || world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.trumpPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow || world.airPractice?.slow ? dt / 2 : dt;
         while (accumulator >= 1 / 60 && world.end === null) {
           const slot = world.trainingPlayerSlot;
           const lesson=world.lesson;
@@ -7518,6 +7562,8 @@
         '<div class="dialog-actions"><button class="primary" data-do="rehearse">Practice this position</button>' +
         '<button class="utility" data-do="resume">Play the stock</button></div>');
       document.querySelector('[data-do=rehearse]').focus();
+    } else if (hash === '#solo/runoff-trump') {
+      startRunoffFight('left','pip','brisket','nightmail','original');
     } else if (hash === '#solo/ledge-trap') {
       leaveOnline();
       afterStory = null;
@@ -7808,6 +7854,11 @@
       afterStory = null;
       startMatch({ ...settings, mode: 'training', p1: 'brisket', p2: 'pip', stage: 'bandstand', fetch: false });
       drill('platform', false, 'shield-drop');
+    }
+    else if (hash === '#training/runoff-trump' || hash === '#training/escape-runoff') {
+      afterStory=null; practiceSide='left';
+      startMatch({...settings,mode:'training',p1:'pip',p2:'brisket',stage:'nightmail',fetch:false});
+      drill('trump',false,hash==='#training/runoff-trump'?'runoff':'escape');
     }
     else if (hash === '#training/beat-the-edgeguard') {
       afterStory = null;

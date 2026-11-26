@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="./online.css?v=room-rules-1" />
     <script defer src="./fighters-art.js?v=fast-cels-1"></script>
     <script defer src="./arena-art.js?v=counterweights-1"></script>
-    <script defer src="./engine.js?v=counterweights-1"></script>
+    <script defer src="./engine.js?v=runoff-trump-1"></script>
     <script defer src="./fight-records.js?v=hit-confirm-1"></script>
     <script defer src="./fight-school.js?v=rematch-target-1"></script>
     <script defer src="./arcade.js?v=continue-1"></script>
@@ -26,7 +26,7 @@
     <script defer src="./render.js?v=counterweights-1"></script>
     <script defer src="./dispatch-script.js?v=letter-lift-1"></script>
     <script defer src="./online.js?v=counterweights-1"></script>
-    <script defer src="./app.js?v=fetch-catch-1"></script>
+    <script defer src="./app.js?v=runoff-trump-1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -609,7 +609,11 @@
             <button id="trump-defend" type="button" class="utility" aria-pressed="false">
               Defend the ledge
             </button>
+            <button id="trump-runoff" type="button" class="utility" aria-pressed="false">Run-off back air</button>
+            <button id="trump-escape" type="button" class="utility" aria-pressed="false">Escape the run-off</button>
             <button id="trump-side" type="button" class="utility">Switch ledge</button>
+            <button id="trump-speed" type="button" class="utility" aria-pressed="true" hidden>Guided · half speed</button>
+            <button id="trump-fight" type="button" class="utility" hidden>Face Rival · 3 stocks</button>
           </span>
           <button id="launch-training" type="button" class="utility">Launch practice</button>
           <span id="launch-patterns" role="group" aria-label="Launch and knockdown drills" hidden>

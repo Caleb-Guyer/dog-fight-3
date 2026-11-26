@@ -2842,6 +2842,7 @@
         this.setLedgeTrap({index:0, left:true, x:floor.x1, y:floor.y});
       }
       if (config.highReturn && this.mode === 'solo') this.placeHighReturn(config.highReturn);
+      if (config.runoffTrump && this.mode === 'solo') this.placeRunoffTrump(config.runoffTrump,1);
       if(config.scoutedRoll && this.mode==='solo' && this.cpuLevel==='rival'){
         const left=config.scoutedRoll.side!=='right', floors=this.terrain.filter(p=>!p.thin);
         const floor=left?floors[0]:floors.at(-1);
@@ -2904,6 +2905,7 @@
         if (memory[key] !== undefined) this.bot[key] = memory[key];
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
+      if (this.bot.runoff && (f.index===1 || this.bot.runoff.phase!=='home')) this.bot.runoff=null;
       if (this.matchCard) this.matchCard.players[f.index].lastHit = null;
       if (fromKO && (this.mode === 'solo' || this.warmupPartner==='spar')) {
         this.bot.pressure = null;
@@ -4909,7 +4911,24 @@
       const reach=Math.min(climber.kit.ledgeRoll.distance*.73,(floor.x2-floor.x1)/2);
       Object.assign(guard,{x:edge.x+inward*reach,y:edge.y,ground:edge.index,face:-inward,vx:0,vy:0});
     }
+    placeRunoffTrump(side,guardSlot) {
+      const floors=this.terrain.filter(p=>!p.thin), left=side==='left', floor=left?floors[0]:floors.at(-1);
+      const edge={index:this.terrain.indexOf(floor),left,x:left?floor.x1:floor.x2,y:floor.y};
+      const guard=this.dogs[guardSlot], holder=this.dogs[1-guardSlot], inward=left?1:-1;
+      this.hangLedge(holder,edge);
+      holder.ledgeTime=20/60;
+      holder.invuln=Math.max(0,holder.invuln-holder.ledgeTime);
+      Object.assign(guard,{x:edge.x+inward*62,y:edge.y,ground:edge.index,face:-inward,vx:0,vy:0});
+      return edge;
+    }
     resetLedgeTrumpPractice(role = 'take', side = 'left') {
+      if (role==='runoff' || role==='escape') {
+        const slow=this.trumpPractice?.slow ?? true, guardSlot=role==='escape'?1:0;
+        this.resetTraining();
+        const edge=this.placeRunoffTrump(side,guardSlot);
+        this.trumpPractice={role,side,edge,guardSlot,slow,phase:'ready'};
+        return;
+      }
       const edge = this.resetTraining(side);
       const defender = role === 'defend';
       const holder = this.dogs[defender ? 0 : 1];
@@ -4929,6 +4948,11 @@
     }
     trumpPracticeInput() {
       const drill = this.trumpPractice;
+      if (drill.guardSlot!==undefined) {
+        if (drill.guardSlot===1 && drill.phase!=='done')
+          return this.runoffTrumpInput(this.dogs[1],this.dogs[0]) || idleInput;
+        return idleInput;
+      }
       if (drill.role !== 'defend' || drill.phase !== 'approach') return idleInput;
       const dummy = this.dogs[1];
       const dir = drill.edge.left ? 1 : -1;
@@ -4942,6 +4966,21 @@
       }
       const dx = drill.edge.x - dir * 9 - dummy.x;
       return { ...idleInput, x: clamp((dx * 6 - dummy.vx * 0.5) / dummy.stats.speed, -1, 1) };
+    }
+    checkRunoffPractice(out) {
+      const d=this.trumpPractice, guard=this.dogs[d.guardSlot], holder=this.dogs[1-d.guardSlot];
+      if (d.phase==='done') return;
+      let result;
+      if (out.includes(guard)) result='fell';
+      else if (d.hit && guard.ground===d.edge.index) result='landed';
+      else if (out.includes(holder) && !d.hit) result='holderLost';
+      else if (!d.took && !holder.ledge && (holder.ground>=0 || holder.floorAction?.edge)) result='escaped';
+      else if (d.took && !d.hit && guard.ground>=0) result='empty';
+      else if (this.time-d.start>3) result=d.hit?'stranded':d.took?'empty':'missed';
+      if (result) {
+        d.phase='done'; d.outcome=result;
+        this.emit('runoffCue',{phase:result,f:guard});
+      }
     }
     finishRollPractice(outcome) {
       const drill = this.rollPractice;
@@ -5935,9 +5974,39 @@
         this.emit('wallCue', { f: this.dogs[0] });
       }
       if (this.trumpPractice?.phase === 'ready') {
-        if (!(Math.abs(input1.x) > 0.2 || input1.jump || input1.shield || input1.special || input1.attack))
+        const d=this.trumpPractice;
+        if (d.guardSlot!==undefined) {
+          if (!input1.attack && !input1.tapped?.attack) return;
+          d.start=this.time; d.cueHeld=true;
+          this.emit('runoffCue',{phase:'go',f:this.dogs[d.guardSlot]});
+        } else if (!(Math.abs(input1.x) > 0.2 || input1.jump || input1.shield || input1.special || input1.attack))
           return;
         this.trumpPractice.phase = 'approach';
+      }
+      if (this.trumpPractice?.cueHeld) {
+        this.trumpPractice.cueHeld=!!input1.attack;
+        input1={...input1,attack:false,tapped:{...input1.tapped,attack:false}};
+      }
+      const runoff=this.trumpPractice;
+      if (runoff?.guardSlot===0 && runoff.slow && runoff.phase!=='done') {
+        const f=this.dogs[0], inward=runoff.edge.left?1:-1;
+        if (!runoff.turned && !runoff.took && f.ground<0 && f.vy>=0 && Math.abs(f.y-runoff.edge.y)<8 &&
+            (runoff.edge.x-f.x)*inward>5) {
+          if (runoff.phase!=='turn') this.emit('runoffCue',{phase:'turn',f});
+          runoff.phase='turn';
+          if (input1.x*inward<=.45) return;
+          runoff.turned=true; runoff.phase='approach';
+        }
+        if (runoff.phase==='caught') {
+          if (input1.y<=.5 || !(input1.jump || input1.tapped?.jump)) return;
+          runoff.phase='jumping';
+        } else if (runoff.phase==='jumping' && !this.dogs[0].ledge) {
+          if (!runoff.prompted) {
+            runoff.prompted=true; this.emit('runoffCue',{phase:'aim',f:this.dogs[0]});
+          }
+          if (!(input1.attack || input1.tapped?.attack || input1.aimStick || input1.tapped?.aimStick)) return;
+          runoff.phase='swing';
+        }
       }
       if (this.rollPractice?.phase === 'ready') {
         if(this.rollPractice.pattern==='scout'){
@@ -6102,6 +6171,7 @@
         this.updateBall(dt);
       const inset = this.blastInset();
       const out = this.dogs.filter(f => !f.absent && blastZone(f.x, f.y, this.stageWidth, inset));
+      if (this.trumpPractice?.guardSlot!==undefined) this.checkRunoffPractice(out);
       if(combo?.source==='throwChase' && combo.thrown && !combo.outcome){
         const rival=this.dogs[1];
         if(out.length || rival.ground>=0 || rival.ledge){
@@ -7987,6 +8057,9 @@
       this.emit('ledge', { f, protectedCatch, guardFrames, trump });
       if (trump)
         this.emit('ledgeTrump', { f, target: rival, edge, dir: inward, point: { x: edge.x, y: edge.y } });
+      if (trump && drill?.guardSlot===f.index && drill.phase!=='done' && sameLedge(edge,drill.edge)) {
+        drill.took=this.time; drill.phase='caught'; this.emit('runoffCue',{phase:'bump',f});
+      }
     }
     releaseLedge(f, slipped) {
       const edge = f.ledge;
@@ -9358,6 +9431,11 @@
       )
         this.trumpPractice.phase = 'intercepted';
       const timing = aerialHitTiming(use, move);
+      const runoff=this.trumpPractice;
+      if (runoff?.took && runoff.phase!=='done' && owner.index===runoff.guardSlot && moveId===owner.kit.air.back &&
+          this.time-runoff.took<=.55 && !runoff.hit) {
+        runoff.hit=true; this.emit('runoffCue',{phase:'backAir',f:owner});
+      }
       this.emit('hit', { f: target, owner, speed, name, moveId, face, point, emphatic, power, damage: applied, timing,
         meteor: !!target.tumble?.meteor, recoveryRestored });
       const breakaway = this.launchPractice;
@@ -10506,6 +10584,40 @@
       }
       return null;
     }
+    runoffTrumpInput(f,foe) {
+      const edge=foe.ledge;
+      let plan=this.bot.runoff;
+      if (!plan) {
+        if (!edge || foe.ledgeTime<18/60 || f.ground!==edge.index || f.floorAction || f.attack || f.command ||
+            f.charge>=0 || f.shield || f.shieldDrop || f.shieldStun || f.impactLag || f.stun || f.grip ||
+            f.jumpSquat || f.landingLag || f.clashRecoil || f.stockLift || f.respawning) return null;
+        const inward=edge.left?1:-1, gap=(f.x-edge.x)*inward;
+        if (gap<12 || gap>90 || f.face!==-inward || this.terrain.some(p=>!p.thin && (edge.left?p.x1<edge.x:p.x2>edge.x))) return null;
+        plan=this.bot.runoff={edge,inward,phase:'run',until:this.time+1.4};
+      }
+      if (f.stun || f.tumble || f.grip || f.wallAction || f.stockLift || f.floorAction || this.time>plan.until ||
+          (plan.phase==='run' && f.ground>=0 && !sameLedge(edge,plan.edge)) ||
+          (plan.phase==='home' && (f.ground>=0 || f.ledge))) {
+        this.bot.runoff=null; return null;
+      }
+      const dir=plan.inward;
+      if (plan.phase==='run') {
+        if (f.ledge) {
+          if (!sameLedge(f.ledge,plan.edge) || !foe.ledgeTrump) {this.bot.runoff=null;return null;}
+          plan.phase='swing';
+          return {...idleInput,y:1,jump:true,tapped:{jump:true}};
+        }
+        if (f.ground<0) return {...idleInput,x:dir};
+        // A walk stops at the lip. Reset the stick if a fresh dash flick is needed.
+        return !f.run && f.prev.x*dir<-.55 ? idleInput : {...idleInput,x:-dir};
+      }
+      if (plan.phase==='swing') {
+        plan.phase='home';
+        return {...idleInput,x:dir,jump:true,aimStick:true,smashX:-dir,tapped:{aimStick:true}};
+      }
+      if (f.y>plan.edge.y+36 && f.vy>=0) {this.bot.runoff=null;return null;}
+      return {...idleInput,x:dir,jump:f.vy<0};
+    }
     rivalEdgeHop(f, foe, floor, left, right) {
       const plan = this.bot.edgeHop;
       if (plan) {
@@ -11154,6 +11266,8 @@
         if(forecast)return forecast;
         const trap = this.ledgeSmashInput(f,foe,brain);
         if (trap) return trap;
+        const runoff=this.runoffTrumpInput(f,foe);
+        if (runoff) return runoff;
         const punish = this.shieldPunishInput(f,foe);
         if (punish) return punish;
         if (f.floorAction?.type === 'spotDodge') {
