@@ -236,7 +236,7 @@
   }
   document.querySelectorAll('i[data-icon]').forEach((el) => (el.innerHTML = svg(el.dataset.icon)));
   const {portrait,coatNames} = window.DogArt;
-  const modes = { solo: 'Solo', local: 'Local versus', training: 'Training' };
+  const modes = { solo: 'Solo', local: 'Local versus', training: 'Training', parcel:'Parcel Punt' };
   const settings = {
     stage: 'picnic',
     stageForm: 'original',
@@ -354,7 +354,7 @@
         else if(world.finished==='fallen')id=null;
         else playing=playing && !paused;
       } else if(fight.end!==null){
-        id=dialogType && fight.endReason!=='fall' && fight.dogs[fight.end] ? 'win-'+fight.dogs[fight.end].kind : null;
+        id=dialogType && fight.endReason!=='fall' && fight.endReason!=='expired' && fight.dogs[fight.end] ? 'win-'+fight.dogs[fight.end].kind : null;
       } else {
         id=fight.stage;playing=playing && !paused && countdown<=0;
         urgent=!world.lesson && fight.mode!=='training' && (fight.suddenDeath || fight.matchCard?.points && fight.clockFrames<=600 ||
@@ -391,6 +391,7 @@
     oscillator.stop(now + length + 0.014);
   }
   function sound(name, detail = {}) {
+    if(name==='parcelLaunch'){tone(330,740,.18,0,'triangle',.09);tone(640,960,.12,.06,'sine',.06);return;}
     if (name === 'ringBell') {
       const pitch=[392,440,494,587,659,784][detail.count-1];
       tone(pitch,pitch,.19,0,'sine',.14);
@@ -997,8 +998,8 @@
     if (dialogType==='records') {
       dismiss(); $('home-records').focus({preventScroll:true}); return;
     }
-    if (dialogType==='bell-result') return;
-    if (dialogType==='bells' || dialogType==='bells-loading') {
+    if (dialogType==='bell-result' || dialogType==='parcel-result') return;
+    if (dialogType==='bells' || dialogType==='bells-loading' || dialogType==='parcel-sheet') {
       dismiss();
       $('home-bells').focus({preventScroll:true});
       return;
@@ -1378,6 +1379,15 @@
     return '';
   }
   function updateHUD() {
+    if(world.mode==='parcel'){
+      const clock=$('match-clock'),badge=$('match-set'),time=world.clock(),label=world.label();
+      if(clock.textContent!==time){
+        clock.textContent=time;clock.setAttribute('aria-label',world.phase==='prep'?'Time left':'Distance');
+        clock.classList.toggle('urgent',world.phase==='prep' && world.matchFrames>=420);
+      }
+      if(badge.textContent!==label)badge.textContent=label;
+      return;
+    }
     if (world.bells) {
       const clock=$('match-clock'), count=$('match-set');
       const time=window.BellBreak.formatTime(world.matchFrames,1);
@@ -1514,7 +1524,28 @@
   let matchConfig, soloSeed, localSet = null, practiceFight = null, corner=null, spar=null;
   const schoolRuns=new WeakMap();
   let finishTape=null, clipScreen=null, victoryShot=null, finishTrial=null;
-  let bellChoice='pip', bellLoad;
+  let bellChoice='pip', bellLoad, parcelChoice='pip';
+  function stadiumTabs(parcel){
+    return '<div class="dialog-actions stadium-events" role="group" aria-label="Stadium event">'+
+      '<button class="utility" data-do="bells-sheet" aria-pressed="'+!parcel+'">Bell Break</button>'+
+      '<button class="utility" data-do="parcel-sheet" aria-pressed="'+parcel+'">Parcel Punt</button></div>';
+  }
+  function parcelSheet(kind=parcelChoice){
+    if(!Object.hasOwn(fighters,kind))return;
+    if(page!=='home')showHome(false);
+    if(!window.ParcelPunt)return waitForDispatch('Parcel Punt',()=>loadDispatch('ParcelPunt'),()=>parcelSheet(kind),showHome);
+    parcelChoice=kind;
+    showDialog('parcel-sheet','Parcel Punt',stadiumTabs(true)+window.ParcelPunt.sheet(kind,id=>portrait(id,savedCoat(0,id))));
+    const device=promptDevice(getPads());
+    $('parcel-binding').textContent=device===2?'Hold Smash, aim sideways, then release.':
+      'Side smash · Hold '+(device===1?padFor(0,'smash'):keyFor(0,'smash'))+' with a sideways aim, then release.';
+    window.ParcelPunt.preview($('parcel-map'),kind,savedCoat(0,kind));
+    document.querySelector('[data-do=parcel-start]').focus();
+  }
+  function parcelResult(){
+    const run=world;
+    window.ParcelPunt.showResult(run,showDialog,announce,()=>world===run && dialogType==='parcel-result');
+  }
   async function bellSheet(kind=bellChoice) {
     if (!Object.hasOwn(fighters,kind)) return;
     if (page!=='home') showHome(false);
@@ -1537,7 +1568,7 @@
     }
     bellChoice=kind;
     const device=getPads().length?1:matchMedia('(pointer:coarse)').matches?2:0;
-    showDialog('bells','Bell Break',window.BellBreak.courseSheet(kind,id=>portrait(id,savedCoat(0,id))));
+    showDialog('bells','Bell Break',stadiumTabs(false)+window.BellBreak.courseSheet(kind,id=>portrait(id,savedCoat(0,id))));
     $('bell-bindings').textContent=device===2 ? 'Tap Jump, then Attack to strike in the air.' :
       'Jump · '+schoolHint('platform',device)+'     Attack · '+schoolHint('jab',device);
     window.BellBreak.preview($('bell-map'),kind,savedCoat(0,kind));
@@ -1970,7 +2001,7 @@
     view = resume?.view || new FightView($('blast-radar'));
     showContactBoxes(false);
     view.shakeEnabled = settings.shake;
-    const Match = config.mode==='targets' ? window.BellBreak.Run : Battle;
+    const Match = config.mode==='targets' ? window.BellBreak.Run : config.mode==='parcel'?window.ParcelPunt.Run:Battle;
     world = resume?.battle || new Match({...config, rivalRead:series?.openingRead}, (name, e) => {
       world?.lesson?.contact(name,e);
       corner?.target?.contact(name,e,world);
@@ -1979,6 +2010,7 @@
       sound(name, e);
       if (name==='ringBell') announce(e.count+' of '+world.bells.length+' bells');
       if (name==='win' && world?.bells) world.saved=window.BellBreak.saveBellTime(world);
+      if(name==='win' && world?.mode==='parcel')world.saved=window.ParcelPunt.save(world);
       if (world?.launchPractice && e.f?.index === 0) launchFeedback(name, e);
       if (world?.meteorPractice && e.f?.index === 0) meteorFeedback(name, e);
       if (world?.survivalPractice && e.f?.index === 0) survivalFeedback(name, e);
@@ -2082,8 +2114,8 @@
       badge.textContent=online.phase==='room'?'Room '+online.code:'Quickplay · Searching';
       badge.setAttribute('aria-label',badge.textContent);
     }
-    if (world.bells) {
-      $('match-stage').textContent=world.course.name;
+    if (world.bells || world.mode==='parcel') {
+      $('match-stage').textContent=world.bells?world.course.name:'Sorting Yard';
       $('match-set').hidden=$('match-clock').hidden=false;
       $('match-set').removeAttribute('aria-label');
       $('match-clock').setAttribute('aria-label','Course time');
@@ -2146,6 +2178,9 @@
     if(finishTrial)return showTrialPause();
     if (page !== 'match' || !world || world.end !== null) return;
     if(world.warmupPartner)return showWarmupMenu();
+    if(world.mode==='parcel'){
+      window.ParcelPunt.pause(world,showDialog);return;
+    }
     if (world.bells) {
       showDialog('pause',world.course.name+' paused','<p>'+world.cleared+' of six bells · '+window.BellBreak.formatTime(world.matchFrames)+
         '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button>'+
@@ -2668,6 +2703,7 @@
     announce(title + '. ' + name(winner) + ' wins. Set score ' + set.score.join(' to '));
   }
   function showResult() {
+    if(world.mode==='parcel')return parcelResult();
     if (world.bells) return bellResult();
     const result = online.match?.confirmedWorld || world;
     recordFight(result);
@@ -2877,6 +2913,10 @@
       return;
     }
     if (action==='bells-start') return startBells();
+    const parcelDog=e.target.closest('[data-parcel-dog]');
+    if(parcelDog){parcelSheet(parcelDog.dataset.parcelDog);document.querySelector('[data-parcel-dog][aria-pressed=true]').focus();return;}
+    if(action==='parcel-sheet')return parcelSheet();
+    if(action==='parcel-start')return startMatch({mode:'parcel',p1:parcelChoice,p2:'brisket',stage:'nightmail',coats:[savedCoat(0,parcelChoice),0]},seededRandom(37));
     if (action==='bells-sheet') return bellSheet();
     if (action==='watch-finish') return showFinishReplay();
     if(action==='ko-replays')return showKnockouts(dialogType==='pause'?'pause':'result');
@@ -5272,7 +5312,7 @@
     DispatchCovers:'dispatch-covers.js?v=night-mail-1', DispatchFilm:'dispatch-film.js?v=night-mail-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=bell-wave-1', DispatchView:'dispatch-view.js?v=bell-wave-1',
-    DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=1',
+    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=first-stock-1', PracticeDirectory:'practice-directory.js?v=1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -7586,6 +7626,8 @@
     } else if (hash==='#records') {
       showHome(false);
       showRecords();
+    } else if (hash==='#parcel-punt' || (hash==='#parcel-punt/'+arena && Object.hasOwn(fighters,arena))){
+      showHome(false);parcelSheet(arena || 'pip');
     } else if (hash==='#bells' || (hash==='#bells/'+arena && Object.hasOwn(fighters,arena))) {
       showHome(false);
       bellSheet(arena || 'pip');

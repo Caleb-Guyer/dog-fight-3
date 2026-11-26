@@ -2582,6 +2582,7 @@
       }
     }
     draw(canvas, world, dt, time, confirmed = world) {
+      if(world.mode==='parcel')return window.ParcelPunt.draw(this,canvas,world,dt);
       const resized = this.fitCanvas(canvas);
       const { width, height } = canvas;
       const ctx = canvas.getContext('2d'),

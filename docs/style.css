@@ -1611,3 +1611,5 @@ dialog[data-view='moves'] {
     scroll-behavior: auto !important;
   }
 }
+
+.stadium-events [aria-pressed='true'] { border-color: var(--gold, #f0bd67); box-shadow: inset 0 -3px #cf984b; }
