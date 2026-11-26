@@ -115,6 +115,54 @@
     ctx.restore();
   }
   class DispatchView extends FightView {
+    missionCues({tone,sound,dispatchNotice,stockLabel,mission,sideRoute,cupRound,unlockLift,stored,rivalName}){
+      return (name,e)=>{
+        this.event(name,e);
+        if (name === 'dispatchCheckpoint') {
+          tone(485, 735, 0.12);
+          tone(735, 980, 0.13, 0.12);
+          dispatchNotice(stored() ? 'Checkpoint saved' : 'Checkpoint reached');
+        } else if (name === 'dispatchStamp') {
+          if (cupRound) return;
+          tone(760, 1150, 0.09);
+          dispatchNotice(unlockLift?'Postmark collected · Dead Letter Lift unlocked':'Postmark collected');
+        } else if (name === 'dispatchSignal') {
+          tone(330, 660, 0.19);
+          dispatchNotice(e.name + ' raised');
+        } else if (name === 'dispatchWave') {
+          tone(420, 570, 0.12);
+          if (sideRoute) dispatchNotice(mission.stops[e.wave-1]+' · '+rivalName());
+          else if (mission.rules === 'horde') dispatchNotice('Wave ' + e.wave);
+        } else if (name === 'ko') {
+          sound(name, e);
+          dispatchNotice(e.f.stats.name + (e.remaining ? ' · ' + stockLabel(e.remaining) + ' left' : ' out'));
+        } else if (name === 'stockTie') dispatchNotice('Tiebreak · One stock each');
+        else if (name === 'hoist') dispatchNotice('Gantry catch · Armor damaged');
+        else if (name === 'dispatchVictory') dispatchNotice(cupRound ? 'Copper Hound defeated' : 'Mission clear');
+        else if (name === 'machineWindup') {
+          if (e.move === 'bell') { tone(540, 485, 0.22); tone(810, 735, 0.23, 0.36); }
+          else tone(e.move === 'charge' ? 240 : 160, e.move === 'charge' ? 390 : 210, 0.18, 0, 'triangle', 0.07);
+        } else if (name === 'machineDown') {
+          tone(215, 48, 0.18);
+          tone(620, 435, 0.12, 0.1);
+        } else if (name === 'machineSwing') tone(135, 55, 0.11);
+        else sound(name, e);
+      };
+    }
+    static fallPanel(world,fightStocks,showDialog,stockLabel){
+      showDialog(
+        'dispatch-fall',
+        world.bridge ? 'Runner down' : 'Out of stocks',
+        '<p>Restart at ' + (world.layout.checkpoints[world.checkpoint - 1]?.name || world.layout.name) +
+          (world.bridge ? '.' : ' with ' + stockLabel(world.atCheckpoint?.stocks ?? fightStocks) + ' at ' +
+          Math.floor(world.atCheckpoint?.damage || 0) + '%.') +
+          '</p><div class="dialog-actions"><button class="primary" data-do="dispatch-retry">Retry</button>' +
+          (!world.bridge && world.checkpoint ? '<button class="utility" data-do="dispatch-rematch">Restart mission</button>' : '') +
+          '<button class="utility" data-do="route">Route map</button></div>',
+        false,
+      );
+      document.querySelector('[data-do=dispatch-retry]').focus();
+    }
     static updateScoreboard(world,recovery,order,marks,{$,tenth,showPercent,showStocks,recoveryStrip}) {
       const hero=world.dogs[0], foes=world.foes, lead=foes[0];
       const boss=world.layout.rules==='boss', horde=world.layout.rules==='horde';

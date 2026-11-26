@@ -3308,6 +3308,7 @@
 
   // The supporting foot stays planted while the striking limb follows the player's aim.
   const tiltLimbs = {
+    cloverLineDrive: { fistY:14, shoulderY:4, fistTurn:22, torsoTurn:8, headTurn:5, rearY:-5 },
     pipStampKick: { rightY:10, frontKneeY:4, rightFootTurn:-23, torsoTurn:4, headTurn:3 },
     brisketGateCheck: { fistY:12, shoulderY:2, fistTurn:19, bodyY:2, headTurn:4 },
     noodleKnotPoke: { fistY:8, shoulderY:2, fistTurn:18, headTurn:4 },

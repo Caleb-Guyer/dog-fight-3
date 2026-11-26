@@ -353,7 +353,85 @@
       ctx.restore();
     }
   }
-  const makeTrial=(index,world,storage)=>index===-1?new Shuttle(world,storage):index===4?new DownAirTrial(world):index<2?new Trial(index,world):new SpecialTrial(index,world);
+  const rangeKey='dog-fight-3.disc-range.v1';
+  function rangeBest(storage){
+    try{
+      const best=JSON.parse(storage?.getItem(rangeKey));
+      if(Number.isInteger(best?.throws) && best.throws>=3 && best.throws<=6 && Number.isSafeInteger(best.frames) && best.frames>0)return best;
+    }catch{}
+    return null;
+  }
+  class DiscRange {
+    constructor(world){
+      this.course='clover';this.index=-2;this.id='disc-range';
+      this.ticks=0;this.throws=0;this.flights=[];this.breaks=[];this.done=this.missed=false;
+      const bench=world.terrain[1];
+      this.x=Math.round((bench.x1+bench.x2)/2);this.y=bench.y;
+      Object.assign(world.dogs[0],{x:this.x,y:this.y,ground:1,face:1,vx:0,vy:0});
+      world.dogs[1].x=world.terrain[0].x2-80;
+      this.plates=[[180,0],[310,-97],[234,71]].map(([dx,dy])=>({x:this.x+dx,y:this.y-39+dy}));
+      this.info={title:'Clover’s Disc Range',task:'Break three plates in six throws from the chalk on the bench. Hold Right + Smash. Add Up or Down while charging, then release Smash. The far high plate needs a longer charge.',keys:[['right','smash']]};
+    }
+    canStep(input){
+      if(this.done || this.missed || (!this.ticks && !input.smash && !input.attack && !input.aimStick))return false;
+      this.ticks++;return true;
+    }
+    partner(){return idleInput;}
+    contact(name,e,world){
+      if(name==='ko' && e.f.index===0)this.missed=true;
+      if(name!=='disc' || e.moveId!=='cloverLineDrive' || e.f.index!==0 || this.throws>=6)return;
+      const disc=world.projectiles.at(-1);
+      const inBox=e.f.ground===1 && Math.abs(e.f.x-this.x)<=34;
+      this.flights.push({disc,x:disc.x,y:disc.y,inBox});this.throws++;
+      this.note=inBox?'Throw '+this.throws+' of 6.':'Outside the chalk. Return to the mint mark to score.';
+    }
+    afterStep(world){
+      for(const shot of this.flights){
+        const {disc}=shot,dx=disc.x-shot.x,dy=disc.y-shot.y;
+        if(shot.inBox)for(const target of this.plates){
+          if(target.broken)continue;
+          const t=Math.max(0,Math.min(1,((target.x-shot.x)*dx+(target.y-shot.y)*dy)/(dx*dx+dy*dy || 1)));
+          if(Math.hypot(shot.x+dx*t-target.x,shot.y+dy*t-target.y)>17)continue;
+          target.broken=this.ticks;disc.caught=true;this.breaks.push(target);
+          world.emit('plateBreak',{f:world.dogs[0],count:this.breaks.length,point:{x:target.x,y:target.y}});
+          const next=this.plates.find(p=>!p.broken);
+          this.note=this.breaks.length+' / 3 plates · '+(6-this.throws)+' throws left. '+(!next?'':next===this.plates[1]?
+            'For the far plate, angle up and hold the charge longer.':next===this.plates[2]?'Angle down for the low plate.':'Aim level for the center plate.');break;
+        }
+        shot.x=disc.x;shot.y=disc.y;
+      }
+      this.flights=this.flights.filter(s=>!s.disc.caught && world.projectiles.includes(s.disc));
+      this.done=this.breaks.length===3;
+      if(this.done)this.info.success='All three plates · '+this.throws+' throws · '+raceTime(this.ticks);
+      else if(this.throws===6 && !this.flights.length){
+        this.missed=true;this.info.miss=this.breaks.length+' / 3 plates in six throws. Retry for a fresh rack.';
+      }
+    }
+    saveTime(storage){
+      if(!this.done || this.saved || this.example)return;
+      this.saved=true;const best=rangeBest(storage);
+      if(best && (best.throws<this.throws || best.throws===this.throws && best.frames<=this.ticks))return;
+      try{storage.setItem(rangeKey,JSON.stringify({throws:this.throws,frames:this.ticks}));}catch{}
+    }
+    drawCourse(ctx){
+      ctx.save();
+      ctx.fillStyle='#172830';ctx.fillRect(this.x-36,this.y-4,72,7);
+      ctx.fillStyle='#86e1b4';ctx.fillRect(this.x-34,this.y-3,68,3);
+      for(const p of this.plates){
+        if(p.broken){
+          const n=this.ticks-p.broken;
+          if(n<13){ctx.fillStyle='#ffc57c';for(const dir of [-1,1])ctx.fillRect(p.x+dir*(5+n),p.y-9+n*n/20,5,4);}
+          continue;
+        }
+        ctx.fillStyle='#29253b';ctx.fillRect(p.x-12,p.y-8,24,16);ctx.fillRect(p.x-8,p.y-12,16,24);
+        ctx.fillStyle='#f5c37e';ctx.fillRect(p.x-10,p.y-6,20,12);ctx.fillRect(p.x-6,p.y-10,12,20);
+        ctx.fillStyle='#ae4e55';ctx.fillRect(p.x-6,p.y-5,12,10);ctx.fillRect(p.x-4,p.y-7,8,14);
+        ctx.fillStyle='#fff0c3';ctx.fillRect(p.x-2,p.y-2,4,4);
+      }
+      ctx.restore();
+    }
+  }
+  const makeTrial=(index,world,storage)=>index===-2?new DiscRange(world):index===-1?new Shuttle(world,storage):index===4?new DownAirTrial(world):index<2?new Trial(index,world):new SpecialTrial(index,world);
   // Durations are in fight frames. A short hold before each new input lets the
   // viewer read the cue without changing the timing between real inputs.
   const examples={
@@ -390,7 +468,11 @@
       const [kind,index]=id.split('-');
       const extra=extraStudies[kind]?.[Number(index)-2];
       if(id==='shuttle')this.shuttle=lesson;
-      const sequence=index==='4'?[[1,'down attack',downAirTasks[kind][0]],[150,kind==='pip'?'right':'',kind==='pip'?'Carry the bounce past Brisket.':'Watch where the attack connects.']]:
+      const sequence=id==='disc-range'?[
+        [8,'right smash','Start a level Line Drive.'],[55,'','Release Smash for the level plate.'],
+        [3,'right smash','Start the next charge facing right.'],[44,'right up smash','Hold Up with Right to lift the throw.'],[65,'','Release for the far plate.'],
+        [3,'right smash','Start a third Line Drive.'],[18,'right down smash','Add Down while charging.'],[90,'','Release for the low plate.']
+      ]:index==='4'?[[1,'down attack',downAirTasks[kind][0]],[150,kind==='pip'?'right':'',kind==='pip'?'Carry the bounce past Brisket.':'Watch where the attack connects.']]:
         this.shuttle?[[600,'right','Run to the gold post.'],[600,'left','Reverse and run across the start line.']]:
         extra?[[1,extra[3].join(' '),extra[1]],[180,'','Release the controls and watch the exchange.']]:examples[id];
       this.cues=sequence.map(([frames,chord,caption])=>{
@@ -456,6 +538,7 @@
     root.querySelector('[data-class-dog][aria-pressed=true]').focus({preventScroll:true});
   }
   function tryoutSheet(kind,{storage,slot,label,coat,portrait,root,showDialog,choose,start,pick,back}){
+    const best=kind==='clover' && rangeBest(storage);
     const {fighters,kits}=window.DogFight;
     const dogs=Object.keys(courses).map(id=>{
       const best=bestRun(storage,id);
@@ -467,7 +550,8 @@
       (i?'Recovery':'Signature')+' · '+m.title+(cleared(storage,kind+'-'+i)?' ✓':'')+'</button>').join('');
     showDialog('fighter-tryout','Fighter tryouts','<div class="cup-dogs" role="group" aria-label="Dogs to try">'+dogs+'</div>'+
       '<h3 class="card-stage">'+fighters[kind].name+' · '+fighters[kind].style+'</h3><p>'+kits[kind].style+'</p>'+
-      '<div class="dialog-actions">'+moves+'<button class="utility" data-try-run="-1">Rooftop shuttle</button></div>'+
+      '<div class="dialog-actions">'+moves+'<button class="utility" data-try-run="-1">Rooftop shuttle</button>'+
+      (kind==='clover'?'<button class="utility" data-try-run="-2">Disc Range'+(best?' · '+best.throws+' throws · '+raceTime(best.frames):'')+'</button>':'')+'</div>'+
       '<p>Use P1 controls. Shuttle times are personal bests. The fastest dog sets the pace on the roof.</p>'+
       '<div class="dialog-actions"><button class="primary" data-try-pick>Pick '+fighters[kind].name+' for '+label+'</button>'+
       '<button class="utility" data-try-back>Back to fighter select</button></div>');
