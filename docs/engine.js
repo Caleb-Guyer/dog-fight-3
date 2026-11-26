@@ -610,7 +610,6 @@
     // Climb points are [frame, distance inward from the lip, feet below the surface].
     pipRailKick: {
       label: 'Rail Kick',
-      hint: 'Swing over the lip on one paw and kick low. Pip lands quickly enough to chase the rival inward.',
       ledgeAttack: true,
       frames: [7, 5, 11],
       climb: [
@@ -626,7 +625,6 @@
     },
     brisketPorchBump: {
       label: 'Porch Bump',
-      hint: 'Haul up and drive your shoulder onto the stage. The shove hits hard, but a miss leaves you open.',
       ledgeAttack: true,
       frames: [13, 6, 19],
       climb: [
@@ -644,7 +642,6 @@
     },
     noodleLatchWhip: {
       label: 'Latch Whip',
-      hint: 'Hang on with one paw and snap the lead across the edge. A distant rival gets pulled toward your landing spot.',
       ledgeAttack: true,
       frames: [9, 6, 13],
       climb: [
@@ -663,7 +660,6 @@
     },
     cloverRimVault: {
       label: 'Rim Vault',
-      hint: 'Vault over the edge and scoop with the held disc. It sends a rival above you as you land farther in.',
       ledgeAttack: true,
       frames: [10, 5, 14],
       climb: [
@@ -682,7 +678,6 @@
     pipStampKick: {
       label: 'Stamp Kick',
       angleHeight: 23, angleChange: 17,
-      hint: 'Plant one foot and snap the other straight out. The quick recovery lets you chase the low launch.',
       frames: [3, 4, 7],
       box: [42, -31, 29, 17],
       dmg: 5,
@@ -692,7 +687,6 @@
     },
     pipChinFlick: {
       label: 'Chin Flick',
-      hint: 'Flick a paw under the chin. On contact, press Jump, Forward and Attack together to follow with Flying Kick.',
       frames: [4, 4, 8],
       box: [19, -74, 32, 33],
       dmg: 5,
@@ -704,7 +698,6 @@
     },
     pipDewclaw: {
       label: 'Dewclaw',
-      hint: 'Crouch and rake the rival’s ankles. At close range, release Down and tap Attack again for Quick Paw.',
       frames: [3, 3, 6],
       box: [34, -12, 29, 13],
       dmg: 4,
@@ -716,7 +709,6 @@
     brisketGateCheck: {
       label: 'Gate Check',
       angleHeight: 27, angleChange: 13,
-      hint: 'Shove with the broad side of your forearm. The flat launch pushes rivals toward the edge.',
       frames: [7, 5, 13],
       box: [44, -38, 39, 23],
       dmg: 10,
@@ -726,7 +718,6 @@
     },
     brisketCrownLift: {
       label: 'Crown Lift',
-      hint: 'Drive the top of your head upward. It catches landings over either shoulder.',
       frames: [6, 6, 12],
       box: [4, -78, 41, 33],
       dmg: 9,
@@ -737,7 +728,6 @@
     },
     brisketDoorstop: {
       label: 'Doorstop',
-      hint: 'Stamp one foot just ahead of you. It pops a grounded rival up in front of your paws.',
       frames: [6, 4, 11],
       box: [39, -9, 32, 17],
       dmg: 8,
@@ -748,7 +738,6 @@
     noodleKnotPoke: {
       label: 'Knot Poke',
       angleHeight: 32, angleChange: 15,
-      hint: 'Poke straight out with the lead. The line deals 5%, and the knot at the tip deals 7%.',
       frames: [5, 4, 10],
       box: [65, -34, 53, 13],
       dmg: 5,
@@ -759,7 +748,6 @@
     },
     noodleLoopLift: {
       label: 'Loop Lift',
-      hint: 'Send a narrow loop high above your head. It catches a falling rival and lifts them close.',
       frames: [6, 5, 10],
       box: [16, -78, 30, 48],
       dmg: 6,
@@ -772,7 +760,6 @@
     },
     noodleTailBroom: {
       label: 'Tail Broom',
-      hint: 'Sweep your tail along the floor. It pops a standing rival up and knocks an airborne rival downward just off the ledge.',
       frames: [4, 5, 9],
       box: [48, -5, 43, 14],
       dmg: 5,
@@ -783,7 +770,6 @@
     cloverOneTwoPass: {
       label: 'One-Two Pass',
       angleHeight: 25, angleChange: 19,
-      hint: 'Tap once to check with your free paw for 2%, then flick the disc forward for another 4%.',
       frames: [4, 3, 14],
       box: [34, -37, 23, 17],
       dmg: 2,
@@ -805,7 +791,6 @@
     },
     cloverCanopyTap: {
       label: 'Canopy Tap',
-      hint: 'Meet the rival with the flat of the disc overhead. The nearly straight-up launch keeps them above you.',
       frames: [5, 5, 8],
       box: [12, -83, 41, 30],
       dmg: 6,
@@ -815,7 +800,6 @@
     },
     cloverBackspin: {
       label: 'Backspin',
-      hint: 'Hook the rim low and flick it back toward you. Catch the rival close to send them behind you.',
       frames: [5, 4, 10],
       box: [41, -15, 31, 16],
       dmg: 6,
@@ -826,7 +810,6 @@
     },
     pipGrassSkid: {
       label: 'Grass Skid',
-      hint: 'Slide in heel-first for a quick, low kick. Pip recovers fast enough to chase.',
       dashAttack: true,
       frames: [4, 6, 10],
       box: [34, -15, 31, 15],
@@ -839,7 +822,6 @@
     },
     brisketYardBuster: {
       label: 'Yard Buster',
-      hint: 'Lead with the shoulder. The first four frames of contact hit hardest, and a miss leaves Brisket open.',
       dashAttack: true,
       frames: [9, 11, 21],
       box: [44, -34, 39, 29],
@@ -862,7 +844,6 @@
     },
     noodleLeadSweep: {
       label: 'Lead Sweep',
-      hint: 'Plant your paws and sweep the lead along the ground. Catch a rival at the tip to pull them into paw range.',
       dashAttack: true,
       frames: [7, 5, 14],
       box: [73, -18, 55, 15],
@@ -877,7 +858,6 @@
     },
     cloverRimRush: {
       label: 'Rim Rush',
-      hint: 'Skim the disc low, then scoop upward for a second hit. Jump as the rim pops the rival up to follow with an aerial.',
       dashAttack: true,
       frames: [5, 4, 20],
       box: [39, -18, 35, 16],
@@ -956,7 +936,6 @@
     },
     pipSpin: {
       label: 'Scramble',
-      hint: 'A fast paw-wheel that catches rivals on either side.',
       frames: [3, 8, 7],
       box: [0, -36, 49, 33],
       dmg: 6,
@@ -968,7 +947,6 @@
     },
     pipDiveKick: {
       label: 'Flying Kick',
-      hint: 'The extended heel kicks the rival away. The trailing paw pops them up for Quick Paw on landing.',
       frames: [4, 10, 6],
       box: [44, -34, 37, 24],
       dmg: 8,
@@ -983,7 +961,6 @@
     pipBackKick: {
       lowLaunch: true,
       label: 'Back Heel',
-      hint: 'A quick heel strike behind you with a low launch.',
       frames: [3, 4, 10],
       box: [-39, -32, 33, 21],
       dmg: 8,
@@ -995,7 +972,6 @@
     },
     pipFlip: {
       label: 'Flip Kick',
-      hint: 'Catch the rival high over your forehead with the heel to launch almost straight up.',
       frames: [3, 6, 8],
       box: [12, -82, 36, 34],
       dmg: 7,
@@ -1008,7 +984,6 @@
     },
     pipPogo: {
       label: 'Pogo Paw',
-      hint: 'Kick down. A clean hit bounces Pip upward once per airtime.',
       frames: [4, 11, 9],
       box: [4, 1, 35, 34],
       dmg: 9,
@@ -1047,7 +1022,6 @@
     },
     brisketCurl: {
       label: 'Barrel Roll',
-      hint: 'Tuck into a broad body hit on both sides. The windup leaves time to dodge.',
       frames: [7, 11, 14],
       box: [0, -35, 52, 38],
       dmg: 11,
@@ -1059,7 +1033,6 @@
     },
     brisketRam: {
       label: 'Air Ram',
-      hint: 'The leading shoulder launches hard. Clip them with the falling body to land close enough for Body Check.',
       frames: [8, 12, 13],
       box: [41, -38, 39, 30],
       dmg: 13,
@@ -1075,7 +1048,6 @@
     brisketHip: {
       lowLaunch: true,
       label: 'Hip Check',
-      hint: 'Back into them at close range for a heavy hip check. Grazing them at full reach gives a softer bump.',
       frames: [6, 6, 15],
       box: [-39, -33, 37, 27],
       dmg: 12,
@@ -1089,7 +1061,6 @@
     },
     brisketCrown: {
       label: 'Crown Bump',
-      hint: 'Lead with your forehead for a strong vertical launch.',
       frames: [6, 7, 12],
       box: [5, -78, 40, 35],
       dmg: 10,
@@ -1101,7 +1072,6 @@
     },
     brisketDrop: {
       label: 'Belly Drop',
-      hint: 'Hang briefly, then plunge. The landing can catch a rival beside you.',
       frames: [10, 17, 18],
       box: [1, -3, 47, 33],
       dmg: 15,
@@ -1153,7 +1123,6 @@
     },
     noodleCoil: {
       label: 'Coil Sweep',
-      hint: 'Uncoil your tail in a wide sweep that reaches farther behind you.',
       frames: [5, 9, 9],
       box: [-8, -32, 64, 25],
       dmg: 7,
@@ -1165,7 +1134,6 @@
     },
     noodleCast: {
       label: 'Slip Lead',
-      hint: 'The outward cast reaches farthest. The shorter returning loop draws the rival in for Ankle Tap.',
       frames: [7, 13, 7],
       box: [65, -37, 61, 17],
       dmg: 6,
@@ -1182,7 +1150,6 @@
     noodleTail: {
       lowLaunch: true,
       label: 'Tail Flick',
-      hint: 'Catch them at the very tip of the tail to send them skimming offstage.',
       frames: [4, 6, 12],
       box: [-57, -29, 51, 18],
       dmg: 9,
@@ -1195,7 +1162,6 @@
     },
     noodleLoop: {
       label: 'Lasso Loop',
-      hint: 'Hook a rival high above your head with the rope.',
       frames: [6, 8, 10],
       box: [9, -94, 31, 44],
       dmg: 7,
@@ -1208,7 +1174,6 @@
     },
     noodleHook: {
       label: 'Underhook',
-      hint: 'Reach below the platform and pull a rival upward toward you.',
       frames: [7, 8, 13],
       box: [17, 18, 31, 49],
       dmg: 7,
@@ -1248,7 +1213,6 @@
     },
     cloverOrbit: {
       label: 'Orbit',
-      hint: 'The disc circles twice. Stay close to land both beats.',
       frames: [4, 4, 19],
       box: [0, -38, 58, 33],
       dmg: 3,
@@ -1262,7 +1226,6 @@
     },
     cloverFore: {
       label: 'Forehand',
-      hint: 'The leading rim sends the rival outward. Brush them with the end of the sweep for a lift into Disc Tap.',
       frames: [5, 10, 7],
       box: [45, -42, 42, 26],
       dmg: 8,
@@ -1276,7 +1239,6 @@
     cloverBack: {
       lowLaunch: true,
       label: 'Backhand',
-      hint: 'The broad face of the disc sends the rival out. Scoop them on its upper rim to loft them for a chase.',
       frames: [4, 5, 11],
       box: [-44, -39, 39, 22],
       dmg: 8,
@@ -1289,7 +1251,6 @@
     },
     cloverVolley: {
       label: 'Sky Volley',
-      hint: 'An upward disc swipe. Use it immediately after jumping out of Set Point.',
       frames: [3, 7, 9],
       box: [22, -75, 46, 40],
       dmg: 8,
@@ -1301,7 +1262,6 @@
     },
     cloverSkip: {
       label: 'Skip Shot',
-      hint: 'Slice downward and forward with the disc to spike an airborne rival.',
       frames: [5, 7, 12],
       box: [29, -1, 36, 31],
       dmg: 9,
@@ -1316,7 +1276,6 @@
   const specials = {
     pipBark: {
       label: 'Snap Bark',
-      hint: 'Two quick barks in front of Pip. The louder second bark can send an incoming disc back at its thrower.',
       frames: [3, 4, 17],
       box: [38, -40, 36, 25],
       dmg: 3,
@@ -1328,7 +1287,6 @@
     },
     pipPounce: {
       label: 'Double Pounce',
-      hint: 'Spring sideways. After a clean hit, tap Side + Special again for one more pounce.',
       frames: [3, 12, 10],
       box: [40, -34, 38, 30],
       dmg: 9,
@@ -1338,7 +1296,6 @@
     },
     pipHopper: {
       label: 'Fence Hopper',
-      hint: 'Leap up, then tap Up + Special again for a second leap. Aim either hop left or right.',
       frames: [2, 7, 8],
       box: [14, -67, 34, 40],
       dmg: 6,
@@ -1348,7 +1305,6 @@
     },
     pipSlide: {
       label: 'Dirt Slide',
-      hint: 'Slide under a rival and pop up at their feet. From the air, dive to the floor to start the slide.',
       frames: [9, 7, 12],
       box: [2, -20, 43, 31],
       dmg: 9,
@@ -1359,7 +1315,6 @@
     },
     brisketClinch: {
       label: 'Collar Toss',
-      hint: 'Scoop up a nearby rival and toss them overhead. Catches shielding or braced rivals.',
       frames: [6, 5, 19],
       box: [34, -37, 32, 29],
       dmg: 11,
@@ -1371,7 +1326,6 @@
     },
     brisketCharge: {
       label: 'Shoulder Charge',
-      hint: 'Commit to a long sideways shoulder charge. Brisket needs room to brake afterward.',
       frames: [7, 16, 13],
       box: [45, -36, 40, 31],
       dmg: 15,
@@ -1382,7 +1336,6 @@
     },
     brisketCannon: {
       label: 'Kennel Cannon',
-      hint: 'Hold Special to charge, then release to blast upward. A tap gives a shorter launch.',
       frames: [3, 13, 13],
       box: [6, -70, 39, 45],
       dmg: 10,
@@ -1393,7 +1346,6 @@
     },
     brisketBrace: {
       label: 'Stand Firm',
-      hint: 'Brace just before a strike. Brisket stops the hit and answers with a short counter. Grabs beat the stance.',
       frames: [4, 12, 18],
       box: [39, -39, 45, 38],
       dmg: 13,
@@ -1404,7 +1356,6 @@
     },
     noodleTug: {
       label: 'Tug Rope',
-      hint: 'Throw the rope straight ahead and yank a rival toward you.',
       frames: [6, 7, 15],
       box: [86, -39, 86, 19],
       dmg: 8,
@@ -1415,7 +1366,6 @@
     },
     noodleSling: {
       label: 'Slingshot',
-      hint: 'Hook a rival and pull Noodle toward them. The cast reaches farther than a normal strike.',
       frames: [5, 8, 15],
       box: [82, -37, 78, 19],
       dmg: 7,
@@ -1427,7 +1377,6 @@
     },
     noodleLasso: {
       label: 'Ledge Lasso',
-      hint: 'Catch a solid ledge and reel Noodle to it. Without an edge in reach, Noodle hops and lashes overhead.',
       frames: [5, 11, 22],
       box: [17, -88, 32, 49],
       dmg: 7,
@@ -1438,7 +1387,6 @@
     },
     noodleTripLine: {
       label: 'Trip Line',
-      hint: 'Drop a rope snare. It stays on the first platform it touches and trips one grounded rival. A new snare replaces the old one.',
       frames: [7, 5, 15],
       box: [48, -8, 29, 12],
       dmg: 6,
@@ -1450,7 +1398,6 @@
     },
     cloverRound: {
       label: 'Round Trip',
-      hint: 'Throw a disc that curves home. It can hit once on the way out and once on the return.',
       frames: [7, 3, 13],
       box: [38, -40, 29, 18],
       dmg: 7,
@@ -1461,7 +1408,6 @@
     },
     cloverChase: {
       label: 'Disc Chase',
-      hint: 'Dash sideways. A nearby Round Trip disc ahead pulls the dash toward it, and Clover can catch it early.',
       frames: [3, 11, 12],
       box: [37, -39, 35, 30],
       dmg: 8,
@@ -1471,7 +1417,6 @@
     },
     cloverSail: {
       label: 'Disc Sail',
-      hint: 'Rise onto the disc. Hold Special and steer to glide, or let go to drop early.',
       frames: [3, 18, 36],
       box: [3, -7, 50, 27],
       dmg: 7,
@@ -1482,7 +1427,6 @@
     },
     cloverServe: {
       label: 'Skip Serve',
-      hint: 'Skim a low disc across the arena. It bounces twice off platform tops and disappears on contact with a rival.',
       frames: [6, 4, 14],
       box: [36, -20, 29, 16],
       dmg: 8,
@@ -1496,7 +1440,6 @@
     pipBoltKick: {
       lowLaunch: true,
       label: 'Bolt Kick',
-      hint: 'Pip springs forward with both feet. The short windup lets you punish a missed attack.',
       frames: [6, 5, 14],
       box: [46, -36, 40, 27],
       dmg: 12,
@@ -1508,7 +1451,6 @@
     },
     pipScissors: {
       label: 'Scissor Kick',
-      hint: 'One heel lifts a nearby rival into a second kick straight overhead.',
       frames: [4, 4, 22],
       box: [14, -55, 48, 35],
       dmg: 3,
@@ -1534,7 +1476,6 @@
     },
     pipDustDevil: {
       label: 'Dust Devil',
-      hint: 'Kick low in front, then sweep behind. Turn your back to the ledge for the stronger second kick.',
       frames: [5, 4, 21],
       box: [45, -18, 36, 18],
       dmg: 10,
@@ -1558,7 +1499,6 @@
     brisketHaymaker: {
       lowLaunch: true,
       label: 'Haymaker',
-      hint: 'Release Smash to plant your feet. When the gold shoulder marks appear, one hit worth up to 8% deals damage without stopping the punch. Grabs still catch you.',
       frames: [12, 5, 24],
       armor: { first:5, limit:8 },
       box: [54, -41, 47, 34],
@@ -1570,7 +1510,6 @@
     },
     brisketRoofRaiser: {
       label: 'Roof Raiser',
-      hint: 'Drive upward with Brisket’s head and shoulders. The wide hit catches rivals on either side and launches them almost straight up.',
       frames: [8, 7, 22],
       box: [0, -75, 55, 46],
       dmg: 15,
@@ -1582,7 +1521,6 @@
     },
     brisketQuake: {
       label: 'Quake Stomp',
-      hint: 'Slam both paws down. The shockwave spreads along the floor on both sides. Stand close for the biggest hit.',
       frames: [13, 7, 25],
       box: [0, -12, 103, 16],
       dmg: 14,
@@ -1597,7 +1535,6 @@
     noodleLeadSnap: {
       lowLaunch: true,
       label: 'Lead Snap',
-      hint: 'Crack the lead straight ahead. The knot at the far end hits much harder than the middle of the rope.',
       frames: [9, 5, 20],
       box: [86, -39, 82, 21],
       dmg: 11,
@@ -1610,7 +1547,6 @@
     },
     noodleBellPull: {
       label: 'Bell Pull',
-      hint: 'Catch a nearby rival in an upward loop, then snap the rope above Noodle’s head to launch them.',
       frames: [7, 5, 25],
       box: [14, -57, 55, 38],
       dmg: 4,
@@ -1637,7 +1573,6 @@
     },
     noodleSwitchback: {
       label: 'Switchback',
-      hint: 'Sweep the rope low on both sides and sling the rival across Noodle. A rival on your left flies right.',
       frames: [9, 7, 19],
       box: [3, -19, 77, 22],
       dmg: 13,
@@ -1652,7 +1587,6 @@
     cloverLineDrive: {
       lowLaunch: true,
       label: 'Line Drive',
-      hint: 'Fire the disc straight ahead. A longer charge gives it more speed, range, and knockback.',
       frames: [9, 3, 18],
       box: [39, -39, 34, 20],
       dmg: 12,
@@ -1664,7 +1598,6 @@
     },
     cloverHaloLift: {
       label: 'Halo Lift',
-      hint: 'Lift the disc over Clover’s head. Catch a jumping rival with its top rim for a stronger launch.',
       frames: [7, 7, 16],
       box: [7, -79, 46, 46],
       dmg: 12,
@@ -1677,7 +1610,6 @@
     },
     cloverRimRattle: {
       label: 'Rim Rattle',
-      hint: 'Spin the disc around your paws. The first pass catches low on either side so the second can knock the rival out.',
       frames: [6, 5, 20],
       box: [0, -20, 59, 21],
       dmg: 3,
@@ -1705,7 +1637,6 @@
   const grabs = {
     pipCollarTag: {
       label: 'Collar Tag',
-      hint: 'A quick paw to the collar. Stay close enough to touch noses.',
       frames: [3, 4, 12],
       box: [32, -39, 22, 21],
       grip: [34, -45],
@@ -1714,7 +1645,6 @@
     },
     brisketBearHug: {
       label: 'Bear Hug',
-      hint: 'Wrap both paws around a nearby rival. Tap Special to shoulder them, walk or hop, then aim and tap Grab to throw.',
       frames: [6, 6, 22],
       box: [32, -43, 28, 34],
       grip: [29, -63],
@@ -1723,7 +1653,6 @@
     },
     noodleLeadLoop: {
       label: 'Lead Loop',
-      hint: 'Cast the lead straight ahead. A distant catch takes longer to reel in.',
       frames: [10, 5, 25],
       box: [79, -45, 74, 13],
       grip: [57, -43],
@@ -1733,7 +1662,6 @@
     },
     cloverDiscHook: {
       label: 'Disc Hook',
-      hint: 'Slide forward with the disc and hook a rival over its rim.',
       frames: [6, 5, 16],
       box: [37, -40, 24, 22],
       grip: [42, -51],
@@ -1748,7 +1676,6 @@
     pipTagDash: {
       ...grabs.pipCollarTag,
       label: 'Tag Dash',
-      hint: 'Keep your stride and dart a paw forward. Pip reaches first and recovers quickly on a miss.',
       frames: [4, 4, 13],
       box: [40, -34, 27, 21],
       carry: 1.06,
@@ -1757,7 +1684,6 @@
     pipHeelHook: {
       ...grabs.pipCollarTag,
       label: 'Heel Hook',
-      hint: 'Plant a heel and hook low behind you. The sharp stop is good for a close pursuer.',
       frames: [4, 5, 13],
       box: [51, -32, 26, 20],
       carry: 0.34,
@@ -1766,7 +1692,6 @@
     brisketFreightHug: {
       ...grabs.brisketBearHug,
       label: 'Freight Hug',
-      hint: 'Carry your weight forward into a two-paw scoop. Start the reach a few steps out.',
       frames: [8, 6, 24],
       box: [44, -47, 34, 35],
       carry: 1.24,
@@ -1775,7 +1700,6 @@
     brisketGateSwing: {
       ...grabs.brisketBearHug,
       label: 'Gate Swing',
-      hint: 'Swing both paws wide behind you. Brisket keeps sliding as the catch opens.',
       frames: [7, 7, 23],
       box: [52, -53, 44, 36],
       carry: 0.78,
@@ -1784,7 +1708,6 @@
     noodleRunningLoop: {
       ...grabs.noodleLeadLoop,
       label: 'Running Loop',
-      hint: 'Cast the lead low from a moving start. The loop reaches well ahead of your paws.',
       frames: [9, 5, 26],
       box: [85, -32, 70, 13],
       carry: 0.9,
@@ -1793,7 +1716,6 @@
     noodleBackcast: {
       ...grabs.noodleLeadLoop,
       label: 'Backcast',
-      hint: 'Throw a long, narrow loop over your shoulder. Catch a pursuer while skidding away.',
       frames: [8, 5, 27],
       box: [96, -47, 84, 14],
       carry: 0.55,
@@ -1802,7 +1724,6 @@
     cloverScoopSlide: {
       ...grabs.cloverDiscHook,
       label: 'Scoop Slide',
-      hint: 'Slide the disc close to the floor and scoop the rival onto its rim.',
       frames: [6, 6, 18],
       box: [48, -27, 30, 20],
       carry: 1.15,
@@ -1811,7 +1732,6 @@
     cloverRimTurn: {
       ...grabs.cloverDiscHook,
       label: 'Rim Turn',
-      hint: 'Plant one foot and sweep the disc upward behind you to catch a low jumper.',
       frames: [5, 5, 16],
       box: [49, -59, 35, 29],
       carry: 0.5,
@@ -1822,7 +1742,6 @@
   const pummels = {
     pipPawDrum: {
       label: 'Paw Drum',
-      hint: 'Keep one paw on the collar and drum with the other. A fast 1% tap.',
       frames: [2, 2, 6],
       dmg: 1,
       recoil: [7, -2],
@@ -1830,7 +1749,6 @@
     },
     brisketBearSqueeze: {
       label: 'Bear Squeeze',
-      hint: 'Lift and squeeze for 4%. The long windup gives the rival time to wriggle free.',
       frames: [7, 4, 14],
       dmg: 4,
       recoil: [-5, -12],
@@ -1838,7 +1756,6 @@
     },
     noodleKnotTug: {
       label: 'Knot Tug',
-      hint: 'Give the loop a short tug. Each pull draws the rival toward you for 2%.',
       frames: [4, 3, 8],
       dmg: 2,
       recoil: [-19, -4],
@@ -1846,7 +1763,6 @@
     },
     cloverRimTap: {
       label: 'Rim Tap',
-      hint: 'Flick the disc rim under the collar for 3%, then settle back into the hold.',
       frames: [5, 3, 11],
       dmg: 3,
       recoil: [4, -13],
@@ -1856,7 +1772,6 @@
   const throws = {
     pipKickoff: {
       label: 'Kickoff',
-      hint: 'Plant one foot and boot the rival straight out of paw range.',
       frames: [5, 3, 10],
       via: [26, -50],
       release: [50, -48],
@@ -1867,7 +1782,6 @@
     },
     pipSlipTurn: {
       label: 'Slip Turn',
-      hint: 'Duck under the collar and flick the rival low behind you.',
       frames: [7, 4, 9],
       via: [1, -65],
       release: [-43, -43],
@@ -1878,7 +1792,6 @@
     },
     pipPopFly: {
       label: 'Pop Fly',
-      hint: 'Pop the rival straight up. Jump as they leave your paws to chase with an aerial.',
       frames: [5, 3, 10],
       via: [24, -53],
       release: [13, -82],
@@ -1892,7 +1805,6 @@
     },
     pipTumbleTrip: {
       label: 'Tumble Trip',
-      hint: 'Sweep their feet for a short forward tumble. Dash after the landing.',
       frames: [6, 2, 6],
       via: [43, -58],
       release: [55, -39],
@@ -1904,7 +1816,6 @@
     },
     brisketYardHeave: {
       label: 'Yard Heave',
-      hint: 'Wind up at the shoulder and heave the rival in a heavy forward arc.',
       frames: [12, 4, 20],
       via: [9, -93],
       release: [63, -76],
@@ -1916,7 +1827,6 @@
     },
     brisketSuplex: {
       label: 'Backyard Suplex',
-      hint: 'Arch backward and sling the rival over your shoulder. Face inward at the edge.',
       frames: [14, 4, 22],
       via: [0, -105],
       release: [-56, -40],
@@ -1928,7 +1838,6 @@
     },
     brisketPress: {
       label: 'Bench Press',
-      hint: 'Press the rival overhead, then send them almost straight up.',
       frames: [11, 4, 18],
       via: [12, -74],
       release: [1, -104],
@@ -1940,7 +1849,6 @@
     },
     brisketSitSlam: {
       label: 'Sit-Down Slam',
-      hint: 'Drive the rival into the floor for a high bounce. Over a gap they keep falling.',
       frames: [13, 4, 20],
       via: [25, -94],
       release: [43, -54],
@@ -1953,7 +1861,6 @@
     },
     noodleSlingCast: {
       label: 'Sling Cast',
-      hint: 'Swing a wide loop and release at full lead length in front of you.',
       frames: [10, 4, 16],
       via: [28, -92],
       release: [91, -65],
@@ -1964,7 +1871,6 @@
     },
     noodleReverseReel: {
       label: 'Reverse Reel',
-      hint: 'Whip the lead across your back. Its low, long release reaches past the ledge.',
       frames: [11, 4, 18],
       via: [-10, -86],
       release: [-82, -49],
@@ -1975,7 +1881,6 @@
     },
     noodleFlagpole: {
       label: 'Flagpole',
-      hint: 'Hoist the rival to the top of the loop before sending them skyward.',
       frames: [11, 3, 14],
       via: [47, -81],
       release: [15, -119],
@@ -1986,7 +1891,6 @@
     },
     noodleSlackSnap: {
       label: 'Slack Snap',
-      hint: 'Let the loop drop outward, then snap the rival inward to your feet for a follow-up.',
       frames: [8, 3, 7],
       via: [83, -57],
       release: [66, -40],
@@ -1999,7 +1903,6 @@
     },
     cloverForehandPass: {
       label: 'Forehand Pass',
-      hint: 'Flick the rival off the disc on a fast, flat line.',
       frames: [6, 3, 12],
       via: [22, -55],
       release: [62, -54],
@@ -2010,7 +1913,6 @@
     },
     cloverBankPass: {
       label: 'Bank Pass',
-      hint: 'Roll the rival around the rim and send them high behind you.',
       frames: [9, 3, 13],
       via: [-5, -84],
       release: [-48, -68],
@@ -2021,7 +1923,6 @@
     },
     cloverSetToss: {
       label: 'Set Toss',
-      hint: 'Set the rival just ahead and above you. Jump on release and meet them with Sky Volley.',
       frames: [7, 3, 13],
       via: [31, -58],
       release: [36, -82],
@@ -2035,7 +1936,6 @@
     },
     cloverSkipToss: {
       label: 'Skip Toss',
-      hint: 'Skim the rival off the rim. They skip once on the first platform they hit.',
       frames: [8, 3, 12],
       via: [53, -66],
       release: [66, -54],
