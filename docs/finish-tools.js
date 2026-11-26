@@ -36,6 +36,7 @@
   }
   function analyze(tape,slot,follow,allMoments=false){
     const list=[];
+    const landings=[],falls=[null,null];
     const seat=f=>'P'+(f.index+1)+' '+f.stats.name;
     const percent=n=>(Math.round(n*10)/10)+'%';
     let player,escape=null,knockedOut=false,lifeStart=0,launch=null,contact=null,grip=null;
@@ -44,6 +45,11 @@
       const frame=player.frame+1;
       if(follow){follow.observe(event,e,frame);return;}
       let label,detail,hit;
+      if((event==='tech' || event==='knockdown') && falls[e.f.index]){
+        const {start,press,held,locked}=falls[e.f.index];
+        landings.push({frame,slot:e.f.index,start:Math.max(start,frame-36),press,held,locked,type:e.type,dir:e.dir,
+          dog:e.f.stats.name,platform:e.f.ground});
+      }
       if(event==='grabCatch' && e.target.index===slot){
         grip={frame,slot,owner:e.f.index,kind:'grab',move:moveName(e.moveId,'Grab'),from:lifeStart};
         contact=grip;
@@ -98,6 +104,13 @@
       list.push({frame,label,...(detail?{detail}:{}),...(hit?{hit}:{})});
     });
     while(player.frame<player.length){
+      if(!follow)for(const f of player.battle.dogs){
+        const i=f.index;
+        if(!f.tumble || f.ground>=0 || player.battle.mode==='solo' && i===1){falls[i]=null;continue;}
+        const fall=falls[i]??={start:player.frame,press:null,held:!!f.prev.shield};
+        const pad=controlsAt(tape,player.frame+1,i);
+        if(pad.tapped?.shield || pad.shield && !f.prev.shield){fall.press=player.frame+1;fall.locked=f.techLock>1e-8;}
+      }
       const dog=player.battle.dogs[slot];
       const planted=dog && (dog.ground>=0 || dog.ledge) && !dog.stun && !dog.tumble && !dog.grip && !dog.stockLift;
       knockedOut=false;
@@ -112,7 +125,7 @@
       }
     }
     // A solo CPU has no recorded stick to substitute. Both seats of a two-player tape do.
-    return {marks:follow?follow.marks:allMoments?list:list.slice(-4),launch:knockedOut && (slot===0 || player.battle.mode==='local') ? launch : null,
+    return {landings,marks:follow?follow.marks:allMoments?list:list.slice(-4),launch:knockedOut && (slot===0 || player.battle.mode==='local') ? launch : null,
       contact:knockedOut && (slot===0 || player.battle.mode==='local')?contact:null,
       escape:escape || {frame:Math.max(lifeStart,player.length-90),label:'Before the knockout'}};
   }
@@ -123,6 +136,119 @@
     const tick=tape.count-tape.length+frame-1;
     const block=tape.blocks.findLast(b=>b.start<=tick);
     return block?.inputs[tick-block.start]?.[slot] || window.DogFight.idleInput;
+  }
+  function landingName(type,dir){
+    if(type==='techRoll')return dir<0?'Rolled left':'Rolled right';
+    return {tech:'Landed in place',downed:'Knocked down',bounce:'Bounced off the stage',land:'Landed without tumbling',airDodgeLand:'Landed after an air dodge',
+      ko:'Lost the stock',ledge:'Caught the ledge',end:'Recording ended before touchdown'}[type];
+  }
+  function timing(press,impact,held=false,locked=false){
+    if(press===null)return held?'Shield was already held when this fall began.':'No Shield tap during the recorded fall.';
+    const lead=impact-press;
+    return (lead?'Shield pressed '+lead+' frame'+(lead===1?'':'s')+' before impact.':'Shield pressed on the impact frame.')+
+      (locked?' The previous tap was still on cooldown.':'');
+  }
+  function landingTry(tape,landing,start,emit=()=>{}){
+    const slot=landing.slot;
+    let result=null,press=null,locked=false;
+    const record=(type,dir,frame)=>{result??={type,dir,frame,press,locked};};
+    const replay=tape.playback(start,(event,e)=>{
+      if(e.f?.index===slot){
+        if(event==='tech' || event==='knockdown')record(e.type,e.dir,replay.frame+1);
+        else if(event==='floorBounce' || event==='meteorBounce')record('bounce',0,replay.frame+1);
+        else if(['ko','ledge','airDodgeLand'].includes(event))record(event,0,replay.frame+1);
+      }
+      emit(event,e);
+    },slot);
+    const {battle}=replay,dog=battle.dogs[slot],held=!!dog.prev.shield;
+    const length=Math.min(replay.length,landing.frame+60);
+    return {battle,get frame(){return replay.frame;},length,outcome:null,get result(){return result;},held,
+      step(input){
+        if(this.outcome || replay.frame>=length)return false;
+        if(!result && (input.tapped?.shield || input.shield && !dog.prev.shield)){press=replay.frame+1;locked=dog.techLock>1e-8;}
+        replay.step(input);
+        if(!result && dog.ground>=0)record('land',0,replay.frame);
+        if(!result && (replay.frame>=length || battle.end!==null))record('end',0,replay.frame);
+        if(result && (replay.frame>=result.frame+18 || replay.frame>=length || battle.end!==null))this.outcome=result.type;
+        return true;
+      }};
+  }
+  function landingPreview(tape,landing,lead,dir){
+    const player=landingTry(tape,landing,landing.start),tap=landing.frame-lead;
+    while(!player.outcome && player.frame<player.length){
+      const frame=player.frame+1,pad=controlsAt(tape,frame,landing.slot);
+      player.step({...pad,...(frame>=tap?{x:dir,grabX:dir}:{}),shield:frame===tap,tapped:{...pad.tapped,shield:frame===tap}});
+    }
+    return player;
+  }
+  function landingDemo(){
+    const {Battle,FinishTape,seededRandom}=window.DogFight;
+    const config={mode:'local',p1:'pip',p2:'brisket',stage:'nightmail',fetch:false,minutes:0};
+    const battle=new Battle(config,()=>{},seededRandom(27)),tape=new FinishTape();
+    battle.resetTraining();battle.dogs[0].damage=35;
+    for(let i=0;i<150;i++){
+      const rival={...idleInput,grab:i===0,y:battle.grapple?.phase==='hold'?-1:0};
+      tape.record(battle,idleInput,rival);battle.step(1/60,idleInput,rival);
+    }
+    return {config,battle,tape};
+  }
+  function landingActions(review){
+    const back=review.clinic?'Back to Fight School':review.from==='pause'?'Back to fight':
+      ['archive','card'].includes(review.from)?'Back to match stats':'Back to results';
+    return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Retry landing</button>'+
+      (review.guided?'<button class="utility" data-do="landing-speed">Try at match speed</button>':'')+
+      '<button class="utility" data-do="trial-replay">Review landing</button><button class="utility" data-do="trial-results">'+back+'</button></div>';
+  }
+  function landingReport(player,landing,showDialog,actions){
+    const r=player.result;
+    const before=landingName(landing.type,landing.dir),after=r?landingName(r.type,r.dir):'Recording ended';
+    showDialog('finish-comparison',after,'<p>'+landing.dog+' · Recorded landing on frame '+landing.frame+'</p>'+
+      '<table class="finish-comparison"><thead><tr><th>Landing</th><th>Original</th><th>This attempt</th></tr></thead>'+
+      '<tbody><tr><th>Result</th><td>'+before+'</td><td>'+after+'</td></tr><tr><th>Input</th><td>'+
+      timing(landing.press,landing.frame,landing.held,landing.locked)+'</td><td>'+(r && r.type!=='end'?timing(r.press,r.frame,player.held,r.locked):'—')+'</td></tr></tbody></table>'+actions,false);
+    document.querySelector('[data-do=trial-retry]').focus();
+  }
+  function landingPanel(nav,tape,landings,jump,practice,opened,signal){
+    const panel=document.createElement('details');
+    panel.id='clip-landings';
+    panel.innerHTML='<summary>Practice a landing</summary><label>Recorded fall <select data-fall></select></label>'+
+      '<p data-before></p><label>Shield timing <input data-lead type="range" min="0" step="1"> <output data-timing></output></label>'+
+      '<div class="dialog-actions" role="group" aria-label="Landing direction">'+
+      ['Roll left','In place','Roll right'].map((s,i)=>'<button type="button" class="utility" data-dir="'+(i-1)+'">'+s+'</button>').join('')+'</div>'+
+      '<canvas width="512" height="288" role="img" aria-label="Result of the selected landing input"></canvas>'+
+      '<p role="status" data-after></p><div class="dialog-actions"><button class="primary" data-guided>Guide my landing</button>'+
+      '<button class="utility" data-live>Try at match speed</button><button class="utility" data-original>Watch original fall</button></div>';
+    nav.before(panel);
+    const find=s=>panel.querySelector(s),select=find('select'),slider=find('input'),canvas=find('canvas');
+    let selected=landings.findLast(l=>l.type==='downed') || landings.at(-1),dir=0;
+    for(const [i,l] of landings.entries())select.add(new Option('P'+(l.slot+1)+' '+l.dog+' · frame '+l.frame,String(i)));
+    select.selectedIndex=landings.indexOf(selected);
+    function compare(){
+      const lead=Number(slider.value),player=landingPreview(tape,selected,lead,dir),r=player.result;
+      find('[data-timing]').textContent=lead?lead+' frames before impact':'On impact';
+      find('[data-after]').textContent='With this input · '+landingName(r.type,r.dir)+' on frame '+r.frame+'.';
+      const view=new window.DogFightView.FightView();view.shakeEnabled=false;
+      view.draw(canvas,player.battle,0,player.battle.time);
+      for(const b of panel.querySelectorAll('[data-dir]'))b.setAttribute('aria-pressed',String(Number(b.dataset.dir)===dir));
+    }
+    function choose(){
+      selected=landings[select.selectedIndex];dir=0;
+      slider.max=String(selected.frame-selected.start-1);slider.value=String(Math.min(5,Number(slider.max)));
+      find('[data-before]').textContent=selected.dog+' · '+landingName(selected.type,selected.dir)+'. '+timing(selected.press,selected.frame,selected.held,selected.locked);
+      jump(selected.frame);compare();
+    }
+    select.onchange=choose;slider.oninput=compare;
+    for(const b of panel.querySelectorAll('[data-dir]'))b.onclick=()=>{dir=Number(b.dataset.dir);compare();};
+    find('[data-guided]').onclick=()=>practice(selected,Math.max(selected.start,selected.frame-6),true);
+    find('[data-live]').onclick=()=>practice(selected,selected.start,false);
+    find('[data-original]').onclick=()=>{
+      jump(Math.max(0,selected.start-20));
+      document.getElementById('clip-toggle').click();
+      document.getElementById('clip-arena').scrollIntoView({block:'nearest'});
+    };
+    panel.addEventListener('toggle',()=>{if(panel.open && !signal.aborted)choose();},{signal});
+    panel.open=opened;
+    if(opened)panel.querySelector('summary').focus();
   }
   function stick(x=0,y=0){
     const horizontal=Math.round(x*100),vertical=Math.round(y*100);
@@ -428,12 +554,13 @@
       worker.postMessage({type:'start',width:out.width,height:out.height});
     });
   }
-  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment}){
+  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,clinic}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
-    const {marks,escape,launch,contact}=analyze(tape,slot,follow,!!retryMoment);
+    const {marks,escape,launch,contact,landings}=analyze(tape,slot,follow,!!retryMoment);
     escapeReady?.(escape);
     if(contact && practiceLaunch)defensePanel(nav,tape,contact,jump,practiceLaunch,signal);
     if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch,signal);
+    if(landings.length && practiceLanding)landingPanel(nav,tape,landings,jump,practiceLanding,!!clinic,signal);
     let selected=null,panel,line,lead;
     if(retryMoment && marks.length){
       panel=document.createElement('section');panel.id='clip-retry';panel.hidden=true;
@@ -483,5 +610,5 @@
     const sync=inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump,signal});
     return ()=>{sync();if(panel && selected)panel.hidden=frame()!==selected.frame;};
   }
-  window.FinishTools={install,moments,analyze,inputFrame,launchFlight,defenseReply,returnTrace,returnComparison};
+  window.FinishTools={install,moments,analyze,inputFrame,launchFlight,defenseReply,returnTrace,returnComparison,landingDemo,landingTry,landingPreview,landingName,timing,landingActions,landingReport};
 })();
