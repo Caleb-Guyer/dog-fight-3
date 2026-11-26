@@ -4434,12 +4434,17 @@
         else if (drill.pattern==='brace') {
           // Count one short drive from first body contact, even if the defender then leaves the ground.
           if (drill.tell || Math.abs(dummy.x-player.x)<=player.stats.width+dummy.stats.width+1) drill.tell++;
+          if (forward(dummy.x)<=0) drill.atChalk=(drill.atChalk || 0)+1;
+          if (drill.atChalk && !drill.tell && (player.ground>=0 || drill.atChalk>=60)) {
+            this.finishFootwork('gaveRoom');
+            return idleInput;
+          }
           if (drill.tell>=18 && player.ground>=0 && !player.floorAction) {
             const distance=Math.max(0,Math.round((drill.startX-player.x)*drill.dir));
             drill.distance=distance;
             this.finishFootwork(forward(player.x)>=0?'heldLine':'lostLine');
           }
-          return drill.phase==='done' || drill.tell>=18?idleInput:{...idleInput,x:-drill.dir};
+          return drill.phase==='done' || drill.atChalk || drill.tell>=18?idleInput:{...idleInput,x:-drill.dir};
         } else if (forward(dummy.x)>108) this.finishFootwork('tookGround');
         else if (forward(dummy.x)<=0) this.finishFootwork('lostGround');
         return drill.phase==='done'?idleInput:{...idleInput,x:-.48*drill.dir};
@@ -5801,7 +5806,7 @@
         input1={...input1,attack:false,tapped:{...input1.tapped,attack:false}};
       }
       if (footwork?.pattern==='center' && footwork.phase==='ready') {
-        if (!input1.x && !input1.shield && !input1.jump && !input1.shortHop) return;
+        if (!input1.x && !input1.shield && !input1.jump && !input1.shortHop && !input1.tapped?.jump && !input1.tapped?.shield) return;
         footwork.phase='approach';
       }
       if (footwork && footwork.pauseOnWindup !== undefined) {

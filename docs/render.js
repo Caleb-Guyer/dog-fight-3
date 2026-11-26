@@ -2863,6 +2863,16 @@
         }
       } else if (world.footworkPractice) {
         const x = snap(world.footworkPractice.mark, 2), y = world.terrain[0].y;
+        const drill=world.footworkPractice;
+        if (drill.pattern==='brace') {
+          const start=snap(drill.startX,2);
+          const drift=drill.distance ?? Math.max(0,(drill.startX-a.x)*drill.dir);
+          const end=snap(drill.startX-drill.dir*Math.min(drift,90),2);
+          const color=drift>30?'#ec977b':mint;
+          pixelLine(ctx,start,y+18,end,y+18,ink,5,2);
+          pixelLine(ctx,start,y+18,end,y+18,color,2,2);
+          pixelLine(ctx,start,y+13,start,y+21,cream,2,2);
+        }
         const chalk = ['opening', 'atMark', 'cancelNow'].includes(world.footworkPractice.phase) ? mint : cream;
         for (const side of [-1, 1]) {
           pixelLine(ctx, x + side * 10, y + 11, x, y + 1, ink, 5, 2);
