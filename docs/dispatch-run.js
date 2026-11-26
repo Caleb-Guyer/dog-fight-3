@@ -83,6 +83,14 @@
       return stocks;
     }
     get objective() {
+      const boss = this.foes[0];
+      if (boss?.kind === 'conductor') {
+        if (boss.phase === 'windup' && boss.move === 'bell') return 'Bell winding up · Jump the floor wave or shield.';
+        const wave = boss.wavefront, hero = this.dogs[0];
+        if (wave && !wave.spent && wave.radius <= Math.abs(hero.x - wave.x) + hero.stats.width + 10)
+          return 'Floor wave · Jump over the brass crest.';
+        if (boss.phase === 'stun') return 'Lamp open · Hit the Copper Hound!';
+      }
       if (this.sideRoute) return this.layout.stops[this.wave]+' · '+(this.wave+1)+' of 3 · '+this.foes[0].f.stats.name;
       if (this.bridge) return this.bridge.objective(this.dogs[0].x);
       if (this.layout.rules === 'horde') {
@@ -120,6 +128,7 @@
       f.encounter = e;
       if (returning && isDog(e.kind)) this.beginStockReturn(f);
       Object.assign(e, { cycle: 0, move: 'stamp', face: f.face, spent: false, hurt: 0, jumpHold: 0 });
+      if (e.kind === 'conductor') { e.wavefront = null; e.nextBell = 0; }
       phase(e, 'approach', 1);
     }
     startWave() {
@@ -237,23 +246,28 @@
             return { ...idleInput, jump: true, tapped: { jump: true } };
           }
         }
-        const rush = kind === 'porter' || (boss && (e.hp <= e.maxHP / 2 ? e.cycle % 3 !== 0 : e.cycle % 2 === 1));
+        const bell = boss && e.hp <= e.maxHP / 2 && e.cycle >= (e.nextBell || 0) && !e.wavefront;
+        const rush = kind === 'porter' || (boss && e.cycle % 2 === 1);
         const reach = rush ? (boss ? 475 : 235) : body.reach + 23;
-        if (Math.abs(dx) > reach) {
+        if (!bell && Math.abs(dx) > reach) {
           f.stats.speed = body.speed;
           const target = clamp(hero.x, floor.x1 + body.width + 12, floor.x2 - body.width - 12);
           return Math.abs(target - f.x) > 7 ? { ...idleInput, x: Math.sign(target - f.x) } : idleInput;
         }
-        e.move = rush ? 'charge' : 'stamp';
+        e.move = bell ? 'bell' : rush ? 'charge' : 'stamp';
         e.spent = false;
-        phase(e, 'windup', boss && rush ? 0.93 : body.windup);
+        phase(e, 'windup', bell ? 0.9 : boss && rush ? 0.93 : body.windup);
         this.emit('machineWindup', { f, kind, move: e.move });
       } else if (e.phase === 'windup' && e.time >= e.duration) {
+        if (e.move === 'bell') {
+          e.wavefront = { x: f.x, radius: 0, spent: false };
+          e.nextBell = e.cycle + 3;
+        }
         phase(e, 'strike', e.move === 'charge' ? (boss ? 0.62 : 0.46) : 0.2);
         this.emit('machineSwing', { f, kind, move: e.move });
       } else if (e.phase === 'strike' && e.time >= e.duration) {
         e.cycle++;
-        phase(e, 'stun', boss ? (e.hp < e.maxHP / 2 ? 0.75 : 1.05) : kind === 'puncher' ? 0.48 : 0.8);
+        phase(e, 'stun', e.move === 'bell' ? 1.45 : boss ? (e.hp < e.maxHP / 2 ? 0.75 : 1.05) : kind === 'puncher' ? 0.48 : 0.8);
       } else if (e.phase === 'stun' && e.time >= e.duration) phase(e, 'approach', 1);
       f.face = e.face;
       if (e.phase === 'strike' && e.move === 'charge') {
@@ -271,6 +285,7 @@
     }
     machineContact(e) {
       const { f, kind } = e, hero = this.dogs[0];
+      if (e.move === 'bell') return;
       if (e.phase !== 'strike' || e.spent || !f.stocks || f.respawning || f.stun > 0 || f.grip || f.ground < 0) return;
       if (hero.stockLift || hero.stockGuard) return;
       const body = machines[kind], boss = kind === 'conductor', rush = e.move === 'charge';
@@ -284,6 +299,27 @@
       this.hit(hero, f, boss && rush ? 13 : body.damage, body.base, body.growth, 0,
         boss ? 'heavy' : 'jab', e.face, guard || { x: hero.x, y: hero.y - hero.stats.height * 0.55 },
         { angle: rush ? 29 : boss ? 62 : 42, hard: boss || kind === 'porter' }, null, null, !!guard);
+    }
+    advanceBell(e, dt) {
+      const wave = e.wavefront, floor = this.terrain[0], hero = this.dogs[0];
+      const previous = wave.radius;
+      wave.radius += 430 * dt;
+      const face = hero.x < wave.x ? -1 : 1;
+      const edge = face < 0 ? wave.x - floor.x1 : floor.x2 - wave.x;
+      if (!wave.spent && previous <= edge && !hero.stockLift && !hero.stockGuard) {
+        // Sweep the short distance between ticks and truncate the wave at the stage lip.
+        const front = Math.min(edge, wave.radius + 10), back = Math.max(0, previous - 10);
+        const x = wave.x + face * (back + front) / 2, rx = (front - back) / 2;
+        const area = { x, rx, y: floor.y - 11, ry: 11 };
+        const guard = shieldContact(hero, area);
+        if (guard || (Math.abs(hero.x - x) <= rx + hero.stats.width &&
+            hero.y >= floor.y - 22 && hero.y - hero.stats.height <= floor.y)) {
+          wave.spent = true;
+          this.hit(hero, e.f, 10, 195, 4.1, 0, 'heavy', face, guard || { x, y: area.y },
+            { angle: 52, hard: true, projectile: true }, null, null, !!guard);
+        }
+      }
+      if (wave.radius > Math.max(wave.x - floor.x1, floor.x2 - wave.x)) e.wavefront = null;
     }
     savePoint() {
       this.checkpoint++;
@@ -316,12 +352,16 @@
         if (f.absent) continue;
         e.hurt = Math.max(0, e.hurt - dt);
         if (e.kind === 'conductor' && e.hp <= 0) {
+          e.wavefront = null;
           if (f.grip) this.breakGrapple(false);
           f.stocks = 0;
           f.attack = null;
           phase(e, 'defeat', 0.8);
           this.emit('machineDown', { f, kind: e.kind });
-        } else if (machines[e.kind]) this.machineContact(e);
+        } else if (machines[e.kind]) {
+          if (e.wavefront) this.advanceBell(e, dt);
+          this.machineContact(e);
+        }
       }
       if (this.foes.some((e) => e.f.stocks > 0)) return;
       if (this.wave + 1 === l.waves.length) {
