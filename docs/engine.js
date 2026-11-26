@@ -10949,12 +10949,14 @@
       const read = this.bot.missedSmash;
       if (!read) return null;
       const charge = foe.smashCharge, swing = foe.attack;
-      if (this.time > read.expires || f.ground < 0 || f.ground !== foe.ground || f.stun || f.grip ||
-          f.ledge || f.floorAction || protectionTime(foe) || (read.charging && read.charging !== charge && swing?.moveId !== read.id)) {
+      const interrupted = f.ground < 0 || f.ground !== foe.ground || f.stun || f.grip ||
+        f.ledge || f.floorAction || protectionTime(foe);
+      if (this.time > read.expires || (read.charging &&
+          (interrupted || (read.charging !== charge && swing?.moveId !== read.id)))) {
         delete this.bot.missedSmash;
         return null;
       }
-      if (f.attack || f.command || f.shield || f.jumpSquat || f.landingLag || f.charge >= 0) return null;
+      if (interrupted || f.attack || f.command || f.shield || f.jumpSquat || f.landingLag || f.charge >= 0) return null;
       const dir = foe.face, gap = (f.x-foe.x)*dir;
       const move = smashes[read.id], reach = move.box[0]+move.box[2]+f.stats.width;
       if (!read.charging) {
