@@ -237,14 +237,14 @@ async function match(browser,device){
     assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!',device+' saved P2’s stock against the original P1');
     await choose('[data-do=trial-results]');await page.locator('[data-saved-clip=full]:focus').waitFor();
     if(device==='keyboard'){
-      await page.goto(root+'?roll#records/study/stock');
+      await page.goto(root+'?roll#records/study/stock');await page.waitForLoadState('networkidle');await page.clock.runFor(900);
       await page.locator('#stock-try').waitFor();
       assert.match(await page.locator('#dialog').innerText(),/Haymaker/);
       await choose('#stock-try');await page.keyboard.down('d');await page.keyboard.down('l');
       await page.clock.runFor(1030);await page.keyboard.up('d');await page.keyboard.up('l');
       await page.clock.runFor(21000);
       assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!');
-      await choose('[data-do=trial-results]');await page.locator('#film-defense [data-study]').waitFor();
+      await choose('[data-do=trial-results]');await page.clock.runFor(900);await page.locator('#film-defense [data-study]').waitFor();
       assert.equal(await seek.inputValue(),'1196','return to the knockout after saving the sample stock');
     }
     assert.deepEqual(errors,[]);
