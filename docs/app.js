@@ -646,7 +646,7 @@
     if (page === 'match' && world?.comboPractice?.defending) return i === 0 ? 'REPLAY' : 'YOU';
     if (page === 'match' && world?.hasSecondPlayer && world.mode === 'training') {
       if (i === 1) return 'P2';
-      return world.comboPractice && !['record','throwChase','confirm'].includes(world.comboPractice.source) ? 'REPLAY' : 'P1';
+      return world.comboPractice && !['record','throwChase','confirm','dashPressure'].includes(world.comboPractice.source) ? 'REPLAY' : 'P1';
     }
     const mode = page === 'match' && world ? world.mode : settings.mode;
     return i === 0 ? 'P1' : mode === 'local' ? 'P2' : mode === 'training' ? 'DUMMY' : 'CPU';
@@ -1380,7 +1380,7 @@
       return li;
     }));
   }
-  const comboSources=['example','late','record','replay','flurry','escapeFlurry','defend','mix','throwChase','confirm'];
+  const comboSources=['example','late','record','replay','flurry','escapeFlurry','defend','mix','throwChase','confirm','dashPressure'];
   function stockStatus(f,battle,human){
     if(f.stockLift){
       if(!f.stockLift.ready)return battle.relayTeams?'Entering':'Returning';
@@ -1512,7 +1512,7 @@
       combo.damage +
       '/' +
       (world.mode === 'training' ? shownMove : '') +
-      (comboLab ? '/' + [comboLab.phase, comboLab.contacts.length, comboLab.counter?.moveId, comboLab.shifts, comboLab.dodges, comboLab.launchRead, comboLab.tick >= 150].join('/') : '') +
+      (comboLab ? '/' + [comboLab.phase, comboLab.contacts.length, comboLab.counter?.moveId, comboLab.window?.gap, comboLab.shifts, comboLab.dodges, comboLab.launchRead, comboLab.tick >= 150].join('/') : '') +
       (world.freshnessPractice ? '/' + world.freshnessPractice.revision + '/' + player.moveHistory.length : '');
     if (key === hudKey) return;
     hudKey = key;
@@ -1969,6 +1969,11 @@
     afterStory = null;
     startMatch({ ...settings, p1:'pip', p2:'noodle', mode:'solo', cpuLevel:'rival', stage:'picnic', fetch:false },
       undefined, 42, series ? new StockSet('picnic') : null);
+  }
+  function startDashPressure(p1,p2,stage='picnic',form='original'){
+    leaveOnline();afterStory=null;
+    startMatch({mode:'solo',p1,p2,stage,form,coats:[savedCoat(0,p1),savedCoat(1,p2)],cpuLevel:'rival',
+      dashPressure:true,stockCount:3,minutes:7,fetch:false},undefined,42);
   }
   function startCloverApproach() {
     leaveOnline();
@@ -3977,6 +3982,7 @@
   }
   $('combo-tapes').onclick=()=>practiceTapes();
   $('combo-fight-pip').onclick = fightRivalPip;
+  $('dash-pressure-fight').onclick=()=>startDashPressure(world.dogs[0].kind,world.dogs[1].kind,world.stage,world.form);
   for (const source of comboSources) $('combo-' + source).onclick = () => {
     if(source!=='throwChase')return drill('combo',false,source);
     if(world.comboPractice?.source!==source && !world.trainingDamage)world.setDummyDamage(95);
@@ -4265,7 +4271,7 @@
     VersusRulebook:'versus-rules.js?v=rumble-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=button-check-1',StageStrike:'stage-strike.js?v=button-check-1',
-    ComboLab:'combo-lab.js?v=ground-space-1', FinishTools:'finish-tools.js?v=ledge-1',
+    ComboLab:'combo-lab.js?v=dash-pressure-1', FinishTools:'finish-tools.js?v=ledge-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
@@ -6589,6 +6595,14 @@
       leaveOnline();afterStory=null;
       startMatch({...settings,mode:'training',p1:'brisket',p2:'pip',stage:'nightmail',fetch:false});
       world.setDummyDamage(60);drill('combo',false,'throwChase','diMix');
+    } else if (/^#(training|solo)\/dash-pressure(?:\/(pip|brisket|noodle|clover)\/(pip|brisket|noodle|clover))?$/.test(hash)) {
+      const [,p1='brisket',p2='pip']=hash.split('/');
+      if(hash.startsWith('#solo'))startDashPressure(p1,p2);
+      else{
+        leaveOnline();afterStory=null;
+        startMatch({...settings,mode:'training',stage:'picnic',form:'original',p1,p2,fetch:false});
+        drill('combo',false,'dashPressure','punish');
+      }
     } else if (hash === '#training/shield-punish') {
       leaveOnline();
       afterStory = null;

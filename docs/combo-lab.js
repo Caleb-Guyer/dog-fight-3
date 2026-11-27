@@ -5,7 +5,7 @@
   const tenth=n=>Number(n.toFixed(1));
   const comboSources = { example:'Dog’s combo', late:'Late jab', record:'Your take', replay:'Your take',
     flurry:'Pip’s rapid jab', escapeFlurry:'Escape the flurry',
-    defend:'Defend this take', mix:'Mix A and B',throwChase:'Chase the up throw',confirm:'Hit confirm' };
+    defend:'Defend this take', mix:'Mix A and B',throwChase:'Chase the up throw',confirm:'Hit confirm',dashPressure:'Dash attack spacing' };
   const comboReplies = { stand: 'Standing', guard: 'Guard', away: 'Flick away', punish:'Block and punish', p2:'Player 2',
     diIn:'Launch DI in',diOut:'Launch DI out',diMix:'Mix launch DI' };
   const takeLetter = slot => slot ? 'B' : 'A';
@@ -79,7 +79,7 @@
   let listedContacts,listedCount=0;
   function readout(world) {
     const d=world.comboPractice;
-    const title = ['flurry','escapeFlurry','throwChase'].includes(d.source) ? comboSources[d.source] : d.defending ? (d.phase === 'done' ? 'Take ' + takeName(world,d.playSlot) :
+    const title = ['flurry','escapeFlurry','throwChase','dashPressure'].includes(d.source) ? comboSources[d.source] : d.defending ? (d.phase === 'done' ? 'Take ' + takeName(world,d.playSlot) :
       d.source === 'mix' ? 'Mix A and B' : 'Defend ' + takeName(world,d.slot)) :
       d.phase === 'ready' ? 'Ready to record' : d.source === 'record' && d.phase === 'active' && d.tick < 150
       ? 'Recording' : comboSources[d.source];
@@ -122,10 +122,17 @@
       latest=d.phase==='done'?d.outcome+(complete?' Tap Attack for a new set.':' Tap Attack for the next jab.'):
         d.opening==='block'?'Shield! Step in and grab.':d.opening==='hit'?'Hit! Tap Attack again.':'Center your direction and tap Attack.';
     }
+    if(d.source==='dashPressure'){
+      if(d.phase==='ready')latest='Attack now, or run closer first.';
+      if(d.window)latest+=' · '+d.window.frames+'f recovery · '+d.window.gap+' px apart';
+      if(d.phase==='done')latest+=' · Tap Attack to retry';
+    }
     $('combo-latest').textContent = latest;
     const prior = d.prior;
     $('combo-previous').hidden = d.source==='confirm'?d.series.played!==6:!prior;
     if(d.source==='confirm' && d.series.played===6)$('combo-previous').textContent='Hits confirmed '+d.series.confirmed+'/3 · Shields grabbed '+d.series.caught+'/3';
+    else if(prior?.source==='dashPressure' && prior.window)$('combo-previous').textContent='Previous dash · '+prior.window.gap+' px apart · '+
+      (prior.counter?comboMoveName(prior.counter):'No punish landed');
     else if (prior) $('combo-previous').textContent = 'Previous · ' + (['mix','defend'].includes(prior.source) ?
       'Defended take ' + takeLetter(prior.slot) : comboSources[prior.source] + ' · ' + comboReplies[prior.reply]) +
       ' at ' + prior.baseline + '% · ' + prior.hits + (prior.hits === 1 ? ' hit' : ' hits') + ' · ' + tenth(prior.damage) + '%';
@@ -172,14 +179,16 @@
     const d = world.comboPractice;
     $('combo-reply').value = d.reply;
     $('combo-fight-pip').hidden = d.source !== 'flurry' && d.source !== 'escapeFlurry';
+    $('dash-pressure-fight').hidden=d.source!=='dashPressure';
     $('combo-slot').value = String(d.slot);
-    $('combo-reply-label').hidden = $('combo-reply').hidden = d.defending || d.source==='confirm';
+    $('combo-reply-label').hidden = $('combo-reply').hidden = d.defending || d.source==='confirm' || d.source==='dashPressure';
     $('combo-slow').setAttribute('aria-pressed', String(d.slow));
     for (const source of Object.keys(comboSources))
       $('combo-' + source).setAttribute('aria-pressed', String(d.source === source));
     const route = { pip: 'Attack, Attack, then Jump + Forward + Attack.', brisket: 'Attack, then Grab. Tap forward to throw.',
       noodle: 'Attack twice, then tap neutral Special.', clover: 'Attack twice, then Jump + Attack.' }[world.dogs[0].kind];
-    return d.source==='confirm'?'Six jabs, three shields. Tap Attack and release. On a hit, follow with Attack. On a shield flash, step in and Grab. Tap Attack after each result for the next exchange.':
+    return d.source==='dashPressure'?'Start in a run toward '+world.dogs[1].stats.name+'’s shield. Tap Attack now, then try running closer first. Compare the distance and recovery left when the rival checks for a counter.':
+      d.source==='confirm'?'Six jabs, three shields. Tap Attack and release. On a hit, follow with Attack. On a shield flash, step in and Grab. Tap Attack after each result for the next exchange.':
       d.source==='throwChase'?'Tap Attack for the opening grab and up throw. You take over on release. Follow the rival and hit them before they land. Tap Attack after the result to retry.':
       d.source === 'flurry' ? 'Tap Attack once. When Quick Paw hits, press Attack again and hold through Cross. Release during Speed Bag for Bell Kick. Try Flick away as the rival’s response.'
       : d.source === 'escapeFlurry' ? 'You control ' + world.dogs[1].stats.name + '. Tap Attack to start. Let Pip hit you once, then flick away during the spark. Re-center between hits to shift again.'
