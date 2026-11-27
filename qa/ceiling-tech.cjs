@@ -79,7 +79,8 @@ test('a delayed remote Jump rewinds a planted tech on both seats and an older sn
 });
 test('guided wall springs and low holds both return by lasso from either side without spending the air jump',()=>{
   for(const side of ['left','right'])for(const spring of [true,false]){
-    const w=new Battle({...config,mode:'training'},undefined,seededRandom(12));w.resetWallPractice(side,'spring');
+    // Enter the current drill from training opened through an older shared combo.
+    const w=new Battle({...config,mode:'training',wallSpring:false},undefined,seededRandom(12));w.resetWallPractice(side,'spring');
     const d=w.wallPractice,f=w.dogs[0];let cast=false,paused=0;
     for(let n=0;n<160&&!f.ledge;n++){
       if(d.waiting && !d.choice)paused++;
