@@ -259,6 +259,7 @@
     shake: true,
     fixedCamera:false,
     cornerTips: true,
+    stockBreaks: false,
     tiltStick: false,
     tiltStick2: false,
     quickAttack1: true,
@@ -282,6 +283,7 @@
     settings.timed=s.timed===true;
     settings.fixedCamera=s.fixedCamera===true;
     settings.guidedLessons=s.guidedLessons===true;
+    settings.stockBreaks=s.stockBreaks===true;
     if(settings.timed && !settings.minutes)settings.minutes=3;
     for (const slot of ['p1', 'p2']) if (Object.hasOwn(fighters, s[slot])) settings[slot] = s[slot];
     for (const key of ['fetch', 'sound', 'shake', 'tiltStick','flickJump1','flickJump2','quickAttack1','quickAttack2','bestOfThree','cornerTips']) if (typeof s[key] === 'boolean') settings[key] = s[key];
@@ -1050,6 +1052,7 @@
     if (dialogType==='finish-replay') {
       if(clipScreen?.review){
         const r=clipScreen.review;
+        if(r.stockBreak)return showStockBreak();
         if(r.launchLab)return closeRecoveryClinic();
         if(r.moment)return watchMatch(r.film,r.frame);
         if(r.clinic){showHome(false);schoolList();return;}
@@ -2369,7 +2372,7 @@
         targetRecap() + (spar?spar.goals(true):'') + (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
           (corner?'<button class="utility" data-do="corner-practice">Practice · '+(schoolLessons.find(l=>l.id===corner.practice)?.title || $(corner.practice).textContent)+'</button>'+
             '<button class="utility" data-do="corner-toggle" aria-pressed="'+settings.cornerTips+'">Ringside tips · '+(settings.cornerTips?'On':'Off')+'</button>'+
-            '<button class="utility" data-do="school-suspend">Save &amp; quit</button>':'')+
+            stockBreakToggle()+'<button class="utility" data-do="school-suspend">Save &amp; quit</button>':'')+
           (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight?.returnStart?'Retry stock return':practiceFight?'Retry position':'Practice this position') + '</button>' : '') +
           '<button class="utility" data-do="practice">Find a drill</button>' +
           (practiceFight ? '<button class="utility" data-do="return-fight">'+$('return-fight').textContent+'</button>' : '') + '</div>' : '') +
@@ -2402,7 +2405,7 @@
       (battle.mode==='local' && !online.match?'Recover P'+(slot+1)+'’s last fall':'Recover my last fall')+'</button>').join('');
   }
   function recoverySheet({coach,coachLine,...review},plan=coach) {
-    const back=()=>review.rescue?closeRecoveryClinic():review.fromClip?showFinishReplay(null,review):review.from==='pause'?showPause():showResult();
+    const back=()=>review.rescue?closeRecoveryClinic():review.fromClip?showFinishReplay(null,review):review.stockBreak?showStockBreak():review.from==='pause'?showPause():showResult();
     if(!window.RecoveryCoach)return waitForDispatch('Practice this recovery',()=>loadDispatch('RecoveryCoach'),()=>recoverySheet(review,plan),back);
     const device=promptDevice(getPads());
     const label=a=>device===0?keyFor(0,a):device===1 && !['left','right','up','down'].includes(a)?padFor(0,a):a[0].toUpperCase()+a.slice(1);
@@ -2415,6 +2418,27 @@
   function knockoutClips(battle){
     finishTape?.captureKnockouts(battle);
     return finishTape?.knockouts || [];
+  }
+  function stockBreakToggle(){
+    return '<button class="utility" data-do="stock-break-toggle" aria-pressed="'+settings.stockBreaks+'">Pause after my KOs · '+(settings.stockBreaks?'On':'Off')+'</button>';
+  }
+  function showStockBreak(){
+    const clip=knockoutClips(world).at(-1),loss=clip?.losses.find(l=>l.slot===0);
+    if(!loss || !world.dogs[0].stockLift)return showPause();
+    const review={clip,slot:0,from:'pause',stockBreak:true,result:world},fall=loss.zone==='bottom';
+    const hit=loss.lastHit && loss.frame-loss.lastHit.frame<=600 && loss.lastHit.id;
+    const move=(moves[hit] || specials[hit] || smashes[hit] || pummels[hit] || throws[hit])?.label;
+    showDialog('stock-break',stockLabel(world.dogs[0].stocks)+' left',
+      '<p id="stock-break-recap"></p><div class="dialog-actions"><button class="primary" data-do="resume">Play next stock</button>'+
+      '<button class="utility" id="stock-break-watch">Watch my KO</button>'+
+      (fall?'<button class="utility" id="stock-break-practice">Practice this recovery</button>':'')+
+      '<button class="utility" id="stock-break-retry">Retry this stock</button>'+stockBreakToggle()+'</div>');
+    $('stock-break-recap').textContent='Pip went out at the '+loss.zone+' blast line at '+tenth(loss.damage)+'%. '+
+      (move?'Brisket’s last hit was '+move+'. ':'')+'Your next stock is waiting on the lift.';
+    $('stock-break-watch').onclick=()=>showFinishReplay(null,review);
+    if(fall)$('stock-break-practice').onclick=()=>recoverySheet(review);
+    $('stock-break-retry').onclick=()=>stockSheet(review);
+    $('dialog-body').querySelector('[data-do=resume]').focus();
   }
   function knockoutLabel(clip,battle){
     return clip.losses.map(loss=>'P'+(loss.slot+1)+' '+fighters[loss.kind || battle.matchCard.players[loss.slot].kind].name+
@@ -2493,7 +2517,7 @@
   }
   function replayTape(review){return review?.returning?review.clip.returnTape:review?.clip?.tape || finishTape;}
   function stockSheet(review){
-    const back=()=>review.from==='lesson'?backToRematchLesson():review.film?watchMatch(review.film,review.frame):review.from==='pause'?showPause(false):showResult();
+    const back=()=>review.stockBreak?showStockBreak():review.from==='lesson'?backToRematchLesson():review.film?watchMatch(review.film,review.frame):review.from==='pause'?showPause(false):showResult();
     if(!window.MatchReview)return waitForDispatch('Retry my stock',()=>loadDispatch('MatchReview'),()=>stockSheet(review),back);
     if(!review.stock){
       const film=review.film?.film || new window.MatchReview.MatchFilm(finishTape.fullMatch());
@@ -2545,6 +2569,7 @@
     if($('clip-return'))$('clip-return').onclick=()=>showFinishReplay(null,{...review,returning:!returning});
     if(ko)$('clip-escape').onclick=()=>startFinishTrial(Math.max(0,tape.length-90),loss.slot,review);
     if(review?.moment)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to full match';
+    if(review?.stockBreak)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to next stock';
     if(review?.clinic || review?.launchLab)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to Fight School';
     for(const b of $('dialog-body').querySelectorAll('[data-clip-recovery]'))
       b.onclick=()=>recoverySheet({...review,slot:Number(b.dataset.clipRecovery),fromClip:true});
@@ -3219,6 +3244,12 @@
     if(spar && drill)return startFighterLesson(spar.kind,Number(drill.dataset.sparLesson),false,pausedFight());
     if(spar && action==='spar-card')return fighterSheet(spar.kind);
     if(action==='rulebook')return openRulebook();
+    if(action==='stock-break-toggle'){
+      settings.stockBreaks=!settings.stockBreaks;save();
+      const button=e.target.closest('button');
+      button.textContent='Pause after my KOs · '+(settings.stockBreaks?'On':'Off');
+      button.setAttribute('aria-pressed',String(settings.stockBreaks));return;
+    }
     if(action==='matchup-card')return page==='match'?showMatchup(matchConfig.openingMatchup,'result'):showMatchup(lobbyMatchup(),'rules');
     if(action==='handicap')return openRulebook(undefined,true);
     if(action==='corner-practice' && corner)return startCornerLesson();
@@ -5245,7 +5276,7 @@
         (schoolSave.passed.includes(l.id)?' ✓':'')+'</button>').join('')+'</div><div class="dialog-actions"><button class="primary" id="school-resume">'+
       (world?.lesson?'Back to lesson':schoolSave.rematch?(schoolSave.rematch.fight?'Rematch Brisket':'Continue rematch practice'):unfinishedLesson()<0?(schoolSave.firstFightDone?'Replay course':'Play first match'):
         schoolSave.started?'Continue course':'Start course')+'</button><button class="utility" id="syllabus-guide">'+
-      (settings.guidedLessons && !world?.lesson?.guideError?'Practice at match speed':'Guide my inputs')+'</button><button class="utility" data-do="fighter-classes">Fighter lessons</button><button class="utility" data-do="pad-check">Check controller</button><button class="utility" data-do="home">Main menu</button></div>');
+      (settings.guidedLessons && !world?.lesson?.guideError?'Practice at match speed':'Guide my inputs')+'</button>'+stockBreakToggle()+'<button class="utility" data-do="fighter-classes">Fighter lessons</button><button class="utility" data-do="pad-check">Check controller</button><button class="utility" data-do="home">Main menu</button></div>');
     const clinic=document.createElement('button');clinic.type='button';clinic.className='utility';clinic.textContent='Landing clinic';
     $('syllabus-guide').after(clinic);clinic.onclick=()=>replayClinic('floor');
     const rescue=clinic.cloneNode(false);rescue.textContent='Recovery clinic';clinic.after(rescue);rescue.onclick=()=>recoveryClinic(false);
@@ -6460,6 +6491,7 @@
           accumulator = frameLab.pending > 0 ? 1 / 60 : 0;
           if (frameLab.pending > 0) frameLab.pending--;
         } else accumulator += world.lesson?.example || world.wallPractice?.heavy || world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.trumpPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow || world.airPractice?.slow ? dt / 2 : dt;
+        const watchedStocks=corner && settings.stockBreaks && !practiceFight ? world.dogs[0].stocks : 0;
         while (accumulator >= 1 / 60 && world.end === null) {
           const slot = world.trainingPlayerSlot;
           const lesson=world.lesson;
@@ -6506,6 +6538,9 @@
           taps.clear();
           touchTaps.clear();
           accumulator = Math.max(0, accumulator - 1 / 60);
+          if(watchedStocks>world.dogs[0].stocks && world.dogs[0].stockLift && world.end===null && !world.suddenDeath){
+            showStockBreak();break;
+          }
         }
         if (world.end!==null && !online.match) recordFight(world);
         const call=roundCall(world);
