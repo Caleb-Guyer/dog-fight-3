@@ -2685,6 +2685,7 @@
       if(config.wallSpring!==false)this.wallSpring=true;
       if(config.risingCatch!==false)this.risingCatch=true;
       if(config.impactTech!==false)this.impactTech=true;
+      if(config.heldAerials!==false)this.heldAerials=true;
       if(config.dashSmash!==false)this.dashSmash=true;
       this.time = 0;
       this.end = null;
@@ -3256,6 +3257,7 @@
       if (!('wallSpring' in state)) delete this.wallSpring;
       if (!('risingCatch' in state)) delete this.risingCatch;
       if (!('impactTech' in state)) delete this.impactTech;
+      if (!('heldAerials' in state)) delete this.heldAerials;
       if (!('dashSmash' in state)) delete this.dashSmash;
       if (!('closingHeight' in state)) delete this.closingHeight;
       this.random.state = random.state;
@@ -6723,7 +6725,7 @@
           : pressed('aimStick') ? 'aimStick' : pressed('smash') ? 'smash' : pressed('attack') ? 'attack' : null;
       if (button) {
         const stickAerial = button === 'aimStick' && (!f.ledge || f.ledge.dropQueued) &&
-          (f.ground < 0 || f.jumpSquat || f.jumpBuffer > 0 || f.guardIntent === 'platformDrop');
+          (f.ground < 0 || f.jumpSquat || f.jumpBuffer > 0 || (this.heldAerials && f.heldRecoveryJump) || f.guardIntent === 'platformDrop');
         const stickTilt = button === 'aimStick' && input.tiltMode && f.ground >= 0 && !stickAerial;
         const guardGrab = button === 'attack' && input.shield && (f.shield || (pressed('shield') && !f.parryFlash)) && f.ground >= 0 &&
           Math.abs(input.y) < .45 && f.guardIntent !== 'platformDrop' &&
@@ -7502,7 +7504,12 @@
       if (f.command) {
         f.command.life -= dt;
         if (!f.command.released) f.command.heldFor += dt;
-        if (f.command.life < -0.00001) f.command = null;
+        if (f.command.life < -0.00001) {
+          // Beyond the tap window, keep the chosen aerial only while both controls stay down.
+          if (this.heldAerials && f.heldRecoveryJump && f.command.type === 'attack' && input[f.command.button || 'attack'])
+            f.command.life = 0;
+          else f.command = null;
+        }
       }
       if (f.clashRecoil) {
         f.clashRecoil.time += dt;

@@ -1771,7 +1771,9 @@
       return;
     }
     const slot = world.trainingPlayerSlot, player = world.dogs[slot], rival = world.dogs[1-slot];
-    const queued = player.heldRecoveryJump ? ' · Jump held' : player.jumpBuffer > 1e-8 && !player.jumpSquat ? ' · Jump buffered' : '';
+    const heldAerial = world.heldAerials && player.command?.type === 'attack' && player.prev[player.command.button || 'attack'];
+    const queued = player.heldRecoveryJump ? (heldAerial ? ' · Jump + Attack held' : ' · Jump held') :
+      player.jumpBuffer > 1e-8 && !player.jumpSquat ? ' · Jump buffered' : '';
     status.textContent = 'Frame +' + frameLab.count + '\n' + player.stats.name + ' · ' + frameState(player) + queued +
       '\n' + rival.stats.name + ' · ' + frameState(rival);
   }
@@ -3944,7 +3946,7 @@
     if(active && !world.comboPractice)drill('combo',false,'example');
     window.ComboLab.shelf(hash,active?world:null,showDialog,back,(card,source,slot)=>{
       leaveOnline();afterStory=null;
-      startMatch({...settings,...card.config,dashSmash:!!card.config.dashSmash,impactTech:!!card.config.impactTech,risingCatch:!!card.config.risingCatch,wallSpring:!!card.config.wallSpring,groundSpace:!!card.config.groundSpace,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
+      startMatch({...settings,...card.config,heldAerials:!!card.config.heldAerials,dashSmash:!!card.config.dashSmash,impactTech:!!card.config.impactTech,risingCatch:!!card.config.risingCatch,wallSpring:!!card.config.wallSpring,groundSpace:!!card.config.groundSpace,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
       window.ComboLab.restore(world,card);
       drill('combo',false,source,'stand',slot);
       if(world.comboPractice.slow!==card.slow)$('combo-slow').click();
@@ -4241,7 +4243,7 @@
   let campaign = yardChapter;
   const dispatchSources={
     SoloEvents:'solo-events.js?v=impact-tech-1',
-    PracticeFeedback:'practice-feedback.js?v=footwork-readout-1', DogOnline:'online.js?v=dash-smash-1',
+    PracticeFeedback:'practice-feedback.js?v=footwork-readout-1', DogOnline:'online.js?v=held-aerial-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
@@ -4254,7 +4256,7 @@
     VersusRulebook:'versus-rules.js?v=cup-roster-3',
     PackRelay:'pack-relay.js?v=versus-2',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
-    ComboLab:'combo-lab.js?v=dash-smash-1', FinishTools:'finish-tools.js?v=second-chance-1',
+    ComboLab:'combo-lab.js?v=held-aerial-1', FinishTools:'finish-tools.js?v=second-chance-1',
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
