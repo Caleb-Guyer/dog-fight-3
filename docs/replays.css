@@ -1,6 +1,9 @@
 dialog:is([data-view='finish-replay'],[data-view='finish-film']) { width:min(760px,calc(100% - 16px)); }
 #clip-arena { display:block; width:100%; aspect-ratio:16/9; height:auto; max-height:52dvh; border:2px solid var(--ink); image-rendering:pixelated; }
-dialog[data-view='finish-stock-film'] { width:min(960px,calc(100% - 16px)); }
+dialog:is([data-view='finish-stock-film'],[data-view='finish-rematch']) { width:min(960px,calc(100% - 16px)); }
+#rematch-rink { margin-block:12px; }
+#rematch-rink input { display:block; width:100%; accent-color:var(--ink); }
+#rematch-rink figure:only-child { grid-column:1/-1; width:min(100%,560px); margin-inline:auto; }
 .stock-films { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
 .stock-films figure { min-width:0; margin:0; }
 .stock-films figcaption { display:flex; justify-content:space-between; align-items:baseline; gap:3px 8px; flex-wrap:wrap; }
