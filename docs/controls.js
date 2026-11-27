@@ -112,6 +112,40 @@
       this.present=this.connected(pads);
     }
   }
+  // Only a device that has supplied gameplay input owns the offline player's seat.
+  class SoloSeat {
+    constructor(){this.index=null;this.id='';this.lost=false;this.waitNeutral=new Map();this.ready=new Map();}
+    get(pads){return this.index===null?null:pads.find(p=>p.index===this.index && p.id===this.id);}
+    use(pad){this.index=pad.index;this.id=pad.id;this.lost=false;this.ready.clear();}
+    active(pad){return pad.buttons.some(b=>b.pressed) || pad.axes.some(n=>Math.abs(n)>.23);}
+    track(pads,playing){
+      if(this.lost)return;
+      if(this.index!==null){
+        if(!this.get(pads)){this.lost=true;this.ready.clear();}
+        return;
+      }
+      if(!playing)return;
+      for(const p of pads){
+        if(!this.active(p)){this.waitNeutral.delete(p.index);continue;}
+        if(!this.waitNeutral.has(p.index) || this.waitNeutral.get(p.index)!==p.id){this.use(p);return;}
+      }
+    }
+    useOtherInput(pads){
+      this.index=null;this.id='';this.lost=false;this.ready.clear();this.waitNeutral.clear();
+      for(const p of pads)if(this.active(p))this.waitNeutral.set(p.index,p.id);
+    }
+    confirm(pads){
+      // A pad can appear with the wake-up button already held. Wait for a neutral sample first.
+      for(const index of this.ready.keys())if(!pads.some(p=>p.index===index))this.ready.delete(index);
+      for(const p of pads){
+        if(!this.active(p)){this.ready.set(p.index,p.id);continue;}
+        const select=p.buttons[0]?.pressed && !p.buttons.some((b,i)=>i!==0 && b.pressed) && !p.axes.some(n=>Math.abs(n)>.23);
+        if(select && this.ready.has(p.index) && this.ready.get(p.index)===p.id){this.use(p);return p;}
+        this.ready.delete(p.index);
+      }
+      return null;
+    }
+  }
   // Follow the lane where the player entered a wide card, such as the Adventure cover.
   function menuNeighbor(rects, current, direction, lane) {
     const horizontal=direction==='left' || direction==='right';
@@ -160,5 +194,5 @@
       return true;
     }
   }
-  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat};
+  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,SoloSeat,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat};
 })();
