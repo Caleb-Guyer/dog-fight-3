@@ -1657,20 +1657,12 @@
     return run.retries + (run.retries === 1 ? ' retry' : ' retries') + ' · ' +
       cup.stocks(run) + '/12 stocks kept · ' + cardTime(cup.frames(run));
   }
-  function relayOffer(entry){
-    const run=entry.active;
-    return run && !run.started && (run.wins.length===1 || run.wins.length===2)?
-      '<button type="button" class="utility" data-do="cup-relay">Take the relay detour</button>':'';
-  }
   const relayRouteName=mask=>mask===3?'Both relay detours':'Round '+(mask===1?2:3)+' relay';
-  function cupRecords(entry){
+  function cupRelayRecords(entry){
     const mask=cup.stamps(entry);
     const relayBests=Object.entries(entry.relayBests || {});
     return (mask?'<p>Relay stamps · Round 2 '+(mask&1?'✓':'—')+' · Round 3 '+(mask&2?'✓':'—')+'</p>':'')+
-      (entry.clears?'<p>'+entry.clears+(entry.clears===1?' clear':' clears')+'</p>':'')+
-      (entry.best?'<p><strong>Personal best</strong> · Standard route · '+cupRecord(entry.best)+'</p>':'')+
-      (relayBests.length?'<details><summary>Relay personal bests</summary>'+relayBests.map(([m,run])=>
-        '<p>'+relayRouteName(Number(m))+' · '+cupRecord(run)+'</p>').join('')+'</details>':'');
+      relayBests.map(([m,run])=>'<p>'+relayRouteName(Number(m))+' best · '+cupRecord(run)+'</p>').join('');
   }
   function cupSheet(kind=cupChoice,route=false,resume=false) {
     if (!Object.hasOwn(cup.courses,kind)) return;
@@ -1689,9 +1681,7 @@
         '</strong><small>'+venue+'</small></div><b>'+(i<round ? stockLabel(run.wins[i].stocks)+' kept' :
           i===round ? 'Up next' : dog ? cpuLevels[cup.levels[i]].name : 'Boss')+'</b></li>';
     }).join('');
-    const activeRelay=run?.relayLead && cup.relay(kind,round,run.relayLead);
-    const tip = activeRelay?'Relay lineup · '+activeRelay.relayTeams[0].map(id=>fighters[id].name).join(' → '):course.bouts[round]?.[3] || yardChapter.rooms[yardChapter.lastRoom].objective;
-    window.VersusRulebook.cupSelect($('cup-select'),{kind,entry,course,route,stops,records:cupRecords(entry),offer:relayOffer(entry),tip,
+    window.VersusRulebook.cupSelect($('cup-select'),{kind,entry,course,route,stops,best:entry.best && cupRecord(entry.best),relayRecords:cupRelayRecords(entry),
       storageNote:unsavedCup.has(kind)?'<p>Progress lasts for this tab while storage is unavailable.</p>':'',
       coatFor:id=>cupEntry(id).active?.coat ?? savedCoat(0,id),select:cupSheet,back:returnToHome,
       start:button=>startCupRound(kind,null,button),relay:exhibition=>openCupRelay(kind,exhibition?1:null,false)});
@@ -1699,8 +1689,17 @@
   }
   function openCupRelay(kind,exhibitionRound=null,fromResult=dialogType==='result'){
     const back=()=>{
-      if(fromResult)showResult();else cupSheet(kind,true);
-      document.querySelector(exhibitionRound?'[data-do=cup-exhibition]':'[data-do=cup-relay]')?.focus();
+      if(fromResult){
+        showResult();
+        $('dialog-body').querySelector('[data-do=cup-exhibition]')?.focus();
+      }else{
+        cupSheet(kind,true);
+        const bonus=$('cup-bonus');
+        if(bonus){
+          bonus.open=true;
+          bonus.querySelector('button').focus();
+        }
+      }
     };
     if(!window.PackRelay || !versusStyled)return waitForDispatch('Pack Relay',()=>loadVersusPanel('PackRelay'),()=>openCupRelay(kind,exhibitionRound,fromResult),back);
     const run=exhibitionRound?cupEntry(kind).active:cupShown.active;
@@ -1741,13 +1740,14 @@
     if (!bout) return beginRun(yardChapter.lastRoom,0,null,attempt);
     startMatch(bout,undefined,17+round*31,null,{cupRound:attempt});
   }
-  function cupFinish(title,kind,coat,headline,line,primary,links,details=''){
+  function cupFinish(title,kind,coat,headline,line,primary,details=''){
     const attempt=cupAttempt, open=!!attempt.detailsOpen;
     showDialog('result',title,'<div class="cup-result"><div class="winner"><img alt="" src="'+portrait(kind,coat)+'"><div><h3>'+
       headline+'</h3><p>'+line+'</p></div></div><div class="cup-advance">'+primary+'</div>'+
-      '<div class="cup-links">'+links+'<button class="utility" id="cup-more" aria-controls="cup-review" aria-expanded="'+open+'">Match details</button></div>'+
-      '<section id="cup-review" aria-label="Match details"'+(open?'':' hidden')+'><span data-cup-recap hidden></span>'+details+'<div class="dialog-actions">'+
-      (world.matchCard?cardButton:'')+'<button class="utility" data-do="home">Main menu</button></div></section></div>',false);
+      '<div class="cup-links"><button class="utility" id="cup-more" aria-controls="cup-review" aria-expanded="'+open+'">More options</button></div>'+
+      '<section id="cup-review" aria-label="More options"'+(open?'':' hidden')+'><div class="dialog-actions">'+
+      '<button class="utility" data-do="cup-sheet">Cup schedule</button><button class="utility" data-do="home">Main menu</button></div>'+
+      '<span data-cup-recap hidden></span>'+details+(world.matchCard?'<div class="dialog-actions">'+cardButton+'</div>':'')+'</section></div>',false);
     $('cup-more').onclick=()=>{
       attempt.detailsOpen=$('cup-review').hidden;$('cup-review').hidden=!attempt.detailsOpen;
       $('cup-more').setAttribute('aria-expanded',String(attempt.detailsOpen));
@@ -1760,8 +1760,7 @@
     if(attempt.exhibition){
       const dog=world.dogs[world.end];
       cupFinish(won?'Relay exhibition won':'Relay exhibition lost',dog.kind,world.coatFor(dog.index),dog.stats.name+' wins',
-        stockLabel(dog.stocks)+' kept','<button class="primary" data-do="cup-exhibition">Choose another lead</button>',
-        '<button class="utility" data-do="cup-sheet">Route card</button>');return;
+        stockLabel(dog.stocks)+' kept','<button class="primary" data-do="cup-exhibition">Choose another lead</button>');return;
     }
     if (!attempt.settled) {
       attempt.saving = true;
@@ -1784,9 +1783,8 @@
     cupFinish(title,winner.kind,world.coatFor(winner.index),headline,line,
       '<button class="primary" data-do="'+(clear?'cup-roster':'cup-next')+'">'+
       (clear?'Choose a fighter':won?'Play round '+(next+1):'Retry round '+next)+'</button>',
-      relayOffer(entry)+'<button class="utility" data-do="cup-sheet">Route card</button>',
       (won && attempt.relayLead?'<p>Round '+next+' relay stamp earned.</p>':'')+
-      (clear?'<p><strong>Personal best</strong> · '+(cup.routeMask(entry.last)?relayRouteName(cup.routeMask(entry.last)):'Standard route')+' · '+cupRecord(cup.bestFor(entry,entry.last))+'</p>':''));
+      (clear?'<p><strong>Personal best</strong> · '+(cup.routeMask(entry.last)?relayRouteName(cup.routeMask(entry.last))+' · ':'')+cupRecord(cup.bestFor(entry,entry.last))+'</p>':''));
   }
   const frameLab = {mode:'live', count:0, pending:0, renderTime:0};
   let trainingMoment = null;
@@ -2430,7 +2428,7 @@
       showDialog('pause',cupAttempt.exhibition?'Exhibition paused':'Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+(cupAttempt.round+1)+
         (cupAttempt.exhibition?' exhibition.':' of 4. Leaving now restarts this round on your next attempt.')+'</p><div class="dialog-actions">'+
         '<button class="primary" data-do="resume">Resume</button>'+reviewButton+'<button class="utility" data-do="moves">Move list</button>'+
-        '<button class="utility" data-do="controls">Controls</button><button class="utility" data-do="cup-sheet">Leave to route card</button></div>');
+        '<button class="utility" data-do="controls">Controls</button><button class="utility" data-do="cup-sheet">Cup schedule</button></div>');
       document.querySelector('[data-do=resume]').focus();
       return;
     }
@@ -3467,7 +3465,6 @@
     if (action==='fighter-classes') return fighterSheet(world?.lesson?.course || settings.p1);
     if (action === 'cup-sheet') return cupSheet(cupAttempt?.kind || cupChoice,true);
     if (action === 'cup-roster') return cupSheet(cupAttempt?.kind || cupChoice);
-    if (action === 'cup-relay') return openCupRelay(cupAttempt?.kind || cupChoice);
     if (action === 'cup-exhibition') return openCupRelay(cupAttempt?.kind || cupChoice,cupAttempt?.exhibition?cupAttempt.round:1);
     if (action === 'cup-start' || action === 'cup-next') return startCupRound(cupAttempt?.kind || cupChoice);
     if (action === 'match-card') return showMatchCard();
@@ -4300,7 +4297,7 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=arena-board-1',
+    VersusRulebook:'versus-rules.js?v=cup-schedule-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
     ComboLab:'combo-lab.js?v=dash-smash-1', FinishTools:'finish-tools.js?v=second-chance-1',
@@ -4317,7 +4314,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=shared-roster-1';
+        link.href='./versus-select.css?v=cup-schedule-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -6088,7 +6085,11 @@
       exitDialog();
       return;
     }
-    if(page==='cup-select')return $('cup-back').click();
+    if(page==='cup-select'){
+      const bonus=$('cup-bonus');
+      if(bonus?.open){bonus.open=false;bonus.querySelector('summary').focus();return;}
+      return $('cup-back').click();
+    }
     if(page==='lobby' && !$('lobby-options').hidden)return leaveLobbyOptions();
     if (page === 'dispatch-story') $('story-map').click();
     else if (page === 'online-lobby' && !$('online-wait').hidden) showOnline();

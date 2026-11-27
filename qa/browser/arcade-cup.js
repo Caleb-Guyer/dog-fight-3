@@ -11,6 +11,12 @@ async function playCup(browser) {
   const record=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.cup.noodle')));
   const tap=action=>page.locator('[data-do="'+action+'"]').click();
   const title=async text=>page.getByRole('heading',{name:text,exact:true}).waitFor();
+  async function checkResult(primary){
+    const actions=page.locator('.cup-result button:visible');
+    assert.deepEqual(await actions.allTextContents(),[primary,'More options']);
+    assert.equal(await page.evaluate(()=>document.activeElement.textContent),primary);
+    assert.doesNotMatch(await page.locator('.cup-result').innerText(),/relay|detour|stamp/i);
+  }
   await page.goto(root);
   await page.locator('#home-cup').click();
   const roster=page.locator('#cup-select[data-view=roster]');
@@ -24,6 +30,7 @@ async function playCup(browser) {
     assert.equal(rivals.length,4);
     assert.equal(rivals[3],'Copper Hound');
     assert(!rivals.map(s=>s.toLowerCase()).includes(kind));
+    assert(!(await page.locator('[data-do=cup-exhibition]').isVisible()));
     await page.keyboard.press('Escape');await roster.waitFor();
   }
   await page.locator('[data-cup-dog=pip]').click();
@@ -68,8 +75,9 @@ async function playCup(browser) {
     await page.evaluate(()=>delete window.ringOut);
   }
   await assertRound('brisket','rookie');
-  await finish(0,'Round 1 lost'); await tap('cup-next');
+  await finish(0,'Round 1 lost');await checkResult('Retry round 1');await tap('cup-next');
   await assertRound('brisket','rookie'); await finish(1,'Round 1 clear');
+  await checkResult('Play round 2');
   assert(!(await page.locator('[data-do=match-card]').isVisible()));await page.locator('#cup-more').click();
   await tap('match-card'); await tap('card-back'); await title('Round 1 clear');
   const saved=await record();
@@ -80,15 +88,15 @@ async function playCup(browser) {
   assert.match(await page.locator('[data-do=cup-start]').textContent(),/Start Clover/);
   await page.locator('[data-cup-dog=noodle]').click();
   await tap('cup-start');await assertRound('clover','arcade');
-  await finish(1,'Round 2 clear');await tap('cup-next');
+  await finish(1,'Round 2 clear');await checkResult('Play round 3');await tap('cup-next');
   await assertRound('pip','rival');await finish(1,'Round 3 clear');
   const fronts=page.locator('.cup-result button:visible');
-  assert.deepEqual(await fronts.allTextContents(),['Play round 4','Route card','Match details']);
+  await checkResult('Play round 4');
   assert.equal(await page.locator('#cup-more').getAttribute('aria-expanded'),'false');
   await page.setViewportSize({width:1920,height:830});await page.screenshot({path:'cup-clear-wide.png'});
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:'cup-clear-phone.png'});
   await page.locator('#cup-more').click();await page.locator('[data-do=watch-match]').waitFor();
-  await page.keyboard.press('Escape');assert.equal(await fronts.count(),3);
+  await page.keyboard.press('Escape');assert.equal(await fronts.count(),2);
   await page.setViewportSize({width:1280,height:720});await tap('cup-next');
   await page.waitForFunction(()=>window.fight?.mode==='adventure');
   assert.deepEqual(await page.evaluate(()=>[fight.dogs[0].kind,fight.dogs[0].stocks,fight.foes[0].hp]),['noodle',3,170]);
@@ -107,12 +115,13 @@ async function playCup(browser) {
   await page.locator('#pause').click(); await tap('cup-sheet');
   assert.match(await page.locator('[data-do=cup-start]').textContent(),/Retry round 4/);
   await tap('cup-start'); await finish(1,'Arcade Cup clear!');
+  await checkResult('Choose a fighter');
   const cleared=await record();
   assert.equal(cleared.active,null);assert.equal(cleared.clears,1);assert.equal(cleared.best.retries,2);
   assert.equal(cleared.best.id,saved.active.id);
   assert.equal(cleared.best.wins.length,4);assert(cleared.best.wins.every(w=>w.frames>0));
   assert.equal(await page.evaluate(()=>localStorage.getItem(DispatchScript.saveKey)),null);
-  await tap('cup-sheet');
+  await page.locator('#cup-more').click();await tap('cup-sheet');
   assert.match(await page.locator('.cup-route-board').textContent(),/Personal best/);
   await page.reload();await tap('cup-sheet');
   assert.match(await page.locator('.cup-route-board').textContent(),/1 clear/);
