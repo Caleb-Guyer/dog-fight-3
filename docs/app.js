@@ -3845,13 +3845,17 @@
       }[pattern];
     } else if (wall) {
       const d = world.wallPractice;
+      $('wall-spring').setAttribute('aria-pressed',String(!!d.spring));
+      $('wall-guide').hidden=!d.spring;
+      $('wall-guide').setAttribute('aria-pressed',String(!!d.guided));
       $('wall-ceiling').setAttribute('aria-pressed', String(!!d.ceiling));
       $('wall-impact').setAttribute('aria-pressed', String(!!d.heavy));
       for (const kind of ['pip','noodle']) $('wall-'+kind).setAttribute('aria-pressed', String(kind === d.runner));
       $('wall-status').dataset.result = 'ready';
       $('wall-status').textContent = d.ceiling ? 'Below the tabletop' : d.runner ? player.stats.name + ' · one air jump left' : pattern === 'right' ? 'Right wall' : 'Left wall';
       const away = d.inward === 1 ? 'left' : 'right';
-      message = d.ceiling ? 'Tap Attack to cue Pip’s Flip Kick. Tap Shield at the hit spark to brace against the underside.' :
+      message = d.spring ? 'Tap Attack to cue Pip. Tap Shield at the heel to brace. Once your paws plant, tap Jump to spring off with your air jump saved.' :
+        d.ceiling ? 'Tap Attack to cue Pip’s Flip Kick. Tap Shield at the hit spark to brace against the underside.' :
         d.runner ? 'Flick '+away+' off the brickwork. Steer back to the near roof, or hold '+away+
         ' to cross the gap. Retry with Jump alone to spend your air jump instead.' :
         d.heavy ? 'Noodle starts at 185%. First tap Shield with no direction. Retry with Up + Shield when Pip’s heel hits.' :
@@ -4007,7 +4011,7 @@
     } else dismiss();
     if (id === 'reset-training' || id === 'partner-training') drill(id === 'partner-training' ? 'partner' : false);
     else if(id==='combo-compare')showComboComparison();
-    else if (['wall-impact','wall-ceiling','wall-pip','wall-noodle'].includes(id)) drill('wall', false, world.wallPractice?.side || 'left', id.slice(5));
+    else if (['wall-impact','wall-ceiling','wall-spring','wall-pip','wall-noodle'].includes(id)) drill('wall', false, world.wallPractice?.side || 'left', id.slice(5));
     else {
       // Freshness toolbar buttons toggle comparisons. A directory selection always starts the named test.
       if (id.startsWith('freshness-') && world.freshnessPractice) world.resetTraining();
@@ -4064,7 +4068,7 @@
     if(active && !world.comboPractice)drill('combo',false,'example');
     window.ComboLab.shelf(hash,active?world:null,showDialog,back,(card,source,slot)=>{
       leaveOnline();afterStory=null;
-      startMatch({...settings,...card.config,groundSpace:!!card.config.groundSpace,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
+      startMatch({...settings,...card.config,wallSpring:!!card.config.wallSpring,groundSpace:!!card.config.groundSpace,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
       window.ComboLab.restore(world,card);
       drill('combo',false,source,'stand',slot);
       if(world.comboPractice.slow!==card.slow)$('combo-slow').click();
@@ -4293,10 +4297,14 @@
     $('game').focus({ preventScroll: true });
   };
   $('wall-training').onclick = () => drill('wall', false, world.wallPractice?.side || 'left');
-  const wallMode = () => world.wallPractice.ceiling ? 'ceiling' : world.wallPractice.heavy ? 'impact' : world.wallPractice.runner;
+  const wallMode = () => world.wallPractice.spring ? 'spring' : world.wallPractice.ceiling ? 'ceiling' : world.wallPractice.heavy ? 'impact' : world.wallPractice.runner;
+  $('wall-guide').onclick=()=>{
+    world.wallPractice.guided=!world.wallPractice.guided;
+    drill('wall',false,world.wallPractice.side,'spring');
+  };
   $('wall-impact').onclick = () => drill('wall', false, world.wallPractice.side, world.wallPractice.heavy ? '' : 'impact');
   $('wall-retry').onclick = () => drill('wall', false, world.wallPractice.side, wallMode());
-  for (const kind of ['pip','noodle','ceiling']) $('wall-'+kind).onclick = () => drill('wall', false, world.wallPractice.side, kind);
+  for (const kind of ['pip','noodle','ceiling','spring']) $('wall-'+kind).onclick = () => drill('wall', false, world.wallPractice.side, kind);
   $('wall-side').onclick = () => drill('wall', false, world.wallPractice.side === 'left' ? 'right' : 'left', wallMode());
   $('shield-training').onclick = () => drill('shield', false, world?.shieldPractice?.pattern || 'kick');
   for (const button of $('shield-patterns').querySelectorAll(':scope > button:not(#shield-strength)'))
@@ -4357,7 +4365,7 @@
   let campaign = yardChapter;
   const dispatchSources={
     SoloEvents:'solo-events.js?v=1',
-    PracticeFeedback:'practice-feedback.js?v=grip-2', DogOnline:'online.js?v=room-resume-1',
+    PracticeFeedback:'practice-feedback.js?v=wall-spring-1', DogOnline:'online.js?v=wall-spring-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
@@ -4370,12 +4378,12 @@
     VersusRulebook:'versus-rules.js?v=landing-read-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=counterpick-map-1',
-    ComboLab:'combo-lab.js?v=compare-defenses-1', FinishTools:'finish-tools.js?v=launch-aim-1',
-    MoveGuide:'move-guide.js?v=landing-study-1', FighterSchool:'fighter-lessons.js?v=landing-study-1',
+    ComboLab:'combo-lab.js?v=wall-spring-1', FinishTools:'finish-tools.js?v=launch-aim-1',
+    MoveGuide:'move-guide.js?v=wall-spring-1', FighterSchool:'fighter-lessons.js?v=landing-study-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-practice-1', DispatchView:'dispatch-view.js?v=launch-rescue-1',
-    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=compare-defenses-1',
+    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=wall-spring-1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -6973,11 +6981,11 @@
       startMatch({ ...settings, mode:'training', stage:'picnic', fetch:false });
       drill('spacing', false, 'footstool');
     }
-    else if (hash === '#training/wall-jumps' || hash === '#training/impact-tech' || hash === '#training/ceiling-tech') {
+    else if (hash === '#training/wall-jumps' || hash === '#training/impact-tech' || hash === '#training/ceiling-tech' || hash === '#training/wall-spring') {
       menuScreen('match');
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'laundry', fetch:false });
-      drill('wall', false, 'left', hash === '#training/ceiling-tech' ? 'ceiling' : hash === '#training/impact-tech' ? 'impact' : 'pip');
+      drill('wall', false, 'left', hash === '#training/wall-spring' ? 'spring' : hash === '#training/ceiling-tech' ? 'ceiling' : hash === '#training/impact-tech' ? 'impact' : 'pip');
     }
     else if (hash === '#training/spike-impact') {
       menuScreen('match');
