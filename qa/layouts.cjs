@@ -4,6 +4,38 @@ require('../docs/controls.js');
 const {load,assign,occupant,allowed,keyName}=window.FightControls;
 require('../docs/player-profiles.js');
 const profiles=window.PlayerProfiles;
+require('../docs/stick-calibration.js');
+test('calibration waits for a steady center and both halves of every fitted axis',()=>{
+  const {Measurement}=window.StickCalibration;
+  const m=new Measurement(4),rest=[.28,-.12,.08,.05];
+  m.sample([.8,0,0,0],0);m.sample(rest,700);m.sample([.16,-.12,.08,.05],1050);
+  m.sample(rest,1300);m.sample(rest,1749);assert.equal(m.phase,'center');
+  m.sample(rest,1750);assert.equal(m.phase,'range');
+  m.sample([-.55,-.60,-.72,.05],1800);m.sample([.66,.70,.55,.80],1850);
+  assert.deepEqual(m.missing(0),[]);assert.deepEqual(m.missing(2),['up']);assert(!m.ready());
+  m.sample([.28,-.12,.08,-.51],1900);assert(m.ready());
+  const axes=raw=>window.FightControls.tuneAxes(raw,m.fit,[]);
+  assert.deepEqual(axes(rest),[0,0,0,0]);assert.deepEqual(axes([-.55,.70,.55,-.51]),[-1,1,1,-1]);
+  const [walk,shallow]=axes([.47,-.11,.08,.05]);assert(Math.abs(walk-.5)<1e-9);assert(shallow>0 && shallow<.03);
+  const two=new Measurement(2);two.sample([0,0],0);two.sample([0,0],500);two.sample([-.7,-.8],600);two.sample([.8,.7],700);assert(two.ready());
+});
+test('saved calibration follows the device and slot, preserving digital input, other axes and rumble',t=>{
+  const entries=new Map();
+  const old=Object.getOwnPropertyDescriptor(globalThis,'localStorage');
+  Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:k=>entries.get(k)??null,setItem:(k,v)=>entries.set(k,v),removeItem:k=>entries.delete(k)}});
+  t.after(()=>{if(old)Object.defineProperty(globalThis,'localStorage',old);else delete globalThis.localStorage;});
+  const {sticks,menuDirection}=window.FightControls,settings=new sticks.constructor();
+  const make=(index,id)=>({index,id,mapping:'standard',connected:true,buttons:[],axes:[.3,0,0,0,.7],vibrationActuator:{}});
+  const a=make(0,'USB'),b=make(1,'USB'),other=make(0,'Wireless');
+  const fit=[[ -.5,.3,.8],[-1,0,1],[-1,0,1],[-1,0,1]];
+  assert.equal(settings.apply(a),a);assert(settings.save(a,fit));assert.equal(settings.apply(b),b);
+  assert.equal(settings.apply(other),other);const view=new sticks.constructor().apply(a);
+  assert.deepEqual(view.axes,[0,0,0,0,.7]);assert.equal(a.axes[0],.3);assert.equal(view.buttons,a.buttons);assert.equal(view.vibrationActuator,a.vibrationActuator);
+  assert.equal(menuDirection({...a,axes:[1,0]},'',false),'');a.buttons[13]={pressed:true};assert.equal(menuDirection(a,'',false),'down');
+  assert.throws(()=>settings.save(a,[[0,0,0]]));assert(settings.save(b,fit));assert(settings.save(a,null));
+  assert.equal(settings.apply(a),a);assert.equal(settings.apply(b).axes[0],0);
+  const key=settings.entry(b).key;entries.set(key,'[false]');assert.equal(new sticks.constructor().apply(b),b);
+});
 test('controller legends use the reported mapping, model and vendor IDs',()=>{
   const {padLegend}=window.FightControls;
   const read=(id,mapping='standard',style='auto')=>padLegend({id,mapping},style);

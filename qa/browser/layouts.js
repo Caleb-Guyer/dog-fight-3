@@ -193,6 +193,54 @@ async function controllerCheck(browser){
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
+async function stickCalibration(browser){
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true}),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  await page.addInitScript(()=>{
+    window.pads=['Worn pad','Fresh pad'].map((id,index)=>({id,index,connected:true,mapping:'standard',
+      axes:index?[0,0,0,0]:[.28,-.12,.08,.05],buttons:Array.from({length:17},()=>({pressed:false,value:0}))}));
+    Object.defineProperty(navigator,'getGamepads',{value:()=>pads});
+  });
+  const locator=id=>page.locator('#stick-'+id);
+  const tick=(ms=80)=>page.clock.runFor(ms);
+  const axes=async(values,ms)=>{await page.evaluate(v=>{pads[0].axes=v;},values);await tick(ms);};
+  const rest=[.28,-.12,.08,.05];
+  const enter=async()=>{await page.goto(root+'?setup#controls/sticks');await locator('next').waitFor();await tick();};
+  try{
+    await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+    await page.clock.pauseAt(new Date('2030-01-01T00:00:03Z'));
+    await enter();await locator('next').tap();await tick(550);
+    assert(await locator('next').isDisabled());
+    await locator('back').focus();await axes([-.55,-.6,-.72,.05]);await axes([.66,.70,.55,.80]);
+    assert(await locator('back').evaluate(el=>el===document.activeElement));
+    assert(await locator('next').isDisabled());assert.match(await locator('readings').textContent(),/Still needed · up/);
+    await axes([.28,-.12,.08,-.51]);await locator('next').tap();await axes(rest);
+    assert.match(await locator('readings').textContent(),/Raw 28%, -12% · Game 0%, 0%/);
+    assert(await locator('readings').evaluate(el=>el.scrollWidth<=el.clientWidth));
+    await locator('next').focus();
+    await page.evaluate(()=>{pads[0].buttons[0]={pressed:true,value:1};});await tick();
+    await page.evaluate(()=>{pads[0].buttons[0]={pressed:false,value:0};});await tick();
+    assert.match(await locator('instruction').textContent(),/Calibration saved/);
+    await locator('device').selectOption('1');await tick();assert.match(await locator('instruction').textContent(),/Factory response/);
+    await locator('next').tap();await tick(550);
+    await page.evaluate(()=>{pads[1].id='Replacement';});await tick();
+    assert.equal(await locator('next').textContent(),'Start calibration');assert(await locator('reset').isHidden());
+    await locator('back').tap();await page.getByRole('button',{name:'Calibrate sticks',exact:true}).waitFor();
+    await page.goto(root+'?fight#tutorial/first-match');await page.locator('#match').waitFor();await tick(2600);
+    await page.evaluate(()=>{
+      const proto=DogFight.Battle.prototype,step=proto.step;
+      proto.step=function(dt,input){window.lastStickInput=input;return step.apply(this,arguments);};
+    });
+    const last=()=>page.evaluate(()=>lastStickInput);
+    await axes([.47,-.12,.08,.05]);assert(Math.abs((await last()).x-.5)<.02);
+    await axes(rest);assert.equal((await last()).x,0);assert.equal((await last()).airDodgeX,0);
+    await axes([.66,-.10,.55,.05]);const hit=await last();assert.equal(hit.x,1);assert(hit.aimStick);assert.equal(hit.smashX,1);
+    assert(hit.airDodgeY>0 && hit.airDodgeY<.05);
+    await enter();assert.match(await locator('instruction').textContent(),/Saved calibration/);
+    await locator('reset').tap();assert.match(await locator('readings').textContent(),/Raw 28%, -12% · Game 28%, -12%/);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
 (async()=>{const b=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await run(b);await controllerCheck(b);}finally{await b.close();}
+  try{await run(b);await controllerCheck(b);await stickCalibration(b);}finally{await b.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+e.stack.replaceAll('\n','%0A'));process.exitCode=1;});
