@@ -167,6 +167,39 @@ test('CPU decisions respect the pool, fighter matchup, and standardized stage ge
   assert.equal(choose('brisket','original'),'nightmail');assert.equal(choose('noodle','original'),'laundry');
   assert.equal(choose('brisket','flat'),choose('noodle','flat'));
 });
+test('counterpick diagrams use the match floor, gaps and full platform travel on every arena form',()=>{
+  const {layoutFor,compareLayouts}=window.StageStrike;
+  for(const stage of stages)for(const form of Object.keys(window.DogFight.stageForms)){
+    const layout=layoutFor(stage,form),battle=new Battle({...cfg,stage,form});
+    const floors=battle.terrain.filter(surface=>!surface.thin);
+    assert.equal(layout.gap,floors.length>1);
+    assert.equal(layout.solidWidth,Math.max(...floors.map(p=>p.x2-p.x1)));
+    assert.equal(layout.upper,battle.terrain.length-floors.length);
+    for(let frame=0;frame<600;frame++){
+      const terrain=window.DogFight.platforms(battle.geometryStage,frame/60);
+      terrain.forEach((p,i)=>{
+        const t=layout.tracks[i],x=(p.x1+p.x2)/2;
+        assert(x>=t.left-.1 && x<=t.right+.1 && p.y>=t.top-.1 && p.y<=t.bottom+.1);
+      });
+    }
+  }
+  const last=layoutFor('nightmail','original'),split=layoutFor('laundry','original');
+  assert.match(compareLayouts(last,split),/56% shorter with a gap/);
+  assert.match(compareLayouts(split,last),/126% longer.*0 upper/);
+  assert.equal(layoutFor('picnic','flat'),last);
+  assert.equal(compareLayouts(layoutFor('canal','flat'),last),'Same fighting layout as last game.');
+  assert.equal(layoutFor('picnic','counterweights').moving,2);
+  assert.equal(layoutFor('nightmail','original').moving,0);
+});
+test('counterpick exits describe the losing seat across regulation stocks and allow older sets without cards',()=>{
+  const {lossLine}=window.StageStrike;
+  const card={losses:[{slot:0,zone:'bottom'},{slot:1,zone:'right'},
+    {slot:0,zone:'bottom'},{slot:0,zone:'left'},{slot:0,zone:'top',suddenRound:1}]};
+  assert.equal(lossLine(card,0),'P1 stock losses · below ×2 · left ×1');
+  assert.equal(lossLine(card,1),'P2 stock losses · right ×1');
+  assert.equal(lossLine(undefined,0),'');
+  assert.equal(lossLine({losses:[]},1),'');
+});
 test('every matchup keeps distinct mirrored coats and a ready dog stays put',()=>{
   for(const p1 of dogs)for(const p2 of dogs)for(const c1 of [0,1,2,3])for(const c2 of [0,1,2,3]){
     const pick=new Selection({...cfg,p1,p2,coatBook:[{[p1]:c1},{[p2]:c2}]});
