@@ -147,7 +147,8 @@
         } else if (name === 'stockShare') {
           tone(392,494,0.09);tone(494,659,0.16,0.09);
           dispatchNotice('P'+(e.seat+1)+' is back · Stock from P'+(2-e.seat));
-        } else if (name === 'stockTie') dispatchNotice('Tiebreak · One stock each');
+        } else if (name === 'rallyHit') dispatchNotice('P'+(e.seat+1)+' landed the comeback hit!');
+        else if (name === 'stockTie') dispatchNotice('Tiebreak · One stock each');
         else if (name === 'hoist') dispatchNotice('Gantry catch · Armor damaged');
         else if (name === 'dispatchVictory') dispatchNotice(cupRound ? 'Copper Hound defeated' : 'Mission clear');
         else if (name === 'machineWindup') {
@@ -216,7 +217,7 @@
       const won=world.finished==='exit', done=!!world.finished;
       const team=world.team.map((f,i)=>'P'+(i+1)+' '+f.stats.name+' · '+f.stocks+(f.stocks===1?' stock':' stocks')).join(' / ');
       const left=Math.ceil(world.foes[0].hp);
-      const rally=world.rally, seat=rally?.seat, player='P'+(seat+1);
+      const rally=world.rally, seat=rally?.seat ?? 0, player='P'+(seat+1);
       const retry=rally?'share-p'+(seat+1):'depot-start';
       const shares=world.borrowed.reduce((a,b)=>a+b);
       const rallyReport=rally?(world.borrowed[seat]?player+(rally.countered?' returned and hit the Hound.':' returned. Land a hit after leaving the lift.') :

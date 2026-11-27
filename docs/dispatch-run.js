@@ -78,10 +78,13 @@
           this.parkTeammate(out);
           const boss=this.foes[0].f;
           this.emit=(name,e)=>{
-            if (e?.damage>0 && this.borrowed[this.rally.seat] &&
-                ((name==='hit' && e.owner===out && e.f===boss) ||
-                 (name==='pummelHit' && e.f===out && e.target===boss))) this.rally.countered=true;
             emit(name,e);
+            if (!this.rally.countered && e?.damage>0 && this.borrowed[this.rally.seat] &&
+                ((name==='hit' && e.owner===out && e.f===boss) ||
+                 (name==='pummelHit' && e.f===out && e.target===boss))) {
+              this.rally.countered=true;
+              emit('rallyHit',{f:out,seat:this.rally.seat});
+            }
           };
         }
       }
