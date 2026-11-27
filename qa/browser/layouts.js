@@ -164,6 +164,10 @@ async function controllerCheck(browser){
     assert.match(await hint(),/Cross to continue/);
     await press([0]);await press([]);assert.match(await hint(),/L1/);
     await page.evaluate(()=>{pads[0]=makeController(0,'Switch Pro Controller');});await tick();
+    assert.equal(await page.locator('#dialog[open]').getAttribute('data-view'),'solo-pad-loss');
+    assert.match(await page.locator('#solo-pad-info').textContent(),/Pad 1 · Press B/);
+    await press([0]);await press([]);
+    assert.equal(await page.locator('#dialog[open]').count(),0);
     assert.equal(await page.locator('#school-list').textContent(),'+ · Lessons');
     assert.equal(await page.locator('#school-example').textContent(),'− · Watch example');
     await page.keyboard.down('l');await tick(20);await page.keyboard.up('l');
