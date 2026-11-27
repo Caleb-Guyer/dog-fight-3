@@ -117,6 +117,8 @@ async function reconnectInFight(browser) {
     await page.evaluate(()=>{
       const step=DogFight.Battle.prototype.step;
       DogFight.Battle.prototype.step=function(dt,a,b){
+        if(window.captureOpening && !window.openingInputs)
+          window.openingInputs=[a,b].map(input=>[input.jump,input.attack,input.x]);
         window.battle=this;window.inputs=[a,b];return step.apply(this,arguments);
       };
     });
@@ -139,6 +141,8 @@ async function reconnectInFight(browser) {
     assert.deepEqual(await state(),snapshot);
     await page.clock.runFor(500);
     assert((await state())[0]>snapshot[0]);
+    const call=page.locator('#countdown');
+    assert.equal(await call.textContent(),'GO!','both players can still read the cue after control returns');
     assert.deepEqual(await page.evaluate(()=>inputs.map(i=>[i.attack,i.jump,i.x>0])),[[false,false,false],[false,false,true]]);
     await page.evaluate(()=>{pads[3].buttons[0].pressed=false;pads[3].buttons[2].pressed=false;});await page.clock.runFor(40);
     await page.evaluate(()=>{pads[3].buttons[2].pressed=true;});await page.clock.runFor(40);
@@ -150,6 +154,26 @@ async function reconnectInFight(browser) {
     await resume.click();await page.clock.runFor(2500);
     await page.keyboard.down('ArrowLeft');await page.clock.runFor(40);
     assert.equal(await page.evaluate(()=>inputs[1].x),-1);await page.keyboard.up('ArrowLeft');
+    await page.locator('#pause').click();
+    const manualPause=await state();
+    await page.locator('[data-do=resume-countdown]').click();
+    assert.equal(await call.textContent(),'3');
+    await page.evaluate(()=>{pads[3].buttons[2].pressed=false;window.captureOpening=true;});
+    await page.clock.runFor(950);
+    assert.equal(await call.textContent(),'2');
+    await page.keyboard.press('Comma');
+    await page.clock.runFor(850);
+    assert.equal(await call.textContent(),'1');
+    assert.deepEqual(await state(),manualPause);
+    await page.keyboard.down('ArrowLeft');
+    await page.evaluate(()=>{pads[3].buttons[0].pressed=true;});
+    await page.clock.runFor(740);
+    assert.equal(await call.textContent(),'GO!');
+    assert.deepEqual(await page.evaluate(()=>openingInputs),[[true,false,0],[false,false,-1]]);
+    assert((await state())[0]>manualPause[0]);
+    await page.keyboard.up('ArrowLeft');
+    await page.clock.runFor(350);
+    assert.equal(await call.textContent(),'');
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
