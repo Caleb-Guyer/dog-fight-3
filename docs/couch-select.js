@@ -19,10 +19,14 @@
       this.tieSlot=picker ?? (fightersOnly || random()<.5?0:1);
     }
     get winner() { return this.phase==='stages' && this.locked.every(Boolean) ? this.stages[this.tieSlot] : null; }
-    choose(i,dir) {
+    select(i,value) {
       if(this.locked[i] || (this.picker!==null && i!==this.picker))return;
-      if(this.phase==='stages'){this.stages[i]=cycle(stages,this.stages[i],dir);return;}
-      this.pickDog(i,cycle(dogs,this.dogs[i],dir));
+      if(this.phase==='stages'){
+        if(stages.includes(value))this.stages[i]=value;
+      }else if(dogs.includes(value))this.pickDog(i,value);
+    }
+    choose(i,dir) {
+      this.select(i,this.phase==='stages'?cycle(stages,this.stages[i],dir):cycle(dogs,this.dogs[i],dir));
     }
     shuffle(i) {
       if(this.phase!=='fighters' || this.locked[i] || (this.picker!==null && i!==this.picker))return;
@@ -75,20 +79,27 @@
     '<header><b>P'+(i+1)+'</b><span data-device></span></header><canvas width="192" height="108" aria-hidden="true"></canvas>'+
     '<div class="couch-choice"><button type="button" data-action="prev" aria-label="Previous choice for player '+(i+1)+'">‹</button>'+
     '<strong data-name></strong><button type="button" data-action="next" aria-label="Next choice for player '+(i+1)+'">›</button></div>'+
-    '<small data-detail></small><button type="button" data-action="shuffle">Random dog</button><button type="button" data-action="coat"></button>'+
-    '<button type="button" class="couch-lock" data-action="lock"></button><small data-keys></small></section>';
+    '<small data-detail></small><div class="couch-colors"><button type="button" data-action="shuffle">Random dog</button><button type="button" data-action="coat"></button></div>'+
+    '<button type="button" class="couch-lock" data-action="lock"></button></section>';
 
   function panel(root,settings,keys,pads,{start,leave,sound,announce,drawStageTile,between,lineupReady,padNames=(i,p)=>window.FightControls.padLegend(p)}) {
     const pick=new Selection(settings,Math.random,between?.picker,!!lineupReady);
     const seats=settings.couchSeats || new window.FightControls.Seats(pads), previous=[null,null];
     const reduced=matchMedia('(prefers-reduced-motion: reduce)');
     const colors=window.DogArt.coatNames;
-    root.innerHTML='<h3 id="couch-phase" class="card-stage"></h3><small id="couch-rules"></small><div class="couch-seats">'+card(0)+card(1)+
-      '</div><p id="couch-call" role="status"></p><div class="dialog-actions">'+
-      '<button type="button" class="primary" id="couch-start"></button><button type="button" class="utility" id="couch-back"></button></div>';
+    root.innerHTML='<div class="couch-board"><div class="couch-heading"><h3 id="couch-phase"></h3><div id="couch-target" role="group" aria-label="Player to edit">'+
+      '<span>Pick for</span><button data-target="0">P1</button><button data-target="1">P2</button></div></div>'+
+      '<div id="couch-grid" role="group"></div><div class="couch-seats">'+card(0)+card(1)+
+      '</div><footer><p id="couch-call" role="status"></p><button type="button" class="primary" id="couch-start"></button>'+
+      '<button type="button" class="utility" id="couch-back"></button></footer><details class="couch-help"><summary>Controls &amp; rules</summary>'+
+      '<p id="couch-rules"></p>'+[0,1].map(i=>'<p><b>P'+(i+1)+'</b> · <span data-keys="'+i+'"></span><span data-pad-keys="'+i+'"></span></p>').join('')+'</details></div>';
+    const grid=root.querySelector('#couch-grid'), target=root.querySelector('#couch-target'),help=root.querySelector('.couch-help');
+    const targets=[...target.querySelectorAll('[data-target]')];
+    let edit=pick.picker??0,gridPhase;
     const cards=[...root.querySelectorAll('[data-seat]')].map(el=>({
       el,canvas:el.querySelector('canvas'),name:el.querySelector('[data-name]'),detail:el.querySelector('[data-detail]'),
-      coat:el.querySelector('[data-action=coat]'),lock:el.querySelector('[data-action=lock]'),keys:el.querySelector('[data-keys]'),
+      coat:el.querySelector('[data-action=coat]'),lock:el.querySelector('[data-action=lock]'),keys:root.querySelector('[data-keys="'+el.dataset.seat+'"]'),
+      padKeys:root.querySelector('[data-pad-keys="'+el.dataset.seat+'"]'),
       shuffle:el.querySelector('[data-action=shuffle]'),
       device:el.querySelector('[data-device]'),arrows:el.querySelectorAll('.couch-choice button'),
     }));
@@ -100,6 +111,35 @@
       (settings.handicap?' · P1 '+settings.handicap[0]+'% / P2 '+settings.handicap[1]+'%':'');
     const key=(i,action)=>window.FightControls.keyName(keys[i][action]);
     let lastCel=-1,closed=false;
+    function renderGrid(){
+      const choosing=pick.phase==='fighters',values=choosing?dogs:stages,choices=choosing?pick.dogs:pick.stages;
+      if(gridPhase!==pick.phase)edit=pick.picker??0;
+      if(pick.picker!==null)edit=pick.picker;
+      else if(pick.locked[edit] && !pick.locked[1-edit])edit=1-edit;
+      if(gridPhase!==pick.phase){
+        gridPhase=grid.dataset.phase=pick.phase;
+        grid.innerHTML=values.map(id=>'<button type="button" data-choice="'+id+'">'+
+          (choosing?'<img alt="" src="'+window.DogArt.portrait(id,0)+'">':'<canvas width="240" height="135" aria-hidden="true"></canvas>')+
+          '<strong>'+(choosing?fighters[id].name:arenas[id].name)+'</strong><span class="couch-chips" aria-hidden="true"></span></button>').join('');
+        if(!choosing)for(const el of grid.querySelectorAll('button'))drawStageTile(el.querySelector('canvas'),el.dataset.choice,settings.stageForm);
+      }
+      for(const [i,button] of targets.entries()){
+        button.disabled=pick.locked[i] || (pick.picker!==null && i!==pick.picker);
+        button.setAttribute('aria-pressed',String(i===edit));
+      }
+      grid.setAttribute('aria-label',(choosing?'Choose a fighter':'Choose an arena')+' for P'+(edit+1));
+      for(const el of grid.children){
+        const id=el.dataset.choice, selected=choices[edit]===id, players=[];
+        el.disabled=pick.locked[edit];
+        el.setAttribute('aria-pressed',String(selected));
+        for(const i of [0,1]){
+          if(choices[i]===id && (choosing || pick.picker===null || i===pick.picker))players.push(i);
+        }
+        const chips=el.querySelector('.couch-chips');
+        chips.innerHTML=players.map(i=>'<b data-chip="'+i+'">P'+(i+1)+(pick.locked[i]?' ✓':'')+'</b>').join('');
+        el.setAttribute('aria-label',el.querySelector('strong').textContent+(players.length?', '+players.map(i=>'P'+(i+1)+(pick.locked[i]?' ready':'')).join(' and '):''));
+      }
+    }
     function paint(time=0) {
       if(pick.phase!=='fighters' && !between) return;
       const cel=reduced.matches?0:Math.floor(time*8);
@@ -144,6 +184,7 @@
       back.textContent=between.fromBracket?'Back to bracket':'Back to results';
     }
     function render() {
+      renderGrid();
       if(between){renderCounterpick();lastCel=-1;paint();return;}
       const choosing=pick.phase==='fighters', winner=pick.winner;
       root.querySelector('#couch-phase').textContent=choosing?'Choose your fighters':'Vote for the opening arena';
@@ -162,7 +203,7 @@
         if(!choosing)drawStageTile(c.canvas,pick.stages[i],settings.stageForm);
       });
       const who=pick.locked[0]?'P1':'P2';
-      call.textContent=winner ? (pick.stages[0]===pick.stages[1]?'Both chose ':'Split vote · P'+(pick.tieSlot+1)+' gets the pick · ')+arenas[winner].name+'. Choose Start fight below.' :
+      call.textContent=winner ? (pick.stages[0]===pick.stages[1]?'Both chose ':'Split vote · P'+(pick.tieSlot+1)+' gets the pick · ')+arenas[winner].name+'. Confirm to start.' :
         pick.locked.some(Boolean) ? who+(choosing?' is ready':' voted')+' · Waiting for '+(who==='P1'?'P2':'P1') :
         choosing?(lineupReady?'Ready both dogs to start striking arenas.':'Ready both dogs to open the arena vote.'):'Matching votes choose the arena. A split vote goes to a coin toss.';
       play.hidden=!winner;
@@ -175,16 +216,18 @@
       if(closed || !pick.winner)return;
       closed=true;start(pick,seats);
     }
-    function act(i,action) {
+    function act(i,action,value) {
       if(closed)return;
+      if(action==='back' && help.open){help.open=false;cards[i].lock.focus({preventScroll:true});return;}
       if(between && i!==pick.picker && !['back','confirm'].includes(action))return;
       if(action==='back' && !pick.locked[i] && pick.phase==='fighters'){
         if(between ? i!==pick.picker : pick.locked[1-i])return;
         closed=true;leave();return;
       }
       if(action==='back')pick.back(i);
-      else if(action==='confirm') { if(pick.locked[i])return;pick.lock(i); }
+      else if(action==='confirm') { if(pick.winner)return launch();if(pick.locked[i])return;pick.lock(i); }
       else if(pick.locked[i])return;
+      else if(action==='select')pick.select(i,value);
       else if(action==='shuffle'){
         if(pick.phase!=='fighters')return;
         pick.shuffle(i);
@@ -197,8 +240,17 @@
       if(between && pick.winner){launch();return;}
       render();
       const choice=pick.phase==='fighters'?colors[pick.dogs[i]][pick.colors[i]]+' '+fighters[pick.dogs[i]].name:arenas[pick.stages[i]].name;
-      if(['left','right','up','down','shuffle'].includes(action))announce('P'+(i+1)+' · '+choice);
+      if(['left','right','up','down','shuffle','select'].includes(action))announce('P'+(i+1)+' · '+choice);
     }
+    target.onclick=e=>{
+      const button=e.target.closest('button[data-target]');
+      if(!button || button.disabled)return;
+      edit=Number(button.dataset.target);renderGrid();
+    };
+    grid.onclick=e=>{
+      const button=e.target.closest('[data-choice]');
+      if(button && !button.disabled)act(edit,'select',button.dataset.choice);
+    };
     for(const [i,c] of cards.entries())c.el.onclick=e=>{
       const button=e.target.closest('[data-action]');if(!button)return;
       const action=button.dataset.action;
@@ -216,7 +268,10 @@
         const pad=seats.get(i,pads), last=previous[i];
         const mask=padMask(pad,last?.mask||0), index=pad?.index??null;
         const names=padNames(i,pad);
-        if(last?.index!==index || last.legend!==names)c.device.textContent=pad?'Pad '+(index+1)+' · '+names[0]+' ready / '+names[1]+' back / '+names[2]+' random':'Keyboard';
+        if(last?.index!==index || last.legend!==names){
+          c.device.textContent=pad?'Pad '+(index+1):'Keyboard';
+          c.padKeys.textContent=pad?' · '+names[0]+' ready / '+names[1]+' back / '+names[2]+' random':'';
+        }
         previous[i]={index,mask,legend:names};
         if(closed || (!between && phase!==pick.phase) || !pad || last?.index!==index)continue;
         const fresh=mask & ~last.mask;
@@ -225,13 +280,20 @@
           if(fresh & 1)act(i,'left');else if(fresh & 2)act(i,'right');
           else if(fresh & 4)act(i,'up');else if(fresh & 8)act(i,'down');
           else if(fresh & 128)act(i,'shuffle');
-          if(fresh & 16)act(i,'confirm');
-          if(ready && fresh & 64)launch();
+          if(fresh & 16 && (ready || !pick.winner))act(i,'confirm');
+          if(fresh & 64){
+            if(ready)launch();
+            else if(!closed && phase===pick.phase){
+              help.open=!help.open;
+              (help.open?help.querySelector('summary'):c.lock).focus();
+            }
+          }
         }
       }
       if(!closed)paint(time);
     }
     function keyboard(e) {
+      if(e.code==='Escape' && help.open){e.preventDefault();help.open=false;help.querySelector('summary').focus();return true;}
       for(const [i,map] of keys.entries()){
         const action=['left','right','up','down','attack','special','grab'].find(a=>map[a]===e.code);
         if(!action)continue;
