@@ -9,6 +9,15 @@ const cfg={stage:'picnic',mode:'local',p1:'pip',p2:'brisket',coatBook:[{},{}],fe
 function testPad(index,id){
   return {index,id,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false}))};
 }
+test('partial travel claims a solo seat only on a mapped Shield button and still respects keyboard takeover',()=>{
+  const seat=new window.FightControls.SoloSeat(), pad=testPad(2,'USB'), mapping={shield:6,shieldAlt:5};
+  pad.buttons[7].value=.45;pad.buttons[6].value=.12;
+  seat.track([pad],true,mapping);assert.equal(seat.index,null);
+  pad.buttons[6].value=.45;seat.track([pad],true,mapping);assert.equal(seat.get([pad]),pad);
+  seat.useOtherInput([pad]);seat.track([pad],true,mapping);assert.equal(seat.index,null);
+  pad.buttons[6].value=0;seat.track([pad],true,mapping);
+  pad.buttons[6].value=.45;seat.track([pad],true,mapping);assert.equal(seat.get([pad]),pad);
+});
 test('a solo dog belongs to the actively used controller and stays put when another pad goes away',()=>{
   const seat=new window.FightControls.SoloSeat(),spare=testPad(0,'Spare'),owner=testPad(5,'Owner');
   spare.axes[1]=.12;

@@ -17,7 +17,7 @@ async function play(browser,device){
         else if(key==='left')g.axes[0]=on?-1:0;
         else if(key==='up')g.axes[1]=on?-1:0;
         else if(key==='down')g.axes[1]=on?1:0;
-        else if(key==='partial')Object.assign(g.buttons[4],{pressed:false,value:on ? .45 : 0});
+        else if(key==='partial')Object.assign(g.buttons[6],{pressed:false,value:on ? .45 : 0});
         else Object.assign(g.buttons[{ok:0,jump:0,pause:9,shield:4,stickClick:10,attack:2,special:1,grab:3}[key]],{pressed:on,value:Number(on)});
       };
     });
@@ -180,6 +180,10 @@ async function play(browser,device){
       ['canal','flat',card.p1,card.p2,card.lives,false]);
     if(pad){
       for(const buttons of [['shield'],['shield','stickClick'],['partial']]){
+        if(buttons[0]==='partial')await page.evaluate(()=>{
+          const layout=FightControls.load();FightControls.assign(layout,'pad',0,'shield',6);
+          localStorage.setItem('dog-fight-3.controls',JSON.stringify(layout));
+        });
         await page.goto('http://127.0.0.1:8080/?shield='+buttons.join('-')+'#training/light-shield');
         await page.locator('#edge-light[aria-pressed="true"]').waitFor();
         for(const key of buttons)await hold(key,true);
