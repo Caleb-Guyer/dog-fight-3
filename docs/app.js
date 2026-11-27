@@ -2368,7 +2368,7 @@
   function showPause(autosave=true) {
     if(finishTrial)return showTrialPause();
     if (page !== 'match' || !world || world.end !== null) return;
-    if(matchConfig.openingDuel)return openOpeningDuel(matchConfig.openingDuel.card,matchConfig.openingDuel,matchConfig.openingDuel.point?'point':'pause');
+    if(matchConfig?.openingDuel)return openOpeningDuel(matchConfig.openingDuel.card,matchConfig.openingDuel,matchConfig.openingDuel.point?'point':'pause');
     if(world.eventId)return window.SoloEvents.panel(world,true,eventUI());
     if (world.bossLesson) return window.DispatchView.lessonPanel(world, view.parkedBoss.world, showDialog);
     if(world.warmupPartner)return showWarmupMenu();
@@ -6647,7 +6647,7 @@
           taps.clear();
           touchTaps.clear();
           accumulator = Math.max(0, accumulator - 1 / 60);
-          const duel=matchConfig.openingDuel;
+          const duel=matchConfig?.openingDuel;
           if(duel?.takePoint(world)){openOpeningDuel(duel.card,duel,'point');break;}
           if(watchedStocks>world.dogs[0].stocks && world.dogs[0].stockLift && world.end===null && !world.suddenDeath){
             showStockBreak();break;
