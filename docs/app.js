@@ -2515,8 +2515,6 @@
       (review?.clip.returnTape?.length?'<button class="utility" id="clip-return">'+(returning?'Watch knockout':'Watch stock return')+'</button>':'')+
       recoveries.map((l,i)=>'<button class="utility" '+(i===0?'id="clip-coach" ':'')+'data-clip-recovery="'+l.slot+'">'+
         (result.mode==='local'?'Practice P'+(l.slot+1)+'’s recovery':'Practice this recovery')+'</button>').join('')+
-      (stageClinic?'<button class="utility" id="clip-stage-other">'+(review.clinic==='ceiling'?'Try the wall':'Try the ceiling')+'</button>'+
-        (review.clinic==='ceiling'?'':'<button class="utility" id="clip-stage-damage">'+(review.clinic==='heavy'?'Try at 90%':'Try at 185%')+'</button>'):'')+
       '<button class="utility" id="clip-exchange"'+(returning?' disabled':'')+'>'+(returning?'Play the return':'Practice exchange')+'</button><button class="utility" id="clip-export">Make GIF</button><button class="utility" data-do="clip-back">'+
       (review?.instant?'Back to pause':review?['card','archive'].includes(review.from)?'Back to match stats':'Back to KO replays':'Back to results')+'</button></div>'+
       (ko?'<p id="clip-escape-start">Start before the knockout and try to keep that stock.</p>':returning?
@@ -2527,8 +2525,6 @@
     if(ko)$('clip-escape').onclick=()=>startFinishTrial(Math.max(0,tape.length-90),loss.slot,review);
     if(review?.moment)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to full match';
     if(review?.clinic)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to Fight School';
-    if(stageClinic)$('clip-stage-other').onclick=()=>replayClinic(review.clinic==='ceiling'?'wall':'ceiling');
-    if($('clip-stage-damage'))$('clip-stage-damage').onclick=()=>replayClinic(review.clinic==='heavy'?'wall':'heavy');
     for(const b of $('dialog-body').querySelectorAll('[data-clip-recovery]'))
       b.onclick=()=>recoverySheet({...review,slot:Number(b.dataset.clipRecovery),fromClip:true});
     const {signal}=clipScreen.lifetime;
@@ -2540,7 +2536,7 @@
         if(signal.aborted)return;
         if(returning)review.recordedReturn=window.FinishTools.returnTrace();
         clipScreen.syncInputs=window.FinishTools.install({tape,signal,stage:stageName(result.stage,result.form),shake:settings.shake,root:$('dialog-body'),
-          follow:returning?review.recordedReturn:null,
+          follow:returning?review.recordedReturn:null,stageClinic:stageClinic && review.clinic,chooseClinic:replayClinic,
           ledgeFocus:review?.ledgeFocus,returnTape:review?.clip?.returnTape,practiceLedge:ledge=>startFinishTrial(ledge.mark.frame,ledge.mark.slot,{
             ...(review || {finish:true,from:'result',clip:{tape,losses:[]},result}),ledge,replayFrame:ledge.mark.frame}),
           holdFocus:review?.holdFocus,practiceHold:(hold,originalHold)=>startFinishTrial(hold.frame,hold.slot,{
@@ -2677,10 +2673,7 @@
     $('school-coach').hidden=true;
     $('corner-tip').hidden=true;
     if(review?.landing){
-      const surface=review.landing.surface;
-      $('corner-title').textContent=surface==='wall'?'Tech the wall':surface==='ceiling'?'Brace against the ceiling':'Break your fall';
-      $('corner-line').textContent=surface?('Tap Shield just before you hit the '+surface+'. '+(surface==='wall'?'Hold Jump at contact to kick away.':'A tech keeps your remaining air jump.')):
-        review.guided?'The fall waits for Shield. Tap it with your stick centered, or aim sideways to roll.':'Watch the distance to the floor. Tap Shield just before impact.';
+      [$('corner-title').textContent,$('corner-line').textContent]=window.FinishTools.landingCue(review);
       $('corner-tip').hidden=false;
     }
     if(review?.moment && !review.landing){
@@ -2748,26 +2741,11 @@
     while(trial.carry>=1/60 && player.frame<player.length && !player.outcome && player.battle.end===null){
       const input=ledge?.watch?player.reply(ledge.action,ledge.delay):
         playerInput(trial.seats?trial.slot:0,pads,trial.slot,player.battle);
-      if(trial.review?.landing && trial.review.guided){
-        const {landing,landingFocus}=trial.review;
-        const tapFrame=landing.surface?Math.max(trial.start,landing.frame-landingFocus.lead-1):trial.start;
-        const spring=landing.surface==='wall' && landingFocus.wallJump;
-        let cue='';
-        if(landing.surface && landingFocus.aimUp && player.frame<tapFrame && input.y>-.45)cue='Hold Up';
-        if(player.frame===tapFrame){
-          const shield=input.tapped?.shield || input.shield && (!landing.surface || !player.battle.dogs[trial.slot].prev.shield);
-          if(!shield || spring && !input.jump && !input.tapped?.jump)cue=spring?'Jump + Shield':'Tap Shield';
-        }
+      if(trial.review?.guided && (trial.review.landing || trial.review.coach)){
+        const cue=trial.review.landing?window.FinishTools.landingGate(trial,input):
+          window.RecoveryCoach.gate(trial.review.coach,player.frame-trial.start,input,trial.review.coachLabel,player.battle.dogs[trial.slot]);
         if($('countdown').textContent!==cue)$('countdown').textContent=cue;
         if(cue){taps.clear();touchTaps.clear();trial.carry=0;return;}
-      }
-      if(trial.review?.coach && trial.review.guided){
-        const cue=window.RecoveryCoach.gate(trial.review.coach,player.frame-trial.start,input,trial.review.coachLabel,player.battle.dogs[trial.slot]);
-        if(cue){
-          if($('countdown').textContent!==cue)$('countdown').textContent=cue;
-          taps.clear();touchTaps.clear();trial.carry=0;return;
-        }
-        $('countdown').textContent='';
       }else if((trial.review?.hold || trial.review?.from==='lesson' || trial.review?.coach && !trial.review.coach.aim) && player.frame===trial.start){
         if(!input.x && !input.y && !input.jump && !input.special && !input.shield && !input.attack && !input.shortHop &&
           !(trial.review.from==='lesson' && Object.values(input.tapped || {}).some(Boolean)) &&
@@ -2826,12 +2804,7 @@
     else showResult();
   }
   function trialActions(){
-    if(finishTrial.review?.ledge){
-      const r=finishTrial.review;
-      const back=r.clinic?'Fight School':r.from==='pause'?'Back to fight':['archive','card'].includes(r.from)?'Back to match stats':'Back to results';
-      return '<div class="dialog-actions"><button class="primary" data-do="ledge-play">'+(r.ledge.watch?'Try the ledge myself':'Retry the ledge')+'</button>'+
-        '<button class="utility" data-do="trial-replay">Compare get-ups</button><button class="utility" data-do="trial-results">'+back+'</button></div>';
-    }
+    if(finishTrial.review?.ledge)return window.FinishTools.ledgeActions(finishTrial.review);
     if(finishTrial.review?.coach)return window.RecoveryCoach.actions(finishTrial.review);
     if(finishTrial.review?.landing)return window.FinishTools.landingActions(finishTrial.review);
     if(finishTrial.review?.stock)return finishTrial.review.stock.actions(finishTrial.review.from,finishTrial.review.film?.sample);
@@ -2846,12 +2819,7 @@
   }
   function showTrialComparison(){
     const {player,original,slot,review}=finishTrial;
-    if(review?.ledge){
-      const line=window.FinishTools.ledgeLine;
-      showDialog('finish-comparison',player.result.text,'<p>Recorded · '+line(review.ledge.original)+'</p><p>'+
-        (review.ledge.watch?'Chosen get-up':'Your get-up')+' · '+line(player.result)+'</p>'+trialActions(),false);
-      document.querySelector('[data-do=ledge-play]').focus();return;
-    }
+    if(review?.ledge)return window.FinishTools.ledgeReport(player,review,showDialog);
     if(review?.hold){
       window.FinishTools.holdReport(review.originalHold,player.result,showDialog,trialActions());
       return;
