@@ -130,6 +130,20 @@ async function play(browser,device){
     await choose('#duel-back');await choose('#matchup-duel');await choose('#duel-start');await page.clock.runFor(11000);
     assert.match(await page.locator('#duel-report').textContent(),/CPU .* takes the point/);
     await choose('#duel-reply');assert.match(await page.locator('#match-mode').textContent(),/P1 Pip/);
+    if(touch){
+      const cdp=await context.newCDPSession(page);
+      const box=await page.locator('[data-touch=shield]').boundingBox();assert(box);
+      await page.evaluate(()=>{
+        const step=DogFight.Battle.prototype.step;
+        DogFight.Battle.prototype.step=function(dt,p1,...rest){
+          if(p1?.shield)window.sawTouchShield=true;
+          return step.call(this,dt,p1,...rest);
+        };
+      });
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:box.x+box.width/2,y:box.y+box.height/2}]});
+      await page.clock.runFor(1500);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      assert(await page.evaluate(()=>window.sawTouchShield));
+    }
     await page.clock.runFor(3300);await choose('[data-do=trial-results]');
     assert.match(await page.locator('#duel-score').textContent(),/0 – 1/);
     await page.goto(root+'?broken'+shared.replace('noodle','unknown'));
