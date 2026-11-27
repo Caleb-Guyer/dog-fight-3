@@ -132,6 +132,7 @@ async function reconnectInFight(browser) {
     await page.evaluate(()=>{pads[3]=pad(3);pads[3].buttons[0].pressed=true;pads[3].buttons[2].pressed=true;});
     await page.clock.runFor(300);
     assert.equal(await resume.textContent(),'Resume match');
+    assert(await resume.evaluate(e=>e===document.activeElement),'a direction held in the fight must leave Resume focused');
     assert.match(await page.locator('#pad-loss-seats').textContent(),/P1 · Pad 4.*P2 · Pad 2/);
     await page.evaluate(()=>{pads[3].buttons[0].pressed=false;});await page.clock.runFor(40);
     await page.evaluate(()=>{pads[3].buttons[0].pressed=true;});await page.clock.runFor(2100);
