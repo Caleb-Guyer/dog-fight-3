@@ -8,7 +8,7 @@ async function play(browser,device) {
   const page=await browser.newPage({viewport:touch?{width:390,height:844}:{width:1280,height:720},isMobile:touch,hasTouch:touch});
   const errors=[]; page.on('pageerror',e=>errors.push(e.message));
   const choose=selector=>touch?page.locator(selector).tap():page.locator(selector).click();
-  const keys={left:'a',right:'d',attack:'j',smash:'i',shield:'l',jump:'Space',hop:'e',down:'s'};
+  const keys={left:'a',right:'d',attack:'j',smash:'i',shield:'l',jump:'Space',hop:'e',down:'s',up:'w'};
   const fingers=new Map();
   try {
     if(pad) await page.addInitScript(()=>{
@@ -17,7 +17,7 @@ async function play(browser,device) {
       Object.defineProperty(navigator,'getGamepads',{value:()=>[gamepad]});
       window.padInput=(action,on)=>{
         if(action==='left'||action==='right') gamepad.axes[0]=on?(action==='left'?-1:1):0;
-        else if(action==='down')gamepad.axes[1]=on?1:0;
+        else if(action==='down'||action==='up')gamepad.axes[1]=on?(action==='up'?-1:1):0;
         else Object.assign(gamepad.buttons[{attack:2,smash:7,shield:4,jump:0,hop:6}[action]],{pressed:on,value:Number(on)});
       };
     });
@@ -197,6 +197,19 @@ async function play(browser,device) {
     assert(worn && Number(worn[1])>22 && Number(worn[1])<48,device+' worn shield gave up more ground');
     await choose('#footwork-center');await hold('left',true);await page.clock.runFor(1600);await hold('left',false);
     assert.equal(await result.textContent(),'Took ground');
+    await page.goto('http://127.0.0.1:8080/?boost#training/dash-up-smash');
+    await page.locator('#footwork-boostSmash[aria-pressed=true]').waitFor();
+    await page.clock.runFor(2800);
+    for(const side of ['right','left']){
+      if(side==='left')await choose('#footwork-side');
+      await hold(side,true);await hold('attack',true);await page.clock.runFor(210);
+      assert.equal(await result.getAttribute('data-result'),'cancelNow',device+' reaches the two-frame cue');
+      await hold('attack',false);await hold(side,false);
+      await hold('up',true);await hold('smash',true);await page.clock.runFor(80);
+      await hold('smash',false);await hold('up',false);await page.clock.runFor(1200);
+      assert.equal(await result.getAttribute('data-result'),'boostSmashCatch',device+' catches the hop '+side);
+      assert.match(await result.textContent(),/Roof Raiser/);
+    }
     assert.deepEqual(errors,[]);
   } finally { await page.close(); }
 }
