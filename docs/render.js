@@ -144,11 +144,13 @@
   }
   function drawPreview(canvas, config, time, coats, pick) {
     const aspect = (canvas.clientWidth || 900) / (canvas.clientHeight || 280);
-    const viewportWidth = clamp(660 + (aspect - 1.7) * 190, 680, 1110);
-    const viewportHeight = viewportWidth / aspect;
     const form = config.mode === 'training' ? 'original' : config.stageForm;
     const geometry = window.DogFight.stageGeometry(config.stage,form);
     const rooftops = geometry === 'laundry';
+    const lifting = geometry === 'counterweights';
+    const preferredWidth = clamp(660 + (aspect - 1.7) * 190, 680, 1110);
+    // Reserve the full vertical trip so exchanging lift heights never pumps the camera.
+    const viewportHeight = Math.max(preferredWidth / aspect, lifting ? 300 : rooftops ? 212 : 120);
     const t = reduced.matches ? 1.4 : Math.floor(time * 9) / 9;
     const stageTime = rooftops ? (1.5 * Math.PI + 0.28 * Math.sin(t * 0.75)) / 0.7 : t;
     const ground = platforms(geometry, stageTime);
@@ -156,7 +158,7 @@
     const podiums = onDeck ? [ground[0], ground[0]] : rooftops ? [ground[2], ground[3]] : [ground[1], ground[2]];
     const positions = onDeck ? window.DogFight.arenas[geometry].spawn : podiums.map((p) => (p.x1 + p.x2) / 2);
     const center = (positions[0] + positions[1]) / 2;
-    const width = Math.round(viewportWidth),
+    const width = Math.round(viewportHeight * aspect),
       height = Math.max(1, Math.round(viewportHeight));
     if (canvas.width !== width || canvas.height !== height) {
       canvas.width = width;
@@ -166,11 +168,12 @@
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     const left = Math.round(center - width / 2);
-    const lifting = form === 'counterweights';
     const top = Math.round((lifting ? (podiums[0].y+podiums[1].y)/2 : podiums[0].y) - height * (rooftops ? 0.8 : 0.69));
     ctx.translate(-left, -top);
     window.ArenaArt.draw(ctx, config.stage, stageTime, { left, top, right: left + width, bottom: top + height },form,ground);
-    const scale = clamp((viewportHeight * (rooftops ? 0.49 : 0.56) - (lifting ? 67 : 0)) / 77, 0.8, 3.1);
+    // The widest idle and tilt silhouettes reach 52 world units behind the foot.
+    const rearClearance=(width-Math.abs(positions[1]-positions[0]))/2-width*.04-2;
+    const scale = Math.min(rearClearance/52,clamp((viewportHeight * (rooftops ? 0.49 : 0.56) - (lifting ? 67 : 0)) / 77, 0.8, 3.1));
     [config.p1, config.p2].forEach((kind, i) => {
       const x = snap(positions[i]),
         y = podiums[i].y;
