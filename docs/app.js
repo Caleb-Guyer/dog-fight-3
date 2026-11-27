@@ -6355,7 +6355,7 @@
       world.end===null && !world.finished && (!!world.lesson || !world.hasSecondPlayer));
     if(!one){soloSeat=soloWorld=null;return;}
     if(soloWorld!==world){soloWorld=world;soloSeat=new controls.SoloSeat();}
-    soloSeat.track(pads,!paused && !dialogType && !document.hidden);
+    soloSeat.track(pads,!paused && !dialogType && !document.hidden,layout.pad[0]);
     if(!soloSeat.lost || (dialogType && dialogType!=='solo-pad-loss'))return;
     if(dialogType!=='solo-pad-loss'){
       const touch=matchMedia('(pointer:coarse)').matches;
