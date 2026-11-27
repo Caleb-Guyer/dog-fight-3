@@ -971,6 +971,27 @@ async function testCeilingTech(page, mobile) {
   console.log((mobile?'Touch':'Keyboard')+' played a ceiling bounce, shield tech and mirrored lasso recovery.');
 }
 
+async function testWallSpring(page,mobile){
+  await page.goto(root+'#training/wall-spring');
+  const status=page.locator('#wall-status');
+  const {press,hold,waitFor}=await trainingControls(page,mobile,status);
+  for(const choice of ['jump','attack']){
+    await hold(['attack']);await waitFor('flight');await hold([]);
+    await page.clock.runFor(350);await waitFor('flight');
+    await hold(['shield']);await waitFor('choice');await hold([]);
+    await page.clock.runFor(450);await waitFor('choice');
+    await hold([choice]);await waitFor(choice==='jump'?'wallTechJump':'stayed');
+    if(choice==='jump')assert.match(await status.innerText(),/frame 4/);
+    await hold([]);
+    if(choice==='jump')await press('wall-side');
+  }
+  await press('wall-guide');
+  assert.equal(await page.locator('#wall-guide').getAttribute('aria-pressed'),'false');
+  await hold(['attack']);await waitFor('wallBounce');await hold([]);
+  await press('wall-retry');
+  assert.equal(await page.locator('#wall-guide').getAttribute('aria-pressed'),'false');
+}
+
 async function testWallJumps(page, mobile) {
   await page.goto(root+'#training/wall-jumps');
   const status=page.locator('#wall-status');
@@ -2523,6 +2544,7 @@ async function testDevice(browser, mobile) {
     await testAngledTilts(page, mobile);
     await testWallJumps(page, mobile);
     await testCeilingTech(page, mobile);
+    await testWallSpring(page,mobile);
     await testLedgePatience(page, mobile);
     await testShortHops(page, mobile);
     await testFlickJumps(page, mobile);
