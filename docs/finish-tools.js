@@ -821,9 +821,19 @@
 
     document.querySelector('[data-finish-slot="'+slot+'"]').focus();
   }
-  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,practiceHold,holdFocus,practiceLedge,ledgeFocus,returnTape,clinic,rescueLaunch}){
+  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,practiceHold,holdFocus,practiceLedge,ledgeFocus,returnTape,clinic,rescueLaunch,stageClinic,chooseClinic}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
     const {marks,escape,launch,contact,landings,holds,ledges}=analyze(tape,slot,follow,!!retryMoment);
+    if(stageClinic){
+      const exchange=root.querySelector('#clip-exchange');
+      const add=(id,label,next)=>{
+        const b=document.createElement('button');b.id=id;b.className='utility';b.textContent=label;
+        b.onclick=()=>chooseClinic(next);exchange.before(b);
+      };
+      const ceiling=stageClinic==='ceiling',heavy=stageClinic==='heavy';
+      add('clip-stage-other',ceiling?'Try the wall':'Try the ceiling',ceiling?'wall':'ceiling');
+      if(!ceiling)add('clip-stage-damage',heavy?'Try at 90%':'Try at 185%',heavy?'wall':'heavy');
+    }
     escapeReady?.(escape);
     if(ledges.length && practiceLedge)ledgePanel(nav,tape,ledges,initialSeat,jump,practiceLedge,ledgeFocus,returnTape);
     if(holds.length && practiceHold)holdPanel(nav,tape,holds,initialSeat,jump,practiceHold,holdFocus);

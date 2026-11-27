@@ -2515,8 +2515,6 @@
       (review?.clip.returnTape?.length?'<button class="utility" id="clip-return">'+(returning?'Watch knockout':'Watch stock return')+'</button>':'')+
       recoveries.map((l,i)=>'<button class="utility" '+(i===0?'id="clip-coach" ':'')+'data-clip-recovery="'+l.slot+'">'+
         (result.mode==='local'?'Practice P'+(l.slot+1)+'’s recovery':'Practice this recovery')+'</button>').join('')+
-      (stageClinic?'<button class="utility" id="clip-stage-other">'+(review.clinic==='ceiling'?'Try the wall':'Try the ceiling')+'</button>'+
-        (review.clinic==='ceiling'?'':'<button class="utility" id="clip-stage-damage">'+(review.clinic==='heavy'?'Try at 90%':'Try at 185%')+'</button>'):'')+
       '<button class="utility" id="clip-exchange"'+(returning?' disabled':'')+'>'+(returning?'Play the return':'Practice exchange')+'</button><button class="utility" id="clip-export">Make GIF</button><button class="utility" data-do="clip-back">'+
       (review?.instant?'Back to pause':review?['card','archive'].includes(review.from)?'Back to match stats':'Back to KO replays':'Back to results')+'</button></div>'+
       (ko?'<p id="clip-escape-start">Start before the knockout and try to keep that stock.</p>':returning?
@@ -2527,8 +2525,6 @@
     if(ko)$('clip-escape').onclick=()=>startFinishTrial(Math.max(0,tape.length-90),loss.slot,review);
     if(review?.moment)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to full match';
     if(review?.clinic)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to Fight School';
-    if(stageClinic)$('clip-stage-other').onclick=()=>replayClinic(review.clinic==='ceiling'?'wall':'ceiling');
-    if($('clip-stage-damage'))$('clip-stage-damage').onclick=()=>replayClinic(review.clinic==='heavy'?'wall':'heavy');
     for(const b of $('dialog-body').querySelectorAll('[data-clip-recovery]'))
       b.onclick=()=>recoverySheet({...review,slot:Number(b.dataset.clipRecovery),fromClip:true});
     const {signal}=clipScreen.lifetime;
@@ -2540,7 +2536,7 @@
         if(signal.aborted)return;
         if(returning)review.recordedReturn=window.FinishTools.returnTrace();
         clipScreen.syncInputs=window.FinishTools.install({tape,signal,stage:stageName(result.stage,result.form),shake:settings.shake,root:$('dialog-body'),
-          follow:returning?review.recordedReturn:null,
+          follow:returning?review.recordedReturn:null,stageClinic:stageClinic && review.clinic,chooseClinic:replayClinic,
           ledgeFocus:review?.ledgeFocus,returnTape:review?.clip?.returnTape,practiceLedge:ledge=>startFinishTrial(ledge.mark.frame,ledge.mark.slot,{
             ...(review || {finish:true,from:'result',clip:{tape,losses:[]},result}),ledge,replayFrame:ledge.mark.frame}),
           holdFocus:review?.holdFocus,practiceHold:(hold,originalHold)=>startFinishTrial(hold.frame,hold.slot,{
