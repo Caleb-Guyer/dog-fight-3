@@ -13,7 +13,6 @@
     pummels,
     throws,
     smashPower,
-    moveFreshness,
     arenas,
     stageForms,
     Battle,
@@ -34,7 +33,7 @@
   const { FightView, drawPreview, drawMoveThumbnail } = window.DogFightView;
   const $ = (id) => document.getElementById(id);
   const footworkPatterns = ['bait','match','power','armor','armorGrab','disc','reflect','returnFire','crawl',
-    'center','brace','brake','dashShield','pivot','antiAir','angleHigh','angleLow','cancelDash','cancelTurn','boostGrab','boostPivot'];
+    'center','brace','brake','dashShield','pivot','antiAir','angleHigh','angleLow','cancelDash','cancelTurn','boostGrab','boostPivot','boostSmash'];
   const glyphs = {
     paw: [
       '...##.##....',
@@ -1418,44 +1417,6 @@
       if(recovery!==null){card.root.insertAdjacentHTML('beforeend',recoveryStrip(recovery));card.strip=card.root.lastChild;}
     }
   }
-  const moveLabel = id => (moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id]).label;
-  function freshnessResult(sample) {
-    const parts = [];
-    if (sample.hits) {
-      parts.push(tenth(sample.damage) + '% damage');
-      if (sample.launch) parts.push(Math.round(sample.launch) + ' px/s');
-      if (Number.isFinite(sample.angle)) parts.push(sample.angle + '° at contact');
-    }
-    if (sample.blocks) parts.push(sample.shieldFrames + 'f shieldstun');
-    if (sample.outcome) parts.push(sample.outcome);
-    return parts.join(' · ');
-  }
-  function updateFreshnessReadout(player, lab) {
-    const { last, previous } = lab;
-    const id = last?.moveId || previous?.last.moveId;
-    $('freshness-name').textContent = lab.drive ? (last ? moveLabel(last.moveId) : 'Launch height') + ' · ' +
-      (lab.drive.edge ? 'Ledge' : 'Center') + ' · ' + world.dogs[1].stats.name + ' at ' + lab.baseline + '%' :
-      lab.rageDamage != null ? player.stats.name + ' at ' + lab.rageDamage + '% · Rage +' +
-      tenth((rageScale(lab.rageDamage) - 1) * 100) + '%' : last ? moveLabel(last.moveId) + ' · ' + tenth(last.power * 100) + '% power' :
-      lab.koTest ? smashes[player.kit.smashes.up].label + ' KO test' : 'Move freshness';
-    const result = last ? freshnessResult(last) : world.dogs[1].stats.name + ' at ' + lab.baseline + '%';
-    if ($('freshness-contact').textContent !== result) $('freshness-contact').textContent = result;
-    $('freshness-previous').hidden = !previous;
-    if (previous) {
-      const label = lab.drive ? moveLabel(previous.last.moveId) + ' at ' + previous.baseline + '% · ' + (previous.edge ? 'Ledge' : 'Center') :
-        previous.rageDamage != null ? 'At ' + previous.rageDamage + '%' :
-        last?.moveId === previous.last.moveId ? 'Previous' : 'Previous ' + moveLabel(previous.last.moveId);
-      $('freshness-previous').textContent = label + ' · ' + freshnessResult(previous.last);
-    }
-    if (lab.drive) $('freshness-percent').textContent = 'Set rival to ' + (lab.baseline ? 0 : 60) + '%';
-    $('freshness-summary').textContent = 'Recent moves ' + player.moveHistory.length + '/9' +
-      (id ? ' · Next ' + tenth(moveFreshness(player, id) * 100) + '%' : '');
-    $('freshness-list').replaceChildren(...player.moveHistory.map(entry => {
-      const li = document.createElement('li');
-      li.textContent = moveLabel(entry.moveId) + (entry.shieldOnly ? ' · shield' : '');
-      return li;
-    }));
-  }
   const comboSources=['example','late','record','replay','flurry','escapeFlurry','defend','mix','throwChase','confirm','dashPressure'];
   function stockStatus(f,battle,human){
     if(f.stockLift){
@@ -1595,7 +1556,7 @@
     if (key === hudKey) return;
     hudKey = key;
     if (comboLab) window.ComboLab.readout(world);
-    if (world.freshnessPractice) updateFreshnessReadout(player, world.freshnessPractice);
+    if (world.freshnessPractice) window.PracticeFeedback?.updateFreshnessReadout(world, player, world.freshnessPractice);
     const lastMove = $('training-move');
     lastMove.hidden =
       world.mode !== 'training' ||
@@ -3679,7 +3640,7 @@
       if(current())waitForDispatch('Footwork readout',()=>loadDispatch('PracticeDirectory'),flush,()=>$('game').focus());
     });
   }
-  const feedbackDrills = new Set(['launch','wall','shield','edge','footwork','wave','spacing','escape','platform','air','roll','climb','trump']);
+  const feedbackDrills = new Set(['freshness','launch','wall','shield','edge','footwork','wave','spacing','escape','platform','air','roll','climb','trump']);
   function drill(ledge, fromHang = false, pattern = 'strike', direction, study) {
     if (!world) return;
     if(feedbackDrills.has(ledge) && !window.PracticeFeedback){
@@ -4032,7 +3993,7 @@
     if(active && !world.comboPractice)drill('combo',false,'example');
     window.ComboLab.shelf(hash,active?world:null,showDialog,back,(card,source,slot)=>{
       leaveOnline();afterStory=null;
-      startMatch({...settings,...card.config,impactTech:!!card.config.impactTech,risingCatch:!!card.config.risingCatch,wallSpring:!!card.config.wallSpring,groundSpace:!!card.config.groundSpace,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
+      startMatch({...settings,...card.config,dashSmash:!!card.config.dashSmash,impactTech:!!card.config.impactTech,risingCatch:!!card.config.risingCatch,wallSpring:!!card.config.wallSpring,groundSpace:!!card.config.groundSpace,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
       window.ComboLab.restore(world,card);
       drill('combo',false,source,'stand',slot);
       if(world.comboPractice.slow!==card.slow)$('combo-slow').click();
@@ -4329,7 +4290,7 @@
   let campaign = yardChapter;
   const dispatchSources={
     SoloEvents:'solo-events.js?v=impact-tech-1',
-    PracticeFeedback:'practice-feedback.js?v=cup-select-1', DogOnline:'online.js?v=impact-tech-1',
+    PracticeFeedback:'practice-feedback.js?v=dash-smash-1', DogOnline:'online.js?v=dash-smash-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
@@ -4342,12 +4303,12 @@
     VersusRulebook:'versus-rules.js?v=arena-board-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
-    ComboLab:'combo-lab.js?v=impact-tech-1', FinishTools:'finish-tools.js?v=second-chance-1',
+    ComboLab:'combo-lab.js?v=dash-smash-1', FinishTools:'finish-tools.js?v=second-chance-1',
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=stock-share-1', DispatchView:'dispatch-view.js?v=stock-share-1',
-    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=light-shield-1',
+    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=dash-smash-1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -7056,11 +7017,11 @@
       startMatch({...settings, mode:'training', p1:'pip', p2:'clover', stage:'picnic', fetch:false});
       drill('launch', false, 'bait');
     }
-    else if (hash === '#training/boost-grab') {
+    else if (hash === '#training/boost-grab' || hash === '#training/dash-up-smash') {
       leaveOnline();
       afterStory = null;
       startMatch({...settings, mode:'training', p1:'brisket', p2:'pip', stage:'picnic', fetch:false});
-      drill('footwork',false,'boostGrab');
+      drill('footwork',false,hash==='#training/boost-grab'?'boostGrab':'boostSmash');
     }
     else if (hash === '#training/attack-cancel') {
       menuScreen('match');

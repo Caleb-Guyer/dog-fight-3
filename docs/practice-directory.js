@@ -206,6 +206,14 @@
           'Retry with Attack first. Tap Grab in the first two frames of the dash attack.';
       return;
     }
+    if(pattern==='boostSmash'){
+      const player=world.dogs[0];
+      status.textContent={cancelNow:'Windup · Up + Smash',boostSmashCatch:player.lastMove+' · caught the hop',
+        groundMiss:'Ground swing missed',lateSmash:'Up smash missed',otherHit:player.lastMove+' · hit'}[state];
+      $('recovery-tip').textContent=state==='cancelNow'?'Release forward, hold Up and tap Smash. Tap Attack again to finish the dash attack instead.':
+        state==='boostSmashCatch'?'Turn off Pause at windup and Half speed to try it at match speed.':'Retry and tap Up + Smash in the first two frames of the dash attack.';
+      return;
+    }
     if (pattern === 'cancelDash' || pattern === 'cancelTurn') {
       const practice = world.footworkPractice, player = world.dogs[0], dash = pattern === 'cancelDash';
       const aim = dash ? 'Up' : practice.dir > 0 ? 'Right' : 'Left';
