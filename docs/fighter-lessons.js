@@ -710,5 +710,73 @@
       paint(frames/60);
     }};
   }
-  window.FighterSchool={courses,Trial,Sparring,Example,hint,sheet,tryoutSheet,mark,cleared,study,makeTrial,Demonstration,preview};
+  const fieldSkills={
+    move:'Cross center stage on foot',platform:'Jump and land on a bench',jab:'Land the first jab',
+    tilt:'Connect with a down tilt',air:'Hit Brisket with an aerial',guard:'Block or parry a hit',
+    throw:'Grab through a shield and throw',special:'Land Double Pounce',
+    return:'Recover from offstage',stock:'Take a stock with a charged side smash'
+  };
+  class FieldCard {
+    constructor(saved){this.marks={};Object.assign(this,saved);}
+    mark(id,frame){
+      if(Object.hasOwn(this.marks,id))return;
+      this.marks[id]=frame;this.changed=true;
+    }
+    contact(name,e,w){
+      const [pip]=w.dogs,frame=w.matchFrames;
+      if(e.f===pip){
+        if(name==='jump')this.jumped=true;
+        if(name==='ledge' || name==='recover' && this.offstage)this.rescue=true;
+        if(name==='block' || name==='parry')this.mark('guard',frame);
+        if(name==='grabCatch')this.caughtShield=e.shielded;
+        if(name==='throwRelease' && this.caughtShield)this.mark('throw',frame);
+        if(name==='ko'){this.jumped=this.offstage=this.rescue=this.caughtShield=false;this.lastX=null;}
+      }
+      if(name==='hit' && e.owner===pip && e.f===w.dogs[1]){
+        const id=e.moveId,k=pip.kit;
+        if(id===k.ground[0])this.mark('jab',frame);
+        if(id===k.tilts.down)this.mark('tilt',frame);
+        if(Object.values(k.air).includes(id))this.mark('air',frame);
+        if(id===k.specials.side)this.mark('special',frame);
+        this.smashAt=id===k.smashes.side && pip.attack?.power>=.15?frame:null;
+      }
+      if(name==='ko' && e.f===w.dogs[1]){
+        const last=w.matchCard.players[1].lastHit;
+        if(this.smashAt!=null && last?.frame===this.smashAt && last.id===pip.kit.smashes.side && frame-this.smashAt<=600)this.mark('stock',frame);
+        this.smashAt=null;
+      }
+    }
+    step(w,input){
+      const f=w.dogs[0], floor=w.terrain[0],center=(floor.x1+floor.x2)/2;
+      if(f.stockLift || f.respawning || !f.stocks){this.lastX=null;return;}
+      if(f.ground<0 && (f.x<floor.x1 || f.x>floor.x2)){
+        this.offstage=true;
+        if(f.attack?.specialSide==='up')this.rescue=true;
+      }
+      if(f.ground>=0 && !f.ledge && !f.floorAction && !f.grip && !f.stun && !f.tumble){
+        if(this.jumped && w.terrain[f.ground].thin)this.mark('platform',w.matchFrames);
+        if(this.offstage && this.rescue)this.mark('return',w.matchFrames);
+        this.jumped=this.offstage=this.rescue=false;
+      }
+      if(f.ground!==0 || f.grip || f.stun || f.floorAction || f.tumble || f.attack || !input.x){this.lastX=null;return;}
+      if(this.lastX!=null && this.lastX!==f.x && Math.sign(f.x-this.lastX)===Math.sign(input.x) &&
+          (this.lastX-center)*(f.x-center)<=0)this.mark('move',w.matchFrames);
+      this.lastX=f.x;
+    }
+    hud(el){el.textContent='Fight School · '+Object.keys(this.marks).length+' / 10 skills';}
+    panel(lessons,passed,showDialog,practice,back,over){
+      const rows=lessons.map(({id},i)=>{
+        const frame=this.marks[id],when=frame==null?'':Math.floor(frame/3600)+':'+String(Math.floor(frame/60)%60).padStart(2,'0');
+        const result=when?'In this fight · '+when:passed.includes(id)?'Cleared in practice':'Practice';
+        return '<li><button class="utility" data-field-lesson="'+i+'"><strong>'+fieldSkills[id]+'</strong><small>'+result+'</small></button></li>';
+      }).join('');
+      showDialog('field-card','Skills from this fight','<p>'+Object.keys(this.marks).length+' of '+lessons.length+
+        ' demonstrated against Brisket. Choose a skill to practice it with Pip.</p><ul class="field-skills">'+rows+
+        '</ul><button class="primary" id="field-back">'+(over?'Match result':'Back to fight')+'</button>',false);
+      const body=document.getElementById('dialog-body');
+      for(const b of body.querySelectorAll('[data-field-lesson]'))b.onclick=()=>practice(Number(b.dataset.fieldLesson));
+      const exit=document.getElementById('field-back');exit.onclick=back;exit.focus({preventScroll:true});
+    }
+  }
+  window.FighterSchool={courses,Trial,Sparring,Example,hint,sheet,tryoutSheet,mark,cleared,study,makeTrial,Demonstration,preview,FieldCard};
 })();
