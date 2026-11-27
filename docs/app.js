@@ -6529,8 +6529,11 @@
       nextLesson();
     } else if (page === 'match' && world?.mode === 'training' && !world.warmupPartner && !$('dialog').open &&
         (now.freeze && !oldPad.freeze || now.step && !oldPad.step)) {
-      if (now.freeze && !oldPad.freeze) toggleFrames();
-      else stepTrainingFrame();
+      // Clicking the left stick while guarding changes shield strength in training, too.
+      const guardChord=pads.some(p=>down(p,10) && [layout.pad[0].shield,layout.pad[0].shieldAlt].some(n=>down(p,n) || p.buttons[n]?.value>=.18));
+      if (now.freeze && !oldPad.freeze) {
+        if (!guardChord) toggleFrames();
+      } else stepTrainingFrame();
     } else if (menuOpen && back) {
       menuBack();
     } else if (menuOpen && (move || confirm)) {
