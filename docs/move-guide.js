@@ -341,9 +341,9 @@
         guideMoveRow(
           {
             label: 'Wall-tech jump',
-            hint: 'Keep Jump held as the tech lands to spring up and away. You can use your saved recovery afterward.',
+            hint: 'Hold Jump at impact, or tap Jump in the first nine frames after your paws plant. Both routes keep your air jump. Waiting lets the protection from your tech run down.',
           },
-          'Tap Shield + hold Jump',
+          'Shield before impact, then Jump',
           'wallTechJump',
           'defense',
         ) +

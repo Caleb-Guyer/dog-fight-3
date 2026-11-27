@@ -19,7 +19,7 @@
       ['Recovery','Ledge timing','climb',['escape','trap','rise','coverRise','patience']],
       ['Recovery','Ledge roll','roll',['guard','read','scout']],
       ['Recovery','Contested ledge','trump',['take','defend','runoff','escape']],
-      ['Recovery','Stage techs & wall jumps','wall',['training','impact','ceiling','pip','noodle']],
+      ['Recovery','Stage techs & wall jumps','wall',['training','impact','ceiling','spring','pip','noodle']],
       ['Movement','Free practice','',['reset-training','partner-training']],
     ];
     const practiceAliases = {
@@ -48,6 +48,7 @@
       'trump-escape':'ledge trump run off roll jump avoid edgeguard',
       'partner-training':'local two players sparring', 'reset-training':'free training dummy',
       'wall-ceiling':'ceiling tech under stage recovery Noodle Pip',
+      'wall-spring':'late delayed wall tech jump brace stage spike saved recovery',
     };
     const practiceTitles = {'roll-scout':'Teach the guard your ledge roll','reset-training':'Free training', 'shield-drop':'Punish Brisket’s Belly Drop',
       'shield-strike':'Parry or roll through a strike', 'shield-grab':'Dodge an incoming grab', 'wall-impact':'Tech a heavy impact'};

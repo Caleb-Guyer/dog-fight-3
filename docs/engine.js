@@ -2682,6 +2682,7 @@
       if(config.shieldPogo!==false)this.shieldPogo=true;
       if(config.aimedDrive!==false)this.aimedDrive=true;
       if(config.groundSpace!==false)this.groundSpace=true;
+      if(config.wallSpring!==false)this.wallSpring=true;
       this.time = 0;
       this.end = null;
       this.endReason = '';
@@ -3238,6 +3239,7 @@
       if (!('shieldPogo' in state)) delete this.shieldPogo;
       if (!('aimedDrive' in state)) delete this.aimedDrive;
       if (!('groundSpace' in state)) delete this.groundSpace;
+      if (!('wallSpring' in state)) delete this.wallSpring;
       if (!('closingHeight' in state)) delete this.closingHeight;
       this.random.state = random.state;
     }
@@ -4738,7 +4740,7 @@
       drill.outcome = outcome;
       this.emit('footworkResult', { f: this.dogs[0], outcome, remaining });
     }
-    resetWallPractice(side = 'left', runner = '', heavy = false) {
+    resetWallPractice(side = 'left', runner = '', heavy = false, guided = this.wallPractice?.guided ?? true) {
       this.resetTraining();
       const original = { stage: this.stage, dogs: this.dogs };
       this.stage = runner === 'ceiling' ? 'picnic' : 'laundry';
@@ -4779,6 +4781,7 @@
         damage: this.trainingDamage,
       });
       this.wallPractice = { phase: 'ready', time: 0, side, inward, heavy, swung: false, outcome: '', original };
+      if (runner === 'spring') Object.assign(this.wallPractice,{spring:true,guided});
     }
     finishWallReturn(f, route, platform) {
       const d = this.wallPractice;
@@ -6097,14 +6100,37 @@
         wallDrill.phase = 'return';
       } else if (wallDrill?.phase === 'ready') {
         this.dogs[0].prev = { ...input1 };
-        if (wallDrill.ceiling) {
+        if (wallDrill.ceiling || wallDrill.spring) {
           if (!input1.attack && !input1.tapped?.attack) return;
         } else {
           wallDrill.time += dt;
           if (wallDrill.time + 1e-8 < 0.75) return;
         }
         wallDrill.phase = 'swing';
+        if (wallDrill.spring) wallDrill.consumeAttack = true;
         this.emit('wallCue', { f: this.dogs[0] });
+      }
+      if (wallDrill?.consumeAttack) {
+        wallDrill.consumeAttack = !!input1.attack;
+        input1={...input1,attack:false,tapped:{...input1.tapped,attack:false}};
+      }
+      if (wallDrill?.spring && wallDrill.guided) {
+        if (wallDrill.phase === 'flight' && !wallDrill.armed) {
+          if (!input1.shield && !input1.tapped?.shield) return;
+          wallDrill.armed = true;
+        }
+        if (wallDrill.phase === 'brace' && this.dogs[0].wallAction?.time >= 3/60-1e-8 && !wallDrill.choice) {
+          if (!wallDrill.waiting) {
+            wallDrill.waiting = true;
+            this.emit('wallChoice',{f:this.dogs[0]});
+          }
+          if (input1.jump || input1.tapped?.jump || input1.shortHop || input1.tapped?.shortHop) wallDrill.choice = 'jump';
+          else if (input1.tapped?.attack || (input1.attack && !this.dogs[0].prev.attack)) {
+            wallDrill.choice = 'stay';
+            wallDrill.consumeAttack = true;
+            input1={...input1,attack:false,tapped:{...input1.tapped,attack:false}};
+          } else return;
+        }
       }
       if (this.trumpPractice?.phase === 'ready') {
         const d=this.trumpPractice;
@@ -6947,6 +6973,16 @@
       }
       this.emit(name, {f, point, speed, hard});
     }
+    springFromWall(f,action) {
+      f.face = action.dir;
+      f.vx = action.dir * 290;
+      f.vy = -f.stats.jump * .92;
+      f.jumpBuffer = 0;
+      f.ledgeLock = 8/60 - 1e-8;
+      action.type = 'wallTechJump';
+      action.time = 0;
+      action.duration = 8/60;
+    }
     hitWall(f, contact, jump) {
       const { wall, dir, feet } = contact;
       f.x = contact.x;
@@ -6963,15 +6999,15 @@
         f.reaction = f.command = f.guardAim = f.throwBounce = null;
         f.stun = f.jumpBuffer = f.guardBuffer = f.coyote = 0;
         f.cutJump = false;
-        f.face = jump ? dir : -dir;
-        f.vx = jump ? dir * 290 : 0;
-        f.vy = jump ? -f.stats.jump * 0.92 : 0;
+        f.face = -dir;
+        f.vx = f.vy = 0;
         f.invuln = Math.max(f.invuln, (jump ? 9 : 12) / 60);
         f.ledgeLock = (jump ? 8 : 10) / 60 - 1e-8;
       }
       f.wallAction = { type, time: 0, duration: (type === 'wallBounce' ? 6 : jump ? 8 : 10) / 60, dir, wall };
+      if (type === 'wallTechJump') this.springFromWall(f,f.wallAction);
       if (this.wallPractice?.phase === 'flight' && f.index === 0) {
-        this.wallPractice.phase = 'done';
+        this.wallPractice.phase = this.wallPractice.spring && type === 'wallTech' ? 'brace' : 'done';
         this.wallPractice.outcome = hard ? 'hardImpact' : type;
         this.wallPractice.speed = speed;
       }
@@ -7436,7 +7472,25 @@
       if (f.wallAction) {
         const action = f.wallAction;
         action.time += dt;
-        if (action.time + 1e-8 >= action.duration) f.wallAction = null;
+        if (this.wallSpring && action.type === 'wallTech' && f.jumpBuffer > 0 && action.time + 1e-8 < action.duration) {
+          const delay=Math.round(action.time*60);
+          this.springFromWall(f,action);
+          f.invuln=Math.min(f.invuln,9/60);
+          if (this.wallPractice && f.index===0) {
+            this.wallPractice.phase='done';
+            this.wallPractice.outcome='wallTechJump';
+          }
+          this.emit('wallTechJump',{f,dir:action.dir,wall:action.wall,delay,
+            point:{x:action.wall.x,y:f.y-f.stats.height*.52}});
+          return;
+        }
+        if (action.time + 1e-8 >= action.duration) {
+          f.wallAction = null;
+          if (f.index===0 && this.wallPractice?.phase==='brace') {
+            this.wallPractice.phase='done';
+            this.emit('wallStay',{f});
+          }
+        }
         else if (action.type === 'wallTech' || action.type === 'ceilingTech') return;
       }
       const floorAction = f.floorAction;
@@ -11626,10 +11680,18 @@
       const x=Math.abs(distance)>12?Math.sign(distance)*(Math.abs(distance)>80?1:.45):f.face!==dir?dir*.4:0;
       return {...idleInput,x};
     }
+    wallGuardClose(f,foe) {
+      return this.wallSpring && this.cpuLevel==='rival' && foe.ground<0 && !foe.ledge && !foe.stun &&
+        Math.abs(foe.x-f.x)<125 && Math.abs(foe.y-f.y)<145;
+    }
     cpu(dt) {
       const f = this.dogs[1],
         foe = this.dogs[0],
         brain = this.bot;
+      if(this.wallSpring && this.cpuLevel==='rival' && f.wallAction?.type==='wallTech'){
+        const spring=f.wallAction.time>=2/60 && this.wallGuardClose(f,foe) && foe.y>f.y+8;
+        return spring?{...idleInput,jump:true,tapped:{jump:true}}:idleInput;
+      }
       const ball=this.ball;
       if(this.itemDrops && this.cpuLevel==='rival' && ball && !f.attack && !f.stun && !f.grip && !f.stockLift && !f.ledge){
         const handX=f.x+f.face*(f.stats.width+8);
@@ -11968,7 +12030,8 @@
       if (solidImpact) {
         result.x = 0;
         if (this.cpuLevel === 'rival' && solidImpact.hard) return result;
-        result.jump = !solidImpact.ceiling && f.tumble.willTech && f.y > solidImpact.wall.top + f.stats.height;
+        result.jump = !solidImpact.ceiling && f.tumble.willTech && f.y > solidImpact.wall.top + f.stats.height &&
+          !(this.wallGuardClose(f,foe) && foe.y < f.y-14);
         if (f.tumble.willTech && f.techLock <= 1e-8) {
           result.shield = true;
           result.tapped = { shield: true };

@@ -675,6 +675,21 @@
   function wallFeedback(world, name, event) {
     const status = $('wall-status');
     const d = world.wallPractice;
+    if (d.spring) {
+      const back=d.inward<0?'left':'right';
+      const line={
+        wallCue:['swing','Watch Pip’s heel','His back paw will send you into the brickwork.'],
+        hit:['flight','Back Heel · tap Shield','Tap Shield to catch the wall. Keep Jump released to plant your paws.'],
+        wallTech:['wallTech','Paws planted','Tap Jump during the brace to kick away.'],
+        wallChoice:['choice','Choose your exit','Tap Jump to spring up, or tap Attack to stay against the wall.'],
+        wallStay:['stayed','Stayed low','Use Up + Special to reach for the lip with Ledge Lasso.'],
+        wallTechJump:['wallTechJump',event.delay?'Sprang on frame '+event.delay:'Sprang at impact','Steer '+back+' toward the roof. Use Up + Special to catch the lip.'],
+        wallBounce:['wallBounce','Missed the brace','Retry kick and tap Shield when the heel hits.'],
+        ledge:['returned','Caught the ledge','Switch wall to try the other side, or turn off Guided timing for match speed.']
+      }[name];
+      if(line && (name!=='hit' || d.phase==='flight'))[status.dataset.result,status.textContent,$('recovery-tip').textContent]=line;
+      return;
+    }
     if (d.ceiling) {
       const away = d.side === 'left' ? 'left' : 'right';
       const feedback = {
@@ -739,7 +754,7 @@
     if (!feedback[name] || (name === 'hit' && world.wallPractice.phase !== 'flight')) return;
     [status.dataset.result, status.textContent, $('recovery-tip').textContent] = feedback[name];
     if (d.heavy && name === 'hit') $('recovery-tip').textContent = 'Hold Up through the hit freeze to soften the impact. Tap Shield before the wall.';
-    if (d.heavy && d.phase === 'done') status.textContent += ' · ' + Math.round(event.speed) + ' px/s';
+    if (d.heavy && d.phase === 'done') status.textContent += ' · ' + Math.round(d.speed) + ' px/s';
   }
   const techResponses={mix:'Rival mix',stay:'In place',away:'Roll away',through:'Roll through'};
   function chaseFeedback(world, name, e) {
