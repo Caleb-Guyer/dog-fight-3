@@ -32,6 +32,12 @@
       brief:'Watch Brisket’s feet. When he plants and winds up, shield Haymaker. When he takes a step back for a running grab, jump his reach or interrupt him. Learn both with hints, then read four without them.',
       clear:'You read Brisket’s approaches at match speed.',
     },
+    'hold-the-bench':{
+      name:'Hold the Bench',p1:'pip',p2:'brisket',stage:'picnic',form:'original',time:8,benchOpening:true,
+      goal:'Catch the bench and counter',
+      brief:'Let Haymaker hit Pip. At the hit spark, hold Down and tap Shield. Pip will plant on the bench. Release Down and Shield, then tap Attack as he stands.',
+      clear:'Pip caught the bench and hit Brisket back before taking another hit.',
+    },
   };
   const ids=Object.keys(events), memory=new Map(), prefix='dog-fight-3.event-best.';
   const stamp=frames=>(frames/60).toFixed(2)+' s';
@@ -50,9 +56,10 @@
     else write();
   }
   function setup(id,normal=false,readSeed,rehearse){
-    const {p1,p2,stage,form,landingRead,liftOpening,finalCount,highReturn}=events[id];
+    const {p1,p2,stage,form,landingRead,liftOpening,finalCount,highReturn,benchOpening}=events[id];
     return {mode:'solo',p1,p2,stage,form,cpuLevel:'rival',stockCount:3,minutes:finalCount?1:7,
-      fetch:false,timeBattle:!!finalCount,landingRead,liftOpening,finalCount,highReturn,...(normal?{}:{eventId:id}),
+      fetch:false,timeBattle:!!finalCount,landingRead,liftOpening,finalCount,highReturn,benchOpening,...(normal?{}:{eventId:id}),
+      ...(benchOpening && !normal && rehearse===true?{guidedImpact:true}:{}),
       ...(id==='read-the-rival' && !normal?{readSeed:readSeed??crypto.getRandomValues(new Uint32Array(1))[0],rehearse}:{})};
   }
   class ApproachSet {
@@ -156,6 +163,7 @@
       this.event=events[this.eventId];
       this.clockFrames=this.event.time*60;
       this.held=0;this.feedback='';this.planted=false;this.sweep=false;
+      if(config.guidedImpact)this.guidedImpact=true;
       const forward=this.emit;
       this.emit=(type,e)=>{this.observe(type,e);forward(type,e);};
       if(config.readSeed!==undefined){this.reads=new ApproachSet(config);this.reads.place(this);}
@@ -164,6 +172,19 @@
     observe(type,e){
       if(this.feedback || this.end!==null)return;
       if(this.reads){this.reads.contact(type,e);return;}
+      if(this.event.benchOpening){
+        if(type==='impactTech' && e.f.index===0)this.planted=true;
+        else if(type==='launchDI' && e.f.index===0 && !this.planted)this.feedback='Pip left the bench. Hold Down through the end of the hit spark and tap Shield during it.';
+        else if((type==='block' || type==='parry') && e.f.index===0)this.feedback='You guarded Haymaker. Wait for the glove to connect before tapping Shield.';
+        else if(type==='hit'){
+          if(e.f.index===0 && this.planted)this.feedback='Brisket caught the return. Release Shield and jab as Pip finishes the tech.';
+          if(e.owner?.index===0){
+            if(this.planted)this.cleared=true;
+            else this.feedback='Pip interrupted the opening. Let the first glove land.';
+          }
+        }
+        return;
+      }
       if(this.eventId==='low-road'){
         if(type==='reachLip' && e.f.index===0)this.reaching=true;
         if(type==='ledge' && e.f.index===0 && e.rising)this.caught=true;
@@ -184,6 +205,10 @@
     }
     step(dt,a,b){
       if(this.end!==null)return;
+      if(this.guidedImpact && !this.pressedAtImpact && this.dogs[0].tumble?.pending){
+        if(!(a?.y>=.65 && (a.shield || a.tapped?.shield)))return;
+        this.pressedAtImpact=true;
+      }
       const before=this.matchFrames,guard=this.dogs[1],swing=guard.attack;
       if(this.eventId==='wrong-way' && this.bot.coveredLanding==='through' && swing?.moveId===guard.kit.tilts.down &&
           swing.time+1e-8>=swing.start+swing.active)this.sweep=true;
@@ -213,6 +238,9 @@
     startSuddenDeath(cause){this.regulationEnd ||= cause==='time'?'time':'ko';}
     finishMatch(winner,reason){this.regulationEnd ||= reason;}
     progress(){
+      if(this.cleared && this.event.benchOpening)return 'Counter landed.';
+      if(this.event.benchOpening)return this.planted?'Release Down and Shield, then jab.':
+        this.dogs[0].tumble?.pending?'Hit spark · Hold Down and tap Shield.':'Let the glove connect.';
       if(this.reads)return this.reads.status();
       if(this.eventId==='low-road')return this.caught?'Get back on the roof.':this.reaching?'Hold the lip.':'Up Special, then Grab beside the lip.';
       if(this.eventId==='high-ground')return (Math.min(180,this.held)/60).toFixed(1)+' / 3.0 s on the top perch';
@@ -225,7 +253,7 @@
       if(el.hasAttribute('aria-label'))el.removeAttribute('aria-label');
     }
     save(store){
-      if(this.end===0 && !this.recorded){this.recorded=true;remember(store,this.eventId,this.reads?.scoredFrames??this.matchFrames);}
+      if(this.end===0 && !this.guidedImpact && !this.recorded){this.recorded=true;remember(store,this.eventId,this.reads?.scoredFrames??this.matchFrames);}
     }
   }
   function board(id,{store,showDialog,open,back,launch,coat,binding}){
@@ -239,11 +267,13 @@
     showDialog('event-board','Event Matches','<div class="event-picks" role="group" aria-label="Choose an event">'+rows+'</div>'+
       '<canvas class="event-preview" id="event-preview" width="640" height="360" role="img" aria-label="'+
       fighters[spec.p1].name+' against '+fighters[spec.p2].name+' at the opening of '+spec.name+'"></canvas>'+
-      '<h3>'+spec.goal+'</h3><p>'+spec.brief+'</p>'+(id==='read-the-rival'?'<p id="event-bindings"></p>':'')+'<p>'+fighters[spec.p1].name+' vs. '+fighters[spec.p2].name+' · '+
+      '<h3>'+spec.goal+'</h3><p>'+spec.brief+'</p>'+(id==='read-the-rival' || spec.benchOpening?'<p id="event-bindings"></p>':'')+'<p>'+fighters[spec.p1].name+' vs. '+fighters[spec.p2].name+' · '+
       window.DogFight.arenas[spec.stage].name+' · '+spec.time+' seconds'+(Number.isFinite(record)?' · Best '+stamp(record):'')+'</p>'+
-      '<div class="dialog-actions"><button class="primary" id="event-play">Start event</button><button class="utility" id="event-back">Fighter select</button></div>',false);
+      '<div class="dialog-actions"><button class="primary" id="event-play">Start event</button>'+
+      (spec.benchOpening?'<button class="utility" id="event-guide">Pause at the hit spark</button>':'')+'<button class="utility" id="event-back">Fighter select</button></div>',false);
     const $=key=>document.getElementById(key);
-    if($('event-bindings'))$('event-bindings').textContent='Shield · '+binding('shield')+'　Jump · '+binding('jump');
+    if($('event-bindings'))$('event-bindings').textContent='Shield · '+binding('shield')+'　'+(spec.benchOpening?'Attack · '+binding('attack'):'Jump · '+binding('jump'));
+    if($('event-guide'))$('event-guide').onclick=()=>launch(id,false,undefined,true);
     const preview=new Run({...setup(id,false,42),coats:[coat(0,spec.p1),coat(1,spec.p2)]},()=>{},seededRandom(42)),view=new window.DogFightView.FightView();
     view.shakeEnabled=false;view.draw($('event-preview'),preview,0,0);
     for(const b of document.querySelectorAll('[data-event-pick]'))b.onclick=()=>{
@@ -256,14 +286,17 @@
     const button=(key,label,primary=false)=>'<button type="button" class="'+(primary?'primary':'utility')+'" id="event-'+key+'">'+label+'</button>';
     showDialog(paused?'pause':'event-result',paused?spec.name+' paused':win?'Event cleared':'Try again',
       '<h3>'+spec.name+' · '+spec.goal+'</h3><p>'+(paused?spec.brief:win?spec.clear:run.feedback)+'</p>'+
-      '<p>'+run.progress()+' · '+(run.reads?'Scored time '+stamp(run.reads.scoredFrames):stamp(run.matchFrames))+(Number.isFinite(record)?' · Best '+stamp(record):'')+'</p>'+
+      '<p>'+run.progress()+' · '+(run.guidedImpact?'Guided practice':run.reads?'Scored time '+stamp(run.reads.scoredFrames):stamp(run.matchFrames))+(Number.isFinite(record)?' · Best '+stamp(record):'')+'</p>'+
       '<div class="dialog-actions">'+(paused?'<button class="primary" data-do="resume">Resume</button>':'')+
       (!paused && win?button('next','Choose next event',true):'')+button('retry','Retry event',!paused && !win)+
+      (spec.benchOpening?button('guide',run.guidedImpact?'Try at match speed':'Pause at the hit spark'):'')+
       (run.reads?(!paused && run.reads.results.some(r=>!r.ok)?button('misses','Rehearse missed reads'):'')+button('shuffle','New mix'):'')+button('normal',run.reads?'Fight Brisket · 3 stocks':'Replay opening as a match')+button('board','Event board')+'</div>'+
       (run.reads && !paused?run.reads.recap():''),false);
     const $=key=>document.getElementById('event-'+key);
     if($('next'))$('next').onclick=()=>open(ids.find(key=>!Number.isFinite(best(store,key))) || ids[(ids.indexOf(id)+1)%ids.length]);
-    $('retry').onclick=()=>launch(id,false,run.reads?.seed);if($('shuffle'))$('shuffle').onclick=()=>launch(id);
+    $('retry').onclick=()=>launch(id,false,run.reads?.seed,run.guidedImpact);
+    if($('guide'))$('guide').onclick=()=>launch(id,false,undefined,!run.guidedImpact);
+    if($('shuffle'))$('shuffle').onclick=()=>launch(id);
     if($('misses'))$('misses').onclick=()=>launch(id,false,run.reads.seed,run.reads.results.flatMap((r,i)=>r.ok?[]:[i]));
     $('normal').onclick=()=>launch(id,true);$('board').onclick=()=>open(id);
     document.querySelector('#dialog-body .primary').focus();

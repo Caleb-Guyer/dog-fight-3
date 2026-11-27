@@ -2684,6 +2684,7 @@
       if(config.groundSpace!==false)this.groundSpace=true;
       if(config.wallSpring!==false)this.wallSpring=true;
       if(config.risingCatch!==false)this.risingCatch=true;
+      if(config.impactTech!==false)this.impactTech=true;
       this.time = 0;
       this.end = null;
       this.endReason = '';
@@ -2808,6 +2809,14 @@
         this.bot.rollHabit={count:2,delay:config.scoutedRoll.delay};
       }
       if (config.driveOpening && this.mode === 'solo') this.placeDriveFighters(config.driveOpening.edge, config.driveOpening.damage);
+      if (config.benchOpening && this.mode==='solo' && this.terrain[1]?.thin) {
+        const [defender,attacker]=this.dogs, bench=this.terrain[1];
+        const x=(bench.x1+bench.x2)/2;
+        Object.assign(defender,{x:x+30,y:bench.y,ground:1,face:-1,damage:45});
+        Object.assign(attacker,{x:x-36,y:bench.y,ground:1,face:1,charge:.2});
+        lockSmash(attacker,'smash',0,1);
+        releaseSmash(attacker);
+      }
       if (timed && config.finalCount) {
         this.clockFrames = 600;
         if(openingLead){
@@ -3245,6 +3254,7 @@
       if (!('groundSpace' in state)) delete this.groundSpace;
       if (!('wallSpring' in state)) delete this.wallSpring;
       if (!('risingCatch' in state)) delete this.risingCatch;
+      if (!('impactTech' in state)) delete this.impactTech;
       if (!('closingHeight' in state)) delete this.closingHeight;
       this.random.state = random.state;
     }
@@ -5624,6 +5634,15 @@
       }
       return best;
     }
+    impactSurface(f,aim) {
+      if (!f.tumble?.canImpactTech || aim.y<.65 || f.ground>=0) return -1;
+      const v=launchInfluence(f.vx,f.vy,aim);
+      if (Math.hypot(v.x,v.y)>=maxTechSpeed || Math.abs(v.y)>.65*Math.abs(v.x)) return -1;
+      // One downward shift must cover the gap and the first frame of upward launch travel.
+      const reach=8+Math.min(0,v.y/60);
+      return this.terrain.findIndex((p,i)=>p.y>=f.y && p.y-f.y<=reach && f.x>=p.x1 && f.x<=p.x2 &&
+        !(p.thin && f.drop>0 && f.dropPlatform===i));
+    }
     releaseLaunch(f, input) {
       const raw = { x: f.vx, y: f.vy };
       let aim = f.index === 0 && this.survivalPractice?.lockedAim;
@@ -5634,7 +5653,17 @@
         aim={x:inward?-away:away,y:0};
         combo.launchRead=inward?'in':'out';
       }
-      const v = launchInfluence(f.vx, f.vy, aim || input);
+      const direction=aim || input;
+      const floor=f.techBuffer>0?this.impactSurface(f,direction):-1;
+      if (floor>=0) {
+        const dir=Math.abs(direction.x)>.45?Math.sign(direction.x):0;
+        f.ground=floor;f.y=this.terrain[floor].y;
+        restoreAir(f);
+        this.beginFloorAction(f,dir?'techRoll':'tech',dir);
+        this.emit('impactTech',{f,dir,floor,point:{x:f.x,y:f.y}});
+        return;
+      }
+      const v = launchInfluence(f.vx, f.vy, direction);
       f.vx = v.x;
       f.vy = v.y;
       f.tumble.pending = false;
@@ -6227,7 +6256,12 @@
           this.finalHitHold = this.finalHitHold <= dt + 1e-8 ? 0 : this.finalHitHold - dt;
         else this.hitStop = this.hitStop <= dt + 1e-8 ? 0 : this.hitStop - dt;
         for (const f of this.dogs) {
-          const human = humanInput(f);
+          let human = humanInput(f);
+          if (!human && !this.hitStop && this.cpuLevel==='rival' && this.cpuControlled(f) &&
+              f.tumble?.pending && f.tumble.willTech && !f.techLock) {
+            const response={...idleInput,y:1,shield:true};
+            if (this.impactSurface(f,response)>=0) { human=response;this.captureInput(f,response); }
+          }
           if (f.hitShift) {
             // A CPU can read a second swing once. It must re-center and flick under the same rules.
             const cpu = f.hitShift.cpuDirection && f.hitShift.remaining <= 4 ? { x: f.hitShift.cpuDirection } : idleInput;
@@ -9660,6 +9694,8 @@
       this.sampleFreshness(owner, use, moveId, power, applied, launchSpeed);
       if (finish && launchSpeed >= tumbleSpeed) {
         this.startTumble(target, true);
+        if (this.impactTech && (!target.encounter || target.encounter.kind===target.kind) && !grab && !meteor && target.vy<=0 && Math.abs(target.vy)<Math.abs(target.vx))
+          target.tumble.canImpactTech=true;
         if (meteor && target.vy > 0) {
           target.tumble.meteor = moveId;
           target.stun = Math.max(target.stun, (move.meteor + (braced ? 3 : 6)) / 60);

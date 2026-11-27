@@ -1368,5 +1368,53 @@
         poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + moves[player.kit.tilts.down].label + '.',
       }[pattern];
   }
-  window.PracticeFeedback={footworkPanel,edgePanel,shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
+  function climbPanel(world,pattern,practiceSide) {
+    const trap = pattern === 'trap', inward = practiceSide === 'left' ? 'right' : 'left';
+    for (const role of ['escape','trap','rise','coverRise','patience'])
+      $('climb-' + role).setAttribute('aria-pressed', String(pattern === role));
+    $('climb-slow').setAttribute('aria-pressed', String(world.climbPractice.slow));
+    $('climb-status').dataset.result = 'ready';
+    $('climb-status').textContent = practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
+    return pattern === 'patience' ? 'Tap Attack to start. Hang below Brisket’s charge. ' + ledgeTrapCounterTip(world.dogs[0]) :
+      pattern === 'rise' ? 'Tap Down + Jump to spring from below the lip. Release Down, hold ' + inward + ' and tap Attack. Land onstage after the hit.' :
+      pattern === 'coverRise' ? 'Hold Shield or tap Attack to start. Watch the rival spring from below and swing. Block, parry, or intercept the return.' :
+      trap ? 'Tap Attack to start. Watch the rival’s paws touch down, then tap Attack again to catch the climb.'
+      : 'Press ' + inward + ' to climb. Release the direction and hold Shield as your dog stands up.';
+  }
+  function platformPanel(world,pattern,player) {
+    const below = pattern === 'below', hold = pattern === 'hold';
+    const drop = pattern === 'shield-drop', ferry = pattern === 'ferry';
+    const layers = pattern === 'layers';
+    for (const id of ['below','top','hold','shield-drop','ferry','layers']) $('platform-' + id).setAttribute('aria-pressed', String(pattern === id));
+    $('platform-slow').hidden = !(drop || ferry || layers);
+    $('platform-slow').setAttribute('aria-pressed', String(!!world.platformPractice.slow));
+    $('platform-status').dataset.result = 'ready';
+    $('platform-status').textContent = layers ? 'Jump from the chalk' : ferry ? 'Challenger on the gate' : drop ? 'Hold Shield to start' : hold ? 'Defend the high platform' : below ? 'Rival below' : 'Rival on top';
+    return layers ? 'Jump straight up. At the apex, tap Down and release to land on top, or hold it to pass through. Watch for the second perch below.'
+      : ferry ? 'Tap Attack to send the ferry left. Watch the challenger jump from the gate. Block the rising aerial or drop through and strike first.'
+      : drop ? 'Hold Shield. When the rising aerial hits your shield, keep holding it, flick down-right and tap Attack for ' + moves[player.kit.air.down].label + '.'
+      : hold ? 'Tap Attack to start. Watch the right wing. Shield the rising aerial or intercept the second jump.'
+      : below
+      ? 'Tap Down to drop. As your paws pass the platform, aim down and tap Attack for ' + moves[player.kit.air.down].label + '.'
+      : 'Press Down and Attack together for ' + moves[player.kit.tilts.down].label + '. Keep both paws on the platform.';
+  }
+  function wallPanel(world,pattern,player) {
+    const d = world.wallPractice;
+    $('wall-spring').setAttribute('aria-pressed',String(!!d.spring));
+    $('wall-guide').hidden=!d.spring;
+    $('wall-guide').setAttribute('aria-pressed',String(!!d.guided));
+    $('wall-ceiling').setAttribute('aria-pressed', String(!!d.ceiling));
+    $('wall-impact').setAttribute('aria-pressed', String(!!d.heavy));
+    for (const kind of ['pip','noodle']) $('wall-'+kind).setAttribute('aria-pressed', String(kind === d.runner));
+    $('wall-status').dataset.result = 'ready';
+    $('wall-status').textContent = d.ceiling ? 'Below the tabletop' : d.runner ? player.stats.name + ' · one air jump left' : pattern === 'right' ? 'Right wall' : 'Left wall';
+    const away = d.inward === 1 ? 'left' : 'right';
+    return d.spring ? 'Tap Attack to cue Pip. Tap Shield at the heel to brace. Once your paws plant, tap Jump to spring off with your air jump saved.' :
+      d.ceiling ? 'Tap Attack to cue Pip’s Flip Kick. Tap Shield at the hit spark to brace against the underside.' :
+      d.runner ? 'Flick '+away+' off the brickwork. Steer back to the near roof, or hold '+away+
+      ' to cross the gap. Retry with Jump alone to spend your air jump instead.' :
+      d.heavy ? 'Noodle starts at 185%. First tap Shield with no direction. Retry with Up + Shield when Pip’s heel hits.' :
+      'You’re Noodle at 90%. Tap Shield when Pip’s Back Heel hits. Hold Jump at the wall to kick away.';
+  }
+  window.PracticeFeedback={wallPanel,platformPanel,climbPanel,footworkPanel,edgePanel,shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
 })();
