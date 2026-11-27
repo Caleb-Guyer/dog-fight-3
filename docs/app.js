@@ -3854,33 +3854,9 @@
           '. Catch the rival’s mint center in it for the sweet spot.';
       }
     } else if (climb) {
-      const trap = pattern === 'trap', inward = practiceSide === 'left' ? 'right' : 'left';
-      for (const role of ['escape','trap','rise','coverRise','patience'])
-        $('climb-' + role).setAttribute('aria-pressed', String(pattern === role));
-      $('climb-slow').setAttribute('aria-pressed', String(world.climbPractice.slow));
-      $('climb-status').dataset.result = 'ready';
-      $('climb-status').textContent = practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
-      message = pattern === 'patience' ? 'Tap Attack to start. Hang below Brisket’s charge. ' + window.PracticeFeedback.ledgeTrapCounterTip(world.dogs[0]) :
-        pattern === 'rise' ? 'Tap Down + Jump to spring from below the lip. Release Down, hold ' + inward + ' and tap Attack. Land onstage after the hit.' :
-        pattern === 'coverRise' ? 'Hold Shield or tap Attack to start. Watch the rival spring from below and swing. Block, parry, or intercept the return.' :
-        trap ? 'Tap Attack to start. Watch the rival’s paws touch down, then tap Attack again to catch the climb.'
-        : 'Press ' + inward + ' to climb. Release the direction and hold Shield as your dog stands up.';
+      message=window.PracticeFeedback.climbPanel(world,pattern,practiceSide);
     } else if (platform) {
-      const below = pattern === 'below', hold = pattern === 'hold';
-      const drop = pattern === 'shield-drop', ferry = pattern === 'ferry';
-      const layers = pattern === 'layers';
-      for (const id of ['below','top','hold','shield-drop','ferry','layers']) $('platform-' + id).setAttribute('aria-pressed', String(pattern === id));
-      $('platform-slow').hidden = !(drop || ferry || layers);
-      $('platform-slow').setAttribute('aria-pressed', String(!!world.platformPractice.slow));
-      $('platform-status').dataset.result = 'ready';
-      $('platform-status').textContent = layers ? 'Jump from the chalk' : ferry ? 'Challenger on the gate' : drop ? 'Hold Shield to start' : hold ? 'Defend the high platform' : below ? 'Rival below' : 'Rival on top';
-      message = layers ? 'Jump straight up. At the apex, tap Down and release to land on top, or hold it to pass through. Watch for the second perch below.'
-        : ferry ? 'Tap Attack to send the ferry left. Watch the challenger jump from the gate. Block the rising aerial or drop through and strike first.'
-        : drop ? 'Hold Shield. When the rising aerial hits your shield, keep holding it, flick down-right and tap Attack for ' + moves[player.kit.air.down].label + '.'
-        : hold ? 'Tap Attack to start. Watch the right wing. Shield the rising aerial or intercept the second jump.'
-        : below
-        ? 'Tap Down to drop. As your paws pass the platform, aim down and tap Attack for ' + moves[player.kit.air.down].label + '.'
-        : 'Press Down and Attack together for ' + moves[player.kit.tilts.down].label + '. Keep both paws on the platform.';
+      message=window.PracticeFeedback.platformPanel(world,pattern,player);
     } else if (escape) {
       message=window.PracticeFeedback.escapePanel(world,pattern);
     } else if (edge) {
@@ -3888,22 +3864,7 @@
     } else if (footwork) {
       message=window.PracticeFeedback.footworkPanel(world,pattern,player,keyFor,footworkPatterns);
     } else if (wall) {
-      const d = world.wallPractice;
-      $('wall-spring').setAttribute('aria-pressed',String(!!d.spring));
-      $('wall-guide').hidden=!d.spring;
-      $('wall-guide').setAttribute('aria-pressed',String(!!d.guided));
-      $('wall-ceiling').setAttribute('aria-pressed', String(!!d.ceiling));
-      $('wall-impact').setAttribute('aria-pressed', String(!!d.heavy));
-      for (const kind of ['pip','noodle']) $('wall-'+kind).setAttribute('aria-pressed', String(kind === d.runner));
-      $('wall-status').dataset.result = 'ready';
-      $('wall-status').textContent = d.ceiling ? 'Below the tabletop' : d.runner ? player.stats.name + ' · one air jump left' : pattern === 'right' ? 'Right wall' : 'Left wall';
-      const away = d.inward === 1 ? 'left' : 'right';
-      message = d.spring ? 'Tap Attack to cue Pip. Tap Shield at the heel to brace. Once your paws plant, tap Jump to spring off with your air jump saved.' :
-        d.ceiling ? 'Tap Attack to cue Pip’s Flip Kick. Tap Shield at the hit spark to brace against the underside.' :
-        d.runner ? 'Flick '+away+' off the brickwork. Steer back to the near roof, or hold '+away+
-        ' to cross the gap. Retry with Jump alone to spend your air jump instead.' :
-        d.heavy ? 'Noodle starts at 185%. First tap Shield with no direction. Retry with Up + Shield when Pip’s heel hits.' :
-        'You’re Noodle at 90%. Tap Shield when Pip’s Back Heel hits. Hold Jump at the wall to kick away.';
+      message=window.PracticeFeedback.wallPanel(world,pattern,player);
     } else if (trump) {
       const defend = pattern === 'defend';
       for (const role of ['take','defend','runoff','escape'])
@@ -4112,7 +4073,7 @@
     if(active && !world.comboPractice)drill('combo',false,'example');
     window.ComboLab.shelf(hash,active?world:null,showDialog,back,(card,source,slot)=>{
       leaveOnline();afterStory=null;
-      startMatch({...settings,...card.config,risingCatch:!!card.config.risingCatch,wallSpring:!!card.config.wallSpring,groundSpace:!!card.config.groundSpace,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
+      startMatch({...settings,...card.config,impactTech:!!card.config.impactTech,risingCatch:!!card.config.risingCatch,wallSpring:!!card.config.wallSpring,groundSpace:!!card.config.groundSpace,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
       window.ComboLab.restore(world,card);
       drill('combo',false,source,'stand',slot);
       if(world.comboPractice.slow!==card.slow)$('combo-slow').click();
@@ -4408,8 +4369,8 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
-    SoloEvents:'solo-events.js?v=rival-reads-1',
-    PracticeFeedback:'practice-feedback.js?v=field-card-1', DogOnline:'online.js?v=light-shield-1',
+    SoloEvents:'solo-events.js?v=impact-tech-1',
+    PracticeFeedback:'practice-feedback.js?v=impact-tech-1', DogOnline:'online.js?v=impact-tech-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
@@ -4422,7 +4383,7 @@
     VersusRulebook:'versus-rules.js?v=light-shield-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=stage-run-1',
-    ComboLab:'combo-lab.js?v=light-shield-1', FinishTools:'finish-tools.js?v=light-shield-1',
+    ComboLab:'combo-lab.js?v=impact-tech-1', FinishTools:'finish-tools.js?v=light-shield-1',
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
