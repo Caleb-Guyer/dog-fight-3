@@ -136,7 +136,24 @@ async function check(browser,device) {
     assert.equal(await page.locator('#dialog-title').textContent(),backTitle);
     if(stockBreak){
       assert.equal(await page.evaluate(()=>fingerprint()),frozen);
+      if(touch){
+        await choose('[data-do=school-suspend]');await page.locator('#home:visible').waitFor();
+        await page.goto(root+'?resume-between-stocks');
+        await page.locator('#home-continue[data-save=school-stock]').waitFor();
+        await choose('#home-continue');await page.locator('#stock-break-recap').waitFor();
+        assert.equal(await page.locator('#dialog-title').textContent(),backTitle);
+        await choose('#stock-break-watch');await choose('[data-do=clip-back]');
+        await page.evaluate(()=>{
+          const step=DogFight.Battle.prototype.step;
+          DogFight.Battle.prototype.step=function(...args){
+            if(!window.career && this.mode==='solo'){window.career=this;
+              window.restored=JSON.stringify([this.matchFrames,this.random.state,this.matchCard,this.dogs.map(f=>[f.x,f.y,f.stocks])]);}
+            return step.apply(this,args);
+          };
+        });
+      }
       await choose('[data-do=resume]');await page.clock.runFor(560);
+      if(touch)assert.equal(await page.evaluate(()=>restored),frozen);
       assert.equal(await page.evaluate(()=>career.dogs[0].stockLift.ready),true);
       assert.equal(await page.evaluate(()=>career.dogs[0].stocks),2);
       assert.equal(await page.locator('#dialog').isVisible(),false);
