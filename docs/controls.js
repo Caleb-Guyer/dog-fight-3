@@ -142,16 +142,37 @@
     }
   }
   class Seats {
-    constructor(pads) { this.ids=[null,null]; this.sync(pads); }
+    constructor(pads) { this.ids=[null,null];this.models=['',''];this.manual=false;this.version=0;this.sync(pads); }
+    set(i,pad){
+      this.ids[i]=pad?.index ?? null;this.models[i]=pad?.id || '';this.version++;
+    }
     sync(pads) {
-      for (const pad of pads) {
-        if (this.ids.includes(pad.index)) continue;
-        const order=pads.length===1?[1,0]:[0,1];
-        const slot=order.find(i=>this.ids[i]!==null && !this.get(i,pads)) ?? order.find(i=>!this.get(i,pads));
-        if(slot!==undefined) this.ids[slot]=pad.index;
+      if(!pads.length)return;
+      const a=this.get(0,pads),b=this.get(1,pads);
+      if((a && b) || pads.length===1 && (a || b) || this.manual && (!this.models[0] || a) && (!this.models[1] || b))return;
+      // Resolve both returning models before giving spare hardware to an open seat.
+      const available=pads.filter(p=>p!==a && p!==b);
+      for(let i=0;i<2;i++)if(this.models[i] && !this.get(i,pads)){
+        const n=available.findIndex(p=>p.id===this.models[i]);
+        if(n>=0)this.set(i,available.splice(n,1)[0]);
+      }
+      if(this.manual)return;
+      const order=pads.length===1?[1,0]:[0,1];
+      for(const pad of available){
+        const slot=order.find(i=>this.ids[i]===pad.index && !this.get(i,pads)) ??
+          order.find(i=>this.ids[i]!==null && !this.get(i,pads)) ?? order.find(i=>!this.get(i,pads));
+        if(slot!==undefined)this.set(slot,pad);
       }
     }
-    get(i,pads) { return pads.find(p=>p.index===this.ids[i]); }
+    get(i,pads) { return pads.find(p=>p.index===this.ids[i] && (p.id || '')===this.models[i]); }
+    copyFrom(other){
+      this.ids=other.ids.slice();this.models=other.models.slice();this.manual=other.manual;this.version++;
+    }
+    assign(i,pad,pads){
+      const other=1-i;
+      if(pad && this.get(other,pads)===pad)this.set(other,this.get(i,pads));
+      this.set(i,pad);this.manual=true;
+    }
     beginMatch(pads) {
       this.sync(pads);
       this.present=this.connected(pads);

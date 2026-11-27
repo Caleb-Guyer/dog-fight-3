@@ -134,3 +134,8 @@ dialog[data-view='tournament'] { width:min(790px,calc(100% - 16px)); }
 .stick-field i { width:11px; height:11px; margin:-5.5px; border:2px solid #f1c56e; border-radius:50%; }
 .stick-field b { width:5px; height:5px; margin:-2.5px; background:#94e6cf; }
 .stick-values { font-variant-numeric:tabular-nums; }
+#controller-seats { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,205px),1fr)); gap:12px; }
+#controller-seats fieldset { min-width:0; margin:0; border:2px solid #c59a62; padding:8px 12px 12px; }
+#controller-seats fieldset + fieldset { border-color:#79bcb6; }
+#controller-seats legend { padding:0 6px; font-weight:bold; }
+#controller-seats p,#seat-status { overflow-wrap:anywhere; }
