@@ -12326,6 +12326,11 @@
       const block=this.blocks.findLast(b=>b.start<=tick);
       return block?.inputs[tick-block.start]?.[slot] || idleInput;
     }
+    launchInput(frame,slot,aim){
+      const recorded=this.inputAt(this.count-this.length+frame-1,slot);
+      if(!aim || aim.x===recorded.x && aim.y===recorded.y)return recorded;
+      return {...recorded,x:aim.x,y:aim.y,grabX:aim.x,airDodgeX:aim.x,airDodgeY:aim.y};
+    }
     copy(source) {
       const battle=Object.create(Battle.prototype);
       battle.emit=()=>{};

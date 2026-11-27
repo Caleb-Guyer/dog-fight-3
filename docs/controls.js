@@ -123,6 +123,7 @@
     try{for(const p of navigator.getGamepads?.() || [])if(p && p.connected!==false)connected.push(sticks.apply(p));}catch{}
     return connected;
   }
+  const movementAxis=value=>Math.abs(value)>.23?value:0;
   class FighterShuffle {
     constructor(roster,random=Math.random) {
       this.roster=roster;
@@ -293,5 +294,5 @@
       return true;
     }
   }
-  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,SoloSeat,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat,sticks,readPads,rawPad,stickAxes,tuneAxes};
+  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,SoloSeat,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat,sticks,readPads,rawPad,stickAxes,tuneAxes,movementAxis};
 })();

@@ -959,7 +959,7 @@
     if(dialogType==='rumble')window.PadFeedback?.stop();
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=ledge-1';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=launch-aim-1';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
@@ -999,6 +999,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(clipScreen?.aimReader?.cancel())return;
     if(dialogType==='couch-pads')return couchPanel?.cancel();
     if(dialogType==='pad-loss' || dialogType==='solo-pad-loss')return;
     if(dialogType==='fighter-tryout'){dismiss();if(page==='lobby')$('lobby-tryout').focus();return;}
@@ -1049,6 +1050,7 @@
     if (dialogType==='finish-replay') {
       if(clipScreen?.review){
         const r=clipScreen.review;
+        if(r.launchLab)return closeRecoveryClinic();
         if(r.moment)return watchMatch(r.film,r.frame);
         if(r.clinic){showHome(false);schoolList();return;}
         if(r.instant){
@@ -2403,7 +2405,7 @@
     const device=promptDevice(getPads());
     const label=a=>device===0?keyFor(0,a):device===1 && !['left','right','up','down'].includes(a)?padFor(0,a):a[0].toUpperCase()+a.slice(1);
     window.RecoveryCoach.sheet(review.clip.tape,{showDialog,back,label,shake:settings.shake,slot:review.slot,follow:review.clip.returnTape,projection:review.rescue || review.projection,launch:review.launch,
-      kind:review.kind,chooseFighter:review.rescue && !review.launch && (kind=>recoveryClinic(review.wide,false,kind)),
+      compare:review.rescue && review.launch && (()=>launchLab(review)),kind:review.kind,chooseFighter:review.rescue && !review.launch && (kind=>recoveryClinic(review.wide,false,kind)),
       swap:review.rescue && {title:review.kind?(review.wide?'Try the left ledge':'Try the right ledge'):review.launch?(review.wide?'Try the high throw':'Try the edge throw'):review.wide?'Try the low fall':'Try the wide fall',open:()=>recoveryClinic(!review.wide,!!review.launch,review.kind)},
       play:(route,guided=false)=>startFinishTrial(route.start,route.slot,{...review,coach:route,guided,coachLabel:label,
         coachLine:window.RecoveryCoach.instruction(route,label)})},plan);
@@ -2519,7 +2521,7 @@
       id==='ball'?'Last hit · Tennis ball':loss?.zone?'Knockout · '+loss.zone+' blast line':'Knockout';
     const caption=ko?cardTime(loss.frame)+' · '+knockoutLabel(review.clip,result)+' · ':'';
     const stageClinic=['wall','heavy','ceiling'].includes(review?.clinic);
-    showDialog('finish-replay',review?.moment?review.moment.title:stageClinic?'Stage tech clinic':review?.clinic==='ledge'?'Ledge clinic':review?.clinic?'Landing clinic':review?.instant?'Instant replay':returning?'Stock return':ko?'KO replay':'Finish replay','<p class="clip-caption">'+
+    showDialog('finish-replay',review?.launchLab?'Launch steering lab':review?.moment?review.moment.title:stageClinic?'Stage tech clinic':review?.clinic==='ledge'?'Ledge clinic':review?.clinic?'Landing clinic':review?.instant?'Instant replay':returning?'Stock return':ko?'KO replay':'Finish replay','<p class="clip-caption">'+
       (returning?stageName(result.stage,result.form)+' · '+cardTime(review.clip.losses[0].frame)+' · After the knockout':caption+stageName(result.stage,result.form)+' · '+detail)+
       '</p><canvas id="clip-arena" width="640" height="360" role="img" aria-label="Replay of the exchange"></canvas>'+
       '<div class="clip-status"><span id="clip-scores"></span><output id="clip-frame" aria-live="off"></output></div>'+
@@ -2541,7 +2543,7 @@
     if($('clip-return'))$('clip-return').onclick=()=>showFinishReplay(null,{...review,returning:!returning});
     if(ko)$('clip-escape').onclick=()=>startFinishTrial(Math.max(0,tape.length-90),loss.slot,review);
     if(review?.moment)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to full match';
-    if(review?.clinic)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to Fight School';
+    if(review?.clinic || review?.launchLab)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to Fight School';
     for(const b of $('dialog-body').querySelectorAll('[data-clip-recovery]'))
       b.onclick=()=>recoverySheet({...review,slot:Number(b.dataset.clipRecovery),fromClip:true});
     const {signal}=clipScreen.lifetime;
@@ -2561,9 +2563,13 @@
           clinic:review?.landingFocus || review?.moment || (stageClinic?{surface:review.clinic==='ceiling'?'ceiling':'wall'}:review?.clinic===true),practiceLanding:(landing,start,guided,options)=>startFinishTrial(start,landing.slot,{
             ...(review || {finish:true,from:'result',clip:{tape,losses:[]},result}),landing,guided,replayFrame:landing.frame,landingFocus:{...options,slot:landing.slot,at:landing.frame}}),
           retryMoment:review?.instant?(frame,slot,contact)=>startFinishTrial(frame,slot,{...review,replayFrame:contact}):null,
-          rescueLaunch:ko?launch=>recoverySheet({...review,launch,slot:launch.slot,fromClip:true}):null,
+          launchStudy:review?.launchStudy,attachAimReader:reader=>{clipScreen.aimReader=reader;},
+          rescueLaunch:ko?launch=>recoverySheet({...review,launch,slot:launch.slot,fromClip:true,
+            launchStudy:launch.chosenAim?{...launch,aim:launch.chosenAim}:review.launchStudy}):null,
           twoPlayers:result.mode==='local',initialSeat:review?.slot ?? loss?.slot ?? 0,frame:()=>clipScreen.player.frame,
-          slot:loss?.slot,practiceLaunch:(frame,slot)=>startFinishTrial(frame,slot,review),escapeReady:ko?mark=>{
+          slot:loss?.slot,practiceLaunch:(frame,slot,study)=>startFinishTrial(frame,slot,study?{
+            ...(review || {finish:true,from:'result',clip:{tape,losses:[]},result}),launchStudy:study,launchInput:tape.launchInput(study.frame,slot,study.aim)
+          }:review),escapeReady:ko?mark=>{
             $('clip-escape-start').textContent=mark.label+' · frame '+mark.frame;
             $('clip-escape').onclick=()=>startFinishTrial(mark.frame,loss.slot,review);
           }:undefined,
@@ -2756,14 +2762,15 @@
     trial.carry+=ledge?.watch?dt/2:dt;
     trial.seats?.sync(pads);
     while(trial.carry>=1/60 && player.frame<player.length && !player.outcome && player.battle.end===null){
-      const input=ledge?.watch?player.reply(ledge.action,ledge.delay):
-        playerInput(trial.seats?trial.slot:0,pads,trial.slot,player.battle);
+      const applied=player.frame===trial.start && (trial.review?.launchInput || trial.review?.coach?.releaseInput);
+      const input=applied || (ledge?.watch?player.reply(ledge.action,ledge.delay):
+        playerInput(trial.seats?trial.slot:0,pads,trial.slot,player.battle));
       if(trial.review?.guided && (trial.review.landing || trial.review.coach)){
         const cue=trial.review.landing?window.FinishTools.landingGate(trial,input):
           window.RecoveryCoach.gate(trial.review.coach,player.frame-trial.start,input,trial.review.coachLabel,player.battle.dogs[trial.slot]);
         if($('countdown').textContent!==cue)$('countdown').textContent=cue;
         if(cue){taps.clear();touchTaps.clear();trial.carry=0;return;}
-      }else if((trial.review?.hold || trial.review?.from==='lesson' || trial.review?.coach && !trial.review.coach.aim) && player.frame===trial.start){
+      }else if(!applied && (trial.review?.hold || trial.review?.from==='lesson' || trial.review?.coach && !trial.review.coach.aim) && player.frame===trial.start){
         if(!input.x && !input.y && !input.jump && !input.special && !input.shield && !input.attack && !input.shortHop &&
           !(trial.review.from==='lesson' && Object.values(input.tapped || {}).some(Boolean)) &&
           !((trial.review.hold || trial.review.from==='lesson') && (input.grab || input.smash || input.aimStick))){
@@ -2780,6 +2787,7 @@
   }
   function leaveFinishTrial(replay) {
     const {saved,start,review}=finishTrial;
+    if(review?.launchInput)delete review.launchInput;
     const ledge=review?.ledge,stageImpact=!!review?.landing?.surface;
     finishTrial=null;
     if(review?.ledge){
@@ -2795,6 +2803,7 @@
       if(replay && ledge)return showFinishReplay(ledge.mark.frame,review);
       if(review.stock && replay)return stockSheet(review);
       if(review.coach && replay)return recoverySheet(review,review.coach);
+      if(review.launchStudy && replay)return showFinishReplay(review.launchStudy.frame-1,review);
       if(review.moment || review.film?.sample)return replay && review.moment && !review.baseline?showFinishReplay(review.moment.at,review):watchMatch(review.film,review.frame);
       if(review.film)return replay?watchMatch(review.film,review.frame):showMatchCard(0,review.entry,review.id,{first:'full'});
       return replay?showFinishReplay(start,review):backToSavedCard(review);
@@ -2806,7 +2815,7 @@
     if(review?.coach || review?.landing || review?.landingFocus || review?.moment){$('corner-title').textContent=saved.cornerTitle;$('corner-line').textContent=saved.cornerLine;}
     hudKey='';updateHUD();
     view.draw($('game'),online.match?.confirmedWorld || world,0,world.time);
-    if(!replay && review?.rescue)closeRecoveryClinic();
+    if(!replay && (review?.rescue || review?.launchLab))closeRecoveryClinic();
     else if(!replay && review?.clinic){showHome(false);schoolList();}
     else if(replay && ledge)showFinishReplay(ledge.mark.frame,review);
     else if(replay && stageImpact)showFinishReplay(review.replayFrame,review);
@@ -2828,7 +2837,7 @@
     if(finishTrial.review?.moment || finishTrial.review?.film?.sample)return window.MatchReview.defenseActions();
     return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">'+(finishTrial.trace?'Retry return':'Retry exchange')+'</button>'+
       '<button class="utility" data-do="trial-replay">'+(finishTrial.review?.instant?'Back to instant replay':finishTrial.review?.film?'Back to full match':finishTrial.trace?'Back to return replay':'Choose another frame')+'</button><button class="utility" data-do="trial-results">'+
-      (finishTrial.review?.from==='pause'?'Back to fight':['card','archive'].includes(finishTrial.review?.from)?'Back to match stats':'Back to results')+'</button></div>';
+      (finishTrial.review?.launchLab?'Fight School':finishTrial.review?.from==='pause'?'Back to fight':['card','archive'].includes(finishTrial.review?.from)?'Back to match stats':'Back to results')+'</button></div>';
   }
   function showTrialPause(){
     showDialog('finish-pause','Practice paused','<div class="dialog-actions"><button class="primary" data-do="resume">Resume</button></div>'+trialActions());
@@ -4269,7 +4278,7 @@
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=fighter-returns-1', MatchReview:'match-review.js?v=school-ko-1',
+    RecoveryCoach:'recovery-coach.js?v=launch-aim-1', MatchReview:'match-review.js?v=school-ko-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
@@ -4278,7 +4287,7 @@
     VersusRulebook:'versus-rules.js?v=sticks-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=button-check-1',
-    ComboLab:'combo-lab.js?v=dash-pressure-1', FinishTools:'finish-tools.js?v=stage-tech-1',
+    ComboLab:'combo-lab.js?v=dash-pressure-1', FinishTools:'finish-tools.js?v=launch-aim-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
@@ -5257,11 +5266,15 @@
     if(matchConfig?.recoveryClinic)showHome(false);
     schoolList();
   }
-  function recoveryClinic(wide,fromLaunch=false,kind){
-    if(!window.RecoveryCoach)return waitForDispatch(fromLaunch?'Launch survival':'Recovery clinic',()=>loadDispatch('RecoveryCoach'),()=>recoveryClinic(wide,fromLaunch,kind),schoolList);
+  function launchLab({clip,result,launch}){
+    showFinishReplay(launch.frame-1,{clip,result,from:'school',slot:launch.slot,launchLab:true,
+      launchStudy:{...launch,aim:{x:0,y:0}}});
+  }
+  function recoveryClinic(wide,fromLaunch=false,kind,study=false){
+    if(!window.RecoveryCoach)return waitForDispatch(fromLaunch?'Launch survival':'Recovery clinic',()=>loadDispatch('RecoveryCoach'),()=>recoveryClinic(wide,fromLaunch,kind,study),schoolList);
     const {config,battle,tape,clip,launch}=window.RecoveryCoach.example(wide,fromLaunch,kind);
     if(page!=='match')startMatch({...config,recoveryClinic:true},undefined,undefined,null,{resume:{battle,tape,countdown:0,call:''}});
-    recoverySheet({rescue:true,wide,kind,clip,launch,result:battle,from:'school'});
+    if(study)launchLab({clip,result:battle,launch});else recoverySheet({rescue:true,wide,kind,clip,launch,result:battle,from:'school'});
   }
   function leaveFighterSheet(){
     if(page==='match' && (matchConfig?.schoolFinal || spar) && world?.end!=null)return showResult();
@@ -6048,7 +6061,7 @@
       const n=layout.pad[i][action];
       return down(pad,n) && !(menuPadButtons.get(pad.index) & (1<<n));
     };
-    const axis = (n) => (Math.abs(pad?.axes?.[n] || 0) > 0.23 ? pad.axes[n] : 0);
+    const axis=n=>controls.movementAxis(pad?.axes?.[n]);
     const left = key('left') || down(pad, 14),
       right = key('right') || down(pad, 15);
     const x = Number(right) - Number(left);
@@ -6218,6 +6231,7 @@
   const menuRepeat=new window.FightControls.MenuRepeat();
   function padMenu(pads,time) {
     const pairing=dialogType==='couch-pads' && couchPanel?.poll(pads);
+    const reading=clipScreen?.aimReader?.poll(pads);
     if(dialogType==='controls' && (controlsShown[0]!==padNames(0,seatPad(0)) || controlsShown[1]!==padNames(1,seatPad(1)) || controlsShown[2]!==layout)){
       $('dialog-body').querySelector('.control-table').outerHTML=controlTable();
     }
@@ -6269,6 +6283,7 @@
     const move=menuRepeat.poll(direction,menuOpen && !document.hidden ? dialogType || page : '',time);
     const back=now.back && !oldPad.back, confirm=now.confirm && !oldPad.confirm;
     if(pairing){if(back)couchPanel.cancel();oldPad=now;return;}
+    if(reading){if(back)clipScreen?.aimReader?.cancel();oldPad=now;return;}
     if(dialogType==='solo-pad-loss'){
       oldPad=now;
       const pad=soloSeat?.confirm(pads);
@@ -6685,6 +6700,8 @@
       settings.guidedLessons=true;save();
       const index=schoolLessons.findIndex(l=>l.id===hash.split('/')[2]);
       if(index<0)resumeCourse();else startLesson(index);
+    } else if(hash==='#tutorial/launch-lab'){
+      recoveryClinic(true,true,undefined,true);
     } else if (hash==='#tutorial/launch-survival') {
       recoveryClinic(false,true);
     } else if(/^#tutorial\/recovery\/(pip|brisket|noodle|clover)$/.test(hash)){
