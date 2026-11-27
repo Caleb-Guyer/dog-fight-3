@@ -1016,6 +1016,7 @@
     if(dialogType==='profiles')return $('profile-back').click();
     if(dialogType==='rulebook')return backFromRulebook();
     if(dialogType==='matchup-card')return $('matchup-back').click();
+    if(dialogType==='opening-duel')return ($('duel-resume') || $('duel-back')).click();
     if(dialogType==='practice-tapes')return $('tape-back').click();
     if(dialogType==='combo-compare')return $('reply-back').click();
     if(dialogType==='pack-relay')return backFromRelay();
@@ -1958,10 +1959,23 @@
     return {mode:settings.mode,p1:settings.p1,p2:settings.p2,stage:settings.stage,coats:[lobbyCoat(0),lobbyCoat(1)],
       ...(settings.mode==='solo'?{cpuLevel:settings.cpuLevel}:{}),...window.DogFight.versusRules(settings)};
   }
-  function playMatchup(card){
+  function playMatchup(card,seats){
     leaveOnline();afterStory=null;
-    startMatch({...settings,handicap:undefined,...card,...lobbyBattleRules(card),form:card.stageForm,openingMatchup:card},
+    startMatch({...settings,handicap:undefined,...card,...lobbyBattleRules(card),form:card.stageForm,openingMatchup:card,couchSeats:seats},
       undefined,undefined,card.bestOfThree?new StockSet(card.stage):null);
+  }
+  function openOpeningDuel(card,duel,phase='setup'){
+    if(!window.VersusRulebook)return waitForDispatch('First-hit duel',()=>loadDispatch('VersusRulebook'),()=>openOpeningDuel(card),toLobby);
+    duel??=new window.VersusRulebook.OpeningDuel(card,crypto.getRandomValues(new Uint32Array(1))[0]);
+    showDialog('opening-duel',phase==='pause'?'First-hit duel paused':'First-hit duel','');
+    duel.panel($('dialog-body'),phase,{start:()=>{
+      leaveOnline();afterStory=null;
+      startMatch({...card,openingDuel:duel,form:card.stageForm,stockCount:3,timeBattle:false,minutes:0,fetch:false,
+        spawnDamage:card.handicap,couchSeats:duel.seats},seededRandom(duel.seed),duel.seed);
+      duel.seats=matchConfig.couchSeats;
+    },play:()=>playMatchup(card,duel.seats),resume:dismiss,back:()=>{
+      if(page==='lobby')showMatchup(card,'rules');else{showHome(false);showMatchup(card,'shared');}
+    }});
   }
   function showMatchup(value,source){
     const back=()=>{
@@ -1976,7 +1990,7 @@
       $('matchup-back').onclick=back;$('matchup-back').focus();return;
     }
     showDialog('matchup-card',source==='shared'?'Shared matchup':source==='pin'?'Pinned matchup':'Matchup card','');
-    refreshCardPin=book.matchupSheet($('dialog-body'),card,{drawPreview,coatNames,stageName,back,play:()=>playMatchup(card),
+    refreshCardPin=book.matchupSheet($('dialog-body'),card,{drawPreview,coatNames,stageName,back,play:()=>playMatchup(card),duel:()=>openOpeningDuel(card),
       edit:()=>{
         const {coats,...config}=card;
         Object.assign(settings,{handicap:undefined},config);
@@ -2139,7 +2153,7 @@
       }
       random=seededRandom(seed);
     }
-    finishTape=resume?.tape || (!visit && !config.eventId && config.lesson===undefined && ['solo','local'].includes(config.mode) ? new window.DogFight.FinishTape(true) : null);
+    finishTape=resume?.tape || (!visit && !config.eventId && !config.openingDuel && config.lesson===undefined && ['solo','local'].includes(config.mode) ? new window.DogFight.FinishTape(true) : null);
     if(finishTape)for(const part of ['MatchReview','StockCall'])loadDispatch(part).catch(()=>{});
     // These modes let the player switch straight from the current exchange into a drill.
     if(config.schoolFinal || (config.mode==='training' && !config.warmupPartner)){
@@ -2250,6 +2264,7 @@
         Object.assign(view,{cx,cy,zoom,leftFighter});
       }
     }
+    config.openingDuel?.place(world);
     $('training-tools').hidden = config.mode !== 'training' || !!world.warmupPartner;
     $('return-fight').hidden = !visit;
     $('return-fight').textContent=visit?.review?'Back to match stats':visit?.returnResult?'Back to results':'Back to fight';
@@ -2284,9 +2299,14 @@
       $('match-set').textContent = 'Game ' + set.games.length + ' · ' + set.score.join('–');
       $('match-set').setAttribute('aria-label', 'Best of three, game ' + set.games.length + ', P1 ' + set.score[0] + ', P2 ' + set.score[1]);
     }
+    if(config.openingDuel){
+      $('match-mode').textContent='First-hit duel';
+      const badge=$('match-set');badge.hidden=false;badge.textContent='First to 3 · '+config.openingDuel.score.join(' – ');
+      badge.setAttribute('aria-label',badge.textContent);
+    }
     $('pause-label').textContent = world.warmupPartner ? 'Warm-up menu' : online.match ? 'Match menu' : 'Pause';
     const position = rehearsal ? visit : resume;
-    countdown = position ? position.countdown : world.lesson || config.mode === 'training' || world.suddenDeath || leadInFrames ? 0 : 2.4;
+    countdown = position ? position.countdown : world.lesson || config.mode === 'training' || world.suddenDeath || leadInFrames ? 0 : config.openingDuel ? .8 : 2.4;
     if(['solo','local'].includes(config.mode) && !world.lesson && !corner && !spar){
       const current=matchConfig,stage=world.stage;
       current.stageTrack=stage;
@@ -2311,7 +2331,7 @@
     resultDelay = 0;
     hudKey = '';
     accumulator = 0;
-    $('countdown').textContent = position ? position.call : countdown ? '3' : '';
+    $('countdown').textContent = position ? position.call : countdown ? String(Math.ceil(countdown/.8)) : '';
     $('countdown').classList.remove('net-lag','opponent-found');
     clearInput();
     updateHUD();
@@ -2348,6 +2368,7 @@
   function showPause(autosave=true) {
     if(finishTrial)return showTrialPause();
     if (page !== 'match' || !world || world.end !== null) return;
+    if(matchConfig.openingDuel)return openOpeningDuel(matchConfig.openingDuel.card,matchConfig.openingDuel,matchConfig.openingDuel.point?'point':'pause');
     if(world.eventId)return window.SoloEvents.panel(world,true,eventUI());
     if (world.bossLesson) return window.DispatchView.lessonPanel(world, view.parkedBoss.world, showDialog);
     if(world.warmupPartner)return showWarmupMenu();
@@ -2982,7 +3003,7 @@
   }
   function recordFight(result) {
     if(result?.eventId)return result.save(storage);
-    if (!result?.matchCard || result.end===null || practiceFight || recordedFights.has(result)) return;
+    if (!result?.matchCard || result.end===null || practiceFight || matchConfig?.openingDuel || recordedFights.has(result)) return;
     const series=online.series || localSet;
     const entry={time:Date.now(),mode:recordMode(),side:online.match?online.side:0,stage:result.stage,form:result.form,
       round:series?.games.length || (cupAttempt && !cupAttempt.exhibition?cupAttempt.round+1:0),winner:result.end,card:structuredClone(result.matchCard)};
@@ -4385,11 +4406,11 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=landing-read-1',
+    VersusRulebook:'versus-rules.js?v=first-hit-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=counterpick-map-1',
     ComboLab:'combo-lab.js?v=wall-spring-1', FinishTools:'finish-tools.js?v=stock-runs-1',
-    MoveGuide:'move-guide.js?v=wall-spring-1', FighterSchool:'fighter-lessons.js?v=landing-study-1',
+    MoveGuide:'move-guide.js?v=wall-spring-1', FighterSchool:'fighter-lessons.js?v=first-hit-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-practice-1', DispatchView:'dispatch-view.js?v=launch-rescue-1',
@@ -5407,6 +5428,11 @@
     const back=()=>{if(page==='match')toLobby();else dismiss();$('lobby-tryout').focus();};
     if(!window.FighterSchool)return waitForDispatch('Fighter tryouts',()=>loadDispatch('FighterSchool'),()=>openTryout(kind),back);
     window.FighterSchool.tryoutSheet(kind,{storage,slot:editing,label:slotLabel(editing),coat:savedCoat,portrait,
+      duel:settings.mode==='training'?null:()=>{
+        const card=lobbyMatchup();card[editing?'p2':'p1']=kind;
+        card.coats=[savedCoat(0,card.p1),savedCoat(1,card.p2)];
+        card.coats[1]=window.DogFight.coatFor(1,card.p1,card.p2,card.coats);openOpeningDuel(card);
+      },
       root:$('dialog-body'),showDialog,choose:openTryout,start:startFighterLesson,back,pick:id=>{back();pickLobbyFighter(id);}});
   }
   $('lobby-tryout').onclick=()=>openTryout();
@@ -6621,6 +6647,8 @@
           taps.clear();
           touchTaps.clear();
           accumulator = Math.max(0, accumulator - 1 / 60);
+          const duel=matchConfig.openingDuel;
+          if(duel?.takePoint(world)){openOpeningDuel(duel.card,duel,'point');break;}
           if(watchedStocks>world.dogs[0].stocks && world.dogs[0].stockLift && world.end===null && !world.suddenDeath){
             showStockBreak();break;
           }
@@ -6666,6 +6694,8 @@
     if(arena==='events' && hash.startsWith('#solo/'))return eventBoard(form);
     if(Object.hasOwn(fighters,arena) && Object.hasOwn(specialInputs,form) && hash==='#moves/'+arena+'/'+form){
       showHome(false);showSpecialPreview({kind:arena,side:form,page:'home',paused:false});
+    }else if(hash==='#local/first-hit' || hash==='#solo/first-hit'){
+      settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();openOpeningDuel(lobbyMatchup());
     }else if(/^#(solo|local)\/matchup(?:\/|$)/.test(hash)){
       showHome(false);showMatchup(hash,'shared');
     }else if(hash==='#arcade/disc-range'){

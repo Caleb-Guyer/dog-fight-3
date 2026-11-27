@@ -1,5 +1,7 @@
 # Dog Fight 3
 
+From fighter select, choose **Try fighters → First-hit duel**. Pick center stage or put either dog near the ledge. Land a damaging hit or force a fall to win a point. A shield block keeps the point live, and a same-frame trade earns a replay. First to three wins. **Start full fight** or **Start full set** carries your fighters, coats, arena and rules into game one. [Play solo](https://caleb-guyer.github.io/dog-fight-3/#solo/first-hit) · [Play with a second player](https://caleb-guyer.github.io/dog-fight-3/#local/first-hit)
+
 In **Move list → Attacks**, choose **Compare landings** beside any aerial. Watch the same swing with Shield pressed before or after touchdown. **Go to touchdown** pauses on the contact frame. Step forward until the shield appears to see how long that dog is open. Choose **Practice this landing** from home or fighter select to time the cancel yourself. Try Brisket’s Belly Drop, which takes 18 frames to recover normally and nine with a timed Shield press. [Practice Belly Drop’s landing](https://caleb-guyer.github.io/dog-fight-3/#moves/brisket/land-down)
 
 When you return to the main menu with a saved game, you can press **Continue** while the game downloads. It opens your most recent lesson, fight, mission, Cup run, or local tournament. A suspended first match brings back both dogs, the clock and the stocks. Press **Esc** or the controller’s Back button during startup to cancel your choice. [Continue playing](https://caleb-guyer.github.io/dog-fight-3/)

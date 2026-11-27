@@ -604,7 +604,7 @@
     root.querySelector('[data-class-back]').onclick=back;
     root.querySelector('[data-class-dog][aria-pressed=true]').focus({preventScroll:true});
   }
-  function tryoutSheet(kind,{storage,slot,label,coat,portrait,root,showDialog,choose,start,pick,back}){
+  function tryoutSheet(kind,{storage,slot,label,coat,portrait,root,showDialog,choose,start,pick,duel,back}){
     const best=kind==='clover' && rangeBest(storage);
     const {fighters,kits}=window.DogFight;
     const dogs=Object.keys(courses).map(id=>{
@@ -621,10 +621,12 @@
       (kind==='clover'?'<button class="utility" data-try-run="-2">Disc Range'+(best?' · '+best.throws+' throws · '+raceTime(best.frames):'')+'</button>':'')+'</div>'+
       '<p>Use P1 controls. Shuttle times are personal bests. The fastest dog sets the pace on the roof.</p>'+
       '<div class="dialog-actions"><button class="primary" data-try-pick>Pick '+fighters[kind].name+' for '+label+'</button>'+
+      (duel?'<button class="utility" data-try-duel>First-hit duel</button>':'')+
       '<button class="utility" data-try-back>Back to fighter select</button></div>');
     for(const b of root.querySelectorAll('[data-try-dog]'))b.onclick=()=>choose(b.dataset.tryDog);
     for(const b of root.querySelectorAll('[data-try-run]'))b.onclick=()=>start(kind,Number(b.dataset.tryRun),true);
     root.querySelector('[data-try-pick]').onclick=()=>pick(kind);
+    if(duel)root.querySelector('[data-try-duel]').onclick=duel;
     root.querySelector('[data-try-back]').onclick=back;
     root.querySelector('[aria-pressed=true]').focus({preventScroll:true});
   }

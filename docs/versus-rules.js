@@ -64,7 +64,71 @@
     coats[1]=coatFor(1,p1,p2,coats);
     return {mode:route.slice(1),p1,p2,stage,coats,...(route==='#solo'?{cpuLevel:rival}:{}),...rules};
   }
-  function matchupSheet(root,card,{drawPreview,coatNames,stageName,back,play,edit,pinned,pin}){
+  class OpeningDuel {
+    constructor(card,seed){
+      this.card=structuredClone(card);
+      this.seed=seed;
+      this.score=[0,0];
+      this.position='center';
+      this.point=null;
+    }
+    place(world){
+      const decks=world.terrain.filter(p=>!p.thin);
+      const rank=p=>this.position==='center'?p.x2-p.x1:this.position==='left'?-p.x1:p.x2;
+      const deck=decks.reduce((a,b)=>rank(a)>=rank(b)?a:b);
+      const gap=Math.min(148,deck.x2-deck.x1-64);
+      const x=this.position==='left'?deck.x1+32:this.position==='right'?deck.x2-32-gap:(deck.x1+deck.x2-gap)/2;
+      world.dogs.forEach((f,i)=>Object.assign(f,{x:x+i*gap,y:deck.y,ground:world.terrain.indexOf(deck),face:i?-1:1}));
+      this.point=null;
+    }
+    takePoint(world){
+      if(this.point || this.score.includes(3))return false;
+      const {players,losses}=world.matchCard;
+      const earned=players.map((p,i)=>p.damage>0 || losses.some(l=>l.slot===1-i));
+      if(!earned.some(Boolean))return false;
+      const winner=earned[0]===earned[1]?null:earned.indexOf(true);
+      this.point={winner,frame:world.matchFrames};
+      if(winner!==null){
+        this.score[winner]++;
+        const loss=losses.find(l=>l.slot===1-winner);
+        const id=(loss?.lastHit || players[1-winner].lastHit)?.id;
+        const {moves,throws,pummels,smashes,specials}=window.DogFight;
+        this.point.move=[moves,throws,pummels,smashes,specials].find(table=>table[id])?.[id].label || world.dogs[winner].lastMove || 'Hit';
+        this.point.damage=Math.round(players[winner].damage*10)/10;
+        this.point.fall=!!loss;
+      }
+      return true;
+    }
+    panel(root,phase,{start,play,back,resume}){
+      const {fighters}=window.DogFight, card=this.card;
+      const names=[card.p1,card.p2].map((kind,i)=>(i===0?'P1':card.mode==='solo'?'CPU':'P2')+' '+fighters[kind].name);
+      const p=this.point,done=this.score.includes(3),paused=phase==='pause',playing=phase==='point';
+      const report=!playing?'Land the first damaging hit to score. Falling gives your rival the point. A trade on the same frame is a draw. First to three wins.':
+        p.winner===null?'Trade on the same frame. Replay the point.':
+        names[p.winner]+(done?' wins the duel':' takes the point')+' · '+(p.fall?'Ring-out':p.move+' · '+p.damage+'%');
+      const openings=[['center','Center stage'],['left','P1 cornered'],['right',card.mode==='solo'?'CPU cornered':'P2 cornered']];
+      const button=(id,label,primary)=>'<button type="button" class="'+(primary?'primary':'utility')+'" id="duel-'+id+'">'+label+'</button>';
+      root.innerHTML='<p id="duel-report"></p><strong id="duel-score"></strong>'+
+        (!paused && !done?'<h3>Starting position</h3><div class="dialog-actions">'+openings.map(([key,label])=>
+          '<button type="button" class="utility" data-opening="'+key+'" aria-pressed="'+(this.position===key)+'">'+label+'</button>').join('')+'</div>':'')+
+        '<div class="dialog-actions">'+(paused?button('resume','Resume point',true):'')+
+        (!done?button('start',paused?'Restart point':playing?'Next point':'Play first point',!paused):'')+
+        button('fight',card.bestOfThree?'Start full set':'Start full fight',done)+button('back','Matchup card',false)+'</div>';
+      const el=id=>root.querySelector('#duel-'+id);
+      el('report').textContent=report;
+      el('score').textContent=names[0]+'  '+this.score[0]+' – '+this.score[1]+'  '+names[1];
+      const choices=root.querySelectorAll('[data-opening]');
+      for(const choice of choices)choice.onclick=()=>{
+        this.position=choice.dataset.opening;
+        for(const other of choices)other.setAttribute('aria-pressed',String(other===choice));
+      };
+      if(paused)el('resume').onclick=resume;
+      if(!done)el('start').onclick=start;
+      el('fight').onclick=play;el('back').onclick=back;
+      el(paused?'resume':done?'fight':'start').focus({preventScroll:true});
+    }
+  }
+  function matchupSheet(root,card,{drawPreview,coatNames,stageName,back,play,duel,edit,pinned,pin}){
     const {fighters,cpuLevels}=window.DogFight, hash=encodeMatchup(card);
     const [one,two]=[card.p1,card.p2].map(kind=>fighters[kind].name);
     const format=card.bestOfThree?'Best of three':'Single game', match=card.timed?'Time Battle':card.lives+(card.lives===1?' stock':' stocks');
@@ -72,6 +136,7 @@
     root.innerHTML='<canvas id="matchup-preview" role="img"></canvas><div class="matchup-fighters"></div>'+
       '<strong id="matchup-stage"></strong><p id="matchup-terms"></p><div class="dialog-actions">'+
       '<button type="button" class="primary" id="matchup-play">'+(card.bestOfThree?'Start set':'Start fight')+'</button>'+
+      '<button type="button" class="utility" id="matchup-duel">First-hit duel</button>'+
       '<button type="button" class="utility" id="matchup-pin"></button><button type="button" class="utility" id="matchup-share">Share link</button>'+
       '<button type="button" class="utility" id="matchup-edit">Edit in fighter select</button>'+
       '<button type="button" class="utility" id="matchup-back">Back</button></div>'+
@@ -100,6 +165,7 @@
       try{await navigator.clipboard.writeText(url.href);if(link.isConnected)status.textContent='Matchup link copied.';}catch{}
     };
     el('back').onclick=back;el('edit').onclick=edit;el('play').onclick=play;
+    el('duel').onclick=duel;
     sync();el('play').focus({preventScroll:true});
     return sync;
   }
@@ -522,5 +588,5 @@
     (pending || testing ? $('layout-back') : row || $('layout-slot')).focus({preventScroll:true});
     return chooseBinding;
   }
-  window.VersusRulebook={codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
+  window.VersusRulebook={OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
 })();
