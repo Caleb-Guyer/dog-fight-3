@@ -720,18 +720,20 @@
     constructor(saved){this.marks={};Object.assign(this,saved);}
     mark(id,frame){
       if(Object.hasOwn(this.marks,id))return;
-      this.marks[id]=frame;this.changed=true;
+      this.marks[id]=frame;this.last=id;this.changed=true;
     }
     contact(name,e,w){
       const [pip]=w.dogs,frame=w.matchFrames;
       if(e.f===pip){
         if(name==='jump')this.jumped=true;
+        if(name==='hit')this.jumped=false;
         if(name==='ledge' || name==='recover' && this.offstage)this.rescue=true;
         if(name==='block' || name==='parry')this.mark('guard',frame);
         if(name==='grabCatch')this.caughtShield=e.shielded;
         if(name==='throwRelease' && this.caughtShield)this.mark('throw',frame);
         if(name==='ko'){this.jumped=this.offstage=this.rescue=this.caughtShield=false;this.lastX=null;}
       }
+      if(name==='grabCatch' && e.target===pip)this.jumped=false;
       if(name==='hit' && e.owner===pip && e.f===w.dogs[1]){
         const id=e.moveId,k=pip.kit;
         if(id===k.ground[0])this.mark('jab',frame);
@@ -758,16 +760,17 @@
         if(this.offstage && this.rescue)this.mark('return',w.matchFrames);
         this.jumped=this.offstage=this.rescue=false;
       }
-      if(f.ground!==0 || f.grip || f.stun || f.floorAction || f.tumble || f.attack || !input.x){this.lastX=null;return;}
+      if(f.ground!==0 || f.grip || f.stun || f.floorAction || f.tumble || f.attack || f.shield || f.impactLag || f.shieldStun || !input.x){this.lastX=null;return;}
       if(this.lastX!=null && this.lastX!==f.x && Math.sign(f.x-this.lastX)===Math.sign(input.x) &&
           (this.lastX-center)*(f.x-center)<=0)this.mark('move',w.matchFrames);
       this.lastX=f.x;
     }
     hud(el){el.textContent='Fight School · '+Object.keys(this.marks).length+' / 10 skills';}
+    notice(frame){return this.last && frame-this.marks[this.last]<150?fieldSkills[this.last]:'';}
     panel(lessons,passed,showDialog,practice,back,over){
       const rows=lessons.map(({id},i)=>{
         const frame=this.marks[id],when=frame==null?'':Math.floor(frame/3600)+':'+String(Math.floor(frame/60)%60).padStart(2,'0');
-        const result=when?'In this fight · '+when:passed.includes(id)?'Cleared in practice':'Practice';
+        const result=when?'In this fight · '+when:passed.includes(id)?'Previously cleared':'Practice';
         return '<li><button class="utility" data-field-lesson="'+i+'"><strong>'+fieldSkills[id]+'</strong><small>'+result+'</small></button></li>';
       }).join('');
       showDialog('field-card','Skills from this fight','<p>'+Object.keys(this.marks).length+' of '+lessons.length+

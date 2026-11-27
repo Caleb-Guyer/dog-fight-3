@@ -5203,15 +5203,17 @@
     const cue=corner.read(world), device=promptDevice(pads), tip=$('corner-tip');
     const t=corner.target;
     const goal=t && (t.doneAt!==null?world.matchFrames-t.doneAt<160:(!cue || cue==='opening') && world.matchFrames<300);
-    if(!settings.cornerTips || (!cue && !goal)){if(!tip.hidden)tip.hidden=true;return;}
-    const key=(goal?t.id+'/'+t.title:cue)+'/'+device+(device===1?padNames(0,seatPad(0,pads))[0]:'');
+    const earned=(!cue || cue==='opening') && corner.field?.notice(world.matchFrames);
+    if(!settings.cornerTips || (!cue && !goal && !earned)){if(!tip.hidden)tip.hidden=true;return;}
+    const key=(goal?t.id+'/'+t.title:earned || cue)+'/'+device+(device===1?padNames(0,seatPad(0,pads))[0]:'');
     if(tip.dataset.cue!==key){
       const label=action=>{
         if(device===0)return keyFor(0,action);
         if(device===2)return action[0].toUpperCase()+action.slice(1);
         return ['left','right','up','down'].includes(action)?'stick '+action:padFor(0,action);
       };
-      const [title,line]=goal?[t.title,t.line]:window.FightSchool.cornerLine(cue,label);
+      const [title,line]=goal?[t.title,t.line]:earned?['Skill earned',earned+' · See your skill card in Pause.']:
+        corner.field && cue==='opening'?['Take center stage','Hold '+label('right')+' to run across the middle of the table.']:window.FightSchool.cornerLine(cue,label);
       $('corner-title').textContent=title;$('corner-line').textContent=line;tip.dataset.cue=key;
     }
     if(tip.hidden)tip.hidden=false;
