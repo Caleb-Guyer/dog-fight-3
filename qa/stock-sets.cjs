@@ -394,7 +394,7 @@ async function onlineSet(browser,phoneBrowser) {
     const stock='[data-do=stock-retry][data-stock-slot="'+slot+'"]';
     assert.equal(await loser.page.locator(stock).textContent(),'Retry my stock');
     if(i===0){
-      await loser.press(stock);
+      await loser.press('#result-review summary');await loser.press(stock);
       assert.equal(await loser.page.locator('#dialog-title').textContent(),'Retry P2’s stock 3');
       await loser.press('#stock-try');
       await loser.page.getByRole('heading',{name:'Stock saved!'}).waitFor();
@@ -432,6 +432,7 @@ async function onlineSet(browser,phoneBrowser) {
       const firstFalls=[];
       const fullScores=[];
       for(const d of [host,guest]){
+        if(await d.page.locator('#result-review:not([open])').count())await d.press('#result-review summary');
         await d.press('[data-do=watch-match]');
         await d.page.locator('#clip-seek').press('Home');
         await d.press('#film-forward');
@@ -637,7 +638,7 @@ async function timedBattles(browser,phone){
   await host.page.locator('#recovery-play').waitFor();
   assert.match(await host.page.locator('#recovery-route').innerText(),/recorded inputs/);
   assert.equal(await guest.page.locator('[data-do=coach-fall]').count(),0);
-  await guest.press('[data-do=ko-replays]');await guest.press('[data-ko]');
+  await guest.press('#result-review summary');await guest.press('[data-do=ko-replays]');await guest.press('[data-ko]');
   await guest.press('[data-clip-recovery="0"]');await guest.page.locator('#recovery-demo').waitFor();
   await guest.press('#recovery-demo');
   await guest.page.waitForFunction(()=>document.querySelector('#recovery-cue')?.textContent.includes('point saved'));

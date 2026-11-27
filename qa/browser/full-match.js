@@ -49,6 +49,18 @@ async function match(browser,device){
     for(let i=0;i<25 && !await page.locator('[data-do=watch-match]').count();i++)await page.clock.runFor(1100);
     await move(false);
     assert.match(await page.locator('#result-turning-point').textContent(),/took the lead at/);
+    assert(await page.locator('#result-review:not([open])').isVisible());
+    assert.equal(await page.locator('[data-do=watch-match]').isVisible(),false);
+    assert.deepEqual(await page.locator('.final-score').allTextContents(),['3','0']);
+    const fall=page.locator('[data-latest-fall="0"]');
+    assert.equal(await page.locator('[data-latest-fall="1"]').count(),0);
+    await choose('[data-latest-fall="0"]');await page.locator('#clip-seek').press('End');
+    assert.match(await page.locator('#clip-scores').textContent(),/Pip .+0 stocks/);
+    await choose('[data-do=clip-back]');assert(await fall.evaluate(el=>document.activeElement===el));
+    await page.screenshot({path:'result-'+device+'.png'});
+    await choose('#result-review summary');
+    assert(await page.locator('#result-highlight').isVisible());
+    if(device==='keyboard')await page.screenshot({path:'result-tools.png'});
     await choose('#result-highlight');
     const seek=page.locator('#clip-seek');
     const decidingFrame=Number(await seek.inputValue());assert(decidingFrame>0);

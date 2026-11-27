@@ -246,7 +246,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: arcade-screens
-          path: cup-*.png
+          path: |
+            cup-*.png
+            result-*.png
           retention-days: 5
   sound-test:
     runs-on: ubuntu-24.04
