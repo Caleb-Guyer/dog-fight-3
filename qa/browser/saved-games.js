@@ -183,6 +183,7 @@ async function personalKnockout(browser){
     assert.equal(await report.getByRole('button').and(report.locator('button')).count(),2);
     const bounds=await report.locator('summary').boundingBox();
     assert(bounds.y>=0 && bounds.y+bounds.height<=844);
+    await page.waitForFunction(()=>getComputedStyle(document.querySelector('.touch-pad')).visibility==='hidden');
     await page.screenshot({path:'result-first-loss-phone.png'});
     await report.locator('summary').tap();
     assert(await report.locator('[data-do=watch-match]').isVisible());

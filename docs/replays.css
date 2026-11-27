@@ -94,7 +94,7 @@ dialog:is([data-view='finish-stock-film'],[data-view='finish-rematch']) { width:
 #cup-review .dialog-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; margin:0; }
 #cup-review .dialog-actions button { border-bottom:1px solid #cfbea1; }
 #cup-review #result-highlight { display:block; text-decoration:underline; }
-body:has(#dialog[open] .cup-result) :is(#match .match-top,#hud,#countdown,.topbar,.touch-controls) { visibility:hidden; }
+body:has(#dialog[open] :is(.cup-result,.school-result)) :is(#match .match-top,#hud,#countdown,.topbar,.touch-pad) { visibility:hidden; }
 .school-result .winner { align-items:center; }
 .school-result .winner .victory-shot { width:clamp(92px,23vw,146px); }
 .school-result .winner h3 { margin:0; font:clamp(23px,4vw,36px)/1 var(--pixel); }
