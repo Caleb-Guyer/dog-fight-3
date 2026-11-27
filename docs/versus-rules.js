@@ -707,7 +707,10 @@
       draw(canvas,stage,form,drawn/12);
     }
     function describe(){
-      for(const b of cards)b.setAttribute('aria-pressed',String(b.dataset.stage===stage));
+      for(const b of cards){
+        const chosen=b.dataset.stage===stage;
+        b.setAttribute('aria-pressed',String(chosen));b.tabIndex=chosen?0:-1;
+      }
       for(const b of layouts)b.setAttribute('aria-pressed',String(b.dataset.stageForm===form));
       const name=arenas[stage].name,layout=stageForms[form];
       el('name').textContent=name;
@@ -723,7 +726,11 @@
       stage=id;describe();
     }
     for(const b of cards){
-      b.onfocus=b.onclick=()=>select(b.dataset.stage);
+      b.onfocus=()=>select(b.dataset.stage);
+      b.onclick=e=>{
+        select(b.dataset.stage);
+        if(e.detail===0)el('confirm').focus();
+      };
     }
     for(const b of layouts)b.onclick=()=>{
       if(form===b.dataset.stageForm)return;
