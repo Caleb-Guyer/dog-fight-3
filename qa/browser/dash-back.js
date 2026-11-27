@@ -30,8 +30,11 @@ async function play(browser,device) {
         const box=await page.locator('[data-touch='+action+']').boundingBox();
         assert(box && box.y>=0 && box.y+box.height<=844,action+' is on screen');
         fingers.set(action,{id:Object.keys(keys).indexOf(action)+1,x:box.x+box.width/2,y:box.y+box.height/2});
-      } else fingers.delete(action);
-      await client.send('Input.dispatchTouchEvent',{type:on?'touchStart':'touchEnd',touchPoints:[...fingers.values()]});
+      }
+      const point=fingers.get(action);
+      assert(point,action+' has a touch contact');
+      await client.send('Input.dispatchTouchEvent',{type:on?'touchStart':'touchEnd',touchPoints:[point]});
+      if(!on)fingers.delete(action);
     }
     await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));

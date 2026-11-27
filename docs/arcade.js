@@ -23,26 +23,7 @@
     ]},
   };
   const rounds = 4, levels = ['rookie','arcade','rival'];
-  const relayVenues={
-    pip:[['bandstand','counterweights'],['laundry','original']],
-    brisket:[['nightmail','trio'],['canal','counterweights']],
-    noodle:[['picnic','trio'],['laundry','original']],
-    clover:[['bandstand','counterweights'],['nightmail','flat']]
-  };
-  function relay(kind,round,lead=kind){
-    if(!Object.hasOwn(courses,kind) || (round!==1 && round!==2))return null;
-    const rivals=courses[kind].bouts.map(b=>b[0]), captain=rivals[round];
-    const partners=rivals.filter(dog=>dog!==captain), pack=[kind,...partners];
-    const first=pack.indexOf(lead);
-    if(first<0)return null;
-    const [stage,form]=relayVenues[kind][round-1];
-    return {stage,form,relayTeams:[[...pack.slice(first),...pack.slice(0,first)],[captain,...partners.reverse()]]};
-  }
   const routeMask=run=>(run?.wins[1]?.relayLead?1:0) | (run?.wins[2]?.relayLead?2:0);
-  const bestFor=(entry,run)=>routeMask(run)?entry.relayBests?.[routeMask(run)]:entry.best;
-  function stamps(entry){
-    return Object.values(entry.relayBests || {}).reduce((mask,run)=>mask | routeMask(run),routeMask(entry.active));
-  }
   const count = n => Number.isSafeInteger(n) && n >= 0;
   const validLead=(lead,round)=>lead===undefined || ((round===1 || round===2) && typeof lead==='string' && Object.hasOwn(courses,lead));
   function validRun(run, length) {
@@ -57,9 +38,17 @@
       const run=raw?.relayBests?.[mask];
       if(validRun(run,n=>n===rounds) && routeMask(run)===mask)relayBests[mask]=run;
     }
+    let active=validRun(raw?.active,n=>n<rounds) ? raw.active : null;
+    if(active?.relayLead){
+      // Resume an unfinished team round as a fresh singles round at the same stop.
+      const {relayLead,...saved}=active;
+      active={...saved,started:false};
+    }
+    let best=validRun(raw?.best,n=>n===rounds) ? raw.best : null;
+    for(const run of Object.values(relayBests))if(better(run,best))best=run;
     return {
-      active:validRun(raw?.active,n=>n<rounds) ? raw.active : null,
-      best:validRun(raw?.best,n=>n===rounds) ? raw.best : null,
+      active,
+      best,
       last:validRun(raw?.last,n=>n===rounds) ? raw.last : null,
       clears:count(raw?.clears) ? raw.clears : 0,
       ...(Object.keys(relayBests).length?{relayBests}:{}),
@@ -70,32 +59,26 @@
   const frames = run => run.wins.reduce((n,w)=>n+w.frames,0);
   const better = (run,other) => !other || run.retries < other.retries || (run.retries === other.retries &&
     (stocks(run) > stocks(other) || (stocks(run) === stocks(other) && frames(run) < frames(other))));
-  function begin(entry, id, coat, kind, lead) {
+  function begin(entry, id, coat) {
     const run = entry.active || {id,coat,retries:0,started:false,wins:[]};
-    if(lead && (run.started || !relay(kind,run.wins.length,lead)))return null;
-    if(lead)return {...entry,active:{...run,started:true,relayLead:lead}};
     return {...entry,active:{...run,started:true,retries:run.retries + (run.started ? 1 : 0)}};
   }
-  function stockBout(kind,round,coat,lead){
+  function stockBout(kind,round,coat){
     const bout=courses[kind].bouts[round];
     if(!bout)return null;
-    const [p2,stage,form]=bout, choice=lead && relay(kind,round,lead);
+    const [p2,stage,form]=bout;
     return {mode:'solo',p1:kind,p2,stage,form,coats:[coat,0],stockCount:3,timeBattle:false,minutes:7,fetch:false,
-      cpuLevel:choice?'rival':levels[round],...(choice?{...choice,p1:choice.relayTeams[0][0],coatBook:[{[kind]:coat},{}]}:{})};
+      cpuLevel:levels[round]};
   }
   function finish(entry, attempt, won, lives, elapsed) {
     const run = entry.active;
-    if (!run?.started || run.id !== attempt.id || run.retries !== attempt.retries || run.wins.length !== attempt.round || run.relayLead!==attempt.relayLead) return null;
+    if (!run?.started || run.id !== attempt.id || run.retries !== attempt.retries || run.wins.length !== attempt.round || attempt.relayLead!==undefined) return null;
     if (!won) return entry;
-    const {relayLead,...prior}=run;
-    const next = {...prior,started:false,wins:[...run.wins,{stocks:lives,frames:Math.max(1,Math.round(elapsed)),...(relayLead?{relayLead}:{})}]};
+    const next = {...run,started:false,wins:[...run.wins,{stocks:lives,frames:Math.max(1,Math.round(elapsed))}]};
     if (next.wins.length < rounds) return {...entry,active:next};
     const cleared={...entry,active:null,last:next,clears:entry.clears+1};
-    if(better(next,bestFor(entry,next))){
-      const mask=routeMask(next);
-      if(mask)cleared.relayBests={...entry.relayBests,[mask]:next};else cleared.best=next;
-    }
+    if(better(next,entry.best))cleared.best=next;
     return cleared;
   }
-  window.YardCup = {courses,levels,rounds,read,begin,finish,stocks,frames,relay,stockBout,stamps,routeMask,bestFor};
+  window.YardCup = {courses,levels,rounds,read,begin,finish,stocks,frames,stockBout};
 })();

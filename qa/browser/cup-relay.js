@@ -43,48 +43,40 @@ async function play(browser,device){
     await rings(1,3);
     assert.deepEqual(await page.locator('.cup-result button:visible').allTextContents(),['Play round 2','More options']);
     await choose('#cup-more');await choose(action('cup-sheet'));
-    assert(!(await page.locator(action('cup-relay')).isVisible()));
-    await choose('#cup-bonus summary');
-    await choose(action('cup-relay'));
-    const board=page.locator('#cup-relay-start');
-    await board.waitFor();
-    assert.equal(await page.locator('[data-cup-lead]').count(),3);
-    assert.match(await page.locator('.cup-relay-arena figcaption').textContent(),/Bandstand/);
-    assert(await page.locator('.cup-relay-arena canvas').evaluate(c=>c.getContext('2d').getImageData(0,0,c.width,c.height).data.some(x=>x)));
-    const before=await stored();
-    await choose('[data-cup-lead=brisket]');assert.match(await page.locator('#cup-relay-order').textContent(),/Brisket → Pip → Noodle/);
-    await choose('#cup-relay-back');assert.equal(await stored(),before);
-    assert.equal(await page.evaluate(()=>document.activeElement.dataset.do),'cup-relay');
-    await choose(action('cup-relay'));await choose('[data-cup-lead=brisket]');await choose('#cup-relay-start');
-    await page.clock.runFor(3500);
-    assert.deepEqual(await page.evaluate(()=>[liveCup.dogs[0].kind,liveCup.dogs[1].kind,liveCup.cpuLevel,liveCup.form]),['brisket','clover','rival','counterweights']);
-    assert.equal(JSON.parse(await stored()).active.relayLead,'brisket');
-    await rings(0,1);
-    assert.equal(await page.evaluate(()=>liveCup.dogs[0].kind),'pip');
-    await choose('#pause');await choose(action('cup-sheet'));
-    await page.reload();await observe();
-    assert.match(await page.locator(action('cup-start')).textContent(),/Retry round 2/);
-    assert.equal(await page.locator(action('cup-relay')).count(),0);
-    const active=await stored();
-    await page.goto(root+'?exhibit#arcade/pip/relay/3');await observe();
-    await choose('#cup-relay-start');await page.clock.runFor(3500);
-    await rings(1,3);
-    assert.equal(await page.locator('#dialog-title').textContent(),'Relay exhibition won');
-    assert.equal(await stored(),active);
-    await choose('#cup-more');await choose(action('cup-sheet'));await choose(action('cup-start'));await page.clock.runFor(3500);
-    assert.equal(await page.evaluate(()=>liveCup.dogs[0].kind),'brisket');
-    await rings(1,3);assert.doesNotMatch(await page.locator('.cup-result').innerText(),/stamp/);
-    await choose('#cup-more');assert.match(await page.locator('.cup-result').innerText(),/Round 2 relay stamp earned/);
+    const schedule=page.locator('.cup-route-board');
+    await schedule.waitFor();
+    assert.equal(await schedule.locator('li').count(),4);
+    assert.doesNotMatch(await schedule.innerText(),/relay|detour|stamp|exhibition/i);
+    assert.equal(await page.locator('#cup-bonus, [data-do=cup-relay], [data-do=cup-exhibition]').count(),0);
     const saved=JSON.parse(await stored());
-    assert.equal(saved.active.wins[1].relayLead,'brisket');assert.equal(saved.active.retries,1);
-    await choose(action('cup-sheet'));assert.doesNotMatch(await page.locator('.cup-route-board').innerText(),/Round 2 ✓/);
-    await choose('#cup-bonus summary');assert.match(await page.locator('#cup-bonus').innerText(),/Round 2 ✓/);
+    saved.active={...saved.active,started:true,relayLead:'brisket',coat:2};
+    await page.evaluate(value=>localStorage.setItem('dog-fight-3.cup.pip',value),JSON.stringify(saved));
+    await page.goto(root+'?legacy#arcade/pip/relay/2');
+    const roster=page.locator('#cup-select[data-view=roster]');
+    await roster.waitFor();await observe();
+    assert.equal(await roster.locator('[aria-pressed=true]').getAttribute('data-cup-dog'),'pip');
+    assert.equal(await roster.locator(action('cup-start')).textContent(),'Continue to round 2');
+    await choose(action('cup-start'));await page.clock.runFor(3500);
+    assert.deepEqual(await page.evaluate(()=>[liveCup.dogs[0].kind,liveCup.coatFor(0),liveCup.dogs[1].kind,
+      liveCup.dogs.map(dog=>dog.stocks),!!liveCup.relayTeams]),['pip',2,'clover',[3,3],false]);
+    assert.equal(JSON.parse(await stored()).active.retries,saved.active.retries);
+    await rings(1,3);
+    assert.deepEqual(await page.locator('.cup-result button:visible').allTextContents(),['Play round 3','More options']);
+    await choose('#cup-more');
+    assert.doesNotMatch(await page.locator('.cup-result').innerText(),/relay|detour|stamp|exhibition/i);
+    await choose(action('cup-sheet'));await schedule.waitFor();
+    const after=JSON.parse(await stored());
+    assert.equal(after.active.id,saved.active.id);
+    assert.equal(after.active.wins.length,2);
+    assert.deepEqual(after.active.wins[0],saved.active.wins[0]);
+    assert.equal(after.active.wins[1].relayLead,undefined);
+    assert.doesNotMatch(await schedule.innerText(),/relay|detour|stamp|exhibition/i);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
   try{for(const device of ['keyboard','touch','controller']){
-    try{await play(browser,device);}catch(e){throw Error(device+' Cup relay: '+e.stack);}
+    try{await play(browser,device);}catch(e){throw Error(device+' Cup singles progression: '+e.stack);}
   }}finally{await browser.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+e.stack.replaceAll('\n','%0A'));process.exitCode=1;});

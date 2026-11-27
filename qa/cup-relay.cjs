@@ -4,59 +4,42 @@ global.window={};
 require('../docs/engine.js');
 require('../docs/arcade.js');
 const {DogFight,YardCup:cup}=window;
-const ticket=run=>({id:run.id,round:run.wins.length,retries:run.retries,relayLead:run.relayLead});
-const win=(entry,stock=2,time=1200)=>cup.finish(entry,ticket(entry.active),true,stock,time);
+const win={stocks:2,frames:800};
 
-test('every Cup detour keeps its arena, rivals, ordered stock changes and captain coat for all three leads',()=>{
+test('a saved relay resumes at its round with the chosen Cup dog, coat and previous wins',()=>{
   for(const kind of Object.keys(cup.courses))for(const round of [1,2]){
-    const initial=cup.relay(kind,round);
-    const captain=cup.courses[kind].bouts[round][0];
-    assert.equal(initial.relayTeams[1][0],captain);
-    assert.equal(cup.relay(kind,round,captain),null);
-    for(const lead of initial.relayTeams[0]){
-      const config=cup.stockBout(kind,round,3,lead);
-      const w=new DogFight.Battle(config,undefined,DogFight.seededRandom(7));
-      assert(DogFight.validRelayTeams(w.relayTeams));
-      assert.deepEqual(w.dogs.map(f=>f.stocks),[3,3]);
-      assert.equal(w.cpuLevel,'rival');assert.equal(w.form,initial.form);assert.equal(w.stage,initial.stage);
-      assert.equal(w.dogs[0].kind,lead);
-      w.dogs[1].damage=42;
-      for(let i=0;i<3;i++){
-        assert.equal(w.dogs[0].kind,w.relayTeams[0][i]);
-        if(w.dogs[0].kind===kind)assert.equal(w.coatFor(0),3);
-        assert.equal(w.dogs[1].damage,42);
-        w.knockouts([w.dogs[0]]);
-      }
-      assert.equal(w.end,1);
-    }
+    const wins=Array.from({length:round},()=>({...win}));
+    const active={id:'old-run',wins,started:true,coat:2,retries:3,relayLead:'noodle'};
+    let entry=cup.read({active});
+    assert.deepEqual(entry.active,{id:'old-run',wins,started:false,coat:2,retries:3});
+    entry=cup.begin(entry,'unused',0);
+    assert.equal(entry.active.retries,3);
+    const ticket={id:'old-run',round,retries:3};
+    assert.equal(cup.finish(entry,{...ticket,relayLead:'noodle'},true,2,900),null);
+    const world=new DogFight.Battle(cup.stockBout(kind,round,entry.active.coat),undefined,DogFight.seededRandom(7));
+    assert.equal(world.dogs[0].kind,kind);
+    assert.equal(world.coatFor(0),2);
+    assert.deepEqual(world.dogs.map(dog=>dog.stocks),[3,3]);
+    assert.equal(!!world.relayTeams,false);
+    assert.equal(world.cpuLevel,cup.levels[round]);
+    const advanced=cup.finish(entry,ticket,true,1,900);
+    assert.deepEqual(advanced.active.wins,[...wins,{stocks:1,frames:900}]);
   }
 });
-test('retry and reload preserve the lead, award each stamp on victory and rank four distinct routes',()=>{
-  let entry=cup.read(null);
-  for(const mask of [0,1,2,3,3]){
-    const prior=entry.clears;
-    for(let r=0;r<4;r++){
-      const detour=mask & (r===1?1:r===2?2:0);
-      const lead=detour?cup.relay('pip',r).relayTeams[0][2]:undefined;
-      entry=cup.begin(entry,'run-'+prior,2,'pip',lead);
-      if(lead){
-        const stale=ticket(entry.active);
-        assert.equal(cup.finish(entry,stale,false,0,90),entry);
-        assert.equal(cup.begin(entry,'different',0,'pip','pip'),null);
-        entry=cup.begin(cup.read(JSON.parse(JSON.stringify(entry))),'unused',0,'pip');
-        assert.equal(entry.active.relayLead,lead);assert.equal(entry.active.coat,2);
-        assert.equal(cup.finish(entry,stale,true,1,600),null);
-      }
-      entry=win(entry,2,prior===4?2300:1200);
-      if(lead){assert.equal(entry.active.wins.at(-1).relayLead,lead);assert.equal(entry.active.relayLead,undefined);}
-    }
-    assert.equal(cup.routeMask(entry.last),mask);
-    assert.equal(cup.bestFor(entry,entry.last).id,'run-'+Math.min(3,prior));
-    entry=cup.read(JSON.parse(JSON.stringify(entry)));
-    assert.equal(entry.best.id,'run-0');assert.equal(entry.clears,prior+1);
+
+test('one Cup best includes valid historical clears and persists when the next run finishes',()=>{
+  const singles={id:'solo',started:false,retries:2,coat:0,wins:Array.from({length:4},()=>({...win}))};
+  const legacy={...singles,id:'relay',retries:0,wins:[win,{...win,relayLead:'brisket'},win,win]};
+  let entry=cup.read({best:singles,last:legacy,relayBests:{1:legacy,2:singles},clears:4});
+  assert.equal(entry.best.id,'relay');
+  assert.deepEqual(entry.relayBests,{1:legacy});
+  assert.equal(entry.last.id,'relay');
+  assert.equal(cup.read({best:{...singles,retries:0},relayBests:{1:legacy}}).best.id,'solo');
+  for(let round=0;round<4;round++){
+    entry=cup.begin(entry,'new',0);
+    entry=cup.finish(entry,{id:'new',round,retries:0},true,3,500);
   }
-  assert.deepEqual(Object.keys(entry.relayBests),['1','2','3']);
-  assert.equal(cup.stamps(entry),3);
-  assert.equal(cup.begin(cup.read(null),'early',1,'pip','noodle'),null);
-  assert.equal(cup.read({relayBests:{1:entry.best,2:entry.best}}).relayBests,undefined);
+  assert.equal(entry.best.id,'new');
+  assert.equal(entry.clears,5);
+  assert.deepEqual(cup.read(entry),entry);
 });

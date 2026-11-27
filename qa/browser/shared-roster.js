@@ -15,6 +15,7 @@ async function play(browser,profile,viewport){
     const choose=id=>press('[data-choice="'+id+'"]');
     const ready=i=>press('[data-seat="'+i+'"] [data-action=lock]');
     await page.goto(root+'#local');await press('#pick-together');
+    await page.locator('#couch-grid [data-choice=clover]').waitFor();
     assert.deepEqual(await page.locator('#couch-grid strong').allTextContents(),['Pip','Brisket','Noodle','Clover']);
     await choose('noodle');await press('[data-target="1"]');await choose('noodle');
     assert.deepEqual(await page.locator('[data-choice=noodle] [data-chip]').allTextContents(),['P1','P2']);

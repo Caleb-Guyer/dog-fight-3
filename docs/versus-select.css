@@ -1,10 +1,4 @@
 .rotation-line { padding:0; margin:.6rem 0; list-style:none; display:grid; gap:4px; }
-.cup-relay-arena { position:relative; margin:0; border:2px solid var(--ink); background:var(--ink); }
-.cup-relay-arena canvas { display:block; width:100%; max-height:18vh; object-fit:contain; image-rendering:pixelated; }
-.cup-relay-arena figcaption { text-align:center; padding:3px; color:var(--cream); font-family:var(--pixel); }
-.cup-relay-team { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; list-style:none; padding:0; margin:4px 0; }
-.cup-relay-team li { display:flex; align-items:center; justify-content:center; gap:4px; flex-wrap:wrap; border-block:1px solid #aa9b77; }
-.cup-relay-team li img { width:32px; height:30px; object-fit:contain; image-rendering:pixelated; }
 .rotation-line li { display:flex; align-items:center; gap:8px; padding:5px 8px; border-left:4px solid #aea081; background:#ede1c2; color:#292333; }
 .rotation-line li:nth-child(1) { border-color:#d37143; }
 .rotation-line li:nth-child(2) { border-color:#5185a0; }
@@ -218,10 +212,6 @@ dialog[data-view='tournament'] { width:min(790px,calc(100% - 16px)); }
 .cup-ticket-actions { display:flex; gap:12px; flex-wrap:wrap; }
 .cup-ticket-actions .primary { min-height:46px; }
 .cup-route-board { padding:clamp(12px,1.8vw,24px); background:var(--cream); color:var(--ink); }
-#cup-bonus { margin-top:12px; border-top:1px solid #b9ac8c; }
-#cup-bonus summary { width:fit-content; min-height:44px; padding:12px 4px; cursor:pointer; }
-#cup-bonus p { margin:0 0 10px; }
-#cup-select #cup-bonus button { color:var(--ink); border-color:currentColor; margin-bottom:10px; }
 #cup-select[data-view=route] .cup-select-inner { max-width:900px; }
 @media(max-width:680px) and (orientation:portrait) {
   .cup-select-inner { padding:14px max(12px,var(--left-edge)) 18px; gap:14px; }
