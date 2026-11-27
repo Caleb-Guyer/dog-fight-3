@@ -1,5 +1,7 @@
 # Dog Fight 3
 
+Choose **Arena** from fighter select to see all five stages. Select a postcard and a layout to watch the platforms move. **Random** draws from the other arenas. **Use arena** saves the choice, and Back keeps your previous setup. Open **Stage Run** or **Stage music** directly from the preview. Between games of a set, the player choosing the next arena uses **Lock in arena**. [Open stage select](https://caleb-guyer.github.io/dog-fight-3/#solo/arenas)
+
 In **Solo Fight** and **Local Versus**, choose either nameplate to edit that fighter. Pick a dog to preview its forward tilt, change its coat, then choose the arena or start the fight. **Match options** holds events, fighter tryouts, move lists, player profiles, and the Fetch Ball switch. Reduced motion keeps the preview still. [Open Solo Fight](https://caleb-guyer.github.io/dog-fight-3/#solo) · [Open Local Versus](https://caleb-guyer.github.io/dog-fight-3/#local)
 
 Open **Arcade Cup** to choose a dog on the full-screen fighter select. Each fighter keeps a separate run. **Route card** shows all four opponents and your records. After a round, play the next one or open **Match details** for stats, replays, and practice. [Choose a Cup fighter](https://caleb-guyer.github.io/dog-fight-3/#arcade)
@@ -248,7 +250,7 @@ In **Try Rival · Pip vs. Noodle**, close the distance until Noodle can reach yo
 
 On fighter select, pick a dog and choose **Coat** to see its four colors. Each player can save a favorite for each dog. When both players choose the same dog, selecting the other player's coat swaps the two. In friend rooms and Quickplay, matching requests give P2 the next color. Watch your coat on the damage meter and in the offscreen marker as you recover. [Play Honey Patch Pip against Tuxedo Pip](https://caleb-guyer.github.io/dog-fight-3/#solo/mirror)
 
-In Solo or Local versus, open **Arena**, choose **Original**, **Flat**, **Three platforms**, or **Counterweights**, then select the setting. Flat gives both dogs one wide deck. Three platforms puts two low perches beneath a high center platform on a narrower deck. All five settings keep their own scenery and music. Friend-room hosts can pick a form when creating the room. A best-of-three uses that form on each counterpick.
+In Solo or Local versus, open **Arena**, choose **Original**, **Flat**, **Three platforms**, or **Counterweights**, then choose a setting and select **Use arena**. Flat gives both dogs one wide deck. Three platforms puts two low perches beneath a high center platform on a narrower deck. All five settings keep their own scenery and music. Friend-room hosts can pick a form when creating the room. A best-of-three uses that form on each counterpick.
 
 On Counterweights, the left lift descends as the round opens. Jump onto it from Pip’s starting spot. Ride it up to take the high ground, or tap Down to drop beneath an incoming aerial. The two lifts trade heights every four seconds. [Play Counterweights on Canal Lock](https://caleb-guyer.github.io/dog-fight-3/#solo/canal/counterweights)
 

@@ -830,12 +830,12 @@
   const lobbyCoat = slot => window.DogFight.coatFor(slot,settings.p1,settings.p2,lobbyCoats);
   const fighterDraws=[0,1].map(()=>new window.FightControls.FighterShuffle(Object.keys(fighters)));
   const stageName = (stage, form) => arenas[stage].name + (form && form !== 'original' ? ' · ' + stageForms[form].name : '');
-  function drawStageTile(canvas, stage, form) {
+  function drawStageTile(canvas, stage, form, time=1.4) {
     const ctx = canvas.getContext('2d');
     ctx.save();
     ctx.imageSmoothingEnabled = false;
     ctx.scale(canvas.width / 1200, canvas.height / 675);
-    window.ArenaArt.draw(ctx, stage, 1.4, undefined,form);
+    window.ArenaArt.draw(ctx, stage, time, undefined,form);
     ctx.restore();
   }
   function syncLobby() {
@@ -990,7 +990,7 @@
   const dialogPresses=new Set();
   let movePreview=null,refreshCardPin=null,refreshController=null;
   function showDialog(kind, title, html, close = true) {
-    refreshCardPin=null;refreshController=null;
+    arenaPreview=null;refreshCardPin=null;refreshController=null;
     if(dialogType==='rumble')window.PadFeedback?.stop();
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
@@ -1017,7 +1017,7 @@
     if (kind==='result' || kind==='online-result') presentWinner();
   }
   function dismiss() {
-    refreshCardPin=null;refreshController=null;
+    arenaPreview=null;refreshCardPin=null;refreshController=null;
     if(dialogType==='rumble')window.PadFeedback?.stop();
     movePreview=null;
     couchPanel=null;
@@ -1126,6 +1126,7 @@
       document.querySelector('[data-do=match-card]')?.focus();
       return;
     }
+    if(dialogType==='arenas'){dismiss();$('choose-stage').focus();return;}
     if (dialogType === 'set-pick' && roomDraft) return showRoomFighters();
     if (dialogType === 'room-fighters' && online.canRepick) {
       roomDraft=null;
@@ -1165,38 +1166,31 @@
       'Fetch Ball',
       '<p>Tap Grab to catch a ball. Aim and tap Attack or Grab to throw. Three swats charge a gold shot.</p><p>In the air, release the direction and tap Grab to drop the ball. Let it fall onto a rival, or tap Attack while it’s within reach to catch it during your aerial. A catch keeps the charge.</p><div class="dialog-actions"><button class="primary" data-do="fetch-match">Play a three-stock Fetch match</button><button class="utility" data-do="drop-catch">Try the drop</button><button class="utility" data-do="defend-drop">Defend the landing</button><button class="utility" data-do="close">Got it</button></div>',
     );
-  function chooseArena(picking = false, form = picking ? world.form : lobbyForm()) {
-    const current = picking ? world.stage : settings.stage;
-    const chooseForm = !picking && settings.mode !== 'training';
-    const forms = chooseForm ? '<div class="form-choices" role="group" aria-label="Stage form">' +
-      Object.entries(stageForms).map(([id,option]) => '<button class="utility" data-stage-form="' + id +
-        '" aria-pressed="' + (id === form) + '">' + option.name + '</button>').join('') + '</div>' : '';
-    const description = stageForms[form].description;
-    const rows = Object.entries(arenas).map(
-      ([id, a]) =>
-        '<button class="stage-option" type="button" data-stage="' +
-        id +
-        '" aria-pressed="' +
-        (id === current) +
-        '"><canvas width="300" height="169" aria-hidden="true"></canvas><span><strong>' +
-        a.name + '</strong>' + (description ? '' : '<small>' + a.description + '</small>') + '</span></button>',
-    );
+  let arenaPreview=null;
+  function chooseArena(picking=false,form=picking?world.form:lobbyForm(),stage=picking?world.stage:settings.stage,focusId) {
     const room=picking && roomDraft;
-    const choice=room?'<p>'+coatNames[room.kind][room.coat]+' '+fighters[room.kind].name+' · Choose an arena to lock in.</p>':'';
-    showDialog(picking ? 'set-pick' : 'arenas', picking ? 'Pick the next arena' : 'Choose arena',
-      choice + forms + (description ? '<p>' + (picking ? stageForms[form].name + ' · ' : '') + description + '</p>' : '') +
-      '<div class="stage-options" data-form="' + form + '">' + rows.join('') + '</div>'+
-      (room?'<p id="net-pick-ready" role="status"></p><button class="utility" data-do="room-fighter-back">Change fighter</button>':'')+
-      (!picking && chooseForm?'<div class="dialog-actions"><button class="utility" id="arena-run">Stage Run</button><button class="utility" id="arena-music">Stage music</button></div>':''));
-    if($('arena-run'))$('arena-run').onclick=()=>stageRunBoard({...lobbyMatchup(),stageForm:form});
-    if($('arena-music'))$('arena-music').onclick=()=>openStageMusic(current,()=>{
-      chooseArena(false,form);$('arena-music').focus();
-    },form);
-    if(room)updateVotes();
-    document.querySelectorAll('.stage-option').forEach((el) => {
-      drawStageTile(el.querySelector('canvas'), el.dataset.stage,form);
+    const back=()=>picking?(room?showRoomFighters():showResult()):$('choose-stage').focus();
+    const title=picking?'Pick the next arena':'Stage select';
+    if(!window.VersusRulebook || !versusStyled)return waitForDispatch(title,()=>loadVersusPanel('VersusRulebook'),
+      ()=>chooseArena(picking,form,stage,focusId),back);
+    showDialog(picking?'set-pick':'arenas',title,'');
+    arenaPreview=window.VersusRulebook.arenaSelect($('dialog-body'),{
+      stage,form,focusId,picking,chooseForm:!picking && settings.mode!=='training',draw:drawStageTile,
+      roomFighter:room?coatNames[room.kind][room.coat]+' '+fighters[room.kind].name:'',
+      reduced:reducedReplays,
+      run:(id,layout)=>stageRunBoard({...lobbyMatchup(),stage:id,stageForm:layout}),
+      music:(id,layout)=>openStageMusic(id,()=>chooseArena(false,layout,id,'arena-music'),layout),
+      confirm(id,layout){
+        if(picking){
+          if(!online.series)return startNextSetGame(id);
+          showResult();online.rematch(id,room?.kind,room?.coat);return;
+        }
+        settings.stage=id;
+        if(settings.mode!=='training')settings.stageForm=layout;
+        save();dismiss();syncLobby();sound('menu');$('choose-stage').focus();
+      },
     });
-    document.querySelector('[data-stage="' + current + '"]').focus({preventScroll:true});
+    if(room)updateVotes();
   }
   $('choose-stage').onclick = () => chooseArena();
   function routeUI(){
@@ -1205,11 +1199,11 @@
         leaveOnline();afterStory=null;
         startMatch({mode:'solo',stage:card.stage,form:card.stageForm,p1:slot?card.p2:card.p1,p2:'pip',coats:[card.coats[slot],0],
           fetch:false,minutes:0,eventId:'stage-run',stageRun:{card,slot,best}},undefined,42);
-      },back:()=>{chooseArena();$('arena-run').focus();}};
+      },back:card=>chooseArena(false,card.stageForm,card.stage,'arena-run')};
   }
   function stageRunBoard(card,slot=0){
     if(page!=='lobby')toLobby();
-    if(!window.StageStrike || !versusStyled)return waitForDispatch('Stage Run',()=>loadVersusPanel('StageStrike'),()=>stageRunBoard(card,slot),()=>chooseArena());
+    if(!window.StageStrike || !versusStyled)return waitForDispatch('Stage Run',()=>loadVersusPanel('StageStrike'),()=>stageRunBoard(card,slot),()=>chooseArena(false,card.stageForm,card.stage,'arena-run'));
     window.StageStrike.routeSheet(card,slot,routeUI());
   }
   let controlsShown=[];
@@ -3402,30 +3396,6 @@
       document.querySelector('[data-guide-section="' + key + '"]').focus({ preventScroll: true });
       return;
     }
-    const stageForm = e.target.closest('[data-stage-form]');
-    if (stageForm) {
-      chooseArena(false,stageForm.dataset.stageForm);
-      document.querySelector('[data-stage-form][aria-pressed=true]').focus();
-      return;
-    }
-    const stage = e.target.closest('[data-stage]');
-    if (stage) {
-      if (dialogType === 'set-pick') {
-        if (online.series) {
-          const draft=roomDraft;
-          showResult();
-          online.rematch(stage.dataset.stage,draft?.kind,draft?.coat);
-        } else startNextSetGame(stage.dataset.stage);
-        return;
-      }
-      settings.stage = stage.dataset.stage;
-      if (settings.mode !== 'training') settings.stageForm = stage.closest('.stage-options').dataset.form;
-      save();
-      syncLobby();
-      sound('menu');
-      dismiss();
-      return;
-    }
     const action = e.target.closest('[data-do]')?.dataset.do;
     if(action==='camera-mode'){
       FightView.fixedCamera=settings.fixedCamera=!settings.fixedCamera;save();
@@ -4337,9 +4307,9 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=cup-select-1',
+    VersusRulebook:'versus-rules.js?v=arena-board-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
-    WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=stage-run-1',
+    WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=arena-board-1',
     ComboLab:'combo-lab.js?v=impact-tech-1', FinishTools:'finish-tools.js?v=second-chance-1',
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
@@ -4354,7 +4324,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=cup-select-1';
+        link.href='./versus-select.css?v=arena-board-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -5017,7 +4987,7 @@
   function openStageMusic(stage=settings.stage,back=()=>{showSoundTest();$('audition-editor')?.focus();},form=lobbyForm()){
     if(!window.StageMusic || !versusStyled) return waitForDispatch('Stage music',()=>loadVersusPanel('StageMusic'),
       ()=>openStageMusic(stage,back,form),back);
-    window.StageMusic.editor(stage,{arenas,storage,showDialog,draw:drawStageTile,play:playPreview,stop:stopPreview,back,
+    window.StageMusic.editor(stage,{arenas,storage,showDialog,draw:(canvas,id)=>drawStageTile(canvas,id,form),play:playPreview,stop:stopPreview,back,
       fight:(stage,song)=>startMatch({...settings,mode:page==='lobby' && settings.mode==='local'?'local':'solo',
         stage,form,coats:lobbyCoats.slice(),stockCount:3,timeBattle:false},undefined,undefined,null,{song})});
     updateMusic();refreshAudition();
@@ -6444,6 +6414,7 @@
       if (dialogType === 'pause' || dialogType === 'online-menu' || dialogType==='finish-pause') dismiss();
       else if (page === 'match' && !dialogType) showPause();
       else if (page === 'dispatch-story' && !dialogType) toggleFilm();
+      else if(arenaPreview)$('arena-confirm').click();
       else if (page === 'lobby' && !dialogType) $('start').click();
     } else if (!finishTrial && world?.lesson && !menuOpen && !$('school-recording').hidden && now.step && !oldPad.step) {
       openLessonRecording();
@@ -6531,6 +6502,7 @@
     padMenu(pads,now);
     if(soloSeat?.lost && !dialogType)checkSoloPad(pads);
     if(couchMatch && matchConfig?.couchSeats?.lost && !dialogType)checkLocalPads(pads);
+    if(arenaPreview && !document.hidden)arenaPreview.tick(dt);
     if(movePreview && !document.hidden)movePreview.tick(dt);
     if((dialogType==='couch' || dialogType==='stage-strike') && !document.hidden)couchPanel?.poll(pads,now);
     if (finishTrial) tickFinishTrial(dt,pads);
@@ -6686,6 +6658,8 @@
     if(arena==='events' && hash.startsWith('#solo/'))return eventBoard(form);
     if(Object.hasOwn(fighters,arena) && Object.hasOwn(specialInputs,form) && hash==='#moves/'+arena+'/'+form){
       showHome(false);showSpecialPreview({kind:arena,side:form,page:'home',paused:false});
+    }else if(hash==='#solo/arenas' || hash==='#local/arenas'){
+      settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();chooseArena();
     }else if(hash==='#local/stage-run' || hash==='#solo/stage-run'){
       settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();stageRunBoard(lobbyMatchup());
     }else if(hash==='#local/first-hit' || hash==='#solo/first-hit'){
