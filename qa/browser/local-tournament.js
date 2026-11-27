@@ -13,10 +13,10 @@ async function play(browser,mobile){
     for(let n=0;n<2;n++)for(const i of [0,1])await press(lock(i));
     await press('#couch-start');
   }
-  async function fall(until){
-    await page.keyboard.down('a');
+  async function fall(until,key='a'){
+    await page.keyboard.down(key);
     try{for(let i=0;i<17 && !await page.locator(until).isVisible();i++)await page.clock.runFor(1000);}
-    finally{await page.keyboard.up('a');}
+    finally{await page.keyboard.up(key);}
     assert(await page.locator(until).isVisible(),until);
   }
   async function winSet(){
@@ -24,6 +24,56 @@ async function play(browser,mobile){
     await fall('[data-do=set-pick]');assert.deepEqual((await snapshot()).results,before);
     await press('[data-do=set-pick]');await press(lock(1));await press(lock(0));await press(lock(0));
     await fall('#rotation-handoff');
+  }
+  async function reopen(){
+    await page.goto(root+'?bracket-return');
+    const home=page.locator('#home-continue[data-save=tournament]');
+    await home.waitFor({state:'visible'});
+    assert.match(await home.innerText(),/Local tournament/);await press('#home-continue');
+  }
+  async function watchOpening(){
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(){
+        if(!window.tourneyOpening && this.mode==='local'){
+          window.tourneyOpening=[this.stage,this.form,this.random.state,this.clockFrames,this.dogs.map((d,i)=>
+            [d.kind,this.coatFor(i),d.x,d.y,d.damage,d.stocks])];
+        }
+        return step.apply(this,arguments);
+      };
+    });
+    await page.clock.runFor(3100);
+    const result=await page.evaluate(()=>window.tourneyOpening);assert(result);return result;
+  }
+  async function resumeFinal(){
+    await fall('[data-do=set-pick]');
+    await press('[data-do=rotation]');assert.equal(await page.locator('#tourney-play').textContent(),'Counterpick for game 2');
+    await reopen();
+    assert.deepEqual(await page.locator('.bracket-match[aria-current] b').allTextContents(),['0','1']);
+    await press('#tourney-play');assert.match(await page.locator('#couch-phase').textContent(),/P1/);
+    assert.equal(await page.locator('#couch-back').textContent(),'Back to bracket');
+    await press('#couch-back');await press('#tourney-play');
+    assert(await page.locator('[data-seat="1"] [data-action=next]').isDisabled());
+    await press('[data-seat="0"] [data-action=next]');await press('[data-seat="0"] [data-action=coat]');
+    await press(lock(0));await press('[data-seat="0"] [data-action=next]');await press(lock(1));await press(lock(0));
+    assert.equal(await page.locator('#match-set').textContent(),'Game 2 · 0–1');
+    const opening=await snapshot();assert.equal(opening.progress.games.length,2);
+    const firstFrame=await watchOpening();await reopen();
+    assert.equal(await page.locator('#tourney-play').textContent(),'Restart game 2');
+    await press('#tourney-play');assert.equal(await page.locator('#match-set').textContent(),'Game 2 · 0–1');
+    const restored=await snapshot();assert.deepEqual(restored.progress,opening.progress);assert.deepEqual(restored.players,opening.players);
+    assert.deepEqual(await watchOpening(),firstFrame);
+    await fall('[data-do=set-pick]','ArrowRight');await reopen();
+    assert.deepEqual(await page.locator('.bracket-match[aria-current] b').allTextContents(),['1','1']);
+    await press('#tourney-play');assert.match(await page.locator('#couch-phase').textContent(),/P2/);
+    assert(await page.locator('[data-seat="0"] [data-action=next]').isDisabled());
+    await press(lock(0));await press(lock(1));await press(lock(1));
+    assert.equal(await page.locator('#match-set').textContent(),'Game 3 · 1–1');
+    await fall('#rotation-handoff');
+    await press('[data-do=match-card]');
+    for(const i of [0,1,2]){await press('[data-card-game="'+i+'"]');assert.match(await page.locator('.card-stage').textContent(),new RegExp('Game '+(i+1)));}
+    await press('[data-do=card-back]');
+    assert.deepEqual((await snapshot()).results,[[0,2],[1,2]]);
   }
   try{
     await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
@@ -59,7 +109,7 @@ async function play(browser,mobile){
       assert.deepEqual((await snapshot()).results,[[0,2]]);
       await page.goto(root+'?resume#local/tournament');
       assert.match(await page.locator('#tourney-call').textContent(),/Final · Maple vs. Clover Club/);
-      await start();await winSet();
+      await start();await resumeFinal();
     }else await fall('#rotation-handoff');
     await press('[data-do=rotation]');
     const champion=mobile?'Ash <3':'Clover Club';
@@ -75,6 +125,15 @@ async function play(browser,mobile){
     await press('#tourney-end');assert.equal(await page.locator('#tourney-roster input').count(),4);
     await press('#tourney-back');await press('#winner-stays');
     assert.match(await page.locator('#rotation-play').textContent(),/Bout 1/);
+    if(mobile){
+      await page.goto(root+'?touch-set#local/tournament');
+      await press('#tourney-format');await press('#tourney-play');await start();
+      await fall('[data-do=set-pick]');await reopen();
+      assert.equal(await page.locator('#tourney-play').textContent(),'Counterpick for game 2');
+      assert(await page.locator('#dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
+      await press('#tourney-play');await press(lock(1));await press(lock(0));await press(lock(0));
+      assert.equal(await page.locator('#match-set').textContent(),'Game 2 · 0–1');
+    }
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

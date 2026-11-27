@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-global.window={};require('../docs/engine.js');require('../docs/couch-select.js');require('../docs/tournament.js');require('../docs/winner-stays.js');
+global.window={};require('../docs/engine.js');require('../docs/fight-records.js');require('../docs/couch-select.js');require('../docs/tournament.js');require('../docs/winner-stays.js');
 const {Lineup:Bracket,key}=window.LocalTournament;
 const setup={mode:'local',p1:'pip',p2:'brisket',coats:[2,3],lives:2,minutes:3,fetch:false,stageForm:'trio',handicap:[10,70]};
 const {eventConfig,finishEvent}=window.CouchSelect;
@@ -13,6 +13,49 @@ function storage(){
   const data=new Map();
   return {getItem:k=>data.get(k),setItem:(k,v)=>data.set(k,v)};
 }
+function gameCard(stage,winner){
+  const battle=new window.DogFight.Battle({...setup,stage,stockCount:1,spawnDamage:setup.handicap});
+  Object.assign(battle.dogs[1-winner],{ground:-1,x:battle.blastBounds().right+80});
+  battle.step(1/60,window.DogFight.idleInput,window.DogFight.idleInput);
+  assert.equal(battle.end,winner);
+  return battle.matchCard;
+}
+test('a tournament saves each opening and completed game in a split set and advances the bracket once',()=>{
+  const disk=storage();let b=bracket(3,true);b.started=true;
+  let set=new window.DogFight.StockSet('canal');
+  for(const [index,winner] of [1,0,1].entries()){
+    const stage=['canal','nightmail','laundry'][index];
+    if(index)assert(set.advance(stage));
+    b.remember(['noodle','brisket'],[3,2]);
+    assert.equal(b.openGame(1,set,51+index),51+index);
+    assert(b.save(disk));b=Bracket.read(disk);set=b.restoreSet();
+    assert.equal(set.current.stage,stage);assert.equal(b.openGame(1,set,934),51+index);
+    assert.equal(set.picker,null);assert.equal(set.games.length,index+1);
+    const card=gameCard(stage,winner);
+    assert(b.finishGame(1,set,winner,card));assert(!b.finishGame(1,set,winner,card));
+    b.save(disk);b=Bracket.read(disk);
+    if(index<2){
+      set=b.restoreSet();assert.equal(set.picker,1-winner);assert.deepEqual(set.current.card,card);
+      assert.match(b.continueCard().detail,new RegExp('Game '+(index+2)));
+    }
+  }
+  assert.deepEqual(b.results,[[1,2]]);assert.equal(b.progress,null);assert.equal(b.restoreSet(),null);
+  assert.match(b.continueCard().detail,/Final/);
+});
+test('older brackets and unreadable in-progress game cards retain all completed pairings',()=>{
+  const disk=storage(),b=bracket(4,true);b.started=true;b.finish(1,0,[2,1]);b.save(disk);
+  const saved=JSON.parse(disk.getItem(key));delete saved.progress;delete saved.playedAt;
+  disk.setItem(key,JSON.stringify(saved));assert.equal(Bracket.read(disk).progress,null);
+  const good={stage:'canal',winner:1,card:gameCard('canal',1)};
+  for(const progress of [{bout:1,seed:1,games:[good]},{bout:2,seed:-1,games:[good]},
+      {bout:2,seed:1,games:[{...good,card:{}}]},{bout:2,seed:1,games:[good,good]},
+      {bout:2,seed:1,games:[{stage:'canal',winner:null},good]}]){
+    disk.setItem(key,JSON.stringify({...saved,progress}));
+    const rebuilt=Bracket.read(disk);
+    assert.deepEqual(rebuilt.results,[[2,1]]);assert.equal(rebuilt.progress,null);
+    assert.equal(rebuilt.continueCard().title,'Local tournament');
+  }
+});
 test('every outcome in fields of two through eight advances each actual winner and eliminates each loser once',()=>{
   for(let n=2;n<=8;n++)for(let path=0;path<2**(n-1);path++){
     const b=bracket(n);b.started=true;
