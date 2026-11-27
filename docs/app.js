@@ -315,6 +315,7 @@
   let walkPointer = null;
   let touchFlick = null, flickAim = null;
   const rightStickHeld = [false, false];
+  const horizontalInputs=[new window.FightControls.HorizontalInput(),new window.FightControls.HorizontalInput()];
   const shieldTiltLocked = [false, false];
   const flickJumpStates = [{},{}];
   function clearInput() {
@@ -326,6 +327,7 @@
     walkPointer = null;
     touchFlick = flickAim = null;
     rightStickHeld.fill(false);
+    for(const input of horizontalInputs)input.clear();
     shieldTiltLocked.fill(false);
     flickJumpStates[0] = {};
     flickJumpStates[1] = {};
@@ -1058,7 +1060,6 @@
     if(dialogType==='field-card')return $('field-back').click();
     if(dialogType==='combo-compare')return $('reply-back').click();
     if(dialogType==='pack-relay')return backFromRelay();
-    if(dialogType==='cup-relay')return $('cup-relay-back').click();
     if(dialogType==='finish-picker')return $('finish-picker-back').click();
     if(dialogType==='ko-replays')return $('ko-list-back').click();
     if(dialogType==='finish-film')return $('film-back').click();
@@ -1449,18 +1450,8 @@
       if (count.textContent!==label) count.textContent=label;
       return;
     }
-    const landing = world.spacingPractice?.pattern === 'landing' && world.spacingPractice;
-    const compare = $('hop-compare');
-    if (landing || !compare.hidden) {
-      const peaks = [];
-      for (const [peak, prefix] of [[landing?.peak, ''], [landing?.previousPeak, 'Previous: ']]) {
-        if (peak?.complete) peaks.push(prefix + (peak.short ? 'Short hop' : 'Full jump') + ' · ' +
-          Math.round(peak.floorY - peak.y) + ' px');
-      }
-      const comparison = peaks.join(' / ');
-      if (compare.textContent !== comparison) compare.textContent = comparison;
-      compare.hidden = !comparison;
-    }
+    if(world.mode==='training')window.PracticeFeedback?.movementReadout(world);
+    else if (!$('hop-compare').hidden) $('hop-compare').hidden=true;
     if (world.mode === 'adventure') return updateDispatchHUD();
     const confirmed = online.match?.confirmedWorld || world;
     const scores = confirmed.dogs;
@@ -1515,16 +1506,7 @@
       if (prompt.textContent !== text) prompt.textContent = text;
     }
     const player = world.dogs[world.trainingPlayerSlot], lab = world.freshnessPractice;
-    const wave = world.wavePractice, comboLab = world.comboPractice;
-    if (wave?.pattern === 'platform' && wave.phase === 'active' && wave.contact !== null) {
-      const bar = $('wave-recovery'), tip = $('wave-tip'), lag = Math.max(0, Math.ceil(player.landingLag * 60 - 1e-8));
-      const canBuffer = player.landingLag <= window.DogFight.inputWindow + 1e-8;
-      if (bar.value !== bar.max - lag) bar.value = bar.max - lag;
-      if (bar.classList.contains('ready') !== canBuffer) bar.classList.toggle('ready', canBuffer);
-      const cue = player.attack?.grabAttempt ? 'Reaching for the shield.' : player.command?.type === 'grab' ? 'Grab queued.' :
-        canBuffer ? 'Tap Grab now.' : 'Landing recovery · ' + lag + ' frames';
-      if (tip.textContent !== cue) tip.textContent = cue;
-    }
+    const comboLab = world.comboPractice;
     const chargeReadout = $(lab ? 'freshness-charge' : 'training-charge');
     if (lab) {
       $('training-charge').hidden = true;
@@ -1659,13 +1641,6 @@
     return run.retries + (run.retries === 1 ? ' retry' : ' retries') + ' · ' +
       cup.stocks(run) + '/12 stocks kept · ' + cardTime(cup.frames(run));
   }
-  const relayRouteName=mask=>mask===3?'Both relay detours':'Round '+(mask===1?2:3)+' relay';
-  function cupRelayRecords(entry){
-    const mask=cup.stamps(entry);
-    const relayBests=Object.entries(entry.relayBests || {});
-    return (mask?'<p>Relay stamps · Round 2 '+(mask&1?'✓':'—')+' · Round 3 '+(mask&2?'✓':'—')+'</p>':'')+
-      relayBests.map(([m,run])=>'<p>'+relayRouteName(Number(m))+' best · '+cupRecord(run)+'</p>').join('');
-  }
   function cupSheet(kind=cupChoice,route=false,resume=false) {
     if (!Object.hasOwn(cup.courses,kind)) return;
     if(!window.VersusRulebook || !versusStyled)return waitForDispatch('Arcade Cup',()=>loadVersusPanel('VersusRulebook'),
@@ -1676,43 +1651,19 @@
     const entry = cupEntry(kind), run = entry.active, course = cup.courses[kind], round = run?.wins.length || 0;
     cupShown = entry;
     const stops = [...course.bouts,[null]].map(([dog,stage,form],i)=>{
-      const lead=run?.wins[i]?.relayLead || (i===round && run?.relayLead);
-      const detour=lead && cup.relay(kind,i,lead);
-      const title = dog ? fighters[dog].name : 'Copper Hound', venue = detour ? 'Pack Relay · '+stageName(detour.stage,detour.form) : dog ? stageName(stage,form) : 'Bell Depot';
+      const title = dog ? fighters[dog].name : 'Copper Hound', venue = dog ? stageName(stage,form) : 'Bell Depot';
       return '<li'+(round===i?' aria-current="step"':'')+'><span>'+(i+1)+'</span><div><strong>'+title+
         '</strong><small>'+venue+'</small></div><b>'+(i<round ? stockLabel(run.wins[i].stocks)+' kept' :
           i===round ? 'Up next' : dog ? cpuLevels[cup.levels[i]].name : 'Boss')+'</b></li>';
     }).join('');
-    window.VersusRulebook.cupSelect($('cup-select'),{kind,entry,course,route,stops,best:entry.best && cupRecord(entry.best),relayRecords:cupRelayRecords(entry),
+    window.VersusRulebook.cupSelect($('cup-select'),{kind,entry,course,route,stops,best:entry.best && cupRecord(entry.best),
       storageNote:unsavedCup.has(kind)?'<p>Progress lasts for this tab while storage is unavailable.</p>':'',
       coatFor:id=>cupEntry(id).active?.coat ?? savedCoat(0,id),select:cupSheet,back:returnToHome,
-      start:button=>startCupRound(kind,null,button),relay:exhibition=>openCupRelay(kind,exhibition?1:null,false)});
+      start:button=>startCupRound(kind,button)});
     if(resume)$('cup-select').querySelector('[data-do=cup-start]').click();
   }
-  function openCupRelay(kind,exhibitionRound=null,fromResult=dialogType==='result'){
-    const back=()=>{
-      if(fromResult){
-        showResult();
-        $('dialog-body').querySelector('[data-do=cup-exhibition]')?.focus();
-      }else{
-        cupSheet(kind,true);
-        const bonus=$('cup-bonus');
-        if(bonus){
-          bonus.open=true;
-          bonus.querySelector('button').focus();
-        }
-      }
-    };
-    if(!window.PackRelay || !versusStyled)return waitForDispatch('Pack Relay',()=>loadVersusPanel('PackRelay'),()=>openCupRelay(kind,exhibitionRound,fromResult),back);
-    const run=exhibitionRound?cupEntry(kind).active:cupShown.active;
-    const round=exhibitionRound ?? run?.wins.length,coat=run?.coat ?? savedCoat(0,kind);
-    if((!exhibitionRound && run?.started) || !cup.relay(kind,round))return cupSheet(kind);
-    window.PackRelay.cupSheet(kind,round,coat,!!exhibitionRound,{showDialog,root:$('dialog-body'),portrait,drawStageTile,stageName,back,
-      start:lead=>exhibitionRound?startMatch(cup.stockBout(kind,round,coat,lead),undefined,17+round*31,null,
-        {cupRound:{kind,round,coat,exhibition:true}}):startCupRound(kind,lead)});
-  }
-  async function startCupRound(kind,lead,button) {
-    button ??= $('dialog').querySelector(lead?'#cup-relay-start':'[data-do=cup-next]');
+  async function startCupRound(kind,button) {
+    button ??= $('dialog').querySelector('[data-do=cup-next]');
     if (!button || button.disabled) return;
     button.disabled = true;
     audioReady();
@@ -1732,13 +1683,13 @@
       if (!current() || latest.clears!==expected.clears || run?.id!==shown?.id ||
           run?.retries!==shown?.retries || run?.wins.length!==shown?.wins.length || run?.started!==shown?.started) return null;
       const id = run?.id || Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
-      return cup.begin(latest,id,savedCoat(0,kind),kind,lead);
+      return cup.begin(latest,id,savedCoat(0,kind));
     });
     if (!current()) return;
     if (!entry) return cupSheet(kind);
     const run = entry.active, round = run.wins.length;
-    const attempt = {kind,id:run.id,retries:run.retries,round,coat:run.coat,relayLead:run.relayLead};
-    const bout = cup.stockBout(kind,round,run.coat,run.relayLead);
+    const attempt = {kind,id:run.id,retries:run.retries,round,coat:run.coat};
+    const bout = cup.stockBout(kind,round,run.coat);
     if (!bout) return beginRun(yardChapter.lastRoom,0,null,attempt);
     startMatch(bout,undefined,17+round*31,null,{cupRound:attempt});
   }
@@ -1759,11 +1710,6 @@
   async function cupResult(won) {
     const attempt = cupAttempt;
     if (!attempt || attempt.saving) return;
-    if(attempt.exhibition){
-      const dog=world.dogs[world.end];
-      cupFinish(won?'Relay exhibition won':'Relay exhibition lost',dog.kind,world.coatFor(dog.index),dog.stats.name+' wins',
-        stockLabel(dog.stocks)+' kept','<button class="primary" data-do="cup-exhibition">Choose another lead</button>');return;
-    }
     if (!attempt.settled) {
       attempt.saving = true;
       const lives = world.dogs[0].stocks, elapsed = world.matchFrames;
@@ -1785,8 +1731,7 @@
     cupFinish(title,winner.kind,world.coatFor(winner.index),headline,line,
       '<button class="primary" data-do="'+(clear?'cup-roster':'cup-next')+'">'+
       (clear?'Choose a fighter':won?'Play round '+(next+1):'Retry round '+next)+'</button>',
-      (won && attempt.relayLead?'<p>Round '+next+' relay stamp earned.</p>':'')+
-      (clear?'<p><strong>Personal best</strong> · '+(cup.routeMask(entry.last)?relayRouteName(cup.routeMask(entry.last))+' · ':'')+cupRecord(cup.bestFor(entry,entry.last))+'</p>':''));
+      clear?'<p><strong>Personal best</strong> · '+cupRecord(entry.best)+'</p>':'');
   }
   const frameLab = {mode:'live', count:0, pending:0, renderTime:0};
   let trainingMoment = null;
@@ -2304,7 +2249,7 @@
     const matchName = world.eventId?world.event.name:world.warmupPartner ? 'Online warm-up' : online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
       (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : world.bells ? 'Bell Break' : modes[config.mode];
     $('match-mode').textContent = rehearsal && visit.returnStart ? 'Stock return · '+(config.mode==='local'?'Local versus':cpuLevels[world.cpuLevel].name+' CPU') :
-      cupAttempt ? cupAttempt.exhibition?'Relay exhibition':'Arcade Cup · Round '+(cupAttempt.round+1)+'/4'+(world.relayTeams?' · Pack Relay':'') :
+      cupAttempt ? 'Arcade Cup · Round '+(cupAttempt.round+1)+'/4' :
       config.rotationRound?(config.tourneyRound || 'Bout '+config.rotationRound)+' · P1 '+config.rotationTags[0]+' / P2 '+config.rotationTags[1]:
       world.lesson ? 'Fight School' : spar?'Sparring · '+world.dogs[0].stats.name:matchName + (world.relayTeams?' · Pack Relay':world.matchCard?.points?' · Time Battle':config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = stageName(config.stage,world.form);
@@ -2427,8 +2372,8 @@
     const reviewButton=(!online.match && finishTape?.length?'<button class="utility" data-do="instant-replay">Instant replay</button>':'')+
       (clips.length?stockRetryButton(world)+recoveryButtons(world,clips)+knockoutButton:'');
     if (cupAttempt) {
-      showDialog('pause',cupAttempt.exhibition?'Exhibition paused':'Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+(cupAttempt.round+1)+
-        (cupAttempt.exhibition?' exhibition.':' of 4. Leaving now restarts this round on your next attempt.')+'</p><div class="dialog-actions">'+
+      showDialog('pause','Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+(cupAttempt.round+1)+
+        ' of 4. Leaving now restarts this round on your next attempt.'+'</p><div class="dialog-actions">'+
         '<button class="primary" data-do="resume">Resume</button>'+reviewButton+'<button class="utility" data-do="moves">Move list</button>'+
         '<button class="utility" data-do="controls">Controls</button><button class="utility" data-do="cup-sheet">Cup schedule</button></div>');
       document.querySelector('[data-do=resume]').focus();
@@ -3086,14 +3031,14 @@
   const recordModes={solo:'Solo',local:'Local versus',online:'Online versus',cup:'Arcade Cup',school:'Fight School'};
   let reviewCard=null;
   function recordMode() {
-    return online.match?'online':cupAttempt && !cupAttempt.exhibition?'cup':matchConfig?.schoolFinal || spar?'school':world.mode;
+    return online.match?'online':cupAttempt?'cup':matchConfig?.schoolFinal || spar?'school':world.mode;
   }
   function recordFight(result) {
     if(result?.eventId)return result.save(storage);
     if (!result?.matchCard || result.end===null || practiceFight || matchConfig?.openingDuel || recordedFights.has(result)) return;
     const series=online.series || localSet;
     const entry={time:Date.now(),mode:recordMode(),side:online.match?online.side:0,stage:result.stage,form:result.form,
-      round:series?.games.length || (cupAttempt && !cupAttempt.exhibition?cupAttempt.round+1:0),winner:result.end,card:structuredClone(result.matchCard)};
+      round:series?.games.length || (cupAttempt?cupAttempt.round+1:0),winner:result.end,card:structuredClone(result.matchCard)};
     const tape=finishTape;
     if(tape?.length){tape.captureKnockouts(result);entry.replay=true;}
     if(corner?.previous && corner.target)entry.rematch={previous:corner.previous,skill:corner.target.id,frame:corner.target.tapeFrame ?? null};
@@ -3469,7 +3414,6 @@
     if (action==='fighter-classes') return fighterSheet(world?.lesson?.course || settings.p1);
     if (action === 'cup-sheet') return cupSheet(cupAttempt?.kind || cupChoice,true);
     if (action === 'cup-roster') return cupSheet(cupAttempt?.kind || cupChoice);
-    if (action === 'cup-exhibition') return openCupRelay(cupAttempt?.kind || cupChoice,cupAttempt?.exhibition?cupAttempt.round:1);
     if (action === 'cup-start' || action === 'cup-next') return startCupRound(cupAttempt?.kind || cupChoice);
     if (action === 'match-card') return showMatchCard();
     if (action === 'card-back') return exitDialog();
@@ -4291,7 +4235,7 @@
   let campaign = yardChapter;
   const dispatchSources={
     SoloEvents:'solo-events.js?v=impact-tech-1',
-    PracticeFeedback:'practice-feedback.js?v=dash-smash-1', DogOnline:'online.js?v=dash-smash-1',
+    PracticeFeedback:'practice-feedback.js?v=footwork-readout-1', DogOnline:'online.js?v=dash-smash-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
@@ -4301,8 +4245,8 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=cup-schedule-1',
-    PackRelay:'pack-relay.js?v=cup-relay-1',
+    VersusRulebook:'versus-rules.js?v=cup-schedule-2',
+    PackRelay:'pack-relay.js?v=versus-2',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
     ComboLab:'combo-lab.js?v=dash-smash-1', FinishTools:'finish-tools.js?v=second-chance-1',
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
@@ -4318,7 +4262,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=cup-schedule-1';
+        link.href='./versus-select.css?v=cup-schedule-2';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -4584,7 +4528,7 @@
       if (!run) continue;
       const round=run.wins.length, opponent=course.bouts[round]?.[0];
       items.push({id:kind,title:fighters[kind].name+'’s Arcade Cup',kind,coat:run.coat,playedAt:entry.playedAt,
-        detail:'Round '+(round+1)+' of 4 · '+(run.relayLead?'Pack Relay · ':'')+(opponent?fighters[opponent].name:'Copper Hound'),action:run.started?'Retry round':'Continue'});
+        detail:'Round '+(round+1)+' of 4 · '+(opponent?fighters[opponent].name:'Copper Hound'),action:run.started?'Retry round':'Continue'});
     }
     return items.sort((a,b)=>(b.playedAt||0)-(a.playedAt||0));
   }
@@ -5897,7 +5841,7 @@
     const map = keys[slot];
     const active = name => held.has(map[name]) || (slot === 0 && touches.has(name));
     const soft = slot === 0 && touchPointers.get(walkPointer)?.dataset.touch;
-    const x = Number(active('right')) - Number(active('left'));
+    const x = horizontalInputs[slot].keys(active('left'),active('right'));
     const y = Number(active('down')) - Number(active('up'));
     return {
       x: x * (active('walk') || (soft && (soft.endsWith('left') || soft.endsWith('right'))) ? 64 / 127 : 1),
@@ -5944,6 +5888,10 @@
     held.add(e.code);
     if (!e.repeat) {
       taps.add(e.code);
+      keys.forEach((map,i)=>{
+        if(e.code===map.left)horizontalInputs[i].last=-1;
+        if(e.code===map.right)horizontalInputs[i].last=1;
+      });
       const slot = keys.findIndex(map => map.attack === e.code);
       if (slot >= 0) attackAim[slot] = buttonAim(slot);
       const smashSlot = keys.findIndex(map => map.smash === e.code);
@@ -5956,12 +5904,15 @@
     const previous = touchPointers.get(pointerId);
     if (previous === button) return;
     const wasUp = touches.has('up');
+    const wasLeft=touches.has('left'),wasRight=touches.has('right');
     if (button) touchPointers.set(pointerId, button);
     else touchPointers.delete(pointerId);
     touches.clear();
     const pressed = new Set(touchPointers.values());
     for (const el of pressed) for (const key of el.dataset.touch.split('-')) touches.add(key);
     if (button) {
+      if(!wasLeft && touches.has('left'))horizontalInputs[0].last=-1;
+      if(!wasRight && touches.has('right'))horizontalInputs[0].last=1;
       if (previous)
         for (const key of previous.dataset.touch.split('-')) if (!touches.has(key)) touchTaps.delete(key);
       for (const key of button.dataset.touch.split('-')) touchTaps.add(key);
@@ -6089,11 +6040,7 @@
       exitDialog();
       return;
     }
-    if(page==='cup-select'){
-      const bonus=$('cup-bonus');
-      if(bonus?.open){bonus.open=false;bonus.querySelector('summary').focus();return;}
-      return $('cup-back').click();
-    }
+    if(page==='cup-select')return $('cup-back').click();
     if(page==='lobby' && !$('lobby-options').hidden)return leaveLobbyOptions();
     if (page === 'dispatch-story') $('story-map').click();
     else if (page === 'online-lobby' && !$('online-wait').hidden) showOnline();
@@ -6146,23 +6093,19 @@
       return down(pad,n) && !(menuPadButtons.get(pad.index) & (1<<n));
     };
     const axis=n=>controls.movementAxis(pad?.axes?.[n]);
-    const left = key('left') || down(pad, 14),
-      right = key('right') || down(pad, 15);
-    const x = Number(right) - Number(left);
+    const localLeft=key('left'),localRight=key('right'),padLeft=down(pad,14),padRight=down(pad,15);
+    const left=localLeft || padLeft,right=localRight || padRight;
+    const horizontal=horizontalInputs[i],padSide=horizontal.samplePad(pad,padLeft,padRight);
+    const x=localLeft || localRight ? horizontal.keys(localLeft,localRight) : padSide;
+    const rawX=left || right ? x : axis(0);
     // A direction released after Attack still belongs to that tap when both edges fall between game ticks.
     const aim = tapped('attack') ? attackAim[i] : null;
-    let grabX = x || axis(0) || aim?.rawX || 0;
-    if (left && right) {
-      // Rolling one direction key onto the other is a turn even during their brief overlap.
-      const leftTap = tapped('left'),
-        rightTap = tapped('right');
-      grabX = leftTap === rightTap ? (battle.dogs[fighterIndex].prev.grabX ?? 0) : rightTap ? 1 : -1;
-    }
+    const grabX=rawX || (!left && !right && aim?.rawX) || 0;
     const up = key('up') || down(pad, 12),
       downAim = key('down') || down(pad, 13);
     const y = Number(downAim) - Number(up);
     // A quick Smash tap can outlive both direction keys or both thumbs in the input queue.
-    const savedSmash = tapped('smash') && !x && !y && !axis(0) && !axis(1) ? smashAim[i] : null;
+    const savedSmash = tapped('smash') && !left && !right && !y && !rawX && !axis(1) ? smashAim[i] : null;
     const digitalAim = left || right || up || downAim || (!i && touches.has('neutral'));
     const rightX = axis(2),
       rightY = axis(3);
@@ -6192,7 +6135,7 @@
     const gentleGuard = shield && grounded && (key('walk') || fromCenter);
     const softCrawl = battle.dogs[fighterIndex].kit.crawl && fromCenter && fromCenter.startsWith('down-');
     const gentleDown = y > 0 && !shield && (key('walk') || fromCenter === 'down' || softCrawl || aim?.y === 64 / 127);
-    const side = (walk ? x * (64 / 127) : x) || axis(0) || (!left && !right && aim?.x) || 0;
+    const side = left || right ? x*(walk?64/127:1) : rawX || aim?.x || 0;
     const vertical = ((gentleGuard || gentleDown) ? y * (64 / 127) : y) || axis(1) || (!up && !downAim && aim?.y) || 0;
     // Keep a held direction aimed when the second bumper is released. Centering rearms the dodge.
     if (grounded && mapped('shield') && mapped('shieldAlt')) shieldTiltLocked[i] = true;
@@ -6211,7 +6154,7 @@
       smash: held.has(map.smash) || tapped('smash') || touchSmash || mapped('smash'),
       aimStick,
       tiltMode: settings[i?'tiltStick2':'tiltStick'] && aimStick,
-      smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : x || axis(0) || savedSmash?.rawX || 0,
+      smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : rawX || savedSmash?.rawX || 0,
       smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : y || axis(1) || savedSmash?.y || 0,
       special: key('special') || mapped('special'),
       shield,
@@ -6703,7 +6646,7 @@
       showHome(false);
       bellSheet(arena || 'pip');
     } else if (/^#arcade\/(pip|brisket|noodle|clover)\/relay\/[23]$/.test(hash)) {
-      showHome(false);cupChoice=arena;openCupRelay(arena,Number(hash.at(-1))-1,false);
+      showHome(false);cupSheet(arena);
     } else if (hash === '#arcade' || (hash === '#arcade/'+arena && Object.hasOwn(cup.courses,arena))) {
       showHome(false);
       cupSheet(arena || settings.p1);
@@ -6801,6 +6744,9 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (arena==='free' && hash==='#training/free/'+form && Object.hasOwn(fighters,form)) {
+      leaveOnline();afterStory=null;
+      startMatch({...settings,mode:'training',p1:form,p2:form==='brisket'?'pip':'brisket',stage:'picnic',fetch:false},undefined,42);
     } else if (hash === '#training/practice') {
       leaveOnline();
       afterStory = null;

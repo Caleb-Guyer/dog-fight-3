@@ -124,6 +124,23 @@
     return connected;
   }
   const movementAxis=value=>Math.abs(value)>.23?value:0;
+  class HorizontalInput {
+    constructor(){this.clear();}
+    clear(){this.last=0;this.mask=0;this.padSide=0;this.id=null;this.index=null;}
+    keys(left,right){return left && right ? this.last : Number(right)-Number(left);}
+    samplePad(pad,left,right){
+      if(this.index!==pad?.index || this.id!==pad?.id){
+        this.mask=0;this.padSide=0;this.index=pad?.index;this.id=pad?.id;
+      }
+      const mask=Number(left)+2*Number(right);
+      if(mask!==this.mask){
+        // Two new D-pad buttons in one poll have no observable press order.
+        this.padSide=mask===3 ? (this.mask===1?1:this.mask===2?-1:0) : Number(right)-Number(left);
+        this.mask=mask;
+      }
+      return this.padSide;
+    }
+  }
   class FighterShuffle {
     constructor(roster,random=Math.random) {
       this.roster=roster;
@@ -298,5 +315,5 @@
       return true;
     }
   }
-  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,SoloSeat,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat,sticks,readPads,rawPad,stickAxes,tuneAxes,movementAxis};
+  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,SoloSeat,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat,sticks,readPads,rawPad,stickAxes,tuneAxes,movementAxis,HorizontalInput};
 })();

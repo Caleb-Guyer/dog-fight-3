@@ -651,22 +651,19 @@
     window.ArenaArt.draw(ctx,stage,0,{left,top,right:left+canvas.width,bottom:top+canvas.height},'original',terrain);
     window.DogArt.draw(ctx,id,x,y,{pose:'idle',face:1,scale:1.9,time:.35,coat});ctx.restore();
   }
-  function cupSelect(root,{kind,entry,course,route,stops,best,relayRecords,storageNote,coatFor,select,back,start,relay}){
+  function cupSelect(root,{kind,entry,course,route,stops,best,storageNote,coatFor,select,back,start}){
     const {fighters}=window.DogFight,run=entry.active,round=run?.wins.length || 0;
     const next=course.bouts[round]?.[0],stop=next?fighters[next].name:'Copper Hound';
     const title=run?(run.started?'Retry round ':'Continue to round ')+(round+1):'Start '+fighters[kind].name+'’s run';
     const button=(key,name,primary=false)=>'<button type="button" class="'+(primary?'primary':'utility')+'" data-do="'+key+'">'+name+'</button>';
     const controls=button('cup-start',title,true);
-    const relayRound=run && !run.started && (round===1 || round===2);
-    const bonus=route?'<details id="cup-bonus"><summary>Bonus relays</summary><div><p>Three dogs per team, one stock each.</p>'+
-      (relayRound?button('cup-relay','Play round '+(round+1)+' as a relay'):button('cup-exhibition','Play a relay exhibition'))+relayRecords+'</div></details>':'';
     const cards=Object.entries(fighters).map(([id,f])=>'<button type="button" class="cup-poster" data-cup-dog="'+id+'" aria-pressed="'+(id===kind)+'" style="--dog-color:'+f.color+'">'+
       '<canvas width="300" height="224" aria-hidden="true"></canvas><span><strong>'+f.name+'</strong><small>'+f.style+'</small></span></button>').join('');
     root.dataset.view=route?'route':'roster';
     root.innerHTML='<div class="cup-select-inner"><header class="cup-select-head"><div><span>Arcade Cup</span><h1>'+
       (route?course.name:'Fighter select')+'</h1></div><button id="cup-back" class="utility">'+(route?'Fighter select':'Main menu')+'</button></header>'+
       (route?'<div class="cup-route-board"><ol class="cup-stops" aria-label="Cup schedule">'+stops+'</ol>'+
-        (entry.clears?'<p>'+entry.clears+(entry.clears===1?' clear':' clears')+(best?' · Personal best · '+best:'')+'</p>':'')+bonus+'</div>':
+        (entry.clears?'<p>'+entry.clears+(entry.clears===1?' clear':' clears')+(best?' · Personal best · '+best:'')+'</p>':'')+'</div>':
       '<div class="cup-posters" role="group" aria-label="Choose your fighter">'+cards+'</div>')+
       '<footer class="cup-ticket"><div>'+(route?'<strong>'+fighters[kind].name+'</strong>':'<strong>'+course.name+'</strong>')+
       '<p>Round '+(round+1)+' of 4 · '+stop+'</p></div><div class="cup-ticket-actions">'+
@@ -675,8 +672,6 @@
     root.querySelector('[data-do=cup-start]').onclick=e=>start(e.currentTarget);
     const routeButton=root.querySelector('[data-do=cup-sheet]');
     if(routeButton)routeButton.onclick=()=>select(kind,true);
-    const detour=root.querySelector('[data-do=cup-relay],[data-do=cup-exhibition]');
-    if(detour)detour.onclick=()=>relay(detour.dataset.do==='cup-exhibition');
     const art={pip:'picnic',brisket:'nightmail',noodle:'laundry',clover:'canal'};
     for(const b of root.querySelectorAll('[data-cup-dog]')){
       const id=b.dataset.cupDog;

@@ -240,8 +240,6 @@ In that opening, let Brisket approach once to see his Yard Buster. On the rematc
 
 **Arcade Cup** gives each dog a four-round route. Fight the other three dogs in three-stock matches, then take your chosen fighter and coat into Bell Depot against the Copper Hound. The rivals progress from Rookie through Arcade to Rival. Every round starts with three stocks. Cleared rounds save separately for each dog. Retrying a lost round or re-entering an unfinished one adds one retry.
 
-For a team fight, open **Cup schedule** and expand **Bonus relays**. After winning round one or two, you can play the next round as a relay. Pick a lead dog. Each teammate has one stock and enters at 0% when the previous dog is knocked out. Retries keep the same lineup. Wins earn stamps, and each relay route keeps its own personal best. You can also try a standalone exhibition. [Play the Bandstand relay exhibition](https://caleb-guyer.github.io/dog-fight-3/#arcade/pip/relay/2)
-
 The Cup schedule shows all four opponents, your clear count, and your personal best. Fewer retries ranks first, followed by more stocks kept and then less time spent in winning fights. To try a rooftop run, pick Noodle, fight Brisket across the laundry gap, and use the perches against Clover in round two. [Enter Noodle’s Arcade Cup](https://caleb-guyer.github.io/dog-fight-3/#arcade/noodle)
 
 Rival can punish a blocked smash or a heavy landing. At close range each dog can grab out of shield. At higher damage it looks for its own up smash. Remaining recovery frames, shield pushback and the reach of the move determine whether it commits. As Brisket, try Haymaker up close against Pip, then back up and make only the tip connect. [Play the three-stock match](https://caleb-guyer.github.io/dog-fight-3/#solo/shield-punish)
@@ -351,6 +349,8 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 | Pause | Esc | Esc | Start |
 
 Flick a side to dash. Reverse in the first few steps to dash-dance. Once your dog is running, its paws have to brake before it can turn. Pip can reverse a dash later than Brisket, who skids farther when stopping. To walk on touch, slide from the center dot onto a side arrow. A direct tap on the arrow starts a dash.
+
+You can roll from Right to Left while keeping Right held. The newer direction steers the dog and aims its attacks. Release Left to steer right again. This works with either player's movement keys, two fingers on the touch arrows, or separate presses on a controller D-pad. If the controller reports both directions together from neutral, the dog stays neutral. Try a quick reversal as Pip, then hold the first direction for a full run as Brisket and watch how far he brakes. [Run as Pip](https://caleb-guyer.github.io/dog-fight-3/#training/free/pip) · [Run as Brisket](https://caleb-guyer.github.io/dog-fight-3/#training/free/brisket)
 
 Walk to the edge of a platform and your dog plants its paws at the lip. You can tilt, shield, jump, or turn back immediately. Dash to take the fight offstage. If you land an aerial near a platform tip with enough sideways speed, sliding off ends its remaining landing recovery. You keep an air jump and can swing on the way down.
 
