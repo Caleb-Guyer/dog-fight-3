@@ -142,7 +142,7 @@
     oval(ctx, f.x, floor.y + 1, 24 * strength + 5, 3, ink);
     ctx.restore();
   }
-  function drawPreview(canvas, config, time, coats) {
+  function drawPreview(canvas, config, time, coats, pick) {
     const aspect = (canvas.clientWidth || 900) / (canvas.clientHeight || 280);
     const viewportWidth = clamp(660 + (aspect - 1.7) * 190, 680, 1110);
     const viewportHeight = viewportWidth / aspect;
@@ -175,13 +175,15 @@
       const x = snap(positions[i]),
         y = podiums[i].y;
       oval(ctx, x, y + 1, 20 * scale, 2 * scale, '#30293280');
+      const move=pick?.slot===i && !reduced.matches && window.DogFight.moves[pick.moveId];
+      const attack=move && {...move,moveId:pick.moveId,tiltSide:'forward',time:clamp((time-pick.start)/2,0,move.end)};
       window.DogArt.draw(ctx, kind, x, y, {
         coat:window.DogFight.coatFor(i,config.p1,config.p2,coats),
         face: i ? -1 : 1,
         scale,
         time: t + i * 0.42,
-        pose: 'idle',
-        phase: 0,
+        pose: attack ? attackPose({attack}) : 'idle',
+        phase: attack ? attackPhase(attack) : 0,
       });
     });
     ctx.restore();

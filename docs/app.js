@@ -673,6 +673,29 @@
   const lobbyForm = () => settings.mode === 'training' ? 'original' : settings.stageForm;
   const savedCoat = (slot,kind) => settings.coatBook[slot][kind] ?? 0;
   let lobbyCoats = [0,0];
+  let previewPick=null;
+  function paintLobby(now) {
+    if (!$('lobby-options').hidden) return;
+    if (previewPick && (now >= previewPick.until || reducedReplays.matches)) previewPick=null;
+    const frame=reducedReplays.matches ? 0 : Math.floor(now*(previewPick ? 24 : 9));
+    if (frame === lastPreview) return;
+    lastPreview=frame;
+    drawPreview($('preview'),settings,now,lobbyCoats,previewPick);
+  }
+  if (window.ResizeObserver) new ResizeObserver(()=>{lastPreview=-1;}).observe($('preview'));
+  else window.addEventListener('resize',()=>{lastPreview=-1;});
+  function showLobbyOptions(focusId='lobby-options-back') {
+    $('lobby-options').hidden=false;
+    $('lobby-options-mode').textContent=modes[settings.mode];
+    $(focusId).focus();
+  }
+  function leaveLobbyOptions() {
+    $('lobby-options').hidden=true;
+    lastPreview=-1;
+    $('lobby-more').focus();
+  }
+  $('lobby-more').onclick=()=>showLobbyOptions();
+  $('lobby-options-back').onclick=leaveLobbyOptions;
   let couchPanel=null,lobbySeats=null,rotation=null,rotationPicking=false;
   const eventPads=new WeakMap();
   let rotationStorage;
@@ -681,7 +704,7 @@
   function saveRotation(){return rotation.save(rotationStorage);}
   function rotationBack(){
     if(page==='match')return showResult();
-    dismiss();$(tournamentOpen?'tournament':'winner-stays').focus({preventScroll:true});
+    dismiss();showLobbyOptions(tournamentOpen?'tournament':'winner-stays');
   }
   function rotationBoard(tournament=tournamentOpen){
     tournamentOpen=tournament;
@@ -708,7 +731,7 @@
     event.board($('dialog-body'),rotation,{portrait,save:saveRotation,back:rotationBack,
       play:()=>{if(page!=='lobby'){settings.mode='local';toLobby();}pickTogether(true);},
       end:()=>{rotation=null;delete savedEvents[part];try{rotationStorage.removeItem(event.key);}catch{}
-        settings.mode='local';toLobby();if(tournament)return rotationBoard(true);$('winner-stays').focus({preventScroll:true});}});
+        settings.mode='local';toLobby();if(tournament)return rotationBoard(true);showLobbyOptions('winner-stays');}});
   }
   function pickTogether(forRotation=false,openingStrikes=false) {
     const saved=forRotation===true && rotation?.restoreSet?.();
@@ -823,6 +846,7 @@
       ', currently ' + coatNames[chosen][lobbyCoat(editing)]);
     $('cpu-level').hidden = settings.mode !== 'solo';
     $('event-matches').hidden=settings.mode!=='solo';
+    $('lobby-events').hidden=settings.mode==='training';
     $('pick-together').hidden=settings.mode!=='local';
     $('depot-duo').hidden=settings.mode!=='local';
     $('tournament').hidden=$('winner-stays').hidden=settings.mode!=='local';
@@ -873,7 +897,7 @@
         stageName(settings.stage,lobbyForm()),
     );
     lastPreview = -1;
-    drawPreview($('preview'), settings, performance.now() / 1000,lobbyCoats);
+    paintLobby(performance.now()/1000);
   }
   function showCoats() {
     const net = page === 'online-lobby', slot = net ? 0 : editing;
@@ -928,6 +952,8 @@
   });
   function pickLobbyFighter(kind,random=false) {
     settings[editing ? 'p2' : 'p1'] = kind;
+    const moveId=kits[kind].tilts.forward, start=performance.now()/1000;
+    previewPick={slot:editing,moveId,start,until:start+moves[moveId].end*2};
     save();
     syncLobby();
     const focus=random?$('lobby-random'):$('roster').querySelector('[data-kind="' + kind + '"]');
@@ -1016,7 +1042,7 @@
     if(clipScreen?.aimReader?.cancel())return;
     if(dialogType==='couch-pads')return couchPanel?.cancel();
     if(dialogType==='pad-loss' || dialogType==='solo-pad-loss')return;
-    if(dialogType==='fighter-tryout'){dismiss();if(page==='lobby')$('lobby-tryout').focus();return;}
+    if(dialogType==='fighter-tryout'){dismiss();if(page==='lobby')showLobbyOptions('lobby-tryout');return;}
     if(dialogType==='mission-saving')return;
     if(dialogType==='special-preview')return $('move-back').click();
     if(dialogType==='stage-strike')return strikeBack();
@@ -1931,7 +1957,7 @@
   }
   $('cpu-level').onclick = showCpuLevels;
   function eventUI(){
-    return {store:storage,showDialog,coat:savedCoat,open:eventBoard,binding:key=>[keyFor(0,key),padFor(0,key),'Touch '+key][promptDevice(getPads())],back:()=>{dismiss();$('event-matches').focus();},launch:(id,normal,seed,rehearse)=>{
+    return {store:storage,showDialog,coat:savedCoat,open:eventBoard,binding:key=>[keyFor(0,key),padFor(0,key),'Touch '+key][promptDevice(getPads())],back:()=>{dismiss();showLobbyOptions('event-matches');},launch:(id,normal,seed,rehearse)=>{
       leaveOnline();afterStory=null;
       const c=window.SoloEvents.setup(id,normal,seed,rehearse);
       startMatch({...c,coats:[savedCoat(0,c.p1),savedCoat(1,c.p2)]},undefined,42);
@@ -1940,7 +1966,7 @@
   function eventBoard(id){
     if(page!=='lobby' || settings.mode!=='solo'){settings.mode='solo';toLobby();}
     if(!window.SoloEvents || !versusStyled)return waitForDispatch('Event Matches',()=>loadVersusPanel('SoloEvents'),
-      ()=>eventBoard(id),()=>$('event-matches').focus());
+      ()=>eventBoard(id),()=>showLobbyOptions('event-matches'));
     window.SoloEvents.board(id,eventUI());
   }
   $('event-matches').onclick=()=>eventBoard();
@@ -2394,6 +2420,8 @@
     localSet = null;
     practiceFight = null;
     page = 'lobby';
+    previewPick=null;
+    $('lobby-options').hidden=true;
     dismiss();
     world = null;
     view = null;
@@ -5363,7 +5391,7 @@
       backLabel:page==='match' && world?.lesson?.course?'Back to lesson':(matchConfig?.schoolFinal || spar) && page==='match'?'Back to results':'Fight School'});
   }
   function openTryout(kind=settings[editing?'p2':'p1']){
-    const back=()=>{if(page==='match')toLobby();else dismiss();$('lobby-tryout').focus();};
+    const back=()=>{if(page==='match')toLobby();else dismiss();showLobbyOptions('lobby-tryout');};
     if(!window.FighterSchool)return waitForDispatch('Fighter tryouts',()=>loadDispatch('FighterSchool'),()=>openTryout(kind),back);
     window.FighterSchool.tryoutSheet(kind,{storage,slot:editing,label:slotLabel(editing),coat:savedCoat,portrait,
       duel:settings.mode==='training'?null:()=>{
@@ -5371,7 +5399,11 @@
         card.coats=[savedCoat(0,card.p1),savedCoat(1,card.p2)];
         card.coats[1]=window.DogFight.coatFor(1,card.p1,card.p2,card.coats);openOpeningDuel(card);
       },
-      root:$('dialog-body'),showDialog,choose:openTryout,start:startFighterLesson,back,pick:id=>{back();pickLobbyFighter(id);}});
+      root:$('dialog-body'),showDialog,choose:openTryout,start:startFighterLesson,back,pick:id=>{
+        if(page==='match')toLobby();else dismiss();
+        $('lobby-options').hidden=true;
+        pickLobbyFighter(id);
+      }});
   }
   $('lobby-tryout').onclick=()=>openTryout();
   function startSparring(kind){
@@ -5803,7 +5835,7 @@
   function openProfiles(source,slot){
     const back=()=>{
       if(source==='bindings'){drawLayouts();$('layout-profiles').focus();return;}
-      dismiss();$('lobby-profiles').focus({preventScroll:true});
+      dismiss();showLobbyOptions('lobby-profiles');
     };
     if(!window.PlayerProfiles)return waitForDispatch('Player profiles',()=>loadDispatch('PlayerProfiles'),()=>openProfiles(source,slot),back);
     showDialog('profiles','Player profiles','');
@@ -6094,6 +6126,7 @@
       return;
     }
     if(page==='cup-select')return $('cup-back').click();
+    if(page==='lobby' && !$('lobby-options').hidden)return leaveLobbyOptions();
     if (page === 'dispatch-story') $('story-map').click();
     else if (page === 'online-lobby' && !$('online-wait').hidden) showOnline();
     else if (page === 'dispatch-route' || page === 'lobby' || page === 'online-lobby') returnToHome();
@@ -6506,10 +6539,7 @@
     else if (page === 'dispatch-story' && film && !document.hidden && !$('dialog').open) {
       film.tick(dt);
     } else if (page === 'lobby') {
-      if (now - lastPreview > 1 / 24 && !document.hidden && !$('dialog').open) {
-        drawPreview($('preview'), settings, now,lobbyCoats);
-        lastPreview = now;
-      }
+      if (!document.hidden && !$('dialog').open) paintLobby(now);
     } else if (!paused && world?.mode === 'adventure') {
       runAdventure(dt, pads);
     } else if (!paused && world && dialogType!=='finish-film') {
@@ -6957,8 +6987,8 @@
       setFrameMode('armed');
     } else if (hash === '#solo/shield-read-set') startShieldReadMatch(true);
     else if (hash === '#solo/shield-read') startShieldReadMatch();
-    else if (hash === '#solo') {
-      settings.mode = 'solo';
+    else if (hash === '#solo' || hash === '#local') {
+      settings.mode = hash.slice(1);
       editing = 0;
       toLobby();
     }
