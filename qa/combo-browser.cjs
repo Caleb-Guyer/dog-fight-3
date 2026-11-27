@@ -1752,6 +1752,11 @@ async function testDashPressure(page,mobile){
   await hold(['shield']);await page.clock.runFor(1000);await hold([]);
   assert.deepEqual(await page.evaluate(()=>rushStocks),[['brisket',3],['pip',3]]);
   assert(await page.evaluate(()=>rushHits.has('pipDiveKick')));
+  await page.goto(root+'?long-reach#training/dash-pressure/noodle/noodle');
+  await page.locator('#dash-pressure-fight').waitFor();await press('combo-slow');
+  await hold(['attack']);await page.clock.runFor(65);await hold(['shield']);
+  await page.clock.runFor(2300);await hold([]);
+  assert.match(await latest.textContent(),/Lead Sweep · blocked.*Noodle punished with Lead Loop/);
 }
 
 async function testPartnerTraining(page,mobile) {
