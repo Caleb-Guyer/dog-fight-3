@@ -129,6 +129,21 @@ async function testEdges(page, mobile) {
   await waitFor('parriedCorner');
   assert.match(await status.innerText(),/parried.*held the corner/i);
   console.log((mobile ? 'Touch' : 'Keyboard') + ' passed a shield push-off, a deeper block, and a parry on the opposite edge.');
+  await page.goto(root + '#training/light-shield');
+  await page.locator('#edge-light[aria-pressed="true"]').waitFor();
+  await guard(true);await waitFor('heldCorner');await guard(false);
+  const comparison=page.locator('#recovery-tip');
+  assert.match(await comparison.innerText(),/Firm · 33% shield left, 11 frames/);
+  await activate('edge-light');
+  if(mobile){
+    const center=await point(1,'neutral'),shield=await point(2,'shield');
+    await touch('touchStart',[center]);await touch('touchStart',[center,shield]);
+  }else{
+    await page.keyboard.down('ShiftLeft');await guard(true);
+  }
+  await waitFor('caughtLip');await guard(false);
+  if(!mobile)await page.keyboard.up('ShiftLeft');
+  assert.match(await comparison.innerText(),/Firm · 33%.*Light · 52% shield left, 14 frames/);
 }
 async function testTumble(page, mobile) {
   await page.goto(root + '#training/tumble');

@@ -17,7 +17,8 @@ async function play(browser,device){
         else if(key==='left')g.axes[0]=on?-1:0;
         else if(key==='up')g.axes[1]=on?-1:0;
         else if(key==='down')g.axes[1]=on?1:0;
-        else Object.assign(g.buttons[{ok:0,jump:0,pause:9,shield:4,attack:2,special:1,grab:3}[key]],{pressed:on,value:Number(on)});
+        else if(key==='partial')Object.assign(g.buttons[4],{pressed:false,value:on?.45:0});
+        else Object.assign(g.buttons[{ok:0,jump:0,pause:9,shield:4,stickClick:10,attack:2,special:1,grab:3}[key]],{pressed:on,value:Number(on)});
       };
     });
     const choose=async selector=>{
@@ -177,6 +178,18 @@ async function play(browser,device){
     await choose('#route-play');await page.clock.runFor(3800);
     assert.deepEqual(await page.evaluate(()=>[fight.stage,fight.form,fight.dogs[0].kind,fight.dogs[1].kind,fight.stockCount,!!fight.route]),
       ['canal','flat',card.p1,card.p2,card.lives,false]);
+    if(pad){
+      await page.goto('http://127.0.0.1:8080/?shield#training/light-shield');
+      await page.locator('#edge-light[aria-pressed="true"]').waitFor();
+      for(const buttons of [['shield'],['stickClick','shield'],['partial']]){
+        if(buttons[0]!=='shield')await choose('#edge-light');
+        for(const key of buttons)await hold(key,true);
+        await page.clock.runFor(4200);
+        for(const key of buttons)await hold(key,false);
+        assert.equal(await page.locator('#edge-status').getAttribute('data-result'),buttons[0]==='shield'?'heldCorner':'caughtLip',buttons.join(' + '));
+      }
+      assert.match(await page.locator('#recovery-tip').textContent(),/Firm · 33%.*Light · 52%/);
+    }
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
