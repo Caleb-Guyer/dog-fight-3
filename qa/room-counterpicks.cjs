@@ -260,6 +260,7 @@ test('friend rooms and quickplay negotiate air drops and closing boundaries acro
           assert.equal(!!world.groundSpace,old===null);
           assert.equal(!!world.wallSpring,old===null);
           assert.equal(!!world.risingCatch,old===null);
+          assert.equal(!!world.impactTech,old===null);
           assert.equal(!!peer.match.lightGuard,old===null);
           world.startSuddenDeath();
           assert.equal(world.blastBounds(1500).bottom<765,old===null);

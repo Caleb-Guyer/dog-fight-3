@@ -86,7 +86,7 @@ async function play(browser,device){
     assert((await saved()).includes('guard'));
     await page.goto('http://127.0.0.1:8080/#solo');await choose('#event-matches');
     const board=page.locator('#dialog[data-view=event-board]');await board.waitFor();
-    assert.equal(await board.locator('[data-event-pick]').count(),5);
+    assert.equal(await board.locator('[data-event-pick]').count(),6);
     const layout=await board.evaluate(d=>({width:d.clientWidth,scroll:d.scrollWidth,
       wide:[...d.querySelectorAll('*')].filter(e=>e.getBoundingClientRect().right>d.getBoundingClientRect().right).map(e=>e.id || e.textContent.slice(0,30))}));
     assert(layout.scroll<=layout.width+1,device+' board fits '+JSON.stringify(layout));
@@ -140,7 +140,25 @@ async function play(browser,device){
     assert(await page.evaluate(()=>!!run.risingLedge(run.dogs[0])));
     await hold('grab',true);await page.clock.runFor(75);await hold('grab',false);
     assert(await page.evaluate(()=>run.caught));await hold('right',true);await page.clock.runFor(2100);await hold('right',false);await result(true);
-    await choose('#event-board');await choose('[data-event-pick=high-ground]');
+    await choose('#event-board');await choose('[data-event-pick=hold-the-bench]');
+    const benchRecord=()=>page.evaluate(()=>localStorage.getItem('dog-fight-3.event-best.hold-the-bench'));
+    for(const guided of [true,false]){
+      await start('#event-guide');await to(12);
+      if(guided){
+        await page.clock.runFor(650);
+        assert.deepEqual(await page.evaluate(()=>[run.matchFrames,run.dogs[0].tumble.pending]),[12,true]);
+        assert.match(await page.locator('#match-set').textContent(),/Hold Down and tap Shield/);
+      }
+      await hold('down',true);await hold('shield',true);await to(21);
+      await hold('shield',false);await hold('down',false);await to(35);
+      await hold('attack',true);await to(38);await hold('attack',false);await result(true);
+      assert.equal(await page.evaluate(()=>run.matchCard.players[0].techs),1);
+      if(guided)assert.equal(await benchRecord(),null);
+      else assert(Number(await benchRecord())>0);
+    }
+    await choose('#event-normal');await page.clock.runFor(2700);
+    assert.match(await page.locator('#match-mode').textContent(),/Solo.*Rival/);
+    await page.goto('http://127.0.0.1:8080/?bench#solo/events/high-ground');await board.waitFor();
     await choose('#event-play');await page.clock.runFor(2600);await choose('#pause');
     assert.match(await page.locator('#dialog-title').textContent(),/High Ground paused/);
     await choose('#event-board');await choose('#event-back');assert(await page.locator('#event-matches').evaluate(b=>document.activeElement===b));

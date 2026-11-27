@@ -12,6 +12,11 @@ module.exports=function liftInput(frame,world) {
       if(!pip.jumps){input.y=-1;input.special=frame%4===0;}
     }
   }else if(!opponent.absent){
+    // Guard a close tech instead of swinging into the rival's protected get-up.
+    if(pip.ground>=0 && gap<120 && ['tech','techRoll'].includes(opponent.floorAction?.type)){
+      input.shield=true;
+      return input;
+    }
     // Hold the lip when Clover throws from outside. Her disc can bring her back over Pip.
     const outside=opponent.x<deck.x1 || opponent.x>deck.x2;
     if(opponent.kind==='clover' && outside && pip.ground>=0 && (pip.x<deck.x1+100 || pip.x>deck.x2-100)){

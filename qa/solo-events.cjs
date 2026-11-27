@@ -59,6 +59,25 @@ function atLip(w,slot,side,depth){
   const f=w.dogs[slot],floor=w.terrain[0],lip=side<0?floor.x1:floor.x2;
   Object.assign(f,{ground:-1,x:lip+side*24,y:floor.y+depth,jumps:0,face:-side,ledgeLock:f.kind==='noodle'?.085:0});
 }
+test('Hold the Bench waits at actual contact, then requires a damaging counter and keeps separate practice and scored runs',()=>{
+  const id='hold-the-bench',store=new Map(),disk={getItem:k=>store.get(k),setItem:(k,v)=>store.set(k,v)};
+  const control=n=>({y:n>=12 && n<21?1:0,shield:n===12,attack:n===35});
+  const guide=new Run(setup(id,false,42,true),undefined,seededRandom(42));
+  for(let n=0;n<120;n++)guide.step(1/60,idleInput,idleInput);
+  assert.equal(guide.matchFrames,12);assert(guide.dogs[0].tumble.pending);
+  const parked=guide.clockFrames;
+  for(let n=0;n<10;n++)guide.step(1/60,{...idleInput,y:1},idleInput);
+  assert.equal(guide.clockFrames,parked);
+  for(let n=12;n<70 && guide.end===null;n++)guide.step(1/60,{...idleInput,...control(n)},idleInput);
+  assert.equal(guide.end,0);assert(guide.planted);guide.save(disk);assert.equal(best(disk,id),Infinity);
+  assert.match(play(id).feedback,/left the bench/);assert.match(play(id,()=>({shield:true})).feedback,/guarded/);
+  const scored=play(id,control);assert.equal(scored.end,0);scored.save(disk);assert.equal(best(disk,id),scored.matchFrames);
+  assert.equal(scored.matchCard.players[0].techs,1);
+  const normal=new Battle(setup(id,true),undefined,seededRandom(42));
+  for(let n=0;n<scored.matchFrames;n++)normal.step(1/60,{...idleInput,...control(n)},idleInput);
+  assert.deepEqual(normal.dogs.map(f=>f.damage),scored.dogs.map(f=>f.damage));
+  assert.deepEqual(normal.dogs.map(f=>f.stocks),[3,3]);assert.equal(normal.end,null);
+});
 test('all four rising specials can take either lip from either seat and older rules keep moving',()=>{
   for(const kind of Object.keys(window.DogFight.fighters))for(const slot of [0,1])for(const side of [-1,1])for(const enabled of [true,false]){
     let tick=0,reach,hang;

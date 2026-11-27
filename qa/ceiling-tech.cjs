@@ -40,6 +40,79 @@ const config = {mode:'local', stage:'picnic', p1:'noodle', p2:'pip', fetch:false
 const input = (changes={}) => ({...idleInput,...changes});
 const hull = {picnic:30, laundry:225, bandstand:45, nightmail:114, canal:126};
 
+function shallowHit(w,slot,{floor=1,face=1,gap=0,beyond=false,drop=false,angle=24,base=410,name='heavy',meteor=0}={}){
+  const f=w.dogs[slot],p=w.terrain[floor],owner=w.dogs[1-slot];
+  Object.assign(f,{x:beyond?p.x2+3:(p.x1+p.x2)/2,y:p.y-gap,ground:gap===0 && !beyond?floor:-1,damage:30});
+  if(drop){f.drop=.15;f.dropPlatform=floor;}
+  w.hit(f,owner,8,base,4.5,0,name,face,{x:f.x,y:f.y-15},{angle,hard:true,meteor},'bench');
+  return f;
+}
+test('all four dogs can catch solid decks and thin lifts at impact, planting or rolling in either direction on either port',()=>{
+  for(const kind of Object.keys(fighters))for(const floor of [0,1])for(const slot of [0,1])for(const dir of [-1,0,1]){
+    const caught=[],w=new Battle({...config,p1:kind,p2:kind,stage:'canal'},(n,e)=>{if(n==='impactTech')caught.push([e.floor,e.dir]);},seededRandom(7));
+    const f=shallowHit(w,slot,{floor,face:slot?-1:1}),damage=f.damage;
+    assert(damage>30 && f.tumble?.pending && w.hitStop>0);
+    while(w.hitStop>0){
+      const a=input({x:dir,y:1,shield:w.hitStop<=tick+1e-8});
+      w.step(tick,slot?idleInput:a,slot?a:idleInput);
+    }
+    assert.deepEqual(caught,[[floor,dir]]);
+    assert.deepEqual([f.damage,f.ground,f.y,f.stun,f.tumble,f.techBuffer,f.floorAction.type,f.floorAction.dir],
+      [damage,floor,w.terrain[floor].y,0,null,0,dir?'techRoll':'tech',dir]);
+    assert(f.invuln>0);assert.equal(w.matchCard.players[slot].techs,1);
+  }
+});
+test('impact tech checks actual floor reach, launch speed and angle, collision type, fresh Shield and held Down',()=>{
+  for(const spec of [{gap:27},{gap:-4},{beyond:true},{drop:true},{angle:70},{base:1100},{name:'throw'},
+    {meteor:12,angle:-35},{y:0},{lock:true},{wasHeld:true},{late:true},{enabled:false}]){
+    const caught=[],w=new Battle({...config,impactTech:spec.enabled!==false},n=>{if(n==='impactTech')caught.push(n);},seededRandom(7));
+    const f=shallowHit(w,0,spec);
+    if(spec.lock)f.techLock=.4;
+    if(spec.wasHeld)f.prev=input({shield:true});
+    while(w.hitStop>0)w.step(tick,input({y:spec.y??1,shield:!spec.late}),idleInput);
+    if(spec.late)w.step(tick,input({y:1,shield:true}),idleInput);
+    assert.deepEqual(caught,[],JSON.stringify(spec));assert.equal(w.matchCard.players[0].techs,0);
+  }
+});
+test('Rival can press on release if it read the hit and has Shield available',()=>{
+  for(const cpuLevel of ['rookie','rival'])for(const read of [true,false])for(const locked of [true,false]){
+    const w=new Battle({...config,mode:'solo',cpuLevel},undefined,seededRandom(7));
+    const f=shallowHit(w,1);f.tumble.willTech=read;if(locked)f.techLock=.4;
+    while(w.hitStop>0)w.step(tick,idleInput);
+    assert.equal(!!f.floorAction,cpuLevel==='rival' && read && !locked);
+  }
+});
+test('late Shield packets rewind a predicted launch to exactly one floor tech on either seat',()=>{
+  const pose=w=>w.dogs.map(f=>[f.x,f.y,f.vx,f.vy,f.ground,f.damage,f.floorAction?.type,f.invuln,w.matchCard.players[f.index].techs]);
+  for(const slot of [0,1]){
+    const ref=new Battle(config,undefined,seededRandom(7));shallowHit(ref,slot);
+    const peers=[0,1].map(side=>{
+      let world;const sent=[];
+      const s=new window.DogOnline.OnlineSession({start(c,r){world=new Battle(c,undefined,r);}});
+      s.impactTech=true;s.side=side;s.send=p=>{if(p[0]==='input')sent[p[2]]=p[3];};
+      s.beginRound(['start',1,config.p1,config.p2,config.stage,7]);
+      for(const w of [world,s.match.confirmedWorld])shallowHit(w,slot);
+      return {world,net:s.match,sent};
+    });
+    const history=[pose(ref)];let predictedLaunch=false;
+    for(let n=0;n<25;n++){
+      const pair=[idleInput,idleInput];pair[slot]=input({y:n<10?1:0,shield:n===5});
+      ref.step(tick,...pair);history.push(pose(ref));
+      for(const [side,p] of peers.entries()){
+        if(n>=4)p.net.receive(n-4,peers[1-side].sent[n-4]);p.net.tick(()=>pair[side],p.world);
+        if(side!==slot && ref.dogs[slot].floorAction && p.world.dogs[slot].tumble?.fromHit)predictedLaunch=true;
+        assert.deepEqual(pose(p.net.confirmedWorld),history[p.net.confirmed]);
+      }
+    }
+    assert(predictedLaunch);assert.equal(ref.matchCard.players[slot].techs,1);
+    for(const [side,p] of peers.entries()){
+      const other=peers[1-side].sent;for(let n=p.net.received;n<other.length;n++)p.net.receive(n,other[n]);
+      p.net.confirm(p.world);assert.deepEqual(pose(p.world),pose(ref));
+    }
+    ref.copyFightFrom(new Battle({...config,impactTech:false}));assert(!ref.impactTech);
+  }
+});
+
 function intoBrick(w,slot,dir){
   const f=w.dogs[slot],x=dir===1?511:689;
   Object.assign(f,{x:x+dir*(f.stats.width+5),y:534+f.stats.height*.52,vx:-dir*480,vy:-10,

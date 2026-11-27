@@ -139,8 +139,11 @@ test('a named take rebuilds the recorded matchup and every combat frame at the s
   const card=lab.capture(source);
   card.name='Mina’s return 🐶';
   const code=lab.encode(card),copy=lab.decode(code);
-  assert.deepEqual(copy.config,{p1:c.p1,p2:c.p2,stage:c.stage,coats:c.coats,shieldPogo:false,aimedDrive:true,groundSpace:true,wallSpring:true,risingCatch:true});
+  assert.deepEqual(copy.config,{p1:c.p1,p2:c.p2,stage:c.stage,coats:c.coats,shieldPogo:false,aimedDrive:true,groundSpace:true,wallSpring:true,risingCatch:true,impactTech:true});
   const old=JSON.parse(Buffer.from(code,'base64url').toString());
+  old.pop();old[0]=5;
+  const v5=lab.decode(Buffer.from(JSON.stringify(old)).toString('base64url'));
+  assert(v5.config.risingCatch && !v5.config.impactTech);
   old.pop();old[0]=4;
   const v4=lab.decode(Buffer.from(JSON.stringify(old)).toString('base64url'));
   assert(v4.config.wallSpring && !v4.config.risingCatch);
