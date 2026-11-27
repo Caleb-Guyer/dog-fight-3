@@ -19,13 +19,15 @@
     enemy.duration = duration;
   }
   class DispatchRun extends Battle {
-    constructor({ chapter = 1, room = 0, checkpoint = 0, stamps = 0, atCheckpoint = null, cupFighter, coat = 0 }, emit = () => {}) {
+    constructor({ chapter = 1, room = 0, checkpoint = 0, stamps = 0, atCheckpoint = null, cupFighter, coat = 0, duo }, emit = () => {}) {
       const {rooms, chapterFighter, bonus} = chapters[chapter-1];
       const sideRoute = !!bonus && room===bonus.id;
       const script = sideRoute ? bonus : rooms[room], saved = script.checkpoints[checkpoint - 1];
       const bridge = script.signals ? new window.DispatchBridge(script, checkpoint) : null;
       const layout = bridge ? { ...script, terrain: bridge.geometry(0) } :
         sideRoute ? {...script,terrain:script.terrain.map(p=>({...p}))} : script;
+      if (duo && script.rules !== 'boss') throw new Error('Depot doubles needs the Copper Hound arena');
+      if (duo) cupFighter = duo.p1;
       const cupBoss = script.rules === 'boss' && Object.hasOwn(window.DogFight.fighters,cupFighter);
       super({ stage: 'dispatch', layout, mode: 'adventure', p1: cupBoss ? cupFighter : chapterFighter, p2: 'brisket', fetch: false }, emit);
       this.random=window.DogFight.seededRandom(Math.floor(this.random()*0x100000000));
@@ -56,12 +58,27 @@
         }
         this.park(this.dogs[1]);
       } else this.startWave();
+      if (duo) {
+        const partner = { kind: duo.p2, index: 2, stocks: fightStocks };
+        this.spawn(partner, false);
+        partner.x = script.start - 105;
+        partner.face = runner.face;
+        this.dogs.push(partner);
+        this.team = [runner, partner];
+        this.teamCoats = this.team.map((_, i) => window.DogFight.coatFor(i, duo.p1, duo.p2, duo.coats));
+        this.foes[0].hp = this.foes[0].maxHP = 280;
+      }
       this.cameraWidth = 1200;
       this.cameraX = this.cameraTarget();
     }
     cameraTarget() {
       const travel = this.layout.length - this.cameraWidth, hero = this.dogs[0];
       if (travel <= 0) return travel / 2;
+      if (this.team) {
+        const live = this.dogs.filter(f => !f.absent);
+        const positions = live.map(f => f.x);
+        return clamp((Math.min(...positions) + Math.max(...positions) - this.cameraWidth) / 2, 0, travel);
+      }
       if (this.bridge) return clamp(hero.x - this.cameraWidth * 0.37, 0, travel);
       const rivals = this.opponents(hero);
       const nearest = rivals.reduce((best, f) =>
@@ -69,7 +86,8 @@
       const lead = nearest ? clamp((nearest.x - hero.x) / 2, -this.cameraWidth * 0.21, this.cameraWidth * 0.21) : 0;
       return clamp(hero.x + lead - this.cameraWidth / 2, 0, travel);
     }
-    coatFor(slot) { return slot === 0 ? this.cupCoat : 0; }
+    coatFor(slot) { return this.teamCoats && slot !== 1 ? this.teamCoats[slot / 2] : slot === 0 ? this.cupCoat : 0; }
+    get hasSecondPlayer() { return !!this.team; }
     rehearseBoss(move, emit) {
       if (this.layout.rules !== 'boss' || !['stamp', 'charge', 'bell'].includes(move)) return null;
       const run = new DispatchRun({chapter: this.chapter, room: this.roomIndex}, emit);
@@ -99,8 +117,8 @@
         if (boss.phase === 'windup' && boss.move === 'bell') return 'Bell winding up · Jump the floor wave or shield.';
         if (boss.phase === 'windup' && boss.move === 'stamp') return 'Paw raised · Shield the stamp or step out of reach.';
         if (boss.phase === 'windup' && boss.move === 'charge') return 'Charge winding up · Jump the rush or hold Shield.';
-        const wave = boss.wavefront, hero = this.dogs[0];
-        if (wave && !wave.spent && wave.radius <= Math.abs(hero.x - wave.x) + hero.stats.width + 10)
+        const wave = boss.wavefront;
+        if (wave && this.opponents(boss.f).some(hero => !this.spentOn(wave,hero) && wave.radius <= Math.abs(hero.x - wave.x) + hero.stats.width + 10))
           return 'Floor wave · Jump over the brass crest.';
         if (boss.phase === 'stun') return 'Lamp open · Hit the Copper Hound!';
       }
@@ -118,10 +136,19 @@
       return isDog(f.encounter?.kind);
     }
     opponents(f) {
+      if (this.team) {
+        if (f.absent) return [];
+        if (f.encounter) return this.team.filter(dog => !dog.absent);
+        return this.foes[0].f.stocks ? [this.foes[0].f] : [];
+      }
       if (f.index) return f.absent ? [] : [this.dogs[0]];
       return this.foes.filter((e) => e.f.stocks > 0 && !e.f.absent).map((e) => e.f);
     }
     separateGroundedFighters() {
+      if (this.team) {
+        for (const hero of this.opponents(this.foes[0].f)) super.separateGroundedFighters(hero, this.foes[0].f);
+        return;
+      }
       const bodies = [this.dogs[0], ...this.opponents(this.dogs[0])];
       for (let i = 0; i < bodies.length; i++)
         for (let j = i + 1; j < bodies.length; j++) super.separateGroundedFighters(bodies[i], bodies[j]);
@@ -141,6 +168,7 @@
       f.encounter = e;
       if (returning && isDog(e.kind)) this.beginStockReturn(f);
       Object.assign(e, { cycle: 0, move: 'stamp', face: f.face, spent: false, hurt: 0, jumpHold: 0 });
+      if (this.team) e.contacts = 0;
       if (e.kind === 'conductor') { e.wavefront = null; e.nextBell = 0; }
       phase(e, 'approach', 1);
     }
@@ -190,15 +218,17 @@
       for (const f of out) {
         if (f.encounter?.kind === 'conductor' && f.encounter.hp > 0) continue;
         if (f.stocks <= 0) {
+          if (this.team?.includes(f)) { this.park(f); continue; }
           if (!f.index) { this.finished = 'fallen'; continue; }
           this.park(f);
           this.emit('machineDown', { f, kind: f.encounter.kind });
-        } else if (f.index) this.placeOpponent(f.encounter, true);
+        } else if (f.encounter) this.placeOpponent(f.encounter, true);
         else {
-          this.spawn(hero, true);
+          this.spawn(f, true);
           delete this.lastBossHit;
         }
       }
+      if (this.team?.every(f => !f.stocks)) this.finished = 'fallen';
       if (tie) this.emit('stockTie', { f: hero });
     }
     dealDamage(target, amount, preserveCombo) {
@@ -239,7 +269,12 @@
       if (owner.encounter?.kind === 'conductor') phase(owner.encounter, 'stun', 1.25);
     }
     machineInput(e, dt) {
-      const { f, kind } = e, hero = this.dogs[0];
+      const { f, kind } = e;
+      const hero = this.team ? this.opponents(f).reduce((best, dog) => {
+        const distance = target => Math.hypot(target.x - f.x, target.y - f.y) + (target.stockLift || target.stockGuard ? this.stageWidth : 0);
+        return !best || distance(dog) < distance(best) ? dog : best;
+      }, null) : this.dogs[0];
+      if (!hero) return idleInput;
       if (!f.stocks || (f.respawning && !f.stockLift) || (kind === 'conductor' && e.hp <= 0)) return idleInput;
       if (isDog(kind)) return this.cpu(dt);
       if (f.grip || f.impactLag > 1e-8) return idleInput;
@@ -282,6 +317,7 @@
         }
         e.move = bell ? 'bell' : rush ? 'charge' : 'stamp';
         e.spent = false;
+        if (this.team) e.contacts = 0;
         phase(e, 'windup', bell ? 0.9 : boss && rush ? 0.93 : body.windup);
         this.emit('machineWindup', { f, kind, move: e.move });
       } else if (e.phase === 'windup' && e.time >= e.duration) {
@@ -309,10 +345,15 @@
       }
       return idleInput;
     }
-    machineContact(e) {
-      const { f, kind } = e, hero = this.dogs[0];
+    spentOn(move, hero) { return this.team ? !!(move.contacts & (1 << hero.index)) : move.spent; }
+    markContact(move, hero) {
+      if (this.team) move.contacts = (move.contacts || 0) | (1 << hero.index);
+      else move.spent = true;
+    }
+    machineContact(e, hero = this.dogs[0]) {
+      const { f, kind } = e;
       if (e.move === 'bell') return;
-      if (e.phase !== 'strike' || e.spent || !f.stocks || f.respawning || f.stun > 0 || f.grip || f.ground < 0) return;
+      if (e.phase !== 'strike' || this.spentOn(e,hero) || !f.stocks || f.respawning || f.stun > 0 || f.grip || f.ground < 0) return;
       if (hero.stockLift || hero.stockGuard) return;
       const body = machines[kind], boss = kind === 'conductor', rush = e.move === 'charge';
       const dx = (hero.x - f.x) * e.face;
@@ -321,18 +362,22 @@
         y: f.y + (6 - high) / 2, ry: (high + 6) / 2 });
       if (!guard && (dx < back - hero.stats.width || dx > front + hero.stats.width ||
           hero.y - hero.stats.height > f.y + 6 || hero.y < f.y - high)) return;
-      e.spent = true;
+      this.markContact(e,hero);
       this.hit(hero, f, boss && rush ? 13 : body.damage, body.base, body.growth, 0,
         boss ? 'heavy' : 'jab', e.face, guard || { x: hero.x, y: hero.y - hero.stats.height * 0.55 },
         { angle: rush ? 29 : boss ? 62 : 42, hard: boss || kind === 'porter' }, null, null, !!guard);
     }
     advanceBell(e, dt) {
-      const wave = e.wavefront, floor = this.terrain[0], hero = this.dogs[0];
+      const wave = e.wavefront, floor = this.terrain[0];
       const previous = wave.radius;
       wave.radius += 430 * dt;
+      for (const hero of this.opponents(e.f)) this.bellContact(e, wave, floor, previous, hero);
+      if (wave.radius > Math.max(wave.x - floor.x1, floor.x2 - wave.x)) e.wavefront = null;
+    }
+    bellContact(e, wave, floor, previous, hero) {
       const face = hero.x < wave.x ? -1 : 1;
       const edge = face < 0 ? wave.x - floor.x1 : floor.x2 - wave.x;
-      if (!wave.spent && previous <= edge && !hero.stockLift && !hero.stockGuard) {
+      if (!this.spentOn(wave,hero) && previous <= edge && !hero.stockLift && !hero.stockGuard) {
         // Sweep the short distance between ticks and truncate the wave at the stage lip.
         const front = Math.min(edge, wave.radius + 10), back = Math.max(0, previous - 10);
         const x = wave.x + face * (back + front) / 2, rx = (front - back) / 2;
@@ -340,12 +385,11 @@
         const guard = shieldContact(hero, area);
         if (guard || (Math.abs(hero.x - x) <= rx + hero.stats.width &&
             hero.y >= floor.y - 22 && hero.y - hero.stats.height <= floor.y)) {
-          wave.spent = true;
+          this.markContact(wave,hero);
           this.hit(hero, e.f, 10, 195, 4.1, 0, 'heavy', face, guard || { x, y: area.y },
             { angle: 52, hard: true, projectile: true }, null, null, !!guard);
         }
       }
-      if (wave.radius > Math.max(wave.x - floor.x1, floor.x2 - wave.x)) e.wavefront = null;
     }
     savePoint() {
       this.checkpoint++;
@@ -356,7 +400,7 @@
       this.emit('dispatchCheckpoint', { f, checkpoint: this.checkpoint, atCheckpoint: this.atCheckpoint });
     }
     awardMark() {
-      if(this.sideRoute)return;
+      if(this.sideRoute || this.team)return;
       const bit = 1 << this.roomIndex;
       if (this.stamps & bit) return;
       this.stamps |= bit;
@@ -386,7 +430,7 @@
           this.emit('machineDown', { f, kind: e.kind });
         } else if (machines[e.kind]) {
           if (e.wavefront) this.advanceBell(e, dt);
-          this.machineContact(e);
+          for (const hero of this.opponents(f)) this.machineContact(e,hero);
         }
       }
       if (this.bossLesson) {
@@ -410,7 +454,7 @@
       this.startWave();
       this.emit('dispatchWave', { f: this.dogs[0], wave: this.wave + 1 });
     }
-    step(dt, input = idleInput) {
+    step(dt, input = idleInput, partner = idleInput) {
       if (this.finished) return;
       if(this.sideRoute && !this.clearDelay)this.runFrames++;
       if (this.clearDelay > 0) {
@@ -430,7 +474,7 @@
       }
       if (this.bridge && !frozen) this.layout.terrain = this.bridge.geometry(dt, this.dogs[0]);
       const inputs = this.foes.length && !frozen ? this.foes.map((e) => this.machineInput(e, dt)) : idleInput;
-      super.step(dt, input, inputs);
+      super.step(dt, input, this.team ? [inputs[0] || idleInput, partner] : inputs);
       if (frozen || this.finished) return;
       if (this.bridge) this.updateCrossing();
       else this.updateFight(dt);

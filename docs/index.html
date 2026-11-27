@@ -17,13 +17,13 @@
     <script defer id="menu-controls" src="./runtime/controls.js?v=a9ac2240ce6c6212"></script>
     <script defer src="./runtime/fighters-art.js?v=2a67aa3b59f1ffbb"></script>
     <script defer src="./runtime/arena-art.js?v=6412e724dc033974"></script>
-    <script defer src="./runtime/engine.js?v=c9cf66b0d4e1dfb3"></script>
+    <script defer src="./runtime/engine.js?v=420926a9ce741d6e"></script>
     <script defer src="./runtime/fight-records.js?v=010ed689ac0ca56e"></script>
     <script defer src="./runtime/fight-school.js?v=1e8cbe0364b1c985"></script>
     <script defer src="./runtime/arcade.js?v=752f452c86948de5"></script>
     <script defer src="./runtime/render.js?v=c8e5f7636f38fe3b"></script>
     <script defer src="./runtime/dispatch-script.js?v=fa8d7f4ec9df9201"></script>
-    <script defer src="./runtime/app.js?v=b82f668db22509c5"></script>
+    <script defer src="./runtime/app.js?v=f9d2126d58938883"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -446,6 +446,7 @@
             <span class="deck-rule" aria-hidden="true"></span>
             <button id="lobby-random" class="utility move-link" type="button">Random dog</button>
             <button id="pick-together" class="utility move-link" type="button" aria-haspopup="dialog" hidden>Pick together</button>
+            <button id="depot-duo" class="utility move-link" type="button" aria-haspopup="dialog" hidden>Co-op boss fight</button>
             <button id="winner-stays" class="utility move-link" type="button" aria-haspopup="dialog" hidden>Winner stays</button>
             <button id="tournament" class="utility move-link" type="button" aria-haspopup="dialog" hidden>Tournament</button>
             <button id="lobby-coat" class="utility move-link" type="button" aria-haspopup="dialog">Coat</button>
@@ -550,6 +551,7 @@
                 <strong class="percentage" id="rival-percent"></strong>
                 <span class="lives" id="rival-lives" role="img"></span>
               </span>
+              <small id="duo-armor" hidden>Copper Hound armor</small>
               <progress id="machine-health" aria-label="Copper Hound armor" hidden></progress>
             </div>
             <span id="dispatch-notice" hidden></span>
