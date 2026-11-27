@@ -1178,6 +1178,8 @@
     up: 'Up + Special',
     down: 'Down + Special',
     'down-air': 'Down + Attack in midair',
+    'land-neutral':'Neutral air landing','land-forward':'Forward air landing','land-back':'Back air landing',
+    'land-up':'Up air landing','land-down':'Down air landing',
   };
   function showMoves(kind, section='air', fromPause=dialogType==='moves'?backToPause:dialogType==='pause',focusSide) {
     if(!window.MoveGuide)return waitForDispatch(fighters[kind].name+' moves',()=>loadDispatch('MoveGuide'),
@@ -1191,7 +1193,7 @@
   $('lobby-moves').onclick = () => showMoves(settings[editing ? 'p2' : 'p1']);
   $('training-moves').onclick = () => showMoves(world.dogs[world.trainingPlayerSlot].kind);
   function backToMoveCard(source){
-    showMoves(source.kind,source.side==='down-air'?'air':'specials',source.paused,source.side);
+    showMoves(source.kind,source.side==='down-air' || source.side.startsWith('land-')?'air':'specials',source.paused,source.side);
   }
   function showSpecialPreview(source){
     const {kind,side}=source,school=window.FighterSchool;
@@ -4369,7 +4371,7 @@
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=button-check-1',
     ComboLab:'combo-lab.js?v=compare-defenses-1', FinishTools:'finish-tools.js?v=launch-aim-1',
-    MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
+    MoveGuide:'move-guide.js?v=landing-study-1', FighterSchool:'fighter-lessons.js?v=landing-study-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-practice-1', DispatchView:'dispatch-view.js?v=launch-rescue-1',

@@ -3441,8 +3441,32 @@
     return 6 + Math.min(2, Math.floor(3 * (tick - last - 1) / (total - last - 2)));
   }
 
+  // The planted foot, weight and striking limb carry the airborne silhouette into touchdown.
+  const aerialLandings = {
+    pipSpinLand:{bodyY:4,torsoTurn:-14,fistX:-4,rearX:7,kneeOut:3},
+    pipDiveKickLand:{bodyX:2,bodyY:3,torsoTurn:-10,rightX:9,leftX:-4,fistY:-4},
+    pipBackKickLand:{bodyX:-2,bodyY:4,torsoTurn:12,leftX:-9,rightX:2,ear:-3},
+    pipFlipLand:{bodyY:4,headTurn:-17,torsoTurn:7,rightX:4,rearY:-6},
+    pipPogoLand:{bodyY:6,kneeOut:7,headY:2,fistX:4,rearX:-5,tailLift:3},
+    brisketCurlLand:{bodyY:7,shoulderY:3,headTurn:13,kneeOut:5,rearX:5},
+    brisketRamLand:{bodyX:4,bodyY:5,torsoTurn:16,shoulderLead:4,leftX:-6,rightX:5},
+    brisketHipLand:{bodyX:-4,bodyY:6,torsoTurn:-15,leftX:-7,rearY:-4},
+    brisketCrownLand:{bodyY:5,headTurn:-18,fistY:-8,rearY:-7,kneeOut:5},
+    brisketDropLand:{bodyY:8,headY:3,shoulderY:3,kneeOut:8,fistY:4,rearY:4},
+    noodleCoilLand:{bodyY:4,torsoTurn:-16,headX:2,tailLift:6,leftX:-3},
+    noodleCastLand:{bodyX:3,bodyY:3,torsoTurn:12,fistX:9,headX:2,leftX:-4},
+    noodleTailLand:{bodyX:-3,bodyY:3,torsoTurn:-11,tailLift:8,rightX:4},
+    noodleLoopLand:{bodyY:4,headTurn:-15,fistY:-8,rearY:-3,leftX:-4},
+    noodleHookLand:{bodyY:5,torsoTurn:11,headTurn:9,fistY:7,rearY:-4},
+    cloverOrbitLand:{bodyY:4,torsoTurn:-13,fistX:6,rearX:-7,charmTurn:23},
+    cloverForeLand:{bodyX:2,bodyY:4,torsoTurn:14,fistX:8,leftX:-4,charmTurn:17},
+    cloverBackLand:{bodyX:-2,bodyY:4,torsoTurn:-16,rearX:-8,rightX:5},
+    cloverVolleyLand:{bodyY:3,torsoTurn:-7,headTurn:-12,fistY:-10,rightX:4},
+    cloverSkipLand:{bodyY:5,torsoTurn:13,fistY:7,fistX:4,leftX:-5,charmTurn:-20},
+  };
   function frameNumber(pose, time, phase, name = 'pip', backRoll = false) {
     const tick = (period) => Math.floor((Math.abs(time) % 1000000) * period);
+    if (Object.hasOwn(aerialLandings,pose)) return Math.min(3,Math.floor(phase*4));
     if (pose === 'ledgeRoll') return ledgeRollFrame(name, phase);
     if (pose === 'ledgeClimb') return Math.round(phase * (window.DogFight?.kits[name].ledgeClimb.total || 26));
     if (pose === 'ledgeTrump') return Math.min(5, Math.round(phase * 5 + 1e-7));
@@ -4812,6 +4836,13 @@
       foldEars: false,
       behindHead: false,
     };
+    if (Object.hasOwn(aerialLandings,pose)) {
+      const weight=[1,.82,.52,.28][frame];
+      for (const [joint,offset] of Object.entries(aerialLandings[pose])) s[joint]+=Math.round(offset*weight);
+      s.guardFloor=true;
+      s.scarf=Math.round(-4*weight);
+      return s;
+    }
     if (Object.prototype.hasOwnProperty.call(kitMoves, pose)) {
       kitStance(s, name, pose, frame);
       return s;
@@ -5904,6 +5935,7 @@
     'rise',
     'win',
     ...landingPoses,
+    ...Object.keys(aerialLandings),
     ...shieldPoses,
     ...airDodgePoses,
     ...captivePoses,

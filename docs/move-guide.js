@@ -161,7 +161,8 @@
         '. Elsewhere in the move it takes 2.' : '') +
       '</span>'+((category==='specials' || category==='air' && direction==='down')?
         '<button type="button" class="utility" '+(category==='specials'?'data-watch-special="'+direction+'" ':'')+
-        'data-watch-move="'+(category==='specials'?direction:'down-air')+'" aria-label="Watch '+move.label+'">Watch move</button>':'')+'</div></li>'
+        'data-watch-move="'+(category==='specials'?direction:'down-air')+'" aria-label="Watch '+move.label+'">Watch move</button>':'')+
+      (category==='air'?'<button type="button" class="utility" data-watch-move="land-'+direction+'" aria-label="Compare '+move.label+' landings">Compare landings</button>':'')+'</div></li>'
     );
   }
   function moveGuide(kind,section,{keyFor,padFor,strikeKeys,specialInputs}) {

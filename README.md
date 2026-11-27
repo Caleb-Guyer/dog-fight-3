@@ -1,5 +1,7 @@
 # Dog Fight 3
 
+In **Move list → Attacks**, choose **Compare landings** beside any aerial. Watch the same swing with Shield pressed before or after touchdown. **Go to touchdown** pauses on the contact frame. Step forward until the shield appears to see how long that dog is open. Choose **Practice this landing** from home or fighter select to time the cancel yourself. Try Brisket’s Belly Drop, which takes 18 frames to recover normally and nine with a timed Shield press. [Practice Belly Drop’s landing](https://caleb-guyer.github.io/dog-fight-3/#moves/brisket/land-down)
+
 When you return to the main menu with a saved game, you can press **Continue** while the game downloads. It opens your most recent lesson, fight, mission, Cup run, or local tournament. A suspended first match brings back both dogs, the clock and the stocks. Press **Esc** or the controller’s Back button during startup to cancel your choice. [Continue playing](https://caleb-guyer.github.io/dog-fight-3/)
 
 **Solo → Event Matches** has three short fights. In **Wrong Way**, land in place as Pip and jab Brisket when his sweep misses. In **High Ground**, drop from the lift as Clover and hold Bandstand’s top perch for three seconds while Brisket tries to take it. In **Last Delivery**, play Brisket and erase Pip’s one-point lead before the ten-second horn. Each event keeps your fastest clear on this device. Choose **Replay opening as a match** to take the same situation into regular versus play. [Open Event Matches](https://caleb-guyer.github.io/dog-fight-3/#solo/events)
