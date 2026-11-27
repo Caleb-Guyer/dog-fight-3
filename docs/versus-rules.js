@@ -261,6 +261,9 @@
         '<button class="utility" data-do="dash-back-watch">Face Rival Pip as Brisket</button></div>' +
         '<p>Pip has seen Haymaker miss once. Hold Smash through GO, watch his front foot, then release as he steps toward you. Wait too long and he can grab you.</p>' +
         '<button class="utility" data-do="dash-back-delay">Catch Pip stepping in</button>' +
+        '<h3>Change your landing</h3><p>You are falling onto the train roof. Rival has seen the same tech twice. Tap Shield just before landing. Center the stick to plant, or hold a side to roll. The fight continues for three stocks.</p>'+
+        '<div class="dialog-actions"><button class="utility" data-do="landing-read" data-landing-read="stay">Rival expects you to stay</button>'+
+        '<button class="utility" data-do="landing-read" data-landing-read="through">Rival expects a roll through</button></div>'+
         '<p>Escape Brisket’s grab at GO. On the top platform, steer across his up throw and air-dodge toward open ground. At the ledge, try a quick jab before his paws close.</p>' +
         '<div class="dialog-actions"><button class="utility" data-do="throw-read-perch">Top platform · 110%</button>' +
         '<button class="utility" data-do="throw-read-edge">Left ledge · 80%</button></div>') + ledgeChoices;
