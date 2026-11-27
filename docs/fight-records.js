@@ -11,7 +11,9 @@
     if (!entry || !count(entry.time) || entry.time>8.64e15 || !count(entry.round) || !slot(entry.winner) || !slot(entry.side) ||
       !Object.hasOwn(arenas,entry.stage) || !Object.hasOwn(stageForms,entry.form) ||
       !['solo','local','online','cup','school'].includes(entry.mode)) return false;
-    const c=entry.card;
+    return validCard(entry.card);
+  }
+  function validCard(c){
     return c && Array.isArray(c.players) && c.players.length===2 && c.players.every(p=>p &&
       Object.hasOwn(fighters,p.kind) && validCoat(p.coat) && number(p.damage) &&
       ['hits','blocks','parries','techs','knockdowns','shieldBreaks'].every(k=>count(p[k]))) &&
@@ -98,5 +100,5 @@
     return {id:'spacing-approach',label:'Practice a landing aerial',
       why:name+' landed '+p.hits+(p.hits===1?' hit':' hits')+' in this game. Work on placing an aerial just before touching down.'};
   }
-  window.FightRecords={Book,coaching,throwLosses,prefix,limit};
+  window.FightRecords={Book,validCard,coaching,throwLosses,prefix,limit};
 })();
