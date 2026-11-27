@@ -41,7 +41,9 @@ async function play(browser,device){
     await page.goto('http://127.0.0.1:8080/#solo');await choose('#event-matches');
     const board=page.locator('#dialog[data-view=event-board]');await board.waitFor();
     assert.equal(await board.locator('[data-event-pick]').count(),3);
-    assert(await board.evaluate(d=>d.scrollWidth<=d.clientWidth+1));
+    const layout=await board.evaluate(d=>({width:d.clientWidth,scroll:d.scrollWidth,
+      wide:[...d.querySelectorAll('*')].filter(e=>e.getBoundingClientRect().right>d.getBoundingClientRect().right).map(e=>e.id || e.textContent.slice(0,30))}));
+    assert(layout.scroll<=layout.width+1,device+' board fits '+JSON.stringify(layout));
     assert(await page.locator('#event-preview').evaluate(c=>c.width>0 && c.getContext('2d').getImageData(0,0,c.width,c.height).data.some(v=>v>0)));
     await page.evaluate(()=>{
       const step=SoloEvents.Run.prototype.step;
