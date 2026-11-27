@@ -12,7 +12,7 @@ async function play(browser,phone){
     if(!phone){
       assert.equal(await page.evaluate(()=>!!window.FighterSchool),false);
       await press('[data-enter-mode="local"]');
-      await press('#lobby-moves');await press('[data-guide-section="specials"]');
+      await press('#lobby-more');await press('#lobby-moves');await press('[data-guide-section="specials"]');
       await page.route('**/fighter-lessons.js*',r=>r.abort(),{times:1});
       await press('[data-watch-special="neutral"]');await press('#dispatch-load-retry');
     }

@@ -18,7 +18,7 @@ async function play(browser,profile){
     await page.clock.install({time:new Date('2030-01-01Z')});
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
     await page.goto('http://127.0.0.1:8080/'+(profile==='keyboard'?'':touch?'#local/stock-share':'#local/depot-doubles'));
-    if(profile==='keyboard'){await choose('[data-enter-mode=local]');await choose('#depot-duo');}
+    if(profile==='keyboard'){await choose('[data-enter-mode=local]');await choose('#lobby-more');await choose('#depot-duo');}
     await page.getByRole('heading',{name:'Bell Depot doubles'}).waitFor();
     if(touch)assert(await page.locator('#rally-options').evaluate(el=>el.open));
     const progress=()=>page.evaluate(()=>DispatchScript.chapters.map(c=>localStorage.getItem(c.saveKey)));
@@ -80,7 +80,7 @@ async function play(browser,profile){
     await choose('[data-do=depot-start]');await step(64);
     assert.deepEqual(await page.evaluate(()=>live.team.map(f=>f.stocks)),[3,3]);
     await choose('#pause');await choose('[data-do=lobby]');
-    await choose('#depot-duo');await choose('#rally-options summary');
+    await choose('#lobby-more');await choose('#depot-duo');await choose('#rally-options summary');
     const seat=touch || count===2?0:1, action=s=>'[data-do=share-p'+(s+1)+']';
     await choose(action(seat));await step(64);
     const prompt=page.locator('#stock-share'),bar=prompt.locator('progress');

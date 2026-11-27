@@ -101,7 +101,7 @@ async function run(browser){
   assert.equal(await page.locator('#profile-active').textContent(),'P2 · Pup <3');
   await click('profile-back');
   assert(await page.locator('#lobby-profiles').evaluate(el=>el===document.activeElement));
-  await click('start');await observe();await page.clock.runFor(2500);
+  await click('lobby-options-back');await click('start');await observe();await page.clock.runFor(2500);
   assert.match(await page.locator('.hud-card.two .hud-name small').textContent(),/P2 · Pup <3/);
   await page.keyboard.down('q');await page.clock.runFor(40);
   sample=await page.evaluate(()=>samples.at(-1));

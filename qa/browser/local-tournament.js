@@ -85,7 +85,7 @@ async function play(browser,mobile){
     });
     await page.goto(root+'#local/rules/stock/1/0/single/flat/off');await press('#rules-use');
     if(!mobile)await page.route('**/tournament.js*',r=>r.abort(),{times:1});
-    await press('#tournament');if(!mobile)await press('#dispatch-load-retry');
+    await press('#lobby-more');await press('#tournament');if(!mobile)await press('#dispatch-load-retry');
     for(let i=4;i<8;i++)await press('#tourney-add');
     assert(await page.locator('#tourney-add').isDisabled());
     assert.equal(await page.locator('#tourney-grid section').count(),3);

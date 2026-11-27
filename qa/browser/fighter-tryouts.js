@@ -30,9 +30,9 @@ async function play(browser,device){
     await page.goto(url);
     if(!touch && !pad)await press('#dispatch-load-retry');
     await page.getByRole('button',{name:'Pick Clover for Player 1'}).waitFor();
-    await press('[data-try-back]');
+    await press('[data-try-back]');await press('#lobby-options-back');
     assert.match(await page.locator('#rules-label').textContent(),/5 stocks · 3 min/);
-    await press('.slot[data-index="1"]');await press('#lobby-tryout');
+    await press('.slot[data-index="1"]');await press('#lobby-more');await press('#lobby-tryout');
     await press('[data-try-dog=clover]');await press('[data-try-run="-1"]');
     await page.clock.runFor(500);
     assert.equal(await page.locator('#school-title').textContent(),'Rooftop shuttle');

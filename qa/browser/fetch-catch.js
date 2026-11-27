@@ -11,7 +11,7 @@ async function play(browser,touch){
     await page.goto(touch?root+'#local/fetch':root);
     if(!touch){
       assert.equal(await page.evaluate(()=>!!window.MoveGuide || !!window.FighterSchool),false);
-      await click('[data-enter-mode=local]');await click('#ball-info');await click('[data-do=fetch-match]');
+      await click('[data-enter-mode=local]');await click('#lobby-more');await click('#ball-info');await click('[data-do=fetch-match]');
     }
     await page.evaluate(()=>{
       const step=DogFight.Battle.prototype.step;

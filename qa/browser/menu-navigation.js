@@ -64,6 +64,52 @@ async function controls(browser,phone){
   await page.evaluate(()=>{window.reads=0;const get=Element.prototype.getBoundingClientRect;
     Element.prototype.getBoundingClientRect=function(){if(this.matches('#roster button,.mode-rack button'))reads++;return get.call(this);};});
   await page.clock.runFor(850);assert.equal(await page.evaluate(()=>reads),0);
+  await page.goto(root+'#local');
+  await is('#pick-together');
+  assert(await page.locator('#winner-stays').isHidden());
+  const choose=async selector=>{
+    if(phone)return page.locator(selector).tap();
+    await focus(selector);await page.keyboard.press('Enter');
+  };
+  await choose('#slots [data-index="1"]');
+  await page.evaluate(()=>{
+    const art=DogArt;window.pickerFrames=[];
+    window.DogArt={...art,draw(ctx,kind,x,y,pose){
+      if(ctx.canvas.id==='preview')pickerFrames.push([kind,pose.face,pose.pose,pose.phase]);
+      return art.draw(ctx,kind,x,y,pose);
+    }};
+  });
+  for(const kind of ['pip','brisket','noodle','clover']){
+    await page.evaluate(()=>{pickerFrames.length=0;});
+    await choose('#roster [data-kind="'+kind+'"]');
+    await page.clock.runFor(1100);
+    const frames=await page.evaluate(()=>pickerFrames);
+    const move=await page.evaluate(k=>DogFight.kits[k].tilts.forward,kind);
+    assert(frames.some(([dog,face,pose,phase])=>dog===kind && face===-1 && pose===move && phase>.15),kind+' shows its attack');
+    assert(frames.filter(r=>r[1]===1).every(r=>r[2]==='idle'),'other player holds position');
+    assert.equal(frames.at(-1)[2],'idle');
+  }
+  const start=await page.locator('#start').boundingBox();
+  assert(start.y>=0 && start.y+start.height<=page.viewportSize().height);
+  const device=phone?'phone':'desktop';
+  await page.screenshot({path:'versus-picker-'+device+'.png'});
+  await choose('#lobby-more');await is('#lobby-options-back');
+  assert(await page.locator('#roster').isHidden());assert(await page.locator('#tournament').isVisible());
+  assert(await page.locator('#event-matches').isHidden());
+  const count=()=>page.evaluate(()=>pickerFrames.length);
+  const hiddenCount=await count();await page.clock.runFor(800);assert.equal(await count(),hiddenCount);
+  await page.screenshot({path:'versus-options-'+device+'.png'});
+  if(phone)await choose('#lobby-options-back');else await tap(1);
+  await is('#lobby-more');assert.match(await page.locator('#slots [data-index="1"]').innerText(),/Clover/i);
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await choose('#roster [data-kind="noodle"]');await page.clock.runFor(200);
+  assert.equal(await page.evaluate(()=>pickerFrames.at(-1)[2]),'idle');
+  const still=await count();await page.clock.runFor(800);assert.equal(await count(),still);
+  await choose('[data-mode=solo]');await choose('#lobby-more');
+  assert(await page.locator('#event-matches').isVisible());assert(await page.locator('#tournament').isHidden());
+  await page.keyboard.press('Escape');await is('#lobby-more');
+  await choose('[data-mode=training]');await choose('#lobby-more');
+  assert(await page.locator('#lobby-events').isHidden());assert(await page.locator('#lobby-tryout').isVisible());
   await page.goto(root+'?codepad#online');
   await page.locator('#online-code').fill('AB');await focus('#online-code');await tap(0);await is('[data-letter=A]');
   assert.equal(await page.locator('#code-join').isDisabled(),true);

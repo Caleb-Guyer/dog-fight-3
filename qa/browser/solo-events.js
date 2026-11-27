@@ -84,7 +84,7 @@ async function play(browser,device){
     await choose('[data-field-lesson="5"]');await hold('shield',true);await page.clock.runFor(650);await hold('shield',false);
     await choose('#school-next');await page.locator('[data-do=school-cup]').waitFor();
     assert((await saved()).includes('guard'));
-    await page.goto('http://127.0.0.1:8080/#solo');await choose('#event-matches');
+    await page.goto('http://127.0.0.1:8080/#solo');await choose('#lobby-more');await choose('#event-matches');
     const board=page.locator('#dialog[data-view=event-board]');await board.waitFor();
     assert.equal(await board.locator('[data-event-pick]').count(),6);
     const layout=await board.evaluate(d=>({width:d.clientWidth,scroll:d.scrollWidth,
