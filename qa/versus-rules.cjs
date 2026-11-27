@@ -5,6 +5,61 @@ const {encode,decode}=window.VersusRulebook;
 const config={mode:'local',stage:'picnic',p1:'pip',p2:'brisket',fetch:false};
 const create=extra=>new Battle({...config,...extra},undefined,seededRandom(11));
 const step=w=>w.step(1/60,idleInput,idleInput);
+const {OpeningDuel}=window.VersusRulebook;
+test('duel openings use solid ground across every stage and form, facing the rival with either seat cornered',()=>{
+  for(const stage of Object.keys(window.DogFight.arenas))for(const form of Object.keys(stageForms)){
+    const card={...config,stage,stageForm:form,handicap:[20,70]};
+    const duel=new OpeningDuel(card,11);
+    for(const position of ['center','left','right']){
+      const w=create({...card,form,spawnDamage:card.handicap});
+      duel.position=position;duel.place(w);
+      const [a,b]=w.dogs,deck=w.terrain[a.ground],solid=w.terrain.filter(p=>!p.thin);
+      assert.equal(a.ground,b.ground);assert(!deck.thin);
+      assert.equal(a.y,deck.y);assert.equal(b.y,deck.y);assert.deepEqual([a.face,b.face],[1,-1]);
+      assert.equal(b.x-a.x,148);
+      if(position==='center')assert.equal((a.x+b.x)/2,(deck.x1+deck.x2)/2);
+      if(position==='left')assert.equal(a.x,Math.min(...solid.map(p=>p.x1))+32);
+      if(position==='right')assert.equal(b.x,Math.max(...solid.map(p=>p.x2))-32);
+      step(w);assert.equal(duel.takePoint(w),false);
+    }
+    assert.deepEqual(duel.card,card);
+  }
+});
+test('blocked jabs and empty grabs keep the duel live while a clean jab or pummel takes exactly one point',()=>{
+  for(const action of ['hit','block','grab']){
+    const w=create(),duel=new OpeningDuel(config,11);duel.place(w);w.dogs[1].x=w.dogs[0].x+55;
+    for(let i=0;i<40;i++){
+      w.step(1/60,{...idleInput,attack:action==='grab'?i===20:i===3,quickAttack:action!=='grab' && i===3,grab:action==='grab' && i===1},
+        {...idleInput,shield:action==='block'});
+      if(action==='grab' && i===18){assert(w.grapple);assert.equal(duel.point,null);}
+      if(duel.takePoint(w)){assert.equal(duel.takePoint(w),false);break;}
+    }
+    assert.deepEqual(duel.score,[action==='block'?0:1,0]);
+    if(action==='block'){assert.equal(w.matchCard.players[1].blocks,1);assert.equal(duel.point,null);}
+    else assert.deepEqual([duel.point.move,duel.point.damage],action==='grab'?['Paw Drum',1]:['Quick Paw',4]);
+  }
+});
+test('double falls draw the point and three individual falls finish the duel without changing the selected rules',()=>{
+  const card={...config,minutes:3,stageForm:'trio',bestOfThree:true,lives:5,fetch:true};
+  const duel=new OpeningDuel(card,19);
+  for(let i=0;i<4;i++){
+    const w=create();duel.place(w);
+    w.dogs[0].x=-2000;if(i===0)w.dogs[1].x=4000;
+    step(w);assert(duel.takePoint(w));
+    assert.equal(duel.point.winner,i===0?null:1);assert.deepEqual(duel.score,[0,i]);
+    if(i)assert(duel.point.fall);
+  }
+  assert.equal(duel.takePoint(create()),false);assert.deepEqual(duel.card,card);
+});
+test('a seeded solo rival can win a reproducible opening against an idle player',()=>{
+  const run=()=>{
+    const card={...config,mode:'solo',cpuLevel:'rival'},duel=new OpeningDuel(card,25);
+    const w=new Battle(card,undefined,seededRandom(duel.seed));duel.place(w);
+    for(let i=0;i<600 && !duel.point;i++){w.step(1/60,idleInput);duel.takePoint(w);}
+    assert.equal(duel.point?.winner,1);return duel.point;
+  };
+  assert.deepEqual(run(),run());
+});
 test('matchup links replay both coats, arena form, opponent and starting rules in a fresh battle',()=>{
   const {decodeMatchup,encodeMatchup}=window.VersusRulebook;
   const {fighters,coatFor,arenas,cpuLevels}=window.DogFight;

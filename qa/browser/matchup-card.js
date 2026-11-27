@@ -77,6 +77,37 @@ async function play(browser,device){
       await choose('#pin-view');await choose('#matchup-pin');await choose('#matchup-back');
       assert(await page.locator('#home-pin').isHidden());
     }
+    const beforeDuel=await config();
+    const records=()=>page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith('dog-fight-3.record.1.')).sort());
+    const previousRecords=await records();
+    await page.goto(root+'?duel'+local);await observe();await choose('#matchup-duel');
+    for(const [i,opening] of ['left','right','center'].entries()){
+      await choose('[data-opening="'+opening+'"]');await choose('#duel-start');
+      if(i===0){
+        await choose('#pause');await choose('#duel-resume');
+        assert.equal(await page.locator('#match-mode').textContent(),'First-hit duel');
+      }
+      await page.clock.runFor(950);
+      const [left,right]=await page.evaluate(()=>fight.dogs.map(f=>f.x));
+      assert(right-left>140 && right-left<155);
+      if(opening!=='center'){
+        const bounds=await page.evaluate(()=>{const p=fight.terrain[fight.dogs[0].ground];return [p.x1,p.x2];});
+        assert.equal(opening==='left'?left-bounds[0]:bounds[1]-right,32);
+      }
+      await page.keyboard.down('d');await page.clock.runFor(320);await page.keyboard.up('d');
+      await page.keyboard.down('j');await page.clock.runFor(34);await page.keyboard.up('j');await page.clock.runFor(350);
+      assert.match(await page.locator('#duel-report').textContent(),i===2?/P1 Clover wins the duel/:/P1 Clover takes the point/);
+      assert.match(await page.locator('#duel-score').textContent(),new RegExp((i+1)+' – 0'));
+    }
+    assert(await page.locator('#duel-start').count()===0);assert.deepEqual(await records(),previousRecords);
+    await choose('#duel-fight');await page.clock.runFor(2500);
+    assert.deepEqual(await page.evaluate(()=>[fight.stockCount,fight.form,fight.dogs.map(f=>f.damage)]),[1,'flat',[0,0]]);
+    assert.equal(await config(),beforeDuel);
+
+    await page.goto(root+'?try#solo/tryouts/pip');await page.locator('[data-try-duel]').waitFor();await choose('[data-try-duel]');
+    assert.match(await page.locator('#duel-score').textContent(),/P1 Pip/);
+    await choose('#duel-back');await choose('#matchup-duel');await choose('#duel-start');await page.clock.runFor(11000);
+    assert.match(await page.locator('#duel-report').textContent(),/CPU .* takes the point/);
     await page.goto(root+'?broken'+shared.replace('noodle','unknown'));
     await page.locator('#matchup-back').waitFor();
     assert.equal(await page.locator('#dialog-title').textContent(),'Matchup unavailable');
