@@ -115,7 +115,7 @@ async function firstPress(browser, url) {
         };
         pad.buttons[15].pressed = true;
       });
-      await controller.waitForFunction(() => document.activeElement.id === 'welcome-dismiss');
+      await controller.waitForFunction(() => document.activeElement.id === 'welcome-field');
       await controller.evaluate(() => { pad.buttons[15].pressed = false; pad.buttons[14].pressed = true; });
       await controller.waitForFunction(() => document.activeElement.id === 'welcome-play');
       await controller.evaluate(() => { pad.buttons[14].pressed = false; pad.buttons[0].pressed = true; });

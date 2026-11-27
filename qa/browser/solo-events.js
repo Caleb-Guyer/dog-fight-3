@@ -41,6 +41,48 @@ async function play(browser,device){
       }else fingers.delete(key);
       await cdp.send('Input.dispatchTouchEvent',{type:on?'touchStart':'touchEnd',touchPoints:[...fingers.values()]});
     }
+    // A separate origin gives this player a fresh save and keeps the event journey independent.
+    const school='http://localhost:8080/';
+    await page.goto(school);
+    const captureFight=()=>page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(...args){
+        if(this.mode==='solo')window.fieldFight=this;
+        return step.apply(this,args);
+      };
+    });
+    await page.waitForFunction(()=>!!window.DogFight);await captureFight();
+    await choose('#welcome-field');await page.locator('#match-mode').filter({hasText:'0 / 10 skills'}).waitFor();
+    await page.clock.runFor(2500);await hold('right',true);await page.clock.runFor(680);await hold('right',false);
+    assert.match(await page.locator('#match-mode').textContent(),/1 \/ 10 skills/);
+    const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.school')).passed);
+    assert.deepEqual(await saved(),['move']);
+    await choose('#pause');await choose('[data-do=field-card]');
+    const moveRow=page.locator('[data-field-lesson="0"]');
+    const firstTime=await moveRow.textContent();assert.match(firstTime,/In this fight · 0:0\d/);
+    assert.equal(await page.locator('[data-field-lesson]').count(),10);
+    assert(await page.locator('#dialog').evaluate(d=>d.scrollWidth<=d.clientWidth+1));
+    const parked=await page.evaluate(()=>({frame:fieldFight.matchFrames,pip:fieldFight.dogs[0].x,clock:fieldFight.clockFrames}));
+    await choose('[data-field-lesson="2"]');await page.locator('#school-coach:visible').waitFor();
+    await hold('attack',true);await page.clock.runFor(180);await hold('attack',false);
+    assert.equal(await page.locator('#school-next').textContent(),'Return to fight');
+    assert.deepEqual(await saved(),['move','jab']);
+    assert.deepEqual(await page.evaluate(()=>({frame:fieldFight.matchFrames,pip:fieldFight.dogs[0].x,clock:fieldFight.clockFrames})),parked);
+    await choose('#school-next');await page.locator('#school-coach').waitFor({state:'hidden'});
+    await choose('#pause');await choose('[data-do=school-suspend]');await page.locator('#home-continue').waitFor();
+    await page.goto(school+'?continue');await choose('#home-continue');await page.locator('[data-do=resume]').waitFor();
+    await captureFight();await choose('[data-do=resume]');await page.clock.runFor(64);
+    await choose('#pause');await choose('[data-do=field-card]');
+    assert.equal(await moveRow.textContent(),firstTime);
+    assert.match(await page.locator('[data-field-lesson="2"]').textContent(),/Previously cleared/);
+    await choose('#field-back');
+    // Let a real blast-line exit conclude the match, then practice from the final card.
+    await page.evaluate(()=>{const f=fieldFight.dogs[1];f.stocks=1;f.x=fieldFight.stageWidth+1000;f.ground=-1;});
+    await page.clock.runFor(2200);await choose('[data-do=field-card]');
+    assert.equal(await moveRow.textContent(),firstTime);
+    await choose('[data-field-lesson="5"]');await hold('shield',true);await page.clock.runFor(650);await hold('shield',false);
+    await choose('#school-next');await page.locator('[data-do=school-cup]').waitFor();
+    assert((await saved()).includes('guard'));
     await page.goto('http://127.0.0.1:8080/#solo');await choose('#event-matches');
     const board=page.locator('#dialog[data-view=event-board]');await board.waitFor();
     assert.equal(await board.locator('[data-event-pick]').count(),5);

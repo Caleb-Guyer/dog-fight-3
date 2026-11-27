@@ -91,6 +91,41 @@ test('chord hints follow the current device and layout',()=>{
   assert.equal(hint(info,2,key,pad),'Special → Attack');
 });
 const {Lesson,lessons}=window.FightSchool;
+test('the field card recognizes all ten techniques from combat events and preserves the first time through a checkpoint',()=>{
+  for(const [index,info] of lessons.entries()){
+    let card=new window.FighterSchool.FieldCard();
+    const world=new Battle({mode:'local',p1:'pip',p2:'brisket',stage:info.id==='platform'?'picnic':'nightmail',fetch:false},
+      (name,e)=>card.contact(name,e,world));
+    const setup=new Lesson(index,world),driver=new window.FighterSchool.Example(info.id);
+    for(let i=0;i<480 && card.marks[info.id]==null;i++){
+      const a=driver.input();if(!a)continue;
+      world.step(1/60,a,setup.partner(a));card.step(world,a);
+      // Saving during a jump or a shielding grab must keep the chain leading to the skill.
+      card=new window.FighterSchool.FieldCard(structuredClone(card));
+    }
+    const frame=card.marks[info.id];assert(frame>0,info.id);
+    card.mark(info.id,frame+120);assert.equal(card.marks[info.id],frame);
+  }
+});
+test('the field card rejects an unshielded grab, a new stock spawned after a fall, and a knockout from an uncharged swing',()=>{
+  for(const id of ['throw','return','stock']){
+    const card=new window.FighterSchool.FieldCard(),world=new Battle({mode:'local',p1:'pip',p2:'brisket',stage:'nightmail',fetch:false},
+      (name,e)=>card.contact(name,e,world));
+    const setup=new Lesson(lessons.findIndex(l=>l.id===id),world),driver=new window.FighterSchool.Example(id);
+    if(id==='stock')world.dogs[1].damage=275;
+    let saw=false;
+    for(let i=0;i<400;i++){
+      let a=driver.input();if(!a)continue;
+      if(id==='stock')a={...idleInput,x:i===18?1:0,smashX:1,smash:i===18};
+      if(id==='return')a=idleInput;
+      world.step(1/60,a,id==='throw'?idleInput:setup.partner(a));card.step(world,a);
+      if(id==='throw' && world.dogs[1].damage>0)saw=true;
+      if(id==='return' && world.dogs[0].stocks<3)saw=true;
+      if(id==='stock' && world.dogs[1].stocks<3)saw=true;
+    }
+    assert(saw,id+' produced the counterexample');assert.equal(card.marks[id],undefined,id);
+  }
+});
 const demos=lessons.map((l,i)=>[l.id,i,Lesson,'pip','brisket',l.id==='platform'?'picnic':'nightmail']);
 for(const [kind,course] of Object.entries(courses))for(const [i] of course.lessons.entries())
   demos.push([kind+'-'+i,i,Trial,kind,course.rival,course.stage]);

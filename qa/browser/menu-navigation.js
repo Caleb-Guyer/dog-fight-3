@@ -23,7 +23,7 @@ async function controls(browser,phone){
   await is('#welcome-play');
   // No pointer or direct focus calls during the desktop journey from welcome into fighter select.
   if(!phone){
-    await tap(15);await is('#welcome-dismiss');await tap(0);await is('#home-adventure');
+    await tap(15);await is('#welcome-field');await tap(15);await is('#welcome-dismiss');await tap(0);await is('#home-adventure');
     await hold(-1,.9,0);await hold();
     const row=()=>page.evaluate(()=>[...document.querySelectorAll('.mode-rack button')].indexOf(document.activeElement));
     const entered=await row();assert(entered>=0,'Right should enter the mode rack');
