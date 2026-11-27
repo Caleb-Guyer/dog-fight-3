@@ -2495,7 +2495,12 @@
       if(matchConfig.openingMatchup)stats.insertAdjacentHTML('beforebegin','<button class="utility" data-do="matchup-card">Opening matchup · Pin or share</button>');
       const clips=knockoutClips(result);
       stats.insertAdjacentHTML('beforebegin',stockRetryButton(result)+recoveryButtons(result,clips));
-      if(finishTape.reel)stats.insertAdjacentHTML('beforebegin','<button class="utility" data-do="watch-match">Watch full match</button>');
+      if(finishTape.reel){
+        stats.insertAdjacentHTML('beforebegin','<button class="utility" data-do="watch-match">Watch full match</button>');
+        const winner=canvas.closest('.winner');
+        const recap=()=>window.MatchReview.resultHighlight(winner,result,()=>watchMatch(null,'highlight'));
+        if(window.MatchReview)recap();else loadDispatch('MatchReview').then(recap).catch(()=>{});
+      }
       if(clips.length)stats.insertAdjacentHTML('beforebegin',knockoutButton);
       const button=document.createElement('button');
       button.className='utility';button.dataset.do='watch-finish';
@@ -4323,7 +4328,7 @@
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=launch-aim-1', MatchReview:'match-review.js?v=school-ko-1',
+    RecoveryCoach:'recovery-coach.js?v=launch-aim-1', MatchReview:'match-review.js?v=deciding-exchange-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
