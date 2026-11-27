@@ -90,7 +90,7 @@
     ctx.fillStyle=paper;ctx.fillText(state,0,37);
     ctx.restore();
   }
-  function draw(ctx,world,age,left,top,zoom,steady){
+  function draw(ctx,world,age,left,top,zoom,steady,showTally=true){
     if(age<0 || age>=72)return;
     const call=world.stockCall,{width,height}=ctx.canvas;
     const cssScale=ctx.canvas.clientWidth?width/ctx.canvas.clientWidth:1;
@@ -100,7 +100,9 @@
       ctx.globalAlpha*=clamp((46-age)/10,0,1);
       for(const d of call.exits)exitMark(ctx,d,age,scale,left,top,zoom,steady);
     }
-    ctx.restore();ctx.save();
+    ctx.restore();
+    if(!showTally)return;
+    ctx.save();
     ctx.globalAlpha*=clamp((72-age)/12,0,1);
     tally(ctx,call,age,scale,steady,world.mode==='solo');
     ctx.restore();
