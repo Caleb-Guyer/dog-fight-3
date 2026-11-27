@@ -7,7 +7,7 @@
     flurry:'Pip’s rapid jab', escapeFlurry:'Escape the flurry',
     defend:'Defend this take', mix:'Mix A and B',throwChase:'Chase the up throw',confirm:'Hit confirm',dashPressure:'Dash attack spacing' };
   const comboReplies = { stand: 'Standing', guard: 'Guard', away: 'Flick away', punish:'Block and punish', p2:'Player 2',
-    diIn:'Launch DI in',diOut:'Launch DI out',diMix:'Mix launch DI' };
+    diIn:'Launch DI in',diOut:'Launch DI out',diMix:'Mix launch DI',jumpAway:'Jump away',strike:'Attack back',player:'Live defense' };
   const takeLetter = slot => slot ? 'B' : 'A';
   const openedTakes=new WeakSet();
   function takeName(world,slot) {
@@ -25,6 +25,68 @@
     const timing = gap === null ? 'opener' : gap ? gap + 'f opening' :
       kind === 'pummel' || kind === 'throw' ? 'held' : 'no free frame';
     return name + ' · ' + result + ' · ' + timing;
+  }
+  const compareSources=['late','example','replay','record'];
+  function* compareReplies(world){
+    const d=world.comboPractice,source=d.source==='record'?'replay':d.source;
+    if(!compareSources.includes(source) || (source==='replay' && !d.saved?.length))return;
+    // Each reply runs on its own copy. The active take, moving platforms and both players stay parked.
+    const tape=new window.DogFight.FinishTape();
+    for(const reply of ['stand','guard','away','jumpAway','strike']){
+      const sample=tape.copy(world);
+      sample.resetComboPractice(source,reply,d.slow,d.slot);
+      const attempt=sample.comboPractice;
+      let jumpedAt=null,counterAt=null;
+      sample.emit=(name,e)=>{if(name==='jump' && e.f?.index===1)jumpedAt??=attempt.hits;};
+      while(attempt.phase!=='done' && sample.end===null){
+        for(let i=0;i<16 && attempt.phase!=='done' && sample.end===null;i++){
+          sample.step(1/60);
+          if(attempt.counter)counterAt??=attempt.hits;
+        }
+        yield null;
+      }
+      const blocks=attempt.contacts.filter(c=>c.kind==='block').length;
+      const outcome=attempt.counter?comboMoveName(attempt.counter.moveId)+' after hit '+counterAt:
+        blocks?blocks+(blocks===1?' block':' blocks'):attempt.dodges?'Air dodged':attempt.shifts?'Shifted away':jumpedAt!==null?'Jump after hit '+jumpedAt:'';
+      const gap=attempt.contacts.find(c=>c.gap>0);
+      const opening=attempt.contacts.length<2?'':gap?gap.gap+'-frame opening before '+comboMoveName(gap.moveId)+'.':
+        'No free frame between recorded contacts.';
+      yield {reply,hits:attempt.hits,damage:tenth(attempt.damage),outcome,opening};
+    }
+  }
+  function compareSheet(world,showDialog,watch,back){
+    const d=world.comboPractice,source=d.source==='record'?'replay':d.source;
+    const attacker=world.dogs[0].stats.name,defender=world.dogs[1].stats.name;
+    const take=source==='replay'?'Take '+takeLetter(d.slot):comboSources[source];
+    showDialog('combo-compare','Compare defenses','<p>'+attacker+' against '+defender+' at '+tenth(d.baseline)+'% · '+take+
+      '. Choose a response to watch the same opening.</p><table class="reply-table"><thead><tr><th>Response</th><th>Hits taken</th><th>Damage</th><th>Reply</th></tr></thead>'+
+      '<tbody id="reply-rows"></tbody></table><p id="reply-opening" hidden></p><p role="status" id="reply-status">Trying five defenses…</p><div class="dialog-actions">'+
+      '<button class="primary" id="reply-play">Play as '+defender+'</button><button class="utility" id="reply-back">Back to practice</button></div>');
+    const rows=$('reply-rows'),tests=compareReplies(world);
+    $('reply-back').onclick=back;
+    $('reply-play').onclick=()=>watch(source,'player',d.slot);
+    $('reply-play').focus();
+    function advance(){
+      if(!rows.isConnected || !rows.closest('dialog').open)return;
+      const until=performance.now()+4;
+      for(let i=0;i<4;i++){
+        const {done,value}=tests.next();
+        if(done){$('reply-status').hidden=true;return;}
+        if(value){
+          const row=rows.insertRow(),button=document.createElement('button');
+          button.type='button';button.className='utility';button.dataset.reply=value.reply;button.textContent=comboReplies[value.reply];
+          button.onclick=()=>watch(source,value.reply,d.slot);
+          row.insertCell().append(button);
+          for(const v of [value.hits,value.damage+'%',value.outcome || '—'])row.insertCell().textContent=v;
+          if(value.reply==='stand' && value.opening){
+            $('reply-opening').textContent='Standing defender · '+value.opening;$('reply-opening').hidden=false;
+          }
+        }
+        if(performance.now()>=until)break;
+      }
+      requestAnimationFrame(advance);
+    }
+    advance();
   }
   function startConfirm(world,series){
     if(!series || series.played===series.responses.length){
@@ -79,7 +141,7 @@
   let listedContacts,listedCount=0;
   function readout(world) {
     const d=world.comboPractice;
-    const title = ['flurry','escapeFlurry','throwChase','dashPressure'].includes(d.source) ? comboSources[d.source] : d.defending ? (d.phase === 'done' ? 'Take ' + takeName(world,d.playSlot) :
+    const title = d.liveReply?'Defend · '+(d.source==='replay'?'Take '+takeLetter(d.slot):comboSources[d.source]) : ['flurry','escapeFlurry','throwChase','dashPressure'].includes(d.source) ? comboSources[d.source] : d.defending ? (d.phase === 'done' ? 'Take ' + takeName(world,d.playSlot) :
       d.source === 'mix' ? 'Mix A and B' : 'Defend ' + takeName(world,d.slot)) :
       d.phase === 'ready' ? 'Ready to record' : d.source === 'record' && d.phase === 'active' && d.tick < 150
       ? 'Recording' : comboSources[d.source];
@@ -100,6 +162,8 @@
       else if (d.phase === 'countdown') latest = 'Get ready';
       else if (d.counter) latest = (last ? comboRow(last) + ' · ' : '') + 'Your ' + comboMoveName(d.counter.moveId) + ' connected';
       if (d.phase === 'done') latest += ' · Tap Attack to retry';
+    } else if(d.reply==='strike' && d.counter){
+      latest+=' · '+world.dogs[1].stats.name+' hit back with '+comboMoveName(d.counter.moveId);
     } else if (d.reply === 'punish') {
       if (d.counter) latest += ' · ' + world.dogs[1].stats.name + ' punished with ' + comboMoveName(d.counter.moveId);
       else if (d.phase === 'done' && d.contacts.some(c => c.kind === 'block')) latest += ' · No punish landed';
@@ -147,6 +211,8 @@
       list.append(row);
     }
     $('combo-replay').disabled = !d.saved?.length;
+    $('combo-compare').disabled=d.source==='record' && !d.saved?.length;
+    $('combo-reply').querySelector('[value=player]').disabled=!compareSources.includes(d.source) || $('combo-compare').disabled;
     $('combo-restore').hidden = !d.saved?.length;
     for (const [i,option] of Array.from($('combo-slot').options).entries()){
       const label=takeName(world,i);if(option.textContent!==label)option.textContent=label;
@@ -164,8 +230,9 @@
     };
     $('combo-reply').onchange = e => {
       const d=getWorld().comboPractice;
-      drill('combo',false,d.source==='record' && d.tape.length?'replay':d.source,e.target.value);
-      if(e.target.value!=='p2' && d.source!=='throwChase')e.target.focus({preventScroll:true});
+      const recorded=d.source==='record' && (d.tape.length || (e.target.value==='player' && d.saved?.length));
+      drill('combo',false,recorded?'replay':d.source,e.target.value);
+      if(!['p2','player'].includes(e.target.value) && d.source!=='throwChase')e.target.focus({preventScroll:true});
     };
     $('combo-slow').onclick = () => {
       const d=getWorld().comboPractice;
@@ -181,13 +248,15 @@
     $('combo-fight-pip').hidden = d.source !== 'flurry' && d.source !== 'escapeFlurry';
     $('dash-pressure-fight').hidden=d.source!=='dashPressure';
     $('combo-slot').value = String(d.slot);
-    $('combo-reply-label').hidden = $('combo-reply').hidden = d.defending || d.source==='confirm' || d.source==='dashPressure';
+    $('combo-compare').hidden=!compareSources.includes(d.source);
+    $('combo-reply-label').hidden = $('combo-reply').hidden = (d.defending && !d.liveReply) || d.source==='confirm' || d.source==='dashPressure';
     $('combo-slow').setAttribute('aria-pressed', String(d.slow));
     for (const source of Object.keys(comboSources))
       $('combo-' + source).setAttribute('aria-pressed', String(d.source === source));
     const route = { pip: 'Attack, Attack, then Jump + Forward + Attack.', brisket: 'Attack, then Grab. Tap forward to throw.',
       noodle: 'Attack twice, then tap neutral Special.', clover: 'Attack twice, then Jump + Attack.' }[world.dogs[0].kind];
-    return d.source==='dashPressure'?'Start in a run toward '+world.dogs[1].stats.name+'’s shield. Tap Attack now, then try running closer first. Compare the distance and recovery left when the rival checks for a counter.':
+    return d.liveReply?'Use your usual controls for '+world.dogs[1].stats.name+'. Tap Attack to start, release, then defend the opening. Tap Attack after the result to retry.':
+      d.source==='dashPressure'?'Start in a run toward '+world.dogs[1].stats.name+'’s shield. Tap Attack now, then try running closer first. Compare the distance and recovery left when the rival checks for a counter.':
       d.source==='confirm'?'Six jabs, three shields. Tap Attack and release. On a hit, follow with Attack. On a shield flash, step in and Grab. Tap Attack after each result for the next exchange.':
       d.source==='throwChase'?'Tap Attack for the opening grab and up throw. You take over on release. Follow the rival and hit them before they land. Tap Attack after the result to retry.':
       d.source === 'flurry' ? 'Tap Attack once. When Quick Paw hits, press Attack again and hold through Cross. Release during Speed Bag for Bell Kick. Try Flick away as the rival’s response.'
@@ -362,5 +431,5 @@
     if(shared && !incoming)status.textContent='This link could not be read. Choose a tape from the shelf.';
     pick.focus();
   }
-  window.ComboLab={readout,setup,startConfirm,confirmInput,confirmContact,finishConfirm,shelf,encode,decode,capture,restore,houseTape};
+  window.ComboLab={readout,setup,compareSheet,compareReplies,startConfirm,confirmInput,confirmContact,finishConfirm,shelf,encode,decode,capture,restore,houseTape};
 })();

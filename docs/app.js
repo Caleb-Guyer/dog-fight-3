@@ -1014,6 +1014,7 @@
     if(dialogType==='rulebook')return backFromRulebook();
     if(dialogType==='matchup-card')return $('matchup-back').click();
     if(dialogType==='practice-tapes')return $('tape-back').click();
+    if(dialogType==='combo-compare')return $('reply-back').click();
     if(dialogType==='pack-relay')return backFromRelay();
     if(dialogType==='cup-relay')return $('cup-relay-back').click();
     if(dialogType==='finish-picker')return $('finish-picker-back').click();
@@ -3968,6 +3969,7 @@
       startMatch({...visit.config, mode:'training', lastStockStart:false, suddenStart:false, fetch:false}, undefined, undefined, null, {visit});
     } else dismiss();
     if (id === 'reset-training' || id === 'partner-training') drill(id === 'partner-training' ? 'partner' : false);
+    else if(id==='combo-compare')showComboComparison();
     else if (['wall-impact','wall-ceiling','wall-pip','wall-noodle'].includes(id)) drill('wall', false, world.wallPractice?.side || 'left', id.slice(5));
     else {
       // Freshness toolbar buttons toggle comparisons. A directory selection always starts the named test.
@@ -4032,6 +4034,14 @@
     });
   }
   $('combo-tapes').onclick=()=>practiceTapes();
+  function showComboComparison(){
+    if(!window.ComboLab)return waitForDispatch('Compare defenses',()=>loadDispatch('ComboLab'),showComboComparison,showPractice);
+    if(!world.comboPractice || $('combo-compare').hidden || $('combo-compare').disabled)drill('combo',false,'late','stand');
+    window.ComboLab.compareSheet(world,showDialog,(source,reply,slot)=>{
+      dismiss();drill('combo',false,source,reply,slot);
+    },()=>{dismiss();$('combo-compare').focus({preventScroll:true});});
+  }
+  $('combo-compare').onclick=showComboComparison;
   $('combo-fight-pip').onclick = fightRivalPip;
   $('dash-pressure-fight').onclick=()=>startDashPressure(world.dogs[0].kind,world.dogs[1].kind,world.stage,world.form);
   for (const source of comboSources) $('combo-' + source).onclick = () => {
@@ -4322,12 +4332,12 @@
     VersusRulebook:'versus-rules.js?v=sticks-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=button-check-1',
-    ComboLab:'combo-lab.js?v=dash-pressure-1', FinishTools:'finish-tools.js?v=launch-aim-1',
+    ComboLab:'combo-lab.js?v=compare-defenses-1', FinishTools:'finish-tools.js?v=launch-aim-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-practice-1', DispatchView:'dispatch-view.js?v=launch-rescue-1',
-    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=ground-space-1',
+    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=compare-defenses-1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -6783,6 +6793,10 @@
         startMatch({...settings,mode:'training',stage:'picnic',form:'original',p1,p2,fetch:false});
         drill('combo',false,'dashPressure','punish');
       }
+    } else if (hash === '#training/compare-defenses') {
+      leaveOnline();afterStory=null;
+      startMatch({...settings,mode:'training',p1:'brisket',p2:'pip',stage:'nightmail',fetch:false});
+      drill('combo',false,'late','strike');
     } else if (hash === '#training/shield-punish') {
       leaveOnline();
       afterStory = null;

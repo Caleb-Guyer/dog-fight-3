@@ -3246,8 +3246,11 @@
       const previous = this.comboPractice;
       this.comboTakes ??= [null,null];
       const tape = this.comboTakes[slot];
+      if (source === 'replay' && !tape?.length) source = 'record';
+      const liveReply=reply==='player' && ['late','example','replay'].includes(source);
+      if(reply==='player' && !liveReply)reply='stand';
       const flurry = source === 'flurry' || source === 'escapeFlurry';
-      const defending = source === 'defend' || source === 'mix' || source === 'escapeFlurry';
+      const defending = liveReply || source === 'defend' || source === 'mix' || source === 'escapeFlurry';
       const markTime = this.comboMarkTime ??= this.time;
       this.resetTraining();
       this.time = markTime;
@@ -3259,11 +3262,10 @@
         rival.x = pip.x + pip.stats.width + rival.stats.width + 3;
         this.dogs = [pip,rival];
       }
-      if (source === 'replay' && !tape?.length) source = 'record';
       const prior = previous && (previous.phase === 'done' || previous.contacts.length) ? { source: previous.source, reply: previous.reply,
         slot:previous.playSlot ?? previous.slot, hits: previous.hits, damage: previous.damage, baseline: previous.baseline,
         window:previous.window,counter:previous.counter?.moveId } : previous?.prior;
-      this.comboPractice = { source, reply, slow, markTime, slot, defending, originalDogs, phase: source === 'record' || source === 'throwChase' || flurry || defending ? 'ready' : 'active',
+      this.comboPractice = { source, reply, slow, markTime, slot, defending, liveReply, originalDogs, phase: source === 'record' || source === 'throwChase' || flurry || defending ? 'ready' : 'active',
         tape: source === 'replay' ? tape : [], saved: tape, baseline: this.trainingDamage, prior,
         tick: 0, clock: 0, contacts: [], hits: 0, damage: 0, firstFree: null, shifts: 0, dodges: 0 };
       if(source==='confirm')window.ComboLab.startConfirm(this,advance?previous?.series:null);
@@ -3309,12 +3311,12 @@
         if(d.thrown)return input;
         return {...idleInput,grab:tick===0,y:this.grapple?.phase==='hold'?-1:0};
       }
-      const length = d.defending ? d.tape.length || 80 : d.source === 'record' || d.source === 'flurry' ? 150 : d.source === 'replay' ? d.tape.length : 55;
+      const length = d.defending && !d.liveReply ? d.tape.length || 80 : d.source === 'record' || d.source === 'flurry' ? 150 : d.source === 'replay' ? d.tape.length : 55;
       if (tick >= length + 60) { d.phase = 'done'; return null; }
       if (tick >= length) return idleInput;
       if (d.source === 'flurry') return input;
       if (d.source === 'escapeFlurry') return {...idleInput,quickAttack:true,attack:tick === 0 || tick >= 9};
-      if (d.defending) return d.tape[tick] || comboHopInput(this.dogs[0].kind, tick, d.playSlot);
+      if (d.defending && !d.liveReply) return d.tape[tick] || comboHopInput(this.dogs[0].kind, tick, d.playSlot);
       if (d.source === 'replay') return d.tape[tick];
       if (d.source !== 'record') return comboExample(this.dogs[0].kind, tick, d.source === 'late');
       d.tape.push({ ...input, tapped: { ...input.tapped } });
@@ -3330,6 +3332,16 @@
         return this.shieldPunishInput(rival,this.dogs[0]) || {...idleInput, shield:rival.ground >= 0};
       }
       if (!d.contacts.length || rival.grip) return idleInput;
+      if(d.reply==='strike' || d.reply==='jumpAway'){
+        const jump=d.reply==='jumpAway',away=Math.sign(rival.x-this.dogs[0].x) || this.dogs[0].face;
+        if(d.answered===d.contacts.length)return jump && rival.ground<0?{...idleInput,x:away}:idleInput;
+        if(frozen || rival.impactLag>dt+1e-8 || rival.landingLag>dt+1e-8 || rival.floorAction || rival.ledge ||
+            rival.wallAction || rival.attack || rival.airDodge ||
+            (rival.stun>dt+1e-8 && (jump || !this.canEscapeHitstun(rival,true))))return idleInput;
+        if(jump && rival.ground<0 && !rival.jumps)return idleInput;
+        d.answered=d.contacts.length;
+        return jump?{...idleInput,x:away,jump:true,tapped:{jump:true}}:{...idleInput,attack:true,quickAttack:true,tapped:{attack:true}};
+      }
       if (d.reply === 'away' && frozen)
         return { ...idleInput, x: Math.sign(rival.x - this.dogs[0].x) || this.dogs[0].face };
       if (d.reply !== 'guard') return idleInput;
@@ -3340,7 +3352,7 @@
     }
     comboContact(target, kind, moveId, damage = 0) {
       const d = this.comboPractice;
-      if ((d?.defending || d?.reply === 'punish' || d?.reply === 'p2') && d.phase === 'active' && target.index === 0 && !d.counter &&
+      if ((d?.defending || d?.reply === 'punish' || d?.reply === 'strike' || d?.reply === 'p2') && d.phase === 'active' && target.index === 0 && !d.counter &&
           (kind === 'hit' || kind === 'grab' || kind === 'throw'))
         d.counter = {kind, moveId, damage};
       if (!d || d.phase !== 'active' || target.index !== 1) return;
@@ -5763,7 +5775,7 @@
           if (combo.phase === 'ready') {
             if (!tap) return;
             combo.playSlot = combo.source === 'mix' ? Math.min(1,Math.floor(this.random()*2)) : combo.slot;
-            combo.tape = combo.source === 'escapeFlurry' ? [] : this.comboTakes[combo.playSlot] || [];
+            if(!combo.liveReply)combo.tape = combo.source === 'escapeFlurry' ? [] : this.comboTakes[combo.playSlot] || [];
             combo.phase = 'countdown';
             combo.lead = 30;
             combo.consumeAttack = true;
