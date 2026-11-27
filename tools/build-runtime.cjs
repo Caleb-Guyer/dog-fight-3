@@ -3,7 +3,7 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { minify } = require('terser');
 
-const scripts = ['controls.js', 'fight-school.js', 'fighters-art.js', 'arena-art.js', 'engine.js', 'render.js', 'app.js'];
+const scripts = ['controls.js', 'fight-school.js', 'arcade.js', 'fighters-art.js', 'arena-art.js', 'engine.js', 'render.js', 'app.js'];
 const args = process.argv.slice(2);
 const checkOnly = args.includes('--check');
 const site = path.resolve(args.find(arg => arg !== '--check') || path.join(__dirname, '..', 'docs'));

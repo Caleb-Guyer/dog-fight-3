@@ -28,6 +28,10 @@ dialog:is([data-view='finish-replay'],[data-view='finish-film']) { width:min(760
 .flight-key::before, .flight-result::before { content:''; display:inline-block; width:17px; margin-right:6px; vertical-align:middle; }
 .flight-key::before { border-top:3px dashed #98651c; }
 .flight-result::before { border-top:3px solid #286d66; }
+.flight-fine { margin:8px 0; }
+.flight-fine label { display:grid; grid-template-columns:5em minmax(52px,12em) minmax(5em,auto); gap:6px; align-items:center; padding:3px 0; }
+.flight-fine input { width:100%; min-width:0; accent-color:var(--ink); }
+.flight-fine output { font-variant-numeric:tabular-nums; }
 @media(max-height:520px) {
   dialog[data-view='finish-replay'] .dialog-inner { padding:8px 12px; }
   dialog[data-view='finish-replay'] .dialog-heading, #dialog-body .clip-caption { margin:2px 0; padding-bottom:2px; }

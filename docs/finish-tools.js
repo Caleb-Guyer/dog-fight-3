@@ -336,8 +336,9 @@
   }
   function launchFlight(tape, launch, aim) {
     const {slot,frame} = launch;
-    let ko = null;
+    let ko = null,release=null;
     const player = tape.playback(frame-1, (event,e) => {
+      if(event==='launchDI' && e.f.index===slot && !release)release={angle:e.angle*180/Math.PI,scale:e.scale};
       if (event === 'ko' && e.f.index === slot) {
         ko = {x:e.x,y:e.y,zone:e.zone,bounds:player.battle.blastBounds()};
       }
@@ -349,14 +350,13 @@
     let bounds=battle.blastBounds();
     while (player.frame < player.length && battle.end === null && !ko) {
       const tick = player.frame+1;
-      const recorded = controlsAt(tape,tick,slot);
-      player.step(tick === frame && aim ? {...recorded,...aim} : recorded);
+      player.step(tick===frame?tape.launchInput(frame,slot,aim):controlsAt(tape,tick,slot));
       bounds=ko?.bounds || battle.blastBounds();
       points.push(ko ? {x:ko.x,y:ko.y} : {x:dog.x,y:dog.y});
     }
     const outcome = ko ? 'KO at the '+ko.zone+' line' : dog.ledge ? 'Holding the ledge' :
       dog.ground >= 0 ? 'Onstage' : 'Still airborne';
-    return {points,terrain,width,bounds,inset:bounds.left+window.DogFight.blastSideMargin,outcome,frame:player.frame};
+    return {points,terrain,width,bounds,inset:bounds.left+window.DogFight.blastSideMargin,outcome,frame:player.frame,release};
   }
   function drawFlights(canvas, recorded, attempt) {
     const ctx = canvas.getContext('2d'), w = canvas.width, h = canvas.height;
@@ -386,7 +386,7 @@
     }
     path(recorded.points,true);path(attempt.points,false);
   }
-  function launchPanel(nav,tape,launch,jump,practice,signal,rescueLaunch) {
+  function launchPanel(nav,tape,launch,jump,practice,signal,rescueLaunch,study,attachAimReader) {
     const choices=[
       ['Up-left','↖',-1,-1],['Up','↑',0,-1],['Up-right','↗',1,-1],
       ['Left','←',-1,0],['Center','•',0,0],['Right','→',1,0],
@@ -398,30 +398,89 @@
       '<div class="flight-study"><div class="flight-stick" role="group" aria-label="Launch direction">'+
       choices.map(([name,glyph])=>'<button type="button" class="utility" aria-label="'+name+'" title="'+name+'">'+glyph+'</button>').join('')+
       '</div><canvas width="360" height="206" role="img"></canvas></div>'+
-      '<p class="flight-key"></p><p class="flight-result" role="status"></p><div class="dialog-actions"><button type="button" class="utility" data-fly>Play from impact</button>'+
+      '<p class="flight-key"></p><p class="flight-result" role="status"></p>'+
+      '<details class="flight-fine"><summary>Fine-tune the stick</summary><label>Horizontal <input data-axis="x" type="range" min="-100" max="100" step="1"><output></output></label>'+
+      '<label>Vertical <input data-axis="y" type="range" min="-100" max="100" step="1"><output></output></label>'+
+      '<p data-angle></p><p>Your chosen aim plays for one frame when the hit releases. You control the dog from the next frame.</p><div class="dialog-actions"><button type="button" class="utility" data-recorded>Use recorded stick</button>'+
+      '<button type="button" class="utility" data-read-pad>Read my controller</button></div><p data-pad-note role="status" hidden></p><div class="dialog-actions">'+
+      '<button type="button" class="primary" data-aim-play>Use this aim and play</button>'+
+      (rescueLaunch?'<button type="button" class="utility" data-aim-search>Find a landing with this aim</button>':'')+
+      '</div></details><div class="dialog-actions"><button type="button" class="utility" data-fly>Play from impact</button>'+
       (rescueLaunch?'<button type="button" class="utility" data-save-launch>Find a route back onstage</button>':'')+'</div>';
     nav.before(panel);
     const pad=[...panel.querySelectorAll('.flight-stick button')],canvas=panel.querySelector('canvas');
     const key=panel.querySelector('.flight-key'),info=panel.querySelector('.flight-result');
-    let recorded, selected=Math.abs(launch.raw.y)>Math.abs(launch.raw.x)?3:1;
+    const fine=panel.querySelector('.flight-fine'),axes=[...fine.querySelectorAll('input')];
+    const saved=study && study.frame===launch.frame && study.slot===launch.slot?study:null;
+    const defaultChoice=choices[Math.abs(launch.raw.y)>Math.abs(launch.raw.x)?3:1];
+    let recorded,aim=saved?.aim || {x:defaultChoice[2],y:defaultChoice[3]},raf=0;
     const attempts=new Map();
-    function compare(index){
-      selected=index;
-      const [name,,x,y]=choices[index];
+    function compare(){
+      if(signal.aborted || !panel.open)return;
+      const {x,y}=aim,index=choices.findIndex(c=>c[2]===x && c[3]===y),name=index<0?stick(x,y):choices[index][0];
       recorded ??= launchFlight(tape,launch);
-      if(!attempts.has(index))attempts.set(index,launchFlight(tape,launch,{x,y}));
-      const other=attempts.get(index);
+      const other=attempts.get(index) || launchFlight(tape,launch,aim);
+      if(index>=0)attempts.set(index,other);
       drawFlights(canvas,recorded,other);
       pad.forEach((b,i)=>b.setAttribute('aria-pressed',String(i===index)));
-      const before='Recorded · '+recorded.outcome+' on frame '+recorded.frame;
+      for(const slider of axes){
+        const axis=slider.dataset.axis,value=Math.round(aim[axis]*100);
+        slider.value=value;slider.nextElementSibling.value=stick(axis==='x'?aim.x:0,axis==='y'?aim.y:0);
+      }
+      const delta=other.release;
+      if(delta)fine.querySelector('[data-angle]').textContent='At release · '+Math.abs(delta.angle).toFixed(1)+'°'+
+        (Math.abs(delta.angle)<.05?' turn':delta.angle>0?' clockwise':' counterclockwise')+' · '+Math.round(delta.scale*100)+'% of original launch speed.';
+      const input=tape.launchInput(launch.frame,launch.slot);
+      const before='Recorded · '+recorded.outcome+' on frame '+recorded.frame+' · '+stick(input.x,input.y);
       const after=name+' · '+other.outcome+' on frame '+other.frame;
       key.textContent=before;info.textContent=after;
       canvas.setAttribute('aria-label','Dashed recorded path and solid '+name.toLowerCase()+' path. '+before+'. '+after+'.');
     }
-    panel.addEventListener('toggle',()=>{if(panel.isConnected && panel.open){jump(launch.frame-1);compare(selected);}}, {signal});
-    pad.forEach((b,i)=>b.onclick=()=>compare(i));
+    panel.addEventListener('toggle',event=>{if(event.target===panel && panel.isConnected && panel.open){jump(launch.frame-1);compare();}}, {signal});
+    pad.forEach((b,i)=>b.onclick=()=>{aim={x:choices[i][2],y:choices[i][3]};compare();});
+    for(const slider of axes)slider.oninput=()=>{
+      aim={...aim,[slider.dataset.axis]:Number(slider.value)/100};
+      if(!raf)raf=requestAnimationFrame(()=>{raf=0;compare();});
+    };
+    signal.addEventListener('abort',()=>cancelAnimationFrame(raf),{once:true});
+    fine.querySelector('[data-recorded]').onclick=()=>{const p=tape.launchInput(launch.frame,launch.slot);aim={x:p.x||0,y:p.y||0};compare();};
+    const read=fine.querySelector('[data-read-pad]'),note=fine.querySelector('[data-pad-note]');
+    let listening=false,sampled=null,pads=[],ready=new Map();
+    function cancel(){
+      const active=listening || sampled!==null;
+      listening=false;sampled=null;note.hidden=true;read.textContent='Read my controller';return active;
+    }
+    read.onclick=()=>{
+      if(cancel())return;
+      listening=true;ready.clear();for(const p of pads)if(!p.buttons[0]?.pressed)ready.set(p.index,p.id);
+      read.textContent='Cancel reading';note.hidden=false;
+      note.textContent='Hold the movement stick at the angle you want. Press the bottom face button to read it.';
+    };
+    attachAimReader?.({cancel,poll(devices){
+      pads=devices;
+      if(!listening && sampled===null)return false;
+      if(!panel.open || !fine.open || signal.aborted){cancel();return false;}
+      if(sampled!==null){
+        const p=pads.find(p=>p.index===sampled.index && p.id===sampled.id);
+        if(!p || !p.buttons[0]?.pressed && Math.max(Math.abs(p.axes[0]||0),Math.abs(p.axes[1]||0))<.42)cancel();
+        return true;
+      }
+      for(const index of ready.keys())if(!pads.some(p=>p.index===index))ready.delete(index);
+      for(const p of pads){
+        if(!p.buttons[0]?.pressed){ready.set(p.index,p.id);continue;}
+        if(!ready.has(p.index) || ready.get(p.index)!==p.id)continue;
+        const axis=window.FightControls.movementAxis;
+        aim={x:axis(p.axes[0]),y:axis(p.axes[1])};listening=false;sampled={index:p.index,id:p.id};
+        compare();note.textContent='Pad '+(p.index+1)+' · '+stick(aim.x,aim.y)+'. Release the button and center the stick.';break;
+      }
+      return true;
+    }});
+    const selection=()=>({frame:launch.frame,slot:launch.slot,aim:{...aim}});
+    fine.querySelector('[data-aim-play]').onclick=()=>practice(launch.frame-1,launch.slot,selection());
+    if(rescueLaunch)fine.querySelector('[data-aim-search]').onclick=()=>rescueLaunch({...launch,chosenAim:{...aim}});
     panel.querySelector('[data-fly]').onclick=()=>practice(launch.frame-1,launch.slot);
     if(rescueLaunch)panel.querySelector('[data-save-launch]').onclick=()=>rescueLaunch(launch);
+    if(saved){fine.open=panel.open=true;panel.querySelector('summary').focus();}
   }
   function holdAttempt(tape,hold,recorded=false,emit=()=>{}){
     let escaped=false;
@@ -821,7 +880,7 @@
 
     document.querySelector('[data-finish-slot="'+slot+'"]').focus();
   }
-  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,practiceHold,holdFocus,practiceLedge,ledgeFocus,returnTape,clinic,rescueLaunch,stageClinic,chooseClinic}){
+  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,practiceHold,holdFocus,practiceLedge,ledgeFocus,returnTape,clinic,rescueLaunch,launchStudy,attachAimReader,stageClinic,chooseClinic}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
     const {marks,escape,launch,contact,landings,holds,ledges}=analyze(tape,slot,follow,!!retryMoment);
     if(stageClinic){
@@ -838,7 +897,7 @@
     if(ledges.length && practiceLedge)ledgePanel(nav,tape,ledges,initialSeat,jump,practiceLedge,ledgeFocus,returnTape);
     if(holds.length && practiceHold)holdPanel(nav,tape,holds,initialSeat,jump,practiceHold,holdFocus);
     if(contact && practiceLaunch)defensePanel(nav,tape,contact,jump,practiceLaunch,signal);
-    if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch,signal,rescueLaunch);
+    if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch,signal,rescueLaunch,launchStudy,attachAimReader);
     if(landings.length && practiceLanding)landingPanel(nav,tape,landings,jump,practiceLanding,clinic,signal);
     let selected=null,panel,line,lead;
     if(retryMoment && marks.length){

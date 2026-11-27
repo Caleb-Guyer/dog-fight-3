@@ -57,7 +57,7 @@
   }
   function controls(route,tick) {
     const {dir,jumpAt,upAt}=route;
-    if (!tick && route.aim) return {...idleInput,...route.aim};
+    if (!tick && route.aim) return route.releaseInput || {...idleInput,...route.aim};
     if (route.dodge && tick===(route.dodgeAt ?? 0)) return {...idleInput,...route.dodge,shield:true,tapped:{shield:true}};
     if(tick===route.rollAt)return {...idleInput,shield:true,tapped:{shield:true}};
     if (tick===upAt || tick===route.secondAt) return {...idleInput,x:dir,y:-1,special:true,tapped:{special:true}};
@@ -66,6 +66,20 @@
     if (jumpAt!==null && tick>=jumpAt && tick<jumpAt+15)
       return {...idleInput,x:dir,jump:true,tapped:{jump:tick===jumpAt}};
     return {...idleInput,x:dir};
+  }
+  const techniques={pip:'double',brisket:'cannon',clover:'sail'};
+  function followSpecial(plan,p,f,tick){
+    const a=f.attack;
+    if(plan.technique==='double' && plan.secondAt===undefined && f.hopWindow>0 && a?.moveId==='pipHopper' && a.time>=.1 && f.vy>-395)plan.secondAt=tick;
+    if(plan.technique==='cannon' && plan.releaseAt===undefined && a?.charging && a.power>=.86)plan.releaseAt=tick;
+    if(plan.technique==='sail' && plan.releaseAt===undefined && a?.moveId==='cloverSail'){
+      const deck=nearestDeck(p.battle,f);
+      if(deck && f.x>=deck.x1+14 && f.x<=deck.x2-14 && f.y<=deck.y)plan.releaseAt=tick;
+    }
+  }
+  function usedTechnique(plan,p){
+    return plan.technique==='double'?p.secondHop:plan.technique==='cannon'?p.charged:
+      plan.technique==='sail'?plan.releaseAt!==undefined && p.folded:true;
   }
   function routeFrom(tape,start,dir,options,slot,follow) {
     const plan={slot,start,dir,jumpAt:options.jump?0:null,upAt:options.up && !options.jump?0:null};
@@ -78,19 +92,12 @@
       if(options.roll && f.ledge && plan.rollAt===undefined)plan.rollAt=tick;
       if (options.jump && options.up && plan.upAt===null && tick>=15 && f.vy>=0 && !f.ledge && f.ground<0)
         plan.upAt=tick;
-      const a=f.attack;
-      if(plan.technique==='double' && plan.secondAt===undefined && f.hopWindow>0 && a?.moveId==='pipHopper' && a.time>=.1 && f.vy>-395)plan.secondAt=tick;
-      if(plan.technique==='cannon' && plan.releaseAt===undefined && a?.charging && a.power>=.86)plan.releaseAt=tick;
-      if(plan.technique==='sail' && plan.releaseAt===undefined && a?.moveId==='cloverSail'){
-        const deck=nearestDeck(p.battle,f);
-        if(deck && f.x>=deck.x1+14 && f.x<=deck.x2-14 && f.y<=deck.y)plan.releaseAt=tick;
-      }
+      if(plan.technique)followSpecial(plan,p,f,tick);
       p.step(controls(plan,tick));
     }
     if (p.outcome!=='landed' || (options.jump && !p.jumped) || (options.up && !p.cast) ||
         (plan.dodge && !(p.dodged && p.caught)) || (options.roll && !p.rolled) ||
-        (plan.technique==='double' && !p.secondHop) || (plan.technique==='cannon' && !p.charged) ||
-        (plan.technique==='sail' && (plan.releaseAt===undefined || !p.folded))) return null;
+        !usedTechnique(plan,p)) return null;
     if(p.hooked && p.caught)plan.technique='lasso';
     plan.end=p.frame;
     return plan;
@@ -126,7 +133,7 @@
     }
     if (lastFall!==original.length) return null;
     samples.sort((a,b)=>a.score-b.score);
-    const technique={pip:'double',brisket:'cannon',clover:'sail'}[original.battle.dogs[slot].kind];
+    const technique=techniques[original.battle.dogs[slot].kind];
     const returns=[{},{jump:true},{up:true},{jump:true,up:true}];
     if(technique)returns.push({up:true,technique},{jump:true,up:true,technique});
     for (const {start,dir,dodge} of samples) {
@@ -145,10 +152,15 @@
     if(!dog?.tumble?.pending || !opening.hitStop || frame>tape.length ||
         !(opening.mode==='local' || opening.mode==='solo' && slot===0))return null;
     const home=dog.x<opening.stageWidth/2?1:-1;
-    const aims=[[home,0],[-home,0],[0,1],[0,-1],[home,-1],[home,1],[-home,-1],[-home,1],[0,0]];
+    const chosen=launch.chosenAim;
+    const aims=chosen?[[chosen.x,chosen.y]]:[[home,0],[-home,0],[0,1],[0,-1],[home,-1],[home,1],[-home,-1],[-home,1],[0,0]];
+    const actions=['drift','up','dodgeDown','dodgeIn','jump','dodgeUpIn'];
+    if(chosen && techniques[dog.kind])actions.push('specialReturn');
     for(const [x,y] of aims){
-      for(const action of ['drift','up','dodgeDown','dodgeIn','jump','dodgeUpIn']){
+      for(const action of actions){
         const plan={slot,start,aim:{x,y},dir:home,jumpAt:null,upAt:null};
+        if(chosen)plan.releaseInput=tape.launchInput(frame,slot,plan.aim);
+        if(action==='specialReturn')plan.technique=techniques[dog.kind];
         const p=attempt(tape,plan,undefined,follow), b=p.battle, f=b.dogs[slot];
         p.step(controls(plan,0));
         // Drift back against the launch. If the flight ends outside the deck, aim for that lip.
@@ -158,7 +170,7 @@
         while(!p.outcome){
           const t=p.frame-start, dodge=action.startsWith('dodge');
           if(!acted && action!=='drift' && ((!f.stun && !f.tumble?.pending) || dodge && b.canEscapeHitstun(f,false))){
-            if(action==='up')plan.upAt=t;
+            if(action==='up' || action==='specialReturn')plan.upAt=t;
             else if(action==='jump')plan.jumpAt=t;
             else {
               plan.dodgeAt=t;
@@ -166,10 +178,11 @@
             }
             acted=true;
           }
+          if(plan.technique)followSpecial(plan,p,f,t);
           p.step(controls(plan,t));
           if(t%20===0)yield;
         }
-        if(p.outcome==='landed' && (action==='drift' || action==='up' && p.cast ||
+        if(p.outcome==='landed' && (action==='drift' || action==='up' && p.cast || action==='specialReturn' && usedTechnique(plan,p) ||
             action==='jump' && p.jumped || plan.dodge && p.dodged)){
           plan.end=p.frame;
           return plan;
@@ -183,7 +196,9 @@
   function instruction(plan,label) {
     const direction=label(plan.dir>0?'right':'left');
     if(plan.aim){
-      const opener='As the hit releases, aim '+stickName(plan.aim,label)+'. Then hold '+direction+'. ';
+      const opener=plan.releaseInput?'Your selected stick position plays on the release frame. Then hold '+direction+'. ':
+        'As the hit releases, aim '+stickName(plan.aim,label)+'. Then hold '+direction+'. ';
+      if(plan.technique)return opener+instruction({...plan,aim:null},label);
       const next=plan.dodge?'Aim '+stickName(plan.dodge,label)+' and tap '+label('shield')+' for an air dodge. ':
         plan.upAt!==null?'Aim '+label('up')+' and tap '+label('special')+' to recover. ':
         plan.jumpAt!==null?'Tap '+label('jump')+' for an air jump. ':'';
@@ -214,7 +229,7 @@
     return target ? length>=.55 && (aim.x*input.x+aim.y*input.y)/(length*target)>.97 : length<.2;
   }
   function gate(plan,tick,input,label,dog) {
-    if(plan.aim && !tick)return aligned(input,plan.aim)?'':stickName(plan.aim,label)+' · Steer the launch';
+    if(plan.aim && !tick)return (plan.releaseInput || aligned(input,plan.aim))?'':stickName(plan.aim,label)+' · Steer the launch';
     if(plan.aim && (tick===1 || tick===plan.dodgeAt+1 || plan.upAt!==null && tick===plan.upAt+1) && input.x*plan.dir<.55)
       return label(plan.dir>0?'right':'left')+' · Drift back';
     if(plan.rollAt!==undefined){
@@ -267,13 +282,14 @@
     if(plan.technique==='lasso' && !p.hooked)return 'The rope missed the edge. Aim up and cast while the lip is in reach.';
     return p.outcome==='fell'?'You crossed the blast line. Watch where the example turns toward the stage.':'Your dog was still fighting for a landing when time ran out.';
   }
-  function sheet(tape,{showDialog,back,play,label,shake,slot=0,follow,swap,chooseFighter,kind,projection,launch},savedPlan) {
+  function sheet(tape,{showDialog,back,play,label,shake,slot=0,follow,swap,chooseFighter,kind,projection,launch,compare},savedPlan) {
     showDialog('finish-recovery',launch?'Survive this launch':'Practice this recovery','<p id="recovery-position" class="clip-caption" hidden></p><p id="recovery-route" role="status">'+(launch?'Trying launch angles and returns…':'Checking the last fall…')+'</p>'+
       '<canvas id="clip-arena" width="640" height="360" role="img" aria-label="Recorded recovery position" hidden></canvas>'+
       '<p id="recovery-cue" role="status"></p><div class="dialog-actions"><button class="primary" id="recovery-play" hidden>Try this recovery</button>'+
       '<button class="utility" id="recovery-guide" hidden>Guide my inputs</button>'+
       '<button class="utility" id="recovery-demo" hidden>Watch the recovery</button><button class="utility" id="recovery-fall" hidden>'+
       (projection?'Watch without input':'Watch my fall')+'</button>'+
+      (compare?'<button class="utility" id="recovery-compare">Compare launch steering</button>':'')+
       (swap?'<button class="utility" id="recovery-swap">'+swap.title+'</button>':'')+
       '<button class="utility" id="recovery-back">'+(swap?'Fight School':'Back')+'</button></div>'+
       (chooseFighter?'<fieldset><legend>Practice a recovery</legend><div class="dialog-actions">'+
@@ -284,6 +300,7 @@
     let plan=savedPlan, raf=0;
     backButton.onclick=()=>{cancelAnimationFrame(raf);back();}; backButton.focus();
     if(swap)el('recovery-swap').onclick=()=>{cancelAnimationFrame(raf);swap.open();};
+    if(compare)el('recovery-compare').onclick=()=>{cancelAnimationFrame(raf);compare();};
     if(chooseFighter)for(const button of backButton.closest('dialog').querySelectorAll('[data-recover-as]')){
       button.onclick=()=>{cancelAnimationFrame(raf);chooseFighter(button.dataset.recoverAs);};
     }
@@ -328,7 +345,7 @@
       raf=requestAnimationFrame(tick);
     }
     function ready() {
-      if(!plan){el('recovery-route').textContent=launch?'None of the tested launch angles and follow-ups got this stock back onstage. In the replay, try defending before the hit.':'No landing found from the available recovery positions in this clip. Try an earlier frame in the match replay.';return;}
+      if(!plan){el('recovery-route').textContent=launch?.chosenAim?'The tested follow-ups with this stick position ended offstage. Go back to compare another angle.':launch?'None of the tested launch angles and follow-ups got this stock back onstage. In the replay, try defending before the hit.':'No landing found from the available recovery positions in this clip. Try an earlier frame in the match replay.';return;}
       const battle=tape.playback(plan.start).battle, dog=battle.dogs[slot], where=el('recovery-position');
       where.textContent=(battle.mode==='local'?'P'+(slot+1)+' · ':'')+dog.stats.name+' · '+Math.round(dog.damage)+'% · '+
         (launch?'Impact to landing · '+(plan.end-plan.start)+' frames':(plan.dir>0?'Left':'Right')+' of the ledge · '+dog.jumps+' air '+(dog.jumps===1?'jump':'jumps'));
@@ -378,7 +395,7 @@
     return {config,...recordFall(battle)};
   }
   function actions(review){
-    const exit=review.rescue?'Fight School':review.from==='pause'?'Back to fight':
+    const exit=review.rescue || review.launchLab?'Fight School':review.from==='pause'?'Back to fight':
       ['card','archive'].includes(review.from)?'Back to match stats':'Back to results';
     return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Retry recovery</button>'+
       '<button class="utility" data-do="recovery-speed">'+(review.guided?'Try at match speed':'Guide my inputs')+'</button>'+
