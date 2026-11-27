@@ -13,7 +13,7 @@
     <link rel="preload" href="./assets/brawl-pixel.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="./style.css?v=parcel-1" />
     <link rel="stylesheet" href="./dispatch.css?v=stock-share-1" />
-    <link rel="stylesheet" href="./screen.css?v=field-card-1" />
+    <link rel="stylesheet" href="./screen.css?v=versus-picker-1" />
     <script defer id="menu-controls" src="./runtime/controls.js?v=a9ac2240ce6c6212"></script>
     <script defer src="./runtime/fighters-art.js?v=2a67aa3b59f1ffbb"></script>
     <script defer src="./runtime/arena-art.js?v=6412e724dc033974"></script>
@@ -21,9 +21,9 @@
     <script defer src="./runtime/fight-records.js?v=010ed689ac0ca56e"></script>
     <script defer src="./runtime/fight-school.js?v=1e8cbe0364b1c985"></script>
     <script defer src="./runtime/arcade.js?v=752f452c86948de5"></script>
-    <script defer src="./runtime/render.js?v=c8e5f7636f38fe3b"></script>
+    <script defer src="./runtime/render.js?v=ca768d27dd50d07d"></script>
     <script defer src="./runtime/dispatch-script.js?v=fa8d7f4ec9df9201"></script>
-    <script defer src="./runtime/app.js?v=dae898ea5979a496"></script>
+    <script defer src="./runtime/app.js?v=a5a97a891676b8e1"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -445,17 +445,10 @@
             <h2 id="picking">Choose for P1</h2>
             <span class="deck-rule" aria-hidden="true"></span>
             <button id="lobby-random" class="utility move-link" type="button">Random dog</button>
-            <button id="pick-together" class="utility move-link" type="button" aria-haspopup="dialog" hidden>Pick together</button>
-            <button id="depot-duo" class="utility move-link" type="button" aria-haspopup="dialog" hidden>Co-op boss fight</button>
-            <button id="winner-stays" class="utility move-link" type="button" aria-haspopup="dialog" hidden>Winner stays</button>
-            <button id="tournament" class="utility move-link" type="button" aria-haspopup="dialog" hidden>Tournament</button>
             <button id="lobby-coat" class="utility move-link" type="button" aria-haspopup="dialog">Coat</button>
-            <button id="cpu-level" class="utility move-link" type="button" aria-haspopup="dialog">CPU · Arcade</button>
-            <button id="event-matches" class="utility move-link" type="button" aria-haspopup="dialog">Event Matches</button>
-            <button id="lobby-moves" class="utility move-link" type="button">Move list</button>
           </div>
           <div id="roster" class="roster" role="group" aria-label="Choose a fighter"></div>
-          <div class="signature"><i data-icon="spark"></i><span id="signature"></span><button type="button" id="lobby-tryout" class="utility" aria-haspopup="dialog">Try fighters</button><button type="button" id="lobby-profiles" class="utility" aria-haspopup="dialog">Player profiles</button></div>
+          <div class="signature"><i data-icon="spark"></i><span id="signature"></span></div>
         </section>
         <div class="coin-panel">
           <button
@@ -469,33 +462,59 @@
             <span><small>Arena</small><strong id="stage-title">Picnic Table</strong></span>
             <i data-icon="chevron"></i>
           </button>
-          <div class="ball-control">
-            <div>
-              <button
-                id="fetch-switch"
-                class="switch"
-                type="button"
-                role="switch"
-                aria-label="Fetch Ball"
-                aria-checked="true"
-              >
-                <i data-icon="ball"></i><span>Fetch Ball</span><b class="toggle-value">On</b>
-              </button>
-              <button
-                id="ball-info"
-                class="info"
-                type="button"
-                aria-label="About the Fetch Ball"
-                title="About the Fetch Ball"
-              >
-                <i data-icon="info"></i>
-              </button>
-            </div>
+          <div class="lobby-config">
+            <button id="cpu-level" class="utility" type="button" aria-haspopup="dialog">CPU · Arcade</button>
+            <button id="pick-together" class="utility" type="button" aria-haspopup="dialog" hidden>Pick together</button>
+            <button id="lobby-more" class="utility" type="button" aria-controls="lobby-options">Match options</button>
           </div>
           <button class="primary start" id="start" type="button">
             <i data-icon="play"></i><span>Start fight</span>
           </button>
         </div>
+        <section id="lobby-options" aria-labelledby="lobby-options-title" hidden>
+          <div class="lobby-options-inner">
+            <header>
+              <div><small id="lobby-options-mode"></small><h1 id="lobby-options-title">Match options</h1></div>
+              <button id="lobby-options-back" type="button" class="utility">Fighter select</button>
+            </header>
+            <div class="lobby-option-groups">
+              <section id="lobby-events"><h2>Events</h2>
+                <button id="event-matches" type="button" aria-haspopup="dialog">Event matches</button>
+                <button id="depot-duo" type="button" aria-haspopup="dialog" hidden>Co-op boss fight</button>
+                <button id="winner-stays" type="button" aria-haspopup="dialog" hidden>Winner stays</button>
+                <button id="tournament" type="button" aria-haspopup="dialog" hidden>Tournament</button>
+              </section>
+              <section><h2>Fighters</h2>
+                <button id="lobby-tryout" type="button" aria-haspopup="dialog">Try fighters</button>
+                <button id="lobby-moves" type="button" aria-haspopup="dialog">Move list</button>
+                <button id="lobby-profiles" type="button" aria-haspopup="dialog">Player profiles</button>
+              </section>
+            </div>
+            <div class="ball-control">
+              <div>
+                <button
+                  id="fetch-switch"
+                  class="switch"
+                  type="button"
+                  role="switch"
+                  aria-label="Fetch Ball"
+                  aria-checked="true"
+                >
+                  <i data-icon="ball"></i><span>Fetch Ball</span><b class="toggle-value">On</b>
+                </button>
+                <button
+                  id="ball-info"
+                  class="info"
+                  type="button"
+                  aria-label="About the Fetch Ball"
+                  title="About the Fetch Ball"
+                >
+                  <i data-icon="info"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
       </section>
       <section id="cup-select" aria-label="Arcade Cup" hidden></section>
       <section id="match" aria-label="Match" hidden>
