@@ -52,9 +52,10 @@ async function play(browser,device){
       };
     });
     await page.waitForFunction(()=>!!window.DogFight);await captureFight();
-    await choose('#welcome-field');await page.locator('#match-mode').filter({hasText:'0 / 10 skills'}).waitFor();
+    await choose('#welcome-field');await page.locator('#match-set').filter({hasText:'0 / 10 skills'}).waitFor();
     await page.clock.runFor(2500);await hold('right',true);await page.clock.runFor(680);await hold('right',false);
-    assert.match(await page.locator('#match-mode').textContent(),/1 \/ 10 skills/);
+    assert.match(await page.locator('#match-set').textContent(),/1 \/ 10 skills/);
+    assert(await page.locator('#pause').evaluate(b=>{const r=b.getBoundingClientRect();return b.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),device+' can reach Pause beside the skill count');
     const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.school')).passed);
     assert.deepEqual(await saved(),['move']);
     await choose('#pause');await choose('[data-do=field-card]');
