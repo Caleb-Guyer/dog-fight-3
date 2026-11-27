@@ -49,7 +49,18 @@ async function play(browser,device){
       const step=SoloEvents.Run.prototype.step;
       SoloEvents.Run.prototype.step=function(...args){step.apply(this,args);window.run=this;};
     });
-    async function start(selector='#event-play'){await page.evaluate(()=>window.run=null);await choose(selector);await page.clock.runFor(2100);}
+    async function start(selector='#event-play'){
+      await page.evaluate(()=>window.run=null);await choose(selector);await page.clock.runFor(2100);
+      if(touch){
+        const hud=await page.evaluate(()=>{
+          const pause=document.querySelector('#pause'),p=pause.getBoundingClientRect();
+          const goal=document.querySelector('#match-set').getBoundingClientRect();
+          return {pauseReachable:pause.contains(document.elementFromPoint(p.x+p.width/2,p.y+p.height/2)),
+            goalFits:goal.width>0 && goal.x>=0 && goal.right<=innerWidth && goal.top>=p.bottom};
+        });
+        assert.deepEqual(hud,{pauseReachable:true,goalFits:true});
+      }
+    }
     async function to(frame){
       for(let i=0;i<170 && await page.evaluate(()=>window.run?.matchFrames || 0)<frame;i++)await page.clock.runFor(16);
       assert(await page.evaluate(n=>window.run?.matchFrames>=n,frame),device+' reached '+frame);
