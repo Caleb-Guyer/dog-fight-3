@@ -245,6 +245,21 @@
       (review.guided?'<button class="utility" data-do="landing-speed">Try at match speed</button>':'')+
       '<button class="utility" data-do="trial-replay">Review '+subject+'</button><button class="utility" data-do="trial-results">'+back+'</button></div>';
   }
+  function landingCue(review){
+    const surface=review.landing.surface;
+    return surface?[surface==='wall'?'Tech the wall':'Brace against the ceiling',
+      'Tap Shield just before you hit the '+surface+'. '+(surface==='wall'?'Hold Jump at contact to kick away.':'A tech keeps your remaining air jump.')]:
+      ['Break your fall',review.guided?'The fall waits for Shield. Tap it with your stick centered, or aim sideways to roll.':'Watch the distance to the floor. Tap Shield just before impact.'];
+  }
+  function landingGate(trial,input){
+    const {landing,landingFocus}=trial.review,{player}=trial;
+    const tapFrame=landing.surface?Math.max(trial.start,landing.frame-landingFocus.lead-1):trial.start;
+    if(landing.surface && landingFocus.aimUp && player.frame<tapFrame && input.y>-.45)return 'Hold Up';
+    if(player.frame!==tapFrame)return '';
+    const shield=input.tapped?.shield || input.shield && (!landing.surface || !player.battle.dogs[trial.slot].prev.shield);
+    const spring=landing.surface==='wall' && landingFocus.wallJump;
+    return !shield || spring && !input.jump && !input.tapped?.jump?spring?'Jump + Shield':'Tap Shield':'';
+  }
   function landingReport(player,landing,showDialog,actions){
     const r=player.result;
     const before=landingName(landing.type,landing.dir,landing.hard),after=r?landingName(r.type,r.dir,r.hard):'Recording ended';
@@ -514,6 +529,16 @@
       }};
   }
   const ledgeLine=r=>r.text+' after '+r.frames+' frame'+(r.frames===1?'':'s')+'. '+(r.contact?r.contact+'.':'No hit or grab.');
+  function ledgeActions(review){
+    const back=review.clinic?'Fight School':review.from==='pause'?'Back to fight':['archive','card'].includes(review.from)?'Back to match stats':'Back to results';
+    return '<div class="dialog-actions"><button class="primary" data-do="ledge-play">'+(review.ledge.watch?'Try the ledge myself':'Retry the ledge')+'</button>'+
+      '<button class="utility" data-do="trial-replay">Compare get-ups</button><button class="utility" data-do="trial-results">'+back+'</button></div>';
+  }
+  function ledgeReport(player,review,showDialog){
+    showDialog('finish-comparison',player.result.text,'<p>Recorded · '+ledgeLine(review.ledge.original)+'</p><p>'+
+      (review.ledge.watch?'Chosen get-up':'Your get-up')+' · '+ledgeLine(player.result)+'</p>'+ledgeActions(review),false);
+    document.querySelector('[data-do=ledge-play]').focus();
+  }
   function ledgePreview(tape,mark,action,delay,follow){
     const attempt=ledgeAttempt(tape,mark,action==='recorded',undefined,follow);
     while(!attempt.outcome && attempt.frame<attempt.length)
@@ -854,5 +879,5 @@
     const sync=inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump,signal});
     return ()=>{sync();if(panel && selected)panel.hidden=frame()!==selected.frame;};
   }
-  window.FinishTools={chooseFighter,install,moments,analyze,inputFrame,launchFlight,holdAttempt,holdPreview,holdReport,ledgeDemo,ledgeAttempt,ledgePreview,ledgeLine,defenseReply,returnTrace,returnComparison,landingDemo,stageTechDemo,landingTry,landingPreview,landingName,timing,landingActions,landingReport};
+  window.FinishTools={chooseFighter,install,moments,analyze,inputFrame,launchFlight,holdAttempt,holdPreview,holdReport,ledgeDemo,ledgeAttempt,ledgePreview,ledgeLine,ledgeActions,ledgeReport,defenseReply,returnTrace,returnComparison,landingDemo,stageTechDemo,landingTry,landingPreview,landingName,timing,landingActions,landingCue,landingGate,landingReport};
 })();
