@@ -995,7 +995,7 @@
     if(dialogType==='rumble')window.PadFeedback?.stop();
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=result-board-1';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=school-result-2';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
@@ -2534,18 +2534,21 @@
         if(window.MatchReview)recap();else loadDispatch('MatchReview').then(recap).catch(()=>{});
       }
       if(clips.length)(watch || stats).insertAdjacentHTML(watch?'beforeend':'beforebegin',knockoutButton);
-      if(!watch){
+      const schoolLoss=matchConfig.schoolFinal && result.end===1 && result.endReason==='ko';
+      if(!watch || matchConfig.schoolFinal){
         const button=document.createElement('button');
         button.className='utility';button.dataset.do='watch-finish';
-        if(matchConfig.schoolFinal && result.end===1 && result.endReason==='ko'){
-          button.textContent='Replay my last stock';
-          stats.closest('.dialog-actions').querySelector('[data-do=rematch]').after(button);
+        button.textContent=schoolLoss?'Replay my last stock':'Watch finish';
+        if(watch)watch.append(button);else stats.before(button);
+        if(schoolLoss){
           const clip=clips.findLast(c=>c.losses.some(l=>l.slot===0));
           if(clip?.losses.some(l=>l.slot===0 && l.lastHit)){
-            const b=button.cloneNode(false);delete b.dataset.do;b.id='result-chance';b.textContent='Coach my last KO';
-            b.onclick=()=>secondChance({clip,slot:0,from:'result',result});button.after(b);
+            const coach=document.createElement('button');
+            coach.className='utility';coach.id='result-chance';coach.textContent='Coach my last KO';
+            coach.onclick=()=>secondChance({clip,slot:0,from:'result',result});
+            practiceTools.append(coach);
           }
-        }else{button.textContent='Watch finish';stats.before(button);}
+        }
       }
       const practice=document.createElement('button');
       practice.className='utility';practice.textContent='Practice finish';practice.dataset.do='practice-finish';
@@ -3120,6 +3123,9 @@
       '<section class="result-scores" aria-label="Final standings"><header><h4>'+type+'</h4>'+cardButton+'</header><ol>'+rows+'</ol>'+next+
       (net?'<p id="net-rematch-status" role="status"></p>':'')+'</section>'+
       '<div class="result-actions">'+primary+links+'</div>'+details+'</div>',false);
+    rememberResultReview(result);
+  }
+  function rememberResultReview(result){
     const review=$('result-review');
     review.ontoggle=()=>{
       if(!review.isConnected)return;
@@ -3193,17 +3199,24 @@
     if (matchConfig?.schoolFinal && !online.match) {
       const won=result.end===0;
       const review=won ? null : window.FightSchool.rematchLesson(result.matchCard);
-      showDialog('result',won?'First fight won!':'First fight finished',
-        '<div class="winner"><img alt="" src="'+portrait(f.kind,result.coatFor(f.index))+'"><div><h3>'+f.stats.name+
-        ' wins!</h3><p>'+finish+' · '+duration+'</p></div></div><p>'+
-        (won?'Pip’s next opponent is Noodle on Picnic Table in the Arcade Cup.':review.reason)+
-        '</p>'+targetRecap()+'<div class="dialog-actions">'+fieldButton()+(corner?.previous?'<button class="utility" data-do="rematch-film">Compare my rematch</button>':'')+'<button class="'+(won?'primary':'utility')+'" data-do="school-cup">Pip’s Arcade Cup</button>'+
-        '<button class="'+(won?'utility':'primary')+'" data-do="rematch">Rematch Brisket</button>'+
-        (review?'<button class="utility" data-school-review="'+review.id+'">'+review.button+'</button>':'')+cardButton+
-        '<button class="utility" data-do="fighter-classes">Fighter lessons</button>'+
-        '<button class="utility" data-do="home">Main menu</button></div>',false);
-      document.querySelector('#dialog-body .primary').focus();
-      announce(won?'First fight won!':'First fight finished');
+      const round=won?(cupEntry('pip').active?.wins.length || 0):0;
+      const bout=cup.courses.pip.bouts[round];
+      const next=bout?fighters[bout[0]].name+' on '+stageName(bout[1],bout[2]):'Copper Hound at Bell Depot';
+      const advance='<button class="'+(won?'primary':'utility')+'" data-do="school-cup">Pip’s Arcade Cup</button>';
+      const practice=review?'<button class="primary" data-school-review="'+review.id+'">'+review.button+'</button>':'';
+      const title=won?'First fight won!':'First fight finished';
+      showDialog('result',title,'<div class="school-result"><div class="winner"><img alt="" src="'+portrait(f.kind,result.coatFor(f.index))+'"><div><h3>'+
+        f.stats.name+' wins!</h3><p>'+finish+' · '+duration+'</p></div></div><p class="school-verdict">'+
+        (won?'Next in Pip’s Arcade Cup · '+next:review.reason)+'</p>'+targetRecap()+
+        '<div class="school-result-actions">'+(won?advance:practice)+'<button class="utility" data-do="rematch">Rematch Brisket</button></div>'+
+        '<details id="result-review"'+(openResultReviews.has(result)?' open':'')+'><summary>More options</summary>'+
+        '<div class="result-tools"><section id="result-watch"><h4>Watch</h4><span id="result-recap" hidden></span>'+
+        (corner?.previous?'<button class="utility" data-do="rematch-film">Compare my rematch</button>':'')+cardButton+'</section>'+
+        '<section id="result-practice"><h4>Practice</h4>'+fieldButton()+'<button class="utility" data-do="fighter-classes">Fighter lessons</button></section>'+
+        '<section id="result-options"><h4>Play</h4>'+(won?'':advance)+'<button class="utility" data-do="home">Main menu</button></section></div></details></div>',false);
+      rememberResultReview(result);
+      document.querySelector('.school-result-actions .primary').focus();
+      announce(title);
       return;
     }
     if (online.match) {
