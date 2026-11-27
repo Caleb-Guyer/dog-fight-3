@@ -480,9 +480,10 @@
       if(dog.shield){
         this.shieldAt=since;
         this.note='Shield up '+since+' frames after touchdown.';
-        this.done=!!this.canceled;this.missed=!this.done;
+        this.done=!!this.canceled && since===this.frames;this.missed=!this.done;
         this.info.success=this.note+' '+this.move.label+' normally takes '+this.move.land+' frames.';
-        this.info.miss=this.note+' Retry and press Shield before landing to cut the recovery to '+Math.ceil(this.move.land/2)+' frames.';
+        this.info.miss=this.note+(this.canceled?' Your dog was ready after '+this.frames+' frames. Keep Shield held through the landing.':
+          ' Retry and press Shield before landing to cut the recovery to '+Math.ceil(this.move.land/2)+' frames.');
       }else if(since>=this.frames+8){
         this.info.miss=this.frames+'f recovery. '+(this.canceled?'You got the cancel. Keep Shield held until the bubble appears.':'Press Shield in the last seven frames and keep holding it.');
         this.missed=true;
