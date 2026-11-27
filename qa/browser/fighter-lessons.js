@@ -30,13 +30,23 @@ async function firstExample(browser){
   page.on('pageerror',e=>errors.push(e.message));
   await clock(page);
   try{
+    const lessonFile=/\/fighter-lessons\.js(?:\?|$)/;
+    let attempts=0;
+    await page.route(lessonFile,route=>++attempts===1
+      ?route.fulfill({status:503,contentType:'text/plain',body:'Lesson unavailable'})
+      :route.continue());
     await page.goto(root+'#tutorial');
     const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.school')).passed);
-    let attempts=0;
-    await page.route('**/fighter-lessons.js*',r=>attempts++?r.continue():r.abort());
+    await page.locator('#school-coach[data-state=playing]').waitFor();
+    await page.locator('#game:focus').waitFor();
+    const failed=page.waitForResponse(response=>lessonFile.test(response.url()) && response.status()===503);
     await page.keyboard.press('Enter');
-    await page.locator('#dispatch-load-retry').click();
+    await failed;
+    await page.clock.runFor(40);
+    await page.getByText('Lesson example could not load.',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Retry',exact:true}).click();
     await page.locator('#school-coach[data-state=example]').waitFor();
+    assert.equal(attempts,2);
     await page.clock.runFor(900);await state(page,'example');
     await page.clock.runFor(1800);await state(page,'example-ended');
     assert.deepEqual(await saved(),[]);
