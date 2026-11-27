@@ -17,9 +17,9 @@ async function build() {
 
   for (const name of scripts) {
     const source = await fs.readFile(path.join(site, name), 'utf8');
-    // Only shorten local identifiers and remove whitespace. Replay fields and public APIs use property names.
+    // Shorten boolean literals in the simulation without renaming replay fields or public APIs.
     const result = await minify(source, {
-      compress: false,
+      compress: name === 'engine.js' ? { defaults: false, booleans: true } : false,
       mangle: true,
       keep_fnames: true,
       keep_classnames: true,

@@ -2027,6 +2027,11 @@
     startMatch({mode:'solo', p1, p2, coats:[savedCoat(0,p1),savedCoat(1,p2)], stage:'picnic', cpuLevel:'rival',
       stockCount:3, minutes:7, fetch:false, dashBackOpening:role}, undefined, 42);
   }
+  function startLandingRead(landingRead,p1=settings.p1,p2=settings.p2){
+    leaveOnline();afterStory=null;
+    startMatch({mode:'solo',p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:'nightmail',form:'flat',
+      cpuLevel:'rival',stockCount:3,minutes:7,fetch:false,landingRead},undefined,42);
+  }
   function startLiftFight(p2=settings.p2,p1=settings.p1,perch=false) {
     leaveOnline();afterStory=null;
     startMatch({mode:'solo',p1,p2,coats:[savedCoat(0,p1),savedCoat(1,p2)],stage:perch?'bandstand':'picnic',form:perch?'original':'flat',
@@ -2047,6 +2052,8 @@
     if (world.mode !== 'solo' || world.cpuLevel !== 'rival') return '';
     const {spotReads, spotPunishes, rollReads, rollPunishes, shieldHabit} = world.bot;
     let report = '';
+    const landing=world.bot.coveredLanding;
+    if(landing)report+='<p>Rival covered '+({stay:'your landing spot',through:'a tech roll through them',away:'a tech roll away'})[landing]+' after seeing the same landing twice. Change your Shield direction on the next fall.</p>';
     if(world.bot.gavePerch)report+='<p>Rival dropped through the platform as you returned with protection. You can keep the high ground or follow through.</p>';
     if(world.bot.challengedReturn)report+='<p>Rival held the platform and aimed a jab at the end of your protection. Shield when the jab starts to block it.</p>';
     if(world.bot.heldCenter)report+='<p>Rival played for center stage with a late lead. Dash in, then shield before you reach its attack range.</p>';
@@ -3400,6 +3407,7 @@
         pick.dataset.returner || pick.dataset.ledgeGuard,side,!!pick.dataset.returner);
     }
     if (action === 'cpu-level') showCpuLevels();
+    if(action==='landing-read')return startLandingRead(e.target.closest('[data-landing-read]').dataset.landingRead);
     if (action === 'shield-read-match') startShieldReadMatch();
     if (action === 'throw-read-perch' || action === 'throw-read-edge') startThrowRead(action.slice('throw-read-'.length));
     if (action === 'perch-fight') startPerchFight();
@@ -4334,7 +4342,7 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=sticks-1',
+    VersusRulebook:'versus-rules.js?v=landing-read-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=button-check-1',
     ComboLab:'combo-lab.js?v=compare-defenses-1', FinishTools:'finish-tools.js?v=launch-aim-1',
@@ -6718,6 +6726,8 @@
       startLiftFight('brisket','pip',true);
     } else if (/^#solo\/stock-return\/(pip|brisket|noodle|clover)$/.test(hash)) {
       startLiftFight(hash.split('/').pop(),'pip');
+    } else if (/^#solo\/landing-read\/(stay|through)$/.test(hash)) {
+      startLandingRead(hash.split('/').pop(),'pip','brisket');
     } else if (/^#solo\/dash-back\/(bait|watch|delay)$/.test(hash)) {
       startDashBack(hash.split('/').pop());
     } else if (hash === '#solo/last-stock') {

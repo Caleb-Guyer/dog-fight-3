@@ -2874,6 +2874,14 @@
         this.bot.returnPerches=true;
         this.bot.readPlatforms=true;
         this.bot.clockAware=true;
+        this.bot.landingHabit={choice:0,count:0};
+      }
+      if(this.mode==='solo' && ['stay','through'].includes(config.landingRead)){
+        const [falling,guard]=this.dogs,deck=this.terrain[0],x=(deck.x1+deck.x2)/2;
+        Object.assign(falling,{x,y:deck.y-48,ground:-1,face:1,vx:32,vy:175,stun:.52,jumps:1,damage:45});
+        Object.assign(guard,{x:x+65,y:deck.y,ground:0,face:-1,landingLag:.28});
+        this.startTumble(falling,false);
+        if(this.bot.landingHabit)this.bot.landingHabit={choice:config.landingRead==='through'?1:0,count:2};
       }
       this.matchCard = versus && config.lesson === undefined ? {
         players:this.dogs.map(f => ({kind:f.kind, coat:this.coatFor(f.index), damage:0, hits:0, blocks:0, parries:0,
@@ -2899,6 +2907,8 @@
       this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
       if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','readDashAttacks','liftReadEnabled','returnPerches','readPlatforms','gavePerch','challengedReturn','clockAware','heldCenter','chasedLead'])
         if (memory[key] !== undefined) this.bot[key] = memory[key];
+      if(memory?.landingHabit)this.bot.landingHabit=memory.landingHabit;
+      if(memory?.coveredLanding)this.bot.coveredLanding=memory.coveredLanding;
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
       if (this.bot.runoff && (f.index===1 || this.bot.runoff.phase!=='home')) this.bot.runoff=null;
@@ -7048,6 +7058,8 @@
       f.invuln = safe / 60;
       const duration = type === 'floorAttack' ? moves[f.kit.floorAttack].end : total / 60;
       f.floorAction = { type, time: 0, duration, dir };
+      if(f.index===0 && this.bot.landingHabit && ['tech','techRoll','downed'].includes(type))
+        this.readLanding(f,type,dir);
       if(read && (type==='tech' || type==='techRoll'))f.floorAction.techChoice=read;
       if (type === 'floorAttack') beginAttack(f, 'floorAttack', 0, 0, f.kit.floorAttack);
       const event =
@@ -10443,6 +10455,33 @@
       f.tumble.rollDir=choice==='away'?away:choice==='through'?-away:0;
       return f.tumble.rollDir;
     }
+    readLanding(target,type,dir){
+      const guard=this.dogs[1],habit=this.bot.landingHabit;
+      if(guard.respawning || guard.stockLift || Math.abs(guard.x-target.x)>280 || Math.abs(guard.y-target.y)>130)return;
+      if(type==='downed'){habit.count=0;return;}
+      const towardGuard=Math.sign(guard.x-target.x) || -guard.face;
+      // Choose the destination from earlier landings. A new roll cannot redirect the attempt.
+      if(habit.count===2 && guard.ground>=0 && guard.ground===target.ground && !guard.attack && !guard.grip && !guard.stun){
+        const floor=this.terrain[guard.ground], predicted=habit.choice*towardGuard;
+        const x=clamp(target.x+predicted*rollDistance(target,{type:'techRoll'}),floor.x1+2,floor.x2-2);
+        if(Math.abs(guard.x-x)<135)this.bot.coverTech={offset:x-floor.x1,ground:guard.ground,at:this.matchFrames,choice:habit.choice};
+      }
+      const choice=dir*towardGuard || 0;
+      habit.count=choice===habit.choice?Math.min(2,habit.count+1):1;habit.choice=choice;
+    }
+    coverLanding(f,foe,mark){
+      const age=this.matchFrames-mark.at,low=moves[f.kit.tilts.down];
+      const [total,safe]=floorFrames[mark.choice?'techRoll':'tech'];
+      if(age>total || f.ground!==mark.ground || f.stun || f.grip || f.attack || f.command || f.floorAction || f.shield || f.charge>=0){
+        delete this.bot.coverTech;return null;
+      }
+      const gap=this.terrain[mark.ground].x1+mark.offset-f.x;
+      if(Math.abs(gap)>low.box[0]+low.box[2]+foe.stats.width-4)return {...idleInput,x:Math.sign(gap)*.6};
+      if(age+low.start*60<safe+1 || f.landingLag)return idleInput;
+      delete this.bot.coverTech;
+      this.bot.coveredLanding=mark.choice===0?'stay':mark.choice>0?'through':'away';
+      return {...idleInput,x:Math.sign(gap)*.5,y:1,tapped:{attack:true}};
+    }
     cpuRollChaseInput(f, foe) {
       const roll = foe.floorAction, brain = this.bot;
       if (roll?.type !== 'techRoll' && roll?.type !== 'getupRoll') {
@@ -11746,6 +11785,7 @@
         const basic = this.rookieNeutral(f, foe);
         if (basic) return basic;
       } else if (this.cpuLevel === 'rival') {
+        if(brain.coverTech){const cover=this.coverLanding(f,foe,brain.coverTech);if(cover)return cover;}
         if(brain.guardRushUntil>this.time){
           if(!brain.blockedSwing && !f.stun && !f.grip && f.shield)return {...idleInput,shield:true};
           brain.guardRushUntil=0;
