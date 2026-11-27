@@ -4503,9 +4503,11 @@
     window.scrollTo(0, 0);
   }
   let missionSaves=[],savesRead=0;
-  async function readSavedTournament(){
+  async function readSavedTournament(required=false){
+    let storedTournament;
+    try{storedTournament=sessionStorage.getItem('dog-fight-3.tournament.1');}catch{return;}
     try{
-      if(savedEvents.LocalTournament || !sessionStorage.getItem('dog-fight-3.tournament.1'))return;
+      if(savedEvents.LocalTournament || !storedTournament)return;
       await loadDispatch('LocalTournament');
       rotationStorage=sessionStorage;
       savedEvents.LocalTournament??=window.LocalTournament.Lineup.read(rotationStorage);
@@ -4514,9 +4516,9 @@
         refreshHomeSaves();
         if(welcome && $('school-welcome').hidden)focusHome();
       }
-    }catch{}
+    }catch(error){if(required)throw error;}
   }
-  async function readMissionSaves(){
+  async function readMissionSaves(required=false){
     const read=++savesRead;
     try{
       if(!window.DispatchSuspend){
@@ -4525,7 +4527,7 @@
       }
       const rows=await window.DispatchSuspend.list();
       if(read===savesRead){missionSaves=rows;if(page==='home')refreshHomeSaves();}
-    }catch{}
+    }catch(error){if(required)throw error;}
   }
   async function suspendMission(){
     if(!window.DispatchSuspend)return waitForDispatch('Suspend mission',()=>loadDispatch('DispatchSuspend'),suspendMission,showPause);
@@ -4599,12 +4601,15 @@
   }
   function showHome(focus = true) {
     menuScreen('home');
+    if (!$('home').querySelector('[data-opening]')) $('opening-choice').textContent='';
     const pendingPin=syncHomePin();
     afterStory = null;
     if (!schoolUnsaved) Object.assign(schoolSave,readSchool());
     refreshHomeSaves();
-    readMissionSaves();
-    readSavedTournament();
+    if (!$('home-continue').hasAttribute('data-opening')) {
+      readMissionSaves();
+      readSavedTournament();
+    }
     if (focus) {
       focusHome();
       pendingPin?.then(()=>{if(page==='home' && !$('dialog').open && document.activeElement===$('home-adventure'))focusHome();});
@@ -4655,6 +4660,7 @@
     if (!item) return;
     $('home-continue').dataset.save=item.id;
     $('continue-dog').src=portrait(item.kind,item.coat);
+    $('continue-dog').hidden=false;
     $('continue-title').textContent=item.title;
     $('continue-detail').textContent=item.detail;
     $('continue-action').textContent=item.action;
@@ -4667,6 +4673,14 @@
       '<button data-resume-id="'+g.id+'"><img alt="" src="'+portrait(g.kind,g.coat)+'"><span><strong>'+g.title+
       '</strong><small>'+g.detail+'</small></span><b>'+g.action+'</b></button>').join('')+'</div>');
     document.querySelector('[data-resume-id]').focus();
+  }
+  function resumeLatest() {
+    waitForDispatch('Continue saved game', () => Promise.all([readMissionSaves(true), readSavedTournament(true)]), () => {
+      const latest = savedGames()[0];
+      if (latest) return resumeSavedGame(latest.id);
+      showHome();
+      $('opening-choice').textContent='No saved game to resume.';
+    }, () => showHome());
   }
   function resumeSavedGame(id) {
     if (!savedGames().some(g=>g.id===id)) return showHome();
@@ -7130,9 +7144,12 @@
   if (page === 'home' && !$('dialog').open && $('home').contains(initialFocus) && initialFocus.matches('button') &&
       !initialFocus.disabled && !initialFocus.closest('[hidden]')) initialFocus.focus({preventScroll:true});
   requestAnimationFrame(frame);
-  document.dispatchEvent(new CustomEvent('dogfight-ready', {detail(index, held) {
-    // A confirm held across startup must not also jump or confirm the next menu.
-    menuPadButtons.set(index, held);
-    oldPad = {...oldPad, confirm:oldPad.confirm || !!(held & 1), back:oldPad.back || !!(held & 2)};
+  document.dispatchEvent(new CustomEvent('dogfight-ready', {detail:{
+    resumeLatest,
+    consumePad(index,held) {
+      // A confirm held across startup must not also jump or confirm the next menu.
+      menuPadButtons.set(index, held);
+      oldPad = {...oldPad, confirm:oldPad.confirm || !!(held & 1), back:oldPad.back || !!(held & 2)};
+    }
   }}));
 })();

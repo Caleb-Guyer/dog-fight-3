@@ -17,11 +17,11 @@ async function build() {
 
   for (const name of scripts) {
     const source = await fs.readFile(path.join(site, name), 'utf8');
-    // Shorten boolean literals in the simulation without renaming replay fields or public APIs.
+    // Menu handlers live inside app's closure. Simulation and replay code retain their function names.
     const result = await minify(source, {
       compress: name === 'engine.js' ? { defaults: false, booleans: true } : false,
       mangle: true,
-      keep_fnames: true,
+      keep_fnames: name !== 'app.js',
       keep_classnames: true,
       format: { comments: /^!/ }
     });
