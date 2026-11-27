@@ -1003,7 +1003,8 @@
   }
   function exitDialog() {
     if(dialogType==='event-board')return $('event-back').click();
-    if(dialogType==='event-result')return eventBoard(world.eventId);
+    if(dialogType==='event-result')return $('event-board').click();
+    if(dialogType==='stage-routes')return $('route-back').click();
     if(clipScreen?.aimReader?.cancel())return;
     if(dialogType==='couch-pads')return couchPanel?.cancel();
     if(dialogType==='pad-loss' || dialogType==='solo-pad-loss')return;
@@ -1150,7 +1151,8 @@
       choice + forms + (description ? '<p>' + (picking ? stageForms[form].name + ' · ' : '') + description + '</p>' : '') +
       '<div class="stage-options" data-form="' + form + '">' + rows.join('') + '</div>'+
       (room?'<p id="net-pick-ready" role="status"></p><button class="utility" data-do="room-fighter-back">Change fighter</button>':'')+
-      (!picking && chooseForm?'<div class="dialog-actions"><button class="utility" id="arena-music">Stage music</button></div>':''));
+      (!picking && chooseForm?'<div class="dialog-actions"><button class="utility" id="arena-run">Stage Run</button><button class="utility" id="arena-music">Stage music</button></div>':''));
+    if($('arena-run'))$('arena-run').onclick=()=>stageRunBoard({...lobbyMatchup(),stageForm:form});
     if($('arena-music'))$('arena-music').onclick=()=>openStageMusic(current,()=>{
       chooseArena(false,form);$('arena-music').focus();
     },form);
@@ -1161,6 +1163,19 @@
     document.querySelector('[data-stage="' + current + '"]').focus({preventScroll:true});
   }
   $('choose-stage').onclick = () => chooseArena();
+  function routeUI(){
+    return {showDialog,root:$('dialog-body'),store:storage,play:playMatchup,board:stageRunBoard,
+      start:(card,slot,best)=>{
+        leaveOnline();afterStory=null;
+        startMatch({mode:'solo',stage:card.stage,form:card.stageForm,p1:slot?card.p2:card.p1,p2:'pip',coats:[card.coats[slot],0],
+          fetch:false,minutes:0,eventId:'stage-run',stageRun:{card,slot,best}},undefined,42);
+      },back:()=>{chooseArena();$('arena-run').focus();}};
+  }
+  function stageRunBoard(card,slot=0){
+    if(page!=='lobby')toLobby();
+    if(!window.StageStrike || !versusStyled)return waitForDispatch('Stage Run',()=>loadVersusPanel('StageStrike'),()=>stageRunBoard(card,slot),()=>chooseArena());
+    window.StageStrike.routeSheet(card,slot,routeUI());
+  }
   let controlsShown=[];
   function controlTable(){
     controlsShown=[padNames(0,seatPad(0)),padNames(1,seatPad(1)),layout];
@@ -1417,6 +1432,7 @@
     return '';
   }
   function updateHUD() {
+    if(world.route)return world.hud($('match-set'));
     if(world.eventId)world.hud($('match-set'));
     if(world.mode==='parcel'){
       const clock=$('match-clock'),badge=$('match-set'),time=world.clock(),label=world.label();
@@ -2199,13 +2215,14 @@
     view = resume?.view || new FightView($('blast-radar'));
     showContactBoxes(false);
     view.shakeEnabled = settings.shake;
-    const Match = config.eventId?window.SoloEvents.Run:config.mode==='targets' ? window.BellBreak.Run : config.mode==='parcel'?window.ParcelPunt.Run:Battle;
+    const Match = config.stageRun?window.StageStrike.StageRun:config.eventId?window.SoloEvents.Run:config.mode==='targets' ? window.BellBreak.Run : config.mode==='parcel'?window.ParcelPunt.Run:Battle;
     world = resume?.battle || new Match({...config, rivalRead:series?.openingRead}, (name, e) => {
       world?.lesson?.contact(name,e,world);
       corner?.target?.contact(name,e,world);
       spar?.contact(name,e,world);
       view.event(name, e);
       fightSound(name,e);
+      if(name==='routeFlag'){sound('tick');announce('Flag '+e.count+' of three');}
       if (name==='ringBell') announce(e.count+' of '+world.bells.length+' bells');
       if (name==='win' && world?.bells) world.saved=window.BellBreak.saveBellTime(world);
       if(name==='win' && world?.mode==='parcel')world.saved=window.ParcelPunt.save(world);
@@ -2270,6 +2287,7 @@
     }
     config.openingDuel?.place(world);
     $('training-tools').hidden = config.mode !== 'training' || !!world.warmupPartner;
+    if(world.route){$('hud').hidden=true;$('match-clock').setAttribute('aria-label','Route time');$('match-clock').classList.remove('urgent');}
     $('return-fight').hidden = !visit;
     $('return-fight').textContent=visit?.review?'Back to match stats':visit?.returnResult?'Back to results':'Back to fight';
     setFrameMode('live');
@@ -2373,6 +2391,7 @@
     if(finishTrial)return showTrialPause();
     if (page !== 'match' || !world || world.end !== null) return;
     if(matchConfig?.openingDuel)return openOpeningDuel(matchConfig.openingDuel.card,matchConfig.openingDuel,matchConfig.openingDuel.point?'point':'pause');
+    if(world.route)return window.StageStrike.routePanel(world,true,routeUI());
     if(world.eventId)return window.SoloEvents.panel(world,true,eventUI());
     if (world.bossLesson) return window.DispatchView.lessonPanel(world, view.parkedBoss.world, showDialog);
     if(world.warmupPartner)return showWarmupMenu();
@@ -3131,6 +3150,7 @@
     announce(title + '. ' + name(winner) + ' wins. Set score ' + set.score.join(' to '));
   }
   function showResult() {
+    if(world.route)return window.StageStrike.routePanel(world,false,routeUI());
     if(world.eventId)return window.SoloEvents.panel(world,false,eventUI());
     if(world.mode==='parcel')return parcelResult();
     if (world.bells) return bellResult();
@@ -4428,7 +4448,7 @@
     PlayerProfiles:'player-profiles.js?v=rumble-1',
     VersusRulebook:'versus-rules.js?v=opening-reply-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
-    WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=counterpick-map-1',
+    WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=stage-run-1',
     ComboLab:'combo-lab.js?v=rising-catch-1', FinishTools:'finish-tools.js?v=stock-runs-1',
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=first-hit-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
@@ -4443,7 +4463,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=counterpick-map-1';
+        link.href='./versus-select.css?v=stage-run-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -6716,6 +6736,8 @@
     if(arena==='events' && hash.startsWith('#solo/'))return eventBoard(form);
     if(Object.hasOwn(fighters,arena) && Object.hasOwn(specialInputs,form) && hash==='#moves/'+arena+'/'+form){
       showHome(false);showSpecialPreview({kind:arena,side:form,page:'home',paused:false});
+    }else if(hash==='#local/stage-run' || hash==='#solo/stage-run'){
+      settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();stageRunBoard(lobbyMatchup());
     }else if(hash==='#local/first-hit' || hash==='#solo/first-hit'){
       settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();openOpeningDuel(lobbyMatchup());
     }else if(/^#(solo|local)\/matchup(?:\/|$)/.test(hash)){

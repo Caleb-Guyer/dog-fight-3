@@ -219,5 +219,147 @@
     });
     return '<details id="strike-history"><summary>Stage picks and bans</summary>'+rows.join('')+'</details>';
   }
-  window.StageStrike={Draft,panel,history,layoutFor,compareLayouts,lossLine};
+  const routes={
+    picnic:[[1,.5,'Near basket'],[2,.5,'Far basket'],[0,.9,'Table end']],
+    laundry:[[2,.5,'Moving basket'],[3,.5,'Upper clothesline'],[1,.8,'Far rooftop']],
+    bandstand:[[1,.5,'Left wing'],[3,.5,'Top perch'],[2,.5,'Right wing']],
+    canal:[[1,.5,'Cable ferry'],[0,.85,'Gate deck'],[0,1,'Gate ledge']],
+    nightmail:[[0,.48,'Center line'],[0,1,'Right ledge'],[0,.82,'Back on deck']],
+    counterweights:[[1,.5,'Left lift'],[2,.5,'Right lift'],[0,.86,'Main deck']]
+  };
+  const routeKey=(card,slot)=>'dog-fight-3.stage-run.1.'+[card.stage,card.stageForm,slot?card.p2:card.p1].join('.');
+  const times=new Map(),clock=n=>(n/60).toFixed(2)+' s';
+  function storedSplits(store,key){
+    let saved;
+    try{saved=JSON.parse(store.getItem(key));}catch{}
+    if(Array.isArray(saved) && saved.length===3 && saved.every((n,i)=>Number.isSafeInteger(n) && n>(saved[i-1]||0)))return saved;
+  }
+  function bestSplits(store,key){
+    const local=times.get(key),saved=storedSplits(store,key);
+    return local && (!saved || local[2]<saved[2])?local:saved;
+  }
+  function flag(ctx,x,y,n,active){
+    ctx.save();ctx.translate(Math.round(x),Math.round(y));
+    ctx.fillStyle='#211d30';ctx.fillRect(-4,-55,6,55);ctx.fillRect(-3,-54,34,29);
+    ctx.fillStyle=active?'#ffcb67':'#c5d0cb';ctx.fillRect(-1,-51,29,23);
+    ctx.fillStyle='#282337';ctx.font='bold 19px monospace';ctx.fillText(String(n),8,-33);
+    if(active){ctx.fillStyle='#ffcb67';ctx.fillRect(-12,-3,24,3);}
+    ctx.restore();
+  }
+  const markX=(p,fraction)=>p.x1+(p.x2-p.x1)*fraction;
+  class StageRun extends window.DogFight.Battle {
+    constructor(config,emit,random){
+      super(config,emit,random);
+      const {card,slot,best}=config.stageRun;
+      this.route={card,slot,best,marks:routes[this.geometryStage],splits:[],started:false};
+      this.eventId='stage-run';this.event={name:'Stage Run'};
+      const floor=this.terrain[0];
+      Object.assign(this.dogs[0],{ground:0,x:floor.x1+60,y:floor.y,face:1});
+      Object.assign(this.dogs[1],{absent:true,stocks:0});
+    }
+    cpu(){return window.DogFight.idleInput;}
+    opponents(){return [];}
+    separateGroundedFighters(){}
+    move(f,input,dt){if(!f.absent)super.move(f,input,dt);}
+    knockouts(out){if(out.includes(this.dogs[0]))this.finishMatch(1,'fall');}
+    step(dt,input=window.DogFight.idleInput){
+      const r=this.route;
+      if(this.end!==null)return;
+      if(!r.started){
+        if(!input.x && !input.y && !input.jump && !input.shortHop && !input.special && !input.shield && !input.attack && !input.grab && !input.smash && !Object.values(input.tapped||{}).some(Boolean))return;
+        r.started=true;
+      }
+      super.step(dt,input);
+      if(this.end!==null)return;
+      const f=this.dogs[0],[index,fraction]=r.marks[r.splits.length],floor=this.terrain[index];
+      const reached=fraction===1?f.ledge?.index===index && !f.ledge.left:
+        f.ground===index && Math.abs(f.x-markX(floor,fraction))<=30;
+      if(reached){
+        r.splits.push(Math.round(this.matchFrames));
+        this.emit('routeFlag',{f,count:r.splits.length});
+        if(r.splits.length===r.marks.length)this.finishMatch(0,'route');
+      }
+    }
+    drawCourse(ctx){
+      const r=this.route;
+      r.marks.forEach(([index,fraction],i)=>{
+        if(i<r.splits.length)return;
+        const floor=this.terrain[index];
+        flag(ctx,markX(floor,fraction),floor.y,i+1,i===r.splits.length);
+      });
+    }
+    hud(badge){
+      const r=this.route,n=r.splits.length,clockEl=document.getElementById('match-clock');
+      const mark=r.marks[n],text=mark?(n+1)+'/3 · '+mark[2]:'3/3 · Finished';
+      if(badge.textContent!==text){badge.textContent=text;badge.removeAttribute('aria-label');}
+      if(badge.hidden)badge.hidden=false;
+      if(clockEl.hidden)clockEl.hidden=false;
+      const time=clock(this.matchFrames);if(clockEl.textContent!==time)clockEl.textContent=time;
+    }
+    save(store){
+      if(this.end!==0 || this.saved)return;
+      this.saved=true;
+      const r=this.route,key=routeKey(r.card,r.slot),prior=bestSplits(store,key);
+      if(prior && prior[2]<=r.splits[2])return;
+      const splits=r.splits.slice();
+      times.set(key,splits);
+      const write=()=>{
+        const old=storedSplits(store,key);
+        if(old && old[2]<=splits[2])return;
+        try{store.setItem(key,JSON.stringify(splits));}catch{}
+      };
+      if(globalThis.navigator?.locks)navigator.locks.request(key,write).catch(write);
+      else write();
+    }
+  }
+  function routeSheet(card,slot,ui){
+    const {root,showDialog,store,start,play,back}=ui;
+    const geometry=stageGeometry(card.stage,card.stageForm),marks=routes[geometry],best=bestSplits(store,routeKey(card,slot));
+    const options=(values,chosen)=>Object.entries(values).map(([k,v])=>'<option value="'+k+'"'+(k===chosen?' selected':'')+'>'+v.name+'</option>').join('');
+    showDialog('stage-routes','Stage Run','<div class="route-picks"><label>Arena <select id="route-arena">'+options(arenas,card.stage)+'</select></label>'+
+      '<label>Form <select id="route-form">'+options(stageForms,card.stageForm)+'</select></label></div>'+
+      '<canvas id="route-map" width="600" height="160" role="img"></canvas>'+
+      '<div class="dialog-actions">'+[card.p1,card.p2].map((kind,i)=>{
+        const finish=bestSplits(store,routeKey(card,i));
+        return '<button class="utility" data-runner="'+i+'" aria-pressed="'+(slot===i)+'">'+(i===0?'P1':card.mode==='solo'?'CPU':'P2')+' · '+fighters[kind].name+
+          (finish?' · '+clock(finish[2]):'')+'</button>';
+      }).join('')+'</div>'+
+      '<p>Use P1 controls. Land at the numbered flags in order. For a ledge flag, catch the lip. The clock starts on your first input.</p>'+
+      '<p id="route-legend"></p><div class="dialog-actions"><button class="primary" id="route-start">Run this stage</button>'+
+      '<button class="utility" id="route-play">'+(card.bestOfThree?'Start set here':'Start fight here')+'</button><button class="utility" id="route-back">Arena picker</button></div>');
+    const el=id=>root.querySelector('#route-'+id),canvas=el('map');
+    const names=marks.map((m,i)=>(i+1)+'. '+m[2]).join(' · ');
+    canvas.setAttribute('aria-label',arenas[card.stage].name+' · '+names);
+    el('legend').textContent=names+(best?' · Best '+clock(best[2]):'');
+    const layout=layoutFor(card.stage,card.stageForm),ctx=canvas.getContext('2d');
+    drawLayout(canvas,layout,0);ctx.save();ctx.scale(.5,.5);ctx.translate(0,-235);
+    const floors=platforms(geometry,0);
+    marks.forEach(([i,fraction],n)=>flag(ctx,markX(floors[i],fraction),floors[i].y,n+1,n===0));ctx.restore();
+    function change(next,who,focus){routeSheet(next,who,ui);root.querySelector(focus).focus({preventScroll:true});}
+    el('arena').onchange=e=>change({...card,stage:e.target.value},slot,'#route-arena');
+    el('form').onchange=e=>change({...card,stageForm:e.target.value},slot,'#route-form');
+    for(const b of root.querySelectorAll('[data-runner]'))b.onclick=()=>change(card,Number(b.dataset.runner),'[data-runner="'+b.dataset.runner+'"]');
+    el('start').onclick=()=>start(card,slot,best);el('play').onclick=()=>play(card);el('back').onclick=back;el('start').focus({preventScroll:true});
+  }
+  function routePanel(w,paused,{showDialog,root,store,start,board,play}){
+    const r=w.route;
+    const other=r.slot?r.card.p1:r.card.p2,compare=other!==w.dogs[0].kind && bestSplits(store,routeKey(r.card,1-r.slot));
+    const rows=r.marks.map((m,i)=>{
+      const t=r.splits[i],prior=r.best?.[i],diff=t && prior?t-prior:null;
+      return '<tr><th scope="row">'+m[2]+'</th><td>'+(t?clock(t):'—')+'</td><td>'+(prior?clock(prior):'—')+'</td><td>'+
+        (diff===null?'—':diff===0?'Even':clock(Math.abs(diff))+(diff<0?' faster':' slower'))+'</td>'+(compare?'<td>'+clock(compare[i])+'</td>':'')+'</tr>';
+    }).join('');
+    showDialog(paused?'pause':'event-result',paused?'Stage Run paused':w.end===0?'Route cleared':'Missed the landing',
+      '<p>'+arenas[w.stage].name+' · '+stageForms[w.form].name+' · '+w.dogs[0].stats.name+'</p>'+
+      '<table class="route-times"><thead><tr><th>Flag</th><th>Run</th><th>Best</th><th>Change</th>'+(compare?'<th>'+fighters[other].name+'</th>':'')+'</tr></thead><tbody>'+rows+'</tbody></table>'+
+      '<div class="dialog-actions">'+(paused?'<button class="primary" data-do="resume">Resume</button>':'')+
+      '<button id="route-again" class="'+(paused?'utility':'primary')+'">Retry route</button>'+
+      (other!==w.dogs[0].kind?'<button class="utility" id="route-swap">Run as '+fighters[other].name+'</button>':'')+'<button class="utility" id="route-fight">'+
+      (r.card.bestOfThree?'Start set here':'Start fight here')+'</button><button class="utility" id="event-board">Stage Run setup</button></div>',false);
+    root.querySelector('#route-again').onclick=()=>start(r.card,r.slot,bestSplits(store,routeKey(r.card,r.slot)));
+    if(root.querySelector('#route-swap'))root.querySelector('#route-swap').onclick=()=>start(r.card,1-r.slot,bestSplits(store,routeKey(r.card,1-r.slot)));
+    root.querySelector('#route-fight').onclick=()=>play(r.card);root.querySelector('#event-board').onclick=()=>board(r.card,r.slot);
+    root.querySelector('.primary').focus({preventScroll:true});
+  }
+  window.StageStrike={Draft,panel,history,layoutFor,compareLayouts,lossLine,StageRun,routeSheet,routePanel};
 })();

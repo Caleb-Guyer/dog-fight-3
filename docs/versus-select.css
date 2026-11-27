@@ -160,3 +160,10 @@ dialog[data-view='tournament'] { width:min(790px,calc(100% - 16px)); }
     overflow-wrap:anywhere;
   }
 }
+.route-picks { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.route-picks label, .route-picks select { display:block; width:100%; min-width:0; }
+.route-picks select { margin-top:4px; min-height:38px; font:inherit; }
+#route-map { display:block; width:100%; height:auto; margin:12px 0; background:#252737; border:2px solid #555061; }
+.route-times { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+.route-times th, .route-times td { text-align:left; padding:6px 3px; border-bottom:1px solid #77737d; }
+@media(max-width:520px){ .route-times { font-size:.85em; } }
