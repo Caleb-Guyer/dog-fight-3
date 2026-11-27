@@ -60,6 +60,9 @@ async function check(browser,device) {
     const play=()=>choose('#recovery-play');
     const root='http://127.0.0.1:8080/';
     await page.goto(root);await choose('#welcome-play');await choose(pad?'#pause':'#school-list');
+    const stockBreak=touch || pad,toggle='[data-do=stock-break-toggle]';
+    assert.equal(await page.locator(toggle).getAttribute('aria-pressed'),'false');
+    if(stockBreak)await choose(toggle);
     await choose('#dialog-body button:text-is("Recovery clinic")');await route();
     assert.match(await page.locator('#recovery-position').textContent(),/Left.+0 air jumps/);
     await choose('#recovery-guide');await page.clock.runFor(1600);
@@ -86,9 +89,21 @@ async function check(browser,device) {
     });
     await hold(-1);await page.clock.runFor(2400);
     for(let i=0;i<16 && !await page.evaluate(()=>window.career?.matchCard.losses.some(l=>l.slot===0));i++)await page.clock.runFor(250);
-    await hold(0);await choose('#pause');
+    await hold(0);
+    if(stockBreak){
+      assert.equal(await page.locator('#dialog-title').textContent(),'2 stocks left');
+      assert.match(await page.locator('#stock-break-recap').textContent(),/Pip went out at the bottom blast line/);
+      assert.equal(await page.evaluate(()=>career.dogs[0].stockLift.time),0);
+      assert.equal(await page.locator(toggle).getAttribute('aria-pressed'),'true');
+    }else await choose('#pause');
     const frozen=await page.evaluate(()=>fingerprint());
-    await choose('[data-do=coach-fall]');await route();
+    if(stockBreak){
+      await choose('#stock-break-watch');await page.clock.runFor(1500);
+      assert.equal(await page.locator('#dialog-title').textContent(),'KO replay');
+      assert.equal(await page.locator('[data-do=clip-back]').textContent(),'Back to next stock');
+      await choose('[data-do=clip-back]');assert.equal(await page.evaluate(()=>fingerprint()),frozen);
+    }
+    await choose(stockBreak?'#stock-break-practice':'[data-do=coach-fall]');await route();
     let line=await page.locator('#recovery-route').textContent();
     assert.match(line,/air jump/);
     if(device==='keyboard')assert.match(line,/Q/);
@@ -105,8 +120,9 @@ async function check(browser,device) {
     assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!',device+' '+line);
     assert.equal(await page.evaluate(()=>fingerprint()),frozen);
     await choose('[data-do=trial-replay]');await route();await choose('#recovery-back');
-    assert.equal(await page.locator('#dialog-title').textContent(),'Paused');
-    await choose('[data-do=stock-retry]');
+    const backTitle=stockBreak?'2 stocks left':'Paused';
+    assert.equal(await page.locator('#dialog-title').textContent(),backTitle);
+    await choose(stockBreak?'#stock-break-retry':'[data-do=stock-retry]');
     assert.equal(await page.locator('#dialog-title').textContent(),'Retry stock 1');
     await choose('#stock-watch');await page.clock.runFor(4400);
     assert.match(await page.locator('#stock-caption').textContent(),/Recorded knockout · bottom/);
@@ -117,7 +133,14 @@ async function check(browser,device) {
     await choose('[data-do=trial-retry]');await hold(-1);await page.clock.runFor(3000);await hold(0);
     assert.equal(await page.locator('#dialog-title').textContent(),'Stock lost');
     await choose('[data-do=trial-replay]');await choose('#stock-back');
-    assert.equal(await page.locator('#dialog-title').textContent(),'Paused');
+    assert.equal(await page.locator('#dialog-title').textContent(),backTitle);
+    if(stockBreak){
+      assert.equal(await page.evaluate(()=>fingerprint()),frozen);
+      await choose('[data-do=resume]');await page.clock.runFor(560);
+      assert.equal(await page.evaluate(()=>career.dogs[0].stockLift.ready),true);
+      assert.equal(await page.evaluate(()=>career.dogs[0].stocks),2);
+      assert.equal(await page.locator('#dialog').isVisible(),false);
+    }
     if(device==='keyboard'){
       await choose('[data-do=resume]');await hold(-1);
       for(let i=0;i<20 && !await page.locator('[data-do=watch-finish]').isVisible();i++)await page.clock.runFor(3500);
