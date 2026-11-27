@@ -494,6 +494,8 @@
 }
 .runner-meter { --side: var(--tomato); }
 .machine-meter { --side: var(--aqua); }
+#stock-share { display:grid; gap:3px; max-width:15ch; line-height:1.1; }
+#stock-share progress { width:100%; }
 .stock-line {
   display: flex;
   align-items: baseline;

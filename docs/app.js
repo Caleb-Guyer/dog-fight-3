@@ -764,11 +764,11 @@
     });
   }
   $('pick-together').onclick=pickTogether;
-  function openDepotDuo(){
-    if(!missionReady())return waitForDispatch('Bell Depot doubles',loadMission,openDepotDuo,toLobby);
-    window.DispatchView.duoSheet([fighters[settings.p1].name,fighters[settings.p2].name],showDialog);
+  function openDepotDuo(rally=false){
+    if(!missionReady())return waitForDispatch('Bell Depot doubles',loadMission,()=>openDepotDuo(rally),toLobby);
+    window.DispatchView.duoSheet([fighters[settings.p1].name,fighters[settings.p2].name],showDialog,rally);
   }
-  $('depot-duo').onclick=openDepotDuo;
+  $('depot-duo').onclick=()=>openDepotDuo();
   function strikeBack(){
     if(page==='match')return showResult();
     dismiss();$('rules-label').focus({preventScroll:true});
@@ -3503,7 +3503,7 @@
     const pattern = e.target.closest('[data-boss-pattern]')?.dataset.bossPattern;
     if (pattern) return startBossPractice(pattern);
     if (action === 'boss-return') return leaveBossPractice();
-    if (action === 'depot-start') return beginRun(yardChapter.lastRoom,0,null,null,null,true);
+    if (['depot-start','share-p1','share-p2'].includes(action)) return beginRun(yardChapter.lastRoom,0,null,null,null,action);
     if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.atCheckpoint);
     if (action === 'suspend-mission') return suspendMission();
     if (action === 'school-suspend') return suspendFirstFight();
@@ -4426,7 +4426,7 @@
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-duo-1', DispatchView:'dispatch-view.js?v=depot-duo-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=stock-share-1', DispatchView:'dispatch-view.js?v=stock-share-1',
     ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=light-shield-1',
   };
   const dispatchLoads=new Map();
@@ -4939,7 +4939,7 @@
     if (story && !sideRoute && !suspended) saveProgress({ room: index, checkpoint, pending: '' });
     if (doubles) {
       const pads=getPads();
-      matchConfig={...settings,coats:lobbyCoats.slice(),couchSeats:lobbySeats || new controls.Seats(pads)};
+      matchConfig={...settings,rallySeat:['share-p1','share-p2'].indexOf(doubles),coats:lobbyCoats.slice(),couchSeats:lobbySeats || new controls.Seats(pads)};
       matchConfig.couchSeats.beginMatch(pads);
       clearInput();
     }
@@ -4956,7 +4956,7 @@
       if(story && name==='dispatchStamp')saveProgress({room:index,stamp:index});
       cues(name,e);
     });
-    $('match-mode').textContent = doubles?'Bell Depot doubles':sideRoute?'Bonus dispatch · Relay':cupRound ? 'Arcade Cup · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
+    $('match-mode').textContent = world.rally?'Last-stock rally':doubles?'Bell Depot doubles':sideRoute?'Bonus dispatch · Relay':cupRound ? 'Arcade Cup · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
     if(suspended){
       window.DispatchSuspend.restore(world,suspended);
       Object.defineProperty(world,'suspendHeader',{value:suspended.header});
@@ -5025,13 +5025,15 @@
     const grip = world.grapple;
     const order = !grip || grip.phase === 'throw' || world.team ? world.objective : grip.owner === 0
       ? grappleControls(world,grip) : 'Grabbed · Tap action buttons to escape';
-    const key = [world.roomIndex, world.wave, hero.stocks, tenth(hero.damage), world.stamps, order, recovery,
+    const offer=world.stockOffer, jump=offer && (seatPad(offer.seat)?padFor(offer.seat,'jump'):
+      !offer.seat && matchMedia('(pointer:coarse)').matches?'Jump':keyFor(offer.seat,'jump'));
+    const key = [world.roomIndex, world.wave, hero.stocks, tenth(hero.damage), world.stamps, order, recovery,jump,offer?.held,offer?.release,
       world.team?.[1].stocks,world.team && tenth(world.team[1].damage),...foes.flatMap((e) => [e.f.stocks, tenth(e.f.damage), e.hp])].join('|');
     if (key === adventureKey) return;
     adventureKey = key;
     const marks=world.bossLesson?'Practice · Avoid the hit, then counter':world.sideRoute?'Noodle / Brisket / Clover':cupAttempt ? 'Arcade Cup · Round 4 / 4' :
       'Postmarks ' + countMarks(world.stamps) + ' / ' + campaign.rooms.length;
-    window.DispatchView.updateScoreboard(world,recovery,order,marks,{$,tenth,showPercent,showStocks,recoveryStrip});
+    window.DispatchView.updateScoreboard(world,recovery,order,marks,{$,tenth,showPercent,showStocks,recoveryStrip,jump});
   }
   function showPercent(element, damage) {
     const css='percentage' + (damage >= 110 ? ' danger' : damage >= 65 ? ' high' : '');
@@ -6781,8 +6783,8 @@
       settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();openStrikeSet();
     }else if(hash==='#local/winner-stays' || hash==='#local/tournament'){
       settings.mode='local';editing=0;toLobby();rotationBoard(hash==='#local/tournament');
-    }else if(hash==='#local/depot-doubles'){
-      settings.mode='local';editing=0;toLobby();openDepotDuo();
+    }else if(hash==='#local/depot-doubles' || hash==='#local/stock-share'){
+      settings.mode='local';editing=0;toLobby();openDepotDuo(hash==='#local/stock-share');
     }else if (hash==='#local/pick-together' || hash==='#local/best-of-three') {
       if(hash==='#local/best-of-three')settings.bestOfThree=true;
       settings.mode='local';editing=0;toLobby();pickTogether();

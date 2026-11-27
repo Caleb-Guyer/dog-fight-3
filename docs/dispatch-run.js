@@ -67,6 +67,23 @@
         this.team = [runner, partner];
         this.teamCoats = this.team.map((_, i) => window.DogFight.coatFor(i, duo.p1, duo.p2, duo.coats));
         this.foes[0].hp = this.foes[0].maxHP = 280;
+        this.borrowed = [0,0];
+        if (duo.rallySeat === 0 || duo.rallySeat === 1) {
+          this.rally = { seat:duo.rallySeat, countered:false };
+          this.random = window.DogFight.seededRandom(3403);
+          const survivor=this.team[1-duo.rallySeat], out=this.team[duo.rallySeat];
+          this.foes[0].hp=this.foes[0].maxHP/2;
+          Object.assign(survivor,{stocks:2,damage:60,x:this.foes[0].f.x-165,face:1});
+          out.stocks=0;
+          this.parkTeammate(out);
+          const boss=this.foes[0].f;
+          this.emit=(name,e)=>{
+            if (e?.damage>0 && this.borrowed[this.rally.seat] &&
+                ((name==='hit' && e.owner===out && e.f===boss) ||
+                 (name==='pummelHit' && e.f===out && e.target===boss))) this.rally.countered=true;
+            emit(name,e);
+          };
+        }
       }
       this.cameraWidth = 1200;
       this.cameraX = this.cameraTarget();
@@ -156,6 +173,29 @@
     park(f) {
       Object.assign(f, { absent: true, attack: null, stockLift: null, stockGuard: 0, ground: -1, x: -4096, y: 0, respawning: Infinity, invuln: Infinity });
     }
+    parkTeammate(f) {
+      this.park(f);
+      this.stockOffer={seat:this.team.indexOf(f),held:0,release:!!(f.prev.jump || f.prev.tapped?.jump)};
+    }
+    readStockShare(offer, input) {
+      const receiver=this.team[offer.seat], donor=this.team[1-offer.seat];
+      if (donor.stocks<2 || !receiver.absent || this.foes[0].hp<=0) {
+        this.stockOffer=null;
+        return;
+      }
+      const jump=input.jump || input.tapped?.jump;
+      if (!jump) { offer.release=false; offer.held=0; return; }
+      if (offer.release) return;
+      const chord=offer.held===0 && (input.shield || input.tapped?.shield);
+      if (++offer.held<30 && !chord) return;
+      donor.stocks--;
+      receiver.stocks=1;
+      receiver.absent=false;
+      this.stockOffer=null;
+      this.borrowed[offer.seat]++;
+      this.spawn(receiver,true);
+      this.emit('stockShare',{f:receiver,donor,seat:offer.seat});
+    }
     placeOpponent(e, returning) {
       const { f, spec } = e, hero = this.dogs[0], floor = this.terrain[0];
       this.spawn(f, returning, false);
@@ -218,7 +258,7 @@
       for (const f of out) {
         if (f.encounter?.kind === 'conductor' && f.encounter.hp > 0) continue;
         if (f.stocks <= 0) {
-          if (this.team?.includes(f)) { this.park(f); continue; }
+          if (this.team?.includes(f)) { this.parkTeammate(f); continue; }
           if (!f.index) { this.finished = 'fallen'; continue; }
           this.park(f);
           this.emit('machineDown', { f, kind: f.encounter.kind });
@@ -228,7 +268,8 @@
           delete this.lastBossHit;
         }
       }
-      if (this.team?.every(f => !f.stocks)) this.finished = 'fallen';
+      if (this.team?.every(f => !f.stocks)) { this.stockOffer=null; this.finished = 'fallen'; }
+      else if (this.stockOffer && this.team[1-this.stockOffer.seat].stocks < 2) this.stockOffer=null;
       if (tie) this.emit('stockTie', { f: hero });
     }
     dealDamage(target, amount, preserveCombo) {
@@ -442,6 +483,7 @@
       }
       if (this.foes.some((e) => e.f.stocks > 0)) return;
       if (this.wave + 1 === l.waves.length) {
+        if (this.team) this.stockOffer=null;
         this.clearDelay = 0.85;
         this.emit('dispatchVictory', { f: this.dogs[0] });
         return;
@@ -465,6 +507,7 @@
         return;
       }
       const frozen = this.hitStop > 0;
+      const offer = this.stockOffer;
       if (this.sideRoute && !frozen) {
         const shelves=this.layout.shelves[this.wave], motion=25*Math.sin((this.time+dt)*1.25);
         for(let i=0;i<2;i++){
@@ -475,10 +518,15 @@
       if (this.bridge && !frozen) this.layout.terrain = this.bridge.geometry(dt, this.dogs[0]);
       const inputs = this.foes.length && !frozen ? this.foes.map((e) => this.machineInput(e, dt)) : idleInput;
       super.step(dt, input, this.team ? [inputs[0] || idleInput, partner] : inputs);
-      if (frozen || this.finished) return;
-      if (this.bridge) this.updateCrossing();
-      else this.updateFight(dt);
-      this.cameraX += (this.cameraTarget() - this.cameraX) * (1 - Math.exp(-dt * 9));
+      if (this.finished) return;
+      if (!frozen) {
+        if (this.bridge) this.updateCrossing();
+        else this.updateFight(dt);
+        this.cameraX += (this.cameraTarget() - this.cameraX) * (1 - Math.exp(-dt * 9));
+      }
+      // Resolve both blast-zone exits and the boss's armor before spending the donor's stock.
+      if (offer && offer===this.stockOffer && !this.clearDelay && !this.finished)
+        this.readStockShare(offer,offer.seat===0?input:partner);
     }
   }
   window.DispatchRun = DispatchRun;
