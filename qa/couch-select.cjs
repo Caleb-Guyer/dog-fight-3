@@ -61,6 +61,32 @@ test('pad loss retains both seats and a replacement rejoins its owner at a new i
   seats.track([b]);assert.equal(seats.present,2);assert.equal(seats.lost,3);
   seats.beginMatch([b]);assert.equal(seats.lost,0);assert.equal(seats.present,2);
 });
+test('local seats recognize swapped browser slots and returning models before assigning a spare',()=>{
+  const {Seats}=window.FightControls;
+  const p=(index,id)=>({index,id}),a=p(0,'Yellow'),b=p(1,'Blue');
+  const seats=new Seats([a,b]);seats.beginMatch([a,b]);
+  const swapped=[p(0,'Blue'),p(1,'Yellow')];
+  seats.track(swapped);assert.equal(seats.lost,3);assert.deepEqual(seats.ids,[1,0]);
+  assert.deepEqual([0,1].map(i=>seats.get(i,swapped).id),['Yellow','Blue']);
+  seats.beginMatch(swapped);seats.track([]);seats.track([p(4,'Blue')]);
+  assert.equal(seats.present,2);seats.track([p(2,'Spare'),p(4,'Blue'),p(8,'Yellow')]);
+  assert.deepEqual(seats.ids,[8,4]);assert.equal(seats.lost,3);
+  seats.beginMatch([p(8,'Yellow'),p(4,'Blue')]);seats.track([p(8,'Replacement'),p(4,'Blue')]);
+  assert.equal(seats.lost,1);assert.equal(seats.get(0,[p(8,'Replacement')]).id,'Replacement');
+});
+test('identical controllers swap by physical input, and a keyboard seat stays free across the set',()=>{
+  const {Seats}=window.FightControls,p=(index,id='USB pad')=>({index,id});
+  const pads=[p(0),p(1)],live=new Seats(pads),draft=new Seats([]);draft.copyFrom(live);
+  draft.assign(0,pads[1],pads);assert.deepEqual(draft.ids,[1,0]);assert.deepEqual(live.ids,[0,1]);
+  live.copyFrom(draft);live.beginMatch(pads);
+  live.assign(1,null,pads);live.sync(pads);assert.deepEqual(live.ids,[1,null]);
+  live.beginMatch(pads);live.track([pads[0],p(3,'Spare')]);
+  assert.equal(live.lost,1);assert.equal(live.present,0);assert.equal(live.get(1,pads),undefined);
+  live.track([p(3,'Spare')]);assert.equal(live.present,0);
+  const replacement=p(3,'Spare');
+  live.assign(0,replacement,[replacement]);live.beginMatch([replacement,...pads]);
+  assert.deepEqual(live.ids,[3,null]);assert.equal(live.get(1,pads),undefined);
+});
 test('a keyboard-only match accepts a first controller for P2 and reports a same-tick replacement',()=>{
   const seats=new Seats([]), a={index:1}, b={index:4};
   seats.beginMatch([]);seats.track([]);assert.equal(seats.lost,0);

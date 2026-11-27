@@ -152,6 +152,62 @@ async function reconnectInFight(browser) {
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
+async function assignControllers(browser){
+  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true}),errors=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.addInitScript(()=>{
+      window.makePad=(index,id)=>({index,id,connected:true,mapping:'standard',axes:[0,0,0,0],
+        buttons:Array.from({length:17},()=>({pressed:false,value:0}))});
+      window.pads=[makePad(0,'Gold'),makePad(1,'Blue')];
+      Object.defineProperty(navigator,'getGamepads',{value:()=>pads});
+    });
+    await clock(page);await page.goto(root+'#local/controllers');
+    const el=id=>page.locator('#'+id),tick=(ms=75)=>page.clock.runFor(ms);
+    const button=async(i,pressed=[],x=0)=>{
+      await page.evaluate(([i,pressed,x])=>{
+        pads[i].axes[0]=x;pads[i].buttons.forEach((b,n)=>{b.pressed=pressed.includes(n);b.value=Number(b.pressed);});
+      },[i,pressed,x]);await tick();
+    };
+    const swap=async()=>{
+      await el('seat-pair-0').tap();await button(1,[0,2]);assert(await el('seat-apply').isDisabled());
+      await button(1,[],.6);await button(1,[0],.6);assert(await el('seat-apply').isDisabled());
+      await button(1);await button(1,[0]);await tick(240);await button(1);
+      assert.match(await el('seat-device-0').textContent(),/Pad 2 · Blue/);
+      assert.match(await el('seat-device-1').textContent(),/Pad 1 · Gold/);
+      assert(await el('seat-apply').isEnabled());
+    };
+    await el('seat-pair-0').waitFor();await tick();
+    assert(await el('controller-seats').evaluate(e=>e.scrollWidth<=e.clientWidth+1));
+    await swap();await el('seat-back').tap();
+    await el('controls').tap();await page.locator('[data-do=couch-pads]').tap();
+    assert.match(await el('seat-device-0').textContent(),/Pad 1 · Gold/);
+    await swap();await el('seat-apply').tap();await page.locator('[data-do=close]').tap();
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(dt,a,b){window.battle=this;window.inputs=[a,b];return step.apply(this,arguments);};
+    });
+    await el('start').tap();await tick(2700);await button(1,[2]);
+    const attacks=()=>page.evaluate(()=>inputs.map(i=>i.attack));
+    const frozen=()=>page.evaluate(()=>[battle.matchFrames,battle.clockFrames,battle.random.state,
+      ...battle.dogs.flatMap(d=>[d.kind,d.x,d.y,d.vx,d.vy,d.damage,d.stocks])]);
+    assert.deepEqual(await attacks(),[true,false]);await button(1);const snapshot=await frozen();
+    await page.evaluate(()=>{pads=[makePad(0,'Blue'),makePad(1,'Gold')];});await tick(600);
+    assert.match(await el('pad-loss-seats').textContent(),/P1 · Pad 1 · Blue.*P2 · Pad 2 · Gold/);
+    assert.deepEqual(await frozen(),snapshot);
+    await page.locator('[data-do=couch-pads]').tap();
+    await el('seat-pair-1').tap();await page.keyboard.press('Escape');assert(await el('seat-apply').isEnabled());
+    await el('seat-back').tap();await el('pad-resume').tap();await tick(2600);
+    await button(0,[2]);assert.deepEqual(await attacks(),[true,false]);await button(0);
+    await button(1,[2]);assert.deepEqual(await attacks(),[false,true]);await button(1);
+    await el('pause').tap();const paused=await frozen();await page.locator('[data-do=couch-pads]').tap();
+    await el('seat-keys-0').tap();await el('seat-apply').tap();assert.deepEqual(await frozen(),paused);
+    await page.locator('[data-do=resume]').tap();await tick(90);
+    await button(0,[2]);assert.deepEqual(await attacks(),[false,false]);
+    await page.keyboard.down('j');await tick();assert.deepEqual(await attacks(),[true,false]);await page.keyboard.up('j');
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
 async function soloReconnect(browser,touch){
   const page=await browser.newPage({viewport:touch?{width:390,height:844}:{width:1280,height:720},hasTouch:touch,isMobile:touch});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
@@ -302,5 +358,5 @@ async function handheld(browser){
 }
 (async()=>{
   const b=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await controllers(b);await handheld(b);await shuffleDraft(b);await reconnectInFight(b);await soloReconnect(b,false);await soloReconnect(b,true);}finally{await b.close();}
+  try{await controllers(b);await handheld(b);await shuffleDraft(b);await reconnectInFight(b);await assignControllers(b);await soloReconnect(b,false);await soloReconnect(b,true);}finally{await b.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});
