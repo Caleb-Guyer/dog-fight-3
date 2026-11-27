@@ -33,7 +33,9 @@ async function controllers(browser) {
     await page.goto(root);assert.equal(await page.evaluate(()=>!!window.CouchSelect),false);
     await press('[data-enter-mode=local]');await press('#pick-together');
     assert.match(await page.locator('[data-seat="1"] [data-device]').textContent(),/Pad 1/);
-    assert.match(await page.locator('[data-seat="0"] [data-keys]').textContent(),/Q ready/);
+    await pad(0,[9]);assert(await page.locator('.couch-help[open]').isVisible());
+    assert.match(await page.locator('[data-keys="0"]').innerText(),/Q ready/);
+    await pad(0,[1]);assert.equal(await page.locator('.couch-help').getAttribute('open'),null);
     await page.keyboard.press('d');assert.equal(await name(0),'Brisket');
     await page.keyboard.press('s');
     const coat=await page.locator('[data-seat="0"] [data-action=coat]').textContent();

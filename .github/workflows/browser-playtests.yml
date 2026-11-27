@@ -19,6 +19,7 @@ jobs:
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/stage-select.js
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/shared-roster.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/result-board.js
       - name: Keep the stage select screens
         if: always()
@@ -28,6 +29,7 @@ jobs:
           path: |
             arena-select-*.png
             scoreboard-*.png
+            shared-*.png
           retention-days: 3
   event-matches:
     runs-on: ubuntu-24.04

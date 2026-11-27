@@ -6,6 +6,23 @@ const {Selection}=window.CouchSelect, {Seats}=window.FightControls;
 const {fighters,arenas,coatFor,Battle,StockSet,idleInput}=window.DogFight;
 const dogs=Object.keys(fighters),stages=Object.keys(arenas);
 const cfg={stage:'picnic',mode:'local',p1:'pip',p2:'brisket',coatBook:[{},{}],fetch:false};
+test('direct roster picks, matching coats, locks and arena votes belong to the seat that made them',()=>{
+  const selection=new Selection(cfg,()=>0);
+  selection.select(0,'noodle');selection.select(1,'noodle');
+  assert.deepEqual(selection.dogs,['noodle','noodle']);
+  assert.deepEqual(selection.colors,[0,1]);
+  selection.lock(1);selection.select(1,'clover');selection.select(0,'laundry');
+  assert.deepEqual(selection.dogs,['noodle','noodle']);
+  selection.lock(0);
+  selection.select(0,'canal');selection.lock(0);selection.select(0,'nightmail');
+  selection.select(1,'laundry');selection.lock(1);
+  assert.deepEqual(selection.stages,['canal','laundry']);assert.equal(selection.winner,'canal');
+  selection.back(1);selection.select(1,'canal');selection.lock(1);assert.equal(selection.winner,'canal');
+  const counter=new Selection(cfg,()=>0,1);
+  counter.select(0,'clover');counter.select(1,'noodle');counter.lock(1);
+  counter.select(0,'canal');counter.select(1,'nightmail');
+  assert.deepEqual(counter.dogs,['pip','noodle']);assert.deepEqual(counter.stages,['picnic','nightmail']);
+});
 function testPad(index,id){
   return {index,id,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false}))};
 }
