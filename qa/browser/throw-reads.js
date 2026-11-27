@@ -125,7 +125,7 @@ async function play(browser, device) {
     assert.match(await page.locator('#dialog-body').textContent(),/You survived the original knockout/);
     assert(await page.evaluate(()=>JSON.stringify(liveStock.matchCard)===beforeStudy));
     await press('[data-do=trial-replay]');
-    await select('#clip-launch summary');
+    await select('#clip-launch > summary');
     await select('#clip-launch button[aria-label=Center]');
     await page.locator('.flight-result').filter({hasText:/Center · KO at the left line/}).waitFor();
     const figure=page.locator('#clip-launch canvas'),original=await figure.evaluate(c=>c.toDataURL());
@@ -141,7 +141,7 @@ async function play(browser, device) {
     await select('#recovery-demo');await page.clock.runFor(6000);
     assert.match(await page.locator('#recovery-cue').textContent(),/Landed onstage/);
     assert(await page.evaluate(()=>JSON.stringify(liveStock.matchCard)===beforeStudy));
-    await select('#recovery-back');await select('#clip-launch summary');
+    await select('#recovery-back');await select('#clip-launch > summary');
     await select('[data-fly]');
     if(pad)await page.evaluate(()=>steer(1));
     else if(touch){
@@ -197,7 +197,7 @@ async function play(browser, device) {
     await page.evaluate(()=>{
       const proto=DogFight.Battle.prototype,release=proto.releaseLaunch,step=proto.step;
       proto.releaseLaunch=function(f,input){
-        if(!document.querySelector('dialog').open && f.index===0){window.chosenRelease=[input.x,input.y];window.studyBattle=this;}
+        if(!document.getElementById('dialog').open && f.index===0){window.chosenRelease=[input.x,input.y];window.studyBattle=this;}
         return release.apply(this,arguments);
       };
       proto.step=function(dt,input){
@@ -215,6 +215,16 @@ async function play(browser, device) {
     assert.match(await page.locator('#recovery-route').textContent(),/selected stick position plays on the release frame/);
     await select('#recovery-demo');await page.clock.runFor(6000);
     assert.match(await page.locator('#recovery-cue').textContent(),/Landed onstage/);
+    if(device==='keyboard'){
+      await select('#recovery-guide');await page.clock.runFor(1500);
+      assert.match(await page.locator('#countdown').textContent(),/Drift back/);
+      await page.keyboard.down('d');await page.clock.runFor(1100);
+      assert.match(await page.locator('#countdown').textContent(),/\+/);
+      await page.keyboard.down('w');await page.keyboard.down('k');await page.clock.runFor(100);
+      await page.keyboard.up('k');await page.keyboard.up('w');await page.clock.runFor(2700);await page.keyboard.up('d');
+      assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!');
+      await select('[data-do=trial-replay]');await page.locator('#recovery-back').waitFor();
+    }
     await select('#recovery-back');await x.waitFor();await select('[data-recorded]');await page.clock.runFor(60);
     assert.equal(await x.inputValue(),'0');assert.equal(await y.inputValue(),'0');
     await select('[data-do=clip-back]');await page.locator('#school-resume').waitFor();
