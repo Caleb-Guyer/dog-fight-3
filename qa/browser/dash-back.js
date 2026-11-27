@@ -250,6 +250,24 @@ async function play(browser,device) {
     const swing=await page.evaluate(()=>[turnSample.face,turnSample.move,DogFight.kits.pip.tilts.forward]);
     assert.deepEqual(swing.slice(0,2),[1,swing[2]],device+' strikes right during a leftward skid');
     await arrow('left',false);await arrow('right',false);
+    await page.goto('http://127.0.0.1:8080/?buffer#training/landing-buffer');
+    const frameStatus=page.locator('#frame-status');
+    await frameStatus.waitFor();
+    await page.clock.runFor(2700);
+    await hold('down',true);await hold('jump',true);await hold('attack',true);
+    await page.clock.runFor(90);
+    await hold('attack',false);await hold('jump',false);await hold('down',false);
+    await page.clock.runFor(650);
+    assert.match(await frameStatus.textContent(),/Landing recovery 18f/,device+' Belly Drop touchdown');
+    await hold('left',true);await hold('jump',true);await hold('attack',true);
+    for(let tick=1;tick<=21;tick++){
+      await page.keyboard.press('BracketRight');await page.clock.runFor(34);
+      if(tick===1)await hold('left',false);
+      if(tick===12)assert.match(await frameStatus.textContent(),/Landing recovery 6f · Jump \+ Attack held/);
+      if(tick===18)assert.match(await frameStatus.textContent(),/Jump squat/);
+    }
+    assert.match(await frameStatus.textContent(),/Hip Check/,device+' kept the back aerial through all 18 landing frames');
+    await hold('attack',false);await hold('jump',false);
     if(device==='keyboard'){
       await page.goto('http://127.0.0.1:8080/?seats#local/final-count');
       await page.evaluate(()=>{

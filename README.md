@@ -418,7 +418,7 @@ In free Training or sparring, press **1** or **Save moment** to keep the current
 
 Turn on **Contact boxes** to see each dog's body in mint, an active melee attack in coral and its sweet spot in gold. A dashed mint outline means the dog is protected. Crouching or falling down changes the body box. Use frame advance to see exactly when a swing becomes active.
 
-**Try it with Brisket.** Choose **Freeze on landing**, jump, then tap Down + Attack for Belly Drop. At touchdown, hold Jump and step through the 18 frames of landing recovery. At frame +18 Brisket starts jump squat. Keep holding for a full jump, or release during the crouch for a short hop. Repeat with an early tap and watch Brisket stay grounded. [Play the landing comparison](https://caleb-guyer.github.io/dog-fight-3/#training/landing-buffer)
+**Try it with Brisket.** Jump, then tap Down + Attack for Belly Drop. When Training freezes on landing, aim behind Brisket and hold Jump + Attack. Step through the recovery. At frame +18 he crouches, and at +21 he takes off with Hip Check. You can let go of the direction after pressing the buttons. Repeat with just Jump for a full hop, or tap both buttons at touchdown and release to stay grounded. [Play the landing comparison](https://caleb-guyer.github.io/dog-fight-3/#training/landing-buffer)
 
 **Jump-cancel an up smash or up special.** Hold Up and tap Jump + Smash together, or press Smash during the three-frame crouch. Your dog starts its grounded up smash. From a run, it slides into range. Hold Smash to charge while your dog slows under its own traction. Use Up + Special during the same crouch to start your dog's up special immediately. Up + Attack and an upward aim-stick flick during the crouch give you a rising up aerial.
 
