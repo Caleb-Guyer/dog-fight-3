@@ -79,7 +79,7 @@ async function play(browser,device){
     await choose('#field-back');
     // Let a real blast-line exit conclude the match, then practice from the final card.
     await page.evaluate(()=>{const f=fieldFight.dogs[1];f.stocks=1;f.x=fieldFight.stageWidth+1000;f.ground=-1;});
-    await page.clock.runFor(2200);await choose('[data-do=field-card]');
+    await page.clock.runFor(2200);await choose('.school-result summary');await choose('[data-do=field-card]');
     assert.equal(await moveRow.textContent(),firstTime);
     await choose('[data-field-lesson="5"]');await hold('shield',true);await page.clock.runFor(650);await hold('shield',false);
     await choose('#school-next');await page.locator('[data-do=school-cup]').waitFor();

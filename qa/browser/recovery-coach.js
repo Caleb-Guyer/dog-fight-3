@@ -180,8 +180,8 @@ async function check(browser,device) {
     }
     if(device==='keyboard'){
       await choose('[data-do=resume]');await hold(-1);
-      for(let i=0;i<20 && !await page.locator('[data-do=watch-finish]').isVisible();i++)await page.clock.runFor(3500);
-      await hold(0);await choose('[data-do=coach-fall]');await route();await choose('#recovery-back');
+      for(let i=0;i<20 && !await page.locator('.school-result').isVisible();i++)await page.clock.runFor(3500);
+      await hold(0);await choose('.school-result summary');await choose('[data-do=coach-fall]');await route();await choose('#recovery-back');
       assert.equal(await page.locator('#dialog-title').textContent(),'First fight finished');
       await choose('[data-do=home]');await choose('#home-records');await choose('[data-record-id]');
       await choose('[data-saved-clip="0"][data-ko-slot="0"]');await choose('#clip-coach');await route();

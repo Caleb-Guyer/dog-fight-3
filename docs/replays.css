@@ -95,6 +95,23 @@ dialog:is([data-view='finish-stock-film'],[data-view='finish-rematch']) { width:
 #cup-review .dialog-actions button { border-bottom:1px solid #cfbea1; }
 #cup-review #result-highlight { display:block; text-decoration:underline; }
 body:has(#dialog[open] .cup-result) :is(#match .match-top,#hud,#countdown,.topbar,.touch-controls) { visibility:hidden; }
+.school-result .winner { align-items:center; }
+.school-result .winner .victory-shot { width:clamp(92px,23vw,146px); }
+.school-result .winner h3 { margin:0; font:clamp(23px,4vw,36px)/1 var(--pixel); }
+.school-result .winner p { margin:6px 0 0; }
+.school-verdict { margin:16px 0; line-height:1.45; }
+.school-result-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.school-result-actions button { min-height:44px; }
+.school-result #result-review { margin-top:10px; border-top:1px solid #b9aa8d; }
+.school-result #result-review summary { min-height:44px; display:list-item; padding:12px 2px; }
+.school-result #result-review summary:focus-visible { outline-color:var(--ink); }
+.school-result .result-tools { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.school-result .result-tools h4 { margin:0 0 4px; }
+.school-result .result-tools button { background:transparent; color:var(--ink); box-shadow:none; border-bottom-color:#c4b697!important; min-height:40px; }
+@media(max-width:520px) {
+  .school-result-actions { display:grid; }
+  .school-result .result-tools { grid-template-columns:1fr; }
+}
 #chance-rink { margin-block:12px; }
 #chance-rink input { width:100%; accent-color:var(--ink); }
 

@@ -175,8 +175,9 @@ async function play(browser, device) {
       await page.goto('http://127.0.0.1:8080/?school-replay#tutorial/first-match');
       await page.locator('#game').waitFor();
       await page.keyboard.down('a');
-      for(let i=0;i<12 && !await page.locator('[data-do=watch-finish]').isVisible();i++)await page.clock.runFor(4000);
+      for(let i=0;i<12 && !await page.locator('.school-result').isVisible();i++)await page.clock.runFor(4000);
       await page.keyboard.up('a');
+      await press('.school-result summary');
       assert.equal(await page.locator('[data-do=watch-finish]').textContent(),'Replay my last stock');
       await press('[data-do=watch-finish]');await page.locator('#clip-frame').waitFor();
       await press('[data-do=clip-back]');

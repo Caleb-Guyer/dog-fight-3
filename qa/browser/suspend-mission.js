@@ -144,7 +144,7 @@ async function firstFight(browser,touch){
     assert(conflict);
     await press('#home-continue');await page.getByRole('heading',{name:'First match ready'}).waitFor();await press('[data-do=resume]');
     await left(true);
-    for(let i=0;i<20 && !await page.locator('[data-do=watch-finish]').isVisible();i++)await page.clock.runFor(1800);
+    for(let i=0;i<20 && !await page.locator('.school-result').isVisible();i++)await page.clock.runFor(1800);
     await left(false);await page.getByRole('heading',{name:'First fight finished'}).waitFor();
     await page.waitForFunction(async()=>!(await DispatchSuspend.list()).some(h=>h.id==='school-stock'));
     assert.deepEqual(errors,[]);
