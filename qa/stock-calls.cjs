@@ -57,3 +57,23 @@ test('lead calls distinguish taking, keeping and tying the lead on signed points
   assert.match(describe(false,[0,1],[[0]],true),/CPU wins\.$/);
   assert.match(describe(false,[0,0],[[0],[1]]),/Sudden Death\.$/);
 });
+
+test('damage feedback fires once per confirmed increase, and resets at a new stock, world or motion preference',()=>{
+  const animations=[],card={percent:{animate(frames,options){
+    const a={frames,options,cancel(){this.cancelled=true;}};animations.push(a);return a;
+  }}};
+  const w=create(), speculative=create();
+  const show=(battle,motion=true)=>{
+    const f=battle.dogs[1];window.StockCall.hitMeter(card,battle,f,motion);card.damage=f.damage;
+  };
+  show(w);speculative.dealDamage(speculative.dogs[1],12,false,'pipJab');show(w);
+  assert.equal(animations.length,0);
+  w.dealDamage(w.dogs[1],5,false,'pipJab');show(w);show(w);
+  assert.equal(animations.length,1);
+  w.dealDamage(w.dogs[1],21,false,'pipHaymaker');show(w);
+  assert(animations[0].cancelled);assert(animations[1].options.duration>animations[0].options.duration);
+  w.knockouts([w.dogs[1]]);show(w);assert(animations[1].cancelled);
+  w.dealDamage(w.dogs[1],7,false,'pipJab');show(w,false);show(w,true);
+  show(speculative);speculative.startSuddenDeath('time');show(speculative);
+  assert.equal(animations.length,2);
+});

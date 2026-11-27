@@ -16,7 +16,7 @@ async function run(browser,phone){
       AudioParam.prototype.exponentialRampToValueAtTime=function(v,t){if(v===1460 || v===1760)ramps.push(v);return ramp.call(this,v,t);};
       StockCall.draw=function(ctx,w,age,...rest){
         if(age>=72)return draw.call(this,ctx,w,age,...rest);
-        sample={canvas:ctx.canvas.id,age,steady:rest.at(-1),labels:[],dogs:[]};calls.push(sample);
+        sample={canvas:ctx.canvas.id,age,steady:rest[3],labels:[],dogs:[]};calls.push(sample);
         try{return draw.call(this,ctx,w,age,...rest);}finally{sample=null;}
       };
       CanvasRenderingContext2D.prototype.fillText=function(txt,x,y,...rest){
@@ -177,6 +177,35 @@ async function run(browser,phone){
     assert.deepEqual(await page.evaluate(()=>atLift),lift);
     await press('#pause');await page.evaluate(()=>window.returning=true);await press('[data-do=return-fight]');
     await page.clock.runFor(70);assert.deepEqual(await page.evaluate(()=>backAt),saved);
+    await page.goto('http://127.0.0.1:8080/?finish#solo/last-stock');
+    await page.waitForFunction(()=>!!window.StockCall,null,{polling:50});
+    await page.evaluate(()=>{
+      window.impacts=[];window.tallies=[];window.finishPhases=[];
+      const animate=Element.prototype.animate,draw=StockCall.draw,frame=DogFightView.FightView.prototype.draw;
+      Element.prototype.animate=function(...args){
+        if(this.classList.contains('percentage'))impacts.push(this.closest('.hud-card').querySelector('.hud-name').textContent);
+        return animate.apply(this,args);
+      };
+      StockCall.draw=function(ctx,battle,age,left,top,zoom,steady,showTally){
+        if(battle.end!==null && ctx.canvas.id==='game')tallies.push(showTally);
+        return draw.apply(this,arguments);
+      };
+      DogFightView.FightView.prototype.draw=function(canvas,world,dt,time,confirmed,phase){
+        if(phase && canvas.id==='game')finishPhases.push(phase);
+        return frame.apply(this,arguments);
+      };
+    });
+    for(let n=0;n<70 && await page.locator('#countdown').textContent()!=='Game!';n++)await page.clock.runFor(85);
+    assert.equal(await page.locator('#countdown').textContent(),'Game!');
+    await page.clock.runFor(240);
+    assert.equal(await page.locator('#dialog').isVisible(),false);
+    assert.deepEqual(await page.evaluate(()=>impacts),phone?[]:['P1Pip']);
+    assert.deepEqual(await page.evaluate(()=>[...new Set(tallies)]),[false]);
+    await page.screenshot({path:'stock-calls-finish-'+(phone?'phone':'desktop')+'.png'});
+    await page.clock.runFor(800);
+    assert(await page.locator('.result-board').isVisible());
+    assert.equal(await page.locator('#countdown').textContent(),'');
+    assert.deepEqual(await page.evaluate(()=>[...new Set(finishPhases)]),['call','results']);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

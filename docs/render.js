@@ -2605,7 +2605,7 @@
         );
       }
     }
-    draw(canvas, world, dt, time, confirmed = world) {
+    draw(canvas, world, dt, time, confirmed = world, finishPhase = null) {
       if(world.mode==='parcel')return window.ParcelPunt.draw(this,canvas,world,dt);
       const resized = this.fitCanvas(canvas);
       const { width, height } = canvas;
@@ -2630,7 +2630,7 @@
       this.fixed=fixed;
       this.pixelRatio = height/(canvas.clientHeight || height);
       if(window.FightCamera){
-        window.FightCamera.frame(this,width,height,dt,world,resized || !this.framed || changed,focus,steady);
+        window.FightCamera.frame(this,width,height,dt,world,resized || !this.framed || changed,focus,steady,finishPhase && confirmed.dogs[confirmed.end]);
         this.framed=true;
       }else{
         this.zoom=Math.min(1,width/1200,height/675);this.cx=600;this.cy=337.5;
@@ -2949,7 +2949,7 @@
       if (this.launchTrace) launchDirections(ctx, this.launchTrace);
       if (Math.abs(a.x-b.x) > 14) this.leftFighter = a.x < b.x ? 0 : 1;
       const entrance=this.entrance && window.FighterEntrances;
-      if(!entrance)fighterTags(ctx, world, this.leftFighter);
+      if(!entrance && !finishPhase)fighterTags(ctx, world, this.leftFighter);
       for (const f of world.dogs) {
         const speed = Math.hypot(f.vx, f.vy);
         if (!reduced.matches && f.stun > 0 && speed > 460 && world.time - this.lastTrail[f.index] > 0.052) {
@@ -3001,14 +3001,13 @@
       if (world.mode === 'training' && this.contactBoxes) drawContactBoxes(ctx, world);
       for (const f of finishers) finalHitArrow(ctx,f,survival?.lockedAim || f.tumble.finalAim || f.prev);
       ctx.restore();
-      this.drawOffscreen(ctx, world, left, top, width, height, this.zoom, time);
+      if(!finishPhase)this.drawOffscreen(ctx, world, left, top, width, height, this.zoom, time);
       if(confirmed.end===null)this.outroFrames=0;
       if(confirmed.matchCard && confirmed.end===null && confirmed.clockFrames>0 && confirmed.clockFrames<=300)
         window.StockCall?.drawClock(ctx,confirmed.clockFrames);
-      if(confirmed.stockCall && window.StockCall){
-        window.StockCall.draw(ctx,confirmed,confirmed.stockCall.age+this.outroFrames,left,top,this.zoom,steady);
-        if(confirmed.end!==null)this.outroFrames+=dt*60;
-      }
+      if(confirmed.stockCall && window.StockCall && finishPhase!=='results')
+        window.StockCall.draw(ctx,confirmed,confirmed.stockCall.age+this.outroFrames,left,top,this.zoom,steady,!finishPhase);
+      if(confirmed.end!==null)this.outroFrames+=dt*60;
       if (this.radar) this.drawRadar(world, left, top, halfW * 2, halfH * 2);
       if (this.launchTrace) launchKey(ctx, this.launchTrace, canvas.clientWidth);
     }

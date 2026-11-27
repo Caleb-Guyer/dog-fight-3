@@ -41,8 +41,18 @@
     view.cy=clamp(view.cy+(aimY-view.cy)*blend,bottom-halfH+40,top+halfH-40);
     return true;
   }
-  function frame(view,width,height,dt,world,resized,focus,steady){
+  function frame(view,width,height,dt,world,resized,focus,steady,winner){
     const [a,b]=world.dogs,koTest=world.freshnessPractice?.koTest,survival=world.survivalPractice;
+    if(winner && !view.fixed && !steady){
+      // Let the exit read first, then settle on the surviving dog below the finish call.
+      if(view.outroFrames<6 && !resized)return;
+      const target=Math.min(2.2,width/420,height/310);
+      const blend=resized?1:1-Math.exp(-dt*5);
+      view.zoom+=(target-view.zoom)*blend;
+      view.cx+=(winner.x-view.cx)*blend;
+      view.cy+=(winner.y-winner.stats.height*.5-height*.10/target-view.cy)*blend;
+      return;
+    }
     if(!view.fixed && !focus && world.suddenDeath?.ceiling!==undefined && world.suddenDeath.frames>600){
       const box=world.blastBounds();
       const left=Math.min(box.left,a.x-a.stats.width,b.x-b.stats.width)-20;

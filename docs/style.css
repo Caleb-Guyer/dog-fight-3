@@ -871,9 +871,11 @@ body.playing .tools .utility,
   margin-right: 4px;
 }
 .percentage {
+  transform-origin:left center;
   font: 400 clamp(20px, 2.4vw, 32px) / 0.98 var(--pixel);
   color: var(--cream);
 }
+.hud-card.two .percentage { transform-origin:right center; }
 .percentage.high {
   color: var(--gold);
 }
@@ -910,6 +912,14 @@ body.playing .tools .utility,
   text-shadow:
     3px 3px #30263b,
     6px 6px #bb5545;
+}
+#countdown.fight-end {
+  inset:18% 0 auto;
+  font-size:clamp(40px,min(12vw,13vh),112px);
+  text-transform:uppercase;
+  color:#fff0bf;
+  -webkit-text-stroke:1px #282236;
+  text-shadow:2px 3px #282236,4px 6px #a94c3b;
 }
 .play-hints,
 .training-tools {

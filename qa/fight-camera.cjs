@@ -54,3 +54,21 @@ test('survival practice retains its dedicated lip-to-blast-line view',()=>{
   frame(v,w);visible(v,720,1184,-115,p.y);visible(v,720,1184,p.x1+180,p.y);
   const prior={...v};v.fixed=true;frame(v,w);assert.equal(v.zoom,prior.zoom);assert.equal(v.cx,prior.cx);
 });
+
+test('a confirmed finish holds the exit, then centers either winner below the end call without moving a fixed camera',()=>{
+  for(const slot of [0,1])for(const [width,height] of [[720,1184],[1280,720],[1920,720]]){
+    const w=make(),v=camera(),winner=w.dogs[slot];
+    winner.x=slot?1070:130;winner.y=505;
+    w.finishMatch(slot,'ko');v.outroFrames=0;
+    const take=steady=>window.FightCamera.frame(v,width,height,1/60,w,false,null,steady,winner);
+    take(false);assert.equal(v.cx,600);
+    for(let i=1;i<42;i++){v.outroFrames=i;take(false);}
+    const x=.5+(winner.x-v.cx)*v.zoom/width,y=.5+(winner.y-winner.stats.height/2-v.cy)*v.zoom/height;
+    assert(Math.abs(x-.5)<.10 && y>.52 && y<.67);
+    visible(v,width,height,winner.x+winner.stats.width,winner.y);
+    const fixed={...v,fixed:true},ref={...fixed};
+    window.FightCamera.frame(fixed,width,height,1/60,w,true,null,true,winner);
+    window.FightCamera.frame(ref,width,height,1/60,w,true,null,true);
+    assert.deepEqual(fixed,ref);
+  }
+});

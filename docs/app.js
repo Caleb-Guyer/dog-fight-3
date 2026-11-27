@@ -1375,6 +1375,7 @@
       card=hudCards[slot]={root,picture,kind:f.kind,coat,label,training,scored,team,sudden,total,lives:root.querySelector('.lives'),
         percent:root.querySelector('.percentage'),alert:'',recovery:null,rage:0};
     }
+    if(battle.matchCard)window.StockCall?.hitMeter(card,battle,f,!reducedReplays.matches && settings.shake);
     if(card.damage!==f.damage){
       card.damage=f.damage;
       showPercent(card.percent,f.damage);
@@ -1473,6 +1474,7 @@
     if (clock.textContent !== clockText) clock.textContent = clockText;
     clock.classList.toggle('urgent', !!confirmed.suddenDeath || seconds <= 10);
     const call = $('countdown');
+    call.classList.toggle('fight-end', !!confirmed.matchCard && confirmed.end!==null && !confirmed.eventId);
     call.classList.toggle('sudden', !!tiebreak?.intro);
     if (tiebreak?.intro) {
       const caption = tiebreak.cause === 'time' ? (confirmed.matchCard?.points?'Time! Points tied':'Time! Stocks tied') :
@@ -3227,6 +3229,8 @@
     announce(title + '. ' + name(winner) + ' wins. Set score ' + set.score.join(' to '));
   }
   function showResult() {
+    const call=$('countdown');
+    if(call.classList.contains('fight-end')){call.textContent='';call.classList.remove('fight-end');}
     if(world.route)return window.StageStrike.routePanel(world,false,routeUI());
     if(world.eventId)return window.SoloEvents.panel(world,false,eventUI());
     if(world.mode==='parcel')return parcelResult();
@@ -4292,8 +4296,8 @@
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
     RecoveryCoach:'recovery-coach.js?v=launch-aim-1', MatchReview:'match-review.js?v=second-chance-1',
-    StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
-    FightCamera:'fight-camera.js?v=closing-lines-1',
+    StockCall:'stock-call.js?v=finish-call-1', BellBreak:'bell-break.js?v=course-result-1',
+    FightCamera:'fight-camera.js?v=finish-shot-1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
@@ -6453,7 +6457,7 @@
     if(w.eventId && w.end!==null)return w.end===0?'Clear!':w.endReason==='time'?'Time!':'Finish!';
     if (w.lesson) return '';
     if (w.endReason === 'time') return 'Time!';
-    if (w.end!==null) return '';
+    if (w.end!==null) return w.matchCard && (w.endReason==='ko' || w.endReason==='sudden')?'Game!':'';
     if (w.suddenDeath?.intro > 0) return 'Sudden Death';
     if (w.matchFrames < (view.resumeGoUntil ?? 0)) return 'GO!';
     if (w.suddenDeath) return w.suddenDeath.frames-(w.suddenDeath.startFrame || 0) < 22 ? 'GO!' : '';
@@ -6634,8 +6638,10 @@
         const waitingOnKO = confirmed && (world.end !== null && confirmed.end === null ||
           world.suddenDeath?.round !== confirmed.suddenDeath?.round);
         const studying = !!world.survivalPractice?.preview;
+        const result=confirmed || world;
+        const finishPhase=result.end!==null && result.matchCard && !result.eventId ? (resultDelay>0?'call':'results') : null;
         view.draw($('game'), waitingOnKO ? confirmed : world, studying ? 0 : frameLab.mode === 'frozen' ? 1/60 : dt,
-          studying ? world.time : frameLab.mode === 'frozen' ? frameLab.renderTime : now, confirmed || world);
+          studying ? world.time : frameLab.mode === 'frozen' ? frameLab.renderTime : now, result, finishPhase);
       }
     }
     updateMusic();
