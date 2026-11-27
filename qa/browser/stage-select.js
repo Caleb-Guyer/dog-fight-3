@@ -29,7 +29,12 @@ async function check(browser,name,viewport){
     assert(await page.locator('[data-stage=picnic]').evaluate(b=>b===document.activeElement));
     const title=()=>page.locator('#arena-name').innerText();
     const canvas=()=>page.locator('#arena-preview').evaluate(c=>c.toDataURL());
-    if(!phone){await padPress(15);assert.match(await title(),/Laundry Line/i);}
+    if(!phone){
+      await padPress(15);assert.match(await title(),/Laundry Line/i);
+      await page.keyboard.press('Tab');assert(await page.locator('#arena-random').evaluate(b=>b===document.activeElement));
+      assert.match(await title(),/Laundry Line/i);
+      await page.keyboard.press('Shift+Tab');await padPress(0);assert(await page.locator('#arena-confirm').evaluate(b=>b===document.activeElement));
+    }
     await choose('[data-stage=canal]');assert.match(await title(),/Canal Lock/i);
     assert.equal(await page.locator('#arena-motion').textContent(),phone?'Play':'Pause');
     if(phone){const still=await canvas();await page.clock.runFor(500);assert.equal(await canvas(),still);await choose('#arena-motion');}
@@ -50,6 +55,11 @@ async function check(browser,name,viewport){
     const dimensions=await page.locator('#dialog').evaluate(d=>[d.clientWidth,d.clientHeight,d.scrollWidth]);
     assert.equal(dimensions[0],viewport.width);assert.equal(dimensions[1],viewport.height);assert(dimensions[2]<=viewport.width);
     const img=await page.locator('#arena-preview').boundingBox();assert(Math.abs(img.width/img.height-16/9)<.02);
+    assert(await page.locator('[data-stage-form]').evaluateAll(items=>items.every(b=>{
+      const r=document.createRange();r.selectNodeContents(b);
+      const label=r.getBoundingClientRect(),button=b.getBoundingClientRect();
+      return label.left>=button.left+1 && label.right<=button.right-1;
+    })));
     await page.screenshot({path:'arena-select-'+name+'.png'});
     // Cancel the exploration with a controller or keyboard. Even the excursions into Stage Run and music did not save it.
     if(phone)await page.keyboard.press('Escape');else await padPress(1);
