@@ -37,9 +37,36 @@ async function play(browser,device){
       await page.evaluate(([i,n])=>{for(let k=0;k<n;k++)liveCup.knockouts([liveCup.dogs[i]]);},[slot,count]);
       await page.clock.runFor(1500);
     }
-    await page.goto(root+'#arcade/pip');
-    await observe();
-    await choose(action('cup-start'));await page.clock.runFor(3500);
+    await page.goto(root+'#arcade/brisket');
+    const cards=page.locator('#cup-select[data-view=roster]');
+    await cards.waitFor();await observe();
+    const posters=await cards.locator('.cup-poster canvas:first-child').elementHandles();
+    const pip=cards.locator('[data-cup-dog=pip]');
+    async function padPress(index){
+      await page.evaluate(i=>button(i,true),index);await page.clock.runFor(48);
+      await page.evaluate(i=>button(i,false),index);await page.clock.runFor(48);
+    }
+    if(touch)await pip.tap();
+    else if(pad)await padPress(14);
+    else await page.keyboard.press('ArrowLeft');
+    assert.equal(await pip.getAttribute('aria-pressed'),'true');
+    assert.match(await cards.locator('.cup-ticket p').textContent(),/Noodle/);
+    assert.equal(await cards.locator('[data-do=cup-start]').textContent(),'Start Pip’s run');
+    assert(await Promise.all(posters.map(c=>c.evaluate(node=>node.isConnected))).then(states=>states.every(Boolean)));
+    assert.equal(await pip.locator('canvas + canvas').evaluate(c=>getComputedStyle(c).animationName),'cup-idle');
+    const moving=await cards.locator('.cup-poster').evaluateAll(dogs=>dogs.map(dog=>{
+      const [a,b]=dog.querySelectorAll('canvas');
+      const base=a.getContext('2d').getImageData(0,0,a.width,a.height).data;
+      const alt=b.getContext('2d').getImageData(0,0,b.width,b.height).data;
+      return [base.some((value,i)=>value!==alt[i]),getComputedStyle(b).animationName!=='none'];
+    }));
+    assert.deepEqual(moving,[[true,true],[true,false],[true,false],[true,false]]);
+    assert.equal(await stored(),null);
+    if(touch){await pip.tap();assert(await cards.isVisible());await choose(action('cup-start'));}
+    else if(pad)await padPress(0);
+    else await page.keyboard.press('Enter');
+    await page.clock.runFor(3500);
+    assert.deepEqual(await page.evaluate(()=>liveCup.dogs.map(dog=>dog.kind)),['pip','noodle']);
     await rings(1,3);
     assert.deepEqual(await page.locator('.cup-result button:visible').allTextContents(),['Play round 2','More options']);
     await choose('#cup-more');await choose(action('cup-sheet'));

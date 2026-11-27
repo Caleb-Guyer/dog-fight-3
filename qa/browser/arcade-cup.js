@@ -22,7 +22,23 @@ async function playCup(browser) {
   const roster=page.locator('#cup-select[data-view=roster]');
   await roster.waitFor();assert(!(await page.locator('#dialog').isVisible()));
   await page.keyboard.press('ArrowRight');assert.equal(await page.evaluate(()=>document.activeElement.dataset.cupDog),'brisket');
-  await page.keyboard.press('Enter');assert.equal(await roster.locator('[aria-pressed=true]').getAttribute('data-cup-dog'),'brisket');
+  assert.equal(await roster.locator('[aria-pressed=true]').getAttribute('data-cup-dog'),'brisket');
+  assert.match(await roster.locator('.cup-ticket p').textContent(),/Pip/);
+  assert.equal(await page.evaluate(()=>localStorage.getItem('dog-fight-3.cup.brisket')),null);
+  // A delayed save must not launch a fighter the player browsed away from, including A -> B -> A.
+  await page.evaluate(()=>{
+    const request=navigator.locks.request.bind(navigator.locks);
+    navigator.locks.request=(key,task)=>{
+      if(key!=='dog-fight-3.cup.brisket')return request(key,task);
+      navigator.locks.request=request;
+      return new Promise(resolve=>{window.releaseCup=()=>resolve(task());});
+    };
+  });
+  await page.keyboard.press('Enter');await page.waitForFunction(()=>!!window.releaseCup);
+  await page.keyboard.press('ArrowRight');await page.keyboard.press('ArrowLeft');
+  await page.evaluate(()=>releaseCup());
+  assert.equal(await page.evaluate(()=>localStorage.getItem('dog-fight-3.cup.brisket')),null);
+  assert(await roster.isVisible());assert(await roster.locator('[data-do=cup-start]').isEnabled());
   for(const kind of ['pip','clover','brisket','noodle']){
     await page.locator('[data-cup-dog='+kind+']').click();
     await tap('cup-sheet');
@@ -36,7 +52,7 @@ async function playCup(browser) {
   await page.locator('[data-cup-dog=pip]').click();
   await page.screenshot({path:'cup-select-desktop.png'});
   await page.locator('[data-cup-dog=noodle]').click();
-  await page.locator('[data-do=cup-start]').focus();
+  assert.equal(await page.evaluate(()=>document.activeElement.dataset.cupDog),'noodle');
   await page.keyboard.press('Enter');
   async function observe() {
     await page.evaluate(()=>{
@@ -135,6 +151,7 @@ async function mobileAndFilms(browser){
   await page.goto(root+'#arcade/clover');
   const roster=page.locator('#cup-select');await roster.waitFor();
   const area=await roster.boundingBox();
+  assert.equal(await roster.locator('[aria-pressed=true] canvas + canvas').evaluate(c=>getComputedStyle(c).animationName),'none');
   assert.equal(await page.locator('.cup-poster').count(),4);
   const check=await roster.evaluate(el=>({width:el.clientWidth,scroll:el.scrollWidth,bottom:el.querySelector('[data-do=cup-start]').getBoundingClientRect().bottom}));
   assert(check.scroll<=check.width && check.bottom<=844,JSON.stringify(check));

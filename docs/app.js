@@ -1647,19 +1647,11 @@
       ()=>cupSheet(kind,route,resume),()=>page==='match'?(world?.end!=null?showResult():showPause()):returnToHome());
     if(page!=='cup-select')menuScreen('cup-select');else dismiss();
     $('dialog-body').replaceChildren();
-    cupChoice = kind;
-    const entry = cupEntry(kind), run = entry.active, course = cup.courses[kind], round = run?.wins.length || 0;
-    cupShown = entry;
-    const stops = [...course.bouts,[null]].map(([dog,stage,form],i)=>{
-      const title = dog ? fighters[dog].name : 'Copper Hound', venue = dog ? stageName(stage,form) : 'Bell Depot';
-      return '<li'+(round===i?' aria-current="step"':'')+'><span>'+(i+1)+'</span><div><strong>'+title+
-        '</strong><small>'+venue+'</small></div><b>'+(i<round ? stockLabel(run.wins[i].stocks)+' kept' :
-          i===round ? 'Up next' : dog ? cpuLevels[cup.levels[i]].name : 'Boss')+'</b></li>';
-    }).join('');
-    window.VersusRulebook.cupSelect($('cup-select'),{kind,entry,course,route,stops,best:entry.best && cupRecord(entry.best),
-      storageNote:unsavedCup.has(kind)?'<p>Progress lasts for this tab while storage is unavailable.</p>':'',
-      coatFor:id=>cupEntry(id).active?.coat ?? savedCoat(0,id),select:cupSheet,back:returnToHome,
-      start:button=>startCupRound(kind,button)});
+    window.VersusRulebook.cupSelect($('cup-select'),{
+      kind,route,select:cupSheet,back:returnToHome,start:startCupRound,record:cupRecord,stageName,stockLabel,
+      progress:id=>{cupChoice=id;cupShown=cupEntry(id);return cupShown;},
+      temporary:id=>unsavedCup.has(id),coatFor:id=>cupEntry(id).active?.coat ?? savedCoat(0,id)
+    });
     if(resume)$('cup-select').querySelector('[data-do=cup-start]').click();
   }
   async function startCupRound(kind,button) {
@@ -1667,8 +1659,9 @@
     if (!button || button.disabled) return;
     button.disabled = true;
     audioReady();
-    const current = () => button.isConnected && ($('cup-select').contains(button)?page==='cup-select' && !$('dialog').open:$('dialog').open);
     const expected = cupShown;
+    const current = () => cupShown===expected && button.isConnected &&
+      ($('cup-select').contains(button)?page==='cup-select' && !$('dialog').open:$('dialog').open);
     if(expected.active?.wins.length===cup.courses[kind].bouts.length && !missionReady()){
       button.textContent='Loading Bell Depot…';
       try { await loadMission(); }
@@ -4245,7 +4238,7 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=cup-schedule-2',
+    VersusRulebook:'versus-rules.js?v=cup-roster-3',
     PackRelay:'pack-relay.js?v=versus-2',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
     ComboLab:'combo-lab.js?v=dash-smash-1', FinishTools:'finish-tools.js?v=second-chance-1',
@@ -4262,7 +4255,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=cup-schedule-2';
+        link.href='./versus-select.css?v=cup-roster-3';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
