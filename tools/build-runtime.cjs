@@ -19,7 +19,8 @@ async function build() {
     const source = await fs.readFile(path.join(site, name), 'utf8');
     // Menu handlers live inside app's closure. Simulation and replay code retain their function names.
     const result = await minify(source, {
-      compress: name === 'engine.js' ? { defaults: false, booleans: true } : false,
+      compress: name === 'engine.js' ? { defaults: false, booleans: true } :
+        ['app.js','render.js'].includes(name) ? { defaults: false, booleans: true, sequences: true, join_vars: true } : false,
       mangle: true,
       keep_fnames: name !== 'app.js',
       keep_classnames: true,

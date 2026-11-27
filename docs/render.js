@@ -1735,6 +1735,10 @@
         pixelLine(ctx, x, y, x + outward * 3, y - 5, ink, 6, 2);
         pixelLine(ctx, x, y, x + outward * 3, y - 5, marks === 1 ? '#ff865d' : gold, 3, 2);
       }
+    } else if(f.attack?.lip){
+      const lip=f.attack.lip, x=lip.x-2*face;
+      pixelLine(ctx,f.x,f.y-12,x,lip.y+2,ink,7,2);
+      pixelLine(ctx,f.x,f.y-12,x,lip.y+2,gold,3,2);
     } else if (state === 'ledge' && f.invuln > 0 && f.ledge.guardFrames) {
       // Chalk grip marks underneath the lip stay legible with reduced motion.
       const remaining = Math.ceil(f.invuln * 60), marks = Math.ceil(remaining / 12);

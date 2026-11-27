@@ -4119,7 +4119,7 @@
     if(active && !world.comboPractice)drill('combo',false,'example');
     window.ComboLab.shelf(hash,active?world:null,showDialog,back,(card,source,slot)=>{
       leaveOnline();afterStory=null;
-      startMatch({...settings,...card.config,wallSpring:!!card.config.wallSpring,groundSpace:!!card.config.groundSpace,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
+      startMatch({...settings,...card.config,risingCatch:!!card.config.risingCatch,wallSpring:!!card.config.wallSpring,groundSpace:!!card.config.groundSpace,mode:'training',fetch:false},undefined,undefined,null,{visit:active?practiceFight:null});
       window.ComboLab.restore(world,card);
       drill('combo',false,source,'stand',slot);
       if(world.comboPractice.slow!==card.slow)$('combo-slow').click();
@@ -4415,8 +4415,8 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
-    SoloEvents:'solo-events.js?v=1',
-    PracticeFeedback:'practice-feedback.js?v=wall-spring-1', DogOnline:'online.js?v=wall-spring-1',
+    SoloEvents:'solo-events.js?v=rising-catch-1',
+    PracticeFeedback:'practice-feedback.js?v=wall-spring-1', DogOnline:'online.js?v=rising-catch-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
@@ -4429,8 +4429,8 @@
     VersusRulebook:'versus-rules.js?v=opening-reply-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=counterpick-map-1',
-    ComboLab:'combo-lab.js?v=wall-spring-1', FinishTools:'finish-tools.js?v=stock-runs-1',
-    MoveGuide:'move-guide.js?v=wall-spring-1', FighterSchool:'fighter-lessons.js?v=first-hit-1',
+    ComboLab:'combo-lab.js?v=rising-catch-1', FinishTools:'finish-tools.js?v=stock-runs-1',
+    MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=first-hit-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-practice-1', DispatchView:'dispatch-view.js?v=launch-rescue-1',

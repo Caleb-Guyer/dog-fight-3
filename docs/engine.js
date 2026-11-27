@@ -2683,6 +2683,7 @@
       if(config.aimedDrive!==false)this.aimedDrive=true;
       if(config.groundSpace!==false)this.groundSpace=true;
       if(config.wallSpring!==false)this.wallSpring=true;
+      if(config.risingCatch!==false)this.risingCatch=true;
       this.time = 0;
       this.end = null;
       this.endReason = '';
@@ -3240,6 +3241,7 @@
       if (!('aimedDrive' in state)) delete this.aimedDrive;
       if (!('groundSpace' in state)) delete this.groundSpace;
       if (!('wallSpring' in state)) delete this.wallSpring;
+      if (!('risingCatch' in state)) delete this.risingCatch;
       if (!('closingHeight' in state)) delete this.closingHeight;
       this.random.state = random.state;
     }
@@ -5149,6 +5151,10 @@
       Object.assign(returner, {x:lip+outward*(slot ? 205 : 108), y:floor.y-108, ground:-1, jumps:1,
         vx:slot ? 0 : -outward*90, vy:25, face:-outward, damage:60});
       Object.assign(guard, {x:lip-outward*10, y:floor.y, ground:this.terrain.indexOf(floor), face:outward});
+      if(side==='low'){
+        Object.assign(returner,{x:lip-24,y:floor.y+110,jumps:0,vx:0,vy:0});
+        guard.x=lip+300;
+      }
     }
     resetAirPractice(pattern = 'neutral', side = 'left', wide = false, kind) {
       const high = pattern === 'highReturn';
@@ -6641,6 +6647,15 @@
       if (!input.special) {
         if (f.attack?.specialSide === 'up') f.attack.released = true;
       }
+      if(pressed('grab') && input.y<.55 && !f.attack?.lip){
+        const edge=this.risingLedge(f);
+        if(edge){
+          f.attack.lip=edge;f.attack.reachTicks=0;f.attack.active=0;
+          f.face=edge.left?1:-1;f.x=edge.x-14*f.face;f.y=edge.y+24;
+          f.vx=f.vy=0;f.command=null;
+          this.emit('reachLip',{f,edge});return;
+        }
+      }
       const button = pressed('grab')
         ? 'grab'
         : pressed('special')
@@ -7407,6 +7422,10 @@
       }
       if ((f.reaction?.planted || f.reaction?.groundSlide) && !f.stun) f.reaction = null;
       if (f.respawning > 0) return;
+      if(f.attack?.lip){
+        if(++f.attack.reachTicks>=3)this.ledgeClaims.push({f,edge:f.attack.lip});
+        return;
+      }
       if (f.ledgeTrump) {
         f.ledgeTrump.time += dt;
         if (f.ledgeTrump.time + 1e-8 >= f.ledgeTrump.duration) f.ledgeTrump = null;
@@ -8181,6 +8200,12 @@
       }
       return landing;
     }
+    risingLedge(f){
+      const a=f.attack;
+      if(!this.risingCatch || a?.specialSide!=='up' || a.anchor || a.charging || a.lip || f.ground>=0 ||
+          f.vy>=-125 || f.ledgeLock || f.grip || f.stun || f.impactLag || f.stockLift || a.time+1e-8<a.start)return null;
+      return this.nearestLedge(f,f.stats.width+12,4,f.stats.height+6);
+    }
     nearestLedge(f, horizontal, above, below) {
       if (f.ledgeCatches >= maxLedgeCatches) return null;
       let best = null,
@@ -8209,7 +8234,7 @@
     hangLedge(f, edge) {
       if (sameLedge(f.ledge, edge) || f.ledgeCatches >= maxLedgeCatches) return;
       const rival = this.dogs.find((other) => other !== f && sameLedge(other.ledge, edge));
-      const trump = !!rival;
+      const trump = !!rival, rising=!!f.attack?.lip;
       const guardFrames = ledgeGuardFrames(f), protectedCatch = guardFrames > 0;
       const inward = edge.left ? 1 : -1;
       if (trump) {
@@ -8260,7 +8285,7 @@
         edgeDrill.guardFrames = guardFrames;
         edgeDrill.phase = 'hanging';
       }
-      this.emit('ledge', { f, protectedCatch, guardFrames, trump });
+      this.emit('ledge', { f, protectedCatch, guardFrames, trump,...(rising?{rising:true}:{}) });
       if (trump)
         this.emit('ledgeTrump', { f, target: rival, edge, dir: inward, point: { x: edge.x, y: edge.y } });
       if (trump && drill?.guardSlot===f.index && drill.phase!=='done' && sameLedge(edge,drill.edge)) {
@@ -11689,6 +11714,11 @@
       const f = this.dogs[1],
         foe = this.dogs[0],
         brain = this.bot;
+      if(this.cpuLevel==='rival' && f.attack?.specialSide==='up' && !f.prev.grab){
+        const lip=this.risingLedge(f);
+        if(lip && (Math.abs(foe.x-lip.x)>90 || foe.stun>.1))
+          return {...idleInput,grab:true,tapped:{grab:true}};
+      }
       if(this.wallSpring && this.cpuLevel==='rival' && f.wallAction?.type==='wallTech'){
         const spring=f.wallAction.time>=2/60 && this.wallGuardClose(f,foe) && foe.y>f.y+8;
         return spring?{...idleInput,jump:true,tapped:{jump:true}}:idleInput;
