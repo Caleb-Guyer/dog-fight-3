@@ -46,10 +46,12 @@
       if(follow){follow.observe(event,e,frame);return;}
       let label,detail,hit;
       if(event==='grabCatch')rememberGrip(player.battle,frame);
-      if((event==='tech' || event==='knockdown') && falls[e.f.index]){
+      const surface=stageContact[event];
+      if((event==='tech' || event==='knockdown' || surface) && falls[e.f.index]){
         const {start,press,held,locked}=falls[e.f.index];
-        landings.push({frame,slot:e.f.index,start:Math.max(start,frame-36),press,held,locked,type:e.type,dir:e.dir,
-          dog:e.f.stats.name,platform:e.f.ground});
+        landings.push({frame,slot:e.f.index,start:Math.max(start,frame-36),press,held,locked,type:surface?event:e.type,dir:e.dir,
+          dog:e.f.stats.name,platform:e.f.ground,...(surface?{surface,hard:!!e.hard}:{})});
+        falls[e.f.index]=null;
       }
       if(event==='grabCatch' && e.target.index===slot){
         grip={frame,slot,owner:e.f.index,kind:'grab',move:moveName(e.moveId,'Grab'),from:lifeStart};
@@ -156,9 +158,13 @@
     const block=tape.blocks.findLast(b=>b.start<=tick);
     return block?.inputs[tick-block.start]?.[slot] || idleInput;
   }
-  function landingName(type,dir){
+  const stageContact={wallTech:'wall',wallTechJump:'wall',wallBounce:'wall',ceilingTech:'ceiling',ceilingBounce:'ceiling'};
+  function landingName(type,dir,hard=false){
+    if(hard && stageContact[type])return (stageContact[type]==='wall'?'Wall':'Ceiling')+' impact too fast to tech';
     if(type==='techRoll')return dir<0?'Rolled left':'Rolled right';
     return {tech:'Landed in place',downed:'Knocked down',bounce:'Bounced off the stage',land:'Landed without tumbling',airDodgeLand:'Landed after an air dodge',
+      wallTech:'Braced against the wall',wallTechJump:'Wall-tech jump',wallBounce:'Bounced off the wall',
+      ceilingTech:'Braced against the ceiling',ceilingBounce:'Bounced off the ceiling',
       ko:'Lost the stock',ledge:'Caught the ledge',end:'Recording ended before touchdown'}[type];
   }
   function timing(press,impact,held=false,locked=false){
@@ -170,12 +176,13 @@
   function landingTry(tape,landing,start,emit=()=>{}){
     const slot=landing.slot;
     let result=null,press=null,locked=false,dodged=false;
-    const record=(type,dir,frame)=>{result??={type,dir,frame,press,locked};};
+    const record=(type,dir,frame,hard=false)=>{result??={type,dir,frame,press,locked,hard};};
     const replay=tape.playback(start,(event,e)=>{
       if(e.f?.index===slot){
         if(event==='dodge' && ['neutralAirDodge','directionalAirDodge'].includes(e.type))dodged=true;
         else if(event==='hit')dodged=false;
         else if(event==='tech' || event==='knockdown')record(e.type,e.dir,replay.frame+1);
+        else if(stageContact[event])record(event,e.dir,replay.frame+1,!!e.hard);
         else if(event==='floorBounce' || event==='meteorBounce')record('bounce',0,replay.frame+1);
         else if(['ko','ledge','airDodgeLand'].includes(event))record(event,0,replay.frame+1);
       }
@@ -194,11 +201,13 @@
         return true;
       }};
   }
-  function landingPreview(tape,landing,lead,dir){
+  function landingPreview(tape,landing,lead,dir,wallJump=false,aimUp=false){
     const player=landingTry(tape,landing,landing.start),tap=landing.frame-lead;
     while(!player.outcome && player.frame<player.length){
       const frame=player.frame+1,pad=controlsAt(tape,frame,landing.slot);
-      player.step({...pad,...(frame>=tap?{x:dir,grabX:dir}:{}),shield:frame===tap,tapped:{...pad.tapped,shield:frame===tap}});
+      const aim=landing.surface?(aimUp?{x:0,y:-1,grabX:0}:{}):frame>=tap?{x:dir,grabX:dir}:{};
+      const jump=landing.surface==='wall'?{jump:wallJump && frame>=tap}: {};
+      player.step({...pad,...aim,...jump,shield:frame===tap,tapped:{...pad.tapped,...(landing.surface==='wall'?{jump:wallJump && frame===tap}:{}),shield:frame===tap}});
     }
     return player;
   }
@@ -213,18 +222,35 @@
     }
     return {config,battle,tape};
   }
+  function stageTechDemo(surface){
+    const {Battle,FinishTape,seededRandom}=window.DogFight;
+    const ceiling=surface==='ceiling',stage=ceiling?'picnic':'laundry';
+    const config={mode:'local',p1:'noodle',p2:'pip',stage,fetch:false,minutes:0};
+    const battle=new Battle(config,undefined,seededRandom(73)),tape=new FinishTape();
+    // Use the regular drill's starting positions, then record the kick from P2's actual stick.
+    battle.resetWallPractice('left',ceiling?'ceiling':'',surface==='heavy');
+    const inward=battle.wallPractice.inward;
+    battle.wallPractice=null;
+    for(let i=0;i<60;i++){
+      const rival=i?idleInput:{...idleInput,attack:true,...(ceiling?{y:-1}:{x:inward})};
+      tape.record(battle,idleInput,rival);battle.step(1/60,idleInput,rival);
+    }
+    return {config,battle,tape};
+  }
   function landingActions(review){
     const back=review.moment?'Back to full match':review.clinic?'Back to Fight School':review.from==='pause'?'Back to fight':
       ['archive','card'].includes(review.from)?'Back to match stats':'Back to results';
-    return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Retry landing</button>'+
+    const subject=review.landing?.surface?'impact':'landing';
+    return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Retry '+subject+'</button>'+
       (review.guided?'<button class="utility" data-do="landing-speed">Try at match speed</button>':'')+
-      '<button class="utility" data-do="trial-replay">Review landing</button><button class="utility" data-do="trial-results">'+back+'</button></div>';
+      '<button class="utility" data-do="trial-replay">Review '+subject+'</button><button class="utility" data-do="trial-results">'+back+'</button></div>';
   }
   function landingReport(player,landing,showDialog,actions){
     const r=player.result;
-    const before=landingName(landing.type,landing.dir),after=r?landingName(r.type,r.dir):'Recording ended';
-    showDialog('finish-comparison',after,'<p>'+landing.dog+' · Recorded landing on frame '+landing.frame+'</p>'+
-      '<table class="finish-comparison"><thead><tr><th>Landing</th><th>Original</th><th>This attempt</th></tr></thead>'+
+    const before=landingName(landing.type,landing.dir,landing.hard),after=r?landingName(r.type,r.dir,r.hard):'Recording ended';
+    const subject=landing.surface?landing.surface+' impact':'landing';
+    showDialog('finish-comparison',after,'<p>'+landing.dog+' · Recorded '+subject+' on frame '+landing.frame+'</p>'+
+      '<table class="finish-comparison"><thead><tr><th>'+ (landing.surface?'Impact':'Landing')+'</th><th>Original</th><th>This attempt</th></tr></thead>'+
       '<tbody><tr><th>Result</th><td>'+before+'</td><td>'+after+'</td></tr><tr><th>Input</th><td>'+
       timing(landing.press,landing.frame,landing.held,landing.locked)+'</td><td>'+(r && r.type!=='end'?timing(r.press,r.frame,player.held,r.locked):'—')+'</td></tr></tbody></table>'+actions,false);
     document.querySelector('[data-do=trial-retry]').focus();
@@ -232,36 +258,53 @@
   function landingPanel(nav,tape,landings,jump,practice,opened,signal){
     const panel=document.createElement('details');
     panel.id='clip-landings';
-    panel.innerHTML='<summary>Practice a landing</summary><label>Recorded fall <select data-fall></select></label>'+
+    panel.innerHTML='<summary>'+ (landings.some(l=>l.surface)?'Practice a stage impact':'Practice a landing')+'</summary><label>Recorded contact <select data-fall></select></label>'+
       '<p data-before></p><label>Shield timing <input data-lead type="range" min="0" step="1"> <output data-timing></output></label>'+
       '<div class="dialog-actions" role="group" aria-label="Landing direction">'+
       ['Roll left','In place','Roll right'].map((s,i)=>'<button type="button" class="utility" data-dir="'+(i-1)+'">'+s+'</button>').join('')+'</div>'+
+      '<div data-stage-options hidden><label><input type="checkbox" data-up>Hold Up during launch</label>'+
+      '<label><input type="checkbox" data-wall-jump>Hold Jump at the wall</label></div>'+
       '<canvas width="512" height="288" role="img" aria-label="Result of the selected landing input"></canvas>'+
       '<p role="status" data-after></p><div class="dialog-actions"><button class="primary" data-guided>Guide my landing</button>'+
       '<button class="utility" data-live>Try at match speed</button><button class="utility" data-original>Watch original fall</button></div>';
     nav.before(panel);
     const find=s=>panel.querySelector(s),select=find('select'),slider=find('input'),canvas=find('canvas');
-    let selected=landings.find(l=>l.slot===opened?.slot && l.frame===opened.at) || landings.findLast(l=>l.type==='downed') || landings.at(-1),dir=0;
-    for(const [i,l] of landings.entries())select.add(new Option('P'+(l.slot+1)+' '+l.dog+' · frame '+l.frame,String(i)));
+    let selected=landings.find(l=>l.slot===opened?.slot && l.frame===opened.at) || landings.find(l=>l.surface && l.surface===opened?.surface) || landings.findLast(l=>l.type==='downed') || landings.at(-1),dir=0;
+    for(const [i,l] of landings.entries())select.add(new Option('P'+(l.slot+1)+' '+l.dog+' · '+(l.surface?l.surface+' · ':'')+'frame '+l.frame,String(i)));
     select.selectedIndex=landings.indexOf(selected);
     function compare(){
-      const lead=Number(slider.value),player=landingPreview(tape,selected,lead,dir),r=player.result;
+      const lead=Number(slider.value),player=landingPreview(tape,selected,lead,dir,find('[data-wall-jump]').checked,find('[data-up]').checked),r=player.result;
       find('[data-timing]').textContent=lead?lead+' frames before impact':'On impact';
-      find('[data-after]').textContent='With this input · '+landingName(r.type,r.dir)+' on frame '+r.frame+'.';
+      find('[data-after]').textContent='With this input · '+landingName(r.type,r.dir,r.hard)+' on frame '+r.frame+'.';
       const view=new window.DogFightView.FightView();view.shakeEnabled=false;
       view.draw(canvas,player.battle,0,player.battle.time);
       for(const b of panel.querySelectorAll('[data-dir]'))b.setAttribute('aria-pressed',String(Number(b.dataset.dir)===dir));
     }
     function choose(){
       selected=landings[select.selectedIndex];dir=0;
-      slider.max=String(selected.frame-selected.start-1);slider.value=String(Math.min(5,Number(slider.max)));
-      find('[data-before]').textContent=selected.dog+' · '+landingName(selected.type,selected.dir)+'. '+timing(selected.press,selected.frame,selected.held,selected.locked);
+      find('[aria-label="Landing direction"]').hidden=!!selected.surface;
+      find('[data-stage-options]').hidden=!selected.surface;
+      find('[data-wall-jump]').parentElement.hidden=selected.surface!=='wall';
+      find('[data-wall-jump]').checked=find('[data-up]').checked=false;
+      find('[data-guided]').textContent=selected.surface?'Guide my tech':'Guide my landing';
+      const saved=opened?.slot===selected.slot && opened.at===selected.frame?opened:null;
+      slider.max=String(selected.frame-selected.start-1);slider.value=String(Math.min(saved?.lead ?? 5,Number(slider.max)));
+      dir=saved?.dir ?? 0;
+      find('[data-wall-jump]').checked=selected.surface==='wall' && !!saved?.wallJump;
+      find('[data-up]').checked=!!selected.surface && !!saved?.aimUp;
+      find('[data-before]').textContent=selected.dog+' · '+landingName(selected.type,selected.dir,selected.hard)+'. '+timing(selected.press,selected.frame,selected.held,selected.locked);
       jump(selected.frame);compare();
     }
     select.onchange=choose;slider.oninput=compare;
+    find('[data-wall-jump]').onchange=find('[data-up]').onchange=compare;
     for(const b of panel.querySelectorAll('[data-dir]'))b.onclick=()=>{dir=Number(b.dataset.dir);compare();};
-    find('[data-guided]').onclick=()=>practice(selected,Math.max(selected.start,selected.frame-6),true);
-    find('[data-live]').onclick=()=>practice(selected,selected.start,false);
+    function play(guided){
+      const lead=Number(slider.value),aimUp=find('[data-up]').checked,wallJump=find('[data-wall-jump]').checked;
+      const start=guided?(selected.surface && aimUp?selected.start:Math.max(selected.start,selected.frame-(selected.surface?lead+1:6))):selected.start;
+      practice(selected,start,guided,{lead,dir,wallJump,aimUp});
+    }
+    find('[data-guided]').onclick=()=>play(true);
+    find('[data-live]').onclick=()=>play(false);
     find('[data-original]').onclick=()=>{
       jump(Math.max(0,selected.start-20));
       document.getElementById('clip-toggle').click();
@@ -811,5 +854,5 @@
     const sync=inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump,signal});
     return ()=>{sync();if(panel && selected)panel.hidden=frame()!==selected.frame;};
   }
-  window.FinishTools={chooseFighter,install,moments,analyze,inputFrame,launchFlight,holdAttempt,holdPreview,holdReport,ledgeDemo,ledgeAttempt,ledgePreview,ledgeLine,defenseReply,returnTrace,returnComparison,landingDemo,landingTry,landingPreview,landingName,timing,landingActions,landingReport};
+  window.FinishTools={chooseFighter,install,moments,analyze,inputFrame,launchFlight,holdAttempt,holdPreview,holdReport,ledgeDemo,ledgeAttempt,ledgePreview,ledgeLine,defenseReply,returnTrace,returnComparison,landingDemo,stageTechDemo,landingTry,landingPreview,landingName,timing,landingActions,landingReport};
 })();
