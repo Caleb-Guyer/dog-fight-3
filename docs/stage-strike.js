@@ -339,7 +339,7 @@
     el('arena').onchange=e=>change({...card,stage:e.target.value},slot,'#route-arena');
     el('form').onchange=e=>change({...card,stageForm:e.target.value},slot,'#route-form');
     for(const b of root.querySelectorAll('[data-runner]'))b.onclick=()=>change(card,Number(b.dataset.runner),'[data-runner="'+b.dataset.runner+'"]');
-    el('start').onclick=()=>start(card,slot,best);el('play').onclick=()=>play(card);el('back').onclick=back;el('start').focus({preventScroll:true});
+    el('start').onclick=()=>start(card,slot,best);el('play').onclick=()=>play(card);el('back').onclick=()=>back(card);el('start').focus({preventScroll:true});
   }
   function routePanel(w,paused,{showDialog,root,store,start,board,play}){
     const r=w.route;

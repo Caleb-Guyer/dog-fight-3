@@ -681,5 +681,73 @@
     }
     root.querySelector(route?'[data-do=cup-start]':'[aria-pressed="true"]').focus({preventScroll:true});
   }
-  window.VersusRulebook={cupSelect,OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
+  function arenaSelect(root,{stage,form,picking,chooseForm,roomFighter,focusId,draw,reduced,run,music,confirm}){
+    const {arenas}=window.DogFight;
+    const drawBag=new window.FightControls.FighterShuffle(Object.keys(arenas));
+    const tiles=Object.entries(arenas).map(([id,a])=>
+      '<button type="button" data-stage="'+id+'"><canvas width="300" height="169" aria-hidden="true"></canvas><span>'+a.name+'</span></button>').join('');
+    const forms=Object.entries(stageForms).map(([id,f])=>
+      '<button type="button" data-stage-form="'+id+'">'+f.name+'</button>').join('');
+    root.innerHTML='<div class="arena-board"><div class="arena-scout"><div class="arena-picture">'+
+      '<canvas id="arena-preview" width="640" height="360" role="img"></canvas><button id="arena-motion" type="button"></button></div>'+
+      '<div class="arena-caption" aria-live="polite" aria-atomic="true"><h3 id="arena-name"></h3><p id="arena-description"></p></div></div>'+
+      '<div class="arena-picks"><h3>Arena</h3><div class="arena-tiles" role="group" aria-label="Arena">'+tiles+
+      '<button type="button" id="arena-random"><b aria-hidden="true">?</b><span>Random</span></button></div>'+
+      (chooseForm?'<h3>Layout</h3><div class="arena-forms" role="group" aria-label="Stage form">'+forms+'</div>':'')+'</div>'+
+      '<footer>'+ (chooseForm?'<div class="arena-tools"><button id="arena-run">Stage Run</button><button id="arena-music">Stage music</button></div>':'')+
+      (roomFighter?'<div class="arena-room"><strong>'+roomFighter+'</strong><span id="net-pick-ready" role="status"></span>'+
+      '<button data-do="room-fighter-back">Change fighter</button></div>':'')+
+      '<button type="button" class="primary" id="arena-confirm">'+(picking?'Lock in arena':'Use arena')+'</button></footer></div>';
+    const el=id=>root.querySelector('#arena-'+id);
+    const cards=[...root.querySelectorAll('[data-stage]')],layouts=[...root.querySelectorAll('[data-stage-form]')];
+    const canvas=el('preview'),motion=el('motion');
+    let time=1.4,drawn=-1,preference=reduced.matches,playing=!preference;
+    function paint(){
+      drawn=Math.floor(time*12);
+      draw(canvas,stage,form,drawn/12);
+    }
+    function describe(){
+      for(const b of cards)b.setAttribute('aria-pressed',String(b.dataset.stage===stage));
+      for(const b of layouts)b.setAttribute('aria-pressed',String(b.dataset.stageForm===form));
+      const name=arenas[stage].name,layout=stageForms[form];
+      el('name').textContent=name;
+      el('description').textContent=(form==='original'?'':layout.name+' · ')+(layout.description || arenas[stage].description);
+      canvas.setAttribute('aria-label',name+' · '+layout.name);
+      paint();
+    }
+    function paintCards(){
+      for(const b of cards)draw(b.querySelector('canvas'),b.dataset.stage,form);
+    }
+    function select(id){
+      if(id===stage)return;
+      stage=id;describe();
+    }
+    for(const b of cards){
+      b.onfocus=b.onclick=()=>select(b.dataset.stage);
+    }
+    for(const b of layouts)b.onclick=()=>{
+      if(form===b.dataset.stageForm)return;
+      form=b.dataset.stageForm;paintCards();describe();
+    };
+    el('random').onclick=()=>select(drawBag.draw(stage));
+    function transport(){
+      motion.textContent=playing?'Pause':'Play';
+      motion.setAttribute('aria-label',motion.textContent+' stage preview');
+    }
+    motion.onclick=()=>{playing=!playing;transport();};
+    el('confirm').onclick=()=>confirm(stage,form);
+    if(chooseForm){
+      el('run').onclick=()=>run(stage,form);
+      el('music').onclick=()=>music(stage,form);
+    }
+    paintCards();describe();transport();
+    (focusId && root.querySelector('#'+focusId) || cards.find(b=>b.dataset.stage===stage)).focus({preventScroll:true});
+    return {tick(dt){
+      if(preference!==reduced.matches){preference=reduced.matches;playing=!preference;transport();}
+      if(!playing)return;
+      time+=dt;
+      if(Math.floor(time*12)!==drawn)paint();
+    }};
+  }
+  window.VersusRulebook={arenaSelect,cupSelect,OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
 })();
