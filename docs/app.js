@@ -782,7 +782,7 @@
     showDialog('stage-strike','Stage strike set','');
     couchPanel=window.StageStrike.panel($('dialog-body'),{draft,seats,keys,pads:getPads(),padNames,drawStageTile,sound,leave:strikeBack,
       dogs:[config.p1,config.p2],form:config.form,solo:config.mode==='solo',game:series?series.games.length+1:1,
-      previous:series?.current.stage,start(stage){
+      previousGame:series?.current,start(stage){
         if(series && !series.advance(stage))return;
         const set=series || new StockSet(stage);
         delete set.pendingStrike;
@@ -4369,7 +4369,7 @@
     PlayerProfiles:'player-profiles.js?v=rumble-1',
     VersusRulebook:'versus-rules.js?v=landing-read-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
-    WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=button-check-1',
+    WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=counterpick-map-1',
     ComboLab:'combo-lab.js?v=compare-defenses-1', FinishTools:'finish-tools.js?v=launch-aim-1',
     MoveGuide:'move-guide.js?v=landing-study-1', FighterSchool:'fighter-lessons.js?v=landing-study-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
@@ -4384,7 +4384,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=event-board-1';
+        link.href='./versus-select.css?v=counterpick-map-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
