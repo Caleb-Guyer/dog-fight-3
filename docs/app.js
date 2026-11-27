@@ -671,7 +671,7 @@
   const lobbyForm = () => settings.mode === 'training' ? 'original' : settings.stageForm;
   const savedCoat = (slot,kind) => settings.coatBook[slot][kind] ?? 0;
   let lobbyCoats = [0,0];
-  let couchPanel=null,rotation=null,rotationPicking=false;
+  let couchPanel=null,lobbySeats=null,rotation=null,rotationPicking=false;
   const eventPads=new WeakMap();
   let rotationStorage;
   const savedEvents={};
@@ -721,8 +721,8 @@
     if(!window.CouchSelect || !versusStyled)return waitForDispatch(title,()=>loadVersusPanel('CouchSelect'),()=>pickTogether(forRotation,openingStrikes),
       ()=>rotationPicking?rotationBoard():counter?showResult():$('pick-together').focus());
     const pair=rotationPicking?rotation.pair:null;
-    const config=pair?window.CouchSelect.eventConfig(settings,rotation,eventPads.get(rotation)):
-      counter?{...matchConfig,stage:world.stage,stageForm:world.form,coats:[world.coatFor(0),world.coatFor(1)]}:settings;
+    const config=pair?window.CouchSelect.eventConfig(settings,rotation,eventPads.get(rotation) || lobbySeats):
+      counter?{...matchConfig,stage:world.stage,stageForm:world.form,coats:[world.coatFor(0),world.coatFor(1)]}:{...settings,couchSeats:lobbySeats};
     if(saved){
       config.stage=saved.current.stage;
       if(!counter){
@@ -771,7 +771,7 @@
     if(series?.pendingStrike)return showStrikeBoard(series.pendingStrike,series);
     const picker=series?.picker ?? null;
     const draft=new window.StageStrike.Draft(picker===null?crypto.getRandomValues(new Uint8Array(1))[0]%2:1-picker,picker);
-    const entry={draft,config:{...config,bestOfThree:true,stageStrikes:true},seats:config.couchSeats || new controls.Seats(getPads())};
+    const entry={draft,config:{...config,bestOfThree:true,stageStrikes:true},seats:config.couchSeats || lobbySeats || new controls.Seats(getPads())};
     if(series)series.pendingStrike=entry;
     showStrikeBoard(entry,series);
   }
@@ -999,6 +999,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='couch-pads')return couchPanel?.cancel();
     if(dialogType==='pad-loss' || dialogType==='solo-pad-loss')return;
     if(dialogType==='fighter-tryout'){dismiss();if(page==='lobby')$('lobby-tryout').focus();return;}
     if(dialogType==='mission-saving')return;
@@ -1157,7 +1158,9 @@
     if (!window.VersusRulebook) return waitForDispatch('Controls', () => loadDispatch('VersusRulebook'), showControls,
       () => page === 'match' ? showPause() : $('controls').focus());
     backToPause = page === 'match';
-    showDialog('controls','Controls','<div class="dialog-actions"><button class="primary" data-do="bindings">Customize controls</button><button class="utility" data-do="pad-check">Check controller</button><button class="utility" data-do="stick-setup">Calibrate sticks</button><button class="utility" data-do="rumble">Controller rumble</button></div>'+controlTable()+window.VersusRulebook.controlsGuide);
+    showDialog('controls','Controls','<div class="dialog-actions"><button class="primary" data-do="bindings">Customize controls</button>'+
+      (page==='lobby' && settings.mode==='local'?'<button class="utility" data-do="couch-pads">Assign controllers</button>':'')+
+      '<button class="utility" data-do="pad-check">Check controller</button><button class="utility" data-do="stick-setup">Calibrate sticks</button><button class="utility" data-do="rumble">Controller rumble</button></div>'+controlTable()+window.VersusRulebook.controlsGuide);
   }
   $('controls').onclick = showControls;
   const specialInputs = {
@@ -2087,7 +2090,7 @@
     delete $('corner-tip').dataset.cue;
     if(config.mode==='local' && !online.match && config.lesson===undefined){
       const pads=getPads();
-      matchConfig.couchSeats ??= new controls.Seats(pads);
+      matchConfig.couchSeats ??= lobbySeats || new controls.Seats(pads);
       matchConfig.couchSeats.beginMatch(pads);
     }
     $('school-coach').hidden = config.lesson === undefined;
@@ -2356,7 +2359,8 @@
         icon('play') +
         'Resume</button><button class="utility" data-do="controls">' +
         icon('keyboard') +
-        'Controls</button><button class="utility" data-do="moves">Move list</button>' + screenAction() + cameraButton() + '</div>' +
+        'Controls</button>'+(world.mode==='local' && matchConfig.couchSeats?'<button class="utility" data-do="couch-pads">Assign controllers</button>':'')+
+        '<button class="utility" data-do="moves">Move list</button>' + screenAction() + cameraButton() + '</div>' +
         (matchConfig.stageTrack!==undefined && window.YardScore?'<p id="music-credit">'+(window.YardScore.scores[matchConfig.stageTrack]?.title || 'Quiet arena')+'</p>':'')+
         targetRecap() + (spar?spar.goals(true):'') + (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
           (corner?'<button class="utility" data-do="corner-practice">Practice · '+(schoolLessons.find(l=>l.id===corner.practice)?.title || $(corner.practice).textContent)+'</button>'+
@@ -2678,7 +2682,7 @@
     finishTrial={player,camera,start,slot,review,original,saved,trace,returnNames:trace && player.battle.dogs.map(f=>f.stats.name),carry:0,ready:.8};
     if(review?.together){
       const seats=new controls.Seats([]);
-      if(matchConfig?.couchSeats)seats.ids=matchConfig.couchSeats.ids.slice();
+      if(matchConfig?.couchSeats)seats.copyFrom(matchConfig.couchSeats);
       seats.sync(getPads());
       finishTrial.seats=seats;
     }
@@ -3267,6 +3271,7 @@
     if (action === 'card-back') return exitDialog();
     if(action==='rumble')return openRumble(dialogType);
     if(action==='stick-setup')return openStickSetup(dialogType);
+    if(action==='couch-pads')return openCouchPads(dialogType);
     if(action==='pad-check')return controllerCheck(dialogType);
     if (action==='bindings') openLayouts(dialogType);
     if (action === 'practice') showPractice();
@@ -4268,7 +4273,7 @@
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
-    PadFeedback:'pad-feedback.js?v=1',StickCalibration:'stick-calibration.js?v=1',
+    PadFeedback:'pad-feedback.js?v=1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
     VersusRulebook:'versus-rules.js?v=sticks-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
@@ -4287,7 +4292,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=sticks-1';
+        link.href='./versus-select.css?v=couch-pads-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -5682,6 +5687,7 @@
     return c.names;
   }
   function seatPad(i,pads=currentPads){
+    if(page==='lobby' && settings.mode==='local' && lobbySeats){lobbySeats.sync(pads);return lobbySeats.get(i,pads);}
     if(!i && soloWorld===world && soloSeat?.index!=null)return soloSeat.get(pads);
     if(page==='match' && matchConfig?.couchSeats && !finishTrial)return matchConfig.couchSeats.get(i,pads);
     return pads[i] || (pads.length===1?pads[0]:null);
@@ -5691,7 +5697,7 @@
   const edit={slot:0,device:'keyboard',mode:'idle',source:'home',action:'',value:null,down:new Set(),last:''};
   function applyLayouts(persist) {
     keys=layout.keyboard;
-    couchPanel?.bindings(keys);
+    couchPanel?.bindings?.(keys);
     matchKeys=new Set(keys.flatMap(map=>Object.values(map)));
     clearInput();
     delete $('school-coach').dataset.key;
@@ -6156,14 +6162,32 @@
       'Reconnect your controller or connect another one to take over.';
     if(info.textContent!==message)info.textContent=message;
   }
+  function openCouchPads(source){
+    const lobby=page==='lobby',seats=lobby?lobbySeats || new controls.Seats(getPads()):matchConfig.couchSeats;
+    function back(){
+      if(source==='lobby'){dismiss();$('controls').focus();return;}
+      if(source==='controls')showControls();
+      else if(source==='pad-loss'){dismiss();checkLocalPads(getPads());}
+      else showPause();
+      $('dialog-body').querySelector('[data-do=couch-pads]')?.focus();
+    }
+    if(!window.CouchControllers || !versusStyled)return waitForDispatch('Assign controllers',()=>loadVersusPanel('CouchControllers'),()=>openCouchPads(source),back);
+    couchPanel=window.CouchControllers.panel({seats,showDialog,back,pads:()=>currentPads,keyFor,confirmName:(i,p)=>padNames(i,p)[0],
+      fighters:lobby?[fighters[settings.p1].name,fighters[settings.p2].name]:world.dogs.map(f=>f.stats.name),save(draft){
+        seats.copyFrom(draft);seats.present=seats.connected(getPads());
+        lobbySeats=seats;
+        if(source!=='pad-loss')seats.lost=0;
+        back();
+      }});
+  }
   function checkLocalPads(pads) {
     const seats=matchConfig?.couchSeats;
     if(!seats || world.end!==null || online.match || finishTrial || clipScreen || victoryShot)return;
-    const before=seats.present, lost=seats.lost;
+    const before=seats.present, lost=seats.lost,version=seats.version;
     seats.track(pads);
     if(!seats.lost || (dialogType && dialogType!=='pad-loss'))return;
     if(dialogType!=='pad-loss'){
-      showDialog('pad-loss','Controller disconnected','<p id="pad-loss-info" role="status"></p><div id="pad-loss-seats"></div><div class="dialog-actions"><button id="pad-resume" class="primary"></button></div>',false);
+      showDialog('pad-loss','Controller disconnected','<p id="pad-loss-info" role="status"></p><div id="pad-loss-seats"></div><div class="dialog-actions"><button id="pad-resume" class="primary"></button><button class="utility" data-do="couch-pads">Assign controllers</button></div>',false);
       $('pad-resume').onclick=()=>{
         seats.lost=0;
         for(const pad of getPads()){
@@ -6173,14 +6197,14 @@
         dismiss();view.entrance=null;countdown=2.4;lastCount=0;
       };
       $('pad-resume').focus({preventScroll:true});
-    }else if(before===seats.present && lost===seats.lost)return;
+    }else if(before===seats.present && lost===seats.lost && version===seats.version)return;
     const labels=mask=>['P1','P2'].filter((_,i)=>mask & (1<<i)).join(' and ');
     const missing=seats.lost & ~seats.present;
     $('pad-loss-info').textContent=missing?labels(missing)+' lost controller input. Reconnect a pad or use the keyboard.':
       'Both fighters are ready.';
     $('pad-loss-seats').replaceChildren(...[0,1].map(i=>{
       const line=document.createElement('p'), pad=seats.get(i,pads);
-      line.textContent='P'+(i+1)+' · '+(pad?'Pad '+(pad.index+1):'Keyboard · '+keyFor(i,'left')+' / '+keyFor(i,'right')+' move · '+
+      line.textContent='P'+(i+1)+' · '+(pad?'Pad '+(pad.index+1)+(pad.id?' · '+pad.id:''):'Keyboard · '+keyFor(i,'left')+' / '+keyFor(i,'right')+' move · '+
         keyFor(i,'jump')+' jump · '+keyFor(i,'attack')+' attack · '+keyFor(i,'shield')+' shield');
       return line;
     }));
@@ -6190,6 +6214,7 @@
   }
   const menuRepeat=new window.FightControls.MenuRepeat();
   function padMenu(pads,time) {
+    const pairing=dialogType==='couch-pads' && couchPanel?.poll(pads);
     if(dialogType==='controls' && (controlsShown[0]!==padNames(0,seatPad(0)) || controlsShown[1]!==padNames(1,seatPad(1)) || controlsShown[2]!==layout)){
       $('dialog-body').querySelector('.control-table').outerHTML=controlTable();
     }
@@ -6236,6 +6261,7 @@
     };
     const move=menuRepeat.poll(direction,menuOpen && !document.hidden ? dialogType || page : '',time);
     const back=now.back && !oldPad.back, confirm=now.confirm && !oldPad.confirm;
+    if(pairing){if(back)couchPanel.cancel();oldPad=now;return;}
     if(dialogType==='solo-pad-loss'){
       oldPad=now;
       const pad=soloSeat?.confirm(pads);
@@ -6644,6 +6670,8 @@
       showHome(false);controllerCheck('controls');
     } else if (hash === '#controls') {
       showHome(false);openLayouts('home');
+    } else if(hash==='#local/controllers'){
+      leaveOnline();settings.mode='local';editing=0;toLobby();openCouchPads('lobby');
     } else if (hash === '#local/profiles') {
       leaveOnline();settings.mode='local';editing=0;toLobby();openProfiles('lobby',0);
     } else if (hash==='#tutorial/guided' || hash.startsWith('#tutorial/guided/') && schoolLessons.some(l=>l.id===hash.split('/')[2])) {
