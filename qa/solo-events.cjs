@@ -12,6 +12,49 @@ function play(id,control=()=>({})){
   assert.deepEqual(calls,[run.end]);
   return run;
 }
+function atLip(w,slot,side,depth){
+  const f=w.dogs[slot],floor=w.terrain[0],lip=side<0?floor.x1:floor.x2;
+  Object.assign(f,{ground:-1,x:lip+side*24,y:floor.y+depth,jumps:0,face:-side,ledgeLock:f.kind==='noodle'?.085:0});
+}
+test('all four rising specials can take either lip from either seat and older rules keep moving',()=>{
+  for(const kind of Object.keys(window.DogFight.fighters))for(const slot of [0,1])for(const side of [-1,1])for(const enabled of [true,false]){
+    let tick=0,reach,hang;
+    const w=new Battle({mode:'local',p1:kind,p2:kind,stage:'picnic',fetch:false,risingCatch:enabled},(n,e)=>{
+      if(n==='reachLip')reach=tick;
+      if(n==='ledge' && e.rising)hang=tick;
+    },seededRandom(15));
+    atLip(w,slot,side,kind==='noodle'?72:92);
+    for(;tick<30 && hang===undefined;tick++){
+      const f=w.dogs[slot],grab=!!w.risingLedge(f) || !enabled && tick===6;
+      const i={...idleInput,grab,special:tick===0,y:tick===0?-1:0};
+      w.step(1/60,slot?idleInput:i,slot?i:idleInput);
+      if(tick===reach || tick===reach+1){assert(!f.ledge);assert(!f.invuln);assert.equal(w.activeSwing(f),null);}
+    }
+    if(enabled){assert.equal(hang,reach+2);assert.equal(w.dogs[slot].ledge.left,side<0);}
+    else{assert.equal(reach,undefined);assert.equal(hang,undefined);}
+  }
+});
+test('Doorstop hits either exposed frame and misses if it arrives after a fresh catch',()=>{
+  for(const guardTap of [0,1,2]){
+    const events=[];
+    const w=new Battle({mode:'local',p1:'pip',p2:'brisket',stage:'picnic',fetch:false},(n,e)=>{
+      if(n==='reachLip' || n==='ledge' || (n==='hit' && e.f.index===0))events.push([n,w.matchFrames]);
+    },seededRandom(4));
+    atLip(w,0,-1,126);w.dogs[1].x=w.terrain[0].x1+60;w.dogs[1].face=-1;
+    for(let i=0;i<17;i++)w.step(1/60,{...idleInput,y:i===0?-1:0,special:i===0,grab:!!w.risingLedge(w.dogs[0])},
+      {...idleInput,y:i===guardTap?1:0,attack:i===guardTap,quickAttack:i===guardTap});
+    assert.equal(events[0][0],'reachLip');
+    assert.deepEqual(events[1],[guardTap===2?'ledge':'hit',events[0][1]+guardTap]);
+    assert.equal(w.dogs[0].damage>0,guardTap<2);
+  }
+});
+test('The Low Road rewards the actual catch followed by an onstage return',()=>{
+  const win=play('low-road',(n,w)=>({y:n===6?-1:0,special:n===6,grab:!!w.risingLedge(w.dogs[0]),x:n>=15?1:0}));
+  assert.equal(win.end,0);assert(win.caught);assert(win.dogs[0].ground>=0);
+  const miss=play('low-road');assert.equal(miss.end,1);assert.match(miss.feedback,/missed the roof/);
+  const regular=new Battle(setup('low-road',true),undefined,seededRandom(42));
+  assert.deepEqual([regular.dogs[0].x,regular.dogs[0].ground,regular.stockCount],[regular.terrain[0].x1-24,-1,3]);
+});
 test('Wrong Way requires a planted tech and a grounded punish during the missed sweep',()=>{
   assert.match(play('wrong-way').feedback,/missed the landing/);
   assert.match(play('wrong-way',n=>({x:1,shield:n===5})).feedback,/Pip rolled/);

@@ -14,8 +14,9 @@ async function play(browser,device){
       Object.defineProperty(navigator,'getGamepads',{value:()=>[g]});
       window.setEventPad=(key,on)=>{
         if(key==='right')g.axes[0]=on?1:0;
+        else if(key==='up')g.axes[1]=on?-1:0;
         else if(key==='down')g.axes[1]=on?1:0;
-        else Object.assign(g.buttons[{ok:0,pause:9,shield:4,attack:2,special:1}[key]],{pressed:on,value:Number(on)});
+        else Object.assign(g.buttons[{ok:0,pause:9,shield:4,attack:2,special:1,grab:3}[key]],{pressed:on,value:Number(on)});
       };
     });
     const choose=async selector=>{
@@ -28,7 +29,7 @@ async function play(browser,device){
       }
     };
     const cdp=touch && await page.context().newCDPSession(page),fingers=new Map();
-    const keys={shield:'l',attack:'j',down:'s',right:'d',special:'k'};
+    const keys={shield:'l',attack:'j',down:'s',right:'d',special:'k',up:'w',grab:'u'};
     async function hold(key,on){
       if(pad)return page.evaluate(([key,on])=>setEventPad(key,on),[key,on]);
       if(!touch)return on?page.keyboard.down(keys[key]):page.keyboard.up(keys[key]);
@@ -40,7 +41,7 @@ async function play(browser,device){
     }
     await page.goto('http://127.0.0.1:8080/#solo');await choose('#event-matches');
     const board=page.locator('#dialog[data-view=event-board]');await board.waitFor();
-    assert.equal(await board.locator('[data-event-pick]').count(),3);
+    assert.equal(await board.locator('[data-event-pick]').count(),4);
     const layout=await board.evaluate(d=>({width:d.clientWidth,scroll:d.scrollWidth,
       wide:[...d.querySelectorAll('*')].filter(e=>e.getBoundingClientRect().right>d.getBoundingClientRect().right).map(e=>e.id || e.textContent.slice(0,30))}));
     assert(layout.scroll<=layout.width+1,device+' board fits '+JSON.stringify(layout));
@@ -87,6 +88,13 @@ async function play(browser,device){
     assert.match(await page.locator('#match-mode').textContent(),/Solo.*Time Battle/);
     await page.goto('http://127.0.0.1:8080/?reload#solo/events/high-ground');
     await board.waitFor();assert.equal(await board.locator('[data-event-pick] small').evaluateAll(nodes=>nodes.filter(n=>n.textContent.includes('✓')).length),3);
+    await choose('[data-event-pick=low-road]');await start();
+    await to(6);await hold('up',true);await hold('special',true);await to(9);await hold('special',false);await hold('up',false);
+    for(let i=0;i<16 && !await page.evaluate(()=>!!run.risingLedge(run.dogs[0]));i++)await page.clock.runFor(16);
+    assert(await page.evaluate(()=>!!run.risingLedge(run.dogs[0])));
+    await hold('grab',true);await page.clock.runFor(75);await hold('grab',false);
+    assert(await page.evaluate(()=>run.caught));await hold('right',true);await page.clock.runFor(2100);await hold('right',false);await result(true);
+    await choose('#event-board');await choose('[data-event-pick=high-ground]');
     await choose('#event-play');await page.clock.runFor(2600);await choose('#pause');
     assert.match(await page.locator('#dialog-title').textContent(),/High Ground paused/);
     await choose('#event-board');await choose('#event-back');assert(await page.locator('#event-matches').evaluate(b=>document.activeElement===b));

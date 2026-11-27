@@ -5,6 +5,37 @@ require('../docs/engine.js');
 require('../docs/online.js');
 const {Battle, fighters, seededRandom, idleInput} = window.DogFight;
 const tick = 1/60;
+test('a delayed rising Grab rewinds the high route to the same two-frame reach on either seat',()=>{
+  const cfg={mode:'local',stage:'picnic',p1:'pip',p2:'pip',fetch:false};
+  const pose=w=>w.dogs.map(f=>[f.x,f.y,f.vx,f.vy,f.attack?.reachTicks,!!f.ledge,f.invuln,f.damage]);
+  for(const slot of [0,1]){
+    const align=w=>Object.assign(w.dogs[slot],{x:w.terrain[0].x1-24,y:w.terrain[0].y+126,ground:-1,face:1,jumps:0});
+    const ref=new Battle(cfg,undefined,seededRandom(7));align(ref);
+    const peers=[0,1].map(side=>{
+      let world;const sent=[];
+      const session=new window.DogOnline.OnlineSession({start(c,r){world=new Battle(c,undefined,r);}});
+      session.risingCatch=true;session.side=side;session.send=p=>{if(p[0]==='input')sent[p[2]]=p[3];};
+      session.beginRound(['start',1,'pip','pip','picnic',7]);
+      align(world);align(session.match.confirmedWorld);return {world,net:session.match,sent};
+    });
+    const history=[pose(ref)];let wrongPrediction=false;
+    for(let i=0;i<22;i++){
+      const pair=[idleInput,idleInput];
+      pair[slot]={...idleInput,special:i===0,y:i===0?-1:0,grab:i===7};
+      ref.step(tick,...pair);history.push(pose(ref));
+      for(const [side,p] of peers.entries()){
+        if(i>=4)p.net.receive(i-4,peers[1-side].sent[i-4]);p.net.tick(()=>pair[side],p.world);
+        if(i===9 && side!==slot)wrongPrediction=!!ref.dogs[slot].ledge && !p.world.dogs[slot].ledge;
+        assert.deepEqual(pose(p.net.confirmedWorld),history[p.net.confirmed]);
+      }
+    }
+    assert(wrongPrediction);
+    for(const [side,p] of peers.entries()){
+      const other=peers[1-side].sent;for(let i=p.net.received;i<other.length;i++)p.net.receive(i,other[i]);
+      p.net.confirm(p.world);assert.deepEqual(pose(p.world),pose(ref));
+    }
+  }
+});
 const config = {mode:'local', stage:'picnic', p1:'noodle', p2:'pip', fetch:false};
 const input = (changes={}) => ({...idleInput,...changes});
 const hull = {picnic:30, laundry:225, bandstand:45, nightmail:114, canal:126};
