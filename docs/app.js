@@ -817,6 +817,7 @@
     $('lobby-coat').setAttribute('aria-label','Choose coat for ' + labelFor(editing) + ' ' + fighters[chosen].name +
       ', currently ' + coatNames[chosen][lobbyCoat(editing)]);
     $('cpu-level').hidden = settings.mode !== 'solo';
+    $('event-matches').hidden=settings.mode!=='solo';
     $('pick-together').hidden=settings.mode!=='local';
     $('tournament').hidden=$('winner-stays').hidden=settings.mode!=='local';
     $('cpu-level').textContent = 'CPU · ' + cpuLevels[settings.cpuLevel].name;
@@ -1001,6 +1002,8 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='event-board')return $('event-back').click();
+    if(dialogType==='event-result')return eventBoard(world.eventId);
     if(clipScreen?.aimReader?.cancel())return;
     if(dialogType==='couch-pads')return couchPanel?.cancel();
     if(dialogType==='pad-loss' || dialogType==='solo-pad-loss')return;
@@ -1409,6 +1412,7 @@
     return '';
   }
   function updateHUD() {
+    if(world.eventId)world.hud($('match-set'));
     if(world.mode==='parcel'){
       const clock=$('match-clock'),badge=$('match-set'),time=world.clock(),label=world.label();
       if(clock.textContent!==time){
@@ -1888,6 +1892,20 @@
     document.querySelector('[data-cpu="' + level + '"]').focus({preventScroll:true});
   }
   $('cpu-level').onclick = showCpuLevels;
+  function eventUI(){
+    return {store:storage,showDialog,coat:savedCoat,open:eventBoard,back:()=>{dismiss();$('event-matches').focus();},launch:(id,normal)=>{
+      leaveOnline();afterStory=null;
+      const c=window.SoloEvents.setup(id,normal);
+      startMatch({...c,coats:[savedCoat(0,c.p1),savedCoat(1,c.p2)]},undefined,42);
+    }};
+  }
+  function eventBoard(id){
+    if(page!=='lobby' || settings.mode!=='solo'){settings.mode='solo';toLobby();}
+    if(!window.SoloEvents || !versusStyled)return waitForDispatch('Event Matches',()=>loadVersusPanel('SoloEvents'),
+      ()=>eventBoard(id),()=>$('event-matches').focus());
+    window.SoloEvents.board(id,eventUI());
+  }
+  $('event-matches').onclick=()=>eventBoard();
   function backFromRelay(){
     if(page==='match' && world?.end!=null)return showResult();
     $('rules-label').onclick();
@@ -2117,7 +2135,7 @@
       }
       random=seededRandom(seed);
     }
-    finishTape=resume?.tape || (!visit && config.lesson===undefined && ['solo','local'].includes(config.mode) ? new window.DogFight.FinishTape(true) : null);
+    finishTape=resume?.tape || (!visit && !config.eventId && config.lesson===undefined && ['solo','local'].includes(config.mode) ? new window.DogFight.FinishTape(true) : null);
     if(finishTape)for(const part of ['MatchReview','StockCall'])loadDispatch(part).catch(()=>{});
     // These modes let the player switch straight from the current exchange into a drill.
     if(config.schoolFinal || (config.mode==='training' && !config.warmupPartner)){
@@ -2159,7 +2177,7 @@
     view = resume?.view || new FightView($('blast-radar'));
     showContactBoxes(false);
     view.shakeEnabled = settings.shake;
-    const Match = config.mode==='targets' ? window.BellBreak.Run : config.mode==='parcel'?window.ParcelPunt.Run:Battle;
+    const Match = config.eventId?window.SoloEvents.Run:config.mode==='targets' ? window.BellBreak.Run : config.mode==='parcel'?window.ParcelPunt.Run:Battle;
     world = resume?.battle || new Match({...config, rivalRead:series?.openingRead}, (name, e) => {
       world?.lesson?.contact(name,e,world);
       corner?.target?.contact(name,e,world);
@@ -2234,7 +2252,7 @@
     setFrameMode('live');
     $('dummy-damage').value = '0';
     $('damage-output').textContent = '0%';
-    const matchName = world.warmupPartner ? 'Online warm-up' : online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
+    const matchName = world.eventId?world.event.name:world.warmupPartner ? 'Online warm-up' : online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
       (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : world.bells ? 'Bell Break' : modes[config.mode];
     $('match-mode').textContent = rehearsal && visit.returnStart ? 'Stock return · '+(config.mode==='local'?'Local versus':cpuLevels[world.cpuLevel].name+' CPU') :
       cupAttempt ? cupAttempt.exhibition?'Relay exhibition':'Arcade Cup · Round '+(cupAttempt.round+1)+'/4'+(world.relayTeams?' · Pack Relay':'') :
@@ -2326,6 +2344,7 @@
   function showPause(autosave=true) {
     if(finishTrial)return showTrialPause();
     if (page !== 'match' || !world || world.end !== null) return;
+    if(world.eventId)return window.SoloEvents.panel(world,true,eventUI());
     if (world.bossLesson) return window.DispatchView.lessonPanel(world, view.parkedBoss.world, showDialog);
     if(world.warmupPartner)return showWarmupMenu();
     if(world.mode==='parcel'){
@@ -2949,6 +2968,7 @@
     return online.match?'online':cupAttempt && !cupAttempt.exhibition?'cup':matchConfig?.schoolFinal || spar?'school':world.mode;
   }
   function recordFight(result) {
+    if(result?.eventId)return result.save(storage);
     if (!result?.matchCard || result.end===null || practiceFight || recordedFights.has(result)) return;
     const series=online.series || localSet;
     const entry={time:Date.now(),mode:recordMode(),side:online.match?online.side:0,stage:result.stage,form:result.form,
@@ -3057,6 +3077,7 @@
     announce(title + '. ' + name(winner) + ' wins. Set score ' + set.score.join(' to '));
   }
   function showResult() {
+    if(world.eventId)return window.SoloEvents.panel(world,false,eventUI());
     if(world.mode==='parcel')return parcelResult();
     if (world.bells) return bellResult();
     const result = online.match?.confirmedWorld || world;
@@ -4332,6 +4353,7 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
+    SoloEvents:'solo-events.js?v=1',
     PracticeFeedback:'practice-feedback.js?v=grip-2', DogOnline:'online.js?v=room-resume-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
@@ -4359,7 +4381,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=couch-pads-1';
+        link.href='./versus-select.css?v=event-board-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -6419,6 +6441,7 @@
     oldPad = now;
   }
   function roundCall(w) {
+    if(w.eventId && w.end!==null)return w.end===0?'Clear!':w.endReason==='time'?'Time!':'Finish!';
     if (w.lesson) return '';
     if (w.endReason === 'time') return 'Time!';
     if (w.end!==null) return '';
@@ -6605,6 +6628,7 @@
     const hash = location.hash;
     const openingStages = {'#solo/night-mail':'nightmail', '#solo/picnic-table':'picnic', '#solo/canal-lock':'canal'};
     const [,arena,form] = hash.split('/');
+    if(arena==='events' && hash.startsWith('#solo/'))return eventBoard(form);
     if(Object.hasOwn(fighters,arena) && Object.hasOwn(specialInputs,form) && hash==='#moves/'+arena+'/'+form){
       showHome(false);showSpecialPreview({kind:arena,side:form,page:'home',paused:false});
     }else if(/^#(solo|local)\/matchup(?:\/|$)/.test(hash)){
