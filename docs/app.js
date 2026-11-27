@@ -6121,7 +6121,7 @@
       showDialog('solo-pad-loss','Controller disconnected','<p>Your game is paused.</p><p id="solo-pad-info" role="status"></p>'+
         '<div class="dialog-actions"><button id="solo-pad-backup" class="primary">Resume with '+(touch?'touch':'keyboard')+'</button></div>',false);
       $('solo-pad-backup').onclick=()=>{
-        soloSeat.useOtherInput(getPads());schoolDevice=touch?2:0;
+        soloSeat.useOtherInput(getPads(),true);schoolDevice=touch?2:0;
         dismiss();announce('Game resumed.');
       };
       $('solo-pad-backup').focus({preventScroll:true});
