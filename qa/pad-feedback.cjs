@@ -50,6 +50,12 @@ test('stock loss takes priority over a follow-up and feedback respects strength,
   pad.vibrationActuator.playEffect=()=>Promise.reject(new Error('unavailable'));send('ko');
   await new Promise(resolve=>setImmediate(resolve));feedback.stop();
 });
+test('co-op haptics go to the dog that was hit or attacked, skipping the machine',()=>{
+  const pads=[controller(),controller()],team=[{index:0},{index:2}],boss={index:1};
+  const send=(f,owner)=>feedback.contact('hit',{f,owner,damage:4},{team,hasSecondPlayer:true},null,null,i=>pads[i],[2,2]);
+  send(boss,team[1]);send(team[0],boss);
+  assert.deepEqual(pads.map(p=>p.calls.map(c=>c.duration)),[[56],[32]]);feedback.stop();
+});
 test('late remote shield corrects a real predicted jab before either pad can feel it',()=>{
   for(const shield of [true,false]){
     const peers=[0,1].map(side=>{
