@@ -40,10 +40,16 @@ test('a new pad in the same slot waits for neutral and a fresh isolated confirm'
 test('keyboard or touch takeover ignores held controls until the pad returns to neutral',()=>{
   const seat=new window.FightControls.SoloSeat(),a=testPad(3),b=testPad(5,'Spare');
   a.buttons[2].pressed=true;seat.track([a,b],true);assert.equal(seat.index,3);
-  b.axes[0]=1;seat.useOtherInput([a,b]);seat.track([a,b],true);assert.equal(seat.index,null);
+  b.axes[0]=1;seat.useOtherInput([a,b],true);seat.track([a,b],true);assert.equal(seat.index,null);
   seat.track([b],true);assert.equal(seat.lost,false);
   b.axes[0]=0;seat.track([b],true);b.axes[0]=.9;seat.track([b],true);
   assert.equal(seat.get([b]),b);
+});
+test('a deliberate new controller input after a keyboard tap restores the controller prompts',()=>{
+  const seat=new window.FightControls.SoloSeat(),pad=testPad(2,'USB');
+  pad.buttons[4].pressed=true;seat.track([pad],true);seat.useOtherInput([pad]);
+  seat.track([pad],true);assert.equal(seat.index,null);
+  pad.buttons[5].pressed=true;seat.track([pad],true);assert.equal(seat.get([pad]),pad);
 });
 test('pad loss retains both seats and a replacement rejoins its owner at a new index',()=>{
   const a={index:2}, b={index:5}, replacement={index:7};
