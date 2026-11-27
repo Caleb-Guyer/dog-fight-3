@@ -6,6 +6,45 @@ const {Selection}=window.CouchSelect, {Seats}=window.FightControls;
 const {fighters,arenas,coatFor,Battle,StockSet,idleInput}=window.DogFight;
 const dogs=Object.keys(fighters),stages=Object.keys(arenas);
 const cfg={stage:'picnic',mode:'local',p1:'pip',p2:'brisket',coatBook:[{},{}],fetch:false};
+function testPad(index,id){
+  return {index,id,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false}))};
+}
+test('a solo dog belongs to the actively used controller and stays put when another pad goes away',()=>{
+  const seat=new window.FightControls.SoloSeat(),spare=testPad(0,'Spare'),owner=testPad(5,'Owner');
+  spare.axes[1]=.12;
+  seat.track([spare,owner],true);
+  seat.track([owner],true);assert.equal(seat.lost,false);assert.equal(seat.index,null);
+  owner.axes[0]=-.7;
+  seat.track([spare,owner],false);assert.equal(seat.index,null);
+  seat.track([spare,owner],true);assert.equal(seat.get([spare,owner]),owner);
+  spare.buttons[9].pressed=true;seat.track([spare],false);
+  assert.equal(seat.lost,true);assert.equal(seat.get([spare]),undefined);
+});
+test('a new pad in the same slot waits for neutral and a fresh isolated confirm',()=>{
+  const seat=new window.FightControls.SoloSeat(),owner=testPad(2,'Old'),replacement=testPad(2,'New');
+  owner.buttons[2].pressed=true;seat.track([owner],true);
+  seat.track([replacement],true);assert.equal(seat.lost,true);
+  replacement.buttons[0].pressed=true;assert.equal(seat.confirm([replacement]),null);
+  replacement.buttons[0].pressed=false;seat.confirm([replacement]);
+  replacement.axes[0]=.8;replacement.buttons[0].pressed=true;assert.equal(seat.confirm([replacement]),null);
+  replacement.axes[0]=0;assert.equal(seat.confirm([replacement]),null);
+  replacement.buttons[0].pressed=false;seat.confirm([replacement]);
+  replacement.buttons[0].pressed=true;replacement.buttons[2].pressed=true;
+  assert.equal(seat.confirm([replacement]),null);replacement.buttons[2].pressed=false;
+  assert.equal(seat.confirm([replacement]),null);
+  replacement.buttons[0].pressed=false;seat.confirm([replacement]);seat.confirm([]);
+  replacement.buttons[0].pressed=true;assert.equal(seat.confirm([replacement]),null);
+  replacement.buttons[0].pressed=false;seat.confirm([replacement]);replacement.buttons[0].pressed=true;
+  assert.equal(seat.confirm([replacement]),replacement);assert.equal(seat.lost,false);
+});
+test('keyboard or touch takeover ignores held controls until the pad returns to neutral',()=>{
+  const seat=new window.FightControls.SoloSeat(),a=testPad(3),b=testPad(5,'Spare');
+  a.buttons[2].pressed=true;seat.track([a,b],true);assert.equal(seat.index,3);
+  b.axes[0]=1;seat.useOtherInput([a,b]);seat.track([a,b],true);assert.equal(seat.index,null);
+  seat.track([b],true);assert.equal(seat.lost,false);
+  b.axes[0]=0;seat.track([b],true);b.axes[0]=.9;seat.track([b],true);
+  assert.equal(seat.get([b]),b);
+});
 test('pad loss retains both seats and a replacement rejoins its owner at a new index',()=>{
   const a={index:2}, b={index:5}, replacement={index:7};
   const seats=new Seats([a,b]);seats.beginMatch([a,b]);

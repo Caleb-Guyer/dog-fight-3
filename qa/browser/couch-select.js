@@ -152,6 +152,76 @@ async function reconnectInFight(browser) {
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
+async function soloReconnect(browser,touch){
+  const page=await browser.newPage({viewport:touch?{width:390,height:844}:{width:1280,height:720},hasTouch:touch,isMobile:touch});
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  const run=ms=>page.clock.runFor(ms);
+  const snapshot=()=>page.evaluate(()=>[live.runFrames,live.matchFrames,live.clockFrames,
+    ...live.dogs.flatMap(d=>[d.x,d.y,d.vx,d.vy,d.damage,d.stocks])]);
+  const loss=page.locator('#dialog[open][data-view="solo-pad-loss"]');
+  const backup=loss.locator('#solo-pad-backup');
+  try{
+    await page.addInitScript(()=>{
+      window.makePad=(index,id)=>({index,id,connected:true,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false}))});
+      window.pads=[makePad(0,'Spare pad'),null,null,makePad(3,'Primary pad')];
+      Object.defineProperty(navigator,'getGamepads',{value:()=>pads});
+    });
+    await clock(page);
+    if(touch){
+      await page.goto(root);
+      await page.evaluate(()=>localStorage.setItem(DispatchScript.chapters[0].saveKey,JSON.stringify({version:2,started:true,room:1,checkpoint:0,stamps:1})));
+      await page.goto(root+'?solo-pad#adventure');await page.locator('#dispatch-start').tap();
+      await page.getByText('The Weigh House',{exact:true}).filter({visible:true}).first().waitFor();
+      await page.waitForFunction(()=>!!window.DispatchRun);
+    }else await page.goto(root+'#tutorial/first-match');
+    await page.evaluate(touch=>{
+      const proto=touch?DispatchRun.prototype:DogFight.Battle.prototype,step=proto.step;
+      window.jumpSamples=0;
+      proto.step=function(dt,input){
+        window.live=this;window.lastInput=input;if(input?.jump)jumpSamples++;
+        return step.apply(this,arguments);
+      };
+    },touch);
+    await run(2800);
+    await page.evaluate(()=>{pads[0]=null;});await run(60);
+    assert.equal(await loss.count(),0);
+    await page.evaluate(()=>{pads[0]=makePad(0,'Spare pad');pads[3].axes[0]=.8;});
+    await run(60);assert((await page.evaluate(()=>lastInput.x))>.7);
+    await page.evaluate(()=>{pads[3].axes[0]=0;pads[0].buttons[9].pressed=true;});await run(60);
+    assert.equal(await page.locator('#dialog[open]').count(),0);
+    await page.evaluate(()=>{pads[0].buttons[9].pressed=false;});await run(40);
+    const before=await snapshot();
+    await page.evaluate(()=>{
+      pads[3]=makePad(3,'Replacement pad');pads[3].buttons[0].pressed=true;
+      pads[3].buttons[2].pressed=true;pads[0].axes[0]=.95;
+    });
+    await run(300);assert.equal(await backup.textContent(),touch?'Resume with touch':'Resume with keyboard');
+    assert.match(await loss.textContent(),/Pad 4/);
+    await page.keyboard.press('Escape');await run(600);assert.deepEqual(await snapshot(),before);
+    if(touch){
+      await backup.tap();await run(120);
+      assert.equal(await page.evaluate(()=>lastInput.x),0);
+      await page.locator('[data-touch=jump]').tap();await run(65);
+      assert((await page.evaluate(()=>jumpSamples))>0);
+    }else{
+      await page.evaluate(()=>{pads[3].buttons[2].pressed=false;});await run(80);
+      assert.deepEqual(await snapshot(),before);
+      await page.evaluate(()=>{pads[3].buttons[0].pressed=false;});await run(40);
+      await page.evaluate(()=>{pads[3].buttons[0].pressed=true;});await run(100);
+      assert.equal(await loss.count(),0);
+      assert.deepEqual(await page.evaluate(()=>[jumpSamples,lastInput.x,lastInput.attack]),[0,0,false]);
+      await page.evaluate(()=>{pads[3].buttons[0].pressed=false;pads[3].buttons[2].pressed=true;});
+      await run(60);assert.equal(await page.evaluate(()=>lastInput.attack),true);
+      await page.locator('#pause').click();const parked=await snapshot();
+      await page.evaluate(()=>{pads[3]=null;});await run(150);
+      await page.locator('[data-do=resume]').click();await run(80);assert.deepEqual(await snapshot(),parked);
+      await backup.click();await run(80);assert.equal(await page.evaluate(()=>lastInput.x),0);
+      await page.keyboard.down('KeyA');await run(50);assert.equal(await page.evaluate(()=>lastInput.x),-1);
+      await page.keyboard.up('KeyA');
+    }
+    assert.notDeepEqual(await snapshot(),before);assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
 async function shuffleDraft(browser){
   const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -232,5 +302,5 @@ async function handheld(browser){
 }
 (async()=>{
   const b=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await controllers(b);await handheld(b);await shuffleDraft(b);await reconnectInFight(b);}finally{await b.close();}
+  try{await controllers(b);await handheld(b);await shuffleDraft(b);await reconnectInFight(b);await soloReconnect(b,false);await soloReconnect(b,true);}finally{await b.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});
