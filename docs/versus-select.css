@@ -127,3 +127,10 @@ dialog[data-view='tournament'] { width:min(790px,calc(100% - 16px)); }
 .check-pad.numbered { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; padding:12px; height:auto; border-radius:8px; }
 .check-pad.numbered > [data-pad-key] { position:static; transform:none; max-width:none; }
 .check-pad.numbered .check-stick,.check-pad.numbered .check-dpad { display:none; }
+#stick-device { max-width:100%; }
+.stick-reading { display:grid; grid-template-columns:88px minmax(0,1fr); align-items:center; gap:14px; margin:12px 0; overflow-wrap:anywhere; }
+.stick-field { width:84px; height:84px; box-sizing:border-box; position:relative; border:2px solid #838795; border-radius:50%; background:linear-gradient(90deg,transparent 49%,#676978 49%,#676978 51%,transparent 51%),linear-gradient(transparent 49%,#676978 49%,#676978 51%,transparent 51%),#222631; }
+.stick-field i,.stick-field b { position:absolute; left:50%; top:50%; box-sizing:border-box; }
+.stick-field i { width:11px; height:11px; margin:-5.5px; border:2px solid #f1c56e; border-radius:50%; }
+.stick-field b { width:5px; height:5px; margin:-2.5px; background:#94e6cf; }
+.stick-values { font-variant-numeric:tabular-nums; }

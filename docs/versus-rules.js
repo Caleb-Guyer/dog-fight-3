@@ -387,7 +387,7 @@
     return '<div class="layout-switch"><label>Player <select id="layout-slot"><option value="0">P1</option><option value="1">P2</option></select></label>'+
       '<label>Device <select id="layout-device"><option value="keyboard">Keyboard</option><option value="pad">Controller</option></select></label></div>'+
       (!keyboard?'<label class="pad-style">Button labels <select id="pad-label-style">'+Object.entries(controls.labelStyles).map(([id,name])=>
-        '<option value="'+id+'"'+(id===style?' selected':'')+'>'+name+'</option>').join('')+'</select></label><button class="utility" data-do="rumble">Controller rumble</button>':'')+
+        '<option value="'+id+'"'+(id===style?' selected':'')+'>'+name+'</option>').join('')+'</select></label><button class="utility" data-do="stick-setup">Calibrate sticks</button><button class="utility" data-do="rumble">Controller rumble</button>':'')+
       (!keyboard && testing?padDiagram(layout.pad[slot],legend):'')+
       '<p>'+(testing?(keyboard?'Press your keys to see which actions register.':'Press buttons together or move either stick. '+legend[9]+' leaves the test.') : keyboard?'Choose an action, then press its new key. Both players share this keyboard.':
         'Choose a button for each action. '+legend[0]+' selects and '+legend[1]+' goes back in menus.')+'</p>'+

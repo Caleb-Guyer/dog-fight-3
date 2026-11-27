@@ -70,6 +70,59 @@
     if(other) layout[device][other.slot][other.action]=old;
     map[action]=value;
   }
+  const stickKey='dog-fight-3.sticks.1.';
+  function rawPad(pad){return pad?.sourcePad || pad;}
+  function stickAxes(pad){return pad?.axes?.length>=4?4:pad?.axes?.length>=2?2:0;}
+  function validSticks(fit,count){
+    return (count===2 || count===4) && Array.isArray(fit) && fit.length===count && fit.every(a=>
+      Array.isArray(a) && a.length===3 && a.every(Number.isFinite) && a[0]>=-1 && a[2]<=1 &&
+      Math.abs(a[1])<=.45 && a[1]-a[0]>=.35 && a[2]-a[1]>=.35);
+  }
+  function tuneAxes(raw,fit,out){
+    out.length=raw.length;
+    for(let i=0;i<raw.length;i++){
+      const value=raw[i],a=fit[i];
+      out[i]=a?Math.max(-1,Math.min(1,(value-a[1])/(value<a[1]?a[1]-a[0]:a[2]-a[1]))):value;
+    }
+    // Keep shallow angles intact when only one component is close to center.
+    for(let i=0;i<fit.length;i+=2)if(out[i]**2+out[i+1]**2<=.045**2)out[i]=out[i+1]=0;
+    return out;
+  }
+  class StickSettings {
+    constructor(){this.slots=new Map();}
+    entry(pad){
+      const raw=rawPad(pad),count=stickAxes(raw);
+      let entry=this.slots.get(raw.index);
+      if(entry && entry.id===raw.id && entry.count===count && entry.mapping===raw.mapping)return entry;
+      const key=stickKey+JSON.stringify([raw.index,raw.id,raw.mapping || '',count]);
+      let fit;
+      try{fit=JSON.parse(localStorage.getItem(key));}catch{}
+      entry={key,id:raw.id,count,mapping:raw.mapping,fit:validSticks(fit,count)?fit:null,view:{index:raw.index,id:raw.id,mapping:raw.mapping,axes:[]}};
+      this.slots.set(raw.index,entry);return entry;
+    }
+    apply(pad){
+      const raw=rawPad(pad),{fit,view}=this.entry(raw);
+      if(!fit)return raw;
+      view.sourcePad=raw;view.connected=raw.connected;view.buttons=raw.buttons;view.vibrationActuator=raw.vibrationActuator;
+      tuneAxes(raw.axes,fit,view.axes);return view;
+    }
+    save(pad,fit){
+      const entry=this.entry(pad);
+      if(fit!==null && !validSticks(fit,entry.count))throw Error('Incomplete stick calibration');
+      entry.fit=fit;
+      try{
+        if(fit)localStorage.setItem(entry.key,JSON.stringify(fit));else localStorage.removeItem(entry.key);
+        return true;
+      }catch{return false;}
+    }
+  }
+  const sticks=new StickSettings();
+  window.addEventListener?.('storage',e=>{if(!e.key || e.key.startsWith(stickKey))sticks.slots.clear();});
+  function readPads(){
+    const connected=[];
+    try{for(const p of navigator.getGamepads?.() || [])if(p && p.connected!==false)connected.push(sticks.apply(p));}catch{}
+    return connected;
+  }
   class FighterShuffle {
     constructor(roster,random=Math.random) {
       this.roster=roster;
@@ -180,11 +233,12 @@
     }
     return best;
   }
-  function menuDirection(pad, previous) {
+  function menuDirection(pad, previous, allowStick=true) {
     const pressed=i=>pad.buttons[i]?.pressed;
     const dx=Number(!!pressed(15))-Number(!!pressed(14)), dy=Number(!!pressed(13))-Number(!!pressed(12));
     let x=dx, y=dy;
     if(!dx && !dy){
+      if(!allowStick)return '';
       x=pad.axes[0]||0; y=pad.axes[1]||0;
       if(Math.max(Math.abs(x),Math.abs(y))<(previous ? .42 : .65))return '';
     }
@@ -209,5 +263,5 @@
       return true;
     }
   }
-  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,SoloSeat,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat};
+  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,SoloSeat,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat,sticks,readPads,rawPad,stickAxes,tuneAxes};
 })();
