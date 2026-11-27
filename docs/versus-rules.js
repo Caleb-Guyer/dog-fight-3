@@ -81,25 +81,78 @@
       world.dogs.forEach((f,i)=>Object.assign(f,{x:x+i*gap,y:deck.y,ground:world.terrain.indexOf(deck),face:i?-1:1}));
       this.point=null;
     }
-    takePoint(world){
-      if(this.point || this.score.includes(3))return false;
+    opening(world){
       const {players,losses}=world.matchCard;
       const earned=players.map((p,i)=>p.damage>0 || losses.some(l=>l.slot===1-i));
-      if(!earned.some(Boolean))return false;
+      if(!earned.some(Boolean))return null;
       const winner=earned[0]===earned[1]?null:earned.indexOf(true);
-      this.point={winner,frame:world.matchFrames};
+      const point={winner,frame:world.matchFrames};
       if(winner!==null){
-        this.score[winner]++;
         const loss=losses.find(l=>l.slot===1-winner);
         const id=(loss?.lastHit || players[1-winner].lastHit)?.id;
         const {moves,throws,pummels,smashes,specials}=window.DogFight;
-        this.point.move=[moves,throws,pummels,smashes,specials].find(table=>table[id])?.[id].label || world.dogs[winner].lastMove || 'Hit';
-        this.point.damage=Math.round(players[winner].damage*10)/10;
-        this.point.fall=!!loss;
+        point.move=[moves,throws,pummels,smashes,specials].find(table=>table[id])?.[id].label || world.dogs[winner].lastMove || 'Hit';
+        point.damage=Math.round(players[winner].damage*10)/10;
+        point.fall=!!loss;
       }
+      return point;
+    }
+    takePoint(world){
+      if(this.point || this.score.includes(3))return false;
+      this.point=this.opening(world);
+      if(!this.point)return false;
+      if(this.point.winner!==null)this.score[this.point.winner]++;
       return true;
     }
-    panel(root,phase,{start,play,back,resume}){
+    get responder(){return this.card.mode==='solo' || this.point.winner===null?0:1-this.point.winner;}
+    reply(tape,start,slot,emit){
+      const recorded=tape.playback(start,emit,slot),battle=recorded.battle;
+      const before={...battle.matchCard.players[slot]};
+      const attempt={battle,before,frame:start,length:tape.length+36,step:input=>{
+        if(attempt.outcome)return;
+        if(attempt.frame<tape.length)recorded.step(input);
+        else{
+          const idle=window.DogFight.idleInput;
+          battle.step(1/60,slot?idle:input,slot?input:idle);
+        }
+        attempt.frame++;
+        const point=this.opening(battle);
+        if(point)attempt.outcome=point.winner===null?'Trade':point.winner===slot?'Won the exchange':point.fall?'Lost a stock':'Caught by '+point.move;
+        else if(attempt.frame===attempt.length){
+          const now=battle.matchCard.players[slot];
+          attempt.outcome=now.parries>before.parries?'Parried the opening':now.blocks>before.blocks?'Blocked the opening':'Stayed clear';
+        }
+      }};
+      return attempt;
+    }
+    reviewPanel(root,tape,slot,watch,practice){
+      const f=window.DogFight.fighters[this.card[slot?'p2':'p1']].name;
+      root.innerHTML='<p>Watch the last '+(tape.length/60).toFixed(1)+' seconds at half speed. On the retry, use P'+(slot+1)+' controls for '+f+'. '+
+        (this.point.fall?'Try spending your jump later or reaching the lip with Up Special.':'Try shielding the swing, stepping out of range, or hitting first.')+'</p>'+
+        '<canvas id="clip-arena" width="640" height="360" role="img" aria-label="Replay of the opening point"></canvas>'+
+        '<div class="clip-status"><span id="clip-scores"></span><output id="clip-frame"></output></div>'+
+        '<input id="clip-seek" type="range" min="0" max="'+tape.length+'" value="0" aria-label="Replay frame">'+
+        '<div class="dialog-actions"><button class="primary" id="clip-toggle">Play</button><button class="utility" id="clip-step">Step 1 frame</button>'+
+        '<button class="utility" id="duel-impact">'+(this.point.fall?'Go to ring-out':'Go to contact')+'</button><button class="utility" id="duel-answer">Try a response</button>'+
+        '<button class="utility" data-do="clip-back">Back to duel</button></div>';
+      root.querySelector('#duel-impact').onclick=()=>watch(tape.length);
+      root.querySelector('#duel-answer').onclick=practice;
+    }
+    actions(){
+      return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Try again</button>'+
+        '<button class="utility" data-do="trial-replay">Watch point</button><button class="utility" data-do="trial-results">Back to duel</button></div>';
+    }
+    report(player,slot,showDialog){
+      const p=this.point,w=player.battle,names=w.dogs.map((f,i)=>'P'+(i+1)+' '+f.stats.name);
+      const original=p.winner===null?'Trade':p.fall?names[1-p.winner]+' fell':names[p.winner]+' landed '+p.move+' for '+p.damage+'%';
+      const defense=w.matchCard.players[slot],blocks=defense.blocks-player.before.blocks,parries=defense.parries-player.before.parries;
+      const guard=[blocks && blocks+(blocks===1?' block':' blocks'),parries && parries+(parries===1?' parry':' parries')].filter(Boolean).join(' · ');
+      showDialog('finish-comparison',player.outcome,'<p>Original point · '+original+'</p><p>This attempt · '+names[slot]+
+        ' dealt '+Math.round(w.matchCard.players[slot].damage*10)/10+'% and took '+Math.round(w.matchCard.players[1-slot].damage*10)/10+
+        '%.'+(guard?' '+guard+'.':'')+'</p><p>Duel score · '+this.score.join(' – ')+'</p>'+this.actions(),false);
+      document.querySelector('[data-do=trial-retry]').focus();
+    }
+    panel(root,phase,{start,play,back,resume,review}){
       const {fighters}=window.DogFight, card=this.card;
       const names=[card.p1,card.p2].map((kind,i)=>(i===0?'P1':card.mode==='solo'?'CPU':'P2')+' '+fighters[kind].name);
       const p=this.point,done=this.score.includes(3),paused=phase==='pause',playing=phase==='point';
@@ -113,6 +166,7 @@
           '<button type="button" class="utility" data-opening="'+key+'" aria-pressed="'+(this.position===key)+'">'+label+'</button>').join('')+'</div>':'')+
         '<div class="dialog-actions">'+(paused?button('resume','Resume point',true):'')+
         (!done?button('start',paused?'Restart point':playing?'Next point':'Play first point',!paused):'')+
+        (playing?button('watch','Watch point',false)+button('reply','Try a response · '+names[this.responder],false):'')+
         button('fight',card.bestOfThree?'Start full set':'Start full fight',done)+button('back','Matchup card',false)+'</div>';
       const el=id=>root.querySelector('#duel-'+id);
       el('report').textContent=report;
@@ -124,6 +178,7 @@
       };
       if(paused)el('resume').onclick=resume;
       if(!done)el('start').onclick=start;
+      if(playing){el('watch').onclick=()=>review(false);el('reply').onclick=()=>review(true);}
       el('fight').onclick=play;el('back').onclick=back;
       el(paused?'resume':done?'fight':'start').focus({preventScroll:true});
     }
