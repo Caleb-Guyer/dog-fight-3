@@ -1449,7 +1449,8 @@
   function raisedShield(ctx, f) {
     const b = shieldBubble(f), color = teamColor(f);
     oval(ctx, b.x, b.y, b.r, b.r, color + '36');
-    arc(ctx, b.x, b.y, b.r, b.r, 0, Math.PI * 2, color, 4);
+    arc(ctx, b.x, b.y, b.r, b.r, 0, Math.PI * 2, color, f.lightShield?2:4);
+    if(f.lightShield)for(const angle of [-2.7,-.6,1.5])arc(ctx,b.x,b.y,b.r-5,b.r-5,angle,angle+.74,cream,2);
     const shine = Math.hypot(f.shieldLeanX, f.shieldLeanY) > 0.12 ? Math.atan2(f.shieldLeanY, f.shieldLeanX) : -2.2;
     arc(ctx, b.x, b.y, b.r - 3, b.r - 3, shine - 0.34, shine + 0.34, cream);
     if (f.shieldStun > 1e-8) {

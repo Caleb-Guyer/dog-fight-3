@@ -286,7 +286,7 @@
     const runs=[];
     let previous;
     for(const frame of take){
-      const state=[mask(frame),mask(frame.tapped),...axes.map(key=>frame[key]??null)];
+      const state=[mask(frame) | (frame.lightShield && frame.shield?1<<buttons.length:0),mask(frame.tapped),...axes.map(key=>frame[key]??null)];
       while(state.length>2 && state.at(-1)===null)state.pop();
       const signature=JSON.stringify(state);
       if(signature===previous)runs.at(-1)[0]++;
@@ -296,19 +296,21 @@
     return runs;
   }
   const integer=(value,min,max)=>Number.isInteger(value) && value>=min && value<=max;
-  function unpackTake(runs){
+  function unpackTake(runs,lightGuard){
     if(runs===null)return null;
     if(!Array.isArray(runs) || !integer(runs.length,1,150))throw Error('Take length');
     const frames=[];
     for(const row of runs){
       if(!Array.isArray(row) || !integer(row.length,3,3+axes.length))throw Error('Input fields');
       const [count,held,pressed,...analog]=row;
-      if(!integer(count,1,150-frames.length) || ![held,pressed].every(n=>integer(n,0,(1<<buttons.length)-1)))throw Error('Input timing');
+      if(!integer(count,1,150-frames.length) || !integer(held,0,(1<<(buttons.length+Number(lightGuard)))-1) ||
+          !integer(pressed,0,(1<<buttons.length)-1))throw Error('Input timing');
       const frame={...idleInput,tapped:{}};
       buttons.forEach((key,i)=>{
         if(held&(1<<i))frame[key]=true;
         if(pressed&(1<<i))frame.tapped[key]=true;
       });
+      if(frame.shield && (held & (1<<buttons.length)))frame.lightShield=true;
       analog.forEach((value,i)=>{
         if(value===null)return;
         if(!Number.isFinite(value) || Math.abs(value)>1)throw Error('Stick position');
@@ -325,6 +327,8 @@
     else if(c.wallSpring){data[0]=4;data.push(!!c.aimedDrive,!!c.groundSpace);}
     else if(c.groundSpace){data[0]=3;data.push(!!c.aimedDrive);}
     else if(c.aimedDrive){data[0]=2;data.push(true);}
+    // Strength is an input. Keep the original simulation version inside the extended input format.
+    if(card.takes.some(t=>t?.some(f=>f.lightShield && f.shield)))data.unshift(6);
     const bytes=new TextEncoder().encode(JSON.stringify(data));
     return btoa(Array.from(bytes,b=>String.fromCharCode(b)).join('')).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
   }
@@ -333,6 +337,8 @@
       if(typeof code!=='string' || code.length>96000 || !/^[A-Za-z0-9_-]+$/.test(code))return null;
       const text=atob(code.replaceAll('-','+').replaceAll('_','/'));
       const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(text,c=>c.charCodeAt(0))));
+      const lightGuard=Array.isArray(data) && data[0]===6;
+      if(lightGuard)data.shift();
       if(!Array.isArray(data) || !(data[0]===1 && data.length===11 || data[0]===2 && data.length===12 && data[11]===true ||
         data[0]===3 && data.length===12 && typeof data[11]==='boolean' ||
         (data[0]===4 && data.length===13 || data[0]===5 && data.length===14) && data.slice(11).every(v=>typeof v==='boolean')))return null;
@@ -347,7 +353,7 @@
       if(version===3 || version>=4 && data[12])config.groundSpace=true;
       if(version===4 || version===5 && data[13])config.wallSpring=true;
       if(version===5)config.risingCatch=true;
-      return {name,config,damage,time,slow,takes:takes.map(unpackTake)};
+      return {name,config,damage,time,slow,takes:takes.map(t=>unpackTake(t,lightGuard))};
     }catch{return null;}
   }
   function capture(world){

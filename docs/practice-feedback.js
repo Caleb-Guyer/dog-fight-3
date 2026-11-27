@@ -490,12 +490,15 @@
     if (d.corner) {
       const result = e.outcome || name;
       status.textContent = {
-        cornerCue:'Release Shield to parry', shieldSlip:'Pushed off · grab the lip or jump',
+        cornerCue:d.samples?'Hold Shield through the hit':'Release Shield to parry', shieldSlip:'Pushed off · grab the lip or jump',
         caughtLip:'Pushed off · caught the ledge', backOnstage:'Pushed off · recovered onstage',
         pushedOff:'Lost the corner', heldCorner:'Blocked · kept your footing', parriedCorner:'Parried · held the corner',
         caught:'Hit by ' + move, interrupted:'Interrupted the swing', avoided:'Evaded the swing',
       }[result];
-      if (e.outcome) $('recovery-tip').textContent = 'Compare Block at lip and Block farther in. Repeat at the lip and release Shield as the chalk turns mint.';
+      if (e.outcome && d.samples) {
+        const rows=Object.entries(d.samples).map(([kind,b])=>kind+' · '+b.energy+'% shield left, '+b.stunFrames+' frames of shieldstun, '+Math.round(b.slide)+' px of slide.');
+        $('recovery-tip').textContent=(rows.length?rows.join(' ')+' ':'Hold Shield until the smash connects. ')+'Choose Compare shield strengths to repeat the same smash.';
+      }else if (e.outcome) $('recovery-tip').textContent = 'Compare Block at lip and Block farther in. Repeat at the lip and release Shield as the chalk turns mint.';
       return;
     }
     if (name === 'ledge') {
@@ -1242,6 +1245,20 @@
       tip.textContent = result[1];
     }
   }
+  function edgePanel(world,pattern,player,keyFor){
+      const d = world.edgePractice, side = d.dir > 0 ? 'right' : 'left';
+      for (const id of ['lip','shortCatch','longCatch','tip','deep','corner','inside','light']) $('edge-' + id).setAttribute('aria-pressed', String(id === d.pattern));
+      $('edge-slow').setAttribute('aria-pressed', String(d.slow));
+      $('edge-status').dataset.result = 'ready';
+      $('edge-status').textContent = d.corner ? (pattern === 'corner' ? 'At the lip' : pattern === 'light' ? 'Twelve pixels inside the lip' : 'One step in') + ' · hold Shield' :
+        d.timeCatch ? (pattern === 'longCatch' ? 'Long recovery' : 'Short recovery') + ' · tap Attack to start' :
+        pattern === 'lip' ? 'Guard the ' + side + ' ledge' : 'Drifting ' + side + ' · tap Attack';
+      if(pattern==='light')return 'Hold '+keyFor(0,'shield')+' for a firm block. Try the same smash with '+keyFor(0,'walk')+' + '+keyFor(0,'shield')+', the center dot + Shield, or left stick click + Shield. Compare your footing and shield energy.';
+      return d.corner ? 'Hold Shield through the charged smash. Compare the two floor marks, then try releasing Shield when the chalk turns mint.' :
+        d.timeCatch ? 'Tap Attack to send the rival toward the ledge. Watch the last grip mark turn gold. Time Down + Attack to hit as it disappears.' :
+        pattern === 'lip' ? 'Walk ' + side + ' to the chalk (P1: Shift + direction, or slide from the center dot). When the rival lets go, tap Down + Attack.' :
+        'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
+  }
   function escapePanel(world,pattern){
     for (const id of ['tip','close','counter','break','gripEscape','gripThrow','carry']) $('escape-' + id).setAttribute('aria-pressed', String(id === pattern));
     $('escape-slow').setAttribute('aria-pressed', String(world.escapePractice.slow));
@@ -1300,5 +1317,5 @@
         poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + moves[player.kit.tilts.down].label + '.',
       }[pattern];
   }
-  window.PracticeFeedback={shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
+  window.PracticeFeedback={edgePanel,shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
 })();

@@ -13,6 +13,7 @@
   const pogoFeature='shield-pogo-1';
   const spaceFeature='ground-space-1';
   const springFeature='wall-spring-1', catchFeature='rising-catch-1';
+  const lightFeature='light-shield-1';
   const resumeFeature='resume-inputs-1';
   const resumeChannel=channel+'-resume';
   const resumeTime=18000;
@@ -34,15 +35,16 @@
   const randomInt = () => crypto.getRandomValues(new Uint32Array(1))[0];
   const roomCode = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (n) => roomAlphabet[n % 32]).join('');
 
-  function pack(input) {
+  function pack(input,lightGuard) {
     const values = axes.map((key) => Math.round(Math.max(-1, Math.min(1, input[key] || 0)) * 127) || 0);
     for (const state of [input, input.tapped || {}])
       values.push(buttons.reduce((bits, key, i) => bits | (state[key] ? 1 << i : 0), 0));
+    if(lightGuard && input.shield && input.lightShield)values[7]|=1<<buttons.length;
     return values;
   }
-  function validInput(values) {
+  function validInput(values,lightGuard) {
     return Array.isArray(values) && values.length === 9 && Array.from(values).every((v, i) =>
-      Number.isInteger(v) && (i < 7 ? Math.abs(v) <= 127 : v >= 0 && v < (1 << buttons.length)));
+      Number.isInteger(v) && (i < 7 ? Math.abs(v) <= 127 : v >= 0 && v < (1 << (buttons.length+(i===7 && lightGuard?1:0)))));
   }
   function unpack(values) {
     const input = { tapped: {} };
@@ -51,6 +53,7 @@
       input[key] = !!(values[7] & (1 << i));
       input.tapped[key] = !!(values[8] & (1 << i));
     });
+    if(input.shield && (values[7] & (1<<buttons.length)))input.lightShield=true;
     return input;
   }
   const { seededRandom, shieldDirection } = window.DogFight;
@@ -67,7 +70,8 @@
 
   // The second Battle is a rolling checkpoint. Only it advances on two known inputs.
   class RollbackMatch {
-    constructor(side, round, send, config, seed, keepInputs) {
+    constructor(side, round, send, config, seed, keepInputs,lightGuard) {
+      this.lightGuard=lightGuard;
       this.side = side;
       this.round = round;
       this.send = send;
@@ -83,7 +87,7 @@
       this.lastStep = performance.now();
     }
     receive(number, values) {
-      if (number !== this.received || this.remote.length >= predictionLimit * 2 + 2 || !validInput(values)) return false;
+      if (number !== this.received || this.remote.length >= predictionLimit * 2 + 2 || !validInput(values,this.lightGuard)) return false;
       this.remote.push(values);
       this.received++;
       return true;
@@ -177,7 +181,7 @@
       if (this.confirmedWorld.end !== null) return;
       if (this.remote.length && this.pending.length) this.confirm(world);
       if (this.confirmedWorld.end !== null || this.pending.length >= predictionLimit) return;
-      const mine = pack(readInput());
+      const mine = pack(readInput(),this.lightGuard);
       // Close a clock gap after a stalled tab without consuming a second physical press.
       const catchUp = this.remote.length > 2;
       this.advance(mine, world);
@@ -249,7 +253,7 @@
       this.closingHeight=false;
       this.shieldPogo=false;
       this.aimedDrive=false;
-      this.groundSpace=this.wallSpring=this.risingCatch=false;
+      this.groundSpace=this.wallSpring=this.risingCatch=this.lightGuard=false;
       this.code = action === 'create' ? roomCode() : code;
       this.attempts = 0;
       this.round = 0;
@@ -314,7 +318,7 @@
       });
     }
     useConnection(peer, conn, host, restoring=false, attempt=0) {
-      if (!host && !restoring) this.itemDrops=this.closingHeight=this.shieldPogo=this.aimedDrive=this.groundSpace=this.wallSpring=this.risingCatch=false;
+      if (!host && !restoring) this.itemDrops=this.closingHeight=this.shieldPogo=this.aimedDrive=this.groundSpace=this.wallSpring=this.risingCatch=this.lightGuard=false;
       this.pending.add(conn);
       const timeout = setTimeout(() => {
         if (this.pending.delete(conn)) conn.close();
@@ -330,8 +334,8 @@
           if(this.recovery?.dial!==conn)return conn.close();
           return conn.send(['resume',this.roomTicket,this.round,attempt,this.match.received]);
         }
-        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,resumeFeature,springFeature,catchFeature] :
-          ['join',this.kind,this.coat,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,springFeature,catchFeature]);
+        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,resumeFeature,springFeature,catchFeature,lightFeature] :
+          ['join',this.kind,this.coat,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,springFeature,catchFeature,lightFeature]);
       });
       conn.on('data', (data) => {
         if (!current() || !Array.isArray(data)) return;
@@ -379,6 +383,7 @@
           this.groundSpace=data.includes(spaceFeature) && window.DogFight.validCoat(data[2]);
           this.wallSpring=data.includes(springFeature) && window.DogFight.validCoat(data[2]);
           this.risingCatch=data.includes(catchFeature) && window.DogFight.validCoat(data[2]);
+          this.lightGuard=data.includes(lightFeature) && window.DogFight.validCoat(data[2]);
           this.shieldPogo=data.includes(pogoFeature) && window.DogFight.validCoat(data[2]);
           // Ordered delivery puts both players' colors in the opening match configuration.
           if (window.DogFight.validCoat(data[2])) {
@@ -391,6 +396,7 @@
             if (this.groundSpace) reply.push(spaceFeature);
             if (this.wallSpring) reply.push(springFeature);
             if (this.risingCatch) reply.push(catchFeature);
+            if (this.lightGuard) reply.push(lightFeature);
             if(this.action==='create' && data.includes(resumeFeature)){
               this.roomTicket=crypto.randomUUID();
               reply.push(resumeFeature,this.roomTicket);
@@ -411,6 +417,7 @@
           this.groundSpace=data.includes(spaceFeature);
           this.wallSpring=data.includes(springFeature);
           this.risingCatch=data.includes(catchFeature);
+          this.lightGuard=data.includes(lightFeature);
           this.shieldPogo=data.includes(pogoFeature);
           const key=data.indexOf(resumeFeature),ticket=data[key+1];
           if(this.action==='join' && key>=0 && typeof ticket==='string' && /^[0-9a-f-]{36}$/i.test(ticket))this.roomTicket=ticket;
@@ -600,7 +607,7 @@
       if (this.risingCatch===false) config.risingCatch=false;
       if(rules)Object.assign(config,{stockCount:rules.lives,minutes:rules.minutes,fetch:rules.fetch});
       if (this.timeMinutes) Object.assign(config, {timeBattle:true,minutes:this.timeMinutes});
-      this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed,!!this.roomTicket);
+      this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed,!!this.roomTicket,this.lightGuard);
       this.events.start(config, seededRandom(seed));
     }
     receive(msg) {
