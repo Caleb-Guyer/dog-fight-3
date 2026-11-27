@@ -151,7 +151,7 @@
       escape:escape || {frame:Math.max(lifeStart,player.length-90),label:'Before the knockout'}};
   }
   const moments=tape=>analyze(tape).marks;
-  const buttons={jump:'Jump',shortHop:'Short hop',attack:'Attack',special:'Special',smash:'Smash',shield:'Shield',grab:'Grab',aimStick:'Strike stick'};
+  const buttons={jump:'Jump',shortHop:'Short hop',attack:'Attack',special:'Special',smash:'Smash',shield:'Shield',lightShield:'Light shield',grab:'Grab',aimStick:'Strike stick'};
   function controlsAt(tape,frame,slot){
     // Frame n shows the result of tick n. A rolling clip can already have held controls at frame zero.
     const tick=(tape.count ?? tape.length)-tape.length+frame-1;

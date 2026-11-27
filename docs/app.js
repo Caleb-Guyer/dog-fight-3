@@ -3871,17 +3871,7 @@
     } else if (escape) {
       message=window.PracticeFeedback.escapePanel(world,pattern);
     } else if (edge) {
-      const d = world.edgePractice, side = d.dir > 0 ? 'right' : 'left';
-      for (const id of ['lip','shortCatch','longCatch','tip','deep','corner','inside']) $('edge-' + id).setAttribute('aria-pressed', String(id === d.pattern));
-      $('edge-slow').setAttribute('aria-pressed', String(d.slow));
-      $('edge-status').dataset.result = 'ready';
-      $('edge-status').textContent = d.corner ? (pattern === 'corner' ? 'At the lip' : 'One step in') + ' · hold Shield' :
-        d.timeCatch ? (pattern === 'longCatch' ? 'Long recovery' : 'Short recovery') + ' · tap Attack to start' :
-        pattern === 'lip' ? 'Guard the ' + side + ' ledge' : 'Drifting ' + side + ' · tap Attack';
-      message = d.corner ? 'Hold Shield through the charged smash. Compare the two floor marks, then try releasing Shield when the chalk turns mint.' :
-        d.timeCatch ? 'Tap Attack to send the rival toward the ledge. Watch the last grip mark turn gold. Time Down + Attack to hit as it disappears.' :
-        pattern === 'lip' ? 'Walk ' + side + ' to the chalk (P1: Shift + direction, or slide from the center dot). When the rival lets go, tap Down + Attack.' :
-        'Tap Attack with the directions released for ' + moves[player.kit.air.neutral].label + '. Coast through the landing. If you slip off, tap Down + Attack.';
+      message=window.PracticeFeedback.edgePanel(world,pattern,player,keyFor);
     } else if (footwork) {
       const practice = world.footworkPractice;
       for (const id of footworkPatterns)
@@ -4200,7 +4190,7 @@
       cpuLevel:'rival', fetch:false, minutes:7, driveOpening:{edge:lab.drive.edge, damage:lab.baseline}}, undefined, 42);
   };
   $('edge-training').onclick = () => drill('edge', false, world.edgePractice?.pattern || 'lip');
-  for (const pattern of ['lip','shortCatch','longCatch','tip','deep','corner','inside']) $('edge-' + pattern).onclick = () => drill('edge', false, pattern);
+  for (const pattern of ['lip','shortCatch','longCatch','tip','deep','corner','inside','light']) $('edge-' + pattern).onclick = () => drill('edge', false, pattern);
   $('edge-side').onclick = () => drill('edge', false, world.edgePractice.pattern, -world.edgePractice.dir);
   $('edge-slow').onclick = () => {
     const d = world.edgePractice;
@@ -4454,7 +4444,7 @@
   let campaign = yardChapter;
   const dispatchSources={
     SoloEvents:'solo-events.js?v=rival-reads-1',
-    PracticeFeedback:'practice-feedback.js?v=wall-spring-1', DogOnline:'online.js?v=rising-catch-1',
+    PracticeFeedback:'practice-feedback.js?v=light-shield-1', DogOnline:'online.js?v=light-shield-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
@@ -4464,15 +4454,15 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=opening-reply-1',
+    VersusRulebook:'versus-rules.js?v=light-shield-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=stage-run-1',
-    ComboLab:'combo-lab.js?v=rising-catch-1', FinishTools:'finish-tools.js?v=stock-runs-1',
+    ComboLab:'combo-lab.js?v=light-shield-1', FinishTools:'finish-tools.js?v=light-shield-1',
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=first-hit-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-practice-1', DispatchView:'dispatch-view.js?v=launch-rescue-1',
-    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=wall-spring-1',
+    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=light-shield-1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -6301,9 +6291,12 @@
     // A quick thumb release can leave queued direction taps after the center-slide gesture ends.
     const tappedWalk = aim?.x === x * (64 / 127) && x !== 0;
     const walk = key('walk') || tappedWalk || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
-    const shield = key('shield') || mapped('shield') || mapped('shieldAlt');
-    const shortHop = key('hop') || mapped('hop');
+    // Remapped analog triggers can guard before their native pressed threshold.
     const grounded = battle.dogs[fighterIndex].ground >= 0;
+    const shieldValue=n=>(menuPadButtons.get(pad?.index)&(1<<n))?0:pad?.buttons[n]?.value || 0;
+    const squeeze=Math.max(shieldValue(layout.pad[i].shield),shieldValue(layout.pad[i].shieldAlt));
+    const shield = key('shield') || mapped('shield') || mapped('shieldAlt') || grounded && squeeze>=.18;
+    const shortHop = key('hop') || mapped('hop');
     const gentleGuard = shield && grounded && (key('walk') || fromCenter);
     const softCrawl = battle.dogs[fighterIndex].kit.crawl && fromCenter && fromCenter.startsWith('down-');
     const gentleDown = y > 0 && !shield && (key('walk') || fromCenter === 'down' || softCrawl || aim?.y === 64 / 127);
@@ -6330,6 +6323,8 @@
       smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : y || axis(1) || savedSmash?.y || 0,
       special: key('special') || mapped('special'),
       shield,
+      ...(grounded && shield && (key('walk') || !i && touches.has('neutral') || down(pad,10) ||
+        !key('shield') && squeeze>=.18 && squeeze<.72)?{lightShield:true}:{}),
       grab: key('grab') || mapped('grab'),
       tapped: {
         jump: tapped('jump') || tapped('hop'),
@@ -7066,11 +7061,11 @@
         $('online-create').focus({preventScroll:true});
       });
     }
-    else if (hash === '#training/corner-pressure') {
+    else if (hash === '#training/corner-pressure' || hash === '#training/light-shield') {
       menuScreen('match');
       afterStory = null;
       startMatch({ ...settings, mode:'training', p1:'pip', p2:'brisket', stage:'picnic', fetch:false });
-      drill('edge', false, 'corner');
+      drill('edge', false, hash === '#training/light-shield'?'light':'corner');
     }
     else if (hash === '#training/edges' || hash === '#training/ledge-catch') {
       menuScreen('match');

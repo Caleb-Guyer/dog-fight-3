@@ -403,6 +403,7 @@
       simple('Short hop','hop'),simple('Attack','attack'),row('Aim strike ← / → / ↑ / ↓',strikeKeys,'Right stick'),
       row('Smash / charge',i=>keyboard(i,'smash'),i=>padFor(i,'smash')+(settings[i?'tiltStick2':'tiltStick']?'':' / right stick')),
       simple('Special','special'),row('Shield / air dodge / tech',i=>keyboard(i,'shield'),i=>padFor(i,'shield')+' / '+padFor(i,'shieldAlt')),
+      row('Light shield',i=>keyboard(i,'walk')+' + '+keyboard(i,'shield'),i=>'Left stick click + '+padFor(i,'shield')+' or partial shield trigger'),
       row('Tilt shield',i=>keyboard(i,'shield')+' + '+keyboard(i,'walk')+' + direction',i=>'Gentle stick / '+padFor(i,'shield')+' + '+padFor(i,'shieldAlt')+' + stick'),
       simple('Grab / throw','grab'),row(networkGame?'Match menu':'Pause',()=>'Esc',startName),
     ];

@@ -2511,7 +2511,7 @@
     return {
       x: f.x + f.shieldLeanX * f.stats.width * 0.65,
       y: f.y - f.stats.height * (0.52 - f.shieldLeanY * 0.25),
-      r: full * (0.29 + 0.71 * clamp(f.shieldHP, 0, 1)),
+      r: full * (0.29 + 0.71 * clamp(f.shieldHP, 0, 1) + (f.shield && f.lightShield ? .22 : 0)),
     };
   }
   function shieldRim(b, x, y) {
@@ -3130,7 +3130,8 @@
     }
     resetEdgePractice(pattern = 'lip', dir = 1, slow = true) {
       const timeCatch = pattern === 'shortCatch' || pattern === 'longCatch';
-      const corner = pattern === 'corner' || pattern === 'inside';
+      const lastSamples=pattern==='light' && this.edgePractice?.pattern==='light' && this.edgePractice.dir===dir?this.edgePractice.samples:null;
+      const corner = pattern === 'corner' || pattern === 'inside' || pattern === 'light';
       const atDeck = pattern === 'lip' || timeCatch || corner;
       this.resetTraining(false, false, !atDeck);
       const [f, rival] = this.dogs;
@@ -3139,7 +3140,8 @@
       const surface = this.terrain[ground], lip = dir > 0 ? surface.x2 : surface.x1;
       this.edgePractice = { pattern, dir, slow, ground, lip, timeCatch, phase: 'ready', ticks: 0, landed: false, frames: 0, outcome: '' };
       if (corner) {
-        const mark = lip - dir * (pattern === 'corner' ? 0 : 27);
+        if(pattern==='light')this.edgePractice.samples=lastSamples || {};
+        const mark = lip - dir * (pattern === 'corner' ? 0 : pattern === 'light' ? 12 : 27);
         Object.assign(this.edgePractice, { corner, mark, blocked:false, slipped:false, cue:false });
         Object.assign(f, { x:mark, y:surface.y, ground, face:-dir });
         Object.assign(rival, { x:mark - dir * (f.stats.width + rival.stats.width + 8), y:surface.y, ground, face:dir });
@@ -3194,6 +3196,7 @@
       if (!d || d.phase === 'done') return;
       d.phase = 'done';
       d.outcome = outcome;
+      if(d.samples && d.block)d.samples[d.block.light?'Light':'Firm']={...d.block,outcome};
       this.emit('edgeResult', { f: this.dogs[0], outcome, moveId, frames: d.frames });
     }
     checkEdgePractice() {
@@ -6454,7 +6457,7 @@
           if (side || drop || jump || action) {
             const command = { ...idleInput, x: input.x, y: input.y, grabX,
               smashX: input.smashX, smashY: input.smashY, tiltMode: input.tiltMode, quickAttack: input.quickAttack,
-              airDodgeX: input.airDodgeX, airDodgeY: input.airDodgeY, tapped: {} };
+              airDodgeX: input.airDodgeX, airDodgeY: input.airDodgeY, ...(input.lightShield?{lightShield:true}:{}), tapped: {} };
             if (action) { command[action] = !!input[action]; command.tapped[action] = true; }
             r.exit = { option: jump ? 'jump' : action ? 'action' : drop ? 'drop' : 'step', input: command };
           }
@@ -7368,6 +7371,7 @@
         // The guard stays up. Keep a tapped response and its original aim until the block ends.
         f.shieldStun = f.shieldStun <= dt + 1e-8 ? 0 : f.shieldStun - dt;
         const floor = this.terrain[f.ground];
+        if(f.index===0 && this.edgePractice?.block)this.edgePractice.block.slide+=Math.abs(f.vx*dt);
         f.x += f.vx * dt;
         f.vx *= Math.pow(0.72, dt * 60);
         if (f.x < floor.x1 - 7 || f.x > floor.x2 + 7) {
@@ -7666,6 +7670,8 @@
       }
       if (f.index === 0 && f.shield && !wasShielding && pressure?.pattern === 'fastfall' && pressure.phase === 'active')
         this.emit('apexGuard',{f});
+      if (f.shield && input.lightShield) f.lightShield = true;
+      else if (f.lightShield) delete f.lightShield;
       if (f.shield) {
         if (!wasShielding) f.shieldLeanX = f.shieldLeanY = 0;
         const x = input.x || 0, y = input.y || 0;
@@ -7675,7 +7681,7 @@
       } else if (!f.shieldDrop) f.shieldLeanX = f.shieldLeanY = 0;
       if (!f.shield) f.shieldGrabWindow = 0;
       if (grounded && input.shield && !f.jumpSquat && !waveChord) f.guardBuffer = 0;
-      f.shieldHP = clamp(f.shieldHP + (f.shield ? -0.13 : 0.24) * dt, 0, 1);
+      f.shieldHP = clamp(f.shieldHP + (f.shield ? f.lightShield ? -.07 : -.13 : .24) * dt, 0, 1);
       if (f.shield && f.shieldHP <= 0) return this.breakShield(f);
       if (free && !grounded && f.guardBuffer > 0 && !f.usedDodge) {
         this.beginAirDodge(f);
@@ -9350,7 +9356,8 @@
         this.finishFootwork('caughtShield');
       // Use the damage of this hitbox, including sweet spots, late hits and smash charge.
       const scale = projectile ? 0.24 : name === 'aerial' ? 0.29 : name === 'heavy' ? 0.48 : 0.53;
-      const stunFrames = clamp(Math.round(1 + damage * scale), 2, 15);
+      const light=target.shield && target.lightShield;
+      const stunFrames = clamp(Math.round(1 + damage * scale), 2, 15)+(light?3:0);
       const impactFrames = clamp(1 + Math.floor(damage * (projectile ? 0.16 : 0.23)), 2, 7);
       const away = projectile ? face : Math.sign(target.x - owner.x) || face;
       const bubble = shieldBubble(target);
@@ -9360,7 +9367,7 @@
         owner.impactLag = Math.max(owner.impactLag, impactFrames / 60);
         owner.vx -= away * push * (owner.ground >= 0 ? 0.8 : 0.45);
       }
-      target.shieldHP -= damage * 0.027;
+      target.shieldHP -= damage * (light ? .020 : .027);
       const broken = target.shieldHP <= 0;
       if(this.shieldPogo && !broken && use?.pogo && !use.landed && owner.ground<0 && !owner.usedPogo)
         use.springPoint=point;
@@ -9397,9 +9404,12 @@
         target.impactLag = Math.max(target.impactLag, impactFrames / 60);
         target.shieldStun = Math.max(target.shieldStun, stunFrames / 60);
         target.shieldGrabWindow = shieldGrabPenalty;
-        target.vx = away * push;
+        target.vx = away * push * (light?1.9:1);
         target.run = null;
-        if (this.edgePractice?.corner && target.index === 0) this.edgePractice.blocked = true;
+        if (this.edgePractice?.corner && target.index === 0) {
+          this.edgePractice.blocked = true;
+          if(this.edgePractice.pattern==='light')this.edgePractice.block={light:!!light,stunFrames,energy:Math.round(target.shieldHP*100),slide:0};
+        }
       }
       this.sampleFreshness(owner, use, moveId, power, 0, stunFrames, true);
       const timing = use?.airSide ? aerialHitTiming(use, attackWindow(use)) : '';
