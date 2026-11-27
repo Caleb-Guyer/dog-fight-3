@@ -108,7 +108,7 @@
         (inRoom?'<small>'+tip.label+' · Available from Fight Records after leaving the room.</small>':
           '<button class="utility" data-record-drill="'+i+'">'+tip.label+'</button>'))+'</div>';
     }).join('');
-    return tabs + '<h3 class="card-stage">' +
+    return tabs + (archived && isRematch(archived)?'<button class="utility" data-do="rematch-film">Compare my rematch</button>':'')+'<h3 class="card-stage">' +
       (set ? 'Game ' + (index+1) + ' · ' : archived ? recordModes[mode]+' · ' : '') + stageName(game.stage,form) + '</h3><p class="card-finish">' +
       slot(game.winner) + (card.relayTeams?'’s pack':' '+name(game.winner)) + ' wins · ' +
       (reason === 'time' ? 'Time expired' : reason === 'sudden' ? 'Sudden Death' : 'Knockout') + ' · ' + cardTime(frames) + '</p>' +
@@ -329,6 +329,147 @@
       try{clip.returnTape=await read(id,span.follow);}catch{/* The knockout is still playable. */}
     }
     return {clip,result};
+  }
+  async function wholeFilm(id,entry){
+    const db=await database();let data;
+    try{data=await request(db.transaction('blocks').objectStore('blocks').get([id,-1]));}finally{db.close();}
+    const film=new MatchFilm(data),last=film.playback(film.length).battle;
+    if(last.stage!==entry.stage || last.form!==entry.form || last.end!==entry.winner || last.matchCard.frames!==entry.card.frames)
+      throw Error('Replay differs from its scorecard');
+    return film;
+  }
+  const schoolPair=e=>e?.mode==='school' && e.stage==='picnic' && e.form==='original' &&
+    e.card.players[0].kind==='pip' && e.card.players[1].kind==='brisket';
+  const isRematch=e=>schoolPair(e) && /^\d{16}-[0-9a-f]{16}$/.test(e.rematch?.previous) &&
+    ['return','guard','jab','stock'].includes(e.rematch.skill);
+  async function firstFall(id,entry,pending){
+    if(!entry?.replay || !entry.card.losses.length)return null;
+    await pending;
+    const c=await catalog(id),span=c?.knockouts.find(s=>s.first===0);
+    return span?(await readClip(id,entry,span,false,false)).clip.tape:null;
+  }
+  class RematchFilm{
+    constructor(before,after,clips,exchange){
+      this.before=before;this.after=after;this.clips=clips;this.exchange=exchange;
+      this.skill=after?.rematch?.skill;
+    }
+    attempt(tape,emit){
+      const target=new window.FightSchool.Corner(this.skill).target;
+      const player=tape.playback(0,(name,e)=>{target.contact(name,e,player.battle);emit(name,e);},0);
+      target.step(player.battle);
+      const step=player.step.bind(player);
+      player.target=target;
+      player.step=input=>{const moved=step(input);target.step(player.battle);return moved;};
+      return player;
+    }
+    actions(){
+      return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Try the target again</button>'+
+        '<button class="utility" data-do="trial-results">Back to rematch film</button></div>';
+    }
+    report(player,showDialog){
+      const met=player.target.doneAt!==null;
+      showDialog('finish-comparison',met?'Target met again':'Target still to practice','<p>'+player.target.line+'</p>'+this.actions(),false);
+      document.querySelector('[data-do=trial-retry]').focus();
+    }
+    panel(ui=this.ui){
+      this.ui=ui;const {showDialog,back,trial,archived}=ui;
+      if(!this.after){
+        showDialog('finish-rematch','Rematch film','<p>This fight has left Fight Records.</p><button class="primary" id="rematch-film-back">Back</button>');
+        document.getElementById('rematch-film-back').onclick=back;return;
+      }
+      const target=new window.FightSchool.Corner(this.skill).target,at=this.after.rematch.frame;
+      const entries=[this.before,this.after],labels=['Earlier loss','Rematch'];
+      const row=(title,read)=>'<tr><th scope="row">'+title+'</th>'+entries.map(e=>'<td>'+(e?read(e):'—')+'</td>').join('')+'</tr>';
+      const firstKO=e=>{
+        const losses=e.card.losses,first=losses[0];if(!first)return 'No knockout';
+        return (losses[1]?.frame===first.frame?'Both dogs':first.slot===0?'Pip':'Brisket')+' out · '+replayTime(first.frame);
+      };
+      const stats=row('Winner',e=>e.winner?'Brisket':'Pip')+row('Brisket stocks taken',e=>e.card.losses.filter(l=>l.slot===1 && !l.suddenRound).length)+
+        row('First knockout',firstKO)+row('Pip hits landed',e=>e.card.players[0].hits)+row('Pip blocks and parries',e=>e.card.players[0].blocks+e.card.players[0].parries);
+      showDialog('finish-rematch','Compare my rematch','<p><strong>Rematch target</strong> · '+target.line+'</p><p>'+
+        (at===null?'Still to practice.':'Target met at '+replayTime(at)+'.')+'</p>'+
+        '<table class="finish-comparison"><thead><tr><th>Picnic Table</th><th>Earlier loss</th><th>Rematch</th></tr></thead><tbody>'+stats+'</tbody></table>'+
+        (!this.before?'<p>The earlier scorecard has left Fight Records.</p>':'')+
+        '<div id="rematch-rink"></div><div class="dialog-actions">'+(this.exchange?'<button class="utility" id="rematch-target-film">Watch my target</button>'+
+          '<button class="utility" id="rematch-takeover">Try my target again</button>':'')+
+        '<button class="utility" id="rematch-film-back">'+(archived?'Back to match stats':'Back to results')+'</button></div>');
+      const el=id=>document.getElementById(id);
+      el('rematch-film-back').onclick=back;
+      const rink=el('rematch-rink');
+      const kos=()=>this.player(rink,this.clips.map((t,i)=>t && {t,at:t.length,label:labels[i]}).filter(Boolean),false);
+      kos();
+      if(this.exchange){
+        el('rematch-target-film').onclick=e=>{
+          this.targetView=!this.targetView;
+          if(this.targetView)this.player(rink,[{t:this.exchange.tape,at:this.exchange.at,label:'Target met'}],true);else kos();
+          e.currentTarget.textContent=this.targetView?'Compare first knockouts':'Watch my target';
+        };
+        if(this.targetView){this.targetView=false;el('rematch-target-film').click();}
+        el('rematch-takeover').onclick=()=>trial(0,0,{rematchFilm:this,from:archived?'archive':'result',slot:0,
+          clip:{tape:this.exchange.tape,losses:[]},result:this.exchange.result,finish:true});
+      }
+      (el('rematch-play') || el('rematch-film-back')).focus({preventScroll:true});
+    }
+    player(root,clips,target){
+      if(!clips.length){root.innerHTML='<p>No opening knockout footage is available for these fights.</p>';return;}
+      const heading=target?'Target':'First knockout';
+      root.innerHTML='<div class="stock-films">'+clips.map(c=>'<figure><figcaption><strong>'+c.label+
+        '</strong><span></span></figcaption><canvas width="480" height="270" role="img" aria-label="'+c.label+' replay"></canvas></figure>').join('')+
+        '</div><label><output></output><input type="range" step="1" aria-label="Frames from '+heading.toLowerCase()+'"></label>'+
+        '<div class="dialog-actions"><button class="primary" id="rematch-play">Play · ½ speed</button><button class="utility" id="rematch-mark">Go to '+heading.toLowerCase()+'</button>'+
+        '<button class="utility" id="rematch-step">Step one frame</button></div>';
+      const seek=root.querySelector('input'),out=root.querySelector('output'),play=root.querySelector('#rematch-play'),step=root.querySelector('#rematch-step');
+      const last=target?clips[0].t.length-clips[0].at:0,first=-Math.min(90,...clips.map(c=>c.at));
+      const lanes=clips.map((c,i)=>({...c,canvas:root.querySelectorAll('canvas')[i],caption:root.querySelectorAll('figcaption span')[i]}));
+      let now=first,raf=0,prior=null,carry=0,running=false;
+      seek.min=first;seek.max=last;
+      function stop(){cancelAnimationFrame(raf);raf=0;running=false;prior=null;carry=0;}
+      function paint(dt){
+        for(const lane of lanes){
+          const b=lane.replay.battle;lane.view.draw(lane.canvas,b,dt,b.time);
+          lane.caption.textContent=b.dogs.map(f=>f.stats.name+' '+Math.round(f.damage)+'%').join(' / ');
+        }
+        const label=now===0?heading:Math.abs(now)+' frames '+(now<0?'before ':'after ')+heading.toLowerCase();
+        out.textContent=label;seek.value=now;seek.setAttribute('aria-valuetext',label);
+        play.textContent=running?'Pause':now===last?'Watch again · ½ speed':'Play · ½ speed';step.disabled=now===last;
+      }
+      function jump(offset){
+        stop();now=offset;
+        for(const l of lanes){
+          l.view=new window.DogFightView.FightView();l.view.shakeEnabled=false;
+          l.replay=l.t.playback(l.at+now,(name,e)=>l.view.event(name,e));
+        }
+        paint(0);
+      }
+      function advance(){for(const l of lanes)l.replay.step();now++;}
+      function tick(stamp){
+        if(!play.isConnected || !play.closest('dialog')?.open)return stop();
+        if(!document.hidden && prior!==null)carry+=Math.min(100,stamp-prior)*.03;
+        prior=document.hidden?null:stamp;let steps=0;
+        while(carry>=1 && now<last){advance();carry--;steps++;}
+        if(now===last)stop();if(steps)paint(steps/60);if(running)raf=requestAnimationFrame(tick);
+      }
+      play.onclick=()=>{if(running)stop();else{if(now===last)jump(first);running=true;raf=requestAnimationFrame(tick);}paint(0);};
+      root.querySelector('#rematch-mark').onclick=()=>jump(0);
+      seek.oninput=()=>jump(Number(seek.value));step.onclick=()=>{stop();advance();paint(1/60);};jump(first);
+    }
+  }
+  async function rematchStudy(book,id,live,pending){
+    const after=book.get(id);
+    if(!isRematch(after))return new RematchFilm(null,null,[],null);
+    const {previous,frame}=after.rematch,prior=book.get(previous),before=schoolPair(prior) && prior.winner===1?prior:null;
+    const validFrame=Number.isSafeInteger(frame) && frame>0;
+    const [oldKO,newKO,film]=await Promise.all([
+      firstFall(previous,before,pending.get(previous)).catch(()=>null),
+      live?live.knockouts.find(c=>c.first===0)?.tape:firstFall(id,after,pending.get(id)).catch(()=>null),
+      !validFrame?null:live?.reel?new MatchFilm(live.fullMatch()):wholeFilm(id,after).catch(()=>null)
+    ]);
+    let exchange=null;
+    if(film && frame<=film.length){
+      const start=Math.max(0,frame-90);
+      exchange={...film.exchange(start,frame-start+60),at:frame-start};
+    }
+    return new RematchFilm(before,after,[oldKO,newKO],exchange);
   }
   async function schoolKnockout(id,entry,lesson){
     const i=window.FightSchool.reviewLoss(entry,lesson);
@@ -801,11 +942,7 @@
           if(b.disabled)return;
           b.disabled=true;
           try{
-            const db=await database();let data;
-            try{data=await request(db.transaction('blocks').objectStore('blocks').get([id,-1]));}finally{db.close();}
-            const film=new MatchFilm(data),last=film.playback(film.length).battle;
-            if(last.stage!==entry.stage || last.form!==entry.form || last.end!==entry.winner || last.matchCard.frames!==entry.card.frames)
-              throw Error('Replay differs from its scorecard');
+            const film=await wholeFilm(id,entry);
             if(b.isConnected)openFilm(film,selection);
           }catch{if(b.isConnected){status.hidden=false;status.textContent='The full replay could not be opened.';}}
           finally{b.disabled=false;}
@@ -824,5 +961,5 @@
       status.hidden=true;status.textContent='';
     }catch{if(card.isConnected)status.textContent='The replay is unavailable on this device. Your match stats are saved.';}
   }
-  window.MatchReview={decidingExchange,resultHighlight,sampleFight,schoolKnockout,openFilm,enableStudy,defenseReport,defenseCue,defenseActions,recordList,cardHTML,save,attach,pack,restore,resumeTape,MatchFilm,watchFilm,StockRetry,koList};
+  window.MatchReview={decidingExchange,resultHighlight,sampleFight,schoolKnockout,rematchStudy,openFilm,enableStudy,defenseReport,defenseCue,defenseActions,recordList,cardHTML,save,attach,pack,restore,resumeTape,MatchFilm,watchFilm,StockRetry,koList};
 })();

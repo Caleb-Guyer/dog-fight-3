@@ -177,7 +177,8 @@
     }
   }
   class Corner {
-    constructor(id){this.seen=new Set();this.stock=0;this.cue='';this.lesson='jab';this.until=0;
+    constructor(id,previous){this.seen=new Set();this.stock=0;this.cue='';this.lesson='jab';this.until=0;
+      if(previous)this.previous=previous;
       this.target=Object.hasOwn(targets,id)?new RematchTarget(id):null;}
     get practice(){return this.lesson!=='air-lastDodge' && this.target?.doneAt===null?this.target.id:this.lesson;}
     read(world){

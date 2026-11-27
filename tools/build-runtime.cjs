@@ -20,7 +20,8 @@ async function build() {
     // Menu handlers live inside app's closure. Simulation and replay code retain their function names.
     const result = await minify(source, {
       compress: name === 'engine.js' ? { defaults: false, booleans: true, sequences: true, join_vars: true,
-        comparisons: true, evaluate: true, properties: true, computed_props: true, dead_code: true, unused: true, arrows: true } :
+        comparisons: true, evaluate: true, properties: true, computed_props: true, dead_code: true, unused: true, arrows: true,
+        reduce_vars: true, collapse_vars: true, hoist_props: true } :
         ['app.js','render.js'].includes(name) ? { defaults: false, booleans: true, sequences: true, join_vars: true } : false,
       mangle: true,
       keep_fnames: name !== 'app.js',
