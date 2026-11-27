@@ -65,6 +65,8 @@ dialog[data-view='tournament'] { width:min(790px,calc(100% - 16px)); }
 .bracket-match img, #tourney-call img { width:24px; height:24px; object-fit:contain; image-rendering:pixelated; }
 #tourney-call { display:flex; align-items:center; gap:8px; margin:8px 0; font:21px var(--pixel); }
 #tourney-call img { width:44px; height:44px; }
+#tourney-call:has(>span) { align-items:flex-start; flex-direction:column; gap:3px; }
+#tourney-call>span { font:14px var(--pixel); }
 @media (max-width:560px) {
   #tourney-grid { flex-direction:column; gap:14px; }
   .bracket-pairs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }

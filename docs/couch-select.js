@@ -141,7 +141,7 @@
         (pick.locked[1-picker]?'P'+(2-picker)+' is ready. ':'')+
         (choosing?player+' can keep the same dog or change the matchup.':'Game '+between.game+' starts when both players confirm.');
       play.hidden=true;
-      back.textContent='Back to results';
+      back.textContent=between.fromBracket?'Back to bracket':'Back to results';
     }
     function render() {
       if(between){renderCounterpick();lastCel=-1;paint();return;}

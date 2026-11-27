@@ -709,21 +709,30 @@
         settings.mode='local';toLobby();if(tournament)return rotationBoard(true);$('winner-stays').focus({preventScroll:true});}});
   }
   function pickTogether(forRotation=false,openingStrikes=false) {
-    const counter=page==='match' && world?.mode==='local' && !online.match && localSet?.picker!=null;
-    const strikes=openingStrikes || (counter && matchConfig.stageStrikes);
-    if(counter && localSet.pendingStrike)return showStrikeBoard(localSet.pendingStrike,localSet);
+    const saved=forRotation===true && rotation?.restoreSet?.();
+    const series=saved || localSet;
+    const counter=saved?saved.picker!==null:page==='match' && world?.mode==='local' && !online.match && localSet?.picker!=null;
+    const strikes=openingStrikes || (!saved && counter && matchConfig.stageStrikes);
+    if(counter && series.pendingStrike)return showStrikeBoard(series.pendingStrike,series);
     if(!counter && (page!=='lobby' || settings.mode!=='local'))return;
     rotationPicking=forRotation===true;
-    const title=counter?'Game '+(localSet.games.length+1)+' · P1 '+localSet.score[0]+' – '+localSet.score[1]+' P2':
+    const title=counter?'Game '+(series.games.length+1)+' · P1 '+series.score[0]+' – '+series.score[1]+' P2':
       rotationPicking?rotation.roundName || 'Winner stays · Bout '+rotation.bout:'Pick together';
     if(!window.CouchSelect || !versusStyled)return waitForDispatch(title,()=>loadVersusPanel('CouchSelect'),()=>pickTogether(forRotation,openingStrikes),
       ()=>rotationPicking?rotationBoard():counter?showResult():$('pick-together').focus());
-    showDialog('couch',title,'');
     const pair=rotationPicking?rotation.pair:null;
-    const config=counter?{...matchConfig,stage:world.stage,stageForm:world.form,coats:[world.coatFor(0),world.coatFor(1)]}:
-      pair?window.CouchSelect.eventConfig(settings,rotation,eventPads.get(rotation)):settings;
+    const config=pair?window.CouchSelect.eventConfig(settings,rotation,eventPads.get(rotation)):
+      counter?{...matchConfig,stage:world.stage,stageForm:world.form,coats:[world.coatFor(0),world.coatFor(1)]}:settings;
+    if(saved){
+      config.stage=saved.current.stage;
+      if(!counter){
+        rotationPicking=false;
+        return startMatch({...config,...lobbyBattleRules(config),form:config.stageForm},undefined,undefined,saved);
+      }
+    }
+    showDialog('couch',title,'');
     couchPanel=window.CouchSelect.panel($('dialog-body'),strikes?{...config,bestOfThree:true}:config,keys,getPads(),{
-      sound,announce,drawStageTile,padNames,leave:exitDialog,between:counter?{picker:localSet.picker,game:localSet.games.length+1}:null,
+      sound,announce,drawStageTile,padNames,leave:exitDialog,between:counter?{picker:series.picker,game:series.games.length+1,fromBracket:!!saved}:null,
       lineupReady:strikes?(pick,seats)=>{
         for(const [i,kind] of pick.dogs.entries())pick.coats[i][kind]=pick.colors[i];
         beginStageStrike({...config,p1:pick.dogs[0],p2:pick.dogs[1],coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats,
@@ -732,18 +741,16 @@
       start(pick,seats) {
         const stage=pick.winner;
         if(!stage)return;
-        if(counter) {
-          if(!localSet.advance(stage))return;
+        if(pair || counter){
+          if(counter && !series.advance(stage))return;
           for(const [i,kind] of pick.dogs.entries())pick.coats[i][kind]=pick.colors[i];
-          if(config.rotationRound){rotation.remember(pick.dogs,pick.colors);saveRotation();}
-          startMatch({...matchConfig,p1:pick.dogs[0],p2:pick.dogs[1],stage,coats:pick.colors.slice(),coatBook:pick.coats},undefined,undefined,localSet);
-          return;
-        }
-        if(pair){
-          rotation.remember(pick.dogs,pick.colors);eventPads.set(rotation,seats);saveRotation();
+          if(config.rotationRound){
+            rotation.remember(pick.dogs,pick.colors);eventPads.set(rotation,seats);
+            if(!config.tourneyRound || !config.bestOfThree)saveRotation();
+          }
           rotationPicking=false;
-          startMatch({...config,...lobbyBattleRules(config),p1:pick.dogs[0],p2:pick.dogs[1],stage,form:config.stageForm,coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats},
-            undefined,undefined,config.bestOfThree?new StockSet(stage):null);return;
+          startMatch({...config,...(pair?lobbyBattleRules(config):{}),p1:pick.dogs[0],p2:pick.dogs[1],stage,form:config.stageForm,coats:pick.colors.slice(),coatBook:pick.coats,couchSeats:seats},
+            undefined,undefined,counter?series:config.bestOfThree?new StockSet(stage):null);return;
         }
         [settings.p1,settings.p2]=pick.dogs;
         settings.stage=stage;
@@ -2087,7 +2094,11 @@
       soloSeed = opening ?? crypto.getRandomValues(new Uint32Array(1))[0];
       random = seededRandom(soloSeed);
     } else if (config.mode==='local' && config.lesson===undefined && random===Math.random) {
-      random=seededRandom(crypto.getRandomValues(new Uint32Array(1))[0]);
+      let seed=crypto.getRandomValues(new Uint32Array(1))[0];
+      if(config.tourneyRound && series && !resume && !visit){
+        seed=rotation.openGame(config.rotationRound,series,seed);saveRotation();
+      }
+      random=seededRandom(seed);
     }
     finishTape=resume?.tape || (!visit && config.lesson===undefined && ['solo','local'].includes(config.mode) ? new window.DogFight.FinishTape(true) : null);
     if(finishTape)for(const part of ['MatchReview','StockCall'])loadDispatch(part).catch(()=>{});
@@ -2904,7 +2915,9 @@
       schoolSave.firstFightDone=true;
       saveSchool(result.end===0?{won:true}:{loss:window.FightSchool.rematchLesson(result.matchCard).id,ticket});
     }
-    if(matchConfig.rotationRound && window.CouchSelect.finishEvent(rotation,matchConfig.rotationRound,localSet,result.end))saveRotation();
+    if(matchConfig.rotationRound && (matchConfig.tourneyRound && localSet?
+      rotation.finishGame(matchConfig.rotationRound,localSet,result.end,result.matchCard):
+      window.CouchSelect.finishEvent(rotation,matchConfig.rotationRound,localSet,result.end)))saveRotation();
     recordedFights.add(result);
   }
   function showRecords(focusId) {
@@ -2981,7 +2994,7 @@
       (world.mode === 'solo' ? 'CPU' : 'P2') + '</h3><ol class="set-history" aria-label="Game winners">' + history +
       '</ol>' + stageLog + next + (net ? '<p id="net-rematch-status" role="status"></p>' : cpuReadReport()) +
       '<div class="dialog-actions"><button class="primary" data-set-next data-do="' + action + '">' + text +
-      '</button>' + (net ? rematchFighterButton() : '') + '<button class="utility" data-do="' + (net ? 'online-leave">Online lobby' : 'lobby">Fighter select') +
+      '</button>' + (net ? rematchFighterButton() : champion===null && matchConfig.tourneyRound?'<button class="utility" data-do="rotation">Tournament bracket</button>':'') + '<button class="utility" data-do="' + (net ? 'online-leave">Online lobby' : 'lobby">Fighter select') +
       '</button>' + cardButton + '</div>', false);
     if (net) updateVotes();
     document.querySelector('[data-set-next]:not(:disabled), [data-do=online-leave]')?.focus();
@@ -4256,7 +4269,7 @@
     PlayerProfiles:'player-profiles.js?v=rumble-1',
     VersusRulebook:'versus-rules.js?v=rumble-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
-    WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=1', CouchSelect:'couch-select.js?v=button-check-1',StageStrike:'stage-strike.js?v=button-check-1',
+    WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=button-check-1',
     ComboLab:'combo-lab.js?v=dash-pressure-1', FinishTools:'finish-tools.js?v=stage-tech-1',
     MoveGuide:'move-guide.js?v=down-air-1', FighterSchool:'fighter-lessons.js?v=disc-range-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
@@ -4271,7 +4284,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=cup-relay-1';
+        link.href='./versus-select.css?v=tournament-sets-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -4392,6 +4405,19 @@
     window.scrollTo(0, 0);
   }
   let missionSaves=[],savesRead=0;
+  async function readSavedTournament(){
+    try{
+      if(savedEvents.LocalTournament || !sessionStorage.getItem('dog-fight-3.tournament.1'))return;
+      await loadDispatch('LocalTournament');
+      rotationStorage=sessionStorage;
+      savedEvents.LocalTournament??=window.LocalTournament.Lineup.read(rotationStorage);
+      if(page==='home' && savedEvents.LocalTournament){
+        const welcome=document.activeElement===$('welcome-play');
+        refreshHomeSaves();
+        if(welcome && $('school-welcome').hidden)focusHome();
+      }
+    }catch{}
+  }
   async function readMissionSaves(){
     const read=++savesRead;
     try{
@@ -4479,6 +4505,7 @@
     if (!schoolUnsaved) Object.assign(schoolSave,readSchool());
     refreshHomeSaves();
     readMissionSaves();
+    readSavedTournament();
     if (focus) {
       focusHome();
       pendingPin?.then(()=>{if(page==='home' && !$('dialog').open && document.activeElement===$('home-adventure'))focusHome();});
@@ -4491,6 +4518,8 @@
   }
   function savedGames() {
     const items=missionSaves.slice();
+    const event=savedEvents.LocalTournament?.continueCard();
+    if(event)items.push(event);
     if (!items.some(s=>s.id==='school-stock') && schoolSave.started && (schoolSave.rematch || schoolSave.passed.length<schoolLessons.length || !schoolSave.firstFightDone)) {
       const index=unfinishedLesson(), final=index<0;
       const r=schoolSave.rematch;
@@ -4542,6 +4571,7 @@
   }
   function resumeSavedGame(id) {
     if (!savedGames().some(g=>g.id===id)) return showHome();
+    if(id==='tournament'){settings.mode='local';editing=0;toLobby();return rotationBoard(true);}
     if (id==='school-stock')return resumeFirstPosition();
     if (missionSaves.some(s=>s.id===id))return resumeMission(id);
     if (id==='school'){
