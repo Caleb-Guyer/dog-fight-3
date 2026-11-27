@@ -2,6 +2,8 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 global.window = {};
 require('../docs/engine.js');
+require('../docs/controls.js');
+require('../docs/online.js');
 const {Battle, FinishTape, idleInput, kits, seededRandom} = window.DogFight;
 
 function fight(role, overrides = {}) {
@@ -12,6 +14,61 @@ function fight(role, overrides = {}) {
   return {battle,events};
 }
 function tick(b,input = idleInput) { b.step(1/60,{...idleInput,...input},idleInput); }
+
+test('overlapping directions reverse an early dash and retain fighter-specific braking on a full run',()=>{
+  const stops=new Set();
+  for(const kind of Object.keys(kits))for(const dir of [-1,1])for(const running of [false,true]){
+    const input=new window.FightControls.HorizontalInput(),pad={index:0,id:'test'};
+    const w=new Battle({mode:'local',stage:'picnic',p1:kind,p2:'clover',fetch:false});
+    const f=w.dogs[0];input.last=dir;
+    for(let i=0;i<(running?18:3);i++)tick(w,{x:input.samplePad(pad,dir<0,dir>0)});
+    const at=f.x;input.last=-dir;
+    for(let i=0;i<30;i++){
+      const x=input.samplePad(pad,true,true);assert.equal(x,input.keys(true,true));tick(w,{x,grabX:x});
+      if(i===0)assert.equal(f.run.face,running?dir:-dir);
+      if(f.vx*dir<0){if(running && dir===1)stops.add(Math.round((f.x-at)*10));break;}
+    }
+    assert(f.vx*dir<0);assert.equal(input.samplePad(pad,dir<0,dir>0),dir);
+    assert.equal(input.samplePad({index:1,id:'new'},true,true),0);input.clear();
+    assert.equal(input.keys(true,true),0);assert.equal(input.samplePad(pad,true,true),0);
+  }
+  assert.equal(stops.size,4);
+});
+
+test('five frames of network delay correct both players’ overlapping turns to the recorded local fight',()=>{
+  const sides=[0,1].map(side=>{
+    let battle;const sent=[],session=new window.DogOnline.OnlineSession({start(c,r){battle=new Battle(c,()=>{},r);}});
+    session.side=side;session.send=data=>{if(data[0]==='input')sent[data[2]]=data[3];};
+    session.beginRound(['start',1,'pip','brisket','picnic',42]);
+    return {battle,net:session.match,sent,axis:new window.FightControls.HorizontalInput()};
+  });
+  const ref=new Battle({mode:'local',stage:'picnic',p1:'pip',p2:'brisket',fetch:true},()=>{},seededRandom(42));
+  const pose=w=>w.dogs.map(f=>[f.x,f.vx,f.face,f.run?.face,!!f.run?.turned,f.attack?.moveId]);
+  const history=[pose(ref)];let corrected=false;
+  for(let t=0;t<40;t++){
+    const pair=sides.map(({axis},i)=>{
+      const dir=i?-1:1;
+      if(t===0)axis.last=dir;
+      if(t===3 || t===22)axis.last=-dir;
+      const overlap=t>=3&&t<6 || t>=22&&t<27;
+      const x=axis.keys(overlap||dir<0,overlap||dir>0);
+      return {...idleInput,x,grabX:x,smashX:x,attack:t===30};
+    });
+    ref.step(1/60,...pair);history.push(pose(ref));
+    for(const [i,p] of sides.entries()){
+      if(t>=5)assert(p.net.receive(t-5,sides[1-i].sent[t-5]));
+      p.net.tick(()=>pair[i],p.battle);
+      assert.deepEqual(pose(p.net.confirmedWorld),history[p.net.confirmed]);
+      if(t===3 && p.battle.dogs[1-i].vx!==ref.dogs[1-i].vx)corrected=true;
+    }
+  }
+  assert(corrected);
+  for(const [i,p] of sides.entries()){
+    const packets=sides[1-i].sent;
+    for(let n=p.net.received;n<packets.length;n++)assert(p.net.receive(n,packets[n]));
+    p.net.confirm(p.battle);assert.deepEqual(pose(p.battle),pose(ref));
+  }
+});
 
 test('all four Rivals clear Haymaker on foot and punish with their own move on either side', () => {
   for (const kind of Object.keys(kits)) for (const mirror of [false,true]) {

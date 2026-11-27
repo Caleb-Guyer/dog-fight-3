@@ -315,6 +315,7 @@
   let walkPointer = null;
   let touchFlick = null, flickAim = null;
   const rightStickHeld = [false, false];
+  const horizontalInputs=[new window.FightControls.HorizontalInput(),new window.FightControls.HorizontalInput()];
   const shieldTiltLocked = [false, false];
   const flickJumpStates = [{},{}];
   function clearInput() {
@@ -326,6 +327,7 @@
     walkPointer = null;
     touchFlick = flickAim = null;
     rightStickHeld.fill(false);
+    for(const input of horizontalInputs)input.clear();
     shieldTiltLocked.fill(false);
     flickJumpStates[0] = {};
     flickJumpStates[1] = {};
@@ -1449,18 +1451,8 @@
       if (count.textContent!==label) count.textContent=label;
       return;
     }
-    const landing = world.spacingPractice?.pattern === 'landing' && world.spacingPractice;
-    const compare = $('hop-compare');
-    if (landing || !compare.hidden) {
-      const peaks = [];
-      for (const [peak, prefix] of [[landing?.peak, ''], [landing?.previousPeak, 'Previous: ']]) {
-        if (peak?.complete) peaks.push(prefix + (peak.short ? 'Short hop' : 'Full jump') + ' · ' +
-          Math.round(peak.floorY - peak.y) + ' px');
-      }
-      const comparison = peaks.join(' / ');
-      if (compare.textContent !== comparison) compare.textContent = comparison;
-      compare.hidden = !comparison;
-    }
+    if(world.mode==='training')window.PracticeFeedback?.movementReadout(world);
+    else if (!$('hop-compare').hidden) $('hop-compare').hidden=true;
     if (world.mode === 'adventure') return updateDispatchHUD();
     const confirmed = online.match?.confirmedWorld || world;
     const scores = confirmed.dogs;
@@ -1515,16 +1507,7 @@
       if (prompt.textContent !== text) prompt.textContent = text;
     }
     const player = world.dogs[world.trainingPlayerSlot], lab = world.freshnessPractice;
-    const wave = world.wavePractice, comboLab = world.comboPractice;
-    if (wave?.pattern === 'platform' && wave.phase === 'active' && wave.contact !== null) {
-      const bar = $('wave-recovery'), tip = $('wave-tip'), lag = Math.max(0, Math.ceil(player.landingLag * 60 - 1e-8));
-      const canBuffer = player.landingLag <= window.DogFight.inputWindow + 1e-8;
-      if (bar.value !== bar.max - lag) bar.value = bar.max - lag;
-      if (bar.classList.contains('ready') !== canBuffer) bar.classList.toggle('ready', canBuffer);
-      const cue = player.attack?.grabAttempt ? 'Reaching for the shield.' : player.command?.type === 'grab' ? 'Grab queued.' :
-        canBuffer ? 'Tap Grab now.' : 'Landing recovery · ' + lag + ' frames';
-      if (tip.textContent !== cue) tip.textContent = cue;
-    }
+    const comboLab = world.comboPractice;
     const chargeReadout = $(lab ? 'freshness-charge' : 'training-charge');
     if (lab) {
       $('training-charge').hidden = true;
@@ -4291,7 +4274,7 @@
   let campaign = yardChapter;
   const dispatchSources={
     SoloEvents:'solo-events.js?v=impact-tech-1',
-    PracticeFeedback:'practice-feedback.js?v=dash-smash-1', DogOnline:'online.js?v=dash-smash-1',
+    PracticeFeedback:'practice-feedback.js?v=footwork-readout-1', DogOnline:'online.js?v=dash-smash-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
@@ -5897,7 +5880,7 @@
     const map = keys[slot];
     const active = name => held.has(map[name]) || (slot === 0 && touches.has(name));
     const soft = slot === 0 && touchPointers.get(walkPointer)?.dataset.touch;
-    const x = Number(active('right')) - Number(active('left'));
+    const x = horizontalInputs[slot].keys(active('left'),active('right'));
     const y = Number(active('down')) - Number(active('up'));
     return {
       x: x * (active('walk') || (soft && (soft.endsWith('left') || soft.endsWith('right'))) ? 64 / 127 : 1),
@@ -5944,6 +5927,10 @@
     held.add(e.code);
     if (!e.repeat) {
       taps.add(e.code);
+      keys.forEach((map,i)=>{
+        if(e.code===map.left)horizontalInputs[i].last=-1;
+        if(e.code===map.right)horizontalInputs[i].last=1;
+      });
       const slot = keys.findIndex(map => map.attack === e.code);
       if (slot >= 0) attackAim[slot] = buttonAim(slot);
       const smashSlot = keys.findIndex(map => map.smash === e.code);
@@ -5956,12 +5943,15 @@
     const previous = touchPointers.get(pointerId);
     if (previous === button) return;
     const wasUp = touches.has('up');
+    const wasLeft=touches.has('left'),wasRight=touches.has('right');
     if (button) touchPointers.set(pointerId, button);
     else touchPointers.delete(pointerId);
     touches.clear();
     const pressed = new Set(touchPointers.values());
     for (const el of pressed) for (const key of el.dataset.touch.split('-')) touches.add(key);
     if (button) {
+      if(!wasLeft && touches.has('left'))horizontalInputs[0].last=-1;
+      if(!wasRight && touches.has('right'))horizontalInputs[0].last=1;
       if (previous)
         for (const key of previous.dataset.touch.split('-')) if (!touches.has(key)) touchTaps.delete(key);
       for (const key of button.dataset.touch.split('-')) touchTaps.add(key);
@@ -6146,23 +6136,19 @@
       return down(pad,n) && !(menuPadButtons.get(pad.index) & (1<<n));
     };
     const axis=n=>controls.movementAxis(pad?.axes?.[n]);
-    const left = key('left') || down(pad, 14),
-      right = key('right') || down(pad, 15);
-    const x = Number(right) - Number(left);
+    const localLeft=key('left'),localRight=key('right'),padLeft=down(pad,14),padRight=down(pad,15);
+    const left=localLeft || padLeft,right=localRight || padRight;
+    const horizontal=horizontalInputs[i],padSide=horizontal.samplePad(pad,padLeft,padRight);
+    const x=localLeft || localRight ? horizontal.keys(localLeft,localRight) : padSide;
+    const rawX=left || right ? x : axis(0);
     // A direction released after Attack still belongs to that tap when both edges fall between game ticks.
     const aim = tapped('attack') ? attackAim[i] : null;
-    let grabX = x || axis(0) || aim?.rawX || 0;
-    if (left && right) {
-      // Rolling one direction key onto the other is a turn even during their brief overlap.
-      const leftTap = tapped('left'),
-        rightTap = tapped('right');
-      grabX = leftTap === rightTap ? (battle.dogs[fighterIndex].prev.grabX ?? 0) : rightTap ? 1 : -1;
-    }
+    const grabX=rawX || (!left && !right && aim?.rawX) || 0;
     const up = key('up') || down(pad, 12),
       downAim = key('down') || down(pad, 13);
     const y = Number(downAim) - Number(up);
     // A quick Smash tap can outlive both direction keys or both thumbs in the input queue.
-    const savedSmash = tapped('smash') && !x && !y && !axis(0) && !axis(1) ? smashAim[i] : null;
+    const savedSmash = tapped('smash') && !left && !right && !y && !rawX && !axis(1) ? smashAim[i] : null;
     const digitalAim = left || right || up || downAim || (!i && touches.has('neutral'));
     const rightX = axis(2),
       rightY = axis(3);
@@ -6192,7 +6178,7 @@
     const gentleGuard = shield && grounded && (key('walk') || fromCenter);
     const softCrawl = battle.dogs[fighterIndex].kit.crawl && fromCenter && fromCenter.startsWith('down-');
     const gentleDown = y > 0 && !shield && (key('walk') || fromCenter === 'down' || softCrawl || aim?.y === 64 / 127);
-    const side = (walk ? x * (64 / 127) : x) || axis(0) || (!left && !right && aim?.x) || 0;
+    const side = left || right ? x*(walk?64/127:1) : rawX || aim?.x || 0;
     const vertical = ((gentleGuard || gentleDown) ? y * (64 / 127) : y) || axis(1) || (!up && !downAim && aim?.y) || 0;
     // Keep a held direction aimed when the second bumper is released. Centering rearms the dodge.
     if (grounded && mapped('shield') && mapped('shieldAlt')) shieldTiltLocked[i] = true;
@@ -6211,7 +6197,7 @@
       smash: held.has(map.smash) || tapped('smash') || touchSmash || mapped('smash'),
       aimStick,
       tiltMode: settings[i?'tiltStick2':'tiltStick'] && aimStick,
-      smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : x || axis(0) || savedSmash?.rawX || 0,
+      smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : rawX || savedSmash?.rawX || 0,
       smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : y || axis(1) || savedSmash?.y || 0,
       special: key('special') || mapped('special'),
       shield,
@@ -6801,6 +6787,9 @@
       leaveOnline();
       afterStory = null;
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage:'picnic', cpuLevel:'arcade', suddenStart:true }, undefined, 17);
+    } else if (arena==='free' && hash==='#training/free/'+form && Object.hasOwn(fighters,form)) {
+      leaveOnline();afterStory=null;
+      startMatch({...settings,mode:'training',p1:form,p2:form==='brisket'?'pip':'brisket',stage:'picnic',fetch:false},undefined,42);
     } else if (hash === '#training/practice') {
       leaveOnline();
       afterStory = null;

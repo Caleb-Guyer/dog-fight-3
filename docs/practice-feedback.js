@@ -1250,6 +1250,31 @@
     status.textContent = label;
     $('recovery-tip').textContent = tip;
   }
+  function movementReadout(world) {
+    const landing = world.spacingPractice?.pattern === 'landing' && world.spacingPractice;
+    const compare = $('hop-compare');
+    if (landing || !compare.hidden) {
+      const peaks = [];
+      for (const [peak, prefix] of [[landing?.peak, ''], [landing?.previousPeak, 'Previous: ']]) {
+        if (peak?.complete) peaks.push(prefix + (peak.short ? 'Short hop' : 'Full jump') + ' · ' +
+          Math.round(peak.floorY - peak.y) + ' px');
+      }
+      const comparison = peaks.join(' / ');
+      if (compare.textContent !== comparison) compare.textContent = comparison;
+      compare.hidden = !comparison;
+    }
+    const wave=world.wavePractice;
+    if (wave?.pattern === 'platform' && wave.phase === 'active' && wave.contact !== null) {
+      const player=world.dogs[world.trainingPlayerSlot];
+      const bar = $('wave-recovery'), tip = $('wave-tip'), lag = Math.max(0, Math.ceil(player.landingLag * 60 - 1e-8));
+      const canBuffer = player.landingLag <= window.DogFight.inputWindow + 1e-8;
+      if (bar.value !== bar.max - lag) bar.value = bar.max - lag;
+      if (bar.classList.contains('ready') !== canBuffer) bar.classList.toggle('ready', canBuffer);
+      const cue = player.attack?.grabAttempt ? 'Reaching for the shield.' : player.command?.type === 'grab' ? 'Grab queued.' :
+        canBuffer ? 'Tap Grab now.' : 'Landing recovery · ' + lag + ' frames';
+      if (tip.textContent !== cue) tip.textContent = cue;
+    }
+  }
   function waveFeedback(world) {
     const d = world.wavePractice, back = d.pattern === 'back', [f, rival] = world.dogs;
     const side = (back ? -d.dir : d.dir) > 0 ? 'right' : 'left';
@@ -1577,5 +1602,5 @@
     }
     return message;
   }
-  window.PracticeFeedback={updateFreshnessReadout,airPanel,trumpPanel,rollPanel,spacingPanel,wallPanel,platformPanel,climbPanel,footworkPanel,edgePanel,shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
+  window.PracticeFeedback={movementReadout,updateFreshnessReadout,airPanel,trumpPanel,rollPanel,spacingPanel,wallPanel,platformPanel,climbPanel,footworkPanel,edgePanel,shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
 })();

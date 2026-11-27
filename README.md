@@ -352,6 +352,8 @@ GitHub serves the files as written. Asset paths are relative to the game page. [
 
 Flick a side to dash. Reverse in the first few steps to dash-dance. Once your dog is running, its paws have to brake before it can turn. Pip can reverse a dash later than Brisket, who skids farther when stopping. To walk on touch, slide from the center dot onto a side arrow. A direct tap on the arrow starts a dash.
 
+You can roll from Right to Left while keeping Right held. The newer direction steers the dog and aims its attacks. Release Left to steer right again. This works with either player's movement keys, two fingers on the touch arrows, or separate presses on a controller D-pad. If the controller reports both directions together from neutral, the dog stays neutral. Try a quick reversal as Pip, then hold the first direction for a full run as Brisket and watch how far he brakes. [Run as Pip](https://caleb-guyer.github.io/dog-fight-3/#training/free/pip) · [Run as Brisket](https://caleb-guyer.github.io/dog-fight-3/#training/free/brisket)
+
 Walk to the edge of a platform and your dog plants its paws at the lip. You can tilt, shield, jump, or turn back immediately. Dash to take the fight offstage. If you land an aerial near a platform tip with enough sideways speed, sliding off ends its remaining landing recovery. You keep an air jump and can swing on the way down.
 
 In **Training → Edge practice**, walk to the chalk and catch a rival’s ledge jump with **Down + Attack**. Then compare **Land at the tip** and **Land deeper**. Tap neutral Attack and coast in both. Watch the recovery count, then try a down air as you slide off the tip. **Switch sides** mirrors the approach. [Play Edge practice](https://caleb-guyer.github.io/dog-fight-3/#training/edges).

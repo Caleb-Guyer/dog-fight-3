@@ -15,6 +15,7 @@ async function play(browser,device) {
       const gamepad={index:0,id:'Hosted pad',mapping:'standard',connected:true,axes:[0,0,0,0],
         buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
       Object.defineProperty(navigator,'getGamepads',{value:()=>[gamepad]});
+      window.padArrow=(side,on)=>Object.assign(gamepad.buttons[side==='left'?14:15],{pressed:on,value:Number(on)});
       window.padInput=(action,on)=>{
         if(action==='left'||action==='right') gamepad.axes[0]=on?(action==='left'?-1:1):0;
         else if(action==='down'||action==='up')gamepad.axes[1]=on?(action==='up'?-1:1):0;
@@ -209,6 +210,56 @@ async function play(browser,device) {
       await hold('smash',false);await hold('up',false);await page.clock.runFor(1200);
       assert.equal(await result.getAttribute('data-result'),'boostSmashCatch',device+' catches the hop '+side);
       assert.match(await result.textContent(),/Roof Raiser/);
+    }
+    await page.goto('http://127.0.0.1:8080/?heavy#training/free/brisket');
+    await page.locator('#game').waitFor();
+    assert.match(await page.locator('#hud .hud-name').first().textContent(),/Brisket/i);
+    await page.goto('http://127.0.0.1:8080/?rollover#training/free/pip');
+    await page.locator('#game').waitFor();
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(dt,a,b){
+        const result=step.apply(this,arguments),f=this.dogs[0];
+        window.turnSample={x:a.x,aim:a.grabX,smash:a.smashX,vx:f.vx,dog:f.kind,form:this.stage,face:f.face,move:f.attack?.moveId};
+        return result;
+      };
+    });
+    const arrow=(side,on)=>pad?page.evaluate(([s,v])=>padArrow(s,v),[side,on]):hold(side,on);
+    const check=async(expected,travel=true)=>{
+      const s=await page.evaluate(()=>turnSample);
+      assert.deepEqual([s.dog,s.form,s.x,s.aim,s.smash],['pip','picnic',expected,expected,expected],device+' '+JSON.stringify(s));
+      if(travel)assert.equal(Math.sign(s.vx),expected);
+    };
+    await arrow('right',true);await page.clock.runFor(34);await check(1);
+    await arrow('left',true);await page.clock.runFor(34);await check(-1);
+    // Keeping both down across samples must not revert to neutral.
+    await page.clock.runFor(34);await check(-1);
+    await arrow('left',false);await page.clock.runFor(34);await check(1);
+    await arrow('right',false);await page.clock.runFor(34);await check(0,false);
+    if(pad){
+      await arrow('left',true);await arrow('right',true);await page.clock.runFor(80);await check(0,false);
+      await arrow('right',false);await page.clock.runFor(34);await check(-1);await arrow('left',false);
+    }
+    await page.clock.runFor(250);
+    await arrow('left',true);await page.clock.runFor(170);
+    await arrow('right',true);await hold('attack',true);await page.clock.runFor(34);await hold('attack',false);
+    await page.clock.runFor(50);
+    const swing=await page.evaluate(()=>[turnSample.face,turnSample.move,DogFight.kits.pip.tilts.forward]);
+    assert.deepEqual(swing.slice(0,2),[1,swing[2]],device+' strikes right during a leftward skid');
+    await arrow('left',false);await arrow('right',false);
+    if(device==='keyboard'){
+      await page.goto('http://127.0.0.1:8080/?seats#local/final-count');
+      await page.evaluate(()=>{
+        const step=DogFight.Battle.prototype.step;
+        DogFight.Battle.prototype.step=function(dt,a,b){window.axes=[a.x,b.x];return step.apply(this,arguments);};
+      });
+      await page.clock.runFor(2800);
+      await page.keyboard.down('d');await page.keyboard.down('ArrowLeft');await page.clock.runFor(34);
+      await page.keyboard.down('a');await page.keyboard.down('ArrowRight');await page.clock.runFor(34);
+      assert.deepEqual(await page.evaluate(()=>axes),[-1,1]);
+      await page.keyboard.up('a');await page.keyboard.up('ArrowRight');await page.clock.runFor(34);
+      assert.deepEqual(await page.evaluate(()=>axes),[1,-1]);
+      await page.keyboard.up('d');await page.keyboard.up('ArrowLeft');
     }
     assert.deepEqual(errors,[]);
   } finally { await page.close(); }
