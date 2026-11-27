@@ -14,6 +14,7 @@ async function play(browser,device){
       Object.defineProperty(navigator,'getGamepads',{value:()=>[g]});
       window.setEventPad=(key,on)=>{
         if(key==='right')g.axes[0]=on?1:0;
+        else if(key==='left')g.axes[0]=on?-1:0;
         else if(key==='up')g.axes[1]=on?-1:0;
         else if(key==='down')g.axes[1]=on?1:0;
         else Object.assign(g.buttons[{ok:0,jump:0,pause:9,shield:4,attack:2,special:1,grab:3}[key]],{pressed:on,value:Number(on)});
@@ -29,7 +30,7 @@ async function play(browser,device){
       }
     };
     const cdp=touch && await page.context().newCDPSession(page),fingers=new Map();
-    const keys={shield:'l',attack:'j',down:'s',right:'d',special:'k',up:'w',grab:'u',jump:'Space'};
+    const keys={shield:'l',attack:'j',down:'s',right:'d',special:'k',up:'w',grab:'u',jump:'Space',left:'a'};
     async function hold(key,on){
       if(pad)return page.evaluate(([key,on])=>setEventPad(key,on),[key,on]);
       if(!touch)return on?page.keyboard.down(keys[key]):page.keyboard.up(keys[key]);
@@ -129,6 +130,53 @@ async function play(browser,device){
     assert.deepEqual(await page.evaluate(()=>[run.reads.seed,run.reads.guided]),[seed,1]);
     await choose('#pause');await choose('#event-normal');await page.clock.runFor(2600);
     assert.match(await page.locator('#match-mode').textContent(),/Solo.*Rival/);
+    await page.goto('http://127.0.0.1:8080/?route#solo');
+    await choose('#choose-stage');await choose('#arena-run');
+    await page.locator('#route-start').waitFor();
+    await page.locator('#route-arena').selectOption('canal');
+    if(pad){
+      await page.locator('#route-form').focus();
+      await hold('right',true);await page.clock.runFor(48);await hold('right',false);await page.clock.runFor(48);
+    }else await page.locator('#route-form').selectOption('flat');
+    assert.equal(await page.locator('#route-form').inputValue(),'flat');
+    assert.match(await page.locator('#route-map').getAttribute('aria-label'),/Canal Lock.*Right ledge/);
+    await page.evaluate(()=>{
+      const step=StageStrike.StageRun.prototype.step;
+      StageStrike.StageRun.prototype.step=function(...args){window.course=this;return step.apply(this,args);};
+      const fight=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(...args){window.fight=this;return fight.apply(this,args);};
+    });
+    async function ready(selector){
+      await choose(selector);await page.clock.runFor(3100);
+      assert.equal(await page.evaluate(()=>course.matchFrames),0,device+' route waits for first press');
+    }
+    async function finishRoute(){
+      await hold('right',true);await page.clock.runFor(1500);
+      for(let i=0;i<200 && await page.evaluate(()=>course.dogs[0].x<course.terrain[0].x2-3);i++)await page.clock.runFor(16);
+      await hold('right',false);await hold('left',true);await page.clock.runFor(2000);await hold('left',false);
+      await page.clock.runFor(1500);
+      const splits=await page.evaluate(()=>course.route.splits);
+      assert.equal(splits.length,3,device+' captures all flags '+JSON.stringify(splits));
+      assert.equal(await page.locator('#dialog-title').textContent(),'Route cleared');
+      assert.deepEqual(await page.locator('.route-times tbody th').allTextContents(),['Center line','Right ledge','Back on deck']);
+      assert(await page.locator('#dialog').evaluate(d=>d.scrollWidth<=d.clientWidth+1));
+      return splits;
+    }
+    await ready('#route-start');await choose('#pause');
+    assert.equal(await page.locator('#dialog-title').textContent(),'Stage Run paused');
+    await ready('#route-again');const first=await finishRoute();
+    const card=await page.evaluate(()=>course.route.card);
+    await ready('#route-swap');
+    assert.equal(await page.evaluate(()=>course.dogs[0].kind),card.p2);
+    await finishRoute();
+    assert.equal(await page.locator('.route-times thead th').count(),5);
+    await choose('#event-board');
+    await choose('[data-runner="0"]');
+    assert.match(await page.locator('#route-legend').textContent(),/Best/);
+    assert.deepEqual(await page.evaluate(card=>JSON.parse(localStorage.getItem('dog-fight-3.stage-run.1.canal.flat.'+card.p1)),card),first);
+    await choose('#route-play');await page.clock.runFor(3800);
+    assert.deepEqual(await page.evaluate(()=>[fight.stage,fight.form,fight.dogs[0].kind,fight.dogs[1].kind,fight.stockCount,!!fight.route]),
+      ['canal','flat',card.p1,card.p2,card.lives,false]);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

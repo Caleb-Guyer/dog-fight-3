@@ -12,9 +12,9 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Clear the five events and revisit the saved board
+      - name: Play the five events and race both matchup dogs on an arena route
         run: |
-          node --test qa/solo-events.cjs
+          node --test qa/solo-events.cjs qa/stage-run.cjs
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
           python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/events-http.log" 2>&1 &
           server_pid=$!
