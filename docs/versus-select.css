@@ -218,13 +218,18 @@ dialog[data-view='tournament'] { width:min(790px,calc(100% - 16px)); }
 .cup-ticket-actions { display:flex; gap:12px; flex-wrap:wrap; }
 .cup-ticket-actions .primary { min-height:46px; }
 .cup-route-board { padding:clamp(12px,1.8vw,24px); background:var(--cream); color:var(--ink); }
+#cup-bonus { margin-top:12px; border-top:1px solid #b9ac8c; }
+#cup-bonus summary { width:fit-content; min-height:44px; padding:12px 4px; cursor:pointer; }
+#cup-bonus p { margin:0 0 10px; }
+#cup-select #cup-bonus button { color:var(--ink); border-color:currentColor; margin-bottom:10px; }
 #cup-select[data-view=route] .cup-select-inner { max-width:900px; }
 @media(max-width:680px) and (orientation:portrait) {
   .cup-select-inner { padding:14px max(12px,var(--left-edge)) 18px; gap:14px; }
   .cup-posters { grid-template-columns:repeat(2,minmax(0,1fr)); }
   .cup-poster canvas { max-height:18dvh; object-fit:cover; }
   .cup-ticket { display:grid; gap:10px; }
-  .cup-ticket-actions { display:grid; grid-template-columns:auto minmax(0,1fr); gap:8px; }
+  .cup-ticket-actions { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+  #cup-select[data-view=route] .cup-ticket-actions { grid-template-columns:1fr; }
   .cup-ticket-actions button { font-size:15px; }
 }
 @media(max-height:540px) and (orientation:landscape) {
