@@ -992,7 +992,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
-    if(dialogType==='pad-loss')return;
+    if(dialogType==='pad-loss' || dialogType==='solo-pad-loss')return;
     if(dialogType==='fighter-tryout'){dismiss();if(page==='lobby')$('lobby-tryout').focus();return;}
     if(dialogType==='mission-saving')return;
     if(dialogType==='special-preview')return $('move-back').click();
@@ -5005,7 +5005,7 @@
   }
   let schoolDevice=null, schoolPadBits=0;
   function promptDevice(pads){
-    const pad=pads[0];
+    const pad=soloSeat?.get(pads) || (soloSeat && (schoolDevice===0 || schoolDevice===2)?null:pads[0]);
     let bits=0;
     if(pad){
       for(let i=0;i<Math.min(17,pad.buttons.length);i++)if(pad.buttons[i].pressed)bits|=1<<i;
@@ -5028,7 +5028,7 @@
     const t=corner.target;
     const goal=t && (t.doneAt!==null?world.matchFrames-t.doneAt<160:(!cue || cue==='opening') && world.matchFrames<300);
     if(!settings.cornerTips || (!cue && !goal)){if(!tip.hidden)tip.hidden=true;return;}
-    const key=(goal?t.id+'/'+t.title:cue)+'/'+device+(device===1?padNames(0,pads[0])[0]:'');
+    const key=(goal?t.id+'/'+t.title:cue)+'/'+device+(device===1?padNames(0,seatPad(0,pads))[0]:'');
     if(tip.dataset.cue!==key){
       const label=action=>{
         if(device===0)return keyFor(0,action);
@@ -5059,7 +5059,7 @@
     const example=lesson.example;
     const state=example?(lesson.done || lesson.missed?'example-ended':'example'):lesson.missed?'retry':lesson.done?'passed':
       lesson.guide?'guided':lesson.guideLoading?'loading-guide':'playing';
-    const names=padNames(0,pads[0]);
+    const names=padNames(0,seatPad(0,pads));
     const key=lesson.id+'/'+state+'/'+device+'/'+(device===1?names[0]+names[8]:'')+'/'+(example?example.index:lesson.guide?.revision ?? lesson.note ?? '');
     if ($('school-coach').dataset.key===key) return;
     $('school-coach').dataset.key=key;
@@ -5652,6 +5652,7 @@
   let matchKeys=new Set(keys.flatMap(map=>Object.values(map)));
   const keyFor=(i,action)=>controls.keyName(keys[i][action]);
   let currentPads=[];
+  let soloSeat=null,soloWorld=null;
   const labelCache=[{},{}];
   function padNames(i,pad){
     const c=labelCache[i],id=pad?.id,mapping=pad?.mapping,style=labelStyles[i];
@@ -5660,6 +5661,7 @@
     return c.names;
   }
   function seatPad(i,pads=currentPads){
+    if(!i && soloWorld===world && soloSeat?.index!=null)return soloSeat.get(pads);
     if(page==='match' && matchConfig?.couchSeats && !finishTrial)return matchConfig.couchSeats.get(i,pads);
     return pads[i] || (pads.length===1?pads[0]:null);
   }
@@ -5809,7 +5811,10 @@
     if (!matchKeys.has(e.code)) return;
     // A held menu confirmation can repeat after the next fight opens.
     if(e.repeat && !held.has(e.code))return;
-    if(!e.repeat && (world?.lesson || corner) && Object.values(keys[0]).includes(e.code))schoolDevice=0;
+    if(!e.repeat && Object.values(keys[0]).includes(e.code)){
+      if(soloSeat?.index!=null)soloSeat.useOtherInput(currentPads);
+      if(world?.lesson || corner)schoolDevice=0;
+    }
     e.preventDefault();
     held.add(e.code);
     if (!e.repeat) {
@@ -5846,6 +5851,7 @@
   }
   touchButtons.forEach((el) => {
     el.addEventListener('pointerdown', (e) => {
+      if(soloSeat?.index!=null)soloSeat.useOtherInput(currentPads);
       if(world?.lesson || corner)schoolDevice=2;
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
@@ -5998,6 +6004,7 @@
     }
   });
   function playPad(i,pads=currentPads){
+    if(soloSeat && soloWorld===world)return !i?soloSeat.get(pads):null;
     return finishTrial?.seats ? finishTrial.seats.get(i,pads) : finishTrial ? pads[0] : matchConfig?.couchSeats && world.mode==='local' ? matchConfig.couchSeats.get(i,pads) :
       world.hasSecondPlayer && !world.lesson && !online.match && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
   }
@@ -6101,6 +6108,29 @@
   const idlePad={};
   let oldPad = idlePad;
   const menuPadButtons = new Map();
+  function checkSoloPad(pads){
+    const one=page==='match' && world && !online.match && !world.warmupPartner &&
+      (finishTrial?!finishTrial.seats && !finishTrial.player.outcome && finishTrial.player.battle.end===null:
+      world.end===null && !world.finished && (!!world.lesson || !world.hasSecondPlayer));
+    if(!one){soloSeat=soloWorld=null;return;}
+    if(soloWorld!==world){soloWorld=world;soloSeat=new controls.SoloSeat();}
+    soloSeat.track(pads,!paused && !dialogType && !document.hidden);
+    if(!soloSeat.lost || (dialogType && dialogType!=='solo-pad-loss'))return;
+    if(dialogType!=='solo-pad-loss'){
+      const touch=matchMedia('(pointer:coarse)').matches;
+      showDialog('solo-pad-loss','Controller disconnected','<p>Your game is paused.</p><p id="solo-pad-info" role="status"></p>'+
+        '<div class="dialog-actions"><button id="solo-pad-backup" class="primary">Resume with '+(touch?'touch':'keyboard')+'</button></div>',false);
+      $('solo-pad-backup').onclick=()=>{
+        soloSeat.useOtherInput(getPads());schoolDevice=touch?2:0;
+        dismiss();announce('Game resumed.');
+      };
+      $('solo-pad-backup').focus({preventScroll:true});
+    }
+    const info=$('solo-pad-info');
+    const message=pads.length?'Center the sticks and release all buttons, then choose a controller. '+pads.map(p=>'Pad '+(p.index+1)+' · Press '+padNames(0,p)[0]).join(' / '):
+      'Reconnect your controller or connect another one to take over.';
+    if(info.textContent!==message)info.textContent=message;
+  }
   function checkLocalPads(pads) {
     const seats=matchConfig?.couchSeats;
     if(!seats || world.end!==null || online.match || finishTrial || clipScreen || victoryShot)return;
@@ -6142,7 +6172,12 @@
       const names=padNames(edit.slot,seatPad(edit.slot,pads));
       if(names!==edit.legend){drawLayouts();}else if(edit.mode==='test')showTestInputs(pads);
     }
+    if(!dialogType && pads.length>1 && soloSeat?.index!=null && !soloSeat.lost){
+      const owner=soloSeat.get(pads);
+      if(owner)pads=[owner];
+    }
     if (!pads.length) {
+      if(dialogType==='solo-pad-loss')soloSeat?.confirm(pads);
       if (oldPad!==idlePad) { oldPad=idlePad; menuPadButtons.clear();menuRepeat.poll('','',time); }
       return;
     }
@@ -6176,6 +6211,15 @@
     };
     const move=menuRepeat.poll(direction,menuOpen && !document.hidden ? dialogType || page : '',time);
     const back=now.back && !oldPad.back, confirm=now.confirm && !oldPad.confirm;
+    if(dialogType==='solo-pad-loss'){
+      oldPad=now;
+      const pad=soloSeat?.confirm(pads);
+      if(pad){
+        menuPadButtons.set(pad.index,1);schoolDevice=1;
+        dismiss();announce('Pad '+(pad.index+1)+' connected. Game resumed.');
+      }
+      return;
+    }
     if(menuOpen && (move || back || confirm || now.pause && !oldPad.pause)){
       document.body.classList.add('pad-navigation');
       const pad=pads.find(p=>p.index===padIndex || down(p,0) || down(p,1) || down(p,9)) || pads[0];
@@ -6270,8 +6314,10 @@
     const pads=getPads();
     if(pads.length && !currentPads.length)loadDispatch('PadFeedback').catch(()=>{});
     currentPads=pads;refreshRumble?.();
+    checkSoloPad(pads);
     if(page==='match' && world?.mode==='local')checkLocalPads(pads);
     padMenu(pads,now);
+    if(soloSeat?.lost && !dialogType)checkSoloPad(pads);
     if(page==='match' && world?.mode==='local' && matchConfig?.couchSeats?.lost && !dialogType)checkLocalPads(pads);
     if(movePreview && !document.hidden)movePreview.tick(dt);
     if((dialogType==='couch' || dialogType==='stage-strike') && !document.hidden)couchPanel?.poll(pads,now);
