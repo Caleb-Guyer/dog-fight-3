@@ -2,6 +2,47 @@ const test=require('node:test'),assert=require('node:assert/strict');
 global.window={};global.document={currentScript:{src:'https://example.test/finish-tools.js'}};
 require('../docs/engine.js');require('../docs/finish-tools.js');
 const {Battle,FinishTape,idleInput,seededRandom}=window.DogFight;
+test('stage-impact previews reproduce both wall hits, a wall-tech jump and a ceiling brace from actual kicks',()=>{
+  const tools=window.FinishTools;
+  for(const surface of ['wall','ceiling']){
+    const {tape,battle}=tools.stageTechDemo(surface),original=JSON.stringify(battle.dogs);
+    const impacts=tools.analyze(tape).landings;
+    assert.deepEqual(impacts.map(m=>[m.frame,m.surface,m.type]),surface==='wall'?
+      [[15,'wall','wallBounce'],[36,'wall','wallBounce']]:[[15,'ceiling','ceilingBounce']]);
+    for(const impact of impacts){
+      const preview=tools.landingPreview(tape,impact,0,0);
+      assert.equal(preview.result.type,surface+'Tech');assert.equal(preview.result.frame,impact.frame);
+      assert.equal(preview.result.press,impact.frame);
+      assert.equal(preview.battle.dogs[0].jumps,1);
+      if(surface==='wall')assert.equal(tools.landingPreview(tape,impact,0,0,true).result.type,'wallTechJump');
+    }
+    assert.equal(JSON.stringify(battle.dogs),original);
+    assert.deepEqual(tools.analyze(tape).landings,impacts);
+  }
+});
+test('a 185 percent wall hit still bounces on a timely shield until launch influence reduces the impact',()=>{
+  const tools=window.FinishTools,{tape}=tools.stageTechDemo('heavy'),[mark]=tools.analyze(tape).landings;
+  assert(mark.hard);assert.equal(mark.press,null);
+  const braced=tools.landingPreview(tape,mark,5,0,false,false),jumped=tools.landingPreview(tape,mark,5,0,true,true);
+  assert.equal(braced.result.hard,true);assert.equal(braced.result.type,'wallBounce');assert.equal(braced.result.press,10);
+  assert.equal(jumped.result.hard,false);assert.equal(jumped.result.type,'wallTechJump');assert.equal(jumped.result.press,10);
+  assert.match(tools.landingName(braced.result.type,0,true),/too fast/);
+});
+test('a recorded second player can retry a locked ceiling impact without changing the recorded opponent',()=>{
+  const tools=window.FinishTools,w=new Battle({mode:'local',stage:'picnic',p1:'pip',p2:'noodle',fetch:false},undefined,seededRandom(48));
+  const tape=new FinishTape(),f=w.dogs[1];
+  Object.assign(f,{x:600,y:485+f.stats.height+22,ground:-1,vy:-680,vx:0,stun:.35,jumps:1,techLock:20/60});
+  w.startTumble(f,false);
+  for(let i=0;i<35;i++){
+    const b={...idleInput,shield:i===0},a={...idleInput,x:-.6};
+    tape.record(w,a,b);w.step(1/60,a,b);
+  }
+  const [impact]=tools.analyze(tape,1).landings;
+  assert.equal(impact.slot,1);assert.equal(impact.type,'ceilingBounce');assert(impact.locked);
+  const p=tools.landingPreview(tape,impact,0,0);
+  assert.equal(p.result.type,'ceilingBounce');assert(p.result.locked);
+  assert.equal(p.battle.dogs[0].x,tape.playback(p.frame).battle.dogs[0].x);
+});
 test('the clinic compares real missed, in-place, rolling and air-dodge landings after the same Brisket throw',()=>{
   const tools=window.FinishTools,{tape,battle}=tools.landingDemo(),before=battle.dogs.map(d=>[d.x,d.y,d.damage,d.stocks]);
   const [fall]=tools.analyze(tape).landings;

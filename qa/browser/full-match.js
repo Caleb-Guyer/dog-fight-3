@@ -137,6 +137,47 @@ async function match(browser,device){
     await choose('[data-do=trial-results]');
     assert.equal(await page.locator('#dialog-title').textContent(),'Fight School');
     console.log(device+' passed guided and match-speed landing comparison from a recorded throw.');
+    await choose('#dialog-body button:text-is("Stage tech clinic")');
+    await panel.locator('[data-after]').waitFor({state:'visible'});
+    assert.match(await panel.locator('[data-before]').textContent(),/Noodle · Bounced off the wall/);
+    assert.match(await panel.locator('[data-after]').textContent(),/Braced against the wall on frame 15/);
+    assert.equal(await panel.locator('[data-fall] option').count(),2);
+    await choose('#clip-stage-damage');await panel.locator('[data-up]').waitFor();
+    assert.match(await panel.locator('[data-after]').textContent(),/too fast to tech/);
+    await choose('#clip-landings [data-up]');
+    assert.match(await panel.locator('[data-after]').textContent(),/Braced against the wall/);
+    if(!touch){
+      await choose('#clip-landings [data-wall-jump]');
+      assert.match(await panel.locator('[data-after]').textContent(),/Wall-tech jump/);
+      await choose('[data-guided]');await page.clock.runFor(1400);
+      assert.equal(await page.locator('#countdown').textContent(),'Hold Up');
+      if(pad)await page.evaluate(()=>{pad.axes[1]=-1;});else await page.keyboard.down('w');
+      await page.clock.runFor(250);
+      assert.equal(await page.locator('#countdown').textContent(),'Jump + Shield');
+      if(pad)await page.evaluate(()=>{for(const i of [0,4])Object.assign(pad.buttons[i],{pressed:true,value:1});});
+      else {await page.keyboard.down('Space');await page.keyboard.down('l');}
+      await page.clock.runFor(700);
+      if(pad)await page.evaluate(()=>{pad.axes[1]=0;for(const i of [0,4])Object.assign(pad.buttons[i],{pressed:false,value:0});});
+      else {await page.keyboard.up('l');await page.keyboard.up('Space');await page.keyboard.up('w');}
+      await page.clock.runFor(48);
+      assert.equal(await page.locator('#dialog-title').textContent(),'Wall-tech jump',device);
+      await choose('[data-do=trial-replay]');await panel.locator('[data-up]').waitFor();await page.clock.runFor(100);
+      assert.equal(await panel.locator('[data-wall-jump]').isChecked(),true);
+      assert.equal(await panel.locator('[data-up]').isChecked(),true);
+    }
+    await choose('#clip-stage-other');await panel.locator('[data-after]').waitFor();
+    assert.match(await panel.locator('[data-before]').textContent(),/Bounced off the ceiling/);
+    assert.equal(await panel.locator('[data-wall-jump]').isVisible(),false);
+    await choose('[data-guided]');await page.clock.runFor(1400);
+    assert.equal(await page.locator('#countdown').textContent(),'Tap Shield');
+    if(touch)await page.locator('[data-touch=shield]').tap();
+    else if(pad)await page.evaluate(()=>Object.assign(pad.buttons[4],{pressed:true,value:1}));
+    else await page.keyboard.press('l');
+    await page.clock.runFor(700);
+    if(pad)await page.evaluate(()=>Object.assign(pad.buttons[4],{pressed:false,value:0}));
+    assert.equal(await page.locator('#dialog-title').textContent(),'Braced against the ceiling',device);
+    await choose('[data-do=trial-results]');
+    assert.equal(await page.locator('#dialog-title').textContent(),'Fight School');
     await page.goto(root+'?defense#records');await page.locator('#record-example').waitFor();
     const recordCount=await page.locator('[data-record-id]').count();
     if(device==='keyboard'){await page.goto(root+'?direct#records/study');await page.waitForLoadState('networkidle');}
