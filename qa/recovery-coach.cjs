@@ -128,6 +128,44 @@ function firstMatchFilm(){
   assert.equal(battle.end,1);
   return {battle,tape,left,film:new window.MatchReview.MatchFilm(tape.fullMatch())};
 }
+test('a stock retry keeps its last four seconds frame-accurate and can restart from the original position under review',()=>{
+  const {film,left}=firstMatchFilm(),fall=film.data.falls[1],retry=new window.MatchReview.StockRetry(film,fall);
+  const state=b=>[b.random.state,b.matchFrames,b.dogs.map(f=>[f.x,f.y,f.vx,f.vy,f.damage,f.stocks]),b.matchCard.losses.length];
+  const full=retry.attempt();
+  while(!full.outcome)full.step(left);
+  assert.equal(full.outcome,'lost');assert.equal(full.take.length,240);
+  for(const n of [0,1,89,239,240]){
+    const original=film.playback(full.frame-full.take.length+n);
+    assert.deepEqual(state(full.take.playback(n).battle),state(original.battle));
+  }
+  const from=retry.end-30,p=retry.attempt(undefined,from),original=film.playback(from);
+  assert.deepEqual(state(p.battle),state(original.battle));
+  assert.equal(p.openingDamage,original.battle.matchCard.players[0].damage);
+  while(!p.outcome)p.step(idleInput);
+  assert.deepEqual(state(p.take.playback(p.take.length).battle),state(p.battle));
+  assert.equal(p.take.inputAt(0,0).x,0);assert.equal(film.inputAt(from,0).x,-1);
+  assert.match(retry.comparison(p).html,/0\.5 s/);
+  assert.deepEqual(state(film.playback(from).battle),state(original.battle));
+});
+test('a marked clip records the genuine opponent input and both live seats when playing together',()=>{
+  const battle=new Battle({mode:'local',p1:'pip',p2:'noodle',stage:'nightmail',fetch:false},undefined,seededRandom(31));
+  const tape=new FinishTape();
+  for(let n=0;n<400 && !battle.matchCard.losses.length;n++){
+    const pair=[{...idleInput,y:-.7,shield:true},{...idleInput,x:1}];
+    tape.record(battle,...pair);battle.step(1/60,...pair);
+  }
+  assert.equal(battle.matchCard.losses[0].slot,1);
+  const original=tape.playback(tape.length).battle;
+  const retry=new window.MatchReview.StockRetry(tape,null,1,{frame:0});
+  for(const together of [false,true]){
+    const from=3,trial=retry.attempt(undefined,from);
+    for(let n=0;n<9;n++)trial.step({...idleInput,x:-1},together?{...idleInput,x:.5,attack:n===0}:undefined);
+    const pad=trial.take.inputAt(0,0);assert.equal(trial.take.inputAt(0,1).x,-1);
+    if(together){assert.equal(pad.x,.5);assert(pad.attack);}else{assert.equal(pad.y,-.7);assert(pad.shield);}
+    assert.deepEqual(trial.take.playback(9).battle.dogs,trial.battle.dogs);
+  }
+  assert.deepEqual(tape.playback(tape.length).battle.dogs,original.dogs);
+});
 test('whole-stock retries reproduce three real losses, including a stock longer than the KO clip',()=>{
   const {battle,tape,left,film}=firstMatchFilm(),last=structuredClone(battle.matchCard);
   const falls=film.data.falls.filter(f=>f.slots.includes(0));assert.equal(falls.length,3);
