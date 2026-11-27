@@ -644,5 +644,42 @@
     (pending || testing ? $('layout-back') : row || $('layout-slot')).focus({preventScroll:true});
     return chooseBinding;
   }
-  window.VersusRulebook={OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
+  function cupPoster(canvas,id,stage,coat){
+    const terrain=window.DogFight.platforms(stage,0),deck=terrain.find(p=>!p.thin);
+    const x=Math.round((deck.x1+deck.x2)/2),y=deck.y,left=x-canvas.width/2,top=y-canvas.height+24;
+    const ctx=canvas.getContext('2d');ctx.save();ctx.translate(-left,-top);
+    window.ArenaArt.draw(ctx,stage,0,{left,top,right:left+canvas.width,bottom:top+canvas.height},'original',terrain);
+    window.DogArt.draw(ctx,id,x,y,{pose:'idle',face:1,scale:1.9,time:.35,coat});ctx.restore();
+  }
+  function cupSelect(root,{kind,entry,course,route,stops,records,offer,tip,storageNote,coatFor,select,back,start,relay}){
+    const {fighters}=window.DogFight,run=entry.active,round=run?.wins.length || 0;
+    const next=course.bouts[round]?.[0],stop=next?fighters[next].name:'Copper Hound';
+    const title=run?(run.started?'Retry round ':'Continue to round ')+(round+1):'Start '+fighters[kind].name+'’s run';
+    const button=(key,name,primary=false)=>'<button type="button" class="'+(primary?'primary':'utility')+'" data-do="'+key+'">'+name+'</button>';
+    const controls=button('cup-start',title,true);
+    const cards=Object.entries(fighters).map(([id,f])=>'<button type="button" class="cup-poster" data-cup-dog="'+id+'" aria-pressed="'+(id===kind)+'" style="--dog-color:'+f.color+'">'+
+      '<canvas width="300" height="224" aria-hidden="true"></canvas><span><strong>'+f.name+'</strong><small>'+f.style+'</small></span></button>').join('');
+    root.dataset.view=route?'route':'roster';
+    root.innerHTML='<div class="cup-select-inner"><header class="cup-select-head"><div><span>Arcade Cup</span><h1>'+
+      (route?course.name:'Fighter select')+'</h1></div><button id="cup-back" class="utility">'+(route?'Fighter select':'Main menu')+'</button></header>'+
+      (route?'<div class="cup-route-board"><ol class="cup-stops">'+stops+'</ol><p>'+tip+'</p>'+records+'</div>':
+      '<div class="cup-posters" role="group" aria-label="Choose your fighter">'+cards+'</div>')+
+      '<footer class="cup-ticket"><div>'+(route?'<strong>'+fighters[kind].name+'</strong>':'<strong>'+course.name+'</strong>')+
+      '<p>Round '+(round+1)+' of 4 · '+stop+'</p></div><div class="cup-ticket-actions">'+
+      (route?offer || button('cup-exhibition','Relay exhibition'):button('cup-sheet','Route card'))+controls+'</div></footer>'+storageNote+'</div>';
+    root.querySelector('#cup-back').onclick=route?()=>select(kind,false):back;
+    root.querySelector('[data-do=cup-start]').onclick=e=>start(e.currentTarget);
+    const routeButton=root.querySelector('[data-do=cup-sheet]');
+    if(routeButton)routeButton.onclick=()=>select(kind,true);
+    const detour=root.querySelector('[data-do=cup-relay],[data-do=cup-exhibition]');
+    if(detour)detour.onclick=()=>relay(detour.dataset.do==='cup-exhibition');
+    const art={pip:'picnic',brisket:'nightmail',noodle:'laundry',clover:'canal'};
+    for(const b of root.querySelectorAll('[data-cup-dog]')){
+      const id=b.dataset.cupDog;
+      cupPoster(b.querySelector('canvas'),id,art[id],coatFor(id));
+      b.onclick=()=>{if(id===kind)root.querySelector('[data-do=cup-start]').focus();else select(id,false);};
+    }
+    root.querySelector(route?'[data-do=cup-start]':'[aria-pressed="true"]').focus({preventScroll:true});
+  }
+  window.VersusRulebook={cupSelect,OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
 })();

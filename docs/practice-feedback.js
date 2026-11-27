@@ -1416,5 +1416,127 @@
       d.heavy ? 'Noodle starts at 185%. First tap Shield with no direction. Retry with Up + Shield when Pip’s heel hits.' :
       'You’re Noodle at 90%. Tap Shield when Pip’s Back Heel hits. Hold Jump at the wall to kick away.';
   }
-  window.PracticeFeedback={wallPanel,platformPanel,climbPanel,footworkPanel,edgePanel,shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
+  function airPanel(world,pattern,practiceSide) {
+    let message;
+    const edge = pattern === 'edge', last = pattern === 'lastDodge', wide = world.airPractice.wide;
+    const interrupted = pattern === 'interrupted', high = pattern === 'highReturn';
+    $('air-status').dataset.result = 'ready';
+    $('air-status').textContent = edge
+      ? practiceSide === 'left'
+        ? 'Left ledge'
+        : 'Right ledge'
+      : 'Jump to begin';
+    if (last) $('air-status').textContent = (wide ? 'Wide' : 'Low') + ' · ' + practiceSide + ' ledge';
+    if (interrupted || high) $('air-status').textContent = world.dogs[0].stats.name + ' · ' + practiceSide + ' ledge';
+    $('air-neutral').setAttribute('aria-pressed', String(pattern === 'neutral'));
+    $('air-edge').setAttribute('aria-pressed', String(edge));
+    $('air-lastDodge').setAttribute('aria-pressed', String(last));
+    $('air-interrupted').setAttribute('aria-pressed', String(interrupted));
+    $('air-highReturn').setAttribute('aria-pressed', String(high));
+    $('air-side').hidden = !edge && !last && !interrupted && !high;
+    $('air-dog-label').hidden = $('air-speed').hidden = $('air-return-fight').hidden = !interrupted && !high;
+    $('air-dog').value = world.dogs[0].kind;
+    $('air-speed').setAttribute('aria-pressed',String(!!world.airPractice.slow));
+    $('air-distance').hidden = !last;
+    $('air-fight').hidden = !last && !interrupted;
+    $('air-fight').textContent = interrupted ? 'Edgeguard as Noodle · 3 stocks' : 'Guard against Rival · 3 stocks';
+    $('air-return-fight').textContent = 'Recover as ' + world.dogs[0].stats.name + ' · 3 stocks';
+    $('air-distance').textContent = wide ? 'Start low' : 'Start wide';
+    message = high ? 'Tap Attack to start drifting back. Watch '+world.dogs[1].stats.name+' jump off the edge. Change height or air dodge, then get back onstage.' :
+      interrupted ? 'Aim up and ' + (practiceSide === 'left' ? 'right' : 'left') +
+      ' and tap Special. Release it as Noodle swings. At “Cast again now,” use Up + Special a second time and steer in.' :
+      last ? 'Your jump and Up Special are spent. Aim ' + (wide ? '' : 'up and ') +
+      (practiceSide === 'left' ? 'right' : 'left') + ' and tap Shield to catch the ledge.' : edge
+      ? 'Aim up and ' +
+        (practiceSide === 'left' ? 'right' : 'left') +
+        ', then tap Shield to slip past the guard and catch the lip.'
+      : 'Jump. As you fall toward the dummy, release the directions and tap Shield before its up tilt connects.';
+    return message;
+  }
+  function trumpPanel(world,pattern,practiceSide) {
+    let message;
+    const defend = pattern === 'defend';
+    for (const role of ['take','defend','runoff','escape'])
+      $('trump-'+role).setAttribute('aria-pressed',String(pattern===role));
+    const runoff=world.trumpPractice.guardSlot!==undefined;
+    $('trump-speed').hidden=$('trump-fight').hidden=!runoff;
+    $('trump-speed').setAttribute('aria-pressed',String(!!world.trumpPractice.slow));
+    $('trump-status').dataset.result = 'ready';
+    $('trump-status').textContent = (practiceSide === 'left' ? 'Left' : 'Right') + ' ledge';
+    message = runoff ? (pattern==='escape'?'Tap Attack to start. You have the ledge. Roll or jump before Rival grabs it.' :
+      'Tap Attack to start. Dash '+practiceSide+' off the stage. Guided practice pauses for the turn, the drop jump and the back air.') : defend
+      ? 'The rival is coming. Wait to feel the bump, or tap Shield to roll before they catch the lip.'
+      : 'The rival has the ledge. Drift ' +
+        (practiceSide === 'left' ? 'right' : 'left') +
+        ' or use your recovery to take it.';
+    return message;
+  }
+  function rollPanel(world,pattern,practiceSide,practiceFight) {
+    let message;
+    const read = pattern === 'read', scout=pattern==='scout';
+    $('roll-status').dataset.result = 'ready';
+    $('roll-status').textContent = scout?'Tap Attack · '+(world.rollPractice.rollHabit?.count || 0)+'/2 rolls':practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
+    $('roll-guard').setAttribute('aria-pressed', String(!read && !scout));
+    $('roll-read').setAttribute('aria-pressed', String(read));
+    $('roll-scout').setAttribute('aria-pressed',String(scout));
+    $('roll-scout').textContent=scout?'Next catch':'Teach the guard';
+    $('roll-fight').hidden=!scout || world.rollPractice.rollHabit?.count!==2 || !!practiceFight;
+    message = scout?'Tap Attack to cue the guard. Tap Shield to roll, then choose Next catch. After two rolls, try jumping or waiting out the grab.':read
+      ? 'The guard is waiting where your roll ends. Tap Shield to test the read, or jump from the ledge.'
+      : 'Tap Shield to roll through the guard’s swing. As your dog turns back, tap Attack.';
+    return message;
+  }
+  function spacingPanel(world,pattern,player,keyFor,padFor,settings,flickJumpTip) {
+    let message;
+    const practice = world.spacingPractice, approach = pattern === 'approach';
+    const run = practice.dir > 0 ? 'right' : 'left', back = practice.dir > 0 ? 'left' : 'right';
+    const key = keyFor(0,practice.dir > 0 ? 'aimLeft' : 'aimRight');
+    $('spacing-approach').setAttribute('aria-pressed', String(approach));
+    $('spacing-retreat').setAttribute('aria-pressed', String(pattern === 'retreat'));
+    $('spacing-landing').setAttribute('aria-pressed', String(pattern === 'landing'));
+    $('spacing-airPower').setAttribute('aria-pressed', String(pattern === 'airPower'));
+    $('spacing-fastfall').setAttribute('aria-pressed', String(pattern === 'fastfall'));
+    $('spacing-apex-pause').hidden = pattern !== 'fastfall';
+    $('spacing-apex-pause').setAttribute('aria-pressed', String(!!practice.pauseAtApex));
+    $('spacing-sweet').setAttribute('aria-pressed', String(isSweetPractice(practice)));
+    $('spacing-aligned').hidden = !isSweetPractice(practice);
+    $('spacing-aligned').setAttribute('aria-pressed', String(pattern === 'sweetAligned'));
+    $('spacing-flick').hidden = pattern !== 'landing';
+    $('spacing-flick').setAttribute('aria-pressed', String(practice.flickJump ?? settings.flickJump1));
+    $('spacing-cancel').setAttribute('aria-pressed', String(pattern === 'cancel'));
+    for (const id of ['footstool','footstoolTech']) $('spacing-' + id).setAttribute('aria-pressed', String(pattern === id));
+    $('spacing-reverse').setAttribute('aria-pressed', String(pattern === 'reverse'));
+    $('spacing-wavebounce').setAttribute('aria-pressed', String(pattern === 'wavebounce'));
+    $('spacing-guard').hidden = pattern !== 'wavebounce';
+    $('spacing-guard').setAttribute('aria-pressed', String(!!practice.guard));
+    $('spacing-slow').setAttribute('aria-pressed', String(practice.slow));
+    $('spacing-status').dataset.result = 'ready';
+    $('spacing-status').textContent = isFootstoolPractice(practice) ? (pattern === 'footstool' ? 'Footstool rescue' : 'Tech a footstool') :
+      pattern === 'cancel' ? 'Down + Attack' : isReversalPractice(practice) ? (pattern === 'reverse' ? 'Rival behind' : 'Rival ahead') :
+      pattern === 'landing' ? 'Hop or Jump · hold ' + run : approach ? 'Jump past the shield' : 'Jump away from the shield';
+    message = isFootstoolPractice(practice) ? (pattern === 'footstool' ?
+      'Your jumps are spent. Tap Attack to fall, then press Jump at the mint marks over the rival’s head. Hold Jump and steer ' + run + ' to the ledge.' :
+      'Tap Attack to start. The rival will jump off your head. Tap Shield before you hit the floor to tech, or add a direction for a tech roll.') :
+      pattern === 'cancel' ? 'Press Down + Attack. Try holding Shield only after touchdown. On the retry, start holding it as the chalk turns mint.' :
+      isReversalPractice(practice) ? reversalTip(world, practice) : pattern === 'landing' ? 'Hold Hop ('+keyFor(0,'hop')+', '+padFor(0,'hop')+', or Hop on touch) and move ' + run + '. Attack at the gold fork for a late hit or the green stripe for a clean hit. Center and jab on landing. Retry with Jump to compare heights.' : 'Running ' + run + '. ' + (approach
+      ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
+      : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
+    if (pattern === 'landing' && (practice.flickJump ?? settings.flickJump1)) message = flickJumpTip;
+    if (pattern === 'airPower') {
+      $('spacing-status').textContent = 'Hold Hop or Jump';
+      message = 'Hold Hop for a short hop or hold Jump for a full jump. Keep the stick centered. Tap Attack as your paws come down to the chalk beside the rival’s ears.';
+    }
+    if (pattern === 'fastfall') {
+      $('spacing-status').textContent = moves[player.kit.air.neutral].label + ' · tap Attack';
+      message = 'You’re rising into Pip’s shield. Tap Attack with no direction. At the apex, hold Shield for an ordinary fall or tap Down and hold Shield to land sooner.';
+    }
+    if (isSweetPractice(practice)) {
+      const move = moves[practice.moveId], aim = practice.side === 'up' ? 'Up' : run;
+      $('spacing-status').textContent = move.label + ' · ' + aim + ' + Attack';
+      message = 'Aim ' + aim + ' and tap Attack. The gold box marks ' + move.sweetSpot.label.toLowerCase() +
+        '. Catch the rival’s mint center in it for the sweet spot.';
+    }
+    return message;
+  }
+  window.PracticeFeedback={airPanel,trumpPanel,rollPanel,spacingPanel,wallPanel,platformPanel,climbPanel,footworkPanel,edgePanel,shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
 })();
