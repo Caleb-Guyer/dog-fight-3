@@ -3611,7 +3611,22 @@
     pixelLine(ctx,29,68,34,65,cream,1,1);pixelLine(ctx,34,65,36,62,cream,1,1);
     if(cel%16<4){rect(39,59,1,5,cream);rect(37,61,5,1,cream);}
   }
+  function hitMeter(card,battle,f,motion){
+    const hits=battle.matchCard.players[1-f.index].hits, round=battle.suddenDeath?.round;
+    if(card.battle!==battle || card.life!==f.stocks || card.round!==round || !motion){
+      card.impact?.cancel();
+    }else if(hits>card.hits && f.damage>card.damage){
+      const weight=Math.min(1,(f.damage-card.damage)/20);
+      card.impact?.cancel();
+      card.impact=card.percent.animate([
+        {transform:'translateY(-'+Math.round(2+weight*4)+'px) scale('+(1.08+weight*.12)+')'},
+        {transform:'none'}
+      ],{duration:130+weight*75,easing:'ease-out'});
+    }
+    card.battle=battle;card.hits=hits;card.life=f.stocks;card.round=round;
+  }
   window.DogFightView = {
+    hitMeter,
     drawPodium,
     FightView,
     drawPreview,

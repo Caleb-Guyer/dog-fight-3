@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict');
-global.window={};require('../docs/engine.js');require('../docs/stock-call.js');
+global.window={matchMedia:()=>({matches:false})};require('../docs/engine.js');require('../docs/render.js');require('../docs/stock-call.js');
 const {Battle,idleInput,seededRandom,FinishTape}=window.DogFight;
 const create=(cfg={},emit)=>new Battle({mode:'local',stage:'picnic',p1:'pip',p2:'brisket',minutes:7,fetch:false,...cfg},emit,seededRandom(31));
 const tick=w=>w.step(1/60,idleInput,idleInput);
@@ -64,7 +64,7 @@ test('damage feedback fires once per confirmed increase, and resets at a new sto
   }}};
   const w=create(), speculative=create();
   const show=(battle,motion=true)=>{
-    const f=battle.dogs[1];window.StockCall.hitMeter(card,battle,f,motion);card.damage=f.damage;
+    const f=battle.dogs[1];window.DogFightView.hitMeter(card,battle,f,motion);card.damage=f.damage;
   };
   show(w);speculative.dealDamage(speculative.dogs[1],12,false,'pipJab');show(w);
   assert.equal(animations.length,0);

@@ -180,7 +180,12 @@ async function run(browser,phone){
     await page.goto('http://127.0.0.1:8080/?finish#solo/last-stock');
     await page.waitForFunction(()=>!!window.StockCall,null,{polling:50});
     await page.evaluate(()=>{
-      window.impacts=[];window.tallies=[];window.finishPhases=[];
+      window.impacts=[];window.meterUpdates=[];window.tallies=[];window.finishPhases=[];
+      const meter=DogFightView.hitMeter;
+      DogFightView.hitMeter=function(card,battle,f,motion){
+        if(f.damage!==card.damage)meterUpdates.push([f.index,f.damage,card.damage,card.hits,battle.matchCard.players[1-f.index].hits,motion]);
+        return meter.apply(this,arguments);
+      };
       const animate=Element.prototype.animate,draw=StockCall.draw,frame=DogFightView.FightView.prototype.draw;
       Element.prototype.animate=function(...args){
         if(this.classList.contains('percentage'))impacts.push(this.closest('.hud-card').querySelector('.hud-name').textContent);
@@ -199,7 +204,7 @@ async function run(browser,phone){
     assert.equal(await page.locator('#countdown').textContent(),'Game!');
     await page.clock.runFor(240);
     assert.equal(await page.locator('#dialog').isVisible(),false);
-    assert.deepEqual(await page.evaluate(()=>impacts),phone?[]:['P1Pip']);
+    assert.deepEqual(await page.evaluate(()=>impacts),phone?[]:['P1Pip'],JSON.stringify(await page.evaluate(()=>meterUpdates)));
     assert.deepEqual(await page.evaluate(()=>[...new Set(tallies)]),[false]);
     await page.screenshot({path:'stock-calls-finish-'+(phone?'phone':'desktop')+'.png'});
     await page.clock.runFor(800);

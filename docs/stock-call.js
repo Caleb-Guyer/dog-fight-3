@@ -2,20 +2,6 @@
   'use strict';
   const {clamp,fighters}=window.DogFight;
   const teams=['#ef926e','#98d0d1'],ink='#252337',paper='#fff1c7',gold='#f4c76a';
-  function hitMeter(card,battle,f,motion){
-    const hits=battle.matchCard.players[1-f.index].hits, round=battle.suddenDeath?.round;
-    if(card.battle!==battle || card.life!==f.stocks || card.round!==round || !motion){
-      card.impact?.cancel();
-    }else if(hits>card.hits && f.damage>card.damage){
-      const weight=Math.min(1,(f.damage-card.damage)/20);
-      card.impact?.cancel();
-      card.impact=card.percent.animate([
-        {transform:'translateY(-'+Math.round(2+weight*4)+'px) scale('+(1.08+weight*.12)+')'},
-        {transform:'none'}
-      ],{duration:130+weight*75,easing:'ease-out'});
-    }
-    card.battle=battle;card.hits=hits;card.life=f.stocks;card.round=round;
-  }
   function standing(call,solo){
     const [a,b]=call.score, leader=a>b?'P1':solo?'CPU':'P2';
     if(!call.points){
@@ -134,5 +120,5 @@
     }
     ctx.restore();
   }
-  window.StockCall={draw,drawClock,describe,hitMeter};
+  window.StockCall={draw,drawClock,describe};
 })();

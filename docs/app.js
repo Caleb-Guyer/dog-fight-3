@@ -1375,7 +1375,7 @@
       card=hudCards[slot]={root,picture,kind:f.kind,coat,label,training,scored,team,sudden,total,lives:root.querySelector('.lives'),
         percent:root.querySelector('.percentage'),alert:'',recovery:null,rage:0};
     }
-    if(battle.matchCard)window.StockCall?.hitMeter(card,battle,f,!reducedReplays.matches && settings.shake);
+    if(battle.matchCard)window.DogFightView.hitMeter(card,battle,f,!reducedReplays.matches && settings.shake);
     if(card.damage!==f.damage){
       card.damage=f.damage;
       showPercent(card.percent,f.damage);
