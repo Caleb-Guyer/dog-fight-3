@@ -2359,7 +2359,9 @@
       'Paused',
       '<div class="dialog-actions"><button class="primary" data-do="resume">' +
         icon('play') +
-        'Resume</button><button class="utility" data-do="controls">' +
+        'Resume</button>' + (world.mode==='local' && !countdown && !world.suddenDeath?.intro ?
+          '<button class="utility" data-do="resume-countdown">Resume with countdown</button>' : '') +
+        '<button class="utility" data-do="controls">' +
         icon('keyboard') +
         'Controls</button>'+(world.mode==='local' && matchConfig.couchSeats?'<button class="utility" data-do="couch-pads">Assign controllers</button>':'')+
         '<button class="utility" data-do="moves">Move list</button>' + screenAction() + cameraButton() + '</div>' +
@@ -3351,6 +3353,7 @@
       document.querySelector('[data-do="' + action + '"]').focus();
     }
     if (action === 'resume' || action === 'close') exitDialog();
+    if (action === 'resume-countdown') resumeLocalCountdown();
     if (action === 'lobby') toLobby();
     const pick=e.target.closest('[data-ledge-guard],[data-returner]');
     if(pick) {
@@ -6194,6 +6197,20 @@
       }});
   }
   const padLossDirection=new Map();
+  function resumeLocalCountdown() {
+    for(const pad of getPads()){
+      const pressed=pad.buttons.slice(0,8).reduce((mask,b,i)=>b.pressed?mask|(1<<i):mask,0);
+      if(pressed)menuPadButtons.set(pad.index,pressed);
+    }
+    dismiss();
+    if(world.suddenDeath?.intro>0)return;
+    view.entrance=null;
+    countdown=2.4;
+    lastCount=0;
+    view.resumeGoUntil=world.matchFrames+22;
+    $('countdown').textContent='3';
+    announce('Resuming in three.');
+  }
   function checkLocalPads(pads) {
     const seats=matchConfig?.couchSeats;
     if(!seats || world.end!==null || online.match || finishTrial || clipScreen || victoryShot)return;
@@ -6205,11 +6222,7 @@
       showDialog('pad-loss','Controller disconnected','<p id="pad-loss-info" role="status"></p><div id="pad-loss-seats"></div><div class="dialog-actions"><button id="pad-resume" class="primary"></button><button class="utility" data-do="couch-pads">Assign controllers</button></div>',false);
       $('pad-resume').onclick=()=>{
         seats.lost=0;
-        for(const pad of getPads()){
-          const held=pad.buttons.slice(0,8).reduce((mask,b,i)=>b.pressed?mask|(1<<i):mask,0);
-          if(held)menuPadButtons.set(pad.index,held);
-        }
-        dismiss();view.entrance=null;countdown=2.4;lastCount=0;
+        resumeLocalCountdown();
       };
       $('pad-resume').focus({preventScroll:true});
     }else if(before===seats.present && lost===seats.lost && version===seats.version)return;
@@ -6353,7 +6366,9 @@
     if (w.lesson) return '';
     if (w.endReason === 'time') return 'Time!';
     if (w.end!==null) return '';
-    if (w.suddenDeath) return w.suddenDeath.intro > 0 ? 'Sudden Death' : w.suddenDeath.frames-(w.suddenDeath.startFrame || 0) < 22 ? 'GO!' : '';
+    if (w.suddenDeath?.intro > 0) return 'Sudden Death';
+    if (w.matchFrames < (view.resumeGoUntil ?? 0)) return 'GO!';
+    if (w.suddenDeath) return w.suddenDeath.frames-(w.suddenDeath.startFrame || 0) < 22 ? 'GO!' : '';
     return w.time < 0.37 && w.mode !== 'training' ? 'GO!' : '';
   }
   function runOnline(dt, pads) {
