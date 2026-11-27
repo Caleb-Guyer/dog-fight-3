@@ -17,7 +17,7 @@ async function play(browser, device) {
       Object.defineProperty(navigator, 'getGamepads', {value:() => [controller]});
       window.attackButton = on => Object.assign(controller.buttons[2], {pressed:on,value:Number(on)});
       window.confirmButton = on => Object.assign(controller.buttons[0], {pressed:on,value:Number(on)});
-      window.steer = x => { controller.axes[0]=x; };
+      window.steer = (x,y=0) => { controller.axes[0]=x;controller.axes[1]=y; };
     }, pad);
     await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
@@ -167,6 +167,57 @@ async function play(browser, device) {
       await press('[data-do=clip-back]');
       assert.equal(await page.locator('#dialog-title').textContent(),'First fight finished');
     }
+    await page.goto('http://127.0.0.1:8080/?study#tutorial/launch-lab');
+    const x=page.locator('[data-axis=x]'),y=page.locator('[data-axis=y]');
+    await x.waitFor();await page.clock.runFor(80);
+    assert.equal(await x.inputValue(),'0');
+    await select('[data-aim-search]');await page.locator('#recovery-back').waitFor();
+    for(let n=0;n<32 && !(await page.locator('#recovery-route').textContent()).includes('ended offstage');n++)await page.clock.runFor(80);
+    assert.match(await page.locator('#recovery-route').textContent(),/with this stick position ended offstage/);
+    await select('#recovery-back');await x.waitFor();
+    if(pad){
+      await select('[data-read-pad]');await page.evaluate(()=>steer(.76,.28));await page.clock.runFor(100);
+      await page.evaluate(()=>confirmButton(true));await page.clock.runFor(80);
+      assert.match(await page.locator('[data-pad-note]').textContent(),/Right 76%.*Down 28%/);
+      await page.evaluate(()=>{confirmButton(false);steer(0);});await page.clock.runFor(80);
+    }else if(touch){
+      for(const [slider,pos] of [[x,.88],[y,.64]]){
+        const bounds=await slider.boundingBox();await slider.tap({position:{x:Math.round(bounds.width*pos),y:Math.floor(bounds.height/2)}});
+      }
+    }else{
+      await x.focus();await page.keyboard.press('End');
+      for(let n=0;n<24;n++)await page.keyboard.press('ArrowLeft');
+      await y.focus();for(let n=0;n<28;n++)await page.keyboard.press('ArrowRight');
+    }
+    await page.clock.runFor(100);
+    const aim=[Number(await x.inputValue())/100,Number(await y.inputValue())/100];
+    if(touch)assert(aim[0]>.55 && aim[1]>.1,JSON.stringify(aim));else assert.deepEqual(aim,[.76,.28]);
+    assert.match(await page.locator('.flight-result').textContent(),/Right .*Down .*Still airborne/);
+    assert.match(await page.locator('[data-angle]').textContent(),/° clockwise.*% of original launch speed/);
+    await page.evaluate(()=>{
+      const proto=DogFight.Battle.prototype,release=proto.releaseLaunch,step=proto.step;
+      proto.releaseLaunch=function(f,input){
+        if(!document.querySelector('dialog').open && f.index===0){window.chosenRelease=[input.x,input.y];window.studyBattle=this;}
+        return release.apply(this,arguments);
+      };
+      proto.step=function(dt,input){
+        if(window.studyBattle===this && !window.followupInput)window.followupInput=[input.x,input.y];
+        return step.apply(this,arguments);
+      };
+    });
+    await select('[data-aim-play]');await page.clock.runFor(2000);
+    const release=await page.evaluate(()=>chosenRelease);assert.deepEqual(release,aim);
+    assert.deepEqual(await page.evaluate(()=>followupInput),[0,0]);
+    await select('[data-do=trial-replay]');await x.waitFor();await page.clock.runFor(100);
+    assert.deepEqual([Number(await x.inputValue())/100,Number(await y.inputValue())/100],aim);
+    await select('[data-aim-search]');await page.locator('#recovery-back').waitFor();
+    for(let n=0;n<32 && !await page.locator('#recovery-play').isVisible();n++)await page.clock.runFor(80);
+    assert.match(await page.locator('#recovery-route').textContent(),/selected stick position plays on the release frame/);
+    await select('#recovery-demo');await page.clock.runFor(6000);
+    assert.match(await page.locator('#recovery-cue').textContent(),/Landed onstage/);
+    await select('#recovery-back');await x.waitFor();await select('[data-recorded]');await page.clock.runFor(60);
+    assert.equal(await x.inputValue(),'0');assert.equal(await y.inputValue(),'0');
+    await select('[data-do=clip-back]');await page.locator('#school-resume').waitFor();
     assert.deepEqual(errors, []);
   } finally {
     await page.close();

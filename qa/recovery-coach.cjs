@@ -14,6 +14,19 @@ function landingRoute(clip,launch){
   do{next=search.next();}while(!next.done);
   return next.value;
 }
+test('the selected analog release is identical in the search, demonstration and playable return',()=>{
+  const {clip,battle,launch}=coach.example(true,true),before=structuredClone(battle.matchCard);
+  const chosenAim={x:.76,y:.28};
+  assert.equal(landingRoute(clip,{...launch,chosenAim:{x:0,y:0}}),null);
+  const plan=landingRoute(clip,{...launch,chosenAim});
+  assert.deepEqual(plan.aim,chosenAim);assert.equal(plan.start,launch.frame-1);
+  assert.deepEqual(coach.controls(plan,0),clip.tape.launchInput(launch.frame,0,chosenAim));
+  assert.equal(coach.gate(plan,0,idleInput,k=>k),'');assert.match(coach.gate(plan,1,idleInput,k=>k),/Drift back/);
+  const p=coach.attempt(clip.tape,plan,undefined,clip.returnTape);
+  while(!p.outcome){const tick=p.frame-plan.start,input=coach.controls(plan,tick);assert.equal(coach.gate(plan,tick,input,k=>k,p.battle.dogs[0]),'');p.step(input);}
+  assert.equal(p.outcome,'landed');assert(p.cast);assert.equal(p.frame,plan.end);
+  assert.equal(p.battle.dogs[0].stocks,3);assert.deepEqual(battle.matchCard,before);
+});
 for(const wide of [false,true])test('a real '+(wide?'edge':'perch')+' throw gets a playable return beyond the original knockout',()=>{
   const {clip,battle,launch}=coach.example(wide,true), plan=landingRoute(clip,launch);
   assert.equal(plan.start,launch.frame-1);assert(plan.end>clip.tape.length);

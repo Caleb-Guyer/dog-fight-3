@@ -140,10 +140,12 @@ for(const [opening,slot] of [['perch',0],['edge',0],['perch',1]]){
     assert.deepEqual(original.points,points.slice(launch.frame-1));
     assert.match(original.outcome,/KO at the (top|left) line/);
     const saved=structuredClone(world.matchCard);
-    for(const [x,y] of [[0,0],[1,0],[-1,0],[0,-1],[1,1]]){
+    for(const [x,y] of [[0,0],[1,0],[-1,0],[0,-1],[1,1],[.76,.28],[-.42,.37]]){
       const path=window.FinishTools.launchFlight(clip,launch,{x,y});
       const independent=launchRecording(opening,slot,launch.frame,{x,y});
       assert.deepEqual(path.points,independent.points.slice(launch.frame-1,path.frame+1));
+      const expected=window.DogFight.launchInfluence(launch.raw.x,launch.raw.y,{x,y});
+      assert(Math.abs(path.release.angle-expected.angle*180/Math.PI)<1e-8);assert.equal(path.release.scale,expected.scale);
       assert(path.frame<=clip.length);
     }
     assert.deepEqual(world.matchCard,saved);
