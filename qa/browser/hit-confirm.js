@@ -28,9 +28,10 @@ async function play(browser,device){
     if(device==='keyboard'){
       await press('#practice-menu');await page.locator('#practice-query').fill('hit confirm');await press('[data-exercise=combo-confirm]');
     }
+    const latest=page.locator('#combo-latest');
     for(let i=0;i<6;i++){
       await act('attack');await page.clock.runFor(device==='pad'?475:545);
-      const latest=page.locator('#combo-latest'),cue=await latest.textContent();
+      const cue=await latest.textContent();
       assert.match(cue,/^(Hit!|Shield!)/);
       await page.evaluate(()=>{window.openingRow=document.querySelector('#combo-list li');});
       await act(cue.startsWith('Shield')?'grab':'attack');
@@ -42,6 +43,39 @@ async function play(browser,device){
     assert.equal(await page.locator('#combo-previous').textContent(),'Hits confirmed 3/3 · Shields grabbed 3/3');
     await act('attack');await page.clock.runFor(500);
     assert.match(await page.locator('#combo-summary').textContent(),/Exchange 1 of 6/);
+    await page.goto('http://127.0.0.1:8080/?compare#training/compare-defenses');
+    await page.locator('#combo-compare:visible').waitFor();
+    await press('#combo-compare');await page.clock.runFor(900);
+    const rows=page.locator('#reply-rows tr');
+    assert.equal(await rows.count(),5);
+    assert.deepEqual(await rows.first().locator('td').allTextContents(),['Standing','2','20%','—']);
+    assert.deepEqual(await rows.nth(3).locator('td').allTextContents(),['Jump away','1','7%','Jump after hit 1']);
+    assert.match(await page.locator('#reply-opening').textContent(),/17-frame opening before Bell Ringer/);
+    assert(await page.locator('.reply-table').evaluate(e=>e.getBoundingClientRect().right<=innerWidth));
+    await press('[data-reply=jumpAway]');await page.clock.runFor(4400);
+    assert.match(await page.locator('#combo-summary').textContent(),/1 hit · 7%/);
+    await press('#combo-compare');
+    if(device==='pad'){
+      await page.evaluate(()=>{confirmPad.buttons[0].pressed=true;});await page.clock.runFor(48);
+      await page.evaluate(()=>{confirmPad.buttons[0].pressed=false;});await page.clock.runFor(48);
+    }else await press('#reply-play');
+    assert.match(await latest.textContent(),/You are Pip/);
+    await act('attack');await page.clock.runFor(600);
+    let client;
+    if(touch){
+      client=await page.context().newCDPSession(page);
+      const b=await page.locator('[data-touch=shield]').boundingBox();
+      await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:b.x+b.width/2,y:b.y+b.height/2}]});
+    }else if(device==='pad')await page.evaluate(()=>{confirmPad.buttons[4].pressed=true;});
+    else await page.keyboard.down('l');
+    await page.clock.runFor(5000);
+    if(touch)await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    else if(device==='pad')await page.evaluate(()=>{confirmPad.buttons[4].pressed=false;});
+    else await page.keyboard.up('l');
+    assert.match(await page.locator('#combo-summary').textContent(),/Defend · Late jab · Took 0 hits · 0%/);
+    assert.match(await latest.textContent(),/blocked.*Tap Attack to retry/);
+    await act('attack');await page.clock.runFor(2100);
+    assert.match(await latest.textContent(),/Body Check.*7%|Bell Ringer.*13%/);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

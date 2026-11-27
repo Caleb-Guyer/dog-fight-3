@@ -71,6 +71,48 @@ function combat(w) {
 }
 require('../docs/combo-lab.js');
 const lab=window.ComboLab;
+test('five defenses replay the same opening and leave the running fight and take slots intact',()=>{
+  const w=new Battle(config('brisket','pip'),undefined,seededRandom(seed));
+  w.resetComboPractice('late','strike',false);
+  for(let n=0;n<12;n++)w.step(dt);
+  const before=structuredClone([combat(w),w.comboPractice,w.comboTakes,w.random.state]);
+  const rows=[...lab.compareReplies(w)].filter(Boolean);
+  assert.deepEqual(rows.map(r=>[r.reply,r.hits,r.damage]),[
+    ['stand',2,20],['guard',1,7],['away',2,20],['jumpAway',1,7],['strike',2,13.4]]);
+  assert.equal(rows[0].opening,'17-frame opening before Bell Ringer.');
+  assert.equal(rows[3].outcome,'Jump after hit 1');assert.equal(rows[4].outcome,'Quick Paw after hit 1');
+  assert.deepEqual([combat(w),w.comboPractice,w.comboTakes,w.random.state],before);
+  const quit=lab.compareReplies(w);quit.next();quit.return();
+  assert.deepEqual([combat(w),w.comboPractice,w.comboTakes,w.random.state],before);
+});
+
+test('P1 controls can reproduce a simulated defense frame for frame against a preset or their recorded B take',()=>{
+  for(const source of ['example','late','replay']){
+    const create=()=>{
+      const w=new Battle(config('clover','pip','canal'),undefined,seededRandom(seed));
+      w.setDummyDamage(35);w.comboMarkTime=1.5;
+      w.resetComboPractice('record','stand',false,1);
+      for(let i=0;i<60;i++)w.step(dt,input({attack:[0,10,20].includes(i),jump:i===20}));
+      return w;
+    };
+    const automatic=create(),live=create(),reply='jumpAway';
+    automatic.resetComboPractice(source,reply,false,1);live.resetComboPractice(source,'player',false,1);
+    const recording=structuredClone(live.comboTakes);
+    assert.equal(live.trainingPlayerSlot,1);assert.equal(live.hasSecondPlayer,false);
+    const read=automatic.comboRivalInput;
+    let pad;
+    automatic.comboRivalInput=function(...args){return pad=read.apply(this,args);};
+    arm(live);
+    for(let i=0;i<220 && automatic.comboPractice.phase!=='done';i++){
+      automatic.step(dt);live.step(dt,pad);
+      assert.deepEqual(combat(live),combat(automatic),source+' frame '+i);
+      assert.deepEqual(live.comboPractice.contacts,automatic.comboPractice.contacts);
+    }
+    assert.equal(live.comboPractice.phase,'done');
+    live.step(dt,input({attack:true}));
+    assert.equal(live.comboPractice.phase,'countdown');assert.deepEqual(live.comboTakes,recording);
+  }
+});
 test('shared house tape gives Pip a block, a throw through shield, and a real spot-dodge window',()=>{
   const card=lab.decode(lab.encode(lab.houseTape()));
   for(const [slot,dodge,expected] of [[0,false,['block']],[1,false,['grab','throw']],[1,true,[]]]){
