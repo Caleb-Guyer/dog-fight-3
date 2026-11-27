@@ -99,7 +99,9 @@ async function play(browser,device){
     await choose('#event-play');await page.clock.runFor(2600);await choose('#pause');
     assert.match(await page.locator('#dialog-title').textContent(),/High Ground paused/);
     await choose('#event-board');await choose('#event-back');assert(await page.locator('#event-matches').evaluate(b=>document.activeElement===b));
-    await page.goto('http://127.0.0.1:8080/?school#tutorial');await choose('#school-list');await choose('#school-read');
+    await page.goto('http://127.0.0.1:8080/?school');
+    if(await page.locator('#welcome-dismiss').isVisible())await choose('#welcome-dismiss');
+    await choose('#home-school');await choose('#school-read');
     await page.locator('#event-bindings').waitFor();await observe();await start();await to(1);
     for(let round=0;round<6;round++){
       let action=null,cue;
