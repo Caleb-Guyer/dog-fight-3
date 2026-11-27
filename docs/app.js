@@ -1898,9 +1898,9 @@
   }
   $('cpu-level').onclick = showCpuLevels;
   function eventUI(){
-    return {store:storage,showDialog,coat:savedCoat,open:eventBoard,back:()=>{dismiss();$('event-matches').focus();},launch:(id,normal)=>{
+    return {store:storage,showDialog,coat:savedCoat,open:eventBoard,binding:key=>[keyFor(0,key),padFor(0,key),'Touch '+key][promptDevice(getPads())],back:()=>{dismiss();$('event-matches').focus();},launch:(id,normal,seed,rehearse)=>{
       leaveOnline();afterStory=null;
-      const c=window.SoloEvents.setup(id,normal);
+      const c=window.SoloEvents.setup(id,normal,seed,rehearse);
       startMatch({...c,coats:[savedCoat(0,c.p1),savedCoat(1,c.p2)]},undefined,42);
     }};
   }
@@ -4415,7 +4415,7 @@
   const [yardChapter, nightChapter] = window.DispatchScript.chapters;
   let campaign = yardChapter;
   const dispatchSources={
-    SoloEvents:'solo-events.js?v=rising-catch-1',
+    SoloEvents:'solo-events.js?v=rival-reads-1',
     PracticeFeedback:'practice-feedback.js?v=wall-spring-1', DogOnline:'online.js?v=rising-catch-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
@@ -5403,6 +5403,7 @@
     const clinic=document.createElement('button');clinic.type='button';clinic.className='utility';clinic.textContent='Landing clinic';
     $('syllabus-guide').after(clinic);clinic.onclick=()=>replayClinic('floor');
     const rescue=clinic.cloneNode(false);rescue.textContent='Recovery clinic';clinic.after(rescue);rescue.onclick=()=>recoveryClinic(false);
+    const read=clinic.cloneNode(false);read.id='school-read';read.textContent='Read the Rival';clinic.before(read);read.onclick=()=>eventBoard('read-the-rival');
     const launch=clinic.cloneNode(false);launch.textContent='Launch survival';rescue.after(launch);launch.onclick=()=>recoveryClinic(false,true);
     const ledge=clinic.cloneNode(false);ledge.textContent='Ledge clinic';launch.after(ledge);ledge.onclick=()=>replayClinic('ledge');
     const stage=clinic.cloneNode(false);stage.textContent='Stage tech clinic';ledge.after(stage);stage.onclick=()=>replayClinic('wall');
