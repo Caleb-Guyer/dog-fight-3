@@ -16,7 +16,7 @@ async function play(browser,device){
         if(key==='right')g.axes[0]=on?1:0;
         else if(key==='up')g.axes[1]=on?-1:0;
         else if(key==='down')g.axes[1]=on?1:0;
-        else Object.assign(g.buttons[{ok:0,pause:9,shield:4,attack:2,special:1,grab:3}[key]],{pressed:on,value:Number(on)});
+        else Object.assign(g.buttons[{ok:0,jump:0,pause:9,shield:4,attack:2,special:1,grab:3}[key]],{pressed:on,value:Number(on)});
       };
     });
     const choose=async selector=>{
@@ -29,7 +29,7 @@ async function play(browser,device){
       }
     };
     const cdp=touch && await page.context().newCDPSession(page),fingers=new Map();
-    const keys={shield:'l',attack:'j',down:'s',right:'d',special:'k',up:'w',grab:'u'};
+    const keys={shield:'l',attack:'j',down:'s',right:'d',special:'k',up:'w',grab:'u',jump:'Space'};
     async function hold(key,on){
       if(pad)return page.evaluate(([key,on])=>setEventPad(key,on),[key,on]);
       if(!touch)return on?page.keyboard.down(keys[key]):page.keyboard.up(keys[key]);
@@ -41,7 +41,7 @@ async function play(browser,device){
     }
     await page.goto('http://127.0.0.1:8080/#solo');await choose('#event-matches');
     const board=page.locator('#dialog[data-view=event-board]');await board.waitFor();
-    assert.equal(await board.locator('[data-event-pick]').count(),4);
+    assert.equal(await board.locator('[data-event-pick]').count(),5);
     const layout=await board.evaluate(d=>({width:d.clientWidth,scroll:d.scrollWidth,
       wide:[...d.querySelectorAll('*')].filter(e=>e.getBoundingClientRect().right>d.getBoundingClientRect().right).map(e=>e.id || e.textContent.slice(0,30))}));
     assert(layout.scroll<=layout.width+1,device+' board fits '+JSON.stringify(layout));
@@ -99,6 +99,34 @@ async function play(browser,device){
     await choose('#event-play');await page.clock.runFor(2600);await choose('#pause');
     assert.match(await page.locator('#dialog-title').textContent(),/High Ground paused/);
     await choose('#event-board');await choose('#event-back');assert(await page.locator('#event-matches').evaluate(b=>document.activeElement===b));
+    await page.goto('http://127.0.0.1:8080/?school#tutorial');await choose('#school-list');await choose('#school-read');
+    await page.locator('#event-bindings').waitFor();await observe();await start();await to(1);
+    for(let round=0;round<6;round++){
+      let action=null,cue;
+      for(let i=0;i<60 && !cue;i++){
+        await page.clock.runFor(48);
+        cue=await page.evaluate(()=>{
+          const g=run.dogs[1];
+          if(g.smashCharge)return 'punch';
+          if(g.x>660 && g.face===-1)return 'grab';
+          return null;
+        });
+      }
+      assert(cue,device+' saw approach '+round);
+      if(round!==2)action=cue==='punch'?'shield':'jump';
+      else if(cue==='grab')action='shield';
+      if(action)await hold(action,true);
+      for(let i=0;i<65 && !await page.evaluate(()=>!!run.reads.call);i++)await page.clock.runFor(48);
+      if(action)await hold(action,false);
+      assert.equal(await page.evaluate(()=>run.reads.call.ok),round!==2,device+' answered '+cue);
+      for(let i=0;i<40 && await page.evaluate(n=>run.reads.index===n,round);i++)await page.clock.runFor(48);
+    }
+    await result(true);assert.match(await page.locator('#dialog-body').textContent(),/3 \/ 4 reads/);
+    assert.equal(await page.locator('#dialog-body ol li').count(),4);
+    const seed=await page.evaluate(()=>run.reads.seed);await start('#event-misses');await to(1);
+    assert.deepEqual(await page.evaluate(()=>[run.reads.seed,run.reads.guided]),[seed,1]);
+    await choose('#pause');await choose('#event-normal');await page.clock.runFor(2600);
+    assert.match(await page.locator('#match-mode').textContent(),/Solo.*Rival/);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

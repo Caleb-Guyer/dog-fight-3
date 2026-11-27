@@ -5,6 +5,49 @@ require('../docs/engine.js');
 require('../docs/solo-events.js');
 const {idleInput,seededRandom,Battle}=window.DogFight;
 const {Run,setup,best}=window.SoloEvents;
+function readSet(seed,skip=[],review){
+  const run=new Run(setup('read-the-rival',false,seed,review),()=>{},seededRandom(42));
+  let button=null;
+  for(let n=0;n<2400 && run.end===null;n++){
+    const set=run.reads,brisket=run.dogs[1],i={...idleInput};
+    if(!set.age || set.call)button=null;
+    if(!set.call && !skip.includes(set.index-set.guided)){
+      if(brisket.smashCharge)button='shield';
+      else if(brisket.x>660 && brisket.face===-1)button='jump';
+      if(button)i[button]=true;
+    }
+    run.step(1/60,i,idleInput);
+  }
+  return run;
+}
+test('Brisket visibly commits to both approaches and the real collisions grade six exchanges',()=>{
+  const orders=new Set();
+  for(const seed of [1,2,99,88442]){
+    const run=readSet(seed),set=run.reads;assert.equal(run.end,0);assert.equal(set.score,4);
+    assert.deepEqual(set.results.map(r=>r.move).sort(),['grab','grab','punch','punch']);
+    for(const r of set.results){
+      assert.equal(r.line,r.move==='grab'?'Evaded Freight Hug':'Blocked Haymaker');
+      assert.equal(r.first.label,r.move==='grab'?'Jump':'Shield');assert(r.first.frame>0 && !r.first.held);
+    }
+    assert(set.scoredFrames<run.matchFrames);assert.equal(run.matchCard.losses.length,0);
+    orders.add(set.results.map(r=>r.move).join(','));
+  }
+  assert(orders.size>1);
+});
+test('three reads clear, two miss, and guided retries restore precisely the missed timing before the identical exam',()=>{
+  const seed=88442,won=readSet(seed,[0]),lost=readSet(seed,[0,2]),review=readSet(seed,[],[0,2]);
+  assert.equal(won.end,0);assert.equal(won.reads.score,3);assert.equal(lost.end,1);assert.equal(lost.reads.score,2);
+  assert.equal(review.end,0);assert.deepEqual(review.reads.rounds.slice(0,2),[lost.reads.rounds[2],lost.reads.rounds[4]]);
+  assert.deepEqual(review.reads.rounds.slice(2),lost.reads.rounds.slice(2));
+  const normal=new Battle(setup('read-the-rival',true));assert.equal(normal.stockCount,3);assert.equal(normal.cpuLevel,'rival');assert(!normal.reads);
+});
+test('camping behind Shield keeps the grab tutorial active and records the held input honestly',()=>{
+  const run=new Run(setup('read-the-rival',false,42),()=>{},seededRandom(42));
+  while(!run.reads.call)run.step(1/60,{...idleInput,shield:true},idleInput);
+  assert.equal(run.reads.call.first.held,true);assert(run.reads.call.ok);
+  for(let i=0;i<300 && !(run.reads.index===1 && run.reads.call);i++)run.step(1/60,{...idleInput,shield:true},idleInput);
+  assert.equal(run.reads.call.ok,false);assert.match(run.reads.call.line,/Caught/);assert.equal(run.reads.results.length,0);
+});
 function play(id,control=()=>({})){
   const calls=[];
   const run=new Run(setup(id),(name,e)=>{if(name==='win')calls.push(e.f.index);},seededRandom(42));
