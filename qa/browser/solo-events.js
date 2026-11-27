@@ -67,8 +67,8 @@ async function play(browser,device){
     await choose('#event-next');assert.equal(await page.locator('[aria-pressed=true][data-event-pick]').getAttribute('data-event-pick'),'high-ground');
     await start();await to(24);await hold('down',true);await to(26);await hold('down',false);await page.clock.runFor(5900);
     await result(true);assert.match(await page.locator('#dialog-body').textContent(),/3.0 \/ 3.0 s/);
-    await choose('#event-next');await start();await to(2);await hold('right',true);await to(12);await hold('special',true);
-    await to(15);await hold('special',false);await page.clock.runFor(1900);await hold('right',false);await result(true);
+    await choose('#event-next');await start();await hold('right',true);await to(19);await hold('special',true);
+    await to(22);await hold('special',false);await page.clock.runFor(1900);await hold('right',false);await result(true);
     assert.equal(await page.evaluate(()=>Object.keys(localStorage).filter(k=>k.startsWith(FightRecords.prefix)).length),0);
     await choose('#event-normal');await page.clock.runFor(2800);
     assert.match(await page.locator('#match-mode').textContent(),/Solo.*Time Battle/);
