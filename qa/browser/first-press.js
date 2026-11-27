@@ -40,12 +40,23 @@ async function firstPress(browser, url) {
     await page.reload({waitUntil:'commit'});
     await page.locator('#home-school').waitFor();
     assert(await tutorial.isHidden(), 'a returning player never sees a fresh-save offer');
-    release(false);
-    await page.locator('#home-continue').waitFor();
-    assert.equal(await page.evaluate(() => history.state?.dogFightOpening), undefined);
     await page.locator('#home-continue').tap();
+    assert.equal(await status.textContent(), 'Opening saved game…');
+    release(true);
+    await page.locator('#opening-error[open]').waitFor();
+    await page.locator('#opening-retry').tap();
     await page.locator('#school-coach:not([hidden])').waitFor();
     assert.equal(await page.locator('#school-title').textContent(), 'Jump onto a platform');
+    assert.equal(await page.evaluate(() => history.state?.dogFightOpening), undefined);
+
+    release = await holdFile(page, '**/app.js*');
+    await page.reload({waitUntil:'commit'});
+    await page.locator('#home-continue').tap();
+    await page.evaluate(() => localStorage.removeItem('dog-fight-3.school'));
+    release(false);
+    await page.getByText('No saved game to resume.', {exact:true}).waitFor();
+    assert(await page.locator('#school-coach').isHidden());
+    assert(await page.locator('#home-continue').isHidden());
 
     const desk = await keyboard.newPage();
     desk.on('pageerror', error => errors.push(error.message));
@@ -114,25 +125,38 @@ async function firstPress(browser, url) {
       assert.equal(await controller.evaluate(() => jumpFrames), 0, 'the menu confirm never becomes an unrequested jump');
       await controller.evaluate(() => { pad.buttons[0].pressed = false; pad.axes[0] = 1; });
       await controller.locator('#school-next:visible').waitFor();
+      release = await holdFile(controller, '**/app.js*');
+      await controller.reload({waitUntil:'commit'});
+      await controller.waitForFunction(() => !!window.FightControls && document.activeElement.id === 'home-continue');
+      await controller.evaluate(() => { pad.buttons[0].pressed = true; });
+      await controller.locator('#home-continue[data-opening]').waitFor();
+      await controller.evaluate(() => { pad.buttons[0].pressed = false; pad.buttons[1].pressed = true; });
+      await controller.waitForFunction(() => !document.querySelector('[data-opening]'));
+      await controller.evaluate(() => { pad.buttons[1].pressed = false; pad.buttons[0].pressed = true; });
+      await controller.locator('#home-continue[data-opening]').waitFor();
+      release(false);
+      await controller.getByText('Jump onto a platform', {exact:true}).waitFor();
     } finally { await controller.close(); }
     assert.deepEqual(errors, []);
   } finally { await Promise.all([phone.close(), keyboard.close()]); }
 }
 
-async function timeFirstPress(browser, url) {
+async function timeFirstPress(browser, url, returning=false) {
   const context = await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   try {
     const page = await context.newPage(), cdp = await context.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', {rate:4});
     await cdp.send('Network.enable');
     await cdp.send('Network.emulateNetworkConditions', {offline:false,latency:60,downloadThroughput:750000,uploadThroughput:250000});
-    await page.addInitScript(() => {
+    const button=returning?'#home-continue':'#welcome-play';
+    await page.addInitScript(selector => {
+      if(selector==='#home-continue')localStorage.setItem('dog-fight-3.school',JSON.stringify({seen:true,started:true,lesson:'move',passed:[],playedAt:1}));
       document.addEventListener('click', event => {
-        if (event.isTrusted && event.target.closest('#welcome-play')) window.firstPressAt = performance.now();
+        if (event.isTrusted && event.target.closest(selector)) window.firstPressAt = performance.now();
       }, true);
-    });
+    },button);
     await page.goto(url, {waitUntil:'commit'});
-    await page.locator('#welcome-play').tap();
+    await page.locator(button).tap();
     await page.locator('#school-coach:not([hidden])').waitFor();
     await page.evaluate(() => {
       const step = DogFight.Battle.prototype.step;
@@ -151,4 +175,4 @@ async function timeFirstPress(browser, url) {
   } finally { await context.close(); }
 }
 
-module.exports = {firstPress, timeFirstPress};
+module.exports = {firstPress, timeFirstPress, holdFile};

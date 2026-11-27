@@ -2,6 +2,7 @@ const assert=require('node:assert/strict');
 const {execFileSync}=require('node:child_process');
 if(process.env.GITHUB_ACTIONS!=='true' || process.env.RUNNER_OS!=='Linux')throw Error('Browser input runs on hosted Linux.');
 const {chromium}=require('playwright-core');
+const {holdFile}=require('./first-press');
 const root='http://127.0.0.1:8080/';
 async function play(browser,touch){
   const page=await browser.newPage({viewport:touch?{width:390,height:844}:{width:1280,height:720},hasTouch:touch,isMobile:touch});
@@ -37,8 +38,11 @@ async function play(browser,touch){
     assert.equal(await page.locator('#continue-action').textContent(),'Resume mission');
     const old=await page.evaluate(async()=>(await DispatchSuspend.list())[0]);
     // A fresh document has only the persistent stores, with no live battle or cached mission scripts.
-    await page.goto(root+'?resume');await page.waitForFunction(()=>document.querySelector('#home-continue').dataset.save==='suspend-1-1');
-    await press('#home-continue');await page.getByRole('heading',{name:'Mission ready'}).waitFor();
+    if(touch)await page.evaluate(()=>localStorage.clear()); // The mission can also be the only save on the origin.
+    const release=await holdFile(page,'**/app.js*');
+    await page.goto(root+'?resume',{waitUntil:'commit'});await press('#home-continue');
+    assert.equal(await page.locator('#opening-choice').textContent(),'Opening saved game…');
+    release(false);await page.getByRole('heading',{name:'Mission ready'}).waitFor();
     await watch();await run(500);assert.equal(await page.evaluate(()=>!!window.liveRun),false);
     await press('[data-do=resume]');await run(70);assert.deepEqual(await page.evaluate(()=>firstFrame),expected);
     await press('#pause');
@@ -95,8 +99,16 @@ async function firstFight(browser,touch){
     await press('#pause');const parked=await page.evaluate(()=>summary(live));
     await press('[data-do=school-suspend]');await page.locator('#home:visible').waitFor();
     assert.match(await page.locator('#continue-detail').textContent(),/Pip 2 stocks.*Brisket [123] stocks?/);
-    await page.goto(root+'?resume-school');await page.waitForFunction(()=>document.querySelector('#home-continue').dataset.save==='school-stock');
-    await press('#home-continue');await page.getByRole('heading',{name:'First match ready'}).waitFor();
+    const release=await holdFile(page,'**/app.js*');
+    if(!touch)await page.route('**/dispatch-suspend.js*',route=>route.abort(),{times:1});
+    await page.goto(root+'?resume-school',{waitUntil:'commit'});await press('#home-continue');
+    assert.equal(await page.locator('#opening-choice').textContent(),'Opening saved game…');
+    release(false);
+    if(!touch){
+      await press('#dispatch-load-retry');
+      assert(await page.locator('#school-coach').isHidden());
+    }
+    await page.getByRole('heading',{name:'First match ready'}).waitFor();
     await watch();await page.clock.runFor(400);assert.equal(await page.evaluate(()=>!!window.live),false);
     await press('[data-do=resume]');await page.clock.runFor(120);
     assert.deepEqual(await page.evaluate(()=>first),parked);

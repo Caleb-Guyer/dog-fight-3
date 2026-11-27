@@ -168,6 +168,7 @@ async function recovery(browser,url){
 (async()=>{
   const files=new Map();assets('docs','/new',files);assets('previous/docs','/old',files);assets('prior-release/docs','/prior',files);
   assets('before-first-press/docs','/before',files);
+  assets('before-continue/docs','/returning',files);
   assets('before-runtime/docs','/shipping',files);
   const server=http.createServer((req,res)=>{
     const path=new URL(req.url,'http://localhost').pathname;
@@ -210,5 +211,13 @@ async function recovery(browser,url){
     assert(timings.before.every(r=>r.press>=r.ready),'Previous release offered Play tutorial at startup completion');
     assert(timings.new.every(r=>r.press>0 && r.move>=r.press && r.ready>0));
     console.log('::notice title=First press::'+JSON.stringify(first));
+    const resume={returning:[],new:[]};
+    for(const order of [['returning','new'],['new','returning'],['returning','new']]){
+      for(const build of order)resume[build].push(await timeFirstPress(browser,origin+'/'+build+'/',true));
+    }
+    const saved=Object.fromEntries(Object.entries(resume).map(([build,rows])=>[build,
+      Object.fromEntries(['press','ready','move'].map(k=>[k,median(rows,k)]))]));
+    assert(resume.new.every(r=>r.press>0 && r.move>=r.press));
+    console.log('::notice title=Early Continue::'+JSON.stringify(saved));
   }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});

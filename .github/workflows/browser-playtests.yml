@@ -171,6 +171,11 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
+          ref: f3fd50ce02e9887d675653b92fe608efa8f34e24
+          path: before-continue
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
           ref: 136623803ae037ef0a2c7f1f9f887738ef2a2e96
           path: before-runtime
           persist-credentials: false
