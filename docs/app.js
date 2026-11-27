@@ -994,7 +994,7 @@
     if(dialogType==='rumble')window.PadFeedback?.stop();
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=cup-select-1';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=result-board-1';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
@@ -1034,6 +1034,9 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if($('result-review')?.open && ['result','online-result'].includes(dialogType)){
+      $('result-review').open=false;$('result-review').querySelector('summary').focus();return;
+    }
     if(dialogType==='result' && $('cup-more') && !$('cup-review').hidden){$('cup-more').click();$('cup-more').focus();return;}
     if(dialogType==='event-board')return $('event-back').click();
     if(dialogType==='event-result')return $('event-board').click();
@@ -1104,6 +1107,9 @@
           showPause(false);$('dialog-body').querySelector('[data-do=instant-replay]')?.focus();return;
         }
         if(r.from==='archive')return backToSavedCard(r);
+        if(r.from==='standings'){
+          showResult();$('dialog-body').querySelector('[data-latest-fall="'+r.slot+'"]')?.focus();return;
+        }
         if(r.finish && r.from==='result'){showResult();return;}
         if(r.from==='card'){
           showMatchCard();
@@ -2606,42 +2612,46 @@
     victoryShot={canvas,kind:dog.kind,coat:result.coatFor(slot),elapsed:0,cel:-1};
     drawVictory(0);
     const stats=document.querySelector('#dialog-body [data-do=match-card]');
+    const options=$('result-options'),watch=$('result-watch'),practiceTools=$('result-practice');
     if(stats && result.mode==='local' && !result.relayTeams && !online.match && (!localSet || localSet.champion!==null)){
       if(matchConfig.rotationRound){
         const winner=localSet?.champion ?? result.end;
         const handoff=document.createElement('p');handoff.id='rotation-handoff';
         handoff.textContent=rotation.handoff(winner,matchConfig.rotationTags);
-        canvas.closest('.winner').after(handoff);
+        if(options)$('dialog-body').querySelector('.result-scores').append(handoff);
+        else canvas.closest('.winner').after(handoff);
       }else{
-        const b=document.createElement('button');b.className='utility';b.dataset.do='rotation';b.textContent='Winner stays';stats.before(b);
+        const b=document.createElement('button');b.className='utility';b.dataset.do='rotation';b.textContent='Winner stays';if(options)options.append(b);else stats.before(b);
       }
     }
     if (finishTape?.length && stats) {
-      if(matchConfig.openingMatchup)stats.insertAdjacentHTML('beforebegin','<button class="utility" data-do="matchup-card">Opening matchup · Pin or share</button>');
+      if(matchConfig.openingMatchup)(options || stats).insertAdjacentHTML(options?'beforeend':'beforebegin','<button class="utility" data-do="matchup-card">Opening matchup · Pin or share</button>');
       const clips=knockoutClips(result);
-      stats.insertAdjacentHTML('beforebegin',stockRetryButton(result)+recoveryButtons(result,clips));
+      (practiceTools || stats).insertAdjacentHTML(practiceTools?'beforeend':'beforebegin',stockRetryButton(result)+recoveryButtons(result,clips));
       if(finishTape.reel){
-        stats.insertAdjacentHTML('beforebegin','<button class="utility" data-do="watch-match">Watch full match</button>');
-        const winner=$('cup-review')?.querySelector('[data-cup-recap]') || canvas.closest('.winner');
+        (watch || stats).insertAdjacentHTML(watch?'beforeend':'beforebegin','<button class="utility" data-do="watch-match">Watch full match</button>');
+        const winner=$('result-recap') || $('cup-review')?.querySelector('[data-cup-recap]') || canvas.closest('.winner');
         const recap=()=>window.MatchReview.resultHighlight(winner,result,()=>watchMatch(null,'highlight'));
         if(window.MatchReview)recap();else loadDispatch('MatchReview').then(recap).catch(()=>{});
       }
-      if(clips.length)stats.insertAdjacentHTML('beforebegin',knockoutButton);
-      const button=document.createElement('button');
-      button.className='utility';button.dataset.do='watch-finish';
-      if(matchConfig.schoolFinal && result.end===1 && result.endReason==='ko'){
-        button.textContent='Replay my last stock';
-        stats.closest('.dialog-actions').querySelector('[data-do=rematch]').after(button);
-        const clip=clips.findLast(c=>c.losses.some(l=>l.slot===0));
-        if(clip?.losses.some(l=>l.slot===0 && l.lastHit)){
-          const b=button.cloneNode(false);delete b.dataset.do;b.id='result-chance';b.textContent='Coach my last KO';
-          b.onclick=()=>secondChance({clip,slot:0,from:'result',result});button.after(b);
-        }
-      }else{button.textContent='Watch finish';stats.before(button);}
+      if(clips.length)(watch || stats).insertAdjacentHTML(watch?'beforeend':'beforebegin',knockoutButton);
+      if(!watch){
+        const button=document.createElement('button');
+        button.className='utility';button.dataset.do='watch-finish';
+        if(matchConfig.schoolFinal && result.end===1 && result.endReason==='ko'){
+          button.textContent='Replay my last stock';
+          stats.closest('.dialog-actions').querySelector('[data-do=rematch]').after(button);
+          const clip=clips.findLast(c=>c.losses.some(l=>l.slot===0));
+          if(clip?.losses.some(l=>l.slot===0 && l.lastHit)){
+            const b=button.cloneNode(false);delete b.dataset.do;b.id='result-chance';b.textContent='Coach my last KO';
+            b.onclick=()=>secondChance({clip,slot:0,from:'result',result});button.after(b);
+          }
+        }else{button.textContent='Watch finish';stats.before(button);}
+      }
       const practice=document.createElement('button');
       practice.className='utility';practice.textContent='Practice finish';practice.dataset.do='practice-finish';
       practice.onclick=()=>chooseFinishFighter();
-      stats.before(practice);
+      if(practiceTools)practiceTools.append(practice);else stats.before(practice);
     }
   }
   function drawVictory(dt) {
@@ -2715,6 +2725,7 @@
     if(ko)$('clip-escape').onclick=()=>startFinishTrial(Math.max(0,tape.length-90),loss.slot,review);
     if(review?.moment)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to full match';
     if(review?.stockBreak)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to next stock';
+    if(review?.from==='standings')$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to results';
     if(review?.clinic || review?.launchLab)$('dialog-body').querySelector('[data-do=clip-back]').textContent='Back to Fight School';
     for(const b of $('dialog-body').querySelectorAll('[data-clip-recovery]'))
       b.onclick=()=>recoverySheet({...review,slot:Number(b.dataset.clipRecovery),fromClip:true});
@@ -3184,6 +3195,38 @@
       watchMatch({film:new window.MatchReview.MatchFilm(finishTape.fullMatch()),selection},0));
     (document.querySelector('[data-card-game][aria-pressed=true]') || $('dialog-close')).focus();
   }
+  const openResultReviews=new WeakSet();
+  function versusResult(result,{title,headline,finish,duration,next='',primary,links='',extras='',notes=''}){
+    const winner=result.end, dog=result.dogs[winner],card=result.matchCard;
+    const timed=!!card?.points,net=!!online.match;
+    const clips=knockoutClips(result);
+    const rows=[winner,1-winner].map((i,rank)=>{
+      const f=result.dogs[i],score=timed?card.points[i]:f.stocks;
+      const clip=clips.findLast(c=>c.losses.some(l=>l.slot===i)),loss=clip?.losses.find(l=>l.slot===i);
+      const content='<b class="place">'+(rank+1)+'</b><img alt="" src="'+portrait(f.kind,result.coatFor(i))+'">'+
+        '<span><small>'+labelFor(i)+'</small><strong>'+ (result.relayTeams?result.relayTeams[i].map(id=>fighters[id].name).join(' / '):f.stats.name)+'</strong></span>'+
+        '<b class="final-score">'+score+'</b>';
+      return '<li data-result-seat="'+i+'">'+(loss?'<button class="standing" data-latest-fall="'+i+'" data-clip-first="'+clip.first+'">'+content+
+        '<span class="fall-link">Watch last fall · '+cardTime(loss.frame)+'</span></button>':'<div class="standing">'+content+'</div>')+'</li>';
+    }).join('');
+    const type=timed?(result.suddenDeath?'Regulation points':'Points'):result.suddenDeath?'Sudden Death stocks':'Stocks left';
+    const art='<div class="result-art"><img src="'+portrait(dog.kind,result.coatFor(winner))+'" alt="">'+
+      (finishTape?.length?'<button class="utility" data-do="watch-finish">'+icon('play')+'Watch finish</button>':'')+'</div>';
+    const details='<details id="result-review"'+(openResultReviews.has(result)?' open':'')+'><summary>Replays &amp; practice</summary>'+
+      '<div class="result-tools"><section id="result-watch"><h4>Watch</h4><span id="result-recap" hidden></span></section>'+
+      '<section id="result-practice"><h4>Practice</h4></section><section id="result-options"><h4>Match options</h4>'+extras+
+      '</section></div>'+notes+'</details>';
+    showDialog(net?'online-result':'result',title,'<div class="result-board">'+(net?'':'<button class="utility result-home" data-do="home">Main menu</button>')+'<div class="winner">'+art+
+      '<div class="result-line"><span>'+stageName(result.stage,result.form)+'</span><h3>'+headline+'</h3><p>'+finish+' · '+duration+'</p></div></div>'+
+      '<section class="result-scores" aria-label="Final standings"><header><h4>'+type+'</h4>'+cardButton+'</header><ol>'+rows+'</ol>'+next+
+      (net?'<p id="net-rematch-status" role="status"></p>':'')+'</section>'+
+      '<div class="result-actions">'+primary+links+'</div>'+details+'</div>',false);
+    const review=$('result-review');
+    review.ontoggle=()=>{
+      if(!review.isConnected)return;
+      if(review.open)openResultReviews.add(result);else openResultReviews.delete(result);
+    };
+  }
   function showSetResult(result, set, finish, duration) {
     roomDraft=null;
     const net = !!online.match;
@@ -3214,15 +3257,12 @@
       text = chooses && canSwitch?'Counterpick for game '+(set.games.length+1):chooses ? 'Pick arena' : 'Ready for game ' + (set.games.length+1);
     }
     const winner = champion ?? result.end;
-    showDialog(net ? 'online-result' : 'result', title,
-      '<div class="winner"><img alt="" src="' + portrait(result.dogs[winner].kind,result.coatFor(winner)) + '"><div><h3>' + name(winner) +
-      (champion === null ? ' wins game ' + set.games.length : ' wins the set') + '</h3><p>' + finish + ' · ' + duration +
-      '</p></div></div><h3 id="set-score">Set score · P1 ' + set.score[0] + ' – ' + set.score[1] + ' ' +
-      (world.mode === 'solo' ? 'CPU' : 'P2') + '</h3><ol class="set-history" aria-label="Game winners">' + history +
-      '</ol>' + stageLog + next + (net ? '<p id="net-rematch-status" role="status"></p>' : cpuReadReport()) +
-      '<div class="dialog-actions"><button class="primary" data-set-next data-do="' + action + '">' + text +
-      '</button>' + (net ? rematchFighterButton() : champion===null && matchConfig.tourneyRound?'<button class="utility" data-do="rotation">Tournament bracket</button>':'') + '<button class="utility" data-do="' + (net ? 'online-leave">Online lobby' : 'lobby">Fighter select') +
-      '</button>' + cardButton + '</div>', false);
+    versusResult(result,{title,headline:name(winner)+(champion===null?' wins game '+set.games.length:' wins the set'),finish,duration,
+      next:'<h3 id="set-score">Set score · P1 '+set.score[0]+' – '+set.score[1]+' '+(world.mode==='solo'?'CPU':'P2')+'</h3>'+next,
+      primary:'<button class="primary" data-set-next data-do="'+action+'">'+text+'</button>',
+      links:(net?rematchFighterButton():champion===null && matchConfig.tourneyRound?'<button class="utility" data-do="rotation">Tournament bracket</button>':'')+
+        '<button class="utility" data-do="'+(net?'online-leave">Online lobby':'lobby">Fighter select')+'</button>',
+      notes:'<ol class="set-history" aria-label="Game winners">'+history+'</ol>'+stageLog+(net?'':cpuReadReport())});
     if (net) updateVotes();
     document.querySelector('[data-set-next]:not(:disabled), [data-do=online-leave]')?.focus();
     announce(title + '. ' + name(winner) + ' wins. Set score ' + set.score.join(' to '));
@@ -3268,36 +3308,23 @@
     if (online.match) {
       roomDraft=null;
       const title = result.end === online.side ? 'You win!' : 'Opponent wins';
-      showDialog('online-result', title,
-        '<div class="winner"><img alt="" src="' + portrait(f.kind,result.coatFor(f.index)) + '"><div><h3>' + f.stats.name +
-        ' wins!</h3><p>' + finish + ' · ' + duration + '</p></div></div><p id="net-rematch-status" role="status"></p>' +
-        '<div class="dialog-actions"><button class="primary" data-do="online-rematch">Rematch</button>'+rematchFighterButton()+
-        '<button class="utility" data-do="online-leave">Online lobby</button>' + cardButton + '</div>', false);
+      versusResult(result,{title,headline:f.stats.name+' wins!',finish,duration,
+        primary:'<button class="primary" data-do="online-rematch">Rematch</button>',links:rematchFighterButton()+
+          '<button class="utility" data-do="online-leave">Online lobby</button>'});
       updateVotes();
       document.querySelector('[data-do=online-rematch]').focus();
       announce(title);
       return;
     }
-    showDialog(
-      'result',
-      result.relayTeams?'Pack Relay result':spar?'Sparring result':'Match result',
-      '<div class="winner"><img alt="" src="' +
-        portrait(f.kind,result.coatFor(f.index)) +
-        '"><div><span class="mode-label">' +
-        (result.relayTeams?result.relayTeams[f.index].map(kind=>fighters[kind].name).join(' · '):labelFor(f.index)) +
-        '</span><h3 style="margin-top:9px">' +
-        (result.relayTeams?labelFor(f.index)+'’s pack':f.stats.name) +
-        ' wins!</h3><p>' +
-        finish + ' · ' +
-        duration +
-        '</p></div></div>' + (spar?spar.goals():cpuReadReport()) + '<div class="dialog-actions"><button class="primary" data-do="'+
-        (matchConfig.rotationRound?'rotation':'rematch')+'">'+(matchConfig.rotationRound?(matchConfig.tourneyRound?'Tournament bracket':'Next challenger'):icon('reset')+'Rematch')+
-        '</button>'+(result.relayTeams?'<button class="utility" data-do="pack-relay">Change teams</button>':'')+
-        (result.matchCard?.openingPoints?'<button class="utility" data-do="swap-clock">'+
-          (matchConfig.finalCount==='chase'?'Start a point ahead':'Start a point behind')+'</button>':'')+
-        (spar?'<button class="utility" data-do="spar-card">Fighter lessons</button>':'<button class="utility" data-do="lobby">Fighter select</button>') + cardButton + '<button class="utility" data-do="home">Main menu</button></div>',
-      false,
-    );
+    versusResult(result,{title:result.relayTeams?'Pack Relay result':spar?'Sparring result':'Match result',
+      headline:(result.relayTeams?labelFor(f.index)+'’s pack':f.stats.name)+' wins!',finish,duration,
+      primary:'<button class="primary" data-do="'+(matchConfig.rotationRound?'rotation':'rematch')+'">'+
+        (matchConfig.rotationRound?(matchConfig.tourneyRound?'Tournament bracket':'Next challenger'):icon('reset')+'Rematch')+'</button>',
+      links:(result.relayTeams?'<button class="utility" data-do="pack-relay">Change teams</button>':'')+
+        (spar?'<button class="utility" data-do="spar-card">Fighter lessons</button>':'<button class="utility" data-do="lobby">Fighter select</button>'),
+      extras:result.matchCard?.openingPoints?'<button class="utility" data-do="swap-clock">'+
+        (matchConfig.finalCount==='chase'?'Start a point ahead':'Start a point behind')+'</button>':'',
+      notes:spar?spar.goals():cpuReadReport()});
     announce(f.stats.name + ' wins the Golden Tennis Ball');
     document.querySelector('#dialog-body .primary').focus();
   }
@@ -3305,6 +3332,11 @@
     startMatch({...settings,...lobbyBattleRules(settings),form:lobbyForm(),coats:lobbyCoats}):playMatchup(lobbyMatchup());
   $('pause').onclick = showPause;
   $('dialog-body').addEventListener('click', (e) => {
+    const fall=e.target.closest('[data-latest-fall]');
+    if(fall){
+      const clip=finishTape?.knockouts.find(c=>c.first===Number(fall.dataset.clipFirst));
+      if(clip)return showFinishReplay(null,{clip,slot:Number(fall.dataset.latestFall),from:'standings'});
+    }
     const coat = e.target.closest('[data-coat]');
     if (coat && dialogType === 'coats') return chooseCoat(Number(coat.dataset.coat));
     const game = e.target.closest('[data-card-game]');
@@ -6066,7 +6098,7 @@
   function menuButtons() {
     const roots=$('dialog').open?[$('dialog')]:[$(page),document.querySelector('.topbar')];
     return roots.flatMap(root=>root ? [...root.querySelectorAll('button:enabled,input:enabled:not([readonly]),select:enabled,a[href],summary')] : [])
-      .filter(el=>el.getClientRects().length && !el.closest('[inert]'));
+      .filter(el=>el.getClientRects().length && !el.closest('[inert],details:not([open]) > :not(summary)'));
   }
   let focusLane=null;
   function moveMenuFocus(direction,items=menuButtons()) {
