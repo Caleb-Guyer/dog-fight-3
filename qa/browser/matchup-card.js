@@ -67,7 +67,7 @@ async function play(browser,device){
     await choose('#matchup-edit');await observe();await choose('#start');await page.clock.runFor(2520);
     assert.deepEqual(await page.evaluate(()=>[fight.mode,fight.clockFrames,fight.stockCount,fight.dogs.map(f=>f.damage)]),['local',null,1,[0,0]]);
     await page.keyboard.down('a');await page.clock.runFor(3800);await page.keyboard.up('a');
-    await choose('#result-review summary');await choose('[data-do=matchup-card]');await choose('#matchup-share');
+    await choose('#result-review > summary');await choose('[data-do=matchup-card]');await choose('#matchup-share');
     assert.equal(await page.locator('#matchup-link').inputValue(),root+local);
     await choose('#matchup-back');await choose('[data-do=home]');await page.locator('#pin-play').waitFor();
     if(device==='keyboard'){

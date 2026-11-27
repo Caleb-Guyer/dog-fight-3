@@ -130,13 +130,13 @@ async function reviewMidMatch(page,mobile,press){
   await press('[data-card-ko="0"]');await page.locator('#clip-seek').press('End');
   assert.match(await page.locator('#clip-scores').textContent(),/2 stocks/);
   await press('[data-do=clip-back]');assert.equal(await page.locator('[data-card-ko]').count(),3);
-  await press('[data-do=card-back]');await press('#result-review summary');await press('[data-do=ko-replays]');
+  await press('[data-do=card-back]');await press('#result-review > summary');await press('[data-do=ko-replays]');
   assert.deepEqual(await page.locator('[data-ko]').evaluateAll(el=>el.map(e=>e.dataset.ko)),['2','1','0']);
   assert.equal(await page.locator('[data-return-fight]').count(),2);
   await press('[data-return-fight="1"]');await page.clock.runFor(130);
   assert.equal(await page.evaluate(()=>returnFight.dogs[0].stocks),1);
   await press('#pause');await press('[data-do=return-fight]');
-  if(await page.locator('#result-review:not([open])').count())await press('#result-review summary');
+  if(await page.locator('#result-review:not([open])').count())await press('#result-review > summary');
   await press('[data-do=ko-replays]');
   await press('#ko-list-back');
   if(cdp)await cdp.detach();
@@ -210,7 +210,7 @@ async function play(browser,mobile) {
     assert(await page.locator('#dialog').evaluate(el=>el.scrollWidth<=el.clientWidth+1));
     await page.keyboard.press('Escape');
     assert.equal(await page.locator('.winner h3').textContent(),result);
-    await press('#result-review summary');await press('[data-do=practice-finish]');await press('[data-finish-slot="1"]');
+    await press('#result-review > summary');await press('[data-do=practice-finish]');await press('[data-finish-slot="1"]');
     assert.match(await page.locator('#match-mode').textContent(),/P2 Brisket/);
     await page.clock.runFor(850);await press('#pause');
     assert.equal(await page.locator('#dialog-title').textContent(),'Practice paused');

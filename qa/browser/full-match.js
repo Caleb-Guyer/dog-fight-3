@@ -58,7 +58,7 @@ async function match(browser,device){
     assert.match(await page.locator('#clip-scores').textContent(),/Pip .+0 stocks/);
     await choose('[data-do=clip-back]');assert(await fall.evaluate(el=>document.activeElement===el));
     await page.screenshot({path:'result-'+device+'.png'});
-    await choose('#result-review summary');
+    await choose('#result-review > summary');
     assert(await page.locator('#result-highlight').isVisible());
     if(device==='keyboard')await page.screenshot({path:'result-tools.png'});
     await choose('#result-highlight');

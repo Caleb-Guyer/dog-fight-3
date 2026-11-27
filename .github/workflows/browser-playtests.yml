@@ -19,12 +19,15 @@ jobs:
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/stage-select.js
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/result-board.js
       - name: Keep the stage select screens
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: arena-select
-          path: arena-select-*.png
+          path: |
+            arena-select-*.png
+            scoreboard-*.png
           retention-days: 3
   event-matches:
     runs-on: ubuntu-24.04

@@ -26,7 +26,7 @@ async function couch(browser){
   const storage=()=>page.evaluate(()=>JSON.parse(sessionStorage.getItem('dog-fight-3.winner-stays.1')));
   try{
     await page.goto(root+'#local/pick-together');assert.equal(await page.evaluate(()=>!!window.WinnerStays),false);
-    await vote(press);await walkOff('[data-do=match-card]');await press('#result-review summary');await press('[data-do=rotation]');
+    await vote(press);await walkOff('[data-do=match-card]');await press('#result-review > summary');await press('[data-do=rotation]');
     assert.match(await label('#rotation-play'),/Bout 2/);
     assert.deepEqual(await page.locator('.rotation-line input').evaluateAll(xs=>xs.map(x=>x.value)),['Player 3','Player 2','Player 1']);
     await page.locator(name(0)).fill('Scout');await page.locator(name(1)).fill('Rex <K9>');await page.locator(name(2)).fill('Moss');

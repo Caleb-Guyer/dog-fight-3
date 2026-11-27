@@ -95,7 +95,7 @@ async function play(browser,solo){
       await face(0);await start(3);await lose(1);
       assert.match(await page.locator('#set-score').textContent(),/2 – 1/);
       assert.equal(await page.locator('.set-history li').count(),3);
-      await press('#result-review summary');await press('#strike-history summary');
+      await press('#result-review > summary');await press('#strike-history summary');
       assert.match(await page.locator('#strike-history p').nth(1).textContent(),/P1 banned.*P1 banned.*P2 picked/);
       await press('[data-do=new-set]');assert.equal(await tally(),0);
     }

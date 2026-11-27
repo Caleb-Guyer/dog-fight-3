@@ -134,7 +134,7 @@ async function run(browser,phone){
     const lives=()=>page.locator('#hud .lives').allTextContents();
     assert.deepEqual(await lives(),['-1 point','0 points']);
     await page.clock.runFor(13800);
-    await press('#result-review summary');
+    await press('#result-review > summary');
     assert.match(await page.locator('#dialog-body').innerText(),/Rival played for center stage/);
     await press('[data-do=match-card]');
     const row=title=>page.locator('.card-stats tr').filter({hasText:title}).locator('td').allTextContents();
