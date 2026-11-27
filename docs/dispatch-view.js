@@ -144,7 +144,11 @@
         } else if (name === 'ko') {
           sound(name, e);
           dispatchNotice(e.f.stats.name + (e.remaining ? ' · ' + stockLabel(e.remaining) + ' left' : ' out'));
-        } else if (name === 'stockTie') dispatchNotice('Tiebreak · One stock each');
+        } else if (name === 'stockShare') {
+          tone(392,494,0.09);tone(494,659,0.16,0.09);
+          dispatchNotice('P'+(e.seat+1)+' is back · Stock from P'+(2-e.seat));
+        } else if (name === 'rallyHit') dispatchNotice('P'+(e.seat+1)+' landed the comeback hit!');
+        else if (name === 'stockTie') dispatchNotice('Tiebreak · One stock each');
         else if (name === 'hoist') dispatchNotice('Gantry catch · Armor damaged');
         else if (name === 'dispatchVictory') dispatchNotice(cupRound ? 'Copper Hound defeated' : 'Mission clear');
         else if (name === 'machineWindup') {
@@ -196,29 +200,59 @@
         '<button class="utility" data-boss-pattern="'+move+'">Try again</button>'+others.map(patternButton).join('')+'</div>', !outcome);
       document.querySelector(outcome?'[data-do=boss-return]':'[data-do=resume]').focus();
     }
-    static duoSheet(names,showDialog) {
+    static duoSheet(names,showDialog,rally=false) {
       showDialog('depot-team','Bell Depot doubles',
         '<p>P1 '+names[0]+' and P2 '+names[1]+' take on the Copper Hound. You each have three stocks. Either dog can finish the fight.</p>'+
         '<p>Jump or shield the bell wave, then hit the open lamp together. Your attacks pass through your partner.</p>'+
+        '<p>Out of stocks? Hold Jump for half a second to borrow a spare from your partner. For an immediate return, hold Shield and tap Jump.</p>'+
+        '<details id="rally-options"'+(rally?' open':'')+'><summary>Practice a comeback · Last-stock rally</summary>'+
+        '<p>One dog starts out. The other has two stocks at 60% damage. Borrow a stock, land a hit with the returning dog and defeat the Copper Hound from half armor.</p>'+
+        '<div class="dialog-actions"><button class="utility" data-do="share-p1">P1 returns · '+names[0]+'</button>'+
+        '<button class="utility" data-do="share-p2">P2 returns · '+names[1]+'</button></div></details>'+
         '<div class="dialog-actions"><button class="primary" data-do="depot-start">Fight together</button>'+
         '<button class="utility" data-do="lobby">Fighter select</button></div>');
-      document.querySelector('[data-do=depot-start]').focus();
+      document.querySelector(rally?'[data-do=share-p1]':'[data-do=depot-start]').focus();
     }
     static duoPanel(world,showDialog) {
       const won=world.finished==='exit', done=!!world.finished;
       const team=world.team.map((f,i)=>'P'+(i+1)+' '+f.stats.name+' · '+f.stocks+(f.stocks===1?' stock':' stocks')).join(' / ');
       const left=Math.ceil(world.foes[0].hp);
-      showDialog(done?'boss-result':'pause',done?(won?'Copper Hound defeated':'Team out of stocks'):'Bell Depot doubles paused',
+      const rally=world.rally, seat=rally?.seat ?? 0, player='P'+(seat+1);
+      const retry=rally?'share-p'+(seat+1):'depot-start';
+      const shares=world.borrowed.reduce((a,b)=>a+b);
+      const rallyReport=rally?(world.borrowed[seat]?player+(rally.countered?' returned and hit the Hound.':' returned. Land a hit after leaving the lift.') :
+        player+' can borrow a stock while the other dog has two.'):'';
+      showDialog(done?'boss-result':'pause',done?(won?(rally?.countered?'Comeback clear':'Copper Hound defeated'):'Team out of stocks'):
+        (rally?'Last-stock rally paused':'Bell Depot doubles paused'),
         '<p>'+team+'</p><p>'+(won?'The depot bell is quiet.':left+' armor left · Strike when the lamp opens.')+'</p>'+
-        '<div class="dialog-actions">'+(done?'<button class="primary" data-do="depot-start">Rematch together</button>':
+        (rallyReport?'<p>'+rallyReport+'</p>':shares?'<p>'+shares+(shares===1?' stock shared.':' stocks shared.')+'</p>':'')+
+        '<div class="dialog-actions">'+(done?'<button class="primary" data-do="'+retry+'">'+(rally?'Repeat rally':'Rematch together')+'</button>':
           '<button class="primary" data-do="resume">Resume</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="couch-pads">Assign controllers</button>')+
+        (rally?'<button class="utility" data-do="share-p'+(2-seat)+'">Swap roles</button><button class="utility" data-do="depot-start">Full boss fight</button>':'')+
         '<button class="utility" data-do="lobby">Fighter select</button></div>',!done);
-      document.querySelector(done?'[data-do=depot-start]':'[data-do=resume]').focus();
+      document.querySelector(done?'[data-do='+retry+']':'[data-do=resume]').focus();
     }
-    static updateScoreboard(world,recovery,order,marks,{$,tenth,showPercent,showStocks,recoveryStrip}) {
+    static sharePrompt(world,$,jump) {
+      let call=$('stock-share');
+      const seat=world.team?.findIndex(f=>f.absent) ?? -1;
+      if (seat<0 || world.finished || world.clearDelay) { if(call)call.hidden=true; return; }
+      if (!call) {
+        call=document.createElement('div');call.id='stock-share';
+        call.innerHTML='<small role="status"></small><progress max="30" aria-label="Hold Jump to borrow one stock"></progress>';
+      }
+      const parent=$(seat?'machine-name':'runner-name').parentElement;
+      if(call.parentElement!==parent)parent.append(call);
+      const offer=world.stockOffer,label=call.firstElementChild,bar=call.lastElementChild;
+      const text=offer?(offer.release?'Release '+jump:'Hold '+jump+' · Borrow 1 stock'):'Out · Partner on last stock';
+      if (text!==label.textContent) label.textContent=text;
+      call.hidden=false;bar.hidden=!offer;bar.value=offer?.held || 0;
+    }
+    static updateScoreboard(world,recovery,order,marks,{$,tenth,showPercent,showStocks,recoveryStrip,jump}) {
       const hero=world.dogs[0], foes=world.foes, lead=foes[0];
       const boss=world.layout.rules==='boss', horde=world.layout.rules==='horde';
       $('duo-armor').hidden=!world.team;
+      $('runner-percent').hidden=!!hero.absent;
+      DispatchView.sharePrompt(world,$,jump);
       $('runner-score').hidden = !!world.bridge;
       $('runner-recovery').hidden = recovery === null;
       if (recovery !== null) $('runner-recovery').innerHTML = recoveryStrip(recovery);
@@ -238,7 +272,8 @@
             const partner=world.team[1];
             $('runner-name').textContent='P1 '+hero.stats.name;
             $('machine-name').textContent='P2 '+partner.stats.name;
-            $('rival-score').hidden=$('rival-percent').hidden=false;
+            $('rival-score').hidden=false;
+            $('rival-percent').hidden=!!partner.absent;
             $('rival-score').removeAttribute('aria-label');
             showPercent($('rival-percent'),partner.damage);
             showStocks($('rival-lives'),partner.stocks,'P2 '+partner.stats.name);

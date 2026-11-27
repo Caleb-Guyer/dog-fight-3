@@ -1,5 +1,7 @@
 # Dog Fight 3
 
+**Last-stock rally** starts Bell Depot with one dog out and the other on two stocks at 60% damage. Choose which player returns. Hold Jump for half a second, or hold Shield and tap Jump, to borrow one spare stock and arrive on the lift at 0%. The donor keeps their current damage and final stock. Land a hit with the returning dog and beat the half-armored boss to earn **Comeback clear**. Stock sharing also works in an ordinary co-op boss fight. [Try Last-stock rally](https://caleb-guyer.github.io/dog-fight-3/#local/stock-share)
+
 Choose **Local versus → Co-op boss fight** to play Bell Depot doubles. Pick both dogs and coats on the fighter select screen. Each player gets three stocks against the Copper Hound, and a surviving partner can finish the fight. The bell wave travels in both directions. Try shielding on one side while your partner jumps over the crest and attacks the open lamp. [Play Bell Depot doubles](https://caleb-guyer.github.io/dog-fight-3/#local/depot-doubles)
 
 Choose **Learn in a match** on your first visit or in Fight School to play Pip against Rookie Brisket on Picnic Table. Both dogs start with three stocks. Landing a jab, throwing through a shield, recovering from offstage, and the other course skills count toward Fight School as you do them. Open **Pause → Skills from this fight** to see when you demonstrated each skill. Pick one to practice, then return to the same stock. **Save & quit** keeps the fight and its skill card together. [Learn in a match](https://caleb-guyer.github.io/dog-fight-3/#tutorial/field)
