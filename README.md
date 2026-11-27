@@ -636,6 +636,8 @@ Open **Practice tapes** after recording to name and save both takes on this devi
 
 When an opponent repeatedly shields your attacks, the match card can offer **Practice hit confirms**. It takes both dogs into the drill. **Back to fight** returns you to the same result or saved card.
 
+In **Training → Combo practice → Compare defenses**, run the same opening against a standing rival, guard, outward hit shift, jump away, and counterattack. The table gives the damage each dog actually took and the first opening in the standing sequence. Select a response to watch it, or choose **Play as the defender** and use your P1 controls. Try Brisket’s **Late jab** against Pip. Standing takes both hits for 20%. Jumping away after Body Check keeps it to 7%. You can compare your own recording in either take slot, too. [Try the late jab](https://caleb-guyer.github.io/dog-fight-3/#training/compare-defenses)
+
 ## Ground tilts
 
 All four forward tilts can hit high, level or low. Hold mostly sideways on a stick and add a little vertical aim, then tap Attack. On keyboard, hold Walk (P1 Left Shift, P2 Right Ctrl) and a diagonal as you tap Attack. On touch, slide from the center dot to a diagonal before tapping Attack. With Tilt stick enabled you can also hold Up or Down on the movement controls and flick the aim stick sideways. A high tilt reaches a jumper and launches them higher. A low tilt reaches under the lip and sends them farther sideways.

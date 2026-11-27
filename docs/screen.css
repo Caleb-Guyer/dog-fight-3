@@ -458,6 +458,11 @@ dialog[data-view='special-preview'] { width:min(760px,calc(100% - 16px)); }
 .card-timeline time { font: 16px/1.4 var(--pixel); }
 .card-timeline span { display: block; font-size: 13px; }
 dialog[data-view='practice'] { width: min(620px, calc(100% - 20px)); }
+dialog[data-view='combo-compare'] { width:min(580px,calc(100% - 16px)); }
+.reply-table { width:100%; border-collapse:collapse; text-align:left; font-variant-numeric:tabular-nums; }
+.reply-table th,.reply-table td { padding:5px 3px; border-bottom:1px solid #736a70; }
+.reply-table th { font-size:.85em; }
+.reply-table .utility { width:100%; text-align:left; }
 dialog[data-view='practice'] .dialog-inner {
   display: flex;
   flex-direction: column;

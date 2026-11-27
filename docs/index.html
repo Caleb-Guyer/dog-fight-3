@@ -13,17 +13,17 @@
     <link rel="preload" href="./assets/brawl-pixel.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="./style.css?v=parcel-1" />
     <link rel="stylesheet" href="./dispatch.css?v=first-menu-1" />
-    <link rel="stylesheet" href="./screen.css?v=first-press-1" />
+    <link rel="stylesheet" href="./screen.css?v=compare-defenses-1" />
     <script defer id="menu-controls" src="./runtime/controls.js?v=e30251624c414d7b"></script>
     <script defer src="./runtime/fighters-art.js?v=383d6679a6026418"></script>
     <script defer src="./runtime/arena-art.js?v=6412e724dc033974"></script>
-    <script defer src="./runtime/engine.js?v=2da3fa0e7c184319"></script>
+    <script defer src="./runtime/engine.js?v=bc7ab9feb2394f85"></script>
     <script defer src="./runtime/fight-records.js?v=010ed689ac0ca56e"></script>
     <script defer src="./runtime/fight-school.js?v=f85f6d090f92b86a"></script>
     <script defer src="./runtime/arcade.js?v=752f452c86948de5"></script>
     <script defer src="./runtime/render.js?v=6ac197add0805776"></script>
     <script defer src="./runtime/dispatch-script.js?v=fa8d7f4ec9df9201"></script>
-    <script defer src="./runtime/app.js?v=2585508e138a91c7"></script>
+    <script defer src="./runtime/app.js?v=5d2f854b94f3d596"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -602,6 +602,9 @@
               <option value="stand">Stand still</option>
               <option value="guard">Shield / air dodge</option>
               <option value="away">Flick away</option>
+              <option value="jumpAway">Jump away after a hit</option>
+              <option value="strike">Attack after a hit</option>
+              <option value="player">Play as the defender</option>
               <option value="diIn">Launch DI in</option>
               <option value="diOut">Launch DI out</option>
               <option value="diMix">Mix launch DI</option>
@@ -624,6 +627,7 @@
             </select>
             <button id="combo-record" type="button" class="utility">Record your combo</button>
             <button id="combo-replay" type="button" class="utility" disabled>Replay yours</button>
+            <button id="combo-compare" type="button" class="utility">Compare defenses</button>
             <button id="combo-defend" type="button" class="utility">Defend this take</button>
             <button id="combo-mix" type="button" class="utility">Mix A and B</button>
             <button id="combo-tapes" type="button" class="utility">Practice tapes</button>
