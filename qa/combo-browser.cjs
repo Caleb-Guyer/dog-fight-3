@@ -1410,7 +1410,7 @@ async function testNightMail(page, mobile) {
   const tile = page.locator('[data-stage="nightmail"]');
   assert.match(await tile.innerText(),/Night Mail/);
   assert(await tile.locator('canvas').evaluate(c => c.getContext('2d').getImageData(150,114,1,1).data[3] === 255));
-  await press('[data-stage="nightmail"]');
+  await press('[data-stage="nightmail"]');await press('#arena-confirm');
   await page.reload();
   assert.equal(await page.locator('#stage-title').textContent(),'Night Mail');
   await press('[data-mode="training"]');
@@ -1482,7 +1482,7 @@ async function testCanal(page,mobile) {
   const click=selector=>mobile?page.locator(selector).tap():page.locator(selector).click();
   await page.goto(root+'?lock-preview#solo');
   await click('#choose-stage');
-  await click('[data-stage="canal"]');
+  await click('[data-stage="canal"]');await click('#arena-confirm');
   assert.equal(await page.locator('#stage-title').textContent(),'Canal Lock');
   await page.clock.runFor(80);
   await page.goto(root+'?lock-opener#online');

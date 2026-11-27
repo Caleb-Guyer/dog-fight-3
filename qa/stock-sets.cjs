@@ -128,7 +128,7 @@ async function counterweightOpening(browser){
       return {fits:text.left>=box.left && text.right<=box.right,height:box.height,top:box.top};
     }));
     assert.equal(boxes.length,4);assert(boxes.every(b=>b.fits && b.height>=44));assert(boxes[2].top>boxes[0].top);
-    await phone.press('[data-stage=canal]');assert.match(await phone.page.locator('#stage-title').textContent(),/Counterweights/);
+    await phone.press('[data-stage=canal]');await phone.press('#arena-confirm');assert.match(await phone.page.locator('#stage-title').textContent(),/Counterweights/);
   }finally{await phone.page.close();}
 }
 async function soloAndLocal(browser){
@@ -153,12 +153,12 @@ async function soloAndLocal(browser){
     assert.deepEqual([left,right],[expected,expected],stage+' '+form+' art lines up with both collision edges');
   }
   await press('[data-mode=local]');await press('#choose-stage');
-  await press('[data-stage-form=counterweights]');await press('[data-stage=canal]');
+  await press('[data-stage-form=counterweights]');await press('[data-stage=canal]');await press('#arena-confirm');
   assert.match(await page.locator('#stage-title').textContent(),/Canal Lock · Counterweights/);
   await page.reload();await observe(page);
   assert.match(await page.locator('#stage-title').textContent(),/Canal Lock · Counterweights/);
   await press('#choose-stage');
-  await press('[data-stage-form=trio]');await press('[data-stage=laundry]');
+  await press('[data-stage-form=trio]');await press('[data-stage=laundry]');await press('#arena-confirm');
   await press('#choose-stage');await press('[data-stage-form=flat]');await page.keyboard.press('Escape');
   assert.match(await page.locator('#stage-title').textContent(),/Laundry Line · Three platforms/);
   await page.reload();await observe(page);
@@ -293,7 +293,7 @@ async function rivalSet(browser) {
   await page.keyboard.press('Escape');
   assert(await page.getByRole('button',{name:'Match stats'}).evaluate(el=>el===document.activeElement));
   await page.locator('[data-do=set-pick]').click();
-  await page.locator('[data-stage=canal]').click();
+  await page.locator('[data-stage=canal]').click();await page.locator('#arena-confirm').click();
   await page.clock.runFor(3200);
   assert.equal(await page.locator('#match-set').textContent(),'Game 2 · 0–1');
   const habits = await page.evaluate(() => window.openingHabits);
@@ -481,7 +481,7 @@ async function onlineSet(browser,phoneBrowser) {
       await loser.press('[data-room-coat="'+chosenCoat+'"]');await loser.press('[data-do=room-stage]');
       await loser.press('[data-do=room-fighter-back]');
       assert.equal(await loser.page.locator('[data-room-coat][aria-pressed=true]').getAttribute('data-room-coat'),String(chosenCoat));
-      await loser.press('[data-do=room-stage]');await loser.press(i===0?'[data-stage=bandstand]':'[data-stage=nightmail]');
+      await loser.press('[data-do=room-stage]');await loser.press(i===0?'[data-stage=bandstand]':'[data-stage=nightmail]');await loser.press('#arena-confirm');
       if(i===1){
         await winner.page.waitForFunction(()=>document.querySelector('#net-rematch-status')?.textContent.includes('Noodle · Night Mail'));
         await winner.press('[data-do=online-rematch]');
