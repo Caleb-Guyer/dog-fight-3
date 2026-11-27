@@ -764,6 +764,11 @@
     });
   }
   $('pick-together').onclick=pickTogether;
+  function openDepotDuo(){
+    if(!missionReady())return waitForDispatch('Bell Depot doubles',loadMission,openDepotDuo,toLobby);
+    window.DispatchView.duoSheet([fighters[settings.p1].name,fighters[settings.p2].name],showDialog);
+  }
+  $('depot-duo').onclick=openDepotDuo;
   function strikeBack(){
     if(page==='match')return showResult();
     dismiss();$('rules-label').focus({preventScroll:true});
@@ -819,6 +824,7 @@
     $('cpu-level').hidden = settings.mode !== 'solo';
     $('event-matches').hidden=settings.mode!=='solo';
     $('pick-together').hidden=settings.mode!=='local';
+    $('depot-duo').hidden=settings.mode!=='local';
     $('tournament').hidden=$('winner-stays').hidden=settings.mode!=='local';
     $('cpu-level').textContent = 'CPU · ' + cpuLevels[settings.cpuLevel].name;
     document
@@ -2396,6 +2402,7 @@
   function showPause(autosave=true) {
     if(finishTrial)return showTrialPause();
     if (page !== 'match' || !world || world.end !== null) return;
+    if(world.team)return window.DispatchView.duoPanel(world,showDialog);
     if(matchConfig?.openingDuel)return openOpeningDuel(matchConfig.openingDuel.card,matchConfig.openingDuel,matchConfig.openingDuel.point?'point':'pause');
     if(world.route)return window.StageStrike.routePanel(world,true,routeUI());
     if(world.eventId)return window.SoloEvents.panel(world,true,eventUI());
@@ -3496,6 +3503,7 @@
     const pattern = e.target.closest('[data-boss-pattern]')?.dataset.bossPattern;
     if (pattern) return startBossPractice(pattern);
     if (action === 'boss-return') return leaveBossPractice();
+    if (action === 'depot-start') return beginRun(yardChapter.lastRoom,0,null,null,null,true);
     if (action === 'dispatch-retry') beginRun(world.roomIndex, world.checkpoint, world.atCheckpoint);
     if (action === 'suspend-mission') return suspendMission();
     if (action === 'school-suspend') return suspendFirstFight();
@@ -4418,7 +4426,7 @@
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-practice-1', DispatchView:'dispatch-view.js?v=launch-rescue-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-duo-1', DispatchView:'dispatch-view.js?v=depot-duo-1',
     ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=light-shield-1',
   };
   const dispatchLoads=new Map();
@@ -4885,13 +4893,13 @@
     $('lift-enter').onclick=()=>open?beginRun(bonus.id,0):progress.room>=bonus.stampRoom?enterStop(bonus.stampRoom,checkpoint):continueAdventure();
     $('lift-enter').focus();
   }
-  function beginRun(index, checkpoint, atCheckpoint = null, cupRound = null, suspended = null) {
+  function beginRun(index, checkpoint, atCheckpoint = null, cupRound = null, suspended = null, doubles = false) {
     corner=spar=null;
-    const book = cupRound ? yardChapter : campaign;
+    const book = cupRound || doubles ? yardChapter : campaign;
     const sideRoute=book.bonus?.id===index, mission=sideRoute?book.bonus:book.rooms[index];
     if(sideRoute && !suspended && !book.liftUnlocked(progress))return showRoute(()=>showLiftTicket());
     if(!missionReady())return waitForDispatch(mission.name,loadMission,
-      ()=>beginRun(index,checkpoint,atCheckpoint,cupRound,suspended),()=>cupRound?cupSheet(cupRound.kind):showRoute());
+      ()=>beginRun(index,checkpoint,atCheckpoint,cupRound,suspended,doubles),()=>doubles?toLobby():cupRound?cupSheet(cupRound.kind):showRoute());
     finishTape=null;
     cupAttempt = cupRound;
     music?.restart();
@@ -4927,7 +4935,14 @@
     document.body.classList.remove('menu-screen', 'training-active', 'cinema-active', 'with-drill-readout');
     $('freshness-readout').hidden = $('wave-readout').hidden = $('combo-readout').hidden = true;
     document.body.classList.add('playing', 'adventure-active');
-    if (!cupRound && !sideRoute && !suspended) saveProgress({ room: index, checkpoint, pending: '' });
+    const story=!cupRound && !doubles;
+    if (story && !sideRoute && !suspended) saveProgress({ room: index, checkpoint, pending: '' });
+    if (doubles) {
+      const pads=getPads();
+      matchConfig={...settings,coats:lobbyCoats.slice(),couchSeats:lobbySeats || new controls.Seats(pads)};
+      matchConfig.couchSeats.beginMatch(pads);
+      clearInput();
+    }
     $('blast-radar').hidden = true;
     view = new window.DispatchView();
     view.shakeEnabled = settings.shake;
@@ -4936,12 +4951,12 @@
     const cues=view.missionCues({tone,sound:fightSound,dispatchNotice,stockLabel,mission,sideRoute,cupRound,
       unlockLift:book.bonus?.stampRoom===index,stored:()=>stored,rivalName:()=>world.foes[0].f.stats.name});
     world = new window.DispatchRun({ chapter:book.number, room: index, checkpoint, atCheckpoint, stamps: cupRound ? 0 : progress.stamps,
-      cupFighter:cupRound?.kind,coat:cupRound?.coat }, (name, e) => {
-      if(!cupRound && name==='dispatchCheckpoint')saveProgress({room:index,checkpoint:e.checkpoint,atCheckpoint:e.atCheckpoint});
-      if(!cupRound && name==='dispatchStamp')saveProgress({room:index,stamp:index});
+      cupFighter:cupRound?.kind,coat:cupRound?.coat,duo:doubles?matchConfig:null }, (name, e) => {
+      if(story && name==='dispatchCheckpoint')saveProgress({room:index,checkpoint:e.checkpoint,atCheckpoint:e.atCheckpoint});
+      if(story && name==='dispatchStamp')saveProgress({room:index,stamp:index});
       cues(name,e);
     });
-    $('match-mode').textContent = sideRoute?'Bonus dispatch · Relay':cupRound ? 'Arcade Cup · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
+    $('match-mode').textContent = doubles?'Bell Depot doubles':sideRoute?'Bonus dispatch · Relay':cupRound ? 'Arcade Cup · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
     if(suspended){
       window.DispatchSuspend.restore(world,suspended);
       Object.defineProperty(world,'suspendHeader',{value:suspended.header});
@@ -4953,7 +4968,7 @@
     view.draw($('game'), world, 0, world.time);
     $('game').focus({ preventScroll: true });
     window.scrollTo(0, 0);
-    announce((cupRound ? 'Arcade Cup final · ' : 'Adventure · ') + world.layout.name);
+    announce((doubles?'Co-op boss fight · ':cupRound ? 'Arcade Cup final · ' : 'Adventure · ') + world.layout.name);
     if(suspended){
       showDialog('pause','Mission ready','<p>'+world.layout.name+' · '+stockLabel(world.dogs[0].stocks)+' · '+tenth(world.dogs[0].damage)+'%</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume fight</button></div>');
       $('dialog-body').querySelector('[data-do=resume]').focus();
@@ -5006,12 +5021,12 @@
       $('dispatch-notice').hidden = true;
     }
     const hero = world.dogs[0], foes = world.foes;
-    const recovery = world.bridge ? null : offstageOptions(hero, world.terrain);
+    const recovery = world.bridge || hero.absent ? null : offstageOptions(hero, world.terrain);
     const grip = world.grapple;
-    const order = !grip || grip.phase === 'throw' ? world.objective : grip.owner === 0
+    const order = !grip || grip.phase === 'throw' || world.team ? world.objective : grip.owner === 0
       ? grappleControls(world,grip) : 'Grabbed · Tap action buttons to escape';
     const key = [world.roomIndex, world.wave, hero.stocks, tenth(hero.damage), world.stamps, order, recovery,
-      ...foes.flatMap((e) => [e.f.stocks, tenth(e.f.damage), e.hp])].join('|');
+      world.team?.[1].stocks,world.team && tenth(world.team[1].damage),...foes.flatMap((e) => [e.f.stocks, tenth(e.f.damage), e.hp])].join('|');
     if (key === adventureKey) return;
     adventureKey = key;
     const marks=world.bossLesson?'Practice · Avoid the hit, then counter':world.sideRoute?'Noodle / Brisket / Clover':cupAttempt ? 'Arcade Cup · Round 4 / 4' :
@@ -5035,13 +5050,14 @@
     while (accumulator >= 1 / 60 && !world.finished) {
       const input = playerInput(0, pads);
       if (cupAttempt) world.matchFrames++;
-      world.step(1 / 60, input);
+      world.step(1 / 60, input, world.team ? playerInput(1,pads,2) : idleInput);
       taps.clear();
       touchTaps.clear();
       accumulator -= 1 / 60;
     }
     updateDispatchHUD();
     view.draw($('game'), world, dt, world.time);
+    if (world.team && world.finished) return window.DispatchView.duoPanel(world,showDialog);
     if (world.bossLesson && world.finished) return window.DispatchView.lessonPanel(world,view.parkedBoss.world,showDialog);
     if (cupAttempt && world.finished) return cupResult(world.finished==='exit');
     if (world.finished === 'exit') {
@@ -6220,7 +6236,7 @@
   function playPad(i,pads=currentPads){
     if(soloSeat && soloWorld===world)return !i?soloSeat.get(pads):null;
     if(finishTrial?.replySeats)return finishTrial.replySeats.get(i,pads);
-    return finishTrial?.seats ? finishTrial.seats.get(i,pads) : finishTrial ? pads[0] : matchConfig?.couchSeats && world.mode==='local' ? matchConfig.couchSeats.get(i,pads) :
+    return finishTrial?.seats ? finishTrial.seats.get(i,pads) : finishTrial ? pads[0] : matchConfig?.couchSeats && (world.mode==='local' || world.team) ? matchConfig.couchSeats.get(i,pads) :
       world.hasSecondPlayer && !world.lesson && !online.match && pads.length === 1 ? (i === 1 ? pads[0] : null) : pads[i];
   }
   function playerInput(i, pads, fighterIndex = i, battle = world) {
@@ -6362,7 +6378,7 @@
     }
     if(!window.CouchControllers || !versusStyled)return waitForDispatch('Assign controllers',()=>loadVersusPanel('CouchControllers'),()=>openCouchPads(source),back);
     couchPanel=window.CouchControllers.panel({seats,showDialog,back,pads:()=>currentPads,keyFor,confirmName:(i,p)=>padNames(i,p)[0],
-      fighters:lobby?[fighters[settings.p1].name,fighters[settings.p2].name]:world.dogs.map(f=>f.stats.name),save(draft){
+      fighters:lobby?[fighters[settings.p1].name,fighters[settings.p2].name]:(world.team || world.dogs).map(f=>f.stats.name),save(draft){
         seats.copyFrom(draft);seats.present=seats.connected(getPads());
         lobbySeats=seats;
         if(source!=='pad-loss')seats.lost=0;
@@ -6377,6 +6393,7 @@
     }
     dismiss();
     if(world.suddenDeath?.intro>0)return;
+    if(world.team)return;
     view.entrance=null;
     countdown=2.4;
     lastCount=0;
@@ -6580,10 +6597,11 @@
     if(pads.length && !currentPads.length)loadDispatch('PadFeedback').catch(()=>{});
     currentPads=pads;refreshController?.();
     checkSoloPad(pads);
-    if(page==='match' && world?.mode==='local')checkLocalPads(pads);
+    const couchMatch=page==='match' && (world?.mode==='local' || world?.team);
+    if(couchMatch)checkLocalPads(pads);
     padMenu(pads,now);
     if(soloSeat?.lost && !dialogType)checkSoloPad(pads);
-    if(page==='match' && world?.mode==='local' && matchConfig?.couchSeats?.lost && !dialogType)checkLocalPads(pads);
+    if(couchMatch && matchConfig?.couchSeats?.lost && !dialogType)checkLocalPads(pads);
     if(movePreview && !document.hidden)movePreview.tick(dt);
     if((dialogType==='couch' || dialogType==='stage-strike') && !document.hidden)couchPanel?.poll(pads,now);
     if (finishTrial) tickFinishTrial(dt,pads);
@@ -6763,6 +6781,8 @@
       settings.mode=hash.startsWith('#local')?'local':'solo';editing=0;toLobby();openStrikeSet();
     }else if(hash==='#local/winner-stays' || hash==='#local/tournament'){
       settings.mode='local';editing=0;toLobby();rotationBoard(hash==='#local/tournament');
+    }else if(hash==='#local/depot-doubles'){
+      settings.mode='local';editing=0;toLobby();openDepotDuo();
     }else if (hash==='#local/pick-together' || hash==='#local/best-of-three') {
       if(hash==='#local/best-of-three')settings.bestOfThree=true;
       settings.mode='local';editing=0;toLobby();pickTogether();

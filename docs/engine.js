@@ -6217,13 +6217,17 @@
         input1 = {...input1,attack:false,tapped:{...input1.tapped,attack:false}};
       }
       if (this.hitStop > 0) {
-        this.captureInput(this.dogs[0], input1);
-        if (this.hasSecondPlayer || combo) this.captureInput(this.dogs[1], input2);
+        const humanInput = f => f.index === 0 ? input1 : this.hasSecondPlayer || combo ?
+          (Array.isArray(input2) ? input2[f.index - 1] : input2) : null;
+        for (const f of this.dogs) {
+          const input = humanInput(f);
+          if (input) this.captureInput(f,input);
+        }
         if (this.finalHitHold > 0)
           this.finalHitHold = this.finalHitHold <= dt + 1e-8 ? 0 : this.finalHitHold - dt;
         else this.hitStop = this.hitStop <= dt + 1e-8 ? 0 : this.hitStop - dt;
         for (const f of this.dogs) {
-          const human = f.index === 0 ? input1 : this.hasSecondPlayer || combo ? input2 : null;
+          const human = humanInput(f);
           if (f.hitShift) {
             // A CPU can read a second swing once. It must re-center and flick under the same rules.
             const cpu = f.hitShift.cpuDirection && f.hitShift.remaining <= 4 ? { x: f.hitShift.cpuDirection } : idleInput;

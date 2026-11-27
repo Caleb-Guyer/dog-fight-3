@@ -196,9 +196,29 @@
         '<button class="utility" data-boss-pattern="'+move+'">Try again</button>'+others.map(patternButton).join('')+'</div>', !outcome);
       document.querySelector(outcome?'[data-do=boss-return]':'[data-do=resume]').focus();
     }
+    static duoSheet(names,showDialog) {
+      showDialog('depot-team','Bell Depot doubles',
+        '<p>P1 '+names[0]+' and P2 '+names[1]+' take on the Copper Hound. You each have three stocks. Either dog can finish the fight.</p>'+
+        '<p>Jump or shield the bell wave, then hit the open lamp together. Your attacks pass through your partner.</p>'+
+        '<div class="dialog-actions"><button class="primary" data-do="depot-start">Fight together</button>'+
+        '<button class="utility" data-do="lobby">Fighter select</button></div>');
+      document.querySelector('[data-do=depot-start]').focus();
+    }
+    static duoPanel(world,showDialog) {
+      const won=world.finished==='exit', done=!!world.finished;
+      const team=world.team.map((f,i)=>'P'+(i+1)+' '+f.stats.name+' · '+f.stocks+(f.stocks===1?' stock':' stocks')).join(' / ');
+      const left=Math.ceil(world.foes[0].hp);
+      showDialog(done?'boss-result':'pause',done?(won?'Copper Hound defeated':'Team out of stocks'):'Bell Depot doubles paused',
+        '<p>'+team+'</p><p>'+(won?'The depot bell is quiet.':left+' armor left · Strike when the lamp opens.')+'</p>'+
+        '<div class="dialog-actions">'+(done?'<button class="primary" data-do="depot-start">Rematch together</button>':
+          '<button class="primary" data-do="resume">Resume</button><button class="utility" data-do="controls">Controls</button><button class="utility" data-do="couch-pads">Assign controllers</button>')+
+        '<button class="utility" data-do="lobby">Fighter select</button></div>',!done);
+      document.querySelector(done?'[data-do=depot-start]':'[data-do=resume]').focus();
+    }
     static updateScoreboard(world,recovery,order,marks,{$,tenth,showPercent,showStocks,recoveryStrip}) {
       const hero=world.dogs[0], foes=world.foes, lead=foes[0];
       const boss=world.layout.rules==='boss', horde=world.layout.rules==='horde';
+      $('duo-armor').hidden=!world.team;
       $('runner-score').hidden = !!world.bridge;
       $('runner-recovery').hidden = recovery === null;
       if (recovery !== null) $('runner-recovery').innerHTML = recoveryStrip(recovery);
@@ -214,6 +234,16 @@
         if (boss) {
           $('machine-health').max = lead.maxHP;
           $('machine-health').value = lead.hp;
+          if (world.team) {
+            const partner=world.team[1];
+            $('runner-name').textContent='P1 '+hero.stats.name;
+            $('machine-name').textContent='P2 '+partner.stats.name;
+            $('rival-score').hidden=$('rival-percent').hidden=false;
+            $('rival-score').removeAttribute('aria-label');
+            showPercent($('rival-percent'),partner.damage);
+            showStocks($('rival-lives'),partner.stocks,'P2 '+partner.stats.name);
+            marks='Copper Hound · '+Math.ceil(lead.hp)+' / '+lead.maxHP+' armor';
+          }
         } else {
           $('rival-percent').hidden = horde;
           if (!horde) showPercent($('rival-percent'), lead.f.damage);
@@ -251,8 +281,9 @@
         reduced.matches || this.shakeEnabled === false ? 0 : Math.sin(t * 86) * Math.min(5, this.shake);
       const travel = l.length - width;
       const x = Math.round(travel <= 0 ? travel / 2 : Math.max(0, Math.min(travel, world.cameraX + shake)));
+      const lead = world.team?.find(f=>!f.absent) || world.dogs[0];
       const top = height >= 675 ? Math.round((675 - height) / 2) :
-        Math.round(Math.max(0, Math.min(675 - height, world.dogs[0].y - height * 0.65)));
+        Math.round(Math.max(0, Math.min(675 - height, lead.y - height * 0.65)));
       this.shake = Math.max(0, this.shake - 52 * dt);
       ctx.save();
       ctx.imageSmoothingEnabled = false;
@@ -282,7 +313,17 @@
       const hero = world.dogs[0];
       if (world.foes[0]?.wavefront) drawBellWave(ctx, world.foes[0].wavefront, world.terrain[0]);
       for (const enemy of world.foes) drawOpponent(ctx, enemy, world, t);
-      drawFighter(ctx, hero, world, t);
+      if (world.team) {
+        for (const [seat,f] of world.team.entries()) {
+          if (f.absent) continue;
+          drawFighter(ctx,f,world,t);
+          const px=Math.round(f.x), py=Math.round(f.y-f.stats.height-24-seat*12);
+          ctx.fillStyle='#241f2d';ctx.fillRect(px-14,py-7,28,15);
+          ctx.fillStyle=seat?'#8be6e1':'#ffd478';
+          ctx.font='12px "Brawl Pixel", monospace';ctx.textAlign='center';
+          ctx.fillText('P'+(seat+1),px,py+5);
+        }
+      } else drawFighter(ctx, hero, world, t);
       if (world.grapple) gripLead(ctx, world.dogs[world.grapple.owner], world.grapple);
       if (l.rules === 'horde') drawHordeDamage(ctx, world.foes);
       for (const shot of world.projectiles) drawItem(ctx, shot);
