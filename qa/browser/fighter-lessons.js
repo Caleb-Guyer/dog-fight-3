@@ -44,7 +44,7 @@ async function firstExample(browser){
     await failed;
     await page.clock.runFor(40);
     await page.getByText('Lesson example could not load.',{exact:true}).waitFor();
-    await page.getByRole('button',{name:'Retry',exact:true}).click();
+    await page.getByRole('dialog',{name:'Lesson example'}).getByRole('button',{name:'Retry',exact:true}).click();
     await page.locator('#school-coach[data-state=example]').waitFor();
     assert.equal(attempts,2);
     await page.clock.runFor(900);await state(page,'example');
