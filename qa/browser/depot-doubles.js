@@ -88,7 +88,7 @@ async function play(browser,profile){
     assert.match(await prompt.innerText(),new RegExp('Hold '+binding+' '));
     assert.equal(await prompt.evaluate(el=>el.parentElement.querySelector('b').textContent.slice(0,2)),'P'+(seat+1));
     assert.equal(await page.evaluate(()=>live.foes[0].hp),140);
-    assert.equal(await page.locator('#match-mode').innerText(),'Last-stock rally');
+    assert.equal(await page.locator('#match-mode').textContent(),'Last-stock rally');
     async function button(name,pressed){
       if(touch){
         const b=await page.locator('[data-touch='+name+']').boundingBox();
@@ -130,7 +130,8 @@ async function play(browser,profile){
     await choose('#pause');await choose('[data-do=depot-start]');await step(64);
     assert.deepEqual(await page.evaluate(()=>live.team.map(f=>f.stocks)),[3,3]);
     assert.deepEqual(await progress(),prior);assert.deepEqual(errors,[]);
-  }finally{await page.close();}
+  }catch(error){throw new Error(profile+' · '+error.message+' · browser errors '+JSON.stringify(errors),{cause:error});}
+  finally{await page.close();}
 }
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
