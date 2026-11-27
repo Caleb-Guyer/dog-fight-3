@@ -6180,6 +6180,7 @@
         back();
       }});
   }
+  const padLossDirection=new Map();
   function checkLocalPads(pads) {
     const seats=matchConfig?.couchSeats;
     if(!seats || world.end!==null || online.match || finishTrial || clipScreen || victoryShot)return;
@@ -6187,6 +6188,7 @@
     seats.track(pads);
     if(!seats.lost || (dialogType && dialogType!=='pad-loss'))return;
     if(dialogType!=='pad-loss'){
+      padLossDirection.clear();
       showDialog('pad-loss','Controller disconnected','<p id="pad-loss-info" role="status"></p><div id="pad-loss-seats"></div><div class="dialog-actions"><button id="pad-resume" class="primary"></button><button class="utility" data-do="couch-pads">Assign controllers</button></div>',false);
       $('pad-resume').onclick=()=>{
         seats.lost=0;
@@ -6209,6 +6211,7 @@
       return line;
     }));
     $('pad-resume').textContent=missing?'Use keyboard for '+labels(missing):'Resume match';
+    for(const p of pads)if(controls.menuDirection(p,'right'))padLossDirection.set(p.index,p.id);
     // A held activation button on a returning pad must not confirm its own reconnection.
     oldPad={...oldPad,confirm:pads.some(p=>down(p,0)),back:pads.some(p=>down(p,1)),pause:pads.some(p=>down(p,9))};
   }
@@ -6246,6 +6249,10 @@
     const any = (i) => pads.some((p) => down(p, i));
     let direction='', padIndex=null;
     for(const pad of pads){
+      if(dialogType==='pad-loss' && padLossDirection.has(pad.index) && padLossDirection.get(pad.index)===pad.id){
+        if(!controls.menuDirection(pad,'right'))padLossDirection.delete(pad.index);
+        continue;
+      }
       direction=controls.menuDirection(pad,pad.index===oldPad.padIndex ? oldPad.direction : '',dialogType!=='stick-setup');
       if(direction){padIndex=pad.index;break;}
     }
