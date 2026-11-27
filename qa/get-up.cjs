@@ -7,6 +7,56 @@ const {Battle,kits,arenas,seededRandom,idleInput}=window.DogFight;
 const tick=1/60;
 const timings={pip:[7,11,6,6],brisket:[14,14,9,9],noodle:[10,17,7,5],clover:[15,8,8,6]};
 
+test('all four Rivals commit to the earlier landing habit and can be fooled on either side',()=>{
+  for(const p2 of Object.keys(kits))for(const sign of [-1,1])for(const read of ['stay','through'])for(const roll of [false,true]){
+    const hits=[],swings=[];
+    const w=new Battle({mode:'solo',cpuLevel:'rival',p1:'pip',p2,stage:'nightmail',form:'flat',landingRead:read,fetch:false},
+      (type,e)=>{if(type==='hit')hits.push([e.owner.index,e.moveId]);},seededRandom(42));
+    if(sign<0)for(const d of w.dogs){d.face*=-1;d.x=w.stageWidth-d.x;d.vx*=-1;}
+    for(let i=0;i<35;i++){
+      w.step(tick,{...idleInput,shield:i===5,x:roll && i>=5 && i<15?sign:0});
+      if(w.dogs[1].attack)swings.push(w.dogs[1].attack.moveId);
+    }
+    assert.equal(w.bot.coveredLanding,read);
+    assert.equal(swings[0],kits[p2].tilts.down);
+    assert.equal(hits.some(([owner,id])=>owner===1 && id===kits[p2].tilts.down),roll===(read==='through'),p2+' '+sign+' '+read);
+    assert.deepEqual(w.dogs.map(f=>f.stocks),[3,3]);assert.equal(w.end,null);
+  }
+});
+test('ordinary Rival learns relative directions across sides, resets on a missed tech, and old checkpoints retain their decisions',()=>{
+  const cfg={mode:'solo',cpuLevel:'rival',p1:'pip',p2:'brisket',stage:'nightmail'};
+  const w=new Battle(cfg,undefined,seededRandom(42));
+  function land(world,mirror,choice){
+    const [f,g]=world.dogs,deck=world.terrain[0];
+    Object.assign(f,{x:600,y:deck.y,ground:0});Object.assign(g,{x:600+65*mirror,y:deck.y,ground:0,face:-mirror});
+    world.beginFloorAction(f,choice===null?'downed':choice?'techRoll':'tech',choice*mirror);
+  }
+  for(const mirror of [1,-1]){land(w,mirror,1);assert.equal(w.bot.coverTech,undefined);}
+  land(w,1,0);
+  assert.equal(w.bot.coverTech.choice,1);assert(w.terrain[0].x1+w.bot.coverTech.offset>w.dogs[0].x);
+  assert.deepEqual(w.bot.landingHabit,{choice:0,count:1});
+  delete w.bot.coverTech;land(w,1,null);assert.equal(w.bot.landingHabit.count,0);
+  const legacy=new Battle(cfg,undefined,seededRandom(42));delete legacy.bot.landingHabit;
+  w.copyFightFrom(legacy);
+  for(let i=0;i<3;i++)land(w,1,0);
+  assert.equal(w.bot.coverTech,undefined);assert.equal(w.bot.landingHabit,undefined);
+});
+test('a saved solo replay reproduces the commitment and Pip can jab the missed sweep in a real stock fight',()=>{
+  const hits=[];
+  const w=new Battle({mode:'solo',cpuLevel:'rival',p1:'pip',p2:'brisket',stage:'nightmail',landingRead:'through'},
+    (t,e)=>{if(t==='hit')hits.push(e.moveId);},seededRandom(42));
+  const tape=new window.DogFight.FinishTape(true);
+  for(let i=0;i<46;i++){
+    const a={...idleInput,shield:i===5,attack:i===30};
+    tape.record(w,a,idleInput);w.step(tick,a);
+  }
+  assert.equal(hits[0],'pipJab');
+  assert.deepEqual(w.dogs.map(d=>d.damage),[45,4]);
+  const copy=tape.playback(13);assert.equal(copy.battle.bot.coverTech.choice,1);
+  while(copy.step()){}
+  assert.deepEqual(copy.battle.matchCard,w.matchCard);assert.deepEqual(copy.battle.bot,w.bot);
+});
+
 test('each dog commits to each requested tech on the mirrored training landings and escapes an idle chaser',()=>{
   for(const rival of Object.keys(kits))for(const stage of Object.keys(arenas))for(const dir of [-1,1]){
     const w=new Battle({p1:'pip',p2:rival,mode:'training',stage,fetch:false},()=>{},seededRandom(3));

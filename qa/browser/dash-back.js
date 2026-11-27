@@ -113,6 +113,18 @@ async function play(browser,device) {
       if(choice==='jump')await hold('jump',false);
       await hold('shield',false);assert.deepEqual(await page.evaluate(()=>live.dogs.map(f=>f.stocks)),[3,3]);
     }
+    await page.evaluate(()=>{window.live=null;location.hash='#solo/landing-read/through';});
+    await page.waitForFunction(()=>document.getElementById('countdown').textContent!=='');
+    await page.clock.runFor(2050);await advanceTo(4);
+    await hold('shield',true);await advanceTo(12);await hold('shield',false);
+    await advanceTo(30);await hold('attack',true);await advanceTo(33);await hold('attack',false);await advanceTo(38);
+    assert.deepEqual(await page.evaluate(()=>contacts[0]),['hit','pipJab'],device+' planted and jabbed the missed read');
+    assert.equal((await damage())[0],45);
+    await choose('#pause');assert.match(await page.locator('#dialog-body').textContent(),/covered a tech roll through/);
+    await choose('[data-do=lobby]');await choose('#cpu-level');await choose('[data-landing-read=stay]');
+    await page.evaluate(()=>{window.live=null;});await page.clock.runFor(2050);await advanceTo(4);
+    await hold('shield',true);await advanceTo(12);await hold('shield',false);await advanceTo(28);
+    assert.deepEqual(await page.evaluate(()=>contacts[0]),await page.evaluate(()=>['hit',live.dogs[1].kit.tilts.down]),device+' repeated the read');
     await page.goto('http://127.0.0.1:8080/?perch#solo/platform-read/clover');
     assert.match(await page.locator('#match-mode').textContent(),/Rival/);
     await page.goto('http://127.0.0.1:8080/?return#solo/stock-return/noodle');
