@@ -1,5 +1,7 @@
 # Dog Fight 3
 
+In **Local Versus → Pick together**, both dogs share one fighter roster. Use your own controls to move your player marker, change coats, and ready up. On a touchscreen, choose **P1** or **P2**, then tap a portrait. Once both dogs are ready, vote on the arena. After both votes, either player can confirm to start. **Controls & rules** shows each player's bindings. [Pick together](https://caleb-guyer.github.io/dog-fight-3/#local/pick-together)
+
 After a versus fight, the winner takes the podium and both scorecards show the final stocks or points. Choose **Rematch** to play again, **Fighter select** to change the lineup, or a fighter’s **Watch last fall** to replay their last knockout. Open **Replays & practice** for the full match and stock retries. [Play a last-stock fight](https://caleb-guyer.github.io/dog-fight-3/#solo/last-stock)
 
 Choose **Arena** from fighter select to see all five stages. Select a postcard and a layout to watch the platforms move. **Random** draws from the other arenas. **Use arena** saves the choice, and Back keeps your previous setup. Open **Stage Run** or **Stage music** directly from the preview. Between games of a set, the player choosing the next arena uses **Lock in arena**. [Open stage select](https://caleb-guyer.github.io/dog-fight-3/#solo/arenas)
