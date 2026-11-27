@@ -27,6 +27,11 @@ dialog[data-view='stage-strike'] { width:min(820px,calc(100% - 16px)); }
 #strike-stages button:disabled { opacity:1; }
 #strike-history summary { cursor:pointer; }
 #strike-history p { margin:.45rem 0; }
+#strike-compare { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px 10px; margin:8px 0; }
+#strike-compare figure { padding:5px 7px; margin:0; border:1px solid #5e5262; background:#25212c; }
+#strike-compare figcaption { font-size:.8rem; }
+#strike-compare canvas { display:block; width:100%; height:auto; image-rendering:pixelated; }
+#strike-compare p, #strike-compare small { grid-column:1/-1; margin:0; }
 @media(max-width:600px){#strike-stages { grid-template-columns:repeat(3,minmax(0,1fr)); }}
 .couch-seats { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin: 10px 0; }
 .couch-seat {

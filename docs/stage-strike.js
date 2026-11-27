@@ -1,6 +1,6 @@
 (() => {
   'use strict';
-  const {arenas,fighters,stageForms}=window.DogFight;
+  const {arenas,fighters,stageForms,stageGeometry,platforms}=window.DogFight;
   const stages=Object.keys(arenas);
   const preferences={
     pip:['bandstand','laundry','picnic','canal','nightmail'],
@@ -34,7 +34,64 @@
     }
   }
   const verbs={strike:'Strike',ban:'Ban',pick:'Pick'};
-  function panel(root,{draft,dogs,form,game,solo,seats,keys,pads,drawStageTile,leave,start,sound,previous,padNames=(i,p)=>window.FightControls.padLegend(p)}){
+  const layouts=new Map();
+  function layoutFor(stage,form){
+    const geometry=stageGeometry(stage,form);
+    if(layouts.has(geometry))return layouts.get(geometry);
+    const surfaces=platforms(geometry,0),floors=surfaces.filter(p=>!p.thin);
+    const midpoint=p=>(p.x1+p.x2)/2;
+    const tracks=surfaces.map(p=>({left:midpoint(p),right:midpoint(p),top:p.y,bottom:p.y}));
+    // Ten seconds covers a complete trip on the basket, ferry and lifts.
+    for(let tick=1;tick<=200;tick++){
+      platforms(geometry,tick/20).forEach((p,i)=>{
+        const x=midpoint(p),track=tracks[i];
+        track.left=Math.min(track.left,x);track.right=Math.max(track.right,x);
+        track.top=Math.min(track.top,p.y);track.bottom=Math.max(track.bottom,p.y);
+      });
+    }
+    const layout={geometry,tracks,solidWidth:Math.max(...floors.map(p=>p.x2-p.x1)),
+      gap:floors.length>1,upper:surfaces.length-floors.length,
+      moving:tracks.filter(t=>t.right-t.left>1 || t.bottom-t.top>1).length};
+    layouts.set(geometry,layout);return layout;
+  }
+  function compareLayouts(last,next){
+    if(last.geometry===next.geometry)return 'Same fighting layout as last game.';
+    const change=Math.round((next.solidWidth/last.solidWidth-1)*100);
+    const width=change===0?'Same length of uninterrupted floor':
+      'Longest uninterrupted floor is '+Math.abs(change)+'% '+(change>0?'longer':'shorter');
+    return width+(next.gap?' with a gap between decks.':'.')+' '+next.upper+' upper platform'+(next.upper===1?'':'s')+
+      (next.moving?' ('+next.moving+' moving).':'.');
+  }
+  function lossLine(card,slot){
+    const labels={left:'left',right:'right',top:'above',bottom:'below'};
+    const counts=new Map();
+    for(const loss of card?.losses || []){
+      if(loss.slot===slot && !loss.suddenRound && Object.hasOwn(labels,loss.zone))
+        counts.set(loss.zone,(counts.get(loss.zone) || 0)+1);
+    }
+    if(!counts.size)return '';
+    return 'P'+(slot+1)+' stock losses · '+Array.from(counts,([zone,n])=>labels[zone]+' ×'+n).join(' · ');
+  }
+  function drawLayout(canvas,layout,time){
+    const ctx=canvas.getContext('2d'),surfaces=platforms(layout.geometry,time);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.save();ctx.scale(canvas.width/1200,canvas.width/1200);ctx.translate(0,-235);
+    ctx.strokeStyle='#d2b080';ctx.lineWidth=6;ctx.setLineDash([10,12]);
+    for(const t of layout.tracks){
+      if(t.right-t.left<1 && t.bottom-t.top<1)continue;
+      ctx.beginPath();ctx.moveTo(t.left,t.top);ctx.lineTo(t.right,t.bottom);ctx.stroke();
+    }
+    for(const p of surfaces){
+      ctx.fillStyle=p.thin?'#8edfc3':'#b6c3ce';
+      ctx.fillRect(p.x1,p.y,p.x2-p.x1,p.thin?9:23);
+      if(!p.thin){
+        ctx.fillStyle='#ffca73';
+        for(const x of [p.x1,p.x2-13])ctx.fillRect(x,p.y,13,23);
+      }
+    }
+    ctx.restore();
+  }
+  function panel(root,{draft,dogs,form,game,solo,seats,keys,pads,drawStageTile,leave,start,sound,previousGame,padNames=(i,p)=>window.FightControls.padLegend(p)}){
     let current=draft.winner || draft.remaining[0],closed=false,cpuAt=null;
     const old=[null,null];let connected=pads,shownLegend;
     const turnLegend=()=>{const n=draft.turn ?? 0;return padNames(n,solo?connected[0]:seats.get(n,connected));};
@@ -42,9 +99,25 @@
     root.innerHTML='<h3 id="strike-turn" class="card-stage" aria-live="polite"></h3><p id="strike-rules"></p>'+
       '<div id="strike-stages" role="group" aria-label="Arenas">'+stages.map(s=>'<button class="utility" type="button" data-strike-stage="'+s+
         '"><canvas width="160" height="90" aria-hidden="true"></canvas><strong>'+arenas[s].name+'</strong><small></small></button>').join('')+
-      '</div><p id="strike-detail"></p><div class="dialog-actions"><button type="button" class="primary" id="strike-confirm"></button>'+
+      '</div><p id="strike-detail"></p>'+(previousGame?'<section id="strike-compare" aria-label="Counterpick comparison">'+
+        '<figure><figcaption>Last game · '+arenas[previousGame.stage].name+'</figcaption><canvas width="240" height="58" aria-hidden="true"></canvas></figure>'+
+        '<figure><figcaption id="strike-candidate"></figcaption><canvas width="240" height="58" aria-hidden="true"></canvas></figure>'+
+        '<small>Gold ends mark ledges. Dotted lines show platform travel.</small>'+
+        '<p id="strike-exits"></p><p id="strike-difference" aria-live="polite"></p></section>':'')+
+      '<div class="dialog-actions"><button type="button" class="primary" id="strike-confirm"></button>'+
       '<button type="button" class="utility" id="strike-back">Back</button></div><small id="strike-keys"></small>';
     const el=id=>root.querySelector('#strike-'+id),confirm=el('confirm'),cards=[...el('stages').children];
+    const diagrams=[...root.querySelectorAll('#strike-compare canvas')];
+    const last=previousGame && layoutFor(previousGame.stage,form);
+    const reducedMotion=last && matchMedia('(prefers-reduced-motion: reduce)');
+    let candidate,previewTime=0,lastPaint=null;
+    if(last){
+      const exits=el('exits');
+      exits.textContent=lossLine(previousGame.card,draft.picker);exits.hidden=!exits.textContent;
+    }
+    function paintLayouts(){
+      drawLayout(diagrams[0],last,previewTime);drawLayout(diagrams[1],candidate,previewTime);
+    }
     el('rules').textContent='Game '+game+' · '+stageForms[form].name+' · '+(draft.picker===null?
       'Strike one, two, then one. Play on the arena left standing.':'The winner bans two arenas. The challenger chooses from the other three.');
     const draw=()=>{
@@ -60,6 +133,12 @@
           winner===s?'Fight here':current===s?'Selected':'';
       }
       el('detail').textContent=arenas[current].name+' · '+(stageForms[form].description || arenas[current].description);
+      if(last){
+        candidate=layoutFor(current,form);
+        el('candidate').textContent='Selected · '+arenas[current].name;
+        el('difference').textContent=compareLayouts(last,candidate);
+        paintLayouts();
+      }
       confirm.disabled=thinking;confirm.textContent=winner?'Start game '+game:verbs[draft.action]+' '+arenas[current].name;
       const n=turn ?? 0,map=keys[n],key=window.FightControls.keyName;
       const legend=shownLegend=turnLegend();
@@ -103,8 +182,13 @@
       if(closed)return;
       if(solo && draft.turn===1){
         cpuAt ??= time+.65;
-        if(time>=cpuAt){draft.cpu(dogs,form,previous);cpuAt=null;sound('menu');draw();}
+        if(time>=cpuAt){draft.cpu(dogs,form,previousGame?.stage);cpuAt=null;sound('menu');draw();}
       }else cpuAt=null;
+      if(last && (last.moving || candidate.moving) && !reducedMotion.matches &&
+        (lastPaint===null || time-lastPaint>=.1)){
+        previewTime+=lastPaint===null?0:Math.min(.2,time-lastPaint);
+        lastPaint=time;paintLayouts();
+      }
       connected=devices;seats.sync(devices);
       if(turnLegend()!==shownLegend)draw();
       const turn=draft.turn,ready=!!draft.winner;
@@ -135,5 +219,5 @@
     });
     return '<details id="strike-history"><summary>Stage picks and bans</summary>'+rows.join('')+'</details>';
   }
-  window.StageStrike={Draft,panel,history};
+  window.StageStrike={Draft,panel,history,layoutFor,compareLayouts,lossLine};
 })();
