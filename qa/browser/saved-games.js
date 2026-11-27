@@ -187,8 +187,45 @@ async function personalKnockout(browser){
     assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'playing');
     await page.goto(root+'?after-personal-save');
     assert.match(await page.locator('#home-continue').textContent(),/Rematch Brisket/);
-    await page.locator('#home-continue').tap();await page.clock.runFor(3200);
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(...args){
+        if(this.mode==='solo' && !window.liveRematch)window.liveRematch=this;
+        return step.apply(this,args);
+      };
+    });
+    await page.locator('#home-continue').tap();await page.clock.runFor(2550);
     assert.equal(await page.locator('#hud .lives').first().getAttribute('aria-label'),'3 stocks');
+    await page.keyboard.down('a');
+    for(let i=0;i<160 && !await page.evaluate(()=>liveRematch.dogs[0].ground<0 && liveRematch.dogs[0].x<liveRematch.terrain[0].x1-15);i++)await page.clock.runFor(16);
+    await page.keyboard.up('a');await page.keyboard.down('d');await page.keyboard.down('w');await page.keyboard.down('k');
+    await page.clock.runFor(40);await page.keyboard.up('w');await page.keyboard.up('k');
+    for(let i=0;i<120 && await page.locator('#corner-title').textContent()!=='Target met';i++)await page.clock.runFor(32);
+    await page.keyboard.up('d');assert.equal(await page.locator('#corner-title').textContent(),'Target met');
+    await page.keyboard.down('a');
+    for(let i=0;i<38 && !await page.locator('[data-do=rematch-film]').count();i++)await page.clock.runFor(1200);
+    await page.keyboard.up('a');
+    await page.locator('[data-do=rematch-film]').tap();
+    const rink=page.locator('#rematch-rink');
+    await rink.locator('canvas').first().waitFor();
+    assert.equal(await rink.locator('canvas').count(),2);
+    assert(await page.locator('#dialog').evaluate(d=>d.scrollWidth<=d.clientWidth+1));
+    await page.locator('#rematch-play').tap();await page.clock.runFor(600);
+    const offset=Number(await rink.locator('input').inputValue());assert(offset<0 && offset>-90);
+    await page.locator('#rematch-mark').tap();assert.equal(await rink.locator('output').textContent(),'First knockout');
+    await page.locator('#rematch-target-film').tap();assert.equal(await rink.locator('canvas').count(),1);
+    await page.locator('#rematch-mark').tap();assert.equal(await rink.locator('output').textContent(),'Target');
+    await page.locator('#rematch-takeover').tap();await page.clock.runFor(4300);
+    await page.locator('[data-do=trial-results]').tap();await page.locator('#rematch-film-back').tap();
+    assert.equal(await page.locator('#dialog-title').textContent(),'First fight finished');
+    await page.goto(root+'?saved-rematch#records');
+    assert.equal(await page.locator('[data-record-id]').count(),2);
+    await page.locator('[data-record-id]').first().tap();await page.locator('[data-do=rematch-film]').tap();
+    await page.locator('#rematch-target-film').waitFor();assert.equal(await rink.locator('canvas').count(),2);
+    await page.locator('#rematch-takeover').tap();await page.clock.runFor(4300);
+    await page.locator('[data-do=trial-results]').tap();await page.locator('#rematch-film-back').tap();
+    assert.equal(await page.locator('#dialog-title').textContent(),'Match stats');
+    assert(await page.locator('[data-do=rematch-film]').evaluate(b=>document.activeElement===b));
   }finally{await page.close();}
 }
 async function touchRematch(browser){
