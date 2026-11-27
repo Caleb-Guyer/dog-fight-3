@@ -2432,7 +2432,8 @@
       '<p id="stock-break-recap"></p><div class="dialog-actions"><button class="primary" data-do="resume">Play next stock</button>'+
       '<button class="utility" id="stock-break-watch">Watch my KO</button>'+
       (fall?'<button class="utility" id="stock-break-practice">Practice this recovery</button>':'')+
-      '<button class="utility" id="stock-break-retry">Retry this stock</button>'+stockBreakToggle()+'</div>');
+      '<button class="utility" id="stock-break-retry">Retry this stock</button>'+stockBreakToggle()+
+      '<button class="utility" data-do="school-suspend">Save &amp; quit</button></div>');
     $('stock-break-recap').textContent='Pip went out at the '+loss.zone+' blast line at '+tenth(loss.damage)+'%. '+
       (move?'Brisket’s last hit was '+move+'. ':'')+'Your next stock is waiting on the lift.';
     $('stock-break-watch').onclick=()=>showFinishReplay(null,review);
@@ -4534,6 +4535,7 @@
     },()=>{
       leaveOnline();afterStory=null;
       startMatch(firstFightConfig(resume.corner.target?.id),undefined,resume.checkpoint.openingSeed,null,{resume});
+      if(settings.stockBreaks && world.dogs[0].stockLift?.time===0)return showStockBreak();
       showDialog('pause','First match ready','<p>'+window.DispatchSuspend.schoolCard(resume.checkpoint.header).detail+'</p>'+
         '<div class="dialog-actions"><button class="primary" data-do="resume">Resume fight</button></div>');
       document.querySelector('[data-do=resume]').focus();
