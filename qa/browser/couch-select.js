@@ -156,7 +156,7 @@ async function soloReconnect(browser,touch){
   const page=await browser.newPage({viewport:touch?{width:390,height:844}:{width:1280,height:720},hasTouch:touch,isMobile:touch});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   const run=ms=>page.clock.runFor(ms);
-  const snapshot=()=>page.evaluate(()=>[live.runFrames,live.matchFrames,live.clockFrames,
+  const snapshot=()=>page.evaluate(()=>[observedSteps,live.time,live.hitStop,live.runFrames,live.matchFrames,live.clockFrames,
     ...live.dogs.flatMap(d=>[d.x,d.y,d.vx,d.vy,d.damage,d.stocks])]);
   const loss=page.locator('#dialog[open][data-view="solo-pad-loss"]');
   const backup=loss.locator('#solo-pad-backup');
@@ -176,9 +176,9 @@ async function soloReconnect(browser,touch){
     }else await page.goto(root+'#tutorial/first-match');
     await page.evaluate(touch=>{
       const proto=touch?DispatchRun.prototype:DogFight.Battle.prototype,step=proto.step;
-      window.jumpSamples=0;
+      window.jumpSamples=0;window.observedSteps=0;
       proto.step=function(dt,input){
-        window.live=this;window.lastInput=input;if(input?.jump)jumpSamples++;
+        window.live=this;window.lastInput=input;observedSteps++;if(input?.jump)jumpSamples++;
         return step.apply(this,arguments);
       };
     },touch);
@@ -219,7 +219,7 @@ async function soloReconnect(browser,touch){
       await page.keyboard.down('KeyA');await run(50);assert.equal(await page.evaluate(()=>lastInput.x),-1);
       await page.keyboard.up('KeyA');
     }
-    assert.notDeepEqual(await snapshot(),before);assert.deepEqual(errors,[]);
+    assert((await snapshot())[0]>before[0],'the simulation must resume stepping after the player takes over');assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
 async function shuffleDraft(browser){
