@@ -968,7 +968,7 @@
     if(dialogType==='rumble')window.PadFeedback?.stop();
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=rematch-film-1';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=cup-select-1';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
@@ -1008,6 +1008,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='result' && $('cup-more') && !$('cup-review').hidden){$('cup-more').click();$('cup-more').focus();return;}
     if(dialogType==='event-board')return $('event-back').click();
     if(dialogType==='event-result')return $('event-board').click();
     if(dialogType==='stage-routes')return $('route-back').click();
@@ -1033,6 +1034,7 @@
     if(dialogType==='finish-picker')return $('finish-picker-back').click();
     if(dialogType==='ko-replays')return $('ko-list-back').click();
     if(dialogType==='finish-film')return $('film-back').click();
+    if(dialogType==='finish-second-chance')return $('chance-back').click();
     if(dialogType==='finish-recovery')return $('recovery-back').click();
     if(dialogType==='finish-stock')return $('stock-back').click();
     if(dialogType==='finish-stock-film')return $('stock-film-back').click();
@@ -1683,14 +1685,15 @@
       (relayBests.length?'<details><summary>Relay personal bests</summary>'+relayBests.map(([m,run])=>
         '<p>'+relayRouteName(Number(m))+' · '+cupRecord(run)+'</p>').join('')+'</details>':'');
   }
-  function cupSheet(kind = cupChoice) {
+  function cupSheet(kind=cupChoice,route=false,resume=false) {
     if (!Object.hasOwn(cup.courses,kind)) return;
-    if (page !== 'home') showHome(false);
+    if(!window.VersusRulebook || !versusStyled)return waitForDispatch('Arcade Cup',()=>loadVersusPanel('VersusRulebook'),
+      ()=>cupSheet(kind,route,resume),()=>page==='match'?(world?.end!=null?showResult():showPause()):returnToHome());
+    if(page!=='cup-select')menuScreen('cup-select');else dismiss();
+    $('dialog-body').replaceChildren();
     cupChoice = kind;
     const entry = cupEntry(kind), run = entry.active, course = cup.courses[kind], round = run?.wins.length || 0;
     cupShown = entry;
-    const selectors = Object.keys(cup.courses).map(id=>'<button class="cup-dog" data-cup-dog="'+id+'" aria-pressed="'+(id===kind)+
-      '"><img alt="" src="'+portrait(id,id===kind && run ? run.coat : savedCoat(0,id))+'"><strong>'+fighters[id].name+'</strong></button>');
     const stops = [...course.bouts,[null]].map(([dog,stage,form],i)=>{
       const lead=run?.wins[i]?.relayLead || (i===round && run?.relayLead);
       const detour=lead && cup.relay(kind,i,lead);
@@ -1701,18 +1704,15 @@
     }).join('');
     const activeRelay=run?.relayLead && cup.relay(kind,round,run.relayLead);
     const tip = activeRelay?'Relay lineup · '+activeRelay.relayTeams[0].map(id=>fighters[id].name).join(' → '):course.bouts[round]?.[3] || yardChapter.rooms[yardChapter.lastRoom].objective;
-    showDialog('cup','Arcade Cup','<div class="cup-dogs" role="group" aria-label="Choose a route">'+selectors.join('')+
-      '</div><h3 class="card-stage">'+course.name+'</h3><ol class="cup-stops">'+stops+'</ol><p>'+tip+'</p>'+
-      (unsavedCup.has(kind)?'<p>Progress lasts for this tab while storage is unavailable.</p>':'')+
-      cupRecords(entry)+
-      '<div class="dialog-actions"><button class="primary" data-do="cup-start">'+
-      (run ? run.started ? 'Retry round '+(round+1) : 'Continue to round '+(round+1) : 'Start '+fighters[kind].name+'’s run')+
-      '</button>'+(relayOffer(entry) || '<button class="utility" data-do="cup-exhibition">Play a relay exhibition</button>')+'</div>');
-    document.querySelector('[data-do=cup-start]').focus({preventScroll:true});
+    window.VersusRulebook.cupSelect($('cup-select'),{kind,entry,course,route,stops,records:cupRecords(entry),offer:relayOffer(entry),tip,
+      storageNote:unsavedCup.has(kind)?'<p>Progress lasts for this tab while storage is unavailable.</p>':'',
+      coatFor:id=>cupEntry(id).active?.coat ?? savedCoat(0,id),select:cupSheet,back:returnToHome,
+      start:button=>startCupRound(kind,null,button),relay:exhibition=>openCupRelay(kind,exhibition?1:null,false)});
+    if(resume)$('cup-select').querySelector('[data-do=cup-start]').click();
   }
   function openCupRelay(kind,exhibitionRound=null,fromResult=dialogType==='result'){
     const back=()=>{
-      if(fromResult)showResult();else cupSheet(kind);
+      if(fromResult)showResult();else cupSheet(kind,true);
       document.querySelector(exhibitionRound?'[data-do=cup-exhibition]':'[data-do=cup-relay]')?.focus();
     };
     if(!window.PackRelay || !versusStyled)return waitForDispatch('Pack Relay',()=>loadVersusPanel('PackRelay'),()=>openCupRelay(kind,exhibitionRound,fromResult),back);
@@ -1723,12 +1723,12 @@
       start:lead=>exhibitionRound?startMatch(cup.stockBout(kind,round,coat,lead),undefined,17+round*31,null,
         {cupRound:{kind,round,coat,exhibition:true}}):startCupRound(kind,lead)});
   }
-  async function startCupRound(kind,lead) {
-    const button = document.querySelector(lead?'#cup-relay-start':'[data-do=cup-start],[data-do=cup-next]');
+  async function startCupRound(kind,lead,button) {
+    button ??= $('dialog').querySelector(lead?'#cup-relay-start':'[data-do=cup-next]');
     if (!button || button.disabled) return;
     button.disabled = true;
     audioReady();
-    const current = () => button.isConnected && $('dialog').open;
+    const current = () => button.isConnected && ($('cup-select').contains(button)?page==='cup-select' && !$('dialog').open:$('dialog').open);
     const expected = cupShown;
     if(expected.active?.wins.length===cup.courses[kind].bouts.length && !missionReady()){
       button.textContent='Loading Bell Depot…';
@@ -1754,16 +1754,27 @@
     if (!bout) return beginRun(yardChapter.lastRoom,0,null,attempt);
     startMatch(bout,undefined,17+round*31,null,{cupRound:attempt});
   }
+  function cupFinish(title,kind,coat,headline,line,primary,links,details=''){
+    const attempt=cupAttempt, open=!!attempt.detailsOpen;
+    showDialog('result',title,'<div class="cup-result"><div class="winner"><img alt="" src="'+portrait(kind,coat)+'"><div><h3>'+
+      headline+'</h3><p>'+line+'</p></div></div><div class="cup-advance">'+primary+'</div>'+
+      '<div class="cup-links">'+links+'<button class="utility" id="cup-more" aria-controls="cup-review" aria-expanded="'+open+'">Match details</button></div>'+
+      '<section id="cup-review" aria-label="Match details"'+(open?'':' hidden')+'><span data-cup-recap hidden></span>'+details+'<div class="dialog-actions">'+
+      (world.matchCard?cardButton:'')+'<button class="utility" data-do="home">Main menu</button></div></section></div>',false);
+    $('cup-more').onclick=()=>{
+      attempt.detailsOpen=$('cup-review').hidden;$('cup-review').hidden=!attempt.detailsOpen;
+      $('cup-more').setAttribute('aria-expanded',String(attempt.detailsOpen));
+    };
+    document.querySelector('.cup-advance button').focus();announce(title+'. '+line);
+  }
   async function cupResult(won) {
     const attempt = cupAttempt;
     if (!attempt || attempt.saving) return;
     if(attempt.exhibition){
       const dog=world.dogs[world.end];
-      showDialog('result',won?'Relay exhibition won':'Relay exhibition lost','<div class="winner"><img alt="" src="'+portrait(dog.kind,world.coatFor(dog.index))+
-        '"><div><h3>'+dog.stats.name+' wins</h3><p>'+stockLabel(dog.stocks)+' kept</p></div></div>'+
-        '<div class="dialog-actions"><button class="primary" data-do="cup-exhibition">Choose another lead</button>'+
-        '<button class="utility" data-do="cup-sheet">Cup route card</button>'+cardButton+'</div>',false);
-      document.querySelector('[data-do=cup-exhibition]').focus();return;
+      cupFinish(won?'Relay exhibition won':'Relay exhibition lost',dog.kind,world.coatFor(dog.index),dog.stats.name+' wins',
+        stockLabel(dog.stocks)+' kept','<button class="primary" data-do="cup-exhibition">Choose another lead</button>',
+        '<button class="utility" data-do="cup-sheet">Route card</button>');return;
     }
     if (!attempt.settled) {
       attempt.saving = true;
@@ -1781,16 +1792,14 @@
     const nextDog = cup.courses[kind].bouts[next]?.[0];
     const line = clear ? cupRecord(entry.last) : won ? 'Next up · '+(nextDog ? fighters[nextDog].name : 'Copper Hound') :
       'Retry this round with three fresh stocks.';
-    showDialog('result',title,'<div class="winner"><img alt="" src="'+portrait(kind,attempt.coat)+'"><div><h3>'+
-      cup.courses[kind].name+'</h3><p>'+line+'</p></div></div>'+
+    const winner=world.mode==='adventure'?world.dogs[0]:world.dogs[world.end];
+    const headline=world.mode==='adventure'?(won?fighters[kind].name+' wins':'Copper Hound wins'):winner.stats.name+' wins';
+    cupFinish(title,winner.kind,world.coatFor(winner.index),headline,line,
+      '<button class="primary" data-do="'+(clear?'cup-roster':'cup-next')+'">'+
+      (clear?'Choose a fighter':won?'Play round '+(next+1):'Retry round '+next)+'</button>',
+      relayOffer(entry)+'<button class="utility" data-do="cup-sheet">Route card</button>',
       (won && attempt.relayLead?'<p>Round '+next+' relay stamp earned.</p>':'')+
-      (clear ? '<p><strong>Personal best</strong> · '+(cup.routeMask(entry.last)?relayRouteName(cup.routeMask(entry.last)):'Standard route')+' · '+cupRecord(cup.bestFor(entry,entry.last))+'</p>' : '')+
-      '<div class="dialog-actions"><button class="primary" data-do="'+(clear?'cup-sheet':'cup-next')+'">'+
-      (clear ? 'Choose a route' : won ? 'Play round '+(next+1) : 'Retry round '+next)+'</button>'+
-      relayOffer(entry)+(!clear?'<button class="utility" data-do="cup-sheet">Route card</button>':'')+
-      (world.matchCard ? cardButton : '')+'<button class="utility" data-do="home">Main menu</button></div>',false);
-    document.querySelector('#dialog-body .primary').focus();
-    announce(title+'. '+line);
+      (clear?'<p><strong>Personal best</strong> · '+(cup.routeMask(entry.last)?relayRouteName(cup.routeMask(entry.last)):'Standard route')+' · '+cupRecord(cup.bestFor(entry,entry.last))+'</p>':''));
   }
   const frameLab = {mode:'live', count:0, pending:0, renderTime:0};
   let trainingMoment = null;
@@ -2192,8 +2201,9 @@
     if (online.match) online.match.onConfirmedInput=(battle,a,b)=>finishTape?.record(battle,a,b);
     audioReady();
     dismiss();
+    $('cup-select').replaceChildren();
     page = 'match';
-    for (const id of ['home', 'online-lobby', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
+    for (const id of ['home', 'cup-select', 'online-lobby', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
       $(id).hidden = true;
     $('hud').hidden = false;
     document.body.classList.remove('menu-screen', 'adventure-active', 'with-drill-readout');
@@ -2388,7 +2398,7 @@
     world = null;
     view = null;
     document.body.classList.remove('playing', 'training-active', 'adventure-active', 'menu-screen');
-    for (const id of ['home', 'online-lobby', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
+    for (const id of ['home', 'cup-select', 'online-lobby', 'dispatch-route', 'dispatch-story', 'dispatch-hud', 'dispatch-orders'])
       $(id).hidden = true;
     $('lobby').hidden = false;
     $('match').hidden = true;
@@ -2507,6 +2517,15 @@
     finishTape?.captureKnockouts(battle);
     return finishTape?.knockouts || [];
   }
+  function secondChance({replyPlan,guided,replyPrompt,...review},contact){
+    const back=()=>review.chanceClip?showFinishReplay(contact?.frame,review):review.rescue?closeRecoveryClinic():
+      review.stockBreak?showStockBreak():showResult();
+    if(!window.FinishTools)return waitForDispatch('Second Chance',()=>loadDispatch('FinishTools'),()=>secondChance(review,contact),back);
+    const device=promptDevice(getPads()),slot=review.slot ?? 0;
+    const label=k=>device===0?keyFor(0,k):device===1 && k!=='down'?padFor(0,k):k;
+    window.FinishTools.secondChanceSheet(review.clip.tape,slot,{showDialog,back,label,loadFilm:()=>loadDispatch('MatchReview'),play:(plan,guided,prompt)=>
+      startFinishTrial(Math.max(plan.contact.from,plan.cue-45),slot,{...review,replyPlan:plan,guided,replyPrompt:prompt})},contact);
+  }
   function stockBreakToggle(){
     return '<button class="utility" data-do="stock-break-toggle" aria-pressed="'+settings.stockBreaks+'">Pause after my KOs · '+(settings.stockBreaks?'On':'Off')+'</button>';
   }
@@ -2519,11 +2538,13 @@
     showDialog('stock-break',stockLabel(world.dogs[0].stocks)+' left',
       '<p id="stock-break-recap"></p><div class="dialog-actions"><button class="primary" data-do="resume">Play next stock</button>'+
       '<button class="utility" id="stock-break-watch">Watch my KO</button>'+
+      (move?'<button class="utility" id="stock-chance">Coach this KO</button>':'')+
       (fall?'<button class="utility" id="stock-break-practice">Practice this recovery</button>':'')+
       '<button class="utility" id="stock-break-retry">Retry this stock</button>'+stockBreakToggle()+
       '<button class="utility" data-do="school-suspend">Save &amp; quit</button></div>');
     $('stock-break-recap').textContent='Pip went out at the '+loss.zone+' blast line at '+tenth(loss.damage)+'%. '+
       (move?'Brisket’s last hit was '+move+'. ':'')+'Your next stock is waiting on the lift.';
+    if($('stock-chance'))$('stock-chance').onclick=()=>secondChance(review);
     $('stock-break-watch').onclick=()=>showFinishReplay(null,review);
     if(fall)$('stock-break-practice').onclick=()=>recoverySheet(review);
     $('stock-break-retry').onclick=()=>stockSheet(review);
@@ -2560,11 +2581,6 @@
     canvas.setAttribute('role','img');
     canvas.setAttribute('aria-label',dog.stats.name+' on the winner’s podium');
     photo.replaceWith(canvas);
-    if (cupAttempt && !cupAttempt.saving && result.mode!=='adventure') {
-      const caption=document.createElement('small');
-      caption.className='mode-label'; caption.textContent=dog.stats.name+' wins';
-      canvas.nextElementSibling.prepend(caption);
-    }
     victoryShot={canvas,kind:dog.kind,coat:result.coatFor(slot),elapsed:0,cel:-1};
     drawVictory(0);
     const stats=document.querySelector('#dialog-body [data-do=match-card]');
@@ -2584,7 +2600,7 @@
       stats.insertAdjacentHTML('beforebegin',stockRetryButton(result)+recoveryButtons(result,clips));
       if(finishTape.reel){
         stats.insertAdjacentHTML('beforebegin','<button class="utility" data-do="watch-match">Watch full match</button>');
-        const winner=canvas.closest('.winner');
+        const winner=$('cup-review')?.querySelector('[data-cup-recap]') || canvas.closest('.winner');
         const recap=()=>window.MatchReview.resultHighlight(winner,result,()=>watchMatch(null,'highlight'));
         if(window.MatchReview)recap();else loadDispatch('MatchReview').then(recap).catch(()=>{});
       }
@@ -2594,6 +2610,11 @@
       if(matchConfig.schoolFinal && result.end===1 && result.endReason==='ko'){
         button.textContent='Replay my last stock';
         stats.closest('.dialog-actions').querySelector('[data-do=rematch]').after(button);
+        const clip=clips.findLast(c=>c.losses.some(l=>l.slot===0));
+        if(clip?.losses.some(l=>l.slot===0 && l.lastHit)){
+          const b=button.cloneNode(false);delete b.dataset.do;b.id='result-chance';b.textContent='Coach my last KO';
+          b.onclick=()=>secondChance({clip,slot:0,from:'result',result});button.after(b);
+        }
       }else{button.textContent='Watch finish';stats.before(button);}
       const practice=document.createElement('button');
       practice.className='utility';practice.textContent='Practice finish';practice.dataset.do='practice-finish';
@@ -2692,6 +2713,7 @@
           clinic:review?.landingFocus || review?.moment || (stageClinic?{surface:review.clinic==='ceiling'?'ceiling':'wall'}:review?.clinic===true),practiceLanding:(landing,start,guided,options)=>startFinishTrial(start,landing.slot,{
             ...(review || {finish:true,from:'result',clip:{tape,losses:[]},result}),landing,guided,replayFrame:landing.frame,landingFocus:{...options,slot:landing.slot,at:landing.frame}}),
           retryMoment:review?.instant?(frame,slot,contact)=>startFinishTrial(frame,slot,{...review,replayFrame:contact}):null,
+          coachDefense:ko?contact=>secondChance({...review,slot:contact.slot,chanceClip:true},contact):null,
           launchStudy:review?.launchStudy,attachAimReader:reader=>{clipScreen.aimReader=reader;},
           rescueLaunch:ko?launch=>recoverySheet({...review,launch,slot:launch.slot,fromClip:true,
             launchStudy:launch.chosenAim?{...launch,aim:launch.chosenAim}:review.launchStudy}):null,
@@ -2812,7 +2834,7 @@
     const emit=(name,e)=>{
       camera.event(name,e);fightSound(name,e);trace?.observe(name,e,player.frame+1);
     };
-    const player=review?.rematchFilm?review.rematchFilm.attempt(tape,emit):review?.duel?review.duel.reply(tape,start,slot,emit):review?.ledge?window.FinishTools.ledgeAttempt(tape,review.ledge.mark,false,emit,review.clip?.returnTape):review?.hold?window.FinishTools.holdAttempt(tape,review.hold,false,emit):review?.stock?review.stock.attempt(emit,start):review?.landing?window.FinishTools.landingTry(tape,review.landing,start,emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
+    const player=review?.replyPlan?window.FinishTools.secondChanceAttempt(tape,review.replyPlan,review.guided,emit):review?.rematchFilm?review.rematchFilm.attempt(tape,emit):review?.duel?review.duel.reply(tape,start,slot,emit):review?.ledge?window.FinishTools.ledgeAttempt(tape,review.ledge.mark,false,emit,review.clip?.returnTape):review?.hold?window.FinishTools.holdAttempt(tape,review.hold,false,emit):review?.stock?review.stock.attempt(emit,start):review?.landing?window.FinishTools.landingTry(tape,review.landing,start,emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
     const saved=finishTrial?.saved || {mode:$('match-mode').textContent,pause:$('pause-label').textContent,
       call:$('countdown').textContent,setHidden:$('match-set').hidden,cornerHidden:$('corner-tip').hidden,schoolHidden:$('school-coach').hidden,
       cornerTitle:$('corner-title').textContent,cornerLine:$('corner-line').textContent};
@@ -2836,6 +2858,10 @@
       $('corner-title').textContent=review.moment.title;
       $('corner-line').textContent=window.MatchReview.defenseCue(review.moment.type);$('corner-tip').hidden=false;
     }
+    if(review?.replyPlan){
+      $('corner-title').textContent='Second Chance';
+      $('corner-line').textContent=review.replyPrompt+' before '+review.replyPlan.contact.move+'.';$('corner-tip').hidden=false;
+    }
     if(review?.coach){
       $('corner-title').textContent='Reach the stage';$('corner-line').textContent=review.coachLine;$('corner-tip').hidden=false;
     }
@@ -2847,7 +2873,7 @@
       $('corner-title').textContent=watch?'Ledge get-up · ½ speed':'Your ledge get-up';
       $('corner-tip').hidden=false;
     }
-    $('match-mode').textContent=(review?.ledge?'Ledge practice':review?.hold?'Grab escape':review?.landing?.surface?'Stage tech practice':review?.landing?'Landing practice':review?.moment?'Defense practice':review?.stock?'Stock '+review.stock.number+' retry':review?.instant?'Exchange practice':review?.coach?'Recovery practice':trace?'Stock return':review?.film?'Match replay practice':review && !review.finish?'KO practice':'Finish practice')+' · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
+    $('match-mode').textContent=(review?.replyPlan?'Second Chance':review?.ledge?'Ledge practice':review?.hold?'Grab escape':review?.landing?.surface?'Stage tech practice':review?.landing?'Landing practice':review?.moment?'Defense practice':review?.stock?'Stock '+review.stock.number+' retry':review?.instant?'Exchange practice':review?.coach?'Recovery practice':trace?'Stock return':review?.film?'Match replay practice':review && !review.finish?'KO practice':'Finish practice')+' · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
     if(review?.together)$('match-mode').textContent+=' · Play together';
     if(review?.duel)$('match-mode').textContent='Opening retry · P'+(slot+1)+' '+player.battle.dogs[slot].stats.name;
     if(review?.rematchFilm)$('match-mode').textContent=player.target.line;
@@ -2900,7 +2926,12 @@
       const applied=player.frame===trial.start && (trial.review?.launchInput || trial.review?.coach?.releaseInput);
       const input=applied || (ledge?.watch?player.reply(ledge.action,ledge.delay):
         playerInput(trial.seats || trial.replySeats?trial.slot:0,pads,trial.slot,player.battle));
-      if(trial.review?.guided && (trial.review.landing || trial.review.coach)){
+      if(trial.review?.guided && trial.review.replyPlan && player.frame===trial.review.replyPlan.cue){
+        if(!window.FinishTools.replyGate(trial.review.replyPlan,input)){
+          $('countdown').textContent=trial.review.replyPrompt;taps.clear();touchTaps.clear();trial.carry=0;return;
+        }
+        $('countdown').textContent='';
+      }else if(trial.review?.guided && (trial.review.landing || trial.review.coach)){
         const cue=trial.review.landing?window.FinishTools.landingGate(trial,input):
           window.RecoveryCoach.gate(trial.review.coach,player.frame-trial.start,input,trial.review.coachLabel,player.battle.dogs[trial.slot]);
         if($('countdown').textContent!==cue)$('countdown').textContent=cue;
@@ -2934,6 +2965,7 @@
     if(replay && review?.landing){delete review.landing;delete review.guided;}
     if(review?.from==='archive'){
       showHome(false);
+      if(review.replyPlan && replay)return secondChance(review,review.replyPlan.contact);
       if(review.rematchFilm)return review.rematchFilm.panel();
       if(replay && stageImpact)return showFinishReplay(review.replayFrame,review);
       if(replay && ledge)return showFinishReplay(ledge.mark.frame,review);
@@ -2948,10 +2980,12 @@
     $('pause-label').textContent=saved.pause;$('countdown').textContent=saved.call;
     $('corner-tip').hidden=saved.cornerHidden;
     $('school-coach').hidden=saved.schoolHidden;
-    if(review?.coach || review?.landing || review?.landingFocus || review?.moment){$('corner-title').textContent=saved.cornerTitle;$('corner-line').textContent=saved.cornerLine;}
+    if(review?.replyPlan || review?.coach || review?.landing || review?.landingFocus || review?.moment){$('corner-title').textContent=saved.cornerTitle;$('corner-line').textContent=saved.cornerLine;}
     hudKey='';updateHUD();
     view.draw($('game'),online.match?.confirmedWorld || world,0,world.time);
     if(review?.rematchFilm)return review.rematchFilm.panel();
+    if(review?.replyPlan && replay)return secondChance(review,review.replyPlan.contact);
+    if(review?.replyPlan && review.stockBreak)return showStockBreak();
     if(review?.duel){if(replay)showFinishReplay(null,review);else showPause(false);}
     else if(!replay && (review?.rescue || review?.launchLab))closeRecoveryClinic();
     else if(!replay && review?.clinic){showHome(false);schoolList();}
@@ -2968,6 +3002,7 @@
     else showResult();
   }
   function trialActions(){
+    if(finishTrial.review?.replyPlan)return window.FinishTools.secondChanceActions(finishTrial.review);
     if(finishTrial.review?.rematchFilm)return finishTrial.review.rematchFilm.actions();
     if(finishTrial.review?.duel)return finishTrial.review.duel.actions();
     if(finishTrial.review?.ledge)return window.FinishTools.ledgeActions(finishTrial.review);
@@ -2985,6 +3020,7 @@
   }
   function showTrialComparison(){
     const {player,original,slot,review}=finishTrial;
+    if(review?.replyPlan)return window.FinishTools.secondChanceReport(player,review,showDialog);
     if(review?.rematchFilm)return review.rematchFilm.report(player,showDialog);
     if(review?.duel)return review.duel.report(player,slot,showDialog);
     if(review?.ledge)return window.FinishTools.ledgeReport(player,review,showDialog);
@@ -3438,13 +3474,8 @@
     if (action==='school-cup') return cupSheet('pip');
     if (action==='rotation') return rotationBoard(!!matchConfig.tourneyRound);
     if (action==='fighter-classes') return fighterSheet(world?.lesson?.course || settings.p1);
-    const cupDog = e.target.closest('[data-cup-dog]');
-    if (cupDog) {
-      cupSheet(cupDog.dataset.cupDog);
-      document.querySelector('[data-cup-dog][aria-pressed=true]').focus();
-      return;
-    }
-    if (action === 'cup-sheet') return cupSheet(cupAttempt?.kind || cupChoice);
+    if (action === 'cup-sheet') return cupSheet(cupAttempt?.kind || cupChoice,true);
+    if (action === 'cup-roster') return cupSheet(cupAttempt?.kind || cupChoice);
     if (action === 'cup-relay') return openCupRelay(cupAttempt?.kind || cupChoice);
     if (action === 'cup-exhibition') return openCupRelay(cupAttempt?.kind || cupChoice,cupAttempt?.exhibition?cupAttempt.round:1);
     if (action === 'cup-start' || action === 'cup-next') return startCupRound(cupAttempt?.kind || cupChoice);
@@ -3805,54 +3836,7 @@
         lab.koTest ? 'Fully charge Up + Smash, release, then choose Return to marks. The mint trail shows your previous launch.' :
         'Land a hit, choose Return to marks, and repeat. Mix in other moves to restore its power.';
     } else if (spacing) {
-      const practice = world.spacingPractice, approach = pattern === 'approach';
-      const run = practice.dir > 0 ? 'right' : 'left', back = practice.dir > 0 ? 'left' : 'right';
-      const key = keyFor(0,practice.dir > 0 ? 'aimLeft' : 'aimRight');
-      $('spacing-approach').setAttribute('aria-pressed', String(approach));
-      $('spacing-retreat').setAttribute('aria-pressed', String(pattern === 'retreat'));
-      $('spacing-landing').setAttribute('aria-pressed', String(pattern === 'landing'));
-      $('spacing-airPower').setAttribute('aria-pressed', String(pattern === 'airPower'));
-      $('spacing-fastfall').setAttribute('aria-pressed', String(pattern === 'fastfall'));
-      $('spacing-apex-pause').hidden = pattern !== 'fastfall';
-      $('spacing-apex-pause').setAttribute('aria-pressed', String(!!practice.pauseAtApex));
-      $('spacing-sweet').setAttribute('aria-pressed', String(isSweetPractice(practice)));
-      $('spacing-aligned').hidden = !isSweetPractice(practice);
-      $('spacing-aligned').setAttribute('aria-pressed', String(pattern === 'sweetAligned'));
-      $('spacing-flick').hidden = pattern !== 'landing';
-      $('spacing-flick').setAttribute('aria-pressed', String(practice.flickJump ?? settings.flickJump1));
-      $('spacing-cancel').setAttribute('aria-pressed', String(pattern === 'cancel'));
-      for (const id of ['footstool','footstoolTech']) $('spacing-' + id).setAttribute('aria-pressed', String(pattern === id));
-      $('spacing-reverse').setAttribute('aria-pressed', String(pattern === 'reverse'));
-      $('spacing-wavebounce').setAttribute('aria-pressed', String(pattern === 'wavebounce'));
-      $('spacing-guard').hidden = pattern !== 'wavebounce';
-      $('spacing-guard').setAttribute('aria-pressed', String(!!practice.guard));
-      $('spacing-slow').setAttribute('aria-pressed', String(practice.slow));
-      $('spacing-status').dataset.result = 'ready';
-      $('spacing-status').textContent = isFootstoolPractice(practice) ? (pattern === 'footstool' ? 'Footstool rescue' : 'Tech a footstool') :
-        pattern === 'cancel' ? 'Down + Attack' : isReversalPractice(practice) ? (pattern === 'reverse' ? 'Rival behind' : 'Rival ahead') :
-        pattern === 'landing' ? 'Hop or Jump · hold ' + run : approach ? 'Jump past the shield' : 'Jump away from the shield';
-      message = isFootstoolPractice(practice) ? (pattern === 'footstool' ?
-        'Your jumps are spent. Tap Attack to fall, then press Jump at the mint marks over the rival’s head. Hold Jump and steer ' + run + ' to the ledge.' :
-        'Tap Attack to start. The rival will jump off your head. Tap Shield before you hit the floor to tech, or add a direction for a tech roll.') :
-        pattern === 'cancel' ? 'Press Down + Attack. Try holding Shield only after touchdown. On the retry, start holding it as the chalk turns mint.' :
-        isReversalPractice(practice) ? window.PracticeFeedback.reversalTip(world, practice) : pattern === 'landing' ? 'Hold Hop ('+keyFor(0,'hop')+', '+padFor(0,'hop')+', or Hop on touch) and move ' + run + '. Attack at the gold fork for a late hit or the green stripe for a clean hit. Center and jab on landing. Retry with Jump to compare heights.' : 'Running ' + run + '. ' + (approach
-        ? 'Press ' + back + ' and Jump together to turn. Steer ' + run + ' and tap Attack during takeoff.'
-        : 'Keep drifting ' + run + '. Tap Jump and aim your back air ' + back + ' with ' + key + ', the right stick, or a flick from Smash.');
-      if (pattern === 'landing' && (practice.flickJump ?? settings.flickJump1)) message = flickJumpTip;
-      if (pattern === 'airPower') {
-        $('spacing-status').textContent = 'Hold Hop or Jump';
-        message = 'Hold Hop for a short hop or hold Jump for a full jump. Keep the stick centered. Tap Attack as your paws come down to the chalk beside the rival’s ears.';
-      }
-      if (pattern === 'fastfall') {
-        $('spacing-status').textContent = moves[player.kit.air.neutral].label + ' · tap Attack';
-        message = 'You’re rising into Pip’s shield. Tap Attack with no direction. At the apex, hold Shield for an ordinary fall or tap Down and hold Shield to land sooner.';
-      }
-      if (isSweetPractice(practice)) {
-        const move = moves[practice.moveId], aim = practice.side === 'up' ? 'Up' : run;
-        $('spacing-status').textContent = move.label + ' · ' + aim + ' + Attack';
-        message = 'Aim ' + aim + ' and tap Attack. The gold box marks ' + move.sweetSpot.label.toLowerCase() +
-          '. Catch the rival’s mint center in it for the sweet spot.';
-      }
+      message=window.PracticeFeedback.spacingPanel(world,pattern,player,keyFor,padFor,settings,flickJumpTip);
     } else if (climb) {
       message=window.PracticeFeedback.climbPanel(world,pattern,practiceSide);
     } else if (platform) {
@@ -3866,66 +3850,11 @@
     } else if (wall) {
       message=window.PracticeFeedback.wallPanel(world,pattern,player);
     } else if (trump) {
-      const defend = pattern === 'defend';
-      for (const role of ['take','defend','runoff','escape'])
-        $('trump-'+role).setAttribute('aria-pressed',String(pattern===role));
-      const runoff=world.trumpPractice.guardSlot!==undefined;
-      $('trump-speed').hidden=$('trump-fight').hidden=!runoff;
-      $('trump-speed').setAttribute('aria-pressed',String(!!world.trumpPractice.slow));
-      $('trump-status').dataset.result = 'ready';
-      $('trump-status').textContent = (practiceSide === 'left' ? 'Left' : 'Right') + ' ledge';
-      message = runoff ? (pattern==='escape'?'Tap Attack to start. You have the ledge. Roll or jump before Rival grabs it.' :
-        'Tap Attack to start. Dash '+practiceSide+' off the stage. Guided practice pauses for the turn, the drop jump and the back air.') : defend
-        ? 'The rival is coming. Wait to feel the bump, or tap Shield to roll before they catch the lip.'
-        : 'The rival has the ledge. Drift ' +
-          (practiceSide === 'left' ? 'right' : 'left') +
-          ' or use your recovery to take it.';
+      message=window.PracticeFeedback.trumpPanel(world,pattern,practiceSide);
     } else if (roll) {
-      const read = pattern === 'read', scout=pattern==='scout';
-      $('roll-status').dataset.result = 'ready';
-      $('roll-status').textContent = scout?'Tap Attack · '+(world.rollPractice.rollHabit?.count || 0)+'/2 rolls':practiceSide === 'left' ? 'Left ledge' : 'Right ledge';
-      $('roll-guard').setAttribute('aria-pressed', String(!read && !scout));
-      $('roll-read').setAttribute('aria-pressed', String(read));
-      $('roll-scout').setAttribute('aria-pressed',String(scout));
-      $('roll-scout').textContent=scout?'Next catch':'Teach the guard';
-      $('roll-fight').hidden=!scout || world.rollPractice.rollHabit?.count!==2 || !!practiceFight;
-      message = scout?'Tap Attack to cue the guard. Tap Shield to roll, then choose Next catch. After two rolls, try jumping or waiting out the grab.':read
-        ? 'The guard is waiting where your roll ends. Tap Shield to test the read, or jump from the ledge.'
-        : 'Tap Shield to roll through the guard’s swing. As your dog turns back, tap Attack.';
+      message=window.PracticeFeedback.rollPanel(world,pattern,practiceSide,practiceFight);
     } else if (air) {
-      const edge = pattern === 'edge', last = pattern === 'lastDodge', wide = world.airPractice.wide;
-      const interrupted = pattern === 'interrupted', high = pattern === 'highReturn';
-      $('air-status').dataset.result = 'ready';
-      $('air-status').textContent = edge
-        ? practiceSide === 'left'
-          ? 'Left ledge'
-          : 'Right ledge'
-        : 'Jump to begin';
-      if (last) $('air-status').textContent = (wide ? 'Wide' : 'Low') + ' · ' + practiceSide + ' ledge';
-      if (interrupted || high) $('air-status').textContent = world.dogs[0].stats.name + ' · ' + practiceSide + ' ledge';
-      $('air-neutral').setAttribute('aria-pressed', String(pattern === 'neutral'));
-      $('air-edge').setAttribute('aria-pressed', String(edge));
-      $('air-lastDodge').setAttribute('aria-pressed', String(last));
-      $('air-interrupted').setAttribute('aria-pressed', String(interrupted));
-      $('air-highReturn').setAttribute('aria-pressed', String(high));
-      $('air-side').hidden = !edge && !last && !interrupted && !high;
-      $('air-dog-label').hidden = $('air-speed').hidden = $('air-return-fight').hidden = !interrupted && !high;
-      $('air-dog').value = world.dogs[0].kind;
-      $('air-speed').setAttribute('aria-pressed',String(!!world.airPractice.slow));
-      $('air-distance').hidden = !last;
-      $('air-fight').hidden = !last && !interrupted;
-      $('air-fight').textContent = interrupted ? 'Edgeguard as Noodle · 3 stocks' : 'Guard against Rival · 3 stocks';
-      $('air-return-fight').textContent = 'Recover as ' + world.dogs[0].stats.name + ' · 3 stocks';
-      $('air-distance').textContent = wide ? 'Start low' : 'Start wide';
-      message = high ? 'Tap Attack to start drifting back. Watch '+world.dogs[1].stats.name+' jump off the edge. Change height or air dodge, then get back onstage.' :
-        interrupted ? 'Aim up and ' + (practiceSide === 'left' ? 'right' : 'left') +
-        ' and tap Special. Release it as Noodle swings. At “Cast again now,” use Up + Special a second time and steer in.' :
-        last ? 'Your jump and Up Special are spent. Aim ' + (wide ? '' : 'up and ') +
-        (practiceSide === 'left' ? 'right' : 'left') + ' and tap Shield to catch the ledge.' : edge
-        ? 'Aim up and ' +
-          (practiceSide === 'left' ? 'right' : 'left') +
-          ', then tap Shield to slip past the guard and catch the lip.'
-        : 'Jump. As you fall toward the dummy, release the directions and tap Shield before its up tilt connects.';
+      message=window.PracticeFeedback.airPanel(world,pattern,practiceSide);
     } else if (shield) {
       message=window.PracticeFeedback.shieldPanel(world,pattern,player);
     } else if (survival) {
@@ -4370,20 +4299,20 @@
   let campaign = yardChapter;
   const dispatchSources={
     SoloEvents:'solo-events.js?v=impact-tech-1',
-    PracticeFeedback:'practice-feedback.js?v=impact-tech-1', DogOnline:'online.js?v=impact-tech-1',
+    PracticeFeedback:'practice-feedback.js?v=cup-select-1', DogOnline:'online.js?v=impact-tech-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=launch-aim-1', MatchReview:'match-review.js?v=rematch-film-1',
+    RecoveryCoach:'recovery-coach.js?v=launch-aim-1', MatchReview:'match-review.js?v=second-chance-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=light-shield-1',
+    VersusRulebook:'versus-rules.js?v=cup-select-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=stage-run-1',
-    ComboLab:'combo-lab.js?v=impact-tech-1', FinishTools:'finish-tools.js?v=light-shield-1',
+    ComboLab:'combo-lab.js?v=impact-tech-1', FinishTools:'finish-tools.js?v=second-chance-1',
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
@@ -4397,7 +4326,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=stage-run-1';
+        link.href='./versus-select.css?v=cup-select-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -4507,13 +4436,14 @@
     dismiss();
     world = null;
     view = null;
+    if(page==='cup-select' && page!==id)$('cup-select').replaceChildren();
     page = id;
     drillSide = null;
     drillWaiting = false;
     document.body.classList.remove('playing', 'training-active', 'adventure-active', 'with-drill-readout');
     document.body.classList.add('menu-screen');
     document.body.classList.toggle('cinema-active', id === 'dispatch-story');
-    for (const screen of ['home', 'online-lobby', 'dispatch-route', 'dispatch-story', 'lobby', 'match'])
+    for (const screen of ['home', 'cup-select', 'online-lobby', 'dispatch-route', 'dispatch-story', 'lobby', 'match'])
       $(screen).hidden = screen !== id;
     window.scrollTo(0, 0);
   }
@@ -4713,8 +4643,7 @@
     }
     if (id==='adventure') { selectChapter(nightUnlocked()?nightChapter:yardChapter); return continueAdventure(); }
     // Use the route card's checked transaction, including its cross-tab retry guard.
-    cupSheet(id);
-    startCupRound(id);
+    cupSheet(id,false,true);
   }
   $('home-continue').onclick=()=>resumeSavedGame($('home-continue').dataset.save);
   $('other-saves').onclick=showSavedGames;
@@ -4867,6 +4796,7 @@
     dismiss();
     $('pause-label').textContent = 'Pause';
     $('countdown').classList.remove('net-lag', 'sudden');
+    $('cup-select').replaceChildren();
     page = 'match';
     drillSide = null;
     drillWaiting = false;
@@ -4877,6 +4807,7 @@
     adventureKey = '';
     for (const id of [
       'home',
+      'cup-select',
       'online-lobby',
       'match-set',
       'dispatch-route',
@@ -5390,6 +5321,7 @@
     const read=clinic.cloneNode(false);read.id='school-read';read.textContent='Read the Rival';clinic.before(read);read.onclick=()=>eventBoard('read-the-rival');
     const field=clinic.cloneNode(false);field.id='school-field';field.textContent='Learn in a match';read.before(field);field.onclick=()=>startFirstFight(null,true);
     const launch=clinic.cloneNode(false);launch.textContent='Launch survival';rescue.after(launch);launch.onclick=()=>recoveryClinic(false,true);
+    const chance=clinic.cloneNode(false);chance.textContent='Second Chance';launch.after(chance);chance.onclick=()=>recoveryClinic(true,true,null,'reply');
     const ledge=clinic.cloneNode(false);ledge.textContent='Ledge clinic';launch.after(ledge);ledge.onclick=()=>replayClinic('ledge');
     const stage=clinic.cloneNode(false);stage.textContent='Stage tech clinic';ledge.after(stage);stage.onclick=()=>replayClinic('wall');
     $('syllabus-guide').onclick=toggleGuide;
@@ -5417,7 +5349,7 @@
     if(!window.RecoveryCoach)return waitForDispatch(fromLaunch?'Launch survival':'Recovery clinic',()=>loadDispatch('RecoveryCoach'),()=>recoveryClinic(wide,fromLaunch,kind,study),schoolList);
     const {config,battle,tape,clip,launch}=window.RecoveryCoach.example(wide,fromLaunch,kind);
     if(page!=='match')startMatch({...config,recoveryClinic:true},undefined,undefined,null,{resume:{battle,tape,countdown:0,call:''}});
-    if(study)launchLab({clip,result:battle,launch});else recoverySheet({rescue:true,wide,kind,clip,launch,result:battle,from:'school'});
+    if(study==='reply')secondChance({rescue:true,clip,result:battle,slot:0,from:'school'});else if(study)launchLab({clip,result:battle,launch});else recoverySheet({rescue:true,wide,kind,clip,launch,result:battle,from:'school'});
   }
   function leaveFighterSheet(){
     if(page==='match' && (matchConfig?.schoolFinal || spar) && world?.end!=null)return showResult();
@@ -6161,6 +6093,7 @@
       exitDialog();
       return;
     }
+    if(page==='cup-select')return $('cup-back').click();
     if (page === 'dispatch-story') $('story-map').click();
     else if (page === 'online-lobby' && !$('online-wait').hidden) showOnline();
     else if (page === 'dispatch-route' || page === 'lobby' || page === 'online-lobby') returnToHome();
@@ -6899,6 +6832,8 @@
       settings.guidedLessons=true;save();
       const index=schoolLessons.findIndex(l=>l.id===hash.split('/')[2]);
       if(index<0)resumeCourse();else startLesson(index);
+    } else if(hash==='#tutorial/second-chance'){
+      recoveryClinic(true,true,null,'reply');
     } else if(hash==='#tutorial/launch-lab'){
       recoveryClinic(true,true,undefined,true);
     } else if (hash==='#tutorial/launch-survival') {

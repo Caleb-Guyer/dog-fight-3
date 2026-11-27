@@ -692,7 +692,121 @@
       return player.step(action==='recorded'?undefined:defenseInput(action,player.frame-start));
     }};
   }
-  function defensePanel(nav,tape,contact,jump,practice,signal) {
+  // Replay a real KO from the defender's seat. Both the suggested reply and the
+  // player's attempt use the original opponent, controls, hitboxes and stock clock.
+  function secondChanceAttempt(tape,plan,guided,emit=()=>{}){
+    const {contact,cue}=plan,slot=contact.slot;
+    const start=Math.max(contact.from,cue-45);
+    let reply='',mistake='',lost=false;
+    const replay=tape.playback(start,(name,e)=>{
+      emit(name,e);
+      if(name==='ko' && e.f.index===slot)lost=true;
+      if(guided && replay.frame<cue || replay.frame>=contact.frame+15)return;
+      if(name==='hit' && e.f.index===slot)mistake ||= 'Took '+moveName(e.moveId,e.name);
+      if(name==='grabCatch' && e.target.index===slot)mistake ||= 'Caught by '+moveName(e.moveId,'Grab');
+      if(name==='hit' && e.owner?.index===slot)reply='Landed '+moveName(e.moveId,e.name);
+      if(e.f?.index!==slot)return;
+      if(name==='block' || name==='parry')reply=(name==='block'?'Blocked ':'Parried ')+moveName(e.moveId,e.attackName);
+      if(name==='jump')reply ||= 'Jumped clear';
+      if(name==='spotDodge' || name==='dodge')reply ||= 'Dodged clear';
+    },slot);
+    const {battle,length}=replay;
+    return {battle,length,get frame(){return replay.frame;},get outcome(){return lost?'lost':replay.frame===length || battle.end!==null?'finished':null;},
+      get saved(){return !lost && !mistake && !!reply && !!this.outcome;},
+      get detail(){return mistake || reply || 'No defensive reply landed';},
+      step(input){return replay.step(guided && replay.frame<cue?controlsAt(tape,replay.frame+1,slot):input);}};
+  }
+  function* findSecondChance(tape,contact){
+    if(!contact)return null;
+    const replies=contact.kind==='grab'?['attack','jump','spot']:['guard','attack','jump','spot'];
+    const leads=[...new Set([8,15,3,24].map(n=>Math.min(n,contact.frame-contact.from)))];
+    for(const lead of leads)for(const action of replies){
+      const cue=contact.frame-lead,plan={contact,cue,action};
+      const p=secondChanceAttempt(tape,plan,true);
+      while(!p.outcome){
+        p.step(p.frame<cue?idleInput:defenseInput(action,p.frame-cue));
+        if(p.frame%24===0)yield;
+      }
+      if(p.saved){plan.reply=p.detail;return plan;}
+      yield;
+    }
+    return null;
+  }
+  function secondChanceFilm(tape,plan){
+    const adjusted=new window.DogFight.FinishTape(), p=secondChanceAttempt(tape,plan,true), start=p.frame;
+    const slot=plan.contact.slot;
+    while(!p.outcome){
+      const input=p.frame<plan.cue?controlsAt(tape,p.frame+1,slot):defenseInput(plan.action,p.frame-plan.cue);
+      const other=controlsAt(tape,p.frame+1,1-slot);
+      adjusted.record(p.battle,slot?other:input,slot?input:other);p.step(input);
+    }
+    return [{t:tape,at:plan.cue,label:'Recorded KO'},{t:adjusted,at:plan.cue-start,label:'Coached reply'}];
+  }
+  function replyKey(action){return {guard:'shield',spot:'shield',attack:'attack',jump:'jump'}[action];}
+  function replyLabel(plan,label){
+    const key=label(replyKey(plan.action));
+    return plan.action==='spot'?label('down')+' + '+key:plan.action==='guard'?'Hold '+key:'Tap '+key;
+  }
+  function replyGate(plan,input){
+    const key=replyKey(plan.action),pressed=input[key] || input.tapped?.[key];
+    return pressed && (plan.action==='spot'?input.y>=.65:plan.action==='attack'?Math.abs(input.x || 0)<.3 && Math.abs(input.y || 0)<.3:true);
+  }
+  function secondChanceSheet(tape,slot,{showDialog,back,play,label,loadFilm},contact){
+    showDialog('finish-second-chance','Second Chance','<p id="chance-move"></p><p role="status" id="chance-reply">Checking your recording…</p>'+
+      '<div class="dialog-actions"><button class="primary" id="chance-guide" hidden>Rehearse the reply</button>'+
+      '<button class="utility" id="chance-speed" hidden>Try at match speed</button><button class="utility" id="chance-film" hidden>Compare both replies</button><button class="utility" id="chance-back">Back</button></div><div id="chance-rink"></div>',false);
+    const el=id=>document.getElementById('chance-'+id),backButton=el('back');
+    let raf=0;backButton.onclick=()=>{cancelAnimationFrame(raf);back();};backButton.focus();
+    contact ??= analyze(tape,slot).contact;
+    if(!contact){el('reply').textContent='This KO recording has no hit or grab to rehearse. Open the replay to see where your dog left the stage.';return;}
+    const dogs=tape.playback(contact.frame-1).battle.dogs;
+    const [f,r]=[slot,contact.owner].map(i=>dogs[i].stats.name);
+    el('move').textContent=r+' '+(contact.kind==='grab'?'caught ':'hit ')+f+' with '+contact.move+' before the knockout.';
+    const search=findSecondChance(tape,contact);
+    function check(){
+      if(!backButton.isConnected || !backButton.closest('dialog')?.open)return;
+      const until=performance.now()+5;
+      do{
+        const next=search.next();
+        if(!next.done)continue;
+        const plan=next.value;
+        if(!plan){el('reply').textContent='None of the tested replies got through this recording safely. Watch the approach in the KO replay.';return;}
+        const prompt=replyLabel(plan,label);
+        el('reply').textContent=prompt+' before '+contact.move+'. '+plan.reply+' in the replay test. In rehearsal the fight waits for your input.';
+        for(const [id,guided] of [['guide',true],['speed',false]]){
+          const b=el(id);b.hidden=false;b.onclick=()=>play(plan,guided,prompt);
+        }
+        const film=el('film');film.hidden=false;
+        film.onclick=async()=>{
+          film.disabled=true;
+          try{
+            await loadFilm();
+            if(!film.isConnected || !film.closest('dialog')?.open)return;
+            window.MatchReview.pairedFilm(el('rink'),secondChanceFilm(tape,plan),'Reply',tape.length-plan.cue,slot);
+            el('rink').querySelector('button').focus();film.hidden=true;
+          }catch{film.disabled=false;film.textContent='Retry comparison';}
+        };
+        if(document.activeElement===backButton)el('guide').focus({preventScroll:true});
+        return;
+      }while(performance.now()<until);
+      raf=requestAnimationFrame(check);
+    }
+    raf=requestAnimationFrame(check);
+  }
+  function secondChanceReport(player,review,showDialog){
+    const points=player.battle.matchCard.points && !player.battle.suddenDeath;
+    const text=player.saved?'Your dog stayed in play through the recorded KO frame.':
+      player.outcome==='lost'?'Your dog crossed the blast line.':'Try the suggested reply before contact.';
+    showDialog('finish-comparison',player.saved?(points?'Point saved':'Stock saved'):'Try the exchange again','<p>'+player.detail+'. '+text+'</p>'+secondChanceActions(review),false);
+    document.querySelector('[data-do=trial-retry]').focus();
+  }
+  function secondChanceActions(review){
+    return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Retry exchange</button>'+
+      '<button class="utility" data-do="recovery-speed">'+(review.guided?'Try at match speed':'Rehearse the reply')+'</button>'+
+      '<button class="utility" data-do="trial-replay">Back to Second Chance</button><button class="utility" data-do="trial-results">'+
+      (review.rescue?'Fight School':review.stockBreak?'Back to next stock':review.from==='pause'?'Back to fight':review.from==='result'?'Back to results':'Back to match stats')+'</button></div>';
+  }
+  function defensePanel(nav,tape,contact,jump,practice,signal,coach) {
     const panel=document.createElement('details');
     panel.id='clip-defense';
     panel.innerHTML='<summary>Defend the '+contact.kind+' · '+contact.move+'</summary>'+
@@ -702,6 +816,10 @@
       '<p class="defense-result" role="status"></p><div class="dialog-actions">'+
       '<button type="button" class="utility" data-watch-reply>Watch at half speed</button>'+
       '<button type="button" class="primary" data-play-defense>Try it myself</button></div>';
+    if(coach){
+      const b=document.createElement('button');b.type='button';b.className='utility';b.id='clip-second-chance';b.textContent='Coach this KO';
+      b.onclick=()=>coach(contact);panel.querySelector('.dialog-actions').append(b);
+    }
     nav.before(panel);
     const timing=panel.querySelector('.defense-timing'),choices=panel.querySelector('.defense-choices');
     const canvas=panel.querySelector('canvas'),info=panel.querySelector('.defense-result');
@@ -881,7 +999,7 @@
 
     document.querySelector('[data-finish-slot="'+slot+'"]').focus();
   }
-  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,practiceHold,holdFocus,practiceLedge,ledgeFocus,returnTape,clinic,rescueLaunch,launchStudy,attachAimReader,stageClinic,chooseClinic}){
+  function install({tape,stage,shake,signal,jump,root,filename,slot,escapeReady,twoPlayers,initialSeat,frame,practiceLaunch,follow,retryMoment,practiceLanding,practiceHold,holdFocus,practiceLedge,ledgeFocus,returnTape,clinic,rescueLaunch,launchStudy,attachAimReader,stageClinic,chooseClinic,coachDefense}){
     const nav=root.querySelector('#clip-moments'),button=root.querySelector('#clip-export'),status=root.querySelector('#clip-export-status');
     const {marks,escape,launch,contact,landings,holds,ledges}=analyze(tape,slot,follow,!!retryMoment);
     if(stageClinic){
@@ -897,7 +1015,7 @@
     escapeReady?.(escape);
     if(ledges.length && practiceLedge)ledgePanel(nav,tape,ledges,initialSeat,jump,practiceLedge,ledgeFocus,returnTape);
     if(holds.length && practiceHold)holdPanel(nav,tape,holds,initialSeat,jump,practiceHold,holdFocus);
-    if(contact && practiceLaunch)defensePanel(nav,tape,contact,jump,practiceLaunch,signal);
+    if(contact && practiceLaunch)defensePanel(nav,tape,contact,jump,practiceLaunch,signal,coachDefense);
     if(launch && practiceLaunch)launchPanel(nav,tape,launch,jump,practiceLaunch,signal,rescueLaunch,launchStudy,attachAimReader);
     if(landings.length && practiceLanding)landingPanel(nav,tape,landings,jump,practiceLanding,clinic,signal);
     let selected=null,panel,line,lead;
@@ -949,5 +1067,5 @@
     const sync=inputPanel(nav,{tape,twoPlayers,initialSeat,frame,jump,signal});
     return ()=>{sync();if(panel && selected)panel.hidden=frame()!==selected.frame;};
   }
-  window.FinishTools={chooseFighter,install,moments,analyze,inputFrame,launchFlight,holdAttempt,holdPreview,holdReport,ledgeDemo,ledgeAttempt,ledgePreview,ledgeLine,ledgeActions,ledgeReport,defenseReply,returnTrace,returnComparison,landingDemo,stageTechDemo,landingTry,landingPreview,landingName,timing,landingActions,landingCue,landingGate,landingReport};
+  window.FinishTools={secondChanceFilm,secondChanceSheet,secondChanceAttempt,secondChanceReport,secondChanceActions,findSecondChance,replyGate,chooseFighter,install,moments,analyze,inputFrame,launchFlight,holdAttempt,holdPreview,holdReport,ledgeDemo,ledgeAttempt,ledgePreview,ledgeLine,ledgeActions,ledgeReport,defenseReply,returnTrace,returnComparison,landingDemo,stageTechDemo,landingTry,landingPreview,landingName,timing,landingActions,landingCue,landingGate,landingReport};
 })();

@@ -167,3 +167,41 @@ dialog[data-view='tournament'] { width:min(790px,calc(100% - 16px)); }
 .route-times { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
 .route-times th, .route-times td { text-align:left; padding:6px 3px; border-bottom:1px solid #77737d; }
 @media(max-width:520px){ .route-times { font-size:.85em; } }
+.cup-select-inner { width:min(100%,1450px); min-height:100%; margin:auto; padding:clamp(18px,3.8vh,52px) clamp(16px,4vw,70px); display:grid; align-content:center; gap:clamp(14px,3vh,34px); }
+#cup-select { height:100%; overflow:auto; background:#27293a; color:#ffefd0; }
+.cup-select-head,.cup-ticket { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.cup-select-head { border-bottom:2px solid #676276; padding-bottom:clamp(10px,2vh,22px); }
+.cup-select-head span { display:block; margin-bottom:6px; color:var(--gold); font:clamp(12px,1.4vw,17px)/1.2 var(--pixel); }
+.cup-select-head h1 { color:inherit; font:clamp(28px,4.4vw,66px)/1 var(--pixel); margin:0; }
+#cup-select .utility { background:transparent; color:#fff1d3; border:1px solid #938b94; box-shadow:none; min-height:44px; }
+.cup-posters { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:clamp(7px,1vw,16px); }
+.cup-poster { position:relative; min-width:0; padding:0; text-align:left; background:#1b1d2a; color:#fff3d7; border:3px solid #696577; box-shadow:3px 4px #171724; }
+.cup-poster canvas { display:block; width:100%; height:auto; image-rendering:pixelated; background:#363747; }
+.cup-poster span { display:block; border-top:4px solid var(--dog-color); padding:clamp(8px,1.3vw,18px); }
+.cup-poster strong { display:block; font:clamp(17px,2.2vw,34px)/1 var(--pixel); }
+.cup-poster small { display:block; margin-top:6px; font:clamp(11px,1vw,15px)/1.2 var(--body); }
+.cup-poster[aria-pressed=true] { border-color:var(--gold); }
+.cup-poster[aria-pressed=true] span { background:var(--gold); color:var(--ink); border-color:var(--gold); }
+.cup-poster[aria-pressed=true]::before { content:'P1'; position:absolute; top:6px; left:6px; background:var(--gold); color:var(--ink); padding:4px 6px; font:14px var(--pixel); }
+.cup-ticket { padding:clamp(12px,2vw,28px) 0 0; border-top:2px solid #676276; }
+.cup-ticket strong { font:clamp(18px,2.3vw,32px)/1.1 var(--pixel); }
+.cup-ticket p { margin:6px 0 0; color:#e0d3ba; }
+.cup-ticket-actions { display:flex; gap:12px; flex-wrap:wrap; }
+.cup-ticket-actions .primary { min-height:46px; }
+.cup-route-board { padding:clamp(12px,1.8vw,24px); background:var(--cream); color:var(--ink); }
+#cup-select[data-view=route] .cup-select-inner { max-width:900px; }
+@media(max-width:680px) and (orientation:portrait) {
+  .cup-select-inner { padding:14px max(12px,var(--left-edge)) 18px; gap:14px; }
+  .cup-posters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .cup-poster canvas { max-height:18dvh; object-fit:cover; }
+  .cup-ticket { display:grid; gap:10px; }
+  .cup-ticket-actions { display:grid; grid-template-columns:auto minmax(0,1fr); gap:8px; }
+  .cup-ticket-actions button { font-size:15px; }
+}
+@media(max-height:540px) and (orientation:landscape) {
+  .cup-select-inner { padding-block:8px 12px; gap:8px; }
+  .cup-select-head { padding-bottom:6px; }
+  .cup-poster canvas { max-height:32dvh; object-fit:contain; }
+  .cup-poster span { padding:5px 8px; }
+  .cup-ticket { padding-top:8px; }
+}

@@ -80,3 +80,20 @@ dialog:is([data-view='finish-stock-film'],[data-view='finish-rematch']) { width:
 #film-defense select { max-width:100%; font:inherit; }
 #film-defense label { display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
 #film-time { font-variant-numeric:tabular-nums; }
+.cup-result .winner { align-items:center; gap:clamp(14px,3vw,24px); margin:4px 0 20px; }
+.cup-result .winner h3 { font:clamp(22px,4vw,36px)/1 var(--pixel); margin:0; }
+.cup-result .winner .victory-shot { width:clamp(94px,22vw,152px); }
+.cup-advance .primary { width:100%; min-height:46px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.cup-advance .primary::after { content:''; width:8px; height:8px; border:solid currentColor; border-width:3px 3px 0 0; transform:rotate(45deg); margin-right:4px; }
+.cup-links { display:flex; flex-wrap:wrap; justify-content:space-between; gap:0 12px; margin-top:6px; }
+.cup-result .cup-links button,.cup-result #cup-review button { background:transparent; box-shadow:none; border:0; padding:8px 3px; min-height:40px; text-align:left; font:600 14px/1.25 var(--body); }
+.cup-result button.utility:hover { text-decoration:underline; }
+.cup-links #cup-more::after { content:' +'; }
+.cup-links #cup-more[aria-expanded=true]::after { content:' −'; }
+#cup-review { border-top:2px solid #beae8f; padding-top:7px; }
+#cup-review .dialog-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; margin:0; }
+#cup-review .dialog-actions button { border-bottom:1px solid #cfbea1; }
+#cup-review #result-highlight { display:block; text-decoration:underline; }
+body:has(#dialog[open] .cup-result) :is(#match .match-top,#hud,#countdown,.topbar,.touch-controls) { visibility:hidden; }
+#chance-rink { margin-block:12px; }
+#chance-rink input { width:100%; accent-color:var(--ink); }

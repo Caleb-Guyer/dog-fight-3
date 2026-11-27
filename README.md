@@ -1,5 +1,9 @@
 # Dog Fight 3
 
+Open **Arcade Cup** to choose a dog on the full-screen fighter select. Each fighter keeps a separate run. **Route card** shows all four opponents and your records. After a round, play the next one or open **Match details** for stats, replays, and practice. [Choose a Cup fighter](https://caleb-guyer.github.io/dog-fight-3/#arcade)
+
+In **Fight School → Second Chance**, compare a recorded KO with a defense that saved the stock. Rehearse the reply at the input cue, then try it at match speed. Open **Coach this KO** in a KO replay or at a first-match stock break to practice an exchange from your own fight. [Try Second Chance](https://caleb-guyer.github.io/dog-fight-3/#tutorial/second-chance)
+
 **Hold the Bench** opens with Brisket winding up Haymaker on the Picnic Table bench. Let him hit Pip. During the hit spark, hold Down and tap Shield to catch the bench underfoot, then release both and jab back. Add Left or Right to roll on contact. Choose **Pause at the hit spark** to rehearse, **Start event** to play for a time, or **Replay opening as a match** to fight it out over three stocks. All four dogs can use this defense against shallow launches close to a floor. [Play Hold the Bench](https://caleb-guyer.github.io/dog-fight-3/#solo/events/hold-the-bench)
 
 **Last-stock rally** starts Bell Depot with one dog out and the other on two stocks at 60% damage. Choose which player returns. Hold Jump for half a second, or hold Shield and tap Jump, to borrow one spare stock and arrive on the lift at 0%. The donor keeps their current damage and final stock. Land a hit with the returning dog and beat the half-armored boss to earn **Comeback clear**. Stock sharing also works in an ordinary co-op boss fight. [Try Last-stock rally](https://caleb-guyer.github.io/dog-fight-3/#local/stock-share)

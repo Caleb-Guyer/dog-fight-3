@@ -411,48 +411,51 @@
       (el('rematch-play') || el('rematch-film-back')).focus({preventScroll:true});
     }
     player(root,clips,target){
-      if(!clips.length){root.innerHTML='<p>No opening knockout footage is available for these fights.</p>';return;}
-      const heading=target?'Target':'First knockout';
-      root.innerHTML='<div class="stock-films">'+clips.map(c=>'<figure><figcaption><strong>'+c.label+
-        '</strong><span></span></figcaption><canvas width="480" height="270" role="img" aria-label="'+c.label+' replay"></canvas></figure>').join('')+
-        '</div><label><output></output><input type="range" step="1" aria-label="Frames from '+heading.toLowerCase()+'"></label>'+
-        '<div class="dialog-actions"><button class="primary" id="rematch-play">Play · ½ speed</button><button class="utility" id="rematch-mark">Go to '+heading.toLowerCase()+'</button>'+
-        '<button class="utility" id="rematch-step">Step one frame</button></div>';
-      const seek=root.querySelector('input'),out=root.querySelector('output'),play=root.querySelector('#rematch-play'),step=root.querySelector('#rematch-step');
-      const last=target?clips[0].t.length-clips[0].at:0,first=-Math.min(90,...clips.map(c=>c.at));
-      const lanes=clips.map((c,i)=>({...c,canvas:root.querySelectorAll('canvas')[i],caption:root.querySelectorAll('figcaption span')[i]}));
-      let now=first,raf=0,prior=null,carry=0,running=false;
-      seek.min=first;seek.max=last;
-      function stop(){cancelAnimationFrame(raf);raf=0;running=false;prior=null;carry=0;}
-      function paint(dt){
-        for(const lane of lanes){
-          const b=lane.replay.battle;lane.view.draw(lane.canvas,b,dt,b.time);
-          lane.caption.textContent=b.dogs.map(f=>f.stats.name+' '+Math.round(f.damage)+'%').join(' / ');
-        }
-        const label=now===0?heading:Math.abs(now)+' frames '+(now<0?'before ':'after ')+heading.toLowerCase();
-        out.textContent=label;seek.value=now;seek.setAttribute('aria-valuetext',label);
-        play.textContent=running?'Pause':now===last?'Watch again · ½ speed':'Play · ½ speed';step.disabled=now===last;
-      }
-      function jump(offset){
-        stop();now=offset;
-        for(const l of lanes){
-          l.view=new window.DogFightView.FightView();l.view.shakeEnabled=false;
-          l.replay=l.t.playback(l.at+now,(name,e)=>l.view.event(name,e));
-        }
-        paint(0);
-      }
-      function advance(){for(const l of lanes)l.replay.step();now++;}
-      function tick(stamp){
-        if(!play.isConnected || !play.closest('dialog')?.open)return stop();
-        if(!document.hidden && prior!==null)carry+=Math.min(100,stamp-prior)*.03;
-        prior=document.hidden?null:stamp;let steps=0;
-        while(carry>=1 && now<last){advance();carry--;steps++;}
-        if(now===last)stop();if(steps)paint(steps/60);if(running)raf=requestAnimationFrame(tick);
-      }
-      play.onclick=()=>{if(running)stop();else{if(now===last)jump(first);running=true;raf=requestAnimationFrame(tick);}paint(0);};
-      root.querySelector('#rematch-mark').onclick=()=>jump(0);
-      seek.oninput=()=>jump(Number(seek.value));step.onclick=()=>{stop();advance();paint(1/60);};jump(first);
+      pairedFilm(root,clips,target?'Target':'First knockout',target?clips[0].t.length-clips[0].at:0);
     }
+  }
+  function pairedFilm(root,clips,heading,last,slot){
+    if(!clips.length){root.innerHTML='<p>No opening knockout footage is available for these fights.</p>';return;}
+    root.innerHTML='<div class="stock-films">'+clips.map(c=>'<figure><figcaption><strong>'+c.label+
+      '</strong><span></span></figcaption><canvas width="480" height="270" role="img" aria-label="'+c.label+' replay"></canvas></figure>').join('')+
+      '</div><label><output></output><input type="range" step="1" aria-label="Frames from '+heading.toLowerCase()+'"></label>'+
+      '<div class="dialog-actions"><button class="primary" id="rematch-play">Play · ½ speed</button><button class="utility" id="rematch-mark">Go to '+heading.toLowerCase()+'</button>'+
+      '<button class="utility" id="rematch-step">Step one frame</button></div>';
+    const seek=root.querySelector('input'),out=root.querySelector('output'),play=root.querySelector('#rematch-play'),step=root.querySelector('#rematch-step');
+    const first=-Math.min(90,...clips.map(c=>c.at));
+    const lanes=clips.map((c,i)=>({...c,canvas:root.querySelectorAll('canvas')[i],caption:root.querySelectorAll('figcaption span')[i]}));
+    let now=first,raf=0,prior=null,carry=0,running=false;
+    seek.min=first;seek.max=last;
+    function stop(){cancelAnimationFrame(raf);raf=0;running=false;prior=null;carry=0;}
+    function paint(dt){
+      for(const lane of lanes){
+        const b=lane.replay.battle;lane.view.draw(lane.canvas,b,dt,b.time);
+        const dog=b.dogs[slot];
+        lane.caption.textContent=dog?dog.stocks+' stocks · '+Math.round(dog.damage)+'%':b.dogs.map(f=>f.stats.name+' '+Math.round(f.damage)+'%').join(' / ');
+      }
+      const label=now===0?heading:Math.abs(now)+' frames '+(now<0?'before ':'after ')+heading.toLowerCase();
+      out.textContent=label;seek.value=now;seek.setAttribute('aria-valuetext',label);
+      play.textContent=running?'Pause':now===last?'Watch again · ½ speed':'Play · ½ speed';step.disabled=now===last;
+    }
+    function jump(offset){
+      stop();now=offset;
+      for(const l of lanes){
+        l.view=new window.DogFightView.FightView();l.view.shakeEnabled=false;
+        l.replay=l.t.playback(l.at+now,(name,e)=>l.view.event(name,e));
+      }
+      paint(0);
+    }
+    function advance(){for(const l of lanes)l.replay.step();now++;}
+    function tick(stamp){
+      if(!play.isConnected || !play.closest('dialog')?.open)return stop();
+      if(!document.hidden && prior!==null)carry+=Math.min(100,stamp-prior)*.03;
+      prior=document.hidden?null:stamp;let steps=0;
+      while(carry>=1 && now<last){advance();carry--;steps++;}
+      if(now===last)stop();if(steps)paint(steps/60);if(running)raf=requestAnimationFrame(tick);
+    }
+    play.onclick=()=>{if(running)stop();else{if(now===last)jump(first);running=true;raf=requestAnimationFrame(tick);}paint(0);};
+    root.querySelector('#rematch-mark').onclick=()=>jump(0);
+    seek.oninput=()=>jump(Number(seek.value));step.onclick=()=>{stop();advance();paint(1/60);};jump(first);
   }
   async function rematchStudy(book,id,live,pending){
     const after=book.get(id);
@@ -961,5 +964,5 @@
       status.hidden=true;status.textContent='';
     }catch{if(card.isConnected)status.textContent='The replay is unavailable on this device. Your match stats are saved.';}
   }
-  window.MatchReview={decidingExchange,resultHighlight,sampleFight,schoolKnockout,rematchStudy,openFilm,enableStudy,defenseReport,defenseCue,defenseActions,recordList,cardHTML,save,attach,pack,restore,resumeTape,MatchFilm,watchFilm,StockRetry,koList};
+  window.MatchReview={pairedFilm,decidingExchange,resultHighlight,sampleFight,schoolKnockout,rematchStudy,openFilm,enableStudy,defenseReport,defenseCue,defenseActions,recordList,cardHTML,save,attach,pack,restore,resumeTape,MatchFilm,watchFilm,StockRetry,koList};
 })();
