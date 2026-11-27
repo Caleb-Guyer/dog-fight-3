@@ -142,21 +142,25 @@
     }
   }
   class Seats {
-    constructor(pads) { this.ids=[null,null];this.models=['',''];this.manual=false;this.version=0;this.sync(pads); }
+    constructor(pads) { this.ids=[null,null];this.models=['',''];this.manual=false;this.spares=new Map();this.version=0;this.sync(pads); }
     set(i,pad){
       this.ids[i]=pad?.index ?? null;this.models[i]=pad?.id || '';this.version++;
     }
     sync(pads) {
+      for(const [index,id] of this.spares)if(!pads.some(p=>p.index===index && p.id===id))this.spares.delete(index);
       if(!pads.length)return;
       const a=this.get(0,pads),b=this.get(1,pads);
-      if((a && b) || pads.length===1 && (a || b) || this.manual && (!this.models[0] || a) && (!this.models[1] || b))return;
+      if(pads.length===Number(!!a)+Number(!!b) || a && b && !this.manual)return;
       // Resolve both returning models before giving spare hardware to an open seat.
-      const available=pads.filter(p=>p!==a && p!==b);
+      const available=pads.filter(p=>p!==a && p!==b && !this.spares.has(p.index));
       for(let i=0;i<2;i++)if(this.models[i] && !this.get(i,pads)){
         const n=available.findIndex(p=>p.id===this.models[i]);
         if(n>=0)this.set(i,available.splice(n,1)[0]);
       }
-      if(this.manual)return;
+      if(this.manual){
+        for(const p of available)this.spares.set(p.index,p.id);
+        return;
+      }
       const order=pads.length===1?[1,0]:[0,1];
       for(const pad of available){
         const slot=order.find(i=>this.ids[i]===pad.index && !this.get(i,pads)) ??
@@ -166,12 +170,17 @@
     }
     get(i,pads) { return pads.find(p=>p.index===this.ids[i] && (p.id || '')===this.models[i]); }
     copyFrom(other){
-      this.ids=other.ids.slice();this.models=other.models.slice();this.manual=other.manual;this.version++;
+      this.ids=other.ids.slice();this.models=other.models.slice();this.manual=other.manual;this.spares=new Map(other.spares);this.version++;
     }
     assign(i,pad,pads){
       const other=1-i;
       if(pad && this.get(other,pads)===pad)this.set(other,this.get(i,pads));
       this.set(i,pad);this.manual=true;
+      // A pad explicitly put down stays spare until claimed or physically reconnected.
+      for(const p of pads){
+        if(this.get(0,pads)===p || this.get(1,pads)===p)this.spares.delete(p.index);
+        else this.spares.set(p.index,p.id);
+      }
     }
     beginMatch(pads) {
       this.sync(pads);
