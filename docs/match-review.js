@@ -1,6 +1,49 @@
 (() => {
   'use strict';
   const {Battle,FinishTape,seededRandom,fighters,moves,specials,smashes,pummels,throws}=window.DogFight;
+  const replayTime=n=>Math.floor(n/3600)+':'+String(Math.floor(n/60)%60).padStart(2,'0');
+  function decidingExchange(card,winner,openingStocks){
+    if(!card?.reason || (winner!==0 && winner!==1))return null;
+    const {losses,players}=card,other=1-winner;
+    const seat='P'+(winner+1);
+    const name=card.relayTeams?seat+'’s pack':(players[winner].kind===players[other].kind?seat+' ':'')+fighters[players[winner].kind].name;
+    if(card.reason==='sudden'){
+      const first=losses.findLastIndex(loss=>loss.suddenRound && loss.slot===other);
+      if(first<0)return null;
+      const loss=losses[first];
+      return {first,text:name+' won round '+loss.suddenRound+' of Sudden Death at '+replayTime(loss.frame)+'.'};
+    }
+    let score=(card.openingPoints || (card.points?[0,0]:openingStocks)).slice();
+    let margin=score[winner]-score[other], deficit=Math.max(0,-margin), first=null;
+    for(let i=0;i<losses.length;){
+      const start=i,frame=losses[i].frame;
+      // The engine records both sides of a double KO before it declares a leader.
+      do {
+        const loss=losses[i++];
+        if(card.points)score=loss.points;
+        else score[loss.slot]=loss.remaining;
+      }while(i<losses.length && losses[i].frame===frame);
+      const next=score[winner]-score[other];
+      if(next>0 && margin<=0)first=start;
+      deficit=Math.max(deficit,-next);margin=next;
+    }
+    if(first===null)return {first:null,text:name+' held the opening lead '+(card.reason==='time'?'until time expired.':'through the final knockout.')};
+    const unit=card.points?'point':'stock',when=' at '+replayTime(losses[first].frame);
+    if(deficit)return {first,text:'Down '+deficit+' '+unit+(deficit===1?'':'s')+', '+name+' took the lead for good'+when+'.'};
+    if(card.reason==='ko' && losses[first].frame===losses.at(-1).frame)return {first,text:name+' won the last-stock exchange'+when+'.'};
+    return {first,text:name+' took the lead'+when+' and held it for the rest of the match.'};
+  }
+  function resultHighlight(anchor,battle,open){
+    if(!anchor.isConnected)return;
+    const {matchCard:card}=battle;
+    const opening=battle.dogs.map((dog,i)=>dog.stocks+card.losses.filter(loss=>loss.slot===i).length);
+    const moment=decidingExchange(card,battle.end,opening);
+    if(!moment)return;
+    const line=document.createElement('p'),button=document.createElement('button');
+    line.textContent=moment.text;line.id='result-turning-point';
+    anchor.after(line);button.type='button';button.className='utility';button.id='result-highlight';
+    button.textContent='Replay deciding exchange';button.onclick=open;line.append(' ',button);
+  }
   function recordList(records,recordModes,portrait,showDialog,focusId,sample){
     const rows=records.list();
     const buttons=rows.map(({id,entry})=>{
@@ -441,13 +484,19 @@
       }
       trial(0,slot,review);
     };
-    watchFilm(film,{stageName,showDialog,shake,card,selection,practice,study:m=>practice(m.frame,m.slot,m),
+    const moment=sample?null:decidingExchange(card,entry?.winner ?? world?.end,origin.dogs.map(d=>d.stocks));
+    const fall=moment && film.data.falls.find(f=>f.first===moment.first);
+    const leadIn=moment && (moment.first===null || fall)?Math.max(0,(fall?.at ?? film.length)-180):null;
+    if(at==='highlight' || (at===null && selection.highlight)){
+      context.highlightOrigin=true;at=leadIn ?? 0;
+    }
+    watchFilm(film,{stageName,showDialog,shake,card,selection,practice,moment,leadIn,study:m=>practice(m.frame,m.slot,m),
       retryStock:!origin.matchCard.points?(fall,frame,slot)=>stockSheet({film:context,fall,frame,slot,entry,id,
         from,result:from==='archive'?film.playback(film.length).battle:world}):null,
       back:()=>{
         if(sample){records('sample');return;}
-        if(entry){cardSheet(0,entry,id,{first:'full'});return;}
-        resultSheet();document.querySelector('[data-do=watch-match]')?.focus();
+        if(entry){cardSheet(0,entry,id,{first:context.highlightOrigin?'highlight':'full'});return;}
+        resultSheet();document.querySelector(context.highlightOrigin?'#result-highlight':'[data-do=watch-match]')?.focus();
       }},at);
   }
   function defenseReport(review,attempt){
@@ -524,9 +573,9 @@
     };
     panel.open=selected.open ?? (!!selected.type || selected.sample===true);
   }
-  function watchFilm(film,{showDialog,stageName,back,practice,retryStock,card,study,selection,shake},at=null){
+  function watchFilm(film,{showDialog,stageName,back,practice,retryStock,card,study,selection,shake,moment,leadIn},at=null){
     const losses=card.losses;
-    const time=n=>Math.floor(n/3600)+':'+String(Math.floor(n/60)%60).padStart(2,'0');
+    const time=replayTime;
     showDialog('finish-film','Full match replay',
       '<p id="film-stage" class="clip-caption"></p><canvas id="clip-arena" width="640" height="360" role="img" aria-label="Full match replay"></canvas>'+
       '<div class="clip-status"><span id="clip-scores"></span><output id="film-time"></output></div>'+
@@ -590,6 +639,13 @@
     };
     el('film-speed').onclick=e=>{rate=rate===1?2:rate===2?.5:1;e.currentTarget.textContent='Speed · '+(rate===.5?'½':rate)+'×';};
     const marks=el('film-marks');
+    if(moment && leadIn!=null){
+      const line=document.createElement('p'),button=document.createElement('button');
+      line.textContent=moment.text;line.id='film-turning-point';
+      button.type='button';button.className='utility';button.textContent='Cue deciding exchange';
+      button.onclick=()=>{pauseAt(leadIn);el('film-play').focus();};
+      line.append(' ',button);marks.before(line);
+    }
     if(film.data.falls.length){
       const details=document.createElement('details'),heading=document.createElement('summary');
       details.id='film-knockouts';
@@ -654,6 +710,10 @@
           finally{b.disabled=false;}
         };
         b.onclick=()=>load();enableStudy(load);
+        const highlight=document.createElement('button');highlight.type='button';highlight.className='utility';
+        highlight.dataset.savedClip='highlight';highlight.textContent='Replay deciding exchange';
+        highlight.onclick=()=>load({highlight:true});actions.append(highlight);
+        if(focus?.first==='highlight')highlight.focus({preventScroll:true});
       }
       const rows=root.querySelectorAll('.card-timeline li');
       for(const span of c.knockouts)for(let i=0;i<span.losses;i++){
@@ -663,5 +723,5 @@
       status.hidden=true;status.textContent='';
     }catch{if(card.isConnected)status.textContent='The replay is unavailable on this device. Your match stats are saved.';}
   }
-  window.MatchReview={sampleFight,schoolKnockout,openFilm,enableStudy,defenseReport,defenseCue,defenseActions,recordList,cardHTML,save,attach,pack,restore,resumeTape,MatchFilm,watchFilm,StockRetry,koList};
+  window.MatchReview={decidingExchange,resultHighlight,sampleFight,schoolKnockout,openFilm,enableStudy,defenseReport,defenseCue,defenseActions,recordList,cardHTML,save,attach,pack,restore,resumeTape,MatchFilm,watchFilm,StockRetry,koList};
 })();
