@@ -23,7 +23,7 @@
     <script defer src="./runtime/arcade.js?v=752f452c86948de5"></script>
     <script defer src="./runtime/render.js?v=6ac197add0805776"></script>
     <script defer src="./runtime/dispatch-script.js?v=fa8d7f4ec9df9201"></script>
-    <script defer src="./runtime/app.js?v=99cc8ef1b7dea667"></script>
+    <script defer src="./runtime/app.js?v=49784fa8ba9c4cf2"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -73,11 +73,11 @@
         </aside>
         <nav id="home-saves" hidden aria-label="Continue playing">
           <button type="button" id="home-continue">
-            <img id="continue-dog" alt="" width="48" height="44" />
-            <span><strong id="continue-title"></strong><small id="continue-detail"></small></span>
+            <img id="continue-dog" alt="" width="48" height="44" hidden />
+            <span><strong id="continue-title">Saved game</strong><small id="continue-detail">Resume your most recent game</small></span>
             <b id="continue-action">Continue</b>
           </button>
-          <button type="button" class="board-back" id="other-saves">Other saves</button>
+          <button type="button" class="board-back" id="other-saves" hidden>Other saves</button>
         </nav>
         <div class="home-grid">
           <button
@@ -139,7 +139,9 @@
           const status = document.getElementById('opening-choice');
           const welcome = document.getElementById('school-welcome');
           const error = document.getElementById('opening-error');
-          const options = [...home.querySelectorAll('#school-welcome button, .home-grid button, .ticket-tools button')];
+          const saves = document.getElementById('home-saves');
+          const resume = document.getElementById('home-continue');
+          const options = [...home.querySelectorAll('#school-welcome button, #home-continue, .home-grid button, .ticket-tools button')];
           const onMenu = () => !location.hash || location.hash === '#home';
           const optionKey = button => button.id || button.dataset.enterMode;
           const listeners = new AbortController();
@@ -153,23 +155,63 @@
             if (!choice) { status.textContent = ''; return; }
             choice.setAttribute('data-opening', '');
             const label = choice.querySelector('.ticket-corner, b') || choice;
-            status.textContent = choice.id === 'welcome-dismiss' ? 'Skipping tutorial…' :
+            status.textContent = choice === resume ? 'Opening saved game…' : choice.id === 'welcome-dismiss' ? 'Skipping tutorial…' :
               'Opening ' + (choice.id === 'welcome-play' ? 'Fight School' : label.textContent.trim()) + '…';
           }
 
+          // These small records can offer Continue immediately. The game checks and ranks the full saves on entry.
+          function saved(store, key) {
+            try { return JSON.parse(store.getItem('dog-fight-3.' + key)); } catch { return null; }
+          }
+          function hasProgress() {
+            try {
+              const school = saved(localStorage, 'school');
+              if (saved(localStorage, 'stock-ready') || school?.started && (!school.firstFightDone || school.rematch || school.passed?.length < 10)) return true;
+              const yard = saved(localStorage, 'last-dispatch.v1'), night = saved(localStorage, 'night-mail.v1');
+              if (yard?.started && (!yard.complete || yard.pending || !night?.complete || night.pending)) return true;
+              if (['pip','brisket','noodle','clover'].some(dog => saved(localStorage, 'cup.' + dog)?.active)) return true;
+            } catch {}
+            try {
+              const bracket = saved(sessionStorage, 'tournament.1');
+              return bracket?.started && bracket.results?.length < bracket.players?.length - 1;
+            } catch { return false; }
+          }
+          let checkpoint = false;
           function prepareMenu() {
             select(null);
             home.inert = !onMenu();
-            // Returning players get the actual save list from the game, including suspended fights.
             let fresh = false;
             try { fresh = !Object.keys(localStorage).some(key => key.startsWith('dog-fight-3.')); } catch {}
-            welcome.hidden = !onMenu() || !fresh;
+            saves.hidden = !onMenu() || !(checkpoint || hasProgress());
+            welcome.hidden = !onMenu() || !fresh || !saves.hidden;
             home.classList.toggle('has-welcome', !welcome.hidden);
-            if (!welcome.hidden && document.activeElement === document.body)
-              document.getElementById('welcome-play').focus({preventScroll:true});
+            home.classList.toggle('has-saves', !saves.hidden);
+            if (document.activeElement === document.body) {
+              if (!saves.hidden) resume.focus({preventScroll:true});
+              else if (!welcome.hidden) document.getElementById('welcome-play').focus({preventScroll:true});
+            }
           }
           prepareMenu();
           listen(window, 'hashchange', prepareMenu);
+          // A suspended mission can be the only save. Never create an empty database while looking for it.
+          async function findCheckpoint() {
+            const dbName = 'dog-fight-3.suspended';
+            if (!saves.hidden || !onMenu() || !(await window.indexedDB?.databases?.())?.some(db => db.name === dbName) || listeners.signal.aborted) return;
+            const opening = indexedDB.open(dbName);
+            opening.onupgradeneeded = () => opening.transaction.abort();
+            opening.onsuccess = () => {
+              const db = opening.result;
+              if (db.objectStoreNames.contains('headers') && !listeners.signal.aborted) {
+                const count = db.transaction('headers').objectStore('headers').count();
+                count.onsuccess = () => {
+                  checkpoint = count.result > 0;
+                  if (checkpoint && onMenu() && !choice && !listeners.signal.aborted) prepareMenu();
+                };
+              }
+              db.close();
+            };
+          }
+          findCheckpoint().catch(() => {});
           function moveFocus(direction) {
             if (!window.FightControls || !onMenu() || error.open) return;
             const visible = options.filter(button => !button.closest('[hidden]'));
@@ -238,7 +280,7 @@
             const {dogFightOpening, ...rest} = history.state;
             try { history.replaceState(rest, ''); } catch {}
             if (onMenu() && retry.url === location.href)
-              select(options.find(button => optionKey(button) === retry.key && !button.closest('[hidden]')));
+              select(options.find(button => optionKey(button) === retry.key && (button === resume || !button.closest('[hidden]'))));
           }
           listen(document, 'dogfight-ready', event => {
             const selected = choice;
@@ -246,11 +288,12 @@
             cancelAnimationFrame(padFrame);
             for (const pad of heldButtons.size ? pads() : []) {
               const held = buttons(pad) & (heldButtons.get(pad.index) || 0);
-              if (held) event.detail(pad.index, held);
+              if (held) event.detail.consumePad(pad.index, held);
             }
             home.inert = false;
             select(null);
-            if (onMenu() && selected && !selected.disabled && !selected.closest('[hidden]')) selected.click();
+            if (onMenu() && selected === resume) event.detail.resumeLatest();
+            else if (onMenu() && selected && !selected.disabled && !selected.closest('[hidden]')) selected.click();
           });
           listen(document, 'DOMContentLoaded', () => {
             document.getElementById('opening-retry').onclick = () => {
