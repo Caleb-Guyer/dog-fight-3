@@ -46,10 +46,11 @@ async function play(browser,device){
       wide:[...d.querySelectorAll('*')].filter(e=>e.getBoundingClientRect().right>d.getBoundingClientRect().right).map(e=>e.id || e.textContent.slice(0,30))}));
     assert(layout.scroll<=layout.width+1,device+' board fits '+JSON.stringify(layout));
     assert(await page.locator('#event-preview').evaluate(c=>c.width>0 && c.getContext('2d').getImageData(0,0,c.width,c.height).data.some(v=>v>0)));
-    await page.evaluate(()=>{
+    const observe=()=>page.evaluate(()=>{
       const step=SoloEvents.Run.prototype.step;
       SoloEvents.Run.prototype.step=function(...args){step.apply(this,args);window.run=this;};
     });
+    await observe();
     async function start(selector='#event-play'){
       await page.evaluate(()=>window.run=null);await choose(selector);await page.clock.runFor(2100);
       if(touch){
@@ -88,7 +89,7 @@ async function play(browser,device){
     assert.match(await page.locator('#match-mode').textContent(),/Solo.*Time Battle/);
     await page.goto('http://127.0.0.1:8080/?reload#solo/events/high-ground');
     await board.waitFor();assert.equal(await board.locator('[data-event-pick] small').evaluateAll(nodes=>nodes.filter(n=>n.textContent.includes('✓')).length),3);
-    await choose('[data-event-pick=low-road]');await start();
+    await observe();await choose('[data-event-pick=low-road]');await start();
     await to(6);await hold('up',true);await hold('special',true);await to(9);await hold('special',false);await hold('up',false);
     for(let i=0;i<16 && !await page.evaluate(()=>!!run.risingLedge(run.dogs[0]));i++)await page.clock.runFor(16);
     assert(await page.evaluate(()=>!!run.risingLedge(run.dogs[0])));
