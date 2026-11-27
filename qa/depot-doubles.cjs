@@ -5,10 +5,10 @@ for(const file of ['engine','dispatch-script','dispatch-run'])require('../docs/'
 const {DispatchRun,DispatchScript,DogFight}=window;
 const {idleInput,seededRandom}=DogFight;
 const dt=1/60;
-function match(p1='pip',p2='brisket'){
+function match(p1='pip',p2='brisket',rallySeat){
   const events=[];
-  const run=new DispatchRun({room:DispatchScript.lastRoom,duo:{p1,p2,coats:[1,1]}},(name,e)=>events.push({...e,name}));
-  run.random=seededRandom(17);
+  const run=new DispatchRun({room:DispatchScript.lastRoom,duo:{p1,p2,coats:[1,1],rallySeat}},(name,e)=>events.push({...e,name}));
+  if(!run.rally)run.random=seededRandom(17);
   return {run,events,boss:run.foes[0]};
 }
 function pursue(run,dog,tick){
@@ -84,4 +84,66 @@ test('each player returns on a separate lift and losing both final stocks ends t
   run.team.forEach(f=>f.stocks=1);run.knockouts(run.team);assert.equal(run.finished,'fallen');
   const campaign=new DispatchRun({room:DispatchScript.lastRoom});assert(!campaign.hasSecondPlayer);
   assert.equal(campaign.foes[0].maxHP,170);
+});
+function controlSeat(run,seat,input){
+  run.step(dt,seat===0?input:idleInput,seat===1?input:idleInput);
+}
+const jump={...idleInput,jump:true},chord={...jump,shield:true};
+for(const seat of [0,1])test('P'+(seat+1)+' spends a spare once after 30 uninterrupted jump ticks',()=>{
+  const {run,events}=match(),receiver=run.team[seat],donor=run.team[1-seat];
+  receiver.stocks=1;Object.assign(receiver,{ground:-1,y:4000});donor.damage=57;
+  controlSeat(run,seat,chord);
+  assert(receiver.absent && run.stockOffer.release);
+  for(let i=0;i<40;i++)controlSeat(run,seat,chord);
+  assert.deepEqual(run.borrowed,[0,0]);
+  controlSeat(run,seat,idleInput);
+  for(let i=0;i<18;i++)controlSeat(run,seat,jump);
+  assert.equal(run.stockOffer.held,18);controlSeat(run,seat,idleInput);
+  for(let i=0;i<29;i++)controlSeat(run,seat,jump);
+  assert.equal(donor.stocks,3);assert(receiver.absent);
+  controlSeat(run,seat,jump);
+  assert.equal(receiver.stocks,1);assert.equal(receiver.damage,0);
+  assert(!receiver.absent && receiver.stockLift);assert.equal(donor.stocks,2);assert.equal(donor.damage,57);
+  for(let i=0;i<12;i++)controlSeat(run,seat,chord);
+  assert.equal(receiver.stockLift.exit,null);assert.equal(events.filter(e=>e.name==='stockShare').length,1);
+  assert(run.opponents(run.foes[0].f).includes(receiver));
+});
+test('only the eliminated player can take a stock, including a quick chord during hitstop',()=>{
+  const {run,events}=match('noodle','pip',1),[donor,receiver]=run.team;
+  assert.equal(run.stockOffer.seat,1);assert.equal(donor.damage,60);
+  controlSeat(run,0,chord);assert(receiver.absent);
+  run.hitStop=3*dt;
+  controlSeat(run,1,{...idleInput,shield:true,tapped:{jump:true}});
+  assert(receiver.stockLift);assert.equal(run.stockOffer,null);
+  assert.deepEqual(run.team.map(f=>f.stocks),[1,1]);assert.equal(events.filter(e=>e.name==='ko').length,0);
+  run.knockouts([receiver]);controlSeat(run,1,chord);
+  assert(receiver.absent && !run.stockOffer && !run.finished);assert.equal(donor.stocks,1);
+});
+test('the last stock, a resolved boss defeat, and a same-tick donor knockout take precedence over sharing',()=>{
+  for(const condition of ['last','boss','blast']){
+    const {run,boss,events}=match('pip','brisket',0),[receiver,donor]=run.team;
+    for(let i=0;i<29;i++)controlSeat(run,0,jump);
+    if(condition==='last')donor.stocks=1;
+    if(condition==='boss')boss.hp=0;
+    if(condition==='blast')Object.assign(donor,{ground:-1,y:4000});
+    controlSeat(run,0,jump);
+    assert(receiver.absent && !run.stockOffer);assert.equal(events.filter(e=>e.name==='stockShare').length,0);
+    assert.equal(donor.stocks,condition==='boss'?2:1);
+    if(condition==='blast')assert(donor.stockLift);
+  }
+});
+for(const seat of [0,1])test('P'+(seat+1)+' can return, leave the lift, hit the boss and clear the seeded rally',()=>{
+  function play(){
+    const {run,boss,events}=match('pip','brisket',seat);
+    assert.equal(boss.hp,boss.maxHP/2);
+    controlSeat(run,seat,chord);assert(!run.rally.countered);
+    for(let tick=1;tick<8000 && !run.finished;tick++){
+      run.step(dt,...run.team.map(f=>f.stockLift?{...idleInput,x:tick%4<2?1:0}:pursue(run,f,tick)));
+    }
+    assert.equal(run.finished,'exit');assert.equal(run.rally.countered,true);
+    assert.deepEqual(events.filter(e=>e.name==='rallyHit').map(e=>e.seat),[seat]);
+    assert(events.some(e=>e.name==='hit' && e.owner===run.team[seat] && e.f===boss.f));
+    return [run.time,run.random.state,run.team.map(f=>[f.stocks,f.damage])];
+  }
+  assert.deepEqual(play(),play());
 });

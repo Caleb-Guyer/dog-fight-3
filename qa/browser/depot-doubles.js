@@ -13,12 +13,14 @@ async function play(browser,profile){
       window.pads=Array.from({length:n},(_,index)=>({index,id:'Doubles pad '+index,connected:true,mapping:'standard',
         axes:[0,0,0,0],buttons:Array.from({length:17},()=>({value:0,pressed:false}))}));
       Object.defineProperty(navigator,'getGamepads',{value:()=>pads});
+      if(n===0)localStorage.setItem('dog-fight-3.controls',JSON.stringify({keyboard:[{},{jump:'KeyH'}]}));
     },count);
     await page.clock.install({time:new Date('2030-01-01Z')});
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
-    await page.goto('http://127.0.0.1:8080/'+(profile==='keyboard'?'':'#local/depot-doubles'));
+    await page.goto('http://127.0.0.1:8080/'+(profile==='keyboard'?'':touch?'#local/stock-share':'#local/depot-doubles'));
     if(profile==='keyboard'){await choose('[data-enter-mode=local]');await choose('#depot-duo');}
     await page.getByRole('heading',{name:'Bell Depot doubles'}).waitFor();
+    if(touch)assert(await page.locator('#rally-options').evaluate(el=>el.open));
     const progress=()=>page.evaluate(()=>DispatchScript.chapters.map(c=>localStorage.getItem(c.saveKey)));
     const prior=await progress();
     await page.evaluate(()=>{
@@ -78,7 +80,56 @@ async function play(browser,profile){
     await choose('[data-do=depot-start]');await step(64);
     assert.deepEqual(await page.evaluate(()=>live.team.map(f=>f.stocks)),[3,3]);
     await choose('#pause');await choose('[data-do=lobby]');
-    assert(await page.locator('#depot-duo').isVisible());assert.deepEqual(errors,[]);
+    await choose('#depot-duo');await choose('#rally-options summary');
+    const seat=touch || count===2?0:1, action=s=>'[data-do=share-p'+(s+1)+']';
+    await choose(action(seat));await step(64);
+    const prompt=page.locator('#stock-share'),bar=prompt.locator('progress');
+    const binding=touch?'Jump':count?'A':'H';
+    assert.match(await prompt.innerText(),new RegExp('Hold '+binding+' '));
+    assert.equal(await prompt.evaluate(el=>el.parentElement.querySelector('b').textContent.slice(0,2)),'P'+(seat+1));
+    assert.equal(await page.evaluate(()=>live.foes[0].hp),140);
+    assert.equal(await page.locator('#match-mode').innerText(),'Last-stock rally');
+    async function button(name,pressed){
+      if(touch){
+        const b=await page.locator('[data-touch='+name+']').boundingBox();
+        await client.send('Input.dispatchTouchEvent',{type:pressed?'touchStart':'touchEnd',
+          touchPoints:pressed?[{x:b.x+b.width/2,y:b.y+b.height/2}]:[]});
+      }else if(count){
+        await page.evaluate(([index,n,down])=>{pads[index].buttons[n]={pressed:down,value:Number(down)};},
+          [count===1?0:seat,{jump:0,shield:4,attack:2}[name],pressed]);
+      }else{
+        const key={jump:'h',shield:'Slash',attack:'Comma'}[name];
+        if(pressed)await page.keyboard.down(key);else await page.keyboard.up(key);
+      }
+    }
+    await button('jump',true);await step(190);
+    assert(await bar.evaluate(el=>el.value>0 && el.value<30));
+    await button('jump',false);await step(50);assert.equal(await bar.evaluate(el=>el.value),0);
+    const chord=profile==='two pads' || profile==='keyboard';
+    if(chord)await button('shield',true);
+    await button('jump',true);await step(chord?64:560);
+    assert.deepEqual(await page.evaluate(()=>live.team.map(f=>f.stocks)),[1,1]);
+    assert(await page.evaluate(s=>!!live.team[s].stockLift,seat));
+    assert(await prompt.isHidden());
+    await button('jump',false);if(chord)await button('shield',false);
+    await step(470);await button('jump',true);await step(60);await button('jump',false);
+    assert(await page.evaluate(s=>!live.team[s].stockLift,seat));
+    // Place an exposed boss in range to check credit, results and retries via the returning seat's actual button.
+    await page.evaluate(s=>{
+      const f=live.team[s],boss=live.foes[0];
+      Object.assign(f,{x:boss.f.x-55,y:boss.f.y,ground:0,face:1,vx:0,vy:0});
+      Object.assign(boss,{phase:'stun',duration:3,time:0,hp:2,wavefront:null});
+    },seat);
+    await button('attack',true);await step(200);await button('attack',false);await step(1100);
+    await page.getByRole('heading',{name:'Comeback clear'}).waitFor();
+    assert.match(await page.locator('#dialog-body').innerText(),new RegExp('P'+(seat+1)+' returned and hit'));
+    await choose(action(seat));await step(64);
+    assert.equal(await page.evaluate(()=>live.stockOffer.seat),seat);
+    await choose('#pause');await choose(action(1-seat));await step(64);
+    assert.equal(await page.evaluate(()=>live.stockOffer.seat),1-seat);
+    await choose('#pause');await choose('[data-do=depot-start]');await step(64);
+    assert.deepEqual(await page.evaluate(()=>live.team.map(f=>f.stocks)),[3,3]);
+    assert.deepEqual(await progress(),prior);assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
 (async()=>{
