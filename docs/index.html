@@ -13,17 +13,17 @@
     <link rel="preload" href="./assets/brawl-pixel.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="./style.css?v=parcel-1" />
     <link rel="stylesheet" href="./dispatch.css?v=first-menu-1" />
-    <link rel="stylesheet" href="./screen.css?v=compare-defenses-1" />
+    <link rel="stylesheet" href="./screen.css?v=field-card-1" />
     <script defer id="menu-controls" src="./runtime/controls.js?v=a9ac2240ce6c6212"></script>
     <script defer src="./runtime/fighters-art.js?v=2a67aa3b59f1ffbb"></script>
     <script defer src="./runtime/arena-art.js?v=6412e724dc033974"></script>
-    <script defer src="./runtime/engine.js?v=7b8b0f2513ea2900"></script>
+    <script defer src="./runtime/engine.js?v=c9cf66b0d4e1dfb3"></script>
     <script defer src="./runtime/fight-records.js?v=010ed689ac0ca56e"></script>
     <script defer src="./runtime/fight-school.js?v=1e8cbe0364b1c985"></script>
     <script defer src="./runtime/arcade.js?v=752f452c86948de5"></script>
     <script defer src="./runtime/render.js?v=c8e5f7636f38fe3b"></script>
     <script defer src="./runtime/dispatch-script.js?v=fa8d7f4ec9df9201"></script>
-    <script defer src="./runtime/app.js?v=10f4c9aa789852d7"></script>
+    <script defer src="./runtime/app.js?v=63adb024577b7f85"></script>
   </head>
   <body class="menu-screen">
     <header class="topbar">
@@ -67,8 +67,9 @@
           </div>
         </div>
         <aside id="school-welcome" hidden aria-labelledby="welcome-title">
-          <div><strong id="welcome-title">Your first fight</strong><span>Learn with Pip, then take on Brisket.</span></div>
+          <div><strong id="welcome-title">Your first fight</strong><span>Practice with Pip or learn as you fight Brisket.</span></div>
           <button class="dispatch-primary" id="welcome-play" type="button">Play tutorial</button>
+          <button class="board-back" id="welcome-field" type="button">Learn in a match</button>
           <button class="board-back" id="welcome-dismiss" type="button">Skip for now</button>
         </aside>
         <nav id="home-saves" hidden aria-label="Continue playing">

@@ -1020,6 +1020,7 @@
     if(dialogType==='matchup-card')return $('matchup-back').click();
     if(dialogType==='opening-duel')return ($('duel-resume') || $('duel-back')).click();
     if(dialogType==='practice-tapes')return $('tape-back').click();
+    if(dialogType==='field-card')return $('field-back').click();
     if(dialogType==='combo-compare')return $('reply-back').click();
     if(dialogType==='pack-relay')return backFromRelay();
     if(dialogType==='cup-relay')return $('cup-relay-back').click();
@@ -2157,6 +2158,7 @@
     spar=null;
     corner=config.schoolFinal && !visit ? resume?.corner || new window.FightSchool.Corner(config.schoolTarget,
       config.schoolTarget===schoolSave.rematch?.id && schoolSave.rematch?.ticket) : null;
+    if(corner && (config.fieldMatch || corner.field))corner.field=new window.FighterSchool.FieldCard(corner.field);
     $('corner-tip').hidden=true;
     delete $('corner-tip').dataset.cue;
     if(config.mode==='local' && !online.match && config.lesson===undefined){
@@ -2221,6 +2223,7 @@
     world = resume?.battle || new Match({...config, rivalRead:series?.openingRead}, (name, e) => {
       world?.lesson?.contact(name,e,world);
       corner?.target?.contact(name,e,world);
+      corner?.field?.contact(name,e,world);
       spar?.contact(name,e,world);
       view.event(name, e);
       fightSound(name,e);
@@ -2302,6 +2305,7 @@
       config.rotationRound?(config.tourneyRound || 'Bout '+config.rotationRound)+' · P1 '+config.rotationTags[0]+' / P2 '+config.rotationTags[1]:
       world.lesson ? 'Fight School' : spar?'Sparring · '+world.dogs[0].stats.name:matchName + (world.relayTeams?' · Pack Relay':world.matchCard?.points?' · Time Battle':config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = stageName(config.stage,world.form);
+    if(corner?.field)corner.field.hud($('match-mode'));
     const set = online.series || localSet;
     $('match-set').hidden = !set;
     if(world.warmupPartner){
@@ -2447,7 +2451,7 @@
         '<button class="utility" data-do="moves">Move list</button>' + screenAction() + cameraButton() + '</div>' +
         (matchConfig.stageTrack!==undefined && window.YardScore?'<p id="music-credit">'+(window.YardScore.scores[matchConfig.stageTrack]?.title || 'Quiet arena')+'</p>':'')+
         targetRecap() + (spar?spar.goals(true):'') + (['solo','training'].includes(world.mode) ? '<div class="dialog-actions">' +
-          (corner?'<button class="utility" data-do="corner-practice">Practice · '+(schoolLessons.find(l=>l.id===corner.practice)?.title || $(corner.practice).textContent)+'</button>'+
+          (corner?fieldButton()+'<button class="utility" data-do="corner-practice">Practice · '+(schoolLessons.find(l=>l.id===corner.practice)?.title || $(corner.practice).textContent)+'</button>'+
             '<button class="utility" data-do="corner-toggle" aria-pressed="'+settings.cornerTips+'">Ringside tips · '+(settings.cornerTips?'On':'Off')+'</button>'+
             stockBreakToggle()+'<button class="utility" data-do="school-suspend">Save &amp; quit</button>':'')+
           (world.mode === 'solo' ? '<button class="utility" data-do="rehearse">' + (practiceFight?.returnStart?'Retry stock return':practiceFight?'Retry position':'Practice this position') + '</button>' : '') +
@@ -3187,7 +3191,7 @@
         '<div class="winner"><img alt="" src="'+portrait(f.kind,result.coatFor(f.index))+'"><div><h3>'+f.stats.name+
         ' wins!</h3><p>'+finish+' · '+duration+'</p></div></div><p>'+
         (won?'Pip’s next opponent is Noodle on Picnic Table in the Arcade Cup.':review.reason)+
-        '</p>'+targetRecap()+'<div class="dialog-actions">'+(corner?.previous?'<button class="utility" data-do="rematch-film">Compare my rematch</button>':'')+'<button class="'+(won?'primary':'utility')+'" data-do="school-cup">Pip’s Arcade Cup</button>'+
+        '</p>'+targetRecap()+'<div class="dialog-actions">'+fieldButton()+(corner?.previous?'<button class="utility" data-do="rematch-film">Compare my rematch</button>':'')+'<button class="'+(won?'primary':'utility')+'" data-do="school-cup">Pip’s Arcade Cup</button>'+
         '<button class="'+(won?'utility':'primary')+'" data-do="rematch">Rematch Brisket</button>'+
         (review?'<button class="utility" data-school-review="'+review.id+'">'+review.button+'</button>':'')+cardButton+
         '<button class="utility" data-do="fighter-classes">Fighter lessons</button>'+
@@ -3371,6 +3375,7 @@
     if(action==='matchup-card')return page==='match'?showMatchup(matchConfig.openingMatchup,'result'):showMatchup(lobbyMatchup(),'rules');
     if(action==='handicap')return openRulebook(undefined,true);
     if(action==='corner-practice' && corner)return startCornerLesson();
+    if(action==='field-card' && corner?.field)return openFieldCard();
     if(action==='stock-retry')return stockSheet({from:dialogType==='pause'?'pause':'result',slot:Number(e.target.closest('[data-stock-slot]').dataset.stockSlot),
       result:online.match?.confirmedWorld || world});
     if(action==='coach-fall'){
@@ -3530,7 +3535,7 @@
     if (action === 'cut-off-clover') startCloverApproach();
     if (action === 'shield-read-set') startShieldReadMatch(true);
     if (action === 'rematch') {
-      if(matchConfig.schoolFinal && world.end!==null)return startFirstFight(world.end===1?window.FightSchool.rematchLesson(world.matchCard).id:null);
+      if(matchConfig.schoolFinal && world.end!==null)return startFirstFight(world.end===1?window.FightSchool.rematchLesson(world.matchCard).id:null,!!corner?.field);
       startMatch(matchConfig, undefined, soloSeed, localSet);
     }
     if (action === 'controls') showControls();
@@ -3605,7 +3610,7 @@
       if(current())waitForDispatch('Footwork readout',()=>loadDispatch('PracticeDirectory'),flush,()=>$('game').focus());
     });
   }
-  const feedbackDrills = new Set(['launch','wall','shield','edge','wave','spacing','escape','platform','air','roll','climb','trump']);
+  const feedbackDrills = new Set(['launch','wall','shield','edge','footwork','wave','spacing','escape','platform','air','roll','climb','trump']);
   function drill(ledge, fromHang = false, pattern = 'strike', direction, study) {
     if (!world) return;
     if(feedbackDrills.has(ledge) && !window.PracticeFeedback){
@@ -3873,55 +3878,7 @@
     } else if (edge) {
       message=window.PracticeFeedback.edgePanel(world,pattern,player,keyFor);
     } else if (footwork) {
-      const practice = world.footworkPractice;
-      for (const id of footworkPatterns)
-        $('footwork-' + id).setAttribute('aria-pressed', String(practice.pattern === id));
-      $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
-      $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
-      $('footwork-pause').hidden = practice.pauseOnWindup === undefined;
-      $('footwork-worn').hidden = pattern!=='brace';
-      $('footwork-worn').setAttribute('aria-pressed',String(!!practice.worn));
-      $('footwork-pause').setAttribute('aria-pressed', String(!!practice.pauseOnWindup));
-      $('footwork-status').dataset.result = 'ready';
-      $('footwork-status').textContent = {
-        brake: 'Brake at the chalk', pivot: 'Catch the chase', antiAir: 'Catch the landing',
-        center:'Take ground',brace:'Brace at the chalk',dashShield:'Run to the chalk',
-        angleHigh: 'Tag the hop', angleLow: 'Clip the recovery',
-        cancelDash:'Catch the hop from a run', cancelTurn:'Turn away, then swing back',
-        boostGrab:'Shield just beyond dash-grab range', boostPivot:'Rival behind your run',
-        bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
-        reflect:'Pip · tap Attack to start', returnFire:'Clover · tap neutral Special',
-        crawl:'Noodle · get under Round Trip',
-        armor:'Brisket · punch through a jab', armorGrab:'Pip · catch the shoulder',
-      }[pattern];
-      const discInput = player.kind === 'noodle' ? 'aim toward Clover and tap Attack' : 'tap Attack';
-      const diagonal = (pattern === 'angleLow' ? 'down-' : 'up-') + (practice.dir > 0 ? 'right' : 'left');
-      const angleTip = 'Tap Attack to start the swing. Aim ' + diagonal +
-        ' with '+keyFor(0,'walk')+' on keyboard, slide from the center dot on touch, or tilt the stick sideways with a little vertical aim. Repeat with level aim to compare.';
-      message = {
-        cancelDash:'You’re already running. Hold ' + (practice.dir > 0 ? 'Right' : 'Left') +
-          ' and tap Attack for a dash attack. Immediately press Up + Jump to catch the rival above you.',
-        cancelTurn:'Tap ' + (practice.dir > 0 ? 'Left' : 'Right') + ' + Attack to start a tilt facing away. Immediately press ' +
-          (practice.dir > 0 ? 'Right' : 'Left') + ' + Jump to swing a back air toward the rival.',
-        center:'Run toward the other dog to push them back, or jump or roll past and land behind them. Keep their paws off your chalk.',
-        brace:'Tap Attack to start the run. Stand still once, then retry holding Shield. Compare how far their shoulder pushes you.',
-        angleHigh: angleTip, angleLow: angleTip,
-        boostGrab:'You’re running. Tap Grab once to test its reach. Retry with Attack, then tap Grab as the windup begins.',
-        boostPivot:'You’re running away from the rival. Tap Attack, then press back and tap Grab to reach behind you.',
-        antiAir: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk as the rival hops. Hold Up and tap Jump + Smash together. Hold Smash longer to compare.',
-        brake: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Release forward for a beat, then press forward and tap Attack together. Compare that with holding forward and tapping Attack.',
-        dashShield:'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Keep forward held and add Shield when Brisket swings. Tap Grab on the block to catch him before he jumps away.',
-        pivot: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk with the rival on your heels. Press back and tap Attack together to catch them during your skid.',
-        bait: 'Dash right to the chalk, then reverse. When Brisket misses his grab, dash back in and tap Attack. Choose Footwork practice to retry.',
-        match: 'Tap Attack to start the count. On the third chalk light, tap Attack again to meet the other dog’s jab.',
-        power: 'You’re Pip. Tap Attack to start and immediately hold Smash. Release on the third light to kick through Brisket’s Body Check.',
-        armor:'Tap Attack to start, then hold Smash. Release on the third light. Pip will jab as Brisket plants his feet.',
-        armorGrab:'Tap Attack to start the count. Try a jab on the third light. Retry and tap Grab on the same beat to catch Brisket.',
-        disc: 'Tap Attack to start. Clover throws Round Trip. On the third light, ' + discInput + ' to bat the disc away.',
-        reflect:'Tap Attack to call for the throw. When Clover releases Round Trip, tap Special with the directions released. Catch the disc on the second bark.',
-        returnFire:'Tap Special with the directions released. Pip is watching your throw. Hold Shield when you hear the second bark send the disc back.',
-        crawl:'Tap Attack to cue Clover. Hold Down and move toward her under both passes. Cross the chalk, then shield her low serve or reach her with a tilt.',
-      }[pattern];
+      message=window.PracticeFeedback.footworkPanel(world,pattern,player,keyFor,footworkPatterns);
     } else if (wall) {
       const d = world.wallPractice;
       $('wall-spring').setAttribute('aria-pressed',String(!!d.spring));
@@ -4444,7 +4401,7 @@
   let campaign = yardChapter;
   const dispatchSources={
     SoloEvents:'solo-events.js?v=rival-reads-1',
-    PracticeFeedback:'practice-feedback.js?v=light-shield-1', DogOnline:'online.js?v=light-shield-1',
+    PracticeFeedback:'practice-feedback.js?v=field-card-1', DogOnline:'online.js?v=light-shield-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
@@ -4458,7 +4415,7 @@
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=stage-run-1',
     ComboLab:'combo-lab.js?v=light-shield-1', FinishTools:'finish-tools.js?v=light-shield-1',
-    MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=first-hit-1',
+    MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=depot-practice-1', DispatchView:'dispatch-view.js?v=launch-rescue-1',
@@ -4669,9 +4626,10 @@
     waitForDispatch('Resume first match',async()=>{
       await Promise.all(['DispatchSuspend','MatchReview'].map(loadDispatch));
       resume=window.DispatchSuspend.schoolPosition(await window.DispatchSuspend.load('school-stock'));
+      if(resume.corner.field)await loadDispatch('FighterSchool');
     },()=>{
       leaveOnline();afterStory=null;
-      startMatch(firstFightConfig(resume.corner.target?.id),undefined,resume.checkpoint.openingSeed,null,{resume});
+      startMatch(firstFightConfig(resume.corner.target?.id,!!resume.corner.field),undefined,resume.checkpoint.openingSeed,null,{resume});
       if(settings.stockBreaks && world.dogs[0].stockLift?.time===0)return showStockBreak();
       showDialog('pause','First match ready','<p>'+window.DispatchSuspend.schoolCard(resume.checkpoint.header).detail+'</p>'+
         '<div class="dialog-actions"><button class="primary" data-do="resume">Resume fight</button></div>');
@@ -5324,6 +5282,9 @@
     else if(lesson.guideError && state==='playing')$('school-task').textContent=info.task+' Guided practice could not load.';
     if(matchConfig.cornerLesson){
       if(lesson.done && lesson.course)window.FighterSchool.mark(storage,lesson.id);
+      if(matchConfig.fieldLesson && lesson.done && !schoolSave.passed.includes(lesson.id)){
+        schoolSave.passed.push(lesson.id);saveSchool();
+      }
       next.textContent='Return to fight';return;
     }
     if(lesson.course){
@@ -5385,16 +5346,30 @@
     else if (unfinishedLesson()>=0) startLesson(unfinishedLesson());
     else startFirstFight();
   }
-  function startFirstFight(target=schoolSave.rematch?.id) {
+  function startFirstFight(target=schoolSave.rematch?.id,field=false) {
+    if(field && !window.FighterSchool)return waitForDispatch('Learn in a match',()=>loadDispatch('FighterSchool'),()=>startFirstFight(target,true),()=>showHome());
     leaveOnline();
     afterStory=null;
     schoolSave.started=true;
     saveSchool({fight:target && schoolSave.rematch?.id===target?schoolSave.rematch.ticket:null});
-    startMatch(firstFightConfig(target));
+    startMatch(firstFightConfig(target,field));
   }
-  function firstFightConfig(target){
-    return {...settings,mode:'solo',schoolFinal:true,schoolTarget:target,p1:'pip',p2:'brisket',cpuLevel:'rookie',
+  function firstFightConfig(target,field=false){
+    return {...settings,mode:'solo',schoolFinal:true,fieldMatch:field,schoolTarget:target,p1:'pip',p2:'brisket',cpuLevel:'rookie',
       stage:'picnic',form:'original',stockCount:3,timeBattle:false,fetch:false,minutes:7};
+  }
+  function fieldButton(){
+    return corner?.field?'<button class="utility" data-do="field-card">Skills from this fight · '+Object.keys(corner.field.marks).length+' / 10</button>':'';
+  }
+  function openFieldCard(){
+    const over=world.end!==null;
+    corner.field.panel(schoolLessons,schoolSave.passed,showDialog,index=>{
+      const parked=pausedFight();
+      startMatch({...settings,mode:'local',lesson:index,cornerLesson:true,fieldLesson:true,form:'original',
+        stage:schoolLessons[index].id==='platform'?'picnic':'nightmail',p1:'pip',p2:'brisket',minutes:0,fetch:false},
+        undefined,undefined,null,{visit:over?{returnResult:parked}:parked});
+      delete $('school-coach').dataset.key;renderSchool(getPads());
+    },over?showResult:dismiss,over);
   }
   function startCornerLesson(){
     if(corner.practice==='air-lastDodge'){
@@ -5432,6 +5407,7 @@
     $('syllabus-guide').after(clinic);clinic.onclick=()=>replayClinic('floor');
     const rescue=clinic.cloneNode(false);rescue.textContent='Recovery clinic';clinic.after(rescue);rescue.onclick=()=>recoveryClinic(false);
     const read=clinic.cloneNode(false);read.id='school-read';read.textContent='Read the Rival';clinic.before(read);read.onclick=()=>eventBoard('read-the-rival');
+    const field=clinic.cloneNode(false);field.id='school-field';field.textContent='Learn in a match';read.before(field);field.onclick=()=>startFirstFight(null,true);
     const launch=clinic.cloneNode(false);launch.textContent='Launch survival';rescue.after(launch);launch.onclick=()=>recoveryClinic(false,true);
     const ledge=clinic.cloneNode(false);ledge.textContent='Ledge clinic';launch.after(ledge);ledge.onclick=()=>replayClinic('ledge');
     const stage=clinic.cloneNode(false);stage.textContent='Stage tech clinic';ledge.after(stage);stage.onclick=()=>replayClinic('wall');
@@ -5551,6 +5527,7 @@
       active===$('home-continue') && $('home-saves').hidden || active===$('welcome-play') && $('school-welcome').hidden)) focusHome();
   });
   $('welcome-play').onclick=resumeCourse;
+  $('welcome-field').onclick=()=>startFirstFight(null,true);
   $('welcome-dismiss').onclick=()=>{saveSchool();showHome();};
   $('home-school').onclick=schoolList;
   $('school-next').onclick=nextLesson;
@@ -6684,6 +6661,16 @@
             finishTape?.record(world,input,second);
             world.step(1 / 60, input, second);
             corner?.target?.step(world);
+            if(corner?.field){
+              const card=corner.field;
+              card.step(world,input);
+              if(card.changed){
+                card.changed=false;
+                card.hud($('match-mode'));
+                const earned=Object.keys(card.marks).filter(id=>!schoolSave.passed.includes(id));
+                if(earned.length){schoolSave.passed.push(...earned);saveSchool();}
+              }
+            }
             if(corner?.target?.doneAt!=null)corner.target.tapeFrame??=finishTape.count;
             spar?.step(world);
             if (world.lesson) world.lesson.afterStep(world);
@@ -6938,6 +6925,8 @@
     } else if (['#tutorial/landings','#tutorial/ledge','#tutorial/stage-tech','#tutorial/stage-tech/heavy','#tutorial/stage-tech/ceiling'].includes(hash)) {
       const kind=hash.split('/').at(-1);
       replayClinic(kind==='stage-tech'?'wall':kind==='landings'?'floor':kind);
+    } else if (hash === '#tutorial/field') {
+      startFirstFight(null,true);
     } else if (hash === '#tutorial/first-match') {
       startFirstFight();
     } else if (hash === '#tutorial') {

@@ -8367,6 +8367,7 @@
         if(plan?.rolled && plan.thrown && this.time-plan.grabAt<=spec.start+spec.active+.04)
           scout.ledgeRollCatches=(scout.ledgeRollCatches || 0)+1;
       }
+      const shielded = target.shield;
       this.grapple = owner.grip = target.grip = grip;
       target.shortHopFlight = false;
       if (target.shieldBreak) this.endShieldBreak(target, 'grabbed', attack.moveId);
@@ -8405,6 +8406,7 @@
       this.emit('grabCatch', {
         f: owner,
         target,
+        shielded,
         face,
         point: { ...grip.anchor },
         moveId: grip.grabId,

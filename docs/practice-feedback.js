@@ -1245,6 +1245,57 @@
       tip.textContent = result[1];
     }
   }
+  function footworkPanel(world,pattern,player,keyFor,footworkPatterns){
+      const practice = world.footworkPractice;
+      for (const id of footworkPatterns)
+        $('footwork-' + id).setAttribute('aria-pressed', String(practice.pattern === id));
+      $('footwork-side').hidden = $('footwork-slow').hidden = pattern === 'bait';
+      $('footwork-slow').setAttribute('aria-pressed', String(practice.slow));
+      $('footwork-pause').hidden = practice.pauseOnWindup === undefined;
+      $('footwork-worn').hidden = pattern!=='brace';
+      $('footwork-worn').setAttribute('aria-pressed',String(!!practice.worn));
+      $('footwork-pause').setAttribute('aria-pressed', String(!!practice.pauseOnWindup));
+      $('footwork-status').dataset.result = 'ready';
+      $('footwork-status').textContent = {
+        brake: 'Brake at the chalk', pivot: 'Catch the chase', antiAir: 'Catch the landing',
+        center:'Take ground',brace:'Brace at the chalk',dashShield:'Run to the chalk',
+        angleHigh: 'Tag the hop', angleLow: 'Clip the recovery',
+        cancelDash:'Catch the hop from a run', cancelTurn:'Turn away, then swing back',
+        boostGrab:'Shield just beyond dash-grab range', boostPivot:'Rival behind your run',
+        bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
+        reflect:'Pip · tap Attack to start', returnFire:'Clover · tap neutral Special',
+        crawl:'Noodle · get under Round Trip',
+        armor:'Brisket · punch through a jab', armorGrab:'Pip · catch the shoulder',
+      }[pattern];
+      const discInput = player.kind === 'noodle' ? 'aim toward Clover and tap Attack' : 'tap Attack';
+      const diagonal = (pattern === 'angleLow' ? 'down-' : 'up-') + (practice.dir > 0 ? 'right' : 'left');
+      const angleTip = 'Tap Attack to start the swing. Aim ' + diagonal +
+        ' with '+keyFor(0,'walk')+' on keyboard, slide from the center dot on touch, or tilt the stick sideways with a little vertical aim. Repeat with level aim to compare.';
+      return {
+        cancelDash:'You’re already running. Hold ' + (practice.dir > 0 ? 'Right' : 'Left') +
+          ' and tap Attack for a dash attack. Immediately press Up + Jump to catch the rival above you.',
+        cancelTurn:'Tap ' + (practice.dir > 0 ? 'Left' : 'Right') + ' + Attack to start a tilt facing away. Immediately press ' +
+          (practice.dir > 0 ? 'Right' : 'Left') + ' + Jump to swing a back air toward the rival.',
+        center:'Run toward the other dog to push them back, or jump or roll past and land behind them. Keep their paws off your chalk.',
+        brace:'Tap Attack to start the run. Stand still once, then retry holding Shield. Compare how far their shoulder pushes you.',
+        angleHigh: angleTip, angleLow: angleTip,
+        boostGrab:'You’re running. Tap Grab once to test its reach. Retry with Attack, then tap Grab as the windup begins.',
+        boostPivot:'You’re running away from the rival. Tap Attack, then press back and tap Grab to reach behind you.',
+        antiAir: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk as the rival hops. Hold Up and tap Jump + Smash together. Hold Smash longer to compare.',
+        brake: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Release forward for a beat, then press forward and tap Attack together. Compare that with holding forward and tapping Attack.',
+        dashShield:'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Keep forward held and add Shield when Brisket swings. Tap Grab on the block to catch him before he jumps away.',
+        pivot: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk with the rival on your heels. Press back and tap Attack together to catch them during your skid.',
+        bait: 'Dash right to the chalk, then reverse. When Brisket misses his grab, dash back in and tap Attack. Choose Footwork practice to retry.',
+        match: 'Tap Attack to start the count. On the third chalk light, tap Attack again to meet the other dog’s jab.',
+        power: 'You’re Pip. Tap Attack to start and immediately hold Smash. Release on the third light to kick through Brisket’s Body Check.',
+        armor:'Tap Attack to start, then hold Smash. Release on the third light. Pip will jab as Brisket plants his feet.',
+        armorGrab:'Tap Attack to start the count. Try a jab on the third light. Retry and tap Grab on the same beat to catch Brisket.',
+        disc: 'Tap Attack to start. Clover throws Round Trip. On the third light, ' + discInput + ' to bat the disc away.',
+        reflect:'Tap Attack to call for the throw. When Clover releases Round Trip, tap Special with the directions released. Catch the disc on the second bark.',
+        returnFire:'Tap Special with the directions released. Pip is watching your throw. Hold Shield when you hear the second bark send the disc back.',
+        crawl:'Tap Attack to cue Clover. Hold Down and move toward her under both passes. Cross the chalk, then shield her low serve or reach her with a tilt.',
+      }[pattern];
+  }
   function edgePanel(world,pattern,player,keyFor){
       const d = world.edgePractice, side = d.dir > 0 ? 'right' : 'left';
       for (const id of ['lip','shortCatch','longCatch','tip','deep','corner','inside','light']) $('edge-' + id).setAttribute('aria-pressed', String(id === d.pattern));
@@ -1317,5 +1368,5 @@
         poke: 'The rival holds their shield high. Aim Down and tap Attack for ' + moves[player.kit.tilts.down].label + '.',
       }[pattern];
   }
-  window.PracticeFeedback={edgePanel,shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
+  window.PracticeFeedback={footworkPanel,edgePanel,shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
 })();
