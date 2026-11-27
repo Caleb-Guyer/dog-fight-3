@@ -1723,6 +1723,37 @@ async function testShieldPunish(page,mobile) {
   assert.equal(await latest.innerText(),result);
 }
 
+async function testDashPressure(page,mobile){
+  await page.goto(root+'?run-at-the-shield#training/dash-pressure');
+  const latest=page.locator('#combo-latest'),{hold,press}=await trainingControls(page,mobile,latest);
+  await page.locator('#dash-pressure-fight').waitFor();
+  await press('combo-slow');
+  await hold(['attack']);await page.clock.runFor(65);await hold(['shield']);
+  await page.clock.runFor(2300);await hold([]);
+  assert.match(await latest.textContent(),/Yard Buster · blocked.*Pip punished with Flying Kick.*\d+f recovery · \d+ px apart/);
+  await press('combo-dashPressure');
+  assert.match(await page.locator('#combo-previous').textContent(),/Previous dash.*Flying Kick/);
+  await hold(['right']);await page.clock.runFor(152);await hold(['attack']);await page.clock.runFor(65);
+  await hold(['shield']);await page.clock.runFor(2300);await hold([]);
+  assert.match(await latest.textContent(),/Pip punished with Collar Tag/);
+  await page.evaluate(()=>{
+    const step=DogFight.Battle.prototype.step;
+    window.rushHits=new Set();
+    DogFight.Battle.prototype.step=function(...args){
+      const value=step.apply(this,args);
+      if(this.mode==='solo' && this.matchCard){
+        window.rushStocks=this.dogs.map(d=>[d.kind,d.stocks]);
+        if(this.matchCard.players[0].lastHit)rushHits.add(this.matchCard.players[0].lastHit.id);
+      }
+      return value;
+    };
+  });
+  await press('dash-pressure-fight');await hold(['attack']);await page.clock.runFor(2750);
+  await hold(['shield']);await page.clock.runFor(1000);await hold([]);
+  assert.deepEqual(await page.evaluate(()=>rushStocks),[['brisket',3],['pip',3]]);
+  assert(await page.evaluate(()=>rushHits.has('pipDiveKick')));
+}
+
 async function testPartnerTraining(page,mobile) {
   await page.goto(root+'?partners#training/sparring');
   const latest=page.locator('#combo-latest'), {press,hold}=await trainingControls(page,mobile,latest);
@@ -2469,6 +2500,7 @@ async function testDevice(browser, mobile) {
     await testDefendTakes(page, mobile);
     await testPracticeTapes(page,mobile);
     await testShieldPunish(page, mobile);
+    await testDashPressure(page,mobile);
     await testCrawl(page, mobile);
     await testPracticeRoom(page, mobile);
     await testGetUpAttacks(page, mobile);

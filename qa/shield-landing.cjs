@@ -7,6 +7,53 @@ const {Battle,kits,arenas,idleInput,seededRandom} = window.DogFight;
 const dt = 1/60, guard = {...idleInput,shield:true};
 const config = {p1:'pip',p2:'clover',stage:'nightmail',fetch:false};
 
+function runDash(p1,p2,delay,mode,legacy=false){
+  const events=[];
+  const w=new Battle({...config,p1,p2,mode,cpuLevel:'rival',dashPressure:true,stockCount:3,minutes:7},
+    (name,e)=>{if(['block','hit','grabCatch'].includes(name))events.push([name,e.moveId]);},seededRandom(42));
+  if(mode==='training')w.resetComboPractice('dashPressure');
+  if(legacy)delete w.bot.readDashAttacks;
+  const start=w.dogs.map(d=>[d.x,d.y,d.face,d.vx,d.stocks]);
+  for(let n=0;n<=126;n++){
+    const input=n<delay?{x:1}:n===delay?{attack:true,tapped:{attack:true}}:{shield:true};
+    w.step(dt,{...idleInput,...input});
+  }
+  return {w,start,events};
+}
+
+test('all sixteen shield matchups read real running attacks and take the same opening into a stock fight',()=>{
+  for(const p1 of Object.keys(kits))for(const p2 of Object.keys(kits))for(const delay of [0,14]){
+    const practice=runDash(p1,p2,delay,'training'),fight=runDash(p1,p2,delay,'solo');
+    const label=[p1,p2,delay].join(' '),drill=practice.w.comboPractice;
+    assert.deepEqual(fight.start,practice.start,label);assert(fight.start.every(d=>d[4]===3));
+    assert(drill.window.frames>0 && drill.window.gap>0,label);assert.equal(drill.phase,'done');
+    const first=practice.events.findIndex(e=>e[0]!=='block'),blocks=p1==='clover'?2:1;
+    assert.deepEqual(practice.events.slice(0,blocks),Array.from({length:blocks},()=>['block',kits[p1].dashAttack]),label);
+    assert.deepEqual(fight.events.slice(0,blocks),practice.events.slice(0,blocks),label);
+    if(drill.counter){
+      assert.equal(first,blocks,label);
+      assert.deepEqual(fight.events[first],practice.events[first],label);
+      assert.equal(drill.counter.moveId,practice.events[first][1],label);
+    }
+  }
+});
+
+test('dash spacing changes the actual counter, preserves the previous read, and respects old recorded brains',()=>{
+  const tip=runDash('brisket','pip',0,'training').w, close=runDash('brisket','pip',9,'training').w;
+  assert.equal(tip.comboPractice.counter.moveId,kits.pip.air.forward);
+  assert.equal(close.comboPractice.counter.moveId,kits.pip.grab);assert(tip.comboPractice.window.gap>close.comboPractice.window.gap);
+  assert(!runDash('noodle','pip',0,'training').w.comboPractice.counter);
+  assert.equal(runDash('noodle','noodle',0,'training').w.comboPractice.counter.moveId,kits.noodle.grab);
+  assert(!runDash('brisket','pip',9,'training',true).w.comboPractice.counter);
+  const old=tip.comboPractice;tip.step(dt,{...idleInput,attack:true,tapped:{attack:true}});
+  assert.equal(tip.comboPractice.phase,'ready');assert.equal(tip.comboPractice.prior.counter,old.counter.moveId);
+  for(let i=0;i<8;i++)tip.step(dt,{...idleInput,attack:true});
+  assert.equal(tip.comboPractice.phase,'ready');tip.step(dt,idleInput);
+  for(let i=0;i<9;i++)tip.step(dt,{...idleInput,x:1});
+  tip.step(dt,{...idleInput,attack:true});for(let i=0;i<100;i++)tip.step(dt,guard);
+  assert.equal(tip.comboPractice.counter.moveId,kits.pip.grab);
+});
+
 test('a front block opens a shield grab, pummel and throw; a cross-up opens each dog’s back air', () => {
   for (const dog of Object.keys(kits)) for (const dir of [-1,1])
     for (const response of ['front','dedicated','behind','miss','wait']) {
