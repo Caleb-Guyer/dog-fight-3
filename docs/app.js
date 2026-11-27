@@ -2399,7 +2399,8 @@
     const device=promptDevice(getPads());
     const label=a=>device===0?keyFor(0,a):device===1 && !['left','right','up','down'].includes(a)?padFor(0,a):a[0].toUpperCase()+a.slice(1);
     window.RecoveryCoach.sheet(review.clip.tape,{showDialog,back,label,shake:settings.shake,slot:review.slot,follow:review.clip.returnTape,projection:review.rescue || review.projection,launch:review.launch,
-      swap:review.rescue && {title:review.launch?(review.wide?'Try the high throw':'Try the edge throw'):review.wide?'Try the low fall':'Try the wide fall',open:()=>recoveryClinic(!review.wide,!!review.launch)},
+      kind:review.kind,chooseFighter:review.rescue && !review.launch && (kind=>recoveryClinic(review.wide,false,kind)),
+      swap:review.rescue && {title:review.kind?(review.wide?'Try the left ledge':'Try the right ledge'):review.launch?(review.wide?'Try the high throw':'Try the edge throw'):review.wide?'Try the low fall':'Try the wide fall',open:()=>recoveryClinic(!review.wide,!!review.launch,review.kind)},
       play:(route,guided=false)=>startFinishTrial(route.start,route.slot,{...review,coach:route,guided,coachLabel:label,
         coachLine:window.RecoveryCoach.instruction(route,label)})},plan);
   }
@@ -4263,7 +4264,7 @@
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=ledge-1', MatchReview:'match-review.js?v=school-ko-1',
+    RecoveryCoach:'recovery-coach.js?v=fighter-returns-1', MatchReview:'match-review.js?v=school-ko-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
@@ -5251,11 +5252,11 @@
     if(matchConfig?.recoveryClinic)showHome(false);
     schoolList();
   }
-  function recoveryClinic(wide,fromLaunch=false){
-    if(!window.RecoveryCoach)return waitForDispatch(fromLaunch?'Launch survival':'Recovery clinic',()=>loadDispatch('RecoveryCoach'),()=>recoveryClinic(wide,fromLaunch),schoolList);
-    const {config,battle,tape,clip,launch}=window.RecoveryCoach.example(wide,fromLaunch);
+  function recoveryClinic(wide,fromLaunch=false,kind){
+    if(!window.RecoveryCoach)return waitForDispatch(fromLaunch?'Launch survival':'Recovery clinic',()=>loadDispatch('RecoveryCoach'),()=>recoveryClinic(wide,fromLaunch,kind),schoolList);
+    const {config,battle,tape,clip,launch}=window.RecoveryCoach.example(wide,fromLaunch,kind);
     if(page!=='match')startMatch({...config,recoveryClinic:true},undefined,undefined,null,{resume:{battle,tape,countdown:0,call:''}});
-    recoverySheet({rescue:true,wide,clip,launch,result:battle,from:'school'});
+    recoverySheet({rescue:true,wide,kind,clip,launch,result:battle,from:'school'});
   }
   function leaveFighterSheet(){
     if(page==='match' && (matchConfig?.schoolFinal || spar) && world?.end!=null)return showResult();
@@ -6651,6 +6652,8 @@
       if(index<0)resumeCourse();else startLesson(index);
     } else if (hash==='#tutorial/launch-survival') {
       recoveryClinic(false,true);
+    } else if(/^#tutorial\/recovery\/(pip|brisket|noodle|clover)$/.test(hash)){
+      recoveryClinic(false,false,hash.split('/')[2]);
     } else if (hash==='#tutorial/recovery' || hash==='#tutorial/recovery/wide') {
       recoveryClinic(hash.endsWith('/wide'));
     } else if (['#tutorial/landings','#tutorial/ledge','#tutorial/stage-tech','#tutorial/stage-tech/heavy','#tutorial/stage-tech/ceiling'].includes(hash)) {

@@ -33,6 +33,14 @@
         this.frame++;
         if(dog.jumps<jumps && dog.ground<0 && !dog.ledge && dog.vy<0)this.jumped=true;
         if(dog.attack?.specialSide==='up')this.cast=true;
+        if(dog.attack?.secondHop)this.secondHop=true;
+        if(dog.attack?.moveId==='brisketCannon' && !dog.attack.charging && dog.attack.power>=.8)this.charged=true;
+        if(dog.attack?.moveId==='cloverSail' && dog.attack.folded && !this.folded){
+          this.folded=true;
+          const deck=nearestDeck(battle,dog);
+          this.foldedOutside=deck && (dog.x<deck.x1 || dog.x>deck.x2);
+        }
+        if(dog.attack?.moveId==='noodleLasso' && dog.attack.anchor)this.hooked=true;
         if(dog.airDodge?.type==='directionalAirDodge')this.dodged=true;
         if(dog.ledge)this.caught=true;
         if(dog.floorAction?.type==='ledgeRoll')this.rolled=true;
@@ -52,7 +60,9 @@
     if (!tick && route.aim) return {...idleInput,...route.aim};
     if (route.dodge && tick===(route.dodgeAt ?? 0)) return {...idleInput,...route.dodge,shield:true,tapped:{shield:true}};
     if(tick===route.rollAt)return {...idleInput,shield:true,tapped:{shield:true}};
-    if (tick===upAt) return {...idleInput,x:dir,y:-1,special:true,tapped:{special:true}};
+    if (tick===upAt || tick===route.secondAt) return {...idleInput,x:dir,y:-1,special:true,tapped:{special:true}};
+    if ((route.technique==='cannon' || route.technique==='sail') && upAt!==null && tick>upAt &&
+        (route.releaseAt===undefined || tick<route.releaseAt))return {...idleInput,x:dir,special:true};
     if (jumpAt!==null && tick>=jumpAt && tick<jumpAt+15)
       return {...idleInput,x:dir,jump:true,tapped:{jump:tick===jumpAt}};
     return {...idleInput,x:dir};
@@ -60,6 +70,7 @@
   function routeFrom(tape,start,dir,options,slot,follow) {
     const plan={slot,start,dir,jumpAt:options.jump?0:null,upAt:options.up && !options.jump?0:null};
     if(options.dodge)plan.dodge=options.dodge;
+    if(options.technique)plan.technique=options.technique;
     const p=attempt(tape,plan,undefined,follow), f=p.battle.dogs[slot];
     if ((options.jump && !f.jumps) || (options.up && f.usedUp)) return null;
     while (!p.outcome) {
@@ -67,10 +78,20 @@
       if(options.roll && f.ledge && plan.rollAt===undefined)plan.rollAt=tick;
       if (options.jump && options.up && plan.upAt===null && tick>=15 && f.vy>=0 && !f.ledge && f.ground<0)
         plan.upAt=tick;
+      const a=f.attack;
+      if(plan.technique==='double' && plan.secondAt===undefined && f.hopWindow>0 && a?.moveId==='pipHopper' && a.time>=.1 && f.vy>-395)plan.secondAt=tick;
+      if(plan.technique==='cannon' && plan.releaseAt===undefined && a?.charging && a.power>=.86)plan.releaseAt=tick;
+      if(plan.technique==='sail' && plan.releaseAt===undefined && a?.moveId==='cloverSail'){
+        const deck=nearestDeck(p.battle,f);
+        if(deck && f.x>=deck.x1+14 && f.x<=deck.x2-14 && f.y<=deck.y)plan.releaseAt=tick;
+      }
       p.step(controls(plan,tick));
     }
     if (p.outcome!=='landed' || (options.jump && !p.jumped) || (options.up && !p.cast) ||
-        (plan.dodge && !(p.dodged && p.caught)) || (options.roll && !p.rolled)) return null;
+        (plan.dodge && !(p.dodged && p.caught)) || (options.roll && !p.rolled) ||
+        (plan.technique==='double' && !p.secondHop) || (plan.technique==='cannon' && !p.charged) ||
+        (plan.technique==='sail' && (plan.releaseAt===undefined || !p.folded))) return null;
+    if(p.hooked && p.caught)plan.technique='lasso';
     plan.end=p.frame;
     return plan;
   }
@@ -105,8 +126,11 @@
     }
     if (lastFall!==original.length) return null;
     samples.sort((a,b)=>a.score-b.score);
+    const technique={pip:'double',brisket:'cannon',clover:'sail'}[original.battle.dogs[slot].kind];
+    const returns=[{},{jump:true},{up:true},{jump:true,up:true}];
+    if(technique)returns.push({up:true,technique},{jump:true,up:true,technique});
     for (const {start,dir,dodge} of samples) {
-      for (const options of dodge?[{},{dodge},{dodge,roll:true}]:[{},{jump:true},{up:true},{jump:true,up:true}]) {
+      for (const options of dodge?[{},{dodge},{dodge,roll:true}]:returns) {
         const plan=routeFrom(tape,start,dir,options,slot,follow);
         if (plan) return plan;
         yield;
@@ -167,6 +191,14 @@
     }
     if(plan.dodge)return 'Aim '+dodgeAim(plan,label)+' and tap '+label('shield')+' to catch the ledge. '+
       (plan.rollAt!==undefined?'Release '+label('shield')+', then tap it again as your paws catch to roll onto the stage.':'Then hold '+direction+' to climb.');
+    if(plan.technique){
+      const up=label('up')+' + '+label('special');
+      const jump=plan.jumpAt===null?'':'Hold '+direction+' and use '+label('jump')+' first. ';
+      if(plan.technique==='double')return jump+'Steer '+direction+' and tap '+up+' for Fence Hopper. Release '+label('special')+', then tap '+up+' again as the first rise slows.';
+      if(plan.technique==='cannon')return jump+'Hold '+up+' to charge Kennel Cannon. Keep aiming '+direction+' and release '+label('special')+' to launch.';
+      if(plan.technique==='sail')return jump+'Hold '+up+' to open Disc Sail. Steer '+direction+' with '+label('special')+' held. Release it over the deck to fold the sail.';
+      if(plan.technique==='lasso')return jump+'Aim '+direction+' and tap '+up+' for Ledge Lasso. Let the rope reel you in, then hold '+direction+' to climb.';
+    }
     if (plan.jumpAt!==null && plan.upAt!==null)
       return 'Hold '+direction+' and '+label('jump')+'. As the jump peaks, press '+label('up')+' + '+label('special')+'. Keep steering toward the stage.';
     if (plan.jumpAt!==null) return 'Hold '+direction+' and press '+label('jump')+' for an air jump. Keep steering toward the stage.';
@@ -193,15 +225,22 @@
       }
     }
     if(dog?.ledge)return input.x*(dog.ledge.left?1:-1)>.5?'':label(dog.ledge.left?'right':'left')+' · Climb';
-    if(tick && tick!==plan.upAt && tick!==plan.jumpAt && tick!==plan.dodgeAt)return '';
     const inward=input.x*plan.dir>.5, side=label(plan.dir>0?'right':'left');
+    if(plan.releaseAt!==undefined && tick>plan.upAt && tick<=plan.releaseAt){
+      if(tick===plan.releaseAt && input.special)return 'Release '+label('special')+(plan.technique==='cannon'?' · Launch':' · Fold the sail');
+      if(tick<plan.releaseAt && !input.special)return 'Hold '+label('special')+(plan.technique==='cannon'?' · Charge':' · Keep sailing');
+      if(!inward)return side+' · Steer toward the stage';
+    }
+    if(plan.secondAt!==undefined && tick>plan.upAt && tick<plan.secondAt && (input.special || input.tapped?.special))
+      return 'Release '+label('special')+' for the second hop';
+    if(tick && tick!==plan.upAt && tick!==plan.secondAt && tick!==plan.jumpAt && tick!==plan.dodgeAt)return '';
     const pressed=k=>input[k] || input.tapped?.[k];
     if(plan.dodge && tick===(plan.dodgeAt ?? 0)){
       const {x,y}=plan.dodge, length=Math.hypot(input.x,input.y);
       const aimed=plan.aim?aligned(input,plan.dodge):length>=.35 && (x*input.x+y*input.y)/length>=.99;
       if(!pressed('shield') || !aimed)
         return dodgeAim(plan,label)+' + '+label('shield');
-    }else if(tick===plan.upAt){
+    }else if(tick===plan.upAt || tick===plan.secondAt){
       if(!inward || input.y>=-.55 || !pressed('special'))return side+' + '+label('up')+' + '+label('special');
     }else if(tick===plan.jumpAt){
       if(!inward || !pressed('jump'))return side+' + '+label('jump');
@@ -222,9 +261,13 @@
       'The directional air dodge never started. Aim before you tap Shield.';
     if(plan.jumpAt!==null && !p.jumped)return 'Your air jump never came out. Press Jump as you turn toward the stage.';
     if(plan.upAt!==null && !p.cast)return 'Your Up Special never came out. Aim up as you press Special.';
+    if(plan.technique==='double' && !p.secondHop)return 'The second hop never came out. Release Special after the first hop, then aim up and press it again.';
+    if(plan.technique==='cannon' && !p.charged)return 'The cannon needs more charge from here. Hold Special until the launch cue.';
+    if(plan.technique==='sail' && (!p.folded || p.foldedOutside))return 'Keep Special held across the gap. Release it once the deck is underneath Clover.';
+    if(plan.technique==='lasso' && !p.hooked)return 'The rope missed the edge. Aim up and cast while the lip is in reach.';
     return p.outcome==='fell'?'You crossed the blast line. Watch where the example turns toward the stage.':'Your dog was still fighting for a landing when time ran out.';
   }
-  function sheet(tape,{showDialog,back,play,label,shake,slot=0,follow,swap,projection,launch},savedPlan) {
+  function sheet(tape,{showDialog,back,play,label,shake,slot=0,follow,swap,chooseFighter,kind,projection,launch},savedPlan) {
     showDialog('finish-recovery',launch?'Survive this launch':'Practice this recovery','<p id="recovery-position" class="clip-caption" hidden></p><p id="recovery-route" role="status">'+(launch?'Trying launch angles and returns…':'Checking the last fall…')+'</p>'+
       '<canvas id="clip-arena" width="640" height="360" role="img" aria-label="Recorded recovery position" hidden></canvas>'+
       '<p id="recovery-cue" role="status"></p><div class="dialog-actions"><button class="primary" id="recovery-play" hidden>Try this recovery</button>'+
@@ -232,12 +275,18 @@
       '<button class="utility" id="recovery-demo" hidden>Watch the recovery</button><button class="utility" id="recovery-fall" hidden>'+
       (projection?'Watch without input':'Watch my fall')+'</button>'+
       (swap?'<button class="utility" id="recovery-swap">'+swap.title+'</button>':'')+
-      '<button class="utility" id="recovery-back">'+(swap?'Fight School':'Back')+'</button></div>');
+      '<button class="utility" id="recovery-back">'+(swap?'Fight School':'Back')+'</button></div>'+
+      (chooseFighter?'<fieldset><legend>Practice a recovery</legend><div class="dialog-actions">'+
+        [['','Last dodge'],['pip','Pip · Fence Hopper'],['brisket','Brisket · Kennel Cannon'],['noodle','Noodle · Ledge Lasso'],['clover','Clover · Disc Sail']].map(([id,name])=>
+          '<button class="utility" data-recover-as="'+id+'" aria-pressed="'+(id===(kind || ''))+'">'+name+'</button>').join('')+'</div></fieldset>':''));
     const el=id=>document.getElementById(id), backButton=el('recovery-back'), canvas=el('clip-arena');
     const task=launch?searchLaunch(tape,launch,follow):search(tape,slot,follow);
     let plan=savedPlan, raf=0;
     backButton.onclick=()=>{cancelAnimationFrame(raf);back();}; backButton.focus();
     if(swap)el('recovery-swap').onclick=()=>{cancelAnimationFrame(raf);swap.open();};
+    if(chooseFighter)for(const button of backButton.closest('dialog').querySelectorAll('[data-recover-as]')){
+      button.onclick=()=>{cancelAnimationFrame(raf);chooseFighter(button.dataset.recoverAs);};
+    }
     function preview(which) {
       cancelAnimationFrame(raf);
       const example=which==='demo', view=new window.DogFightView.FightView();
@@ -260,7 +309,9 @@
           if (example) {
             const action=!t && plan.aim?'Steer the launch · '+stickName(plan.aim,label):
               plan.dodge && t===(plan.dodgeAt ?? 0)?'Air dodge · '+dodgeAim(plan,label):
-              t===1 && plan.aim?'Drift · '+label(plan.dir>0?'right':'left'):t===plan.rollAt?'Ledge roll · '+label('shield'):t===plan.upAt?'Up Special':t===plan.jumpAt?'Air jump':'';
+              t===1 && plan.aim?'Drift · '+label(plan.dir>0?'right':'left'):t===plan.rollAt?'Ledge roll · '+label('shield'):
+              t===plan.secondAt?'Fence Hopper · second hop':t===plan.releaseAt?(plan.technique==='sail'?'Fold the sail':'Release the cannon'):
+              plan.secondAt!==undefined && t===plan.upAt+1?'Release Special':t===plan.upAt?({cannon:'Charge the cannon',sail:'Hold the sail open',lasso:'Hook the ledge'}[plan.technique] || 'Up Special'):t===plan.jumpAt?'Air jump':'';
             if (action || !t) cue.textContent=action || 'Steer toward the stage';
             p.step(controls(plan,t));
           } else p.step();
@@ -311,14 +362,18 @@
     }
     return {battle,tape,launch,clip:tape.knockouts.find(c=>c.losses.some(l=>l.slot===0 && (fromLaunch || l.zone==='bottom')))};
   }
-  function example(wide,fromLaunch=false) {
+  function example(wide,fromLaunch=false,kind) {
     const {Battle,seededRandom}=window.DogFight;
-    const config={mode:'solo',p1:'pip',p2:'brisket',cpuLevel:'rookie',stage:'picnic',fetch:false,stockCount:3};
+    const config={mode:'solo',p1:kind || 'pip',p2:kind==='brisket'?'pip':'brisket',cpuLevel:'rookie',stage:'picnic',fetch:false,stockCount:3};
     if(fromLaunch)Object.assign(config,{stage:'nightmail',form:'trio',cpuLevel:'rival',throwOpening:wide?'edge':'perch'});
     const battle=new Battle(config,undefined,seededRandom(fromLaunch?31:42));
     if(fromLaunch)return {config,...recordFall(battle,true)};
-    battle.placeLastDodge(wide?'right':'left',wide,0);
     const floor=battle.terrain[0];
+    if(kind){
+      const [gap,depth]={pip:[50,215],brisket:[105,244],noodle:[120,140],clover:[226,92]}[kind];
+      const dir=wide?-1:1;
+      Object.assign(battle.dogs[0],{x:(wide?floor.x2:floor.x1)-dir*gap,y:floor.y+depth,ground:-1,coyote:0,jumps:0,vx:0,vy:75,face:dir});
+    }else battle.placeLastDodge(wide?'right':'left',wide,0);
     battle.dogs[1].x=(floor.x1+floor.x2)/2;
     return {config,...recordFall(battle)};
   }
