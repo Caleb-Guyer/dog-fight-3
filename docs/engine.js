@@ -7002,9 +7002,9 @@
         f.face = -dir;
         f.vx = f.vy = 0;
         f.invuln = Math.max(f.invuln, (jump ? 9 : 12) / 60);
-        f.ledgeLock = (jump ? 8 : 10) / 60 - 1e-8;
+        f.ledgeLock = 10/60 - 1e-8;
       }
-      f.wallAction = { type, time: 0, duration: (type === 'wallBounce' ? 6 : jump ? 8 : 10) / 60, dir, wall };
+      f.wallAction = { type, time: 0, duration: (type === 'wallBounce' ? 6 : 10) / 60, dir, wall };
       if (type === 'wallTechJump') this.springFromWall(f,f.wallAction);
       if (this.wallPractice?.phase === 'flight' && f.index === 0) {
         this.wallPractice.phase = this.wallPractice.spring && type === 'wallTech' ? 'brace' : 'done';
@@ -7472,11 +7472,12 @@
       if (f.wallAction) {
         const action = f.wallAction;
         action.time += dt;
-        if (this.wallSpring && action.type === 'wallTech' && f.jumpBuffer > 0 && action.time + 1e-8 < action.duration) {
+        if (action.type === 'wallTech' && f.jumpBuffer > 0 && action.time + 1e-8 < action.duration &&
+            (this.wallSpring || this.wallPractice?.spring)) {
           const delay=Math.round(action.time*60);
           this.springFromWall(f,action);
           f.invuln=Math.min(f.invuln,9/60);
-          if (this.wallPractice && f.index===0) {
+          if (this.wallPractice?.outcome==='wallTech' && f.index===0) {
             this.wallPractice.phase='done';
             this.wallPractice.outcome='wallTechJump';
           }
