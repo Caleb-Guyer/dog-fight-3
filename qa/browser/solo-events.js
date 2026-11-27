@@ -52,8 +52,14 @@ async function play(browser,device){
       for(let i=0;i<170 && await page.evaluate(()=>window.run?.matchFrames || 0)<frame;i++)await page.clock.runFor(16);
       assert(await page.evaluate(n=>window.run?.matchFrames>=n,frame),device+' reached '+frame);
     }
-    async function result(clear){await page.clock.runFor(1150);await page.locator('#dialog[data-view=event-result]').waitFor();
-      assert.equal(await page.locator('#dialog-title').textContent(),clear?'Event cleared':'Try again');}
+    async function result(clear){
+      const panel=page.locator('#dialog[data-view=event-result]');
+      for(let i=0;i<35 && !await panel.isVisible();i++)await page.clock.runFor(100);
+      const state=await page.evaluate(()=>({view:document.getElementById('dialog').dataset.view,frame:window.run?.matchFrames,
+        event:window.run?.eventId,end:window.run?.end,feedback:window.run?.feedback,call:document.getElementById('countdown').textContent}));
+      assert(await panel.isVisible(),device+' result '+JSON.stringify(state)+' '+errors.join(', '));
+      assert.equal(await page.locator('#dialog-title').textContent(),clear?'Event cleared':'Try again',device+' '+JSON.stringify(state));
+    }
     await start();await result(false);
     assert.match(await page.locator('#dialog-body').textContent(),/missed the landing/);
     await start('#event-retry');await to(5);await hold('shield',true);await to(12);await hold('shield',false);
