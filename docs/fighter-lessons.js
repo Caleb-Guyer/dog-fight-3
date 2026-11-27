@@ -190,7 +190,14 @@
       [240,'Aim down and fire Skip Serve. Let the disc skip along the floor to reach Pip.','The skipping disc reached Pip.',['down','special']]
     ]
   };
+  const airSides=['neutral','forward','back','up','down'];
+  const airDirections={neutral:'',forward:'right',back:'left',up:'up',down:'down'};
   function study(kind,side){
+    if(side.startsWith('land-')){
+      const aim=side.slice(5),id=window.DogFight.kits[kind].air[aim];
+      return {index:5+airSides.indexOf(aim),id,stage:'nightmail',rival:courses[kind].rival,
+        title:window.DogFight.moves[id].label+' landing'};
+    }
     if(side==='down-air'){
       const id=window.DogFight.kits[kind].air.down;
       return {index:4,id,stage:'nightmail',rival:courses[kind].rival,title:window.DogFight.moves[id].label};
@@ -431,7 +438,58 @@
       ctx.restore();
     }
   }
-  const makeTrial=(index,world,storage)=>index===-2?new DiscRange(world):index===-1?new Shuttle(world,storage):index===4?new DownAirTrial(world):index<2?new Trial(index,world):new SpecialTrial(index,world);
+  class LandingTrial{
+    constructor(index,world){
+      const [dog,rival]=world.dogs,deck=world.terrain[0],side=airSides[index-5];
+      this.course=dog.kind;this.index=index;this.id=dog.kind+'-'+index;
+      this.move=window.DogFight.moves[dog.kit.air[side]];
+      this.moveId=dog.kit.air[side];
+      this.keys=[airDirections[side],'attack'].filter(Boolean);
+      this.info={title:this.move.label+' landing',keys:[this.keys,['shield']],
+        task:'Start '+this.move.label+' as you fall. Tap Shield just before your paws reach the roof, then keep holding it.'};
+      this.ticks=0;this.done=false;this.missed=false;
+      // Start the fast-fall inside this move’s committed landing window. Belly Drop stalls before its dive.
+      const height=this.move.plunge?50:(Math.min(15,this.move.landingWindow[1]-2)-.5)*dog.kit.fastFallSpeed/60;
+      Object.assign(dog,{x:530,y:deck.y-height,ground:-1,face:1,vx:0,vy:dog.kit.fastFallSpeed,fastFall:true,jumps:1});
+      Object.assign(rival,{x:850,y:deck.y,ground:0,face:-1,vx:0,vy:0});
+    }
+    canStep(input){
+      if(this.done || this.missed)return false;
+      if(!this.ticks && !(input.attack || input.tapped?.attack || input.aimStick || input.tapped?.aimStick))return false;
+      this.ticks++;return true;
+    }
+    partner(){return idleInput;}
+    contact(name,e){
+      if(name==='landingCancel' && e.f.index===0 && e.moveId===this.moveId)this.canceled=true;
+    }
+    afterStep(world){
+      const dog=world.dogs[0];
+      if(dog.attack?.airSide && dog.attack.moveId!==this.moveId){
+        this.info.miss='That was '+dog.attack.label+'. Retry and aim '+(airDirections[airSides[this.index-5]] || 'neutral')+' for '+this.move.label+'.';
+        this.missed=true;return;
+      }
+      if(dog.ground<0){
+        if(world.landingCancelAhead(dog)){this.inWindow=true;this.note='Shield now. Hold it through touchdown.';}
+        return;
+      }
+      if(this.landedAt===undefined){
+        this.landedAt=this.ticks;this.frames=Math.round(dog.landingLag*60);
+        this.note=(this.canceled?'Canceled':'Landed')+' · '+this.frames+'f recovery. Hold Shield.';
+      }
+      const since=this.ticks-this.landedAt;
+      if(dog.shield){
+        this.shieldAt=since;
+        this.note='Shield up '+since+' frames after touchdown.';
+        this.done=!!this.canceled;this.missed=!this.done;
+        this.info.success=this.note+' '+this.move.label+' normally takes '+this.move.land+' frames.';
+        this.info.miss=this.note+' Retry and press Shield before landing to cut the recovery to '+Math.ceil(this.move.land/2)+' frames.';
+      }else if(since>=this.frames+8){
+        this.info.miss=this.frames+'f recovery. '+(this.canceled?'You got the cancel. Keep Shield held until the bubble appears.':'Press Shield in the last seven frames and keep holding it.');
+        this.missed=true;
+      }
+    }
+  }
+  const makeTrial=(index,world,storage)=>index>=5 && index<10?new LandingTrial(index,world):index===-2?new DiscRange(world):index===-1?new Shuttle(world,storage):index===4?new DownAirTrial(world):index<2?new Trial(index,world):new SpecialTrial(index,world);
   // Durations are in fight frames. A short hold before each new input lets the
   // viewer read the cue without changing the timing between real inputs.
   const examples={
@@ -464,11 +522,16 @@
       [100,'right','Release Special over the deck to fold the sail and land.']],
   };
   class Example {
-    constructor(id,lesson){
+    constructor(id,lesson,afterLanding=false){
       const [kind,index]=id.split('-');
       const extra=extraStudies[kind]?.[Number(index)-2];
       if(id==='shuttle')this.shuttle=lesson;
-      const sequence=id==='disc-range'?[
+      if(lesson instanceof LandingTrial){this.landing=lesson;this.afterLanding=afterLanding;}
+      const sequence=this.landing?[
+        [1,lesson.keys.join(' '),'Start '+lesson.move.label+' above the roof.'],
+        [180,'',afterLanding?'Wait until the paws touch down.':'Watch the paws approach the roof.'],
+        [120,'shield',afterLanding?'Hold Shield from touchdown. Watch for the first frame with a bubble.':'Press Shield before touchdown and keep holding it.'],
+      ]:id==='disc-range'?[
         [8,'right smash','Start a level Line Drive.'],[55,'','Release Smash for the level plate.'],
         [3,'right smash','Start the next charge facing right.'],[44,'right up smash','Hold Up with Right to lift the throw.'],[65,'','Release for the far plate.'],
         [3,'right smash','Start a third Line Drive.'],[18,'right down smash','Add Down while charging.'],[90,'','Release for the low plate.']
@@ -493,6 +556,9 @@
     }
     get cue(){return this.cues[this.index];}
     input(){
+      if(this.landing && this.index===1 && (this.afterLanding?this.landing.landedAt!==undefined:this.landing.inWindow)){
+        this.index++;this.frame=-18;
+      }
       if(this.shuttle?.split && this.index===0){this.index=1;this.frame=-18;}
       if(this.frame===this.cue.frames && this.index+1<this.cues.length){
         this.index++;this.frame=-18;
@@ -562,11 +628,11 @@
     root.querySelector('[aria-pressed=true]').focus({preventScroll:true});
   }
   class Demonstration{
-    constructor(kind,side,coat,event){
+    constructor(kind,side,coat,event,afterLanding=false){
       const spec=study(kind,side);
       this.battle=new window.DogFight.Battle({mode:'local',stage:spec.stage,p1:kind,p2:spec.rival,fetch:false,
         form:'original',minutes:0,lesson:spec.index,coats:[coat,0]},(name,e)=>{this.trial?.contact(name,e);event?.(name,e);},window.DogFight.seededRandom(11));
-      this.trial=makeTrial(spec.index,this.battle);this.example=new Example(this.trial.id);
+      this.trial=makeTrial(spec.index,this.battle);this.example=new Example(this.trial.id,this.trial,afterLanding);
       this.frame=0;this.tail=0;this.ended=false;
     }
     step(){
@@ -586,29 +652,43 @@
   }
   function preview({kind,side,coat,root,shake,reduced,device,keyFor,padFor,showDialog,title,input,canPractice}){
     const name=window.DogFight.fighters[kind].name;
+    const landing=side.startsWith('land-');
     showDialog('special-preview',title,'<p class="clip-caption">'+name+' · '+input+'</p>'+
       '<canvas id="move-arena" width="720" height="405" role="img" aria-label="'+name+' demonstrates '+title+'"></canvas>'+
       '<div class="clip-status"><strong id="move-cue"></strong><output id="move-frame"></output></div><p id="move-caption"></p>'+
+      (landing?'<div class="dialog-actions" role="group" aria-label="Shield timing"><button class="utility" id="move-before" aria-pressed="true">Shield before landing</button><button class="utility" id="move-after" aria-pressed="false">Shield after landing</button><button class="utility" id="move-touchdown">Go to touchdown</button></div>':'')+
       '<div class="dialog-actions"><button class="utility" id="move-play">Play</button><button class="utility" id="move-step">Step 1 frame</button>'+
       '<button class="utility" id="move-speed">Speed · ½×</button><button class="utility" id="move-restart">Restart</button></div>'+
-      '<div class="dialog-actions">'+(canPractice?'<button class="primary" id="move-try">Try this move</button>':'')+
+      '<div class="dialog-actions">'+(canPractice?'<button class="primary" id="move-try">'+(landing?'Practice this landing':'Try this move')+'</button>':'')+
       '<button class="utility" id="move-back">Back to moves</button></div>');
     const el=id=>root.querySelector('#move-'+id);
     const canvas=el('arena'),toggle=el('play'),speed=el('speed'),output=el('frame'),cue=el('cue'),caption=el('caption');
-    let demo,view,playing=!reduced,rate=.5,carry=0;
+    let demo,view,playing=!reduced,rate=.5,carry=0,afterLanding=false;
     const write=(node,value)=>{if(node.textContent!==value)node.textContent=value;};
     function paint(dt){
       view.draw(canvas,demo.battle,dt,demo.battle.time);
       const phase=demo.example.cue, finished=demo.trial.done;
-      write(output,'Frame '+demo.frame+' · '+demo.battle.dogs[1].stats.name+' '+Math.round(demo.battle.dogs[1].damage)+'%');
+      write(output,'Frame '+demo.frame+' · '+(landing?(demo.trial.landedAt===undefined?'Airborne':'Touchdown +'+(demo.frame-demo.trial.landedAt)+'f'):
+        demo.battle.dogs[1].stats.name+' '+Math.round(demo.battle.dogs[1].damage)+'%'));
       write(cue,demo.tail?'Release':phase.keys.length?hint({keys:[phase.keys]},device(),keyFor,padFor):'Release');
-      write(caption,finished?demo.trial.info.success:phase.caption);
+      write(caption,finished?demo.trial.info.success:landing && demo.trial.landedAt!==undefined?demo.trial.note:phase.caption);
       write(toggle,demo.ended?'Replay':playing?'Pause':'Play');
       el('step').disabled=demo.ended;
     }
     function restart(){
       carry=0;view=new window.DogFightView.FightView();view.shakeEnabled=shake && !reduced;
-      demo=new Demonstration(kind,side,coat,(name,e)=>view.event(name,e));paint(0);
+      demo=new Demonstration(kind,side,coat,(name,e)=>view.event(name,e),afterLanding);paint(0);
+    }
+    if(landing){
+      for(const [id,late] of [['before',false],['after',true]])el(id).onclick=()=>{
+        afterLanding=late;el('before').setAttribute('aria-pressed',String(!late));el('after').setAttribute('aria-pressed',String(late));
+        playing=!reduced;restart();
+      };
+      el('touchdown').onclick=()=>{
+        playing=false;restart();
+        while(demo.trial.landedAt===undefined && !demo.ended)demo.step();
+        paint(0);
+      };
     }
     toggle.onclick=()=>{
       if(demo.ended){playing=true;restart();}else{playing=!playing;carry=0;paint(0);}

@@ -301,6 +301,10 @@
       clamp(1 - f.landingLag * 60 / f.kit.airDodge.directional[3], 0, 1)];
     if (f.jumpSquat) return [f.jumpSquat.turned ? 'turnJumpSquat' : 'jumpSquat', clamp((f.jumpSquat.time * 60 - 1) / 2, 0, 1)];
     if (f.shield) return ['shield', 0];
+    if (f.ground >= 0 && f.landingAerial && f.landingLag > 1e-8 && !f.attack) {
+      const elapsed=Math.max(0,f.landDuration-f.landTime);
+      return [f.landingAerial+'Land',elapsed/(elapsed+f.landingLag)];
+    }
     if (f.crouch && f.crawling) {
       const stride = Math.floor(f.strideDistance / 6) % 6;
       return ['crawl', reduced.matches || Math.abs(f.vx) < 1 ? 0 : (f.vx * f.face < 0 ? (6 - stride) % 6 : stride) / 6];
