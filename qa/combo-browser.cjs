@@ -568,7 +568,9 @@ async function testStockClock(page, mobile) {
   await page.reload();
   assert.match(await rules.innerText(), /1 min/i);
   await press('[data-mode="local"]');
+  await press('#lobby-more');
   if (await page.locator('#fetch-switch').getAttribute('aria-checked') === 'true') await press('#fetch-switch');
+  await press('#lobby-options-back');
   await press('#start');
   assert.equal(await clock.innerText(), '1:00');
   await page.clock.runFor(6000);
