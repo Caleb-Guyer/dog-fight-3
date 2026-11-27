@@ -60,7 +60,9 @@ async function play(browser,mobile){
     const opening=await snapshot();assert.equal(opening.progress.games.length,2);
     const firstFrame=await watchOpening();await reopen();
     assert.equal(await page.locator('#tourney-play').textContent(),'Restart game 2');
-    await press('#tourney-play');assert.equal(await page.locator('#match-set').textContent(),'Game 2 · 0–1');
+    await press('#tourney-play');
+    await page.locator('#match-set').waitFor({state:'visible'});
+    assert.equal(await page.locator('#match-set').textContent(),'Game 2 · 0–1');
     const restored=await snapshot();assert.deepEqual(restored.progress,opening.progress);assert.deepEqual(restored.players,opening.players);
     assert.deepEqual(await watchOpening(),firstFrame);
     await fall('[data-do=set-pick]','ArrowRight');await reopen();
