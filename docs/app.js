@@ -2115,6 +2115,7 @@
     $('partner-training').setAttribute('aria-pressed','false');
     localSet = series;
     matchConfig = { ...config };
+    $('match').classList.toggle('event-active', !!config.eventId);
     spar=null;
     corner=config.schoolFinal && !visit ? resume?.corner || new window.FightSchool.Corner(config.schoolTarget) : null;
     $('corner-tip').hidden=true;
