@@ -114,10 +114,19 @@
   }
   // Only a device that has supplied gameplay input owns the offline player's seat.
   class SoloSeat {
-    constructor(){this.index=null;this.id='';this.lost=false;this.waitNeutral=new Map();this.ready=new Map();}
+    constructor(){this.index=null;this.id='';this.lost=false;this.ignored=new Map();this.ready=new Map();}
     get(pads){return this.index===null?null:pads.find(p=>p.index===this.index && p.id===this.id);}
     use(pad){this.index=pad.index;this.id=pad.id;this.lost=false;this.ready.clear();}
     active(pad){return pad.buttons.some(b=>b.pressed) || pad.axes.some(n=>Math.abs(n)>.23);}
+    pressedMask(pad){
+      let bits=0;
+      for(let i=0;i<Math.min(17,pad.buttons.length);i++)if(pad.buttons[i].pressed)bits|=1<<i;
+      for(let i=0;i<Math.min(4,pad.axes.length);i++){
+        if(pad.axes[i]>.23)bits|=1<<(17+2*i);
+        if(pad.axes[i]<-.23)bits|=1<<(18+2*i);
+      }
+      return bits;
+    }
     track(pads,playing){
       if(this.lost)return;
       if(this.index!==null){
@@ -126,13 +135,19 @@
       }
       if(!playing)return;
       for(const p of pads){
-        if(!this.active(p)){this.waitNeutral.delete(p.index);continue;}
-        if(!this.waitNeutral.has(p.index) || this.waitNeutral.get(p.index)!==p.id){this.use(p);return;}
+        if(!this.active(p)){this.ignored.delete(p.index);continue;}
+        const held=this.ignored.get(p.index);
+        if(held && held.id===p.id){
+          if(held.waitForNeutral)continue;
+          const bits=this.pressedMask(p);
+          if(!(bits & ~held.bits)){held.bits=bits;continue;}
+        }
+        this.use(p);return;
       }
     }
-    useOtherInput(pads){
-      this.index=null;this.id='';this.lost=false;this.ready.clear();this.waitNeutral.clear();
-      for(const p of pads)if(this.active(p))this.waitNeutral.set(p.index,p.id);
+    useOtherInput(pads,waitForNeutral=false){
+      this.index=null;this.id='';this.lost=false;this.ready.clear();this.ignored.clear();
+      for(const p of pads)if(this.active(p))this.ignored.set(p.index,{id:p.id,bits:this.pressedMask(p),waitForNeutral});
     }
     confirm(pads){
       // A pad can appear with the wake-up button already held. Wait for a neutral sample first.
