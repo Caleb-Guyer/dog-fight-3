@@ -38,3 +38,14 @@ for(const [kind,kit] of Object.entries(kits))test(kind+' shows the committed aer
   }
   assert.equal(contacts.size,5,'each aerial has a distinct touchdown drawing');
 });
+test('a canceled Belly Drop still needs a timely guard to pass the playable exercise',()=>{
+  const film=new window.FighterSchool.Demonstration('brisket','land-down');
+  while(film.trial.landedAt===undefined)film.step();
+  const {trial,battle}=film;
+  for(let n=1;n<=11;n++){
+    const input={...idleInput,shield:n===11};
+    assert(trial.canStep(input));battle.step(1/60,input,idleInput);trial.afterStep(battle);
+  }
+  assert.equal(trial.canceled,true);assert.equal(trial.frames,9);assert.equal(trial.shieldAt,11);
+  assert(trial.missed && !trial.done);assert.match(trial.info.miss,/ready after 9 frames/);
+});
