@@ -597,7 +597,7 @@
       if (this.aimedDrive===false) config.aimedDrive=false;
       if (this.groundSpace===false) config.groundSpace=false;
       if (this.wallSpring===false) config.wallSpring=false;
-      if (!this.risingCatch) config.risingCatch=false;
+      if (this.risingCatch===false) config.risingCatch=false;
       if(rules)Object.assign(config,{stockCount:rules.lives,minutes:rules.minutes,fetch:rules.fetch});
       if (this.timeMinutes) Object.assign(config, {timeBattle:true,minutes:this.timeMinutes});
       this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed,!!this.roomTicket);
