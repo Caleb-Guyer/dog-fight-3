@@ -71,7 +71,7 @@ async function play(browser,device){
     await rings(1,3);assert.match(await page.locator('#dialog-body').textContent(),/Round 2 relay stamp earned/);
     const saved=JSON.parse(await stored());
     assert.equal(saved.active.wins[1].relayLead,'brisket');assert.equal(saved.active.retries,1);
-    await choose(action('cup-sheet'));assert.match(await page.locator('#dialog-body').textContent(),/Round 2 ✓/);
+    await choose(action('cup-sheet'));assert.match(await page.locator('.cup-route-board').textContent(),/Round 2 ✓/);
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

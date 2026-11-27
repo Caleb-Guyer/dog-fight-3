@@ -99,6 +99,21 @@ async function play(browser, device) {
     await page.locator('#clip-grip[open]').waitFor();
     await select('#clip-defense summary');
     await page.locator('.defense-result').filter({hasText:/Brisket caught Pip with Bear Hug/}).waitFor();
+    await select('#clip-second-chance');await page.clock.runFor(500);
+    await page.locator('#chance-guide').waitFor();assert.match(await page.locator('#chance-reply').textContent(),/Quick Paw/);
+    await select('#chance-film');await page.locator('#chance-rink canvas').first().waitFor();
+    assert.equal(await page.locator('#chance-rink canvas').count(),2);
+    await select('#rematch-play');await page.clock.runFor(3500);
+    assert.match(await page.locator('#chance-rink figure').first().textContent(),/2 stocks/);
+    assert.match(await page.locator('#chance-rink figure').last().textContent(),/3 stocks/);
+    await select('#chance-guide');await page.clock.runFor(1500);assert.match(await page.locator('#countdown').textContent(),/Tap /);
+    if(pad){await page.evaluate(()=>attackButton(true));await page.clock.runFor(50);await page.evaluate(()=>attackButton(false));}
+    else if(touch)await page.locator('[data-touch=attack]').tap();
+    else await page.keyboard.press('j');
+    await page.clock.runFor(2500);assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved');
+    await select('[data-do=recovery-speed]');await page.clock.runFor(2600);assert.equal(await page.locator('#dialog-title').textContent(),'Try the exchange again');
+    assert(await page.evaluate(()=>JSON.stringify(liveStock.matchCard)===beforeStudy));
+    await select('[data-do=trial-replay]');await select('#chance-back');await select('#clip-defense summary');
     await select('[data-reply=guard]');
     assert.match(await page.locator('.defense-result').textContent(),/Brisket caught Pip/);
     await select('[data-lead="3"]');await select('[data-reply=spot]');

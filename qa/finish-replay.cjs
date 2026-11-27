@@ -9,6 +9,29 @@ require('../docs/finish-tools.js');
 require('../docs/fight-school.js');
 const {Battle,FinishTape,seededRandom,idleInput}=window.DogFight;
 const dt=1/60;
+test('Second Chance verifies real replies, reproduces them in a film and leaves the source knockout intact',()=>{
+  require('../docs/recovery-coach.js');
+  const tools=window.FinishTools;
+  for(const wide of [true,false]){
+    const {clip}=window.RecoveryCoach.example(wide,true),tape=clip.tape;
+    const contact=tools.analyze(tape,0).contact;assert.equal(contact.kind,'grab');
+    const search=tools.findSecondChance(tape,contact);let item;
+    do{item=search.next();}while(!item.done);
+    const plan=item.value;assert(plan);
+    const film=tools.secondChanceFilm(tape,plan);
+    assert.equal(film[0].t.playback(tape.length).battle.dogs[0].stocks,2);
+    const retry=film[1].t;assert.equal(retry.playback(retry.length).battle.dogs[0].stocks,3);
+    for(const play of [true,false]){
+      const p=tools.secondChanceAttempt(tape,plan,true);
+      while(!p.outcome)p.step(play && p.frame===plan.cue?{...idleInput,attack:wide,y:wide?0:1,shield:!wide}:idleInput);
+      assert.equal(p.saved,play);assert.equal(p.battle.dogs[0].stocks,play?3:2);
+      if(!play)assert.match(p.detail,/Caught by/);
+    }
+    assert(!tools.replyGate(plan,idleInput));
+    assert.equal(tools.replyGate(plan,wide?{tapped:{attack:true}}:{y:1,tapped:{shield:true}}),true);
+  }
+  assert.equal(tools.findSecondChance(null,null).next().value,null);
+});
 function state({emit,random,...fields}) { return {fields,seed:random.state}; }
 function archive(tape) {
   const {catalog,blocks}=structuredClone(window.MatchReview.pack(tape));
