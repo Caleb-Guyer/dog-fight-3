@@ -201,17 +201,21 @@
     constructor(){this.index=null;this.id='';this.lost=false;this.ignored=new Map();this.ready=new Map();}
     get(pads){return this.index===null?null:pads.find(p=>p.index===this.index && p.id===this.id);}
     use(pad){this.index=pad.index;this.id=pad.id;this.lost=false;this.ready.clear();}
-    active(pad){return pad.buttons.some(b=>b.pressed) || pad.axes.some(n=>Math.abs(n)>.23);}
+    buttonActive(b,i){
+      return b.pressed || b.value>=.18 && (i===this.guardLayout?.shield || i===this.guardLayout?.shieldAlt);
+    }
+    active(pad){return pad.buttons.some((b,i)=>this.buttonActive(b,i)) || pad.axes.some(n=>Math.abs(n)>.23);}
     pressedMask(pad){
       let bits=0;
-      for(let i=0;i<Math.min(17,pad.buttons.length);i++)if(pad.buttons[i].pressed)bits|=1<<i;
+      for(let i=0;i<Math.min(17,pad.buttons.length);i++)if(this.buttonActive(pad.buttons[i],i))bits|=1<<i;
       for(let i=0;i<Math.min(4,pad.axes.length);i++){
         if(pad.axes[i]>.23)bits|=1<<(17+2*i);
         if(pad.axes[i]<-.23)bits|=1<<(18+2*i);
       }
       return bits;
     }
-    track(pads,playing){
+    track(pads,playing,guardLayout=padDefaults){
+      this.guardLayout=guardLayout;
       if(this.lost)return;
       if(this.index!==null){
         if(!this.get(pads)){this.lost=true;this.ready.clear();}
@@ -238,7 +242,7 @@
       for(const index of this.ready.keys())if(!pads.some(p=>p.index===index))this.ready.delete(index);
       for(const p of pads){
         if(!this.active(p)){this.ready.set(p.index,p.id);continue;}
-        const select=p.buttons[0]?.pressed && !p.buttons.some((b,i)=>i!==0 && b.pressed) && !p.axes.some(n=>Math.abs(n)>.23);
+        const select=p.buttons[0]?.pressed && !p.buttons.some((b,i)=>i!==0 && this.buttonActive(b,i)) && !p.axes.some(n=>Math.abs(n)>.23);
         if(select && this.ready.has(p.index) && this.ready.get(p.index)===p.id){this.use(p);return p;}
         this.ready.delete(p.index);
       }
