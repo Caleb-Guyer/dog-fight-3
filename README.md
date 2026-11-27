@@ -1,5 +1,7 @@
 # Dog Fight 3
 
+During the first two frames of a dash attack, aim up and tap **Smash** to slide into your dog's up smash. Tap for the quickest hit, or hold Smash to charge as your dog brakes. In **Training → Footwork practice → Dash into up smash**, hold forward and tap Attack at the mark. The drill pauses during the windup. Try Up + Smash, then retry and let the dash attack finish to compare. Switch sides or turn off the pause to play at match speed. [Try the sliding up smash as Brisket](https://caleb-guyer.github.io/dog-fight-3/#training/dash-up-smash)
+
 In **Local Versus → Pick together**, both dogs share one fighter roster. Use your own controls to move your player marker, change coats, and ready up. On a touchscreen, choose **P1** or **P2**, then tap a portrait. Once both dogs are ready, vote on the arena. After both votes, either player can confirm to start. **Controls & rules** shows each player's bindings. [Pick together](https://caleb-guyer.github.io/dog-fight-3/#local/pick-together)
 
 After a versus fight, the winner takes the podium and both scorecards show the final stocks or points. Choose **Rematch** to play again, **Fighter select** to change the lineup, or a fighter’s **Watch last fall** to replay their last knockout. Open **Replays & practice** for the full match and stock retries. [Play a last-stock fight](https://caleb-guyer.github.io/dog-fight-3/#solo/last-stock)

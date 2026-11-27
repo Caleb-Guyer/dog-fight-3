@@ -1,9 +1,47 @@
 /* Training-only readouts. Events come from the same battle that owns the exercise. */
 (() => {
   'use strict';
-  const {moves,specials,smashes,throws,grabs,isSweetPractice,isFootstoolPractice,isReversalPractice}=window.DogFight;
+  const {moves,specials,smashes,pummels,throws,grabs,rageScale,moveFreshness,isSweetPractice,isFootstoolPractice,isReversalPractice}=window.DogFight;
   const $=id=>document.getElementById(id);
   const tenth=n=>Number(n.toFixed(1));
+  const moveLabel = id => (moves[id] || specials[id] || smashes[id] || pummels[id] || throws[id]).label;
+  function freshnessResult(sample) {
+    const parts = [];
+    if (sample.hits) {
+      parts.push(tenth(sample.damage) + '% damage');
+      if (sample.launch) parts.push(Math.round(sample.launch) + ' px/s');
+      if (Number.isFinite(sample.angle)) parts.push(sample.angle + '° at contact');
+    }
+    if (sample.blocks) parts.push(sample.shieldFrames + 'f shieldstun');
+    if (sample.outcome) parts.push(sample.outcome);
+    return parts.join(' · ');
+  }
+  function updateFreshnessReadout(world, player, lab) {
+    const { last, previous } = lab;
+    const id = last?.moveId || previous?.last.moveId;
+    $('freshness-name').textContent = lab.drive ? (last ? moveLabel(last.moveId) : 'Launch height') + ' · ' +
+      (lab.drive.edge ? 'Ledge' : 'Center') + ' · ' + world.dogs[1].stats.name + ' at ' + lab.baseline + '%' :
+      lab.rageDamage != null ? player.stats.name + ' at ' + lab.rageDamage + '% · Rage +' +
+      tenth((rageScale(lab.rageDamage) - 1) * 100) + '%' : last ? moveLabel(last.moveId) + ' · ' + tenth(last.power * 100) + '% power' :
+      lab.koTest ? smashes[player.kit.smashes.up].label + ' KO test' : 'Move freshness';
+    const result = last ? freshnessResult(last) : world.dogs[1].stats.name + ' at ' + lab.baseline + '%';
+    if ($('freshness-contact').textContent !== result) $('freshness-contact').textContent = result;
+    $('freshness-previous').hidden = !previous;
+    if (previous) {
+      const label = lab.drive ? moveLabel(previous.last.moveId) + ' at ' + previous.baseline + '% · ' + (previous.edge ? 'Ledge' : 'Center') :
+        previous.rageDamage != null ? 'At ' + previous.rageDamage + '%' :
+        last?.moveId === previous.last.moveId ? 'Previous' : 'Previous ' + moveLabel(previous.last.moveId);
+      $('freshness-previous').textContent = label + ' · ' + freshnessResult(previous.last);
+    }
+    if (lab.drive) $('freshness-percent').textContent = 'Set rival to ' + (lab.baseline ? 0 : 60) + '%';
+    $('freshness-summary').textContent = 'Recent moves ' + player.moveHistory.length + '/9' +
+      (id ? ' · Next ' + tenth(moveFreshness(player, id) * 100) + '%' : '');
+    $('freshness-list').replaceChildren(...player.moveHistory.map(entry => {
+      const li = document.createElement('li');
+      li.textContent = moveLabel(entry.moveId) + (entry.shieldOnly ? ' · shield' : '');
+      return li;
+    }));
+  }
   function event(world,name,e,practiceFight) {
     if (world?.launchPractice && e.f?.index === 0) launchFeedback(world, name, e);
     if (world?.meteorPractice && e.f?.index === 0) meteorFeedback(world, name, e);
@@ -1261,7 +1299,7 @@
         center:'Take ground',brace:'Brace at the chalk',dashShield:'Run to the chalk',
         angleHigh: 'Tag the hop', angleLow: 'Clip the recovery',
         cancelDash:'Catch the hop from a run', cancelTurn:'Turn away, then swing back',
-        boostGrab:'Shield just beyond dash-grab range', boostPivot:'Rival behind your run',
+        boostGrab:'Shield just beyond dash-grab range', boostPivot:'Rival behind your run',boostSmash:'Catch the hop with an up smash',
         bait: 'Bait Bear Hug', match: 'Clash jabs', power: 'Bolt Kick vs. Body Check', disc: 'Bat Round Trip',
         reflect:'Pip · tap Attack to start', returnFire:'Clover · tap neutral Special',
         crawl:'Noodle · get under Round Trip',
@@ -1281,6 +1319,7 @@
         angleHigh: angleTip, angleLow: angleTip,
         boostGrab:'You’re running. Tap Grab once to test its reach. Retry with Attack, then tap Grab as the windup begins.',
         boostPivot:'You’re running away from the rival. Tap Attack, then press back and tap Grab to reach behind you.',
+        boostSmash:'Hold '+(practice.dir>0?'Right':'Left')+' and tap Attack. As the dash attack starts, aim up and tap Smash. Try Up + Smash alone from the same mark to compare its reach.',
         antiAir: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk as the rival hops. Hold Up and tap Jump + Smash together. Hold Smash longer to compare.',
         brake: 'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Release forward for a beat, then press forward and tap Attack together. Compare that with holding forward and tapping Attack.',
         dashShield:'Run ' + (practice.dir > 0 ? 'right' : 'left') + ' to the chalk. Keep forward held and add Shield when Brisket swings. Tap Grab on the block to catch him before he jumps away.',
@@ -1538,5 +1577,5 @@
     }
     return message;
   }
-  window.PracticeFeedback={airPanel,trumpPanel,rollPanel,spacingPanel,wallPanel,platformPanel,climbPanel,footworkPanel,edgePanel,shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
+  window.PracticeFeedback={updateFreshnessReadout,airPanel,trumpPanel,rollPanel,spacingPanel,wallPanel,platformPanel,climbPanel,footworkPanel,edgePanel,shieldPanel,escapePanel,event,techResponses,reversalTip,ledgeTrapCounterTip,crouchCounterPrompt,escapeFeedback,survivalFeedback,meteorFeedback,waveFeedback};
 })();
