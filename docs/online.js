@@ -12,7 +12,7 @@
   const driveFeature='aimed-drive-1';
   const pogoFeature='shield-pogo-1';
   const spaceFeature='ground-space-1';
-  const springFeature='wall-spring-1';
+  const springFeature='wall-spring-1', catchFeature='rising-catch-1';
   const resumeFeature='resume-inputs-1';
   const resumeChannel=channel+'-resume';
   const resumeTime=18000;
@@ -249,7 +249,7 @@
       this.closingHeight=false;
       this.shieldPogo=false;
       this.aimedDrive=false;
-      this.groundSpace=this.wallSpring=false;
+      this.groundSpace=this.wallSpring=this.risingCatch=false;
       this.code = action === 'create' ? roomCode() : code;
       this.attempts = 0;
       this.round = 0;
@@ -314,7 +314,7 @@
       });
     }
     useConnection(peer, conn, host, restoring=false, attempt=0) {
-      if (!host && !restoring) this.itemDrops=this.closingHeight=this.shieldPogo=this.aimedDrive=this.groundSpace=this.wallSpring=false;
+      if (!host && !restoring) this.itemDrops=this.closingHeight=this.shieldPogo=this.aimedDrive=this.groundSpace=this.wallSpring=this.risingCatch=false;
       this.pending.add(conn);
       const timeout = setTimeout(() => {
         if (this.pending.delete(conn)) conn.close();
@@ -330,8 +330,8 @@
           if(this.recovery?.dial!==conn)return conn.close();
           return conn.send(['resume',this.roomTicket,this.round,attempt,this.match.received]);
         }
-        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,resumeFeature,springFeature] :
-          ['join',this.kind,this.coat,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,springFeature]);
+        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,resumeFeature,springFeature,catchFeature] :
+          ['join',this.kind,this.coat,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,springFeature,catchFeature]);
       });
       conn.on('data', (data) => {
         if (!current() || !Array.isArray(data)) return;
@@ -378,6 +378,7 @@
           this.aimedDrive=data.includes(driveFeature) && window.DogFight.validCoat(data[2]);
           this.groundSpace=data.includes(spaceFeature) && window.DogFight.validCoat(data[2]);
           this.wallSpring=data.includes(springFeature) && window.DogFight.validCoat(data[2]);
+          this.risingCatch=data.includes(catchFeature) && window.DogFight.validCoat(data[2]);
           this.shieldPogo=data.includes(pogoFeature) && window.DogFight.validCoat(data[2]);
           // Ordered delivery puts both players' colors in the opening match configuration.
           if (window.DogFight.validCoat(data[2])) {
@@ -389,6 +390,7 @@
             if (this.aimedDrive) reply.push(driveFeature);
             if (this.groundSpace) reply.push(spaceFeature);
             if (this.wallSpring) reply.push(springFeature);
+            if (this.risingCatch) reply.push(catchFeature);
             if(this.action==='create' && data.includes(resumeFeature)){
               this.roomTicket=crypto.randomUUID();
               reply.push(resumeFeature,this.roomTicket);
@@ -408,6 +410,7 @@
           this.aimedDrive=data.includes(driveFeature);
           this.groundSpace=data.includes(spaceFeature);
           this.wallSpring=data.includes(springFeature);
+          this.risingCatch=data.includes(catchFeature);
           this.shieldPogo=data.includes(pogoFeature);
           const key=data.indexOf(resumeFeature),ticket=data[key+1];
           if(this.action==='join' && key>=0 && typeof ticket==='string' && /^[0-9a-f-]{36}$/i.test(ticket))this.roomTicket=ticket;
@@ -594,6 +597,7 @@
       if (this.aimedDrive===false) config.aimedDrive=false;
       if (this.groundSpace===false) config.groundSpace=false;
       if (this.wallSpring===false) config.wallSpring=false;
+      if (this.risingCatch===false) config.risingCatch=false;
       if(rules)Object.assign(config,{stockCount:rules.lives,minutes:rules.minutes,fetch:rules.fetch});
       if (this.timeMinutes) Object.assign(config, {timeBattle:true,minutes:this.timeMinutes});
       this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed,!!this.roomTicket);

@@ -1,5 +1,7 @@
 # Dog Fight 3
 
+During a rising **Up Special**, tap **Grab** beside a solid ledge to reach for it. Your dog gives up the attack and stays exposed for two frames before hanging. Let the move continue to recover high. Brisket can reach after Kennel Cannon fires. Noodle can reach after a missed lasso cast; a lasso that already hooked the lip reels in as usual. Rival CPUs can take the short route when the guard leaves the lip open. [Try The Low Road on the train roof](https://caleb-guyer.github.io/dog-fight-3/#solo/events/low-road)
+
 After a point in **First-hit duel**, choose **Watch point** to see the opening at half speed. **Go to contact** freezes the scoring frame. **Try a response** gives you up to three quarters of a second before that frame to move, shield or interrupt the attack. In Local, the defending player uses their own controls against the other player's recorded approach. Retry the same exchange or return to the duel with its original score.
 
 From fighter select, choose **Try fighters → First-hit duel**. Pick center stage or put either dog near the ledge. Land a damaging hit or force a fall to win a point. A shield block keeps the point live, and a same-frame trade earns a replay. First to three wins. **Start full fight** or **Start full set** carries your fighters, coats, arena and rules into game one. [Play solo](https://caleb-guyer.github.io/dog-fight-3/#solo/first-hit) · [Play with a second player](https://caleb-guyer.github.io/dog-fight-3/#local/first-hit)

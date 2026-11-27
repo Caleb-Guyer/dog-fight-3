@@ -20,6 +20,12 @@
       brief:'Brisket starts a point behind Pip with ten seconds left. A credited knockout puts you ahead. Close the distance, or draw Pip toward the blast line.',
       clear:'Brisket overtook Pip before the horn.',
     },
+    'low-road':{
+      name:'The Low Road',p1:'pip',p2:'brisket',stage:'nightmail',form:'flat',highReturn:'low',
+      goal:'Catch the train roof on the way up',time:10,
+      brief:'Pip is below the left lip with his jump spent. Use Up Special, then tap Grab when his head reaches the roof. Hold toward the train to climb.',
+      clear:'Pip cut Fence Hopper short and made it onto the roof.',
+    },
   };
   const ids=Object.keys(events), memory=new Map(), prefix='dog-fight-3.event-best.';
   const stamp=frames=>(frames/60).toFixed(2)+' s';
@@ -38,9 +44,9 @@
     else write();
   }
   function setup(id,normal=false){
-    const {p1,p2,stage,form,landingRead,liftOpening,finalCount}=events[id];
+    const {p1,p2,stage,form,landingRead,liftOpening,finalCount,highReturn}=events[id];
     return {mode:'solo',p1,p2,stage,form,cpuLevel:'rival',stockCount:3,minutes:finalCount?1:7,
-      fetch:false,timeBattle:!!finalCount,landingRead,liftOpening,finalCount,...(normal?{}:{eventId:id})};
+      fetch:false,timeBattle:!!finalCount,landingRead,liftOpening,finalCount,highReturn,...(normal?{}:{eventId:id})};
   }
   class Run extends Battle {
     constructor(config,emit,random){
@@ -54,6 +60,12 @@
     }
     observe(type,e){
       if(this.feedback || this.end!==null)return;
+      if(this.eventId==='low-road'){
+        if(type==='reachLip' && e.f.index===0)this.reaching=true;
+        if(type==='ledge' && e.f.index===0 && e.rising)this.caught=true;
+        if(type==='hit' && e.f.index===0)this.reaching=false;
+        if(type==='ko' && e.f.index===0)this.feedback=this.caught?'Brisket knocked Pip away. Try rolling past him after the catch.':'Pip missed the roof. Tap Up Special first, then Grab while he is still rising beside the lip.';
+      }
       if(this.eventId==='high-ground' && type==='ko' && e.f.index===0)this.feedback='Clover lost her stock. Drop from the lift early and keep the top perch in reach.';
       if(this.eventId!=='wrong-way')return;
       if(e.f?.index===0 && type==='tech'){
@@ -72,6 +84,10 @@
       if(this.eventId==='wrong-way' && this.bot.coveredLanding==='through' && swing?.moveId===guard.kit.tilts.down &&
           swing.time+1e-8>=swing.start+swing.active)this.sweep=true;
       super.step(dt,a,b);
+      if(this.eventId==='low-road' && this.dogs[0].ground>=0 && !this.dogs[0].stockLift && !this.dogs[0].floorAction){
+        if(this.caught)this.cleared=true;
+        else this.feedback='Pip came in high. Tap Grab while his paws are still below the roof.';
+      }
       if(this.eventId==='wrong-way' && this.sweep && guard.attack?.moveId!==guard.kit.tilts.down && !this.cleared)
         this.feedback='Brisket recovered. Tap Attack as Doorstop sweeps past you.';
       if(this.eventId==='high-ground'){
@@ -91,6 +107,7 @@
     startSuddenDeath(cause){this.regulationEnd ||= cause==='time'?'time':'ko';}
     finishMatch(winner,reason){this.regulationEnd ||= reason;}
     progress(){
+      if(this.eventId==='low-road')return this.caught?'Get back on the roof.':this.reaching?'Hold the lip.':'Up Special, then Grab beside the lip.';
       if(this.eventId==='high-ground')return (Math.min(180,this.held)/60).toFixed(1)+' / 3.0 s on the top perch';
       if(this.eventId==='last-delivery')return 'Brisket '+this.matchCard.points[0]+' · Pip '+this.matchCard.points[1];
       return this.planted?'Tap Attack as Brisket’s sweep misses.':'Land with Shield and a centered stick.';

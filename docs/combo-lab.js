@@ -321,7 +321,8 @@
   function encode(card){
     const {config:c}=card;
     const data=[1,card.name,c.p1,c.p2,c.stage,c.coats,c.shieldPogo,card.damage,card.time,card.slow,card.takes.map(packTake)];
-    if(c.wallSpring){data[0]=4;data.push(!!c.aimedDrive,!!c.groundSpace);}
+    if(c.risingCatch){data[0]=5;data.push(!!c.aimedDrive,!!c.groundSpace,!!c.wallSpring);}
+    else if(c.wallSpring){data[0]=4;data.push(!!c.aimedDrive,!!c.groundSpace);}
     else if(c.groundSpace){data[0]=3;data.push(!!c.aimedDrive);}
     else if(c.aimedDrive){data[0]=2;data.push(true);}
     const bytes=new TextEncoder().encode(JSON.stringify(data));
@@ -334,7 +335,7 @@
       const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(text,c=>c.charCodeAt(0))));
       if(!Array.isArray(data) || !(data[0]===1 && data.length===11 || data[0]===2 && data.length===12 && data[11]===true ||
         data[0]===3 && data.length===12 && typeof data[11]==='boolean' ||
-        data[0]===4 && data.length===13 && data.slice(11).every(v=>typeof v==='boolean')))return null;
+        (data[0]===4 && data.length===13 || data[0]===5 && data.length===14) && data.slice(11).every(v=>typeof v==='boolean')))return null;
       const [version,name,p1,p2,stage,coats,shieldPogo,damage,time,slow,takes]=data;
       if(typeof name!=='string' || !name.trim() || name.length>48 ||
         ![p1,p2].every(id=>typeof id==='string' && Object.hasOwn(fighters,id)) || typeof stage!=='string' || !Object.hasOwn(arenas,stage) ||
@@ -343,8 +344,9 @@
         !Number.isFinite(time) || time<0 || time>1e9 || !Array.isArray(takes) || takes.length!==2)return null;
       const config={p1,p2,stage,coats,shieldPogo};
       if([p1,p2].includes('clover'))config.aimedDrive=!!data[11];
-      if(version===3 || version===4 && data[12])config.groundSpace=true;
-      if(version===4)config.wallSpring=true;
+      if(version===3 || version>=4 && data[12])config.groundSpace=true;
+      if(version===4 || version===5 && data[13])config.wallSpring=true;
+      if(version===5)config.risingCatch=true;
       return {name,config,damage,time,slow,takes:takes.map(unpackTake)};
     }catch{return null;}
   }
@@ -352,7 +354,7 @@
     const d=world.comboPractice, dogs=d?.originalDogs || world.dogs;
     const [p1,p2]=dogs.map(f=>f.kind);
     return {name:fighters[p1].name+' vs '+fighters[p2].name,config:{p1,p2,stage:world.stage,
-      coats:[...world.coats],...(world.wallSpring?{wallSpring:true}:{}),shieldPogo:!!world.shieldPogo,...(world.groundSpace?{groundSpace:true}:{}),...([p1,p2].includes('clover')?{aimedDrive:!!world.aimedDrive}:{})},damage:world.trainingDamage,time:world.comboMarkTime??world.time,
+      coats:[...world.coats],...(world.risingCatch?{risingCatch:true}:{}),...(world.wallSpring?{wallSpring:true}:{}),shieldPogo:!!world.shieldPogo,...(world.groundSpace?{groundSpace:true}:{}),...([p1,p2].includes('clover')?{aimedDrive:!!world.aimedDrive}:{})},damage:world.trainingDamage,time:world.comboMarkTime??world.time,
       slow:d?.slow??true,takes:world.comboTakes || [null,null]};
   }
   function restore(world,card){

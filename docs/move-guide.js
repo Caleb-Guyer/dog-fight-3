@@ -370,7 +370,7 @@
     } else if (section === 'specials') {
       contents =
         '<p class="recovery-note"><strong>Offstage</strong> ' +
-        kit.recovery +
+        kit.recovery + ' While Up Special is rising beside a solid ledge, tap Grab (P1 '+keyFor(0,'grab')+', P2 '+keyFor(1,'grab')+') to cut the move short. Your paws are exposed for two frames before the catch.' +
         '</p><p>In the air, tap neutral Special, then immediately flick behind you for a <strong>B-reverse</strong>. Your dog turns and reverses its sideways speed. Flick back and release <em>before</em> Special for a turnaround that keeps your drift. Combine both inputs for a <strong>wavebounce</strong>. Try Training → Aerial practice.</p><ul class="move-rows guide-specials">' +
         rows +
         '</ul>' +
