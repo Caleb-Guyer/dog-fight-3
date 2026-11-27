@@ -765,7 +765,10 @@
           (this.lastX-center)*(f.x-center)<=0)this.mark('move',w.matchFrames);
       this.lastX=f.x;
     }
-    hud(el){el.textContent='Fight School · '+Object.keys(this.marks).length+' / 10 skills';}
+    hud(el){
+      const n=Object.keys(this.marks).length;
+      el.hidden=false;el.textContent=n+' / 10 skills';el.setAttribute('aria-label',n+' of 10 Fight School skills demonstrated');
+    }
     notice(frame){return this.last && frame-this.marks[this.last]<150?fieldSkills[this.last]:'';}
     panel(lessons,passed,showDialog,practice,back,over){
       const rows=lessons.map(({id},i)=>{

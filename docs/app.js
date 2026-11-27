@@ -2305,9 +2305,9 @@
       config.rotationRound?(config.tourneyRound || 'Bout '+config.rotationRound)+' · P1 '+config.rotationTags[0]+' / P2 '+config.rotationTags[1]:
       world.lesson ? 'Fight School' : spar?'Sparring · '+world.dogs[0].stats.name:matchName + (world.relayTeams?' · Pack Relay':world.matchCard?.points?' · Time Battle':config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = stageName(config.stage,world.form);
-    if(corner?.field)corner.field.hud($('match-mode'));
     const set = online.series || localSet;
     $('match-set').hidden = !set;
+    if(corner?.field)corner.field.hud($('match-set'));
     if(world.warmupPartner){
       const badge=$('match-set');
       badge.hidden=false;
@@ -6668,7 +6668,7 @@
               card.step(world,input);
               if(card.changed){
                 card.changed=false;
-                card.hud($('match-mode'));
+                card.hud($('match-set'));
                 const earned=Object.keys(card.marks).filter(id=>!schoolSave.passed.includes(id));
                 if(earned.length){schoolSave.passed.push(...earned);saveSchool();}
               }
