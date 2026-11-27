@@ -1,5 +1,7 @@
 # Dog Fight 3
 
+After a versus fight, the winner takes the podium and both scorecards show the final stocks or points. Choose **Rematch** to play again, **Fighter select** to change the lineup, or a fighter’s **Watch last fall** to replay their last knockout. Open **Replays & practice** for the full match and stock retries. [Play a last-stock fight](https://caleb-guyer.github.io/dog-fight-3/#solo/last-stock)
+
 Choose **Arena** from fighter select to see all five stages. Select a postcard and a layout to watch the platforms move. **Random** draws from the other arenas. **Use arena** saves the choice, and Back keeps your previous setup. Open **Stage Run** or **Stage music** directly from the preview. Between games of a set, the player choosing the next arena uses **Lock in arena**. [Open stage select](https://caleb-guyer.github.io/dog-fight-3/#solo/arenas)
 
 In **Solo Fight** and **Local Versus**, choose either nameplate to edit that fighter. Pick a dog to preview its forward tilt, change its coat, then choose the arena or start the fight. **Match options** holds events, fighter tryouts, move lists, player profiles, and the Fetch Ball switch. Reduced motion keeps the preview still. [Open Solo Fight](https://caleb-guyer.github.io/dog-fight-3/#solo) · [Open Local Versus](https://caleb-guyer.github.io/dog-fight-3/#local)
