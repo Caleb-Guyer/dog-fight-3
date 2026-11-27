@@ -159,6 +159,11 @@
       }
       this.data=data;this.length=count;
     }
+    inputAt(tick,slot){
+      if(tick<0 || tick>=this.length)return window.DogFight.idleInput;
+      const runs=this.data.parts[Math.floor(tick/120)].runs;
+      return runs.findLast(r=>r[0]<=tick%120)[slot+1];
+    }
     playback(target=0,emit=()=>{}){
       const stop=Math.max(0,Math.min(this.length,Math.trunc(target)));
       const checkpoint=Math.floor(Math.min(stop,this.length-1)/360)*3;
@@ -356,17 +361,22 @@
       const losses=this.original.matchCard.losses.filter(l=>l.slot===slot);
       this.number=losses.length;this.loss=losses.at(-1);
     }
-    attempt(emit){
-      const slot=this.slot,clip=!!this.takeover,replay=this.film.playback(this.start,emit,clip?slot:null),battle=replay.battle;
+    attempt(emit,from=this.start){
+      const start=Math.max(this.start,Math.min(this.end-1,Math.trunc(from)));
+      const film=this.film,slot=this.slot,clip=!!this.takeover,replay=film.playback(start,emit,clip?slot:null),battle=replay.battle;
+      const take=new FinishTape();
       const damage=battle.matchCard.players[slot].damage,end=this.end;
       let seen=battle.matchCard.losses.length,stable=0;
-      return {battle,frame:this.start,length:end+180,outcome:null,openingDamage:damage,
+      return {battle,take,start,frame:start,length:end+180,outcome:null,openingDamage:damage,
         step(input=window.DogFight.idleInput,partner){
           if(this.outcome)return false;
           const a=slot===0?input:partner, b=slot===1?input:partner;
           // After the recording ends, the absent opponent releases their controls.
-          const recorded=clip?replay.step(input):replay.step(null,a,b);
-          if(!recorded)battle.step(1/60,a,b);
+          if(clip || !replay.step(take,a,b)){
+            const other=partner ?? (clip?film.inputAt(film.count-film.length+this.frame,1-slot):window.DogFight.idleInput);
+            const first=slot===0?input:other,second=slot===1?input:other;
+            take.record(battle,first,second);battle.step(1/60,first,second);
+          }
           this.frame++;
           const dog=battle.dogs[slot];
           const safe=dog.ground>=0 && !dog.stockLift && !dog.respawning && !dog.ledge && !dog.grip &&
@@ -424,15 +434,106 @@
       el('stock-try').focus({preventScroll:true});
     }
     comparison(player){
-      const original=this.original,elapsed=player.frame-this.start;
+      const original=this.original,elapsed=player.frame-player.start;
       const title={lost:'Stock lost',saved:'Stock saved!',won:'Match won!',ended:'Regulation ended',unsettled:'Still fighting for a landing'}[player.outcome];
       const text={lost:'Your dog crossed the blast line.',saved:'You stayed onstage past the original knockout.',
         won:'You won the match on this stock.',ended:'The clock expired during the attempt.',
         unsettled:'You passed the original knockout but were still in danger three seconds later.'}[player.outcome];
       const damage=b=>Math.round((b.matchCard.players[this.slot].damage-player.openingDamage)*10)/10+'%';
       return {title,html:'<p>'+text+'</p><table class="finish-comparison"><thead><tr><th>Stock '+this.number+'</th>'+
-        '<th>Original</th><th>This attempt</th></tr></thead><tbody><tr><th>Time played</th><td>'+seconds(this.end-this.start)+
+        '<th>Original</th><th>This attempt</th></tr></thead><tbody><tr><th>Time played</th><td>'+seconds(this.end-player.start)+
         '</td><td>'+seconds(elapsed)+'</td></tr><tr><th>Damage dealt</th><td>'+damage(original)+'</td><td>'+damage(player.battle)+'</td></tr></tbody></table>'};
+    }
+    compareRuns(attempt,{showDialog,back,retry,shake}){
+      const film=this.film,take=attempt.take,slot=this.slot;
+      const first=attempt.frame-take.length,last=attempt.frame;
+      const focus=Math.max(first,Math.min(this.end,last)-45);
+      showDialog('finish-stock-film','Compare both runs',
+        '<div class="stock-films">'+['Original stock','Your retry'].map(label=>'<figure><figcaption><strong>'+label+
+          '</strong><span data-stock-state></span></figcaption><canvas width="480" height="270" role="img" aria-label="'+label+
+          ' replay"></canvas><p data-stock-input></p></figure>').join('')+'</div>'+
+        '<label for="stock-film-seek" id="stock-film-time"></label><input type="range" step="1" id="stock-film-seek">'+
+        '<div class="dialog-actions"><button id="stock-film-play" class="primary">Play both · ½ speed</button>'+
+        '<button id="stock-film-prev" class="utility">Previous frame</button><button id="stock-film-next" class="utility">Next frame</button>'+
+        '<button id="stock-film-change" class="utility">First different input</button>'+
+        '<button id="stock-film-retry" class="utility">Retry original from here</button><button id="stock-film-back" class="utility">Back to result</button></div>');
+      const el=id=>document.getElementById('stock-film-'+id),seek=el('seek'),play=el('play');
+      const panels=[...document.querySelectorAll('.stock-films figure')].map(figure=>({
+        canvas:figure.querySelector('canvas'),state:figure.querySelector('[data-stock-state]'),input:figure.querySelector('[data-stock-input]')
+      }));
+      seek.min=first;seek.max=last;
+      let frame=focus,running=false,previous=null,carry=0,raf=0;
+      const stop=()=>{running=false;previous=null;carry=0;cancelAnimationFrame(raf);};
+      const laneFrame=i=>i?frame-first:Math.min(frame,this.end);
+      // Before takeover, both dogs reached the selected frame using the original inputs.
+      const retryInputs={length:attempt.frame,inputAt(tick,seat){
+        return tick<attempt.start?film.inputAt((film.count ?? film.length)-film.length+tick,seat):take.inputAt(tick-attempt.start,seat);
+      }};
+      const controls=(source,n)=>{
+        const input=window.FinishTools.inputFrame(source,n,slot);
+        return [input.movement,...(input.aim?['Aim '+input.aim]:[]),...input.actions].join(' · ');
+      };
+      let change=null;
+      for(let n=Math.max(first,attempt.start+1);n<=Math.min(this.end,last);n++){
+        if(controls(film,n)!==controls(retryInputs,n)){change=n;break;}
+      }
+      el('change').disabled=change===null;
+      if(change===null)el('change').textContent='Inputs match in this clip';
+      function paint(dt){
+        for(const [i,p] of panels.entries()){
+          if(p.drawn===p.player.frame)continue;
+          p.drawn=p.player.frame;
+          const battle=p.player.battle,f=battle.dogs[slot];
+          const ended=i?frame===last && attempt.outcome==='lost':frame>=originalEnd;
+          p.view.draw(p.canvas,battle,dt,battle.time);
+          const loss=ended && battle.matchCard.losses.findLast(l=>l.slot===slot);
+          p.state.textContent=loss?'KO · '+loss.zone+' · '+Math.round(loss.damage)+'%':
+            f.stats.name+' · '+Math.round(f.damage)+'% · '+f.stocks+(f.stocks===1?' stock':' stocks');
+          p.input.textContent=controls(i?retryInputs:film,i?frame:p.player.frame);
+        }
+        seek.value=frame;
+        const time='Stock frame '+(frame-stockStart)+' · '+seconds(frame-stockStart);
+        el('time').textContent=time;seek.setAttribute('aria-valuetext',time);
+        el('prev').disabled=frame===first;el('next').disabled=frame===last;
+        el('retry').disabled=frame>=originalEnd;
+        play.textContent=running?'Pause':frame===last?'Watch both again':'Play both · ½ speed';
+      }
+      const originalEnd=this.end,stockStart=this.start;
+      function jump(next){
+        stop();frame=next;
+        for(const [i,p] of panels.entries()){
+          p.drawn=null;
+          p.view=new window.DogFightView.FightView();p.view.shakeEnabled=shake;
+          p.player=(i?take:film).playback(laneFrame(i),(name,e)=>p.view.event(name,e));
+        }
+        paint(0);
+      }
+      function advance(){
+        frame++;
+        for(const [i,p] of panels.entries())if(p.player.frame<laneFrame(i))p.player.step();
+      }
+      function tick(now){
+        if(!seek.isConnected || !seek.closest('dialog')?.open || !running)return stop();
+        if(document.hidden)previous=null;
+        carry+=previous===null?0:Math.min(.1,(now-previous)/1000)*30;previous=document.hidden?null:now;
+        let steps=0;
+        while(carry>=1 && frame<last){advance();steps++;carry--;}
+        if(frame===last)stop();
+        if(steps)paint(steps/60);
+        if(running)raf=requestAnimationFrame(tick);
+      }
+      play.onclick=()=>{
+        if(running)stop();
+        else{if(frame===last)jump(first);running=true;raf=requestAnimationFrame(tick);}
+        paint(0);
+      };
+      el('prev').onclick=()=>jump(frame-1);
+      el('next').onclick=()=>{stop();advance();paint(1/60);};
+      el('change').onclick=()=>jump(change);
+      seek.oninput=()=>jump(Number(seek.value));
+      el('retry').onclick=()=>{stop();retry(frame);};
+      el('back').onclick=()=>{stop();back();};
+      jump(focus);play.focus({preventScroll:true});
     }
     actions(from,sample){
       return '<div class="dialog-actions"><button class="primary" data-do="trial-retry">Retry stock</button>'+

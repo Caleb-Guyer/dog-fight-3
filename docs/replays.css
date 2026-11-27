@@ -1,5 +1,18 @@
 dialog:is([data-view='finish-replay'],[data-view='finish-film']) { width:min(760px,calc(100% - 16px)); }
 #clip-arena { display:block; width:100%; aspect-ratio:16/9; height:auto; max-height:52dvh; border:2px solid var(--ink); image-rendering:pixelated; }
+dialog[data-view='finish-stock-film'] { width:min(960px,calc(100% - 16px)); }
+.stock-films { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.stock-films figure { min-width:0; margin:0; }
+.stock-films figcaption { display:flex; justify-content:space-between; align-items:baseline; gap:3px 8px; flex-wrap:wrap; }
+.stock-films canvas { display:block; width:100%; height:auto; border:2px solid var(--ink); image-rendering:pixelated; }
+.stock-films figcaption span,.stock-films [data-stock-input] { font-size:.83rem; font-variant-numeric:tabular-nums; }
+#dialog-body .stock-films p { margin:3px 0; }
+#stock-film-time { display:block; margin-top:7px; }
+#stock-film-seek { display:block; width:100%; accent-color:var(--ink); }
+@media(max-width:580px) and (orientation:portrait) {
+  .stock-films { grid-template-columns:minmax(0,1fr); gap:6px; }
+  .stock-films canvas { width:min(100%,42dvh); margin-inline:auto; }
+}
 
 .clip-status { display:flex; flex-wrap:wrap; justify-content:space-between; gap:3px 8px; font-size:13px; margin-top:5px; }
 #clip-seek { display:block; width:100%; margin:5px 0; accent-color:#6b4569; }

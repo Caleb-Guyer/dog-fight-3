@@ -154,7 +154,8 @@
   const buttons={jump:'Jump',shortHop:'Short hop',attack:'Attack',special:'Special',smash:'Smash',shield:'Shield',grab:'Grab',aimStick:'Strike stick'};
   function controlsAt(tape,frame,slot){
     // Frame n shows the result of tick n. A rolling clip can already have held controls at frame zero.
-    const tick=tape.count-tape.length+frame-1;
+    const tick=(tape.count ?? tape.length)-tape.length+frame-1;
+    if(tape.inputAt)return tape.inputAt(tick,slot);
     const block=tape.blocks.findLast(b=>b.start<=tick);
     return block?.inputs[tick-block.start]?.[slot] || idleInput;
   }

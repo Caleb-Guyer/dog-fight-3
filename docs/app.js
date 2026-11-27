@@ -962,7 +962,7 @@
     if(dialogType==='rumble')window.PadFeedback?.stop();
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=launch-aim-1';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=stock-runs-1';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
@@ -1025,6 +1025,7 @@
     if(dialogType==='finish-film')return $('film-back').click();
     if(dialogType==='finish-recovery')return $('recovery-back').click();
     if(dialogType==='finish-stock')return $('stock-back').click();
+    if(dialogType==='finish-stock-film')return $('stock-film-back').click();
     if(dialogType==='recording-unavailable')return backToRematchLesson();
     if(dialogType==='finish-comparison')return leaveFinishTrial(true);
     if(dialogType==='finish-pause')return dismiss();
@@ -2743,7 +2744,7 @@
     const emit=(name,e)=>{
       camera.event(name,e);fightSound(name,e);trace?.observe(name,e,player.frame+1);
     };
-    const player=review?.ledge?window.FinishTools.ledgeAttempt(tape,review.ledge.mark,false,emit,review.clip?.returnTape):review?.hold?window.FinishTools.holdAttempt(tape,review.hold,false,emit):review?.stock?review.stock.attempt(emit):review?.landing?window.FinishTools.landingTry(tape,review.landing,start,emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
+    const player=review?.ledge?window.FinishTools.ledgeAttempt(tape,review.ledge.mark,false,emit,review.clip?.returnTape):review?.hold?window.FinishTools.holdAttempt(tape,review.hold,false,emit):review?.stock?review.stock.attempt(emit,start):review?.landing?window.FinishTools.landingTry(tape,review.landing,start,emit):review?.coach?window.RecoveryCoach.attempt(tape,review.coach,emit,review.clip.returnTape):tape.playback(start,emit,slot);
     const saved=finishTrial?.saved || {mode:$('match-mode').textContent,pause:$('pause-label').textContent,
       call:$('countdown').textContent,setHidden:$('match-set').hidden,cornerHidden:$('corner-tip').hidden,schoolHidden:$('school-coach').hidden,
       cornerTitle:$('corner-title').textContent,cornerLine:$('corner-line').textContent};
@@ -2920,6 +2921,15 @@
     if(review?.stock || review?.baseline){
       const report=review.stock?review.stock.comparison(player):window.MatchReview.defenseReport(review,player.battle);
       showDialog('finish-comparison',report.title,report.html+trialActions(),false);
+      if(review.stock && player.take.length){
+        const compare=document.createElement('button');compare.id='stock-compare';compare.className='utility';compare.textContent='Compare both runs';
+        document.querySelector('#dialog-body .dialog-actions').prepend(compare);
+        compare.onclick=()=>{
+          const back=()=>{showTrialComparison();$('stock-compare').focus({preventScroll:true});};
+          const open=()=>review.stock.compareRuns(player,{showDialog,shake:settings.shake,back,retry:frame=>startFinishTrial(frame,slot,review)});
+          if(window.FinishTools)open();else waitForDispatch('Compare both runs',()=>loadDispatch('FinishTools'),open,back);
+        };
+      }
       if(review.from==='lesson' && ['saved','won'].includes(player.outcome)){
         saveSchool({fight:review.ticket});
         const btn=document.createElement('button');btn.className='primary';btn.textContent='Rematch Brisket';
@@ -4369,7 +4379,7 @@
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
-    RecoveryCoach:'recovery-coach.js?v=launch-aim-1', MatchReview:'match-review.js?v=deciding-exchange-1',
+    RecoveryCoach:'recovery-coach.js?v=launch-aim-1', MatchReview:'match-review.js?v=stock-runs-1',
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
@@ -4378,7 +4388,7 @@
     VersusRulebook:'versus-rules.js?v=landing-read-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=tournament-sets-1',StageStrike:'stage-strike.js?v=counterpick-map-1',
-    ComboLab:'combo-lab.js?v=wall-spring-1', FinishTools:'finish-tools.js?v=launch-aim-1',
+    ComboLab:'combo-lab.js?v=wall-spring-1', FinishTools:'finish-tools.js?v=stock-runs-1',
     MoveGuide:'move-guide.js?v=wall-spring-1', FighterSchool:'fighter-lessons.js?v=landing-study-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
