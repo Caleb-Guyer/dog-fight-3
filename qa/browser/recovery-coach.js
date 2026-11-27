@@ -240,7 +240,8 @@ async function check(browser,device) {
       assert.equal(await page.locator('[data-recover-as="'+kind+'"]').getAttribute('aria-pressed'),'true');
       assert.match(await page.locator('#recovery-route').textContent(),/Fence Hopper|Kennel Cannon|Ledge Lasso|Disc Sail/);
       assert.match(await page.locator('#recovery-position').textContent(),dir<0?/Right of the ledge/:/Left of the ledge/);
-      await choose('#recovery-guide');await page.clock.runFor(80);
+      await choose('#recovery-guide');await page.clock.runFor(1500);
+      assert.match(await page.locator('#countdown').textContent(),/\+/,device+' opening recovery cue');
       const cast=()=>hold(dir,false,true,false,false,true);
       await cast();await page.clock.runFor(kind==='noodle'?100:1100);
       if(kind==='pip'){
