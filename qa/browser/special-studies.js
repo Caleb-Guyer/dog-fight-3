@@ -94,9 +94,10 @@ async function downAirs(browser,device){
           await page.evaluate(a=>{
             pad.axes[0]=Number(a.includes('right'));pad.axes[1]=Number(a.includes('down'));
             Object.assign(pad.buttons[2],{pressed:a.includes('attack'),value:Number(a.includes('attack'))});
+            Object.assign(pad.buttons[4],{pressed:a.includes('shield'),value:Number(a.includes('shield'))});
           },actions);
         }else{
-          for(const [action,key] of [['down','s'],['attack','j'],['right','d']])
+          for(const [action,key] of [['down','s'],['attack','j'],['right','d'],['shield','l']])
             if(actions.includes(action))await page.keyboard.down(key);else await page.keyboard.up(key);
         }
       };
@@ -108,6 +109,25 @@ async function downAirs(browser,device){
       assert(await clear());await enter('#school-next');
       assert.equal(await page.evaluate(()=>document.activeElement.dataset.watchMove),'down-air');
       assert.equal(await page.locator('[data-guide-section="air"]').getAttribute('aria-pressed'),'true');
+      const landings=page.locator('[data-watch-move^=land-]');
+      assert.equal(await landings.count(),5);
+      await enter('[data-watch-move="land-down"]');
+      await enter('#move-touchdown');assert.match(await page.locator('#move-frame').textContent(),/Touchdown \+0f/);
+      const normal=await page.evaluate(k=>DogFight.moves[DogFight.kits[k].air.down].land,kind);
+      assert.match(await page.locator('#move-caption').textContent(),new RegExp('Canceled · '+Math.ceil(normal/2)+'f'));
+      await enter('#move-after');await enter('#move-touchdown');
+      assert.match(await page.locator('#move-caption').textContent(),new RegExp('Landed · '+normal+'f'));
+      await enter('#move-play');await page.clock.runFor(2400);
+      assert.match(await page.locator('#move-caption').textContent(),new RegExp('Shield up '+normal+' frames'));
+      await enter('#move-try');
+      await steer(['down','attack']);await page.clock.runFor(32);await steer([]);
+      for(let n=0;n<20 && !(await page.locator('#school-task').textContent()).includes('Shield now');n++)await page.clock.runFor(16);
+      assert.match(await page.locator('#school-task').textContent(),/Shield now/);
+      await steer(['shield']);await page.clock.runFor(540);await steer([]);
+      assert.equal(await page.locator('#school-coach').getAttribute('data-state'),'passed',kind+' landing '+device);
+      assert.match(await page.locator('#school-task').textContent(),new RegExp('Shield up '+Math.ceil(normal/2)+' frames'));
+      await enter('#school-next');
+      assert.equal(await page.evaluate(()=>document.activeElement.dataset.watchMove),'land-down');
     }
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
