@@ -2839,6 +2839,10 @@
         beginGrab(guard,'standing',0,0);
       }
       if (config.dodgeReturn && this.mode === 'solo') this.placeLastDodge(config.dodgeReturn.side, config.dodgeReturn.wide, 1);
+      if(config.dashPressure && this.mode==='solo' && this.cpuLevel==='rival'){
+        this.placeDashPressure();
+        this.bot.guardRushUntil=this.time+.65;
+      }
       if (config.shieldLanding && this.mode === 'solo') {
         const {dir,cross} = config.shieldLanding;
         const opening = new Battle({...config,mode:'local'},undefined,this.random);
@@ -2864,6 +2868,7 @@
       }
       // Solo replays reconstruct the CPU. Older checkpoints retain the footwork they recorded.
       if (this.cpuLevel === 'rival') this.bot.dashBackEnabled = true;
+      if(this.cpuLevel==='rival' || this.mode==='training')this.bot.readDashAttacks=true;
       if (this.mode==='solo' && this.cpuLevel==='rival'){
         this.bot.liftReadEnabled=true;
         this.bot.returnPerches=true;
@@ -2892,7 +2897,7 @@
     resetCpu() {
       const memory = this.bot;
       this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
-      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','liftReadEnabled','returnPerches','readPlatforms','gavePerch','challengedReturn','clockAware','heldCenter','chasedLead'])
+      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','readDashAttacks','liftReadEnabled','returnPerches','readPlatforms','gavePerch','challengedReturn','clockAware','heldCenter','chasedLead'])
         if (memory[key] !== undefined) this.bot[key] = memory[key];
     }
     spawn(f, fromKO, useLift = this.mode !== 'training' || !!this.stockPractice) {
@@ -3256,11 +3261,26 @@
       }
       if (source === 'replay' && !tape?.length) source = 'record';
       const prior = previous && (previous.phase === 'done' || previous.contacts.length) ? { source: previous.source, reply: previous.reply,
-        slot:previous.playSlot ?? previous.slot, hits: previous.hits, damage: previous.damage, baseline: previous.baseline } : previous?.prior;
+        slot:previous.playSlot ?? previous.slot, hits: previous.hits, damage: previous.damage, baseline: previous.baseline,
+        window:previous.window,counter:previous.counter?.moveId } : previous?.prior;
       this.comboPractice = { source, reply, slow, markTime, slot, defending, originalDogs, phase: source === 'record' || source === 'throwChase' || flurry || defending ? 'ready' : 'active',
         tape: source === 'replay' ? tape : [], saved: tape, baseline: this.trainingDamage, prior,
         tick: 0, clock: 0, contacts: [], hits: 0, damage: 0, firstFree: null, shifts: 0, dodges: 0 };
       if(source==='confirm')window.ComboLab.startConfirm(this,advance?previous?.series:null);
+      if(source==='dashPressure'){
+        this.placeDashPressure();
+        Object.assign(this.comboPractice,{phase:'ready',reply:'punish'});
+      }
+    }
+    placeDashPressure(){
+      const [runner,guard]=this.dogs,ground=this.terrain.findIndex(p=>!p.thin),floor=this.terrain[ground];
+      const dash=moves[runner.kit.dashAttack],speed=runner.stats.speed*dash.carry;
+      const windup=Math.min(dash.start+2/60,speed/dash.brake);
+      const slide=speed*windup-.5*dash.brake*windup*windup;
+      const gap=dash.box[0]+dash.box[2]+guard.stats.width+slide-5,center=(floor.x1+floor.x2)/2;
+      Object.assign(runner,{ground,y:floor.y,x:center-gap/2,face:1,vx:runner.stats.speed,vy:0,sprintDir:1});
+      moveOnFoot(runner,1,1/60);
+      Object.assign(guard,{ground,y:floor.y,x:center+gap/2,face:-1,vx:0,vy:0,shield:true});
     }
     comboPlayerInput(input) {
       const d = this.comboPractice;
@@ -3276,6 +3296,10 @@
         d.phase = 'active';
       }
       const tick = d.tick++;
+      if(d.source==='dashPressure'){
+        if(tick>=120){d.phase='done';return null;}
+        return input;
+      }
       if(d.source==='throwChase'){
         if(tick>=210){d.phase='done';return null;}
         if(d.consumeAttack){
@@ -5716,12 +5740,17 @@
       }
       let combo = this.comboPractice;
       if (combo) {
-        if(combo.source==='throwChase' || combo.source==='confirm'){
+        if(combo.source==='throwChase' || combo.source==='confirm' || combo.source==='dashPressure'){
           if(combo.phase==='done' && (input1.tapped?.attack || (input1.attack && !combo.chaseHeld))){
             this.resetComboPractice(combo.source,combo.reply,combo.slow,combo.slot,true);
             combo=this.comboPractice;
+            if(combo.source==='dashPressure'){combo.retryHeld=true;return;}
           }
           combo.chaseHeld=!!input1.attack;
+          if(combo.retryHeld){
+            if(input1.attack)return;
+            combo.retryHeld=false;
+          }
         }
         if (combo.defending) {
           const tap = input1.tapped?.attack || (input1.attack && !combo.attackHeld);
@@ -9233,7 +9262,7 @@
         use.springPoint=point;
       if (target.index === 1 && owner.index === 0 &&
           (this.cpuLevel === 'rival' || (!this.comboPractice?.defending && this.comboPractice?.reply === 'punish')))
-        this.bot.blockedSwing = !broken && !projectile && (use?.airSide || use?.smashSide) ? use : null;
+        this.bot.blockedSwing = !broken && !projectile && (use?.airSide || use?.smashSide || this.bot.readDashAttacks && use?.dashAttack) ? use : null;
       if (this.shieldPractice?.brokenSlot === target.index && this.shieldPractice.phase === 'awake')
         this.guardBreakCue(target, 'guarded', this.shieldPractice.frames, this.shieldPractice.struggles, moveId);
       if (this.cpuLevel === 'rival' && owner.index === 1 && target.index === 0 && !projectile &&
@@ -10169,16 +10198,13 @@
       // Keep guarding a descending attack and any second swing. Judge the actual landing, including cancels.
       if (landingNear || f.impactLag > 0 || f.shieldStun > 0 ||
           (sameSwing && swing.second && swing.time < swing.second.start + swing.second.active)) return guarding;
-      const back = moves[f.kit.air.back], startup = jumpSquatTime + back.start;
-      // On the last landing frame the attacker can already raise Shield before hit detection.
-      if (foe.ground === f.ground && (foe.x-f.x)*f.face < -foe.stats.width/2 && startup < recovery-1e-8) {
-        const [x,y,rx,ry] = back.box, height = bodyHeight(foe);
-        const gap = (foe.x + foe.vx*Math.min(.05,startup) - f.x - f.vx*jumpSquatTime)*f.face;
-        const rise = f.stats.jump*.6*back.start - .5*1540*f.kit.gravity*back.start*back.start;
-        if (Math.abs(gap-x) <= rx+foe.stats.width-2 && Math.abs(foe.y-height*.52-f.y+rise-y) <= ry+height*.4) {
-          this.bot.blockedSwing = null;
-          return {...guarding,jump:true,aimStick:true,smashX:-f.face,tapped:{jump:true,aimStick:true}};
-        }
+      const drill=this.comboPractice;
+      if(drill?.source==='dashPressure' && sameSwing && swing.dashAttack && !drill.window)
+        drill.window={frames:Math.ceil(recovery*60-1e-8),gap:Math.round(Math.abs(foe.x-f.x))};
+      const behind=(foe.x-f.x)*f.face < -foe.stats.width/2;
+      if(behind){
+        const counter=this.risingShieldCounter(f,foe,'back',recovery);
+        if(counter)return counter;
       }
       const grab = grabs[f.kit.grab], smash = smashes[f.kit.smashes.up];
       for (const move of foe.damage >= 75 ? [smash,grab] : [grab,smash]) {
@@ -10192,7 +10218,19 @@
         this.bot.blockedSwing = null;
         return isGrab ? {...guarding,tapped:{grab:true}} : {...guarding,smashY:-1,tapped:{smash:true}};
       }
+      if(!behind && swing.dashAttack)return this.risingShieldCounter(f,foe,'forward',recovery) || guarding;
       return guarding;
+    }
+    risingShieldCounter(f,foe,side,recovery){
+      const move=moves[f.kit.air[side]],startup=jumpSquatTime+move.start;
+      // On the last recovery frame an attacker can already raise Shield before hit detection.
+      if(foe.ground!==f.ground || startup>=recovery-1e-8)return null;
+      const [x,y,rx,ry]=move.box,height=bodyHeight(foe);
+      const gap=(foe.x+foe.vx*Math.min(.05,startup)-f.x-f.vx*jumpSquatTime)*f.face;
+      const rise=f.stats.jump*.6*move.start-.5*1540*f.kit.gravity*move.start*move.start;
+      if(Math.abs(gap-x)>rx+foe.stats.width-2 || Math.abs(foe.y-height*.52-f.y+rise-y)>ry+height*.4)return null;
+      this.bot.blockedSwing=null;
+      return {...idleInput,shield:true,jump:true,aimStick:true,smashX:side==='back'?-f.face:f.face,tapped:{jump:true,aimStick:true}};
     }
     cpuGuard(f, foe) {
       if (f.ground < 0 || f.attack || f.stun || f.charge >= 0 || f.dodge || f.landingLag) return null;
@@ -11696,6 +11734,10 @@
         const basic = this.rookieNeutral(f, foe);
         if (basic) return basic;
       } else if (this.cpuLevel === 'rival') {
+        if(brain.guardRushUntil>this.time){
+          if(!brain.blockedSwing && !f.stun && !f.grip && f.shield)return {...idleInput,shield:true};
+          brain.guardRushUntil=0;
+        }
         if(brain.clockAware && this.matchCard && this.clockFrames>0 && this.clockFrames<=600){
           const position=this.clockPositionInput(f,foe,this.terrain[f.ground]);
           if(position)return position;
