@@ -6596,7 +6596,7 @@
       startMatch({...settings,mode:'training',p1:'brisket',p2:'pip',stage:'nightmail',fetch:false});
       world.setDummyDamage(60);drill('combo',false,'throwChase','diMix');
     } else if (/^#(training|solo)\/dash-pressure(?:\/(pip|brisket|noodle|clover)\/(pip|brisket|noodle|clover))?$/.test(hash)) {
-      const [,p1='brisket',p2='pip']=hash.split('/');
+      const [,,p1='brisket',p2='pip']=hash.split('/');
       if(hash.startsWith('#solo'))startDashPressure(p1,p2);
       else{
         leaveOnline();afterStory=null;
