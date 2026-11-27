@@ -60,6 +60,49 @@ test('a seeded solo rival can win a reproducible opening against an idle player'
   };
   assert.deepEqual(run(),run());
 });
+function recordOpening(mode,commands,mark){
+  const card={...config,mode,cpuLevel:'rival'};
+  const world=new Battle(card,undefined,seededRandom(25)),tape=new FinishTape(),duel=new OpeningDuel(card,25);
+  duel.place(world);mark?.(world);
+  for(let frame=0;frame<700 && !duel.point;frame++){
+    const pair=commands(frame);
+    tape.record(world,...pair);world.step(1/60,...pair);duel.takePoint(world);
+  }
+  assert(duel.point);
+  return {world,tape,duel};
+}
+function answer({duel,tape},input){
+  const start=Math.max(0,tape.length-45);
+  const reply=duel.reply(tape,start,duel.responder,()=>{});
+  for(let i=0;i<100 && !reply.outcome;i++)reply.step(input(i));
+  assert(reply.outcome);return reply;
+}
+test('replaying a late opening and answering it with a shield or jab leaves the recorded contact and score intact',()=>{
+  const round=recordOpening('local',i=>[{...idleInput,attack:i===410,quickAttack:i===410},idleInput],
+    w=>{w.dogs[1].x=w.dogs[0].x+48;});
+  const {tape,duel,world}=round;
+  assert.equal(tape.length,240);assert(tape.blocks.length<=3);assert.equal(tape.reel,undefined);assert.equal(duel.responder,1);
+  const original=structuredClone(world.matchCard);
+  const last=tape.playback(tape.length-1);assert.equal(duel.opening(last.battle),null);
+  last.step();assert.deepEqual(last.battle.matchCard,original);
+  for(const [name,input] of [
+    ['Caught by Quick Paw',()=>idleInput],
+    ['Blocked the opening',()=>({...idleInput,shield:true})],
+    ['Won the exchange',i=>({...idleInput,quickAttack:i===2,attack:i===2})]
+  ])assert.equal(answer(round,input).outcome,name);
+  assert.deepEqual(world.matchCard,original);assert.deepEqual(duel.score,[1,0]);
+  assert.deepEqual(tape.playback(tape.length).battle.matchCard,original);
+});
+test('a solo defender can evade the CPU opening and a falling player can take a different route',()=>{
+  const solo=recordOpening('solo',()=>[idleInput,idleInput]);
+  const fall=recordOpening('local',()=>[{...idleInput,x:-1},idleInput]);
+  for(const round of [solo,fall])assert.equal(round.duel.responder,0);
+  assert.equal(answer(solo,()=>idleInput).outcome,'Caught by Yard Buster');
+  assert.equal(answer(solo,()=>({...idleInput,x:-1})).outcome,'Stayed clear');
+  assert.equal(answer(fall,()=>({...idleInput,x:-1})).outcome,'Lost a stock');
+  assert.equal(answer(fall,()=>idleInput).outcome,'Stayed clear');
+  assert.deepEqual(solo.duel.score,[0,1]);assert.deepEqual(fall.duel.score,[0,1]);
+});
 test('matchup links replay both coats, arena form, opponent and starting rules in a fresh battle',()=>{
   const {decodeMatchup,encodeMatchup}=window.VersusRulebook;
   const {fighters,coatFor,arenas,cpuLevels}=window.DogFight;

@@ -98,6 +98,27 @@ async function play(browser,device){
       await page.keyboard.down('j');await page.clock.runFor(34);await page.keyboard.up('j');await page.clock.runFor(350);
       assert.match(await page.locator('#duel-report').textContent(),i===2?/P1 Clover wins the duel/:/P1 Clover takes the point/);
       assert.match(await page.locator('#duel-score').textContent(),new RegExp((i+1)+' – 0'));
+      if(i===0){
+        await choose('#duel-watch');await page.locator('#clip-arena').waitFor();
+        await choose('#duel-impact');const end=await page.locator('#clip-seek').getAttribute('max');
+        assert.equal(await page.locator('#clip-seek').inputValue(),end);
+        assert.match(await page.locator('#clip-scores').textContent(),/Noodle [1-9]/);
+        await choose('#duel-answer');
+        assert.match(await page.locator('#match-mode').textContent(),/Opening retry · P2 Noodle/);
+        if(pad)await page.evaluate(()=>setButton(4,true));else await page.keyboard.down('/');
+        await page.clock.runFor(3200);
+        if(pad)await page.evaluate(()=>setButton(4,false));else await page.keyboard.up('/');
+        assert.equal(await page.locator('#dialog-title').textContent(),'Blocked the opening');
+        assert.match(await page.locator('#dialog-body').textContent(),/Noodle dealt 0% and took 0%/);
+        await choose('[data-do=trial-retry]');await page.clock.runFor(3200);
+        assert.match(await page.locator('#dialog-title').textContent(),/^Caught by/);
+        await choose('[data-do=trial-replay]');await choose('[data-do=clip-back]');
+        assert.match(await page.locator('#duel-score').textContent(),/1 – 0/);
+      }
+      if(i===2){
+        await choose('#duel-reply');await page.clock.runFor(3200);await choose('[data-do=trial-results]');
+        assert.match(await page.locator('#duel-score').textContent(),/3 – 0/);
+      }
     }
     assert(await page.locator('#duel-start').count()===0);assert.deepEqual(await records(),previousRecords);
     await choose('#duel-fight');await page.clock.runFor(2500);
@@ -108,6 +129,9 @@ async function play(browser,device){
     assert.match(await page.locator('#duel-score').textContent(),/P1 Pip/);
     await choose('#duel-back');await choose('#matchup-duel');await choose('#duel-start');await page.clock.runFor(11000);
     assert.match(await page.locator('#duel-report').textContent(),/CPU .* takes the point/);
+    await choose('#duel-reply');assert.match(await page.locator('#match-mode').textContent(),/P1 Pip/);
+    await page.clock.runFor(3300);await choose('[data-do=trial-results]');
+    assert.match(await page.locator('#duel-score').textContent(),/0 – 1/);
     await page.goto(root+'?broken'+shared.replace('noodle','unknown'));
     await page.locator('#matchup-back').waitFor();
     assert.equal(await page.locator('#dialog-title').textContent(),'Matchup unavailable');
