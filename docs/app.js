@@ -4417,7 +4417,7 @@
     StockCall:'stock-call.js?v=final-count-1', BellBreak:'bell-break.js?v=course-result-1',
     FightCamera:'fight-camera.js?v=closing-lines-1',
     FighterEntrances:'fighter-entrances.js?v=1',
-    PadFeedback:'pad-feedback.js?v=1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
+    PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
     VersusRulebook:'versus-rules.js?v=light-shield-1',
     PackRelay:'pack-relay.js?v=cup-relay-1',

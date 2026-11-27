@@ -36,6 +36,7 @@
     const paired=trial?!!trial.seats:onlineSide==null && battle.hasSecondPlayer && !battle.lesson;
     const mine=trial?.slot ?? onlineSide ?? battle.trainingPlayerSlot ?? 0;
     function play(slot,cue){
+      if(battle.team)slot=battle.team.findIndex(f=>f.index===slot);
       if(slot!==0 && slot!==1)return;
       const seat=paired?slot:slot===mine?0:-1;
       if(seat>=0 && levels[seat])pulse(padFor(seat),levels[seat],cue);
