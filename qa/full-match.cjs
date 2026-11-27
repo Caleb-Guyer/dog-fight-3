@@ -9,6 +9,39 @@ const {MatchFilm,pack,resumeTape}=window.MatchReview;
 const tick=1/60;
 const cfg={mode:'local',stage:'canal',form:'counterweights',fetch:true,p1:'pip',p2:'noodle'};
 const snapshot=({emit,random,...state})=>structuredClone({state,seed:random.state});
+function scoredFight(options,exits,finish){
+  const battle=new Battle({...cfg,...options},undefined,seededRandom(27));
+  const opening=battle.dogs.map(d=>d.stocks);
+  for(const [i,slots] of exits.entries()){
+    battle.matchFrames=60*(i+1);
+    battle.knockouts(slots.map(slot=>battle.dogs[slot]));
+  }
+  if(finish)finish(battle);
+  assert.notEqual(battle.end,null);
+  const before=structuredClone(battle.matchCard);
+  const mark=window.MatchReview.decidingExchange(battle.matchCard,battle.end,opening);
+  assert.deepEqual(battle.matchCard,before);
+  return mark;
+}
+test('a two-stock comeback cues the permanent lead, counting double falls as one exchange',()=>{
+  let mark=scoredFight({},[[0],[0],[1],[1],[1]]);
+  assert.deepEqual(mark,{first:4,text:'Down 2 stocks, Pip took the lead for good at 0:05.'});
+  mark=scoredFight({},[[1],[1,0],[1]]);
+  assert.deepEqual(mark,{first:0,text:'Pip took the lead at 0:01 and held it for the rest of the match.'});
+  mark=scoredFight({lastStockStart:true,p2:'pip'},[[0]]);
+  assert.deepEqual(mark,{first:0,text:'P2 Pip won the last-stock exchange at 0:01.'});
+  mark=scoredFight({},[[0],[1],[0],[1],[0]]);
+  assert.equal(mark.first,4,'a tie cancels an earlier lead');
+});
+test('time and sudden-death recaps use regulation points, opening leads and the final tiebreak round',()=>{
+  const horn=b=>{b.clockFrames=1;b.step(tick,idleInput,idleInput);};
+  let mark=scoredFight({timeBattle:true,finalCount:'defend'},[],horn);
+  assert.deepEqual(mark,{first:null,text:'Pip held the opening lead until time expired.'});
+  mark=scoredFight({timeBattle:true,finalCount:'chase'},[[1],[0,1],[1]],horn);
+  assert.deepEqual(mark,{first:3,text:'Down 1 point, Pip took the lead for good at 0:03.'});
+  mark=scoredFight({lastStockStart:true},[[1,0],[0,1],[0]]);
+  assert.deepEqual(mark,{first:4,text:'Noodle won round 2 of Sudden Death at 0:03.'});
+});
 test('a full match finds four defenses through checkpoint counters, including hits far outside its finish',async()=>{
   const {film,card}=await window.MatchReview.sampleFight(),untouched=structuredClone(film.data);
   assert.equal(await film.defenses(card,()=>false),null);
