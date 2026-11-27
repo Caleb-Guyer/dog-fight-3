@@ -177,6 +177,36 @@ function play(clip,plan,input) {
   while(!p.outcome)p.step(input(p.frame-plan.start));
   return p;
 }
+for(const [kind,technique,observed] of [['pip','double','secondHop'],['brisket','cannon','charged'],['noodle','lasso','hooked'],['clover','sail','folded']]){
+  test(kind+' saves its clinic fall on both sides and the same position in a recorded P2 stock',()=>{
+    for(const right of [false,true]){
+      const {clip}=coach.example(right,false,kind),start=clip.tape.playback().battle;
+      const b=new Battle({mode:'local',stage:'picnic',p1:start.dogs[1].kind,p2:kind,fetch:false},undefined,seededRandom(42));
+      const source=start.dogs[0];
+      for(const field of ['x','y','vx','vy','ground','jumps','coyote','face'])b.dogs[1][field]=source[field];
+      b.dogs[0].x=600;
+      const tape=new FinishTape(true);
+      for(let t=0;t<150 && !tape.knockouts.length;t++){tape.record(b,idleInput,idleInput);b.step(1/60,idleInput,idleInput);tape.captureKnockouts(b);}
+      for(const [slot,recording] of [[0,clip.tape],[1,tape.knockouts[0].tape]]){
+        const plan=find(recording,slot);assert.equal(plan.technique,technique);assert.equal(plan.dir,right?-1:1);
+        const original=recording.playback(recording.length).battle.matchCard;
+        const trial=coach.attempt(recording,plan);
+        while(!trial.outcome){
+          const t=trial.frame-plan.start,good=coach.controls(plan,t),gate=i=>coach.gate(plan,t,i,x=>x,trial.battle.dogs[slot]);
+          assert.equal(gate(good),'');
+          if(t===plan.releaseAt)assert.match(gate({...good,special:true}),/Release special/);
+          if(plan.secondAt!==undefined && t===plan.upAt+1)assert.match(gate({...good,special:true}),/Release special/);
+          if(t===plan.secondAt)assert.match(gate({...good,special:false,tapped:{}}),/up.*special/);
+          trial.step(good);
+        }
+        assert(trial[observed]);assert.equal(trial.outcome,'landed');assert.equal(trial.frame,plan.end);
+        const missed=play(recording,plan,t=>t===0 && kind!=='noodle'?coach.controls(plan,0):{...idleInput,x:plan.dir});
+        assert.equal(missed.outcome,'fell');assert.equal(original.losses.at(-1).slot,slot);
+        assert.deepEqual(recording.playback(recording.length).battle.matchCard,original);
+      }
+    }
+  });
+}
 test('each dog uses real inputs to save a bottom knockout on both stage edges',()=>{
   for(const kind of Object.keys(kits)) for(const side of [-1,1]){
     const {b,clip}=record({kind,side,position:{}}),before=structuredClone(b.matchCard);

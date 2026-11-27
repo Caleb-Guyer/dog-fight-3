@@ -14,7 +14,8 @@ async function check(browser,device) {
       if(pad){
         const g={id:'Hosted pad',index:0,connected:true,mapping:'standard',axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
         Object.defineProperty(navigator,'getGamepads',{value:()=>[g]});
-        window.controls=(x,jump,y=0,shield=false)=>{g.axes[0]=x;g.axes[1]=y;
+        window.controls=(x,jump,y=0,shield=false,special=false)=>{g.axes[0]=x;g.axes[1]=y;
+          Object.assign(g.buttons[1],{pressed:special,value:Number(special)});
           Object.assign(g.buttons[0],{pressed:jump,value:Number(jump)});Object.assign(g.buttons[4],{pressed:shield,value:Number(shield)});};
         window.menuButton=on=>Object.assign(g.buttons[9],{pressed:on,value:Number(on)});
       }else if(!matchMedia('(pointer:coarse)').matches)
@@ -24,19 +25,19 @@ async function check(browser,device) {
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
     const client=touch && await page.context().newCDPSession(page);
     let previous=[];
-    async function hold(x,jump=false,up=false,shield=false,down=false){
-      if(pad)return page.evaluate(args=>controls(...args),[x,jump,up?-1:down?1:0,shield]);
-      const next=[...(x?[x<0?'left':'right']:[]),...(jump?['jump']:[]),...(up?['up']:down?['down']:[]),...(shield?['shield']:[])];
+    async function hold(x,jump=false,up=false,shield=false,down=false,special=false){
+      if(pad)return page.evaluate(args=>controls(...args),[x,jump,up?-1:down?1:0,shield,special]);
+      const next=[...(x?[x<0?'left':'right']:[]),...(jump?['jump']:[]),...(up?['up']:down?['down']:[]),...(shield?['shield']:[]),...(special?['special']:[])];
       if(touch){
         const points=[];
         for(const action of next){
           const b=await page.locator('[data-touch='+action+']').boundingBox();assert(b,action);
-          points.push({id:{left:1,right:1,jump:2,up:3,down:3,shield:4}[action],x:b.x+b.width/2,y:b.y+b.height/2});
+          points.push({id:{left:1,right:1,jump:2,up:3,down:3,shield:4,special:5}[action],x:b.x+b.width/2,y:b.y+b.height/2});
         }
         if(previous.some(a=>!next.includes(a)))await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
         if(points.length)await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:points});
       }else{
-        const keys={left:'a',right:'d',jump:'q',up:'w',down:'s',shield:'l'};
+        const keys={left:'a',right:'d',jump:'q',up:'w',down:'s',shield:'l',special:'k'};
         for(const a of previous)if(!next.includes(a))await page.keyboard.up(keys[a]);
         for(const a of next)if(!previous.includes(a))await page.keyboard.down(keys[a]);
       }
@@ -229,6 +230,26 @@ async function check(browser,device) {
       assert.equal(await page.locator('#dialog-title').textContent(),'Onstage');
       assert.equal(await page.evaluate(()=>stockState()),frozen);
       await choose('[data-do=trial-results]');assert(await page.locator('#dialog').isHidden());
+    }
+    const kinds=touch?['brisket']:pad?['clover']:['pip','noodle'];
+    await page.goto(root+'?specials#tutorial/recovery/'+kinds[0]);await route();
+    for(const kind of kinds){
+      if(kind!==kinds[0]){await choose('[data-recover-as="'+kind+'"]');await route();}
+      const dir=kind==='clover'||kind==='noodle'?-1:1;
+      if(dir<0){await choose('#recovery-swap');await route();}
+      assert.equal(await page.locator('[data-recover-as="'+kind+'"]').getAttribute('aria-pressed'),'true');
+      assert.match(await page.locator('#recovery-route').textContent(),/Fence Hopper|Kennel Cannon|Ledge Lasso|Disc Sail/);
+      assert.match(await page.locator('#recovery-position').textContent(),dir<0?/Right of the ledge/:/Left of the ledge/);
+      await choose('#recovery-guide');await page.clock.runFor(80);
+      const cast=()=>hold(dir,false,true,false,false,true);
+      await cast();await page.clock.runFor(kind==='noodle'?100:1100);
+      if(kind==='pip'){
+        assert.match(await page.locator('#countdown').textContent(),/Release/);
+        await hold(dir);await page.clock.runFor(600);await cast();await page.clock.runFor(80);
+      }else if(kind!=='noodle')assert.match(await page.locator('#countdown').textContent(),kind==='clover'?/Fold the sail/:/Launch/);
+      await hold(dir);await page.clock.runFor(2700);await hold(0);
+      assert.equal(await page.locator('#dialog-title').textContent(),'Stock saved!',device+' '+kind);
+      await choose('[data-do=trial-replay]');await route();
     }
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
