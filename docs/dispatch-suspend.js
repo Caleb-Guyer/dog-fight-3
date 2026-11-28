@@ -139,5 +139,40 @@
       read.onsuccess=()=>{if(read.result?.token===header.token){headers.delete(header.id);runs.delete(header.id);}};
     });
   }
-  window.DispatchSuspend={capture,restore,save,list,load,clear,schoolCapture,schoolPosition,schoolCard,writeSchool};
+  function cupCapture(position){
+    const {battle,tape,countdown,lastCount,call,cupRound:a,view}=position;
+    const {emit,random,...state}=battle;
+    if(battle.end!==null || battle.finished || a.settled)throw Error('Round finished');
+    tape?.captureKnockouts(battle);
+    return structuredClone({format,kind:a.kind,id:a.id,round:a.round,retries:a.retries,coat:a.coat,
+      seed:random.state,state,countdown,lastCount,call,entrance:view.entrance,opening:view.cupOpening,
+      packed:tape?.length?window.MatchReview.pack(tape):null,
+      returning:tape?.returning?tape.knockouts.find(c=>c.returnTape===tape.returning)?.first:null});
+  }
+  function storeCup(position){
+    const record=cupCapture(position),key='cup-'+crypto.randomUUID();
+    return transact('readwrite',(headers,runs,done)=>{runs.add(record,key);done(key);});
+  }
+  function cupPosition(kind,run,record){
+    const s=record?.state,round=run.wins.length,bout=window.YardCup.stockBout(kind,round,run.coat);
+    if(record?.format!==format || record.kind!==kind || record.id!==run.id || record.round!==round ||
+       record.retries!==run.retries || record.coat!==run.coat || s?.end!==null || s.dogs?.[0]?.kind!==kind ||
+       !Number.isInteger(record.seed) || !Number.isFinite(record.countdown) ||
+       (bout?s.mode!=='solo' || s.stage!==bout.stage || s.dogs[1]?.kind!==bout.p2 || !s.matchCard:
+         s.mode!=='adventure' || s.finished || s.layout?.rules!=='boss' || s.foes?.[0]?.kind!=='conductor'))
+      throw Error('Saved round unavailable');
+    return {checkpoint:record,countdown:record.countdown,lastCount:record.lastCount,call:record.call,
+      tape:bout?window.MatchReview.resumeTape(record.packed,s.matchCard.losses,record.returning):null};
+  }
+  async function readCup(kind,run){
+    const record=await transact('readonly',(headers,runs,done)=>{
+      const read=runs.get(run.saved);read.onsuccess=()=>done(read.result);
+    });
+    return cupPosition(kind,run,record);
+  }
+  function discardCup(key){
+    if(typeof key==='string' && key.startsWith('cup-'))
+      return transact('readwrite',(headers,runs)=>runs.delete(key)).catch(()=>{});
+  }
+  window.DispatchSuspend={capture,restore,save,list,load,clear,schoolCapture,schoolPosition,schoolCard,writeSchool,cupCapture,cupPosition,storeCup,readCup,discardCup};
 })();

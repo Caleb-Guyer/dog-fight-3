@@ -61,7 +61,8 @@
     (stocks(run) > stocks(other) || (stocks(run) === stocks(other) && frames(run) < frames(other))));
   function begin(entry, id, coat) {
     const run = entry.active || {id,coat,retries:0,started:false,wins:[]};
-    return {...entry,active:{...run,started:true,retries:run.retries + (run.started ? 1 : 0)}};
+    const {saved,...active}=run;
+    return {...entry,active:{...active,started:true,retries:run.retries + (run.started ? 1 : 0)}};
   }
   function stockBout(kind,round,coat){
     const bout=courses[kind].bouts[round];
@@ -72,7 +73,7 @@
   }
   function finish(entry, attempt, won, lives, elapsed) {
     const run = entry.active;
-    if (!run?.started || run.id !== attempt.id || run.retries !== attempt.retries || run.wins.length !== attempt.round || attempt.relayLead!==undefined) return null;
+    if (!run?.started || run.saved || run.id !== attempt.id || run.retries !== attempt.retries || run.wins.length !== attempt.round || attempt.relayLead!==undefined) return null;
     if (!won) return entry;
     const next = {...run,started:false,wins:[...run.wins,{stocks:lives,frames:Math.max(1,Math.round(elapsed))}]};
     if (next.wins.length < rounds) return {...entry,active:next};

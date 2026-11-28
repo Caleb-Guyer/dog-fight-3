@@ -672,7 +672,7 @@
   function cupScheduleSheet({kind,settled},shown,{showDialog,stageName,stockLabel,record}){
     const entry=settled || shown,run=entry.active || entry.last;
     const current=!settled?'Fighting now':run.started?'Retry':'Up next';
-    const rows=cupSchedule(kind,entry,{run,current,stageName,stockLabel,record:settled && record});
+    const rows=cupSchedule(kind,entry,{run,current,stageName,stockLabel,record});
     showDialog('cup-schedule','Cup schedule','<div class="cup-route-board">'+rows+'</div><div class="dialog-actions">'+
       '<button class="primary" data-do="'+(settled?'cup-return':'cup-resume')+'">'+(settled?'Back to results':'Resume fight')+'</button></div>');
     document.querySelector('#dialog-body .primary').focus();
@@ -686,12 +686,93 @@
       '<button class="primary" data-do="resume">Resume</button><button class="utility" data-do="cup-sheet">Cup schedule</button></div>'+
       '<details id="cup-pause-tools"'+(open?' open':'')+'><summary>More options</summary><div class="dialog-actions">'+
       '<button class="utility" data-do="moves">Move list</button><button class="utility" data-do="controls">Controls</button>'+reviewButton+'</div>'+
-      '<p id="cup-leave-note">Leaving restarts round '+round+' on your next visit. Cleared rounds stay saved.</p>'+
-      '<button class="utility" data-do="cup-roster" aria-describedby="cup-leave-note">Leave round</button></details>');
+      '<button class="utility" data-do="cup-save">Save &amp; quit</button></details>');
     const tools=document.getElementById('cup-pause-tools');
     attempt.pauseToolsOpen=tools.open;
     tools.ontoggle=()=>{if(tools.isConnected)attempt.pauseToolsOpen=tools.open;};
     document.querySelector('[data-do=resume]').focus();
+  }
+  async function saveCup(position,{showDialog,current,loadDispatch,updateCup,home,back}){
+    const a=position.cupRound;
+    showDialog('mission-saving','Saving round '+(a.round+1),'<p role="status">Saving the fight…</p>',false);
+    let key;
+    try{
+      await Promise.all((position.tape?['DispatchSuspend','MatchReview']:['DispatchSuspend']).map(loadDispatch));
+      if(!current())return;
+      key=await window.DispatchSuspend.storeCup(position);
+      const entry=await updateCup(a.kind,e=>{
+        const run=e.active;
+        if(!current() || !run?.started || run.saved || run.id!==a.id || run.retries!==a.retries || run.wins.length!==a.round)return null;
+        return {...e,active:{...run,saved:key}};
+      },true);
+      if(!entry)throw Error('Round changed');
+    }catch{
+      if(key)await window.DispatchSuspend.discardCup(key);
+      if(!current())return;
+      back();
+      const tools=document.getElementById('cup-pause-tools');tools.open=true;
+      tools.insertAdjacentHTML('beforeend','<p role="alert">The fight could not be saved. Try again, or leave and restart this round next time.</p>'+
+        '<button class="utility" data-do="cup-roster">Leave round</button>');
+      tools.querySelector('[data-do=cup-save]').focus();
+      return;
+    }
+    if(current())home();
+  }
+  async function openCupRound(kind,button,expected,{current,loadBoss,loadDispatch,updateCup,coat,back,play,showDialog}){
+    const cup=window.YardCup,shown=expected.active,key=shown?.saved;
+    const boss=shown?.wins.length===cup.courses[kind].bouts.length;
+    let resume;
+    if(boss && loadBoss){
+      button.textContent='Loading Bell Depot…';
+      try{await loadBoss();}catch{
+        if(current()){button.disabled=false;button.textContent='Retry loading Bell Depot';button.focus();}
+        return;
+      }
+      if(!current())return;
+    }
+    async function claim(ready){
+      const entry=await updateCup(kind,e=>{
+        const run=e.active;
+        if(!ready() || e.clears!==expected.clears || run?.id!==shown?.id || run?.saved!==key ||
+           run?.retries!==shown?.retries || run?.wins.length!==shown?.wins.length || run?.started!==shown?.started)return null;
+        if(resume){
+          const {saved,...active}=run;
+          return {...e,active};
+        }
+        const id=run?.id || Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
+        return cup.begin(e,id,coat());
+      },!!key);
+      if(!ready())return;
+      if(!entry)return back();
+      try{play(entry,resume);}catch(error){
+        if(resume)await updateCup(kind,e=>{
+          const a=e.active,r=entry.active;
+          if(!a?.started || a.saved || a.id!==r.id || a.retries!==r.retries || a.wins.length!==r.wins.length)return null;
+          return {...e,active:{...a,saved:key}};
+        },true);
+        throw error;
+      }
+      if(key)window.DispatchSuspend?.discardCup(key);
+    }
+    if(key){
+      button.textContent='Loading saved fight…';
+      try{
+        await Promise.all((boss?['DispatchSuspend']:['DispatchSuspend','MatchReview']).map(loadDispatch));
+        resume=await window.DispatchSuspend.readCup(kind,shown);
+      }catch{
+        if(!current())return;
+        showDialog('cup-save-recovery','Saved fight unavailable','<p>Your cleared rounds are saved. You can try loading again or start this round with three stocks.</p>'+
+          '<div class="dialog-actions"><button class="primary" id="cup-save-back">Back to fighter select</button>'+
+          '<button class="utility" id="cup-save-restart">Restart round '+(shown.wins.length+1)+'</button></div>',false);
+        const restart=document.getElementById('cup-save-restart'),cancel=document.getElementById('cup-save-back');
+        cancel.onclick=back;cancel.focus();
+        restart.onclick=()=>{restart.disabled=true;claim(()=>restart.isConnected && document.getElementById('dialog').open).catch(()=>back());};
+        return;
+      }
+    }
+    try{await claim(current);}catch{
+      if(current()){button.disabled=false;button.textContent='Try again';button.focus();}
+    }
   }
   function cupLossLine(battle,tenth){
     const loss=battle.matchCard?.losses.findLast(l=>l.slot===0);
@@ -745,20 +826,19 @@
     (previous || document.querySelector('.cup-advance button')).focus();
     announce(title+'. '+headline+'. '+line);
   }
-  function cupSelect(root,{kind,route,progress,temporary,coatFor,select,back,start,record,stageName,stockLabel}){
+  function cupSelect(root,{kind,progress,temporary,coatFor,back,start}){
     const {fighters}=window.DogFight,cup=window.YardCup;
     const art={pip:'picnic',brisket:'nightmail',noodle:'laundry',clover:'canal'};
-    const cards=route?'':Object.entries(fighters).map(([id,f])=>
+    const cards=Object.entries(fighters).map(([id,f])=>
       '<button type="button" class="cup-poster" data-cup-dog="'+id+'" style="--dog-color:'+f.color+'">'+
       '<span class="cup-portrait" aria-hidden="true"><canvas width="300" height="224"></canvas><canvas width="300" height="224"></canvas></span>'+
       '<span class="cup-name"><strong>'+f.name+'</strong><small>'+f.style+'</small></span></button>').join('');
-    root.dataset.view=route?'route':'roster';
-    root.innerHTML='<div class="cup-select-inner"><header class="cup-select-head"><div><span>Arcade Cup</span><h1>'+
-      (route?'Cup schedule':'Fighter select')+'</h1></div><button id="cup-back" class="utility">'+(route?'Fighter select':'Main menu')+'</button></header>'+
-      (route?'<div class="cup-route-board"></div>':'<div class="cup-posters" role="group" aria-label="Choose your fighter">'+cards+'</div>')+
+    root.dataset.view='roster';
+    root.innerHTML='<div class="cup-select-inner"><header class="cup-select-head"><div><span>Arcade Cup</span><h1>Fighter select</h1></div>'+
+      '<button id="cup-back" class="utility">Main menu</button></header>'+
+      '<div class="cup-posters" role="group" aria-label="Choose your fighter">'+cards+'</div>'+
       '<footer class="cup-ticket"><div aria-live="polite" aria-atomic="true"><strong></strong><p></p></div><div class="cup-ticket-actions">'+
-      '<button type="button" class="primary" data-do="cup-start"></button>'+
-      (route?'':'<button type="button" class="utility" data-do="cup-sheet">Cup schedule</button>')+'</div></footer>'+
+      '<button type="button" class="primary" data-do="cup-start"></button></div></footer>'+
       '<p data-cup-storage hidden>Progress lasts for this tab while storage is unavailable.</p></div>';
     const startButton=root.querySelector('[data-do=cup-start]'),dogs=[...root.querySelectorAll('[data-cup-dog]')];
     let chosen;
@@ -772,12 +852,10 @@
       root.querySelector('.cup-ticket p').textContent=fighters[id].name+' vs. '+(opponent?fighters[opponent].name:'Copper Hound');
       root.querySelector('[data-cup-storage]').hidden=!temporary(id);
       startButton.disabled=false;
-      startButton.textContent=run?(run.started?'Retry round ':'Continue to round ')+(round+1):'Start '+fighters[id].name+'’s run';
-      if(route)root.querySelector('.cup-route-board').innerHTML=cupSchedule(id,entry,{stageName,stockLabel,record});
+      startButton.textContent=run?(run.saved?'Resume round ':run.started?'Retry round ':'Continue to round ')+(round+1):'Start '+fighters[id].name+'’s run';
     }
     startButton.onclick=()=>start(chosen,startButton);
-    root.querySelector('#cup-back').onclick=route?()=>select(chosen,false):back;
-    if(!route)root.querySelector('[data-do=cup-sheet]').onclick=()=>select(chosen,true);
+    root.querySelector('#cup-back').onclick=back;
     for(const dog of dogs){
       const id=dog.dataset.cupDog;
       cupPoster(dog,id,art[id],coatFor(id));
@@ -789,7 +867,7 @@
       };
     }
     preview(kind);
-    (route?startButton:root.querySelector('[aria-pressed="true"]')).focus({preventScroll:true});
+    root.querySelector('[aria-pressed="true"]').focus({preventScroll:true});
   }
   function arenaSelect(root,{stage,form,picking,chooseForm,roomFighter,focusId,draw,reduced,run,music,confirm}){
     const {arenas}=window.DogFight;
@@ -866,5 +944,5 @@
       if(Math.floor(time*12)!==drawn)paint();
     }};
   }
-  window.VersusRulebook={arenaSelect,cupSelect,cupSchedule,cupScheduleSheet,cupPause,cupResult,OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
+  window.VersusRulebook={arenaSelect,cupSelect,cupSchedule,cupScheduleSheet,cupPause,cupResult,openCupRound,saveCup,OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
 })();
