@@ -4,11 +4,16 @@ if(process.env.GITHUB_ACTIONS!=='true' || process.env.RUNNER_OS!=='Linux')throw 
 const {chromium}=require('playwright-core');
 const root='http://127.0.0.1:8080/';
 
-async function openMatch(browser,touch){
+async function openMatch(browser,touch,controllers=false){
   const page=await browser.newPage({hasTouch:touch,isMobile:touch,viewport:touch?{width:844,height:390}:{width:1100,height:720}});
   await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
   await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
   if(!touch)await page.addInitScript(()=>localStorage.setItem('dog-fight-3.config',JSON.stringify({tiltStick:true,tiltStick2:true})));
+  if(controllers)await page.addInitScript(()=>{
+    window.testPads=[0,1].map(index=>({id:'Strike pad '+index,index,connected:true,mapping:'standard',
+      axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))}));
+    Object.defineProperty(navigator,'getGamepads',{value:()=>testPads});
+  });
   await page.goto(root+(touch?'#solo/picnic-table':'#local'));
   if(!touch)await page.locator('#start').click();
   await page.locator('#match').waitFor();
@@ -16,9 +21,10 @@ async function openMatch(browser,touch){
     window.strikes=[[],[]];
     const step=DogFight.Battle.prototype.step;
     DogFight.Battle.prototype.step=function(dt,a,b){
+      const lastSmash=this.dogs.map(f=>f.prev?.smash);
       const result=step.apply(this,arguments);
       for(const [slot,input] of [a,b].entries()){
-        if(!input?.tapped?.smash && !input?.tapped?.aimStick)continue;
+        if(!input?.tapped?.smash && !input?.tapped?.aimStick && !(input?.smash && !lastSmash[slot]))continue;
         const f=this.dogs[slot];
         strikes[slot].push({x:input.x,aim:[input.smashX,input.smashY],face:f.face,
           move:f.smashCharge?.side || f.attack?.tiltSide || f.attack?.smashSide});
@@ -28,6 +34,30 @@ async function openMatch(browser,touch){
   });
   await page.clock.runFor(2600);
   return page;
+}
+async function controller(browser){
+  const page=await openMatch(browser,false,true);
+  try{
+    const flick=direction=>page.evaluate(d=>{testPads[0].axes[2]=d;testPads[1].axes[2]=-d;},direction);
+    await flick(-1);await page.clock.runFor(1100);
+    await flick(1);await page.clock.runFor(1100);
+    await page.evaluate(()=>{
+      for(const [i,pad] of testPads.entries()){
+        pad.axes[1]=i?1:-1;
+        Object.assign(pad.buttons[7],{pressed:true,value:1});
+      }
+    });
+    await page.clock.runFor(100);
+    const logs=await page.evaluate(()=>strikes);
+    for(const [i,log] of logs.entries()){
+      const first=i?1:-1;
+      assert.equal(log.length,3);
+      assert.deepEqual(log.map(({aim,move})=>[aim,move]),[
+        [[first,0],'forward'],[[-first,0],'forward'],[[0,first],i?'down':'up']
+      ]);
+      assert.deepEqual(log.slice(0,2).map(s=>s.face),[first,-first]);
+    }
+  }finally{await page.close();}
 }
 async function keyboard(browser){
   const page=await openMatch(browser,false);
@@ -72,5 +102,5 @@ async function touchscreen(browser){
 }
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await keyboard(browser);await touchscreen(browser);}finally{await browser.close();}
+  try{await keyboard(browser);await touchscreen(browser);await controller(browser);}finally{await browser.close();}
 })().catch(error=>{console.error(error);console.log('::error::'+String(error.stack).replaceAll('\n','%0A'));process.exitCode=1;});

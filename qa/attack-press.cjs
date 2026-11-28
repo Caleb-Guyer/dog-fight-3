@@ -3,10 +3,53 @@ const assert = require('node:assert/strict');
 global.window = {};
 require('../docs/engine.js');
 require('../docs/online.js');
+require('../docs/controls.js');
 const {Battle, fighters, idleInput, moves, seededRandom} = window.DogFight;
 const tick = 1 / 60, cfg = {mode:'local',p1:'pip',p2:'brisket',stage:'picnic',fetch:false};
 const input = changes => ({...idleInput,...changes});
 const act = (world, changes) => world.step(tick,input(changes),idleInput);
+const {StrikeStick} = window.FightControls;
+
+test('the strike stick rearms across center, stays held around the rim and ignores small deflections',()=>{
+  const stick=new StrikeStick(),pad={index:0,id:'A',axes:[0,0,0,0]};
+  function steer(x,y){pad.axes[2]=x;pad.axes[3]=y;stick.sample(pad,false);return [stick.held,stick.pressed];}
+  for(const [x,y] of [[1,0],[-1,0],[0,1],[0,-1],[.8,.7],[-.7,.8]]){
+    stick.clear();
+    assert.deepEqual(steer(x,y),[true,true]);
+    assert.deepEqual(steer(-x,-y),[true,true]);
+    assert.deepEqual(steer(-x,-y),[true,false]);
+  }
+  stick.clear();assert.deepEqual(steer(1,0),[true,true]);
+  for(let i=1;i<=16;i++)assert.deepEqual(steer(Math.cos(i*Math.PI/4),Math.sin(i*Math.PI/4)),[true,false]);
+  assert.deepEqual(steer(.44,0),[true,false]);
+  assert.deepEqual(steer(-.46,0),[false,false]);
+  assert.deepEqual(steer(-.8,0),[true,true]);
+  assert.deepEqual(steer(-.37,0),[false,false]);
+  assert.deepEqual(steer(-.61,0),[false,false]);
+  assert.deepEqual(steer(-1,0),[true,true]);
+  pad.id='B';assert.deepEqual(steer(-1,0),[true,true]);
+  stick.sample(undefined,false);assert.equal(stick.held,false);
+});
+
+test('reversing a charged stick releases the original swing and preserves its charge for every dog',()=>{
+  for(const kind of Object.keys(fighters)){
+    const w=new Battle({...cfg,p1:kind}),f=w.dogs[0];
+    const stick=new StrikeStick(),pad={index:1,id:'B',axes:[0,0,-1,0]};
+    function poll(){
+      stick.sample(pad,f.smashCharge?.button==='aimStick');
+      act(w,{aimStick:stick.held,tapped:{aimStick:stick.pressed},smashX:stick.x,smashY:stick.y});
+    }
+    for(let n=0;n<32;n++)poll();
+    assert.equal(f.smashCharge?.side,'side');assert.equal(f.face,-1);
+    pad.axes[2]=1;poll();
+    assert.equal(stick.held,false);assert.equal(f.attack?.moveId,f.kit.smashes.side);
+    assert.equal(f.face,-1);assert(f.lastSmashPower>.45);
+    const swing=f.attack;
+    poll();assert(stick.pressed);assert.equal(f.attack,swing);
+    for(let n=0;n<90;n++){poll();assert(!stick.pressed);}
+    assert(!f.attack && !f.smashCharge);
+  }
+});
 
 test('each dog commits its jab and aimed tilts on the press, with the normal startup and one swing per hold', () => {
   for (const kind of Object.keys(fighters)) for (const slot of [0,1]) for (const [side,aim] of [
@@ -90,8 +133,18 @@ test('rollback reproduces a held first-frame tilt and a held smash with opposite
       return {net:session.match,world,packets};
     });
     const history=[sample(ref)];let early=false,opponentSmash=false;
-    for(let n=0;n<88;n++){
+    const sticks=[new StrikeStick(),new StrikeStick()];
+    const pads=sticks.map((_,index)=>({index,id:'Pad '+index,axes:[0,0,0,0]}));
+    for(let n=0;n<252;n++){
       const inputs=[0,1].map(s=>{
+        if(n>=130){
+          const stick=sticks[s],pad=pads[s];
+          pad.axes[2]=(s?1:-1)*(n<183?1:-1);
+          stick.sample(pad,false);
+          const smash=n>=240;
+          return input({aimStick:stick.held,tiltMode:true,tapped:{aimStick:stick.pressed},
+            smash,smashX:smash?0:stick.x,smashY:smash?-1:stick.y});
+        }
         if(n===75)return input({x:-1,grabX:-1,smashX:1,aimStick:s===fastSlot,tiltMode:s===fastSlot,
           smash:s!==fastSlot,tapped:s===fastSlot?{aimStick:true}:{smash:true}});
         return input({attack:n>=2 && n<27,y:n<42?-1:0,quickAttack:s===fastSlot});
@@ -102,6 +155,10 @@ test('rollback reproduces a held first-frame tilt and a held smash with opposite
         assert.equal(tilt.attack?.tiltSide,'forward');assert.equal(tilt.face,1);
         assert.equal(charge.smashCharge?.side,'side');assert.equal(charge.smashCharge.face,1);
       }
+      if(n===183)for(const [s,f] of ref.dogs.entries()){
+        assert.equal(f.attack?.moveId,f.kit.tilts.forward);assert.equal(f.face,s?-1:1);
+      }
+      if(n===240)for(const f of ref.dogs)assert.equal(f.smashCharge?.side,'up');
       for(const [s,p] of peers.entries()){
         if(n>=5)assert(p.net.receive(n-5,peers[1-s].packets[n-5]));
         p.net.tick(()=>inputs[s],p.world);

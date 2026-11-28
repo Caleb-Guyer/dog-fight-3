@@ -314,7 +314,7 @@
     touchPointers = new Map();
   let walkPointer = null;
   let touchFlick = null, flickAim = null;
-  const rightStickHeld = [false, false];
+  const strikeSticks = [new window.FightControls.StrikeStick(),new window.FightControls.StrikeStick()];
   const strikeAim = [{x:0,y:0},{x:0,y:0}];
   const horizontalInputs=[new window.FightControls.HorizontalInput(),new window.FightControls.HorizontalInput()];
   const shieldTiltLocked = [false, false];
@@ -327,7 +327,7 @@
     touchTaps.clear();
     walkPointer = null;
     touchFlick = flickAim = null;
-    rightStickHeld.fill(false);
+    for(const stick of strikeSticks)stick.clear();
     for(const input of horizontalInputs)input.clear();
     shieldTiltLocked.fill(false);
     flickJumpStates[0] = {};
@@ -1829,7 +1829,7 @@
     const {cx,cy,zoom,leftFighter,effects,lastTrail,shake} = view;
     trainingMoment = {battle:world.saveTrainingMoment(), mode:frameLab.mode,
       picture:structuredClone({cx,cy,zoom,leftFighter,effects,lastTrail,shake}), renderTime:frameLab.renderTime,
-      sticks:rightStickHeld.slice(), tilt:shieldTiltLocked.slice(), flick:structuredClone(flickJumpStates)};
+      sticks:structuredClone(strikeSticks), tilt:shieldTiltLocked.slice(), flick:structuredClone(flickJumpStates)};
     $('moment-retry').disabled = false;
     momentNotice('Moment saved');
   };
@@ -1837,7 +1837,7 @@
     if (!trainingMoment) return;
     world.restoreTrainingMoment(trainingMoment.battle);
     for (const i of [0,1]) {
-      rightStickHeld[i] = trainingMoment.sticks[i];
+      Object.assign(strikeSticks[i],trainingMoment.sticks[i]);
       shieldTiltLocked[i] = trainingMoment.tilt[i];
       flickJumpStates[i] = {...trainingMoment.flick[i]};
     }
@@ -6156,15 +6156,16 @@
     // Commit the direction on a keyboard or touch Smash press. A neutral press can still be chorded this tick.
     const savedSmash = tapped('smash') && (smashAim[i].rawX || smashAim[i].y) ? smashAim[i] : null;
     const digitalAim = left || right || up || downAim || (!i && touches.has('neutral'));
-    const rightX = axis(2),
-      rightY = axis(3);
-    const rightStick = Math.max(Math.abs(rightX), Math.abs(rightY)) > (rightStickHeld[i] ? 0.38 : 0.62);
-    rightStickHeld[i] = rightStick;
+    const fighter=battle.dogs[fighterIndex],stick=strikeSticks[i];
+    const stickCharging=fighter.smashCharge?.button==='aimStick';
+    stick.sample(pad,stickCharging);
     const strikeTap = tapped('aimLeft') || tapped('aimRight') || tapped('aimUp') || tapped('aimDown');
     const keyAimX = strikeTap ? strikeAim[i].x : heldStrikeAxis(map.aimLeft,map.aimRight,strikeAim[i].x);
     const keyAimY = strikeTap ? strikeAim[i].y : heldStrikeAxis(map.aimUp,map.aimDown,strikeAim[i].y);
     const flick = !i && (touchFlick?.fired || touchTaps.has('aimStick')) ? flickAim : null;
-    const aimStick = !!(rightStick || keyAimX || keyAimY || flick);
+    const aimStick = !!(stick.held || keyAimX || keyAimY || flick);
+    const flickTap=!!(flick && touchTaps.has('aimStick'));
+    const aimTap=stick.pressed || strikeTap || flickTap;
     // With an explicit Up + Jump chord the smash must reach the fighter before takeoff.
     if (!i && touchFlick?.deferSmash && !touchFlick.fired) {
       const f = battle.dogs[fighterIndex];
@@ -6172,12 +6173,18 @@
         touchFlick.committed = true;
     }
     const touchSmash = !i && touches.has('smash') && (!touchFlick?.deferSmash || touchFlick.committed);
+    const smash=held.has(map.smash) || tapped('smash') || touchSmash || mapped('smash');
+    const smashPress=tapped('smash') || (smash && !fighter.prev?.smash);
+    // When two controls share the aim axes, the new command owns the direction.
+    const useStickAim=aimStick && (aimTap || !fighter.prev?.aimStick || !smash || (stickCharging && !smashPress));
+    const useFlick=flick && (flickTap || !stick.pressed && !strikeTap);
+    const useKeys=(keyAimX || keyAimY) && (strikeTap || !stick.pressed);
     const fromCenter = !i && touchPointers.get(walkPointer)?.dataset.touch;
     // A quick thumb release can leave queued direction taps after the center-slide gesture ends.
     const tappedWalk = aim?.x === x * (64 / 127) && x !== 0;
     const walk = key('walk') || tappedWalk || (fromCenter && (fromCenter.endsWith('left') || fromCenter.endsWith('right')));
     // Remapped analog triggers can guard before their native pressed threshold.
-    const grounded = battle.dogs[fighterIndex].ground >= 0;
+    const grounded = fighter.ground >= 0;
     const shieldValue=n=>(menuPadButtons.get(pad?.index)&(1<<n))?0:pad?.buttons[n]?.value || 0;
     const squeeze=Math.max(shieldValue(layout.pad[i].shield),shieldValue(layout.pad[i].shieldAlt));
     const shield = key('shield') || mapped('shield') || mapped('shieldAlt') || grounded && squeeze>=.18;
@@ -6201,11 +6208,11 @@
       shortHop,
       attack: key('attack') || mapped('attack'),
       quickAttack: settings[i === 0 ? 'quickAttack1' : 'quickAttack2'],
-      smash: held.has(map.smash) || tapped('smash') || touchSmash || mapped('smash'),
+      smash,
       aimStick,
       tiltMode: settings[i?'tiltStick2':'tiltStick'] && aimStick,
-      smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : savedSmash?.rawX ?? rawX,
-      smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : savedSmash?.y ?? (y || axis(1)),
+      smashX: useStickAim ? (useFlick?flick.x:useKeys?keyAimX:stick.x) : savedSmash?.rawX ?? rawX,
+      smashY: useStickAim ? (useFlick?flick.y:useKeys?keyAimY:stick.y) : savedSmash?.y ?? (y || axis(1)),
       special: key('special') || mapped('special'),
       shield,
       ...(grounded && shield && (key('walk') || !i && touches.has('neutral') || down(pad,10) ||
@@ -6215,8 +6222,7 @@
         jump: tapped('jump') || tapped('hop'),
         attack: tapped('attack'),
         smash: tapped('smash'),
-        aimStick: !!(flick && touchTaps.has('aimStick')) ||
-          strikeTap,
+        aimStick: aimTap,
         special: tapped('special'),
         shield: tapped('shield'),
         grab: tapped('grab'),

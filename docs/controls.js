@@ -124,6 +124,31 @@
     return connected;
   }
   const movementAxis=value=>Math.abs(value)>.23?value:0;
+  class StrikeStick {
+    constructor(){this.clear();}
+    clear(){
+      this.x=0;this.y=0;this.held=false;this.pressed=false;
+      this.index=undefined;this.id=undefined;
+    }
+    sample(pad,charging){
+      const x=movementAxis(pad?.axes?.[2]),y=movementAxis(pad?.axes?.[3]);
+      const wasHeld=this.held && this.index===pad?.index && this.id===pad?.id;
+      const release=.38;
+      let reversed=false;
+      if(wasHeld){
+        const dot=this.x*x+this.y*y,cross=this.x*y-this.y*x;
+        // A snap can cross neutral between polls. Require a turn of at least 135 degrees
+        // and a path through the release zone so rolling around the rim stays one hold.
+        reversed=dot<0 && Math.abs(cross)<=-dot &&
+          cross*cross<=release*release*((x-this.x)**2+(y-this.y)**2);
+      }
+      const threshold=wasHeld && !reversed?release:.62;
+      // A charged swing must see the release before the opposite stroke can begin.
+      this.held=Math.max(Math.abs(x),Math.abs(y))>threshold && !(reversed && charging);
+      this.pressed=this.held && (!wasHeld || reversed);
+      this.x=x;this.y=y;this.index=pad?.index;this.id=pad?.id;
+    }
+  }
   class HorizontalInput {
     constructor(){this.clear();}
     clear(){this.last=0;this.mask=0;this.padSide=0;this.id=null;this.index=null;}
@@ -315,5 +340,5 @@
       return true;
     }
   }
-  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,SoloSeat,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat,sticks,readPads,rawPad,stickAxes,tuneAxes,movementAxis,HorizontalInput};
+  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,SoloSeat,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat,sticks,readPads,rawPad,stickAxes,tuneAxes,movementAxis,HorizontalInput,StrikeStick};
 })();
