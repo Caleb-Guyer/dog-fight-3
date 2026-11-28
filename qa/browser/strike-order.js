@@ -4,11 +4,11 @@ if(process.env.GITHUB_ACTIONS!=='true' || process.env.RUNNER_OS!=='Linux')throw 
 const {chromium}=require('playwright-core');
 const root='http://127.0.0.1:8080/';
 
-async function openMatch(browser,touch,controllers=false){
+async function openMatch(browser,touch,controllers=false,tiltStick=true){
   const page=await browser.newPage({hasTouch:touch,isMobile:touch,viewport:touch?{width:844,height:390}:{width:1100,height:720}});
   await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
   await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
-  if(!touch)await page.addInitScript(()=>localStorage.setItem('dog-fight-3.config',JSON.stringify({tiltStick:true,tiltStick2:true})));
+  if(!touch)await page.addInitScript(tilt=>localStorage.setItem('dog-fight-3.config',JSON.stringify({tiltStick:tilt,tiltStick2:true})),tiltStick);
   if(controllers)await page.addInitScript(()=>{
     window.testPads=[0,1].map(index=>({id:'Strike pad '+index,index,connected:true,mapping:'standard',
       axes:[0,0,0,0],buttons:Array.from({length:17},()=>({pressed:false,value:0}))}));
@@ -21,6 +21,7 @@ async function openMatch(browser,touch,controllers=false){
     window.strikes=[[],[]];
     const step=DogFight.Battle.prototype.step;
     DogFight.Battle.prototype.step=function(dt,a,b){
+      window.strikeWorld=this;
       const lastSmash=this.dogs.map(f=>f.prev?.smash);
       const result=step.apply(this,arguments);
       for(const [slot,input] of [a,b].entries()){
@@ -34,6 +35,30 @@ async function openMatch(browser,touch,controllers=false){
   });
   await page.clock.runFor(2600);
   return page;
+}
+async function platformAerial(browser){
+  const page=await openMatch(browser,false,true,false);
+  try{
+    await page.evaluate(()=>{
+      const w=strikeWorld,index=w.terrain.findIndex(p=>p.thin),p=w.terrain[index];
+      for(const [i,f] of w.dogs.entries()){
+        Object.assign(f,{ground:index,y:p.y,x:i?p.x2-8:p.x1+8,vx:0,vy:0,face:i?-1:1});
+        testPads[i].axes[1]=1;
+      }
+    });
+    await page.clock.runFor(17);
+    const prep=await page.evaluate(()=>strikeWorld.dogs.map(f=>f.dropPrep?.frames));
+    assert(prep.every(n=>n===1 || n===2),'both pads started a drop: '+prep);
+    await page.evaluate(()=>{
+      for(const [i,pad] of testPads.entries()){
+        pad.axes[1]=0;pad.axes[0]=i?-1:1;
+        if(i)pad.axes[2]=1;else pad.axes[3]=1;
+      }
+    });
+    await page.clock.runFor(34);
+    const state=await page.evaluate(()=>strikeWorld.dogs.map((f,i)=>[f.ground,f.jumps,f.attack?.moveId,f.kit.air[i?'back':'down']]));
+    for(const [ground,jumps,swing,expected] of state)assert.deepEqual([ground,jumps,swing],[-1,1,expected]);
+  }finally{await page.close();}
 }
 async function controller(browser){
   const page=await openMatch(browser,false,true);
@@ -102,5 +127,5 @@ async function touchscreen(browser){
 }
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await keyboard(browser);await touchscreen(browser);await controller(browser);}finally{await browser.close();}
+  try{await keyboard(browser);await touchscreen(browser);await controller(browser);await platformAerial(browser);}finally{await browser.close();}
 })().catch(error=>{console.error(error);console.log('::error::'+String(error.stack).replaceAll('\n','%0A'));process.exitCode=1;});

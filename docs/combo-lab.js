@@ -332,6 +332,7 @@
     if(card.takes.some(t=>t?.some(f=>f.lightShield && f.shield)))data.unshift(6);
     if(c.dashSmash)data.unshift(8);
     if(c.heldAerials)data.unshift(9);
+    if(c.dropAerials)data.unshift(10);
     const bytes=new TextEncoder().encode(JSON.stringify(data));
     return btoa(Array.from(bytes,b=>String.fromCharCode(b)).join('')).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
   }
@@ -340,6 +341,8 @@
       if(typeof code!=='string' || code.length>96000 || !/^[A-Za-z0-9_-]+$/.test(code))return null;
       const text=atob(code.replaceAll('-','+').replaceAll('_','/'));
       const data=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(Uint8Array.from(text,c=>c.charCodeAt(0))));
+      const dropAerials=Array.isArray(data) && data[0]===10;
+      if(dropAerials)data.shift();
       const heldAerials=Array.isArray(data) && data[0]===9;
       if(heldAerials)data.shift();
       const dashSmash=Array.isArray(data) && data[0]===8;
@@ -357,6 +360,7 @@
         !Number.isFinite(time) || time<0 || time>1e9 || !Array.isArray(takes) || takes.length!==2)return null;
       const config={p1,p2,stage,coats,shieldPogo};
       if(heldAerials)config.heldAerials=true;
+      if(dropAerials)config.dropAerials=true;
       if(dashSmash)config.dashSmash=true;
       if([p1,p2].includes('clover'))config.aimedDrive=!!data[11];
       if(version===3 || version>=4 && data[12])config.groundSpace=true;
@@ -370,7 +374,7 @@
     const d=world.comboPractice, dogs=d?.originalDogs || world.dogs;
     const [p1,p2]=dogs.map(f=>f.kind);
     return {name:fighters[p1].name+' vs '+fighters[p2].name,config:{p1,p2,stage:world.stage,
-      coats:[...world.coats],...(world.heldAerials?{heldAerials:true}:{}),...(world.dashSmash?{dashSmash:true}:{}),...(world.impactTech?{impactTech:true}:{}),...(world.risingCatch?{risingCatch:true}:{}),...(world.wallSpring?{wallSpring:true}:{}),shieldPogo:!!world.shieldPogo,...(world.groundSpace?{groundSpace:true}:{}),...([p1,p2].includes('clover')?{aimedDrive:!!world.aimedDrive}:{})},damage:world.trainingDamage,time:world.comboMarkTime??world.time,
+      coats:[...world.coats],...(world.dropAerials?{dropAerials:true}:{}),...(world.heldAerials?{heldAerials:true}:{}),...(world.dashSmash?{dashSmash:true}:{}),...(world.impactTech?{impactTech:true}:{}),...(world.risingCatch?{risingCatch:true}:{}),...(world.wallSpring?{wallSpring:true}:{}),shieldPogo:!!world.shieldPogo,...(world.groundSpace?{groundSpace:true}:{}),...([p1,p2].includes('clover')?{aimedDrive:!!world.aimedDrive}:{})},damage:world.trainingDamage,time:world.comboMarkTime??world.time,
       slow:d?.slow??true,takes:world.comboTakes || [null,null]};
   }
   function restore(world,card){

@@ -214,7 +214,7 @@ On **Canal Lock**, hold Jump from Pip’s starting spot to land on the approachi
 
 In **Platform practice → Defend the ferry**, Brisket rides and Pip jumps to meet him. Tap Attack to start, then hold Shield to see where Pip’s up air hits. Retry and tap Down as the ferry draws over Pip. Aim down and attack as Brisket’s paws pass through the boards to catch Pip first. Each retry starts at the same point on the cable. [Play the ferry drill](https://caleb-guyer.github.io/dog-fight-3/#training/ferry)
 
-Try the same opening on two stages. You play Pip against Rival Brisket, with three stocks, seven minutes, and the Fetch Ball off. Jump straight up from your starting spot and let Pip fall. On the train you return to the roof. On the table you can land on the left platform, then drop through or jump again. [Play Night Mail](https://caleb-guyer.github.io/dog-fight-3/#solo/night-mail) · [Play Picnic Table](https://caleb-guyer.github.io/dog-fight-3/#solo/picnic-table)
+Try the same opening on two stages. You play Pip against Rival Brisket, with three stocks, seven minutes, and the Fetch Ball off. Jump straight up from your starting spot and let Pip fall. On the train you return to the roof. On the table you can land on the left platform, then drop through or jump again. To attack on the way down, flick the movement stick down, release it, and flick the right stick toward your opponent as Pip crouches. Both right-stick settings let you aim the aerial independently of drift. [Play Night Mail](https://caleb-guyer.github.io/dog-fight-3/#solo/night-mail) · [Play Picnic Table](https://caleb-guyer.github.io/dog-fight-3/#solo/picnic-table)
 
 ## Stock and Time Battle rules
 
