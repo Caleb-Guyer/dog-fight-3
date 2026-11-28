@@ -364,7 +364,7 @@ In **Footwork practice → Run up and shield**, run to the chalk and guard Brisk
 
 **Brake at the chalk** lets you compare two approaches from the same starting line. Hold forward and tap Attack for a dash attack. On the next run, release forward briefly, then press forward and tap Attack together. Your dog slides into its forward tilt. Aim up or down and tap Attack during a run for a sliding vertical tilt. In **Catch the chase**, turn and tap Attack together to hit a pursuer while you still travel away. Each dog brakes at its own rate.
 
-In **Options**, switch **Grounded aim stick** to **Tilt** to throw a tilt with one flick, even while holding a run in the opposite direction. This setting also covers the keyboard aim keys and a swipe outward from Smash on touch. In the air these controls aim aerials. The dedicated Smash button still charges smashes.
+In **Options**, switch **Grounded aim stick** to **Tilt** to throw a tilt with one flick, even while running the other way. After the swing recovers, snap the right stick back across center to attack in the opposite direction. Hold it steady for a single attack. To charge a smash while the right stick is still held, aim with the movement stick and press **RT**. The Tilt setting also covers the keyboard aim keys and an outward swipe from Smash on touch. In the air these controls aim aerials.
 
 On keyboard or touch, hold a direction and press Smash to lock in your swing. You can immediately steer back. With the keyboard strike keys, the newest press chooses the attack direction when opposite keys overlap.
 
