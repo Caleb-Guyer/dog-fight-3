@@ -2017,6 +2017,11 @@ async function testPracticeRoom(page,mobile) {
   const topics = await results.locator('button').evaluateAll(items=>items.map(el=>el.dataset.lane));
   assert.deepEqual(topics,['Movement','Attack','Defense','Recovery']);
   assert(await results.evaluate(el=>el.scrollHeight<=el.clientHeight+1));
+  assert(await results.locator('[data-lane]').evaluateAll(buttons=>buttons.every(b=>{
+    const title=document.createRange();title.selectNodeContents(b.firstChild);
+    const r=title.getBoundingClientRect(),box=b.getBoundingClientRect();
+    return r.left>=box.left+6 && r.right<=box.right-6;
+  })));
   await page.screenshot({path:'drill-finder-'+(mobile?'phone':'desktop')+'.png'});
   const entries=[];
   for(const topic of topics){
