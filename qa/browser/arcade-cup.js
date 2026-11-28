@@ -125,8 +125,20 @@ async function playCup(browser) {
   const fronts=page.locator('.cup-result button:visible');
   await checkResult('Play round 4');
   assert.equal(await page.locator('#cup-more').getAttribute('aria-expanded'),'false');
-  await page.setViewportSize({width:1920,height:830});await page.screenshot({path:'cup-clear-wide.png'});
-  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'cup-clear-phone.png'});
+  await page.evaluate(()=>{
+    const proto=DogFightView.FightView.prototype,draw=proto.draw;
+    window.resultRedraws=[];
+    proto.draw=function(canvas,battle,dt,time,confirmed,phase){
+      if(canvas.id==='game' && battle.end!==null)resultRedraws.push([innerWidth,phase]);
+      return draw.apply(this,arguments);
+    };
+  });
+  for(const [width,height,name] of [[1920,830,'wide'],[390,844,'phone']]){
+    await page.setViewportSize({width,height});
+    await page.waitForFunction(w=>resultRedraws.some(([width])=>width===w),width);
+    assert(await page.evaluate(()=>resultRedraws.every(([,phase])=>phase==='results')));
+    await page.screenshot({path:'cup-clear-'+name+'.png'});
+  }
   await page.locator('#cup-more').click();await page.locator('[data-do=watch-match]').waitFor();
   await page.keyboard.press('Escape');assert.equal(await fronts.count(),2);
   await page.setViewportSize({width:1280,height:720});await tap('cup-next');

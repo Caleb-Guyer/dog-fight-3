@@ -2922,7 +2922,8 @@
     $('school-coach').hidden=saved.schoolHidden;
     if(review?.replyPlan || review?.coach || review?.landing || review?.landingFocus || review?.moment){$('corner-title').textContent=saved.cornerTitle;$('corner-line').textContent=saved.cornerLine;}
     hudKey='';updateHUD();
-    view.draw($('game'),online.match?.confirmedWorld || world,0,world.time);
+    const result=online.match?.confirmedWorld || world;
+    view.draw($('game'),result,0,world.time,result,matchFinishPhase(result));
     if(review?.rematchFilm)return review.rematchFilm.panel();
     if(review?.replyPlan && replay)return secondChance(review,review.replyPlan.contact);
     if(review?.replyPlan && review.stockBreak)return showStockBreak();
@@ -6012,10 +6013,15 @@
   }
   window.addEventListener('blur', onBlur);
   window.addEventListener('focus',()=>{musicFocused=true;if(page==='home')readMissionSaves();});
+  function matchFinishPhase(result){
+    return result.end!==null && result.matchCard && !result.eventId ? (resultDelay>0?'call':'results') : null;
+  }
   const redrawPausedStage = () => {
     if(finishTrial)return drawFinishTrial(0);
-    if (page === 'match' && world && view && (paused || frameLab.mode === 'frozen'))
-      view.draw($('game'), world, 0, frameLab.mode === 'frozen' ? frameLab.renderTime : world.time, online.match?.confirmedWorld || world);
+    if (page === 'match' && world && view && (paused || frameLab.mode === 'frozen')){
+      const result=online.match?.confirmedWorld || world;
+      view.draw($('game'),world,0,frameLab.mode==='frozen'?frameLab.renderTime:world.time,result,matchFinishPhase(result));
+    }
   };
   FightView.observeDisplay($('game'),redrawPausedStage);
   const reframeFilm = () => film?.paint(true);
@@ -6613,9 +6619,8 @@
           world.suddenDeath?.round !== confirmed.suddenDeath?.round);
         const studying = !!world.survivalPractice?.preview;
         const result=confirmed || world;
-        const finishPhase=result.end!==null && result.matchCard && !result.eventId ? (resultDelay>0?'call':'results') : null;
         view.draw($('game'), waitingOnKO ? confirmed : world, studying ? 0 : frameLab.mode === 'frozen' ? 1/60 : dt,
-          studying ? world.time : frameLab.mode === 'frozen' ? frameLab.renderTime : now, result, finishPhase);
+          studying ? world.time : frameLab.mode === 'frozen' ? frameLab.renderTime : now, result, matchFinishPhase(result));
       }
     }
     updateMusic();
