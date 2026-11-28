@@ -27,19 +27,25 @@ jobs:
           trap 'kill "$current_pid" "$previous_pid"' EXIT
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/cup-frame-times.js
   cup-full-run:
+    strategy:
+      fail-fast: false
+      matrix:
+        fighter: [pip, brisket, noodle, clover]
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Play Pip's Cup with controller inputs and resume after round one
+      - name: Play the full Cup with controller inputs and resume after round one
+        env:
+          CUP_FIGHTER: ${{ matrix.fighter }}
         run: |
           npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
           python3 -m http.server 8080 --bind 127.0.0.1 --directory docs > "$RUNNER_TEMP/cup-full-http.log" 2>&1 &
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
-          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/cup-full-run.js
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/cup-full-run.js "$CUP_FIGHTER"
   stage-select:
     runs-on: ubuntu-24.04
     timeout-minutes: 3
