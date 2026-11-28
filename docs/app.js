@@ -1035,6 +1035,10 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='cup-schedule')return returnFromCupSchedule();
+    if(dialogType==='pause' && $('cup-pause-tools')?.open){
+      $('cup-pause-tools').open=false;$('cup-pause-tools').querySelector('summary').focus();return;
+    }
     if($('result-review')?.open && ['result','online-result'].includes(dialogType)){
       $('result-review').open=false;$('result-review').querySelector('summary').focus();return;
     }
@@ -1680,11 +1684,26 @@
     });
     if (!current()) return;
     if (!entry) return cupSheet(kind);
+    cupShown=entry;
     const run = entry.active, round = run.wins.length;
     const attempt = {kind,id:run.id,retries:run.retries,round,coat:run.coat};
     const bout = cup.stockBout(kind,round,run.coat);
     if (!bout) return beginRun(yardChapter.lastRoom,0,null,attempt);
     startMatch(bout,undefined,17+round*31,null,{cupRound:attempt});
+  }
+  function showCupSchedule(){
+    const {kind,settled}=cupAttempt;
+    const entry=settled || cupShown,run=entry.active || entry.last;
+    const current=!settled?'Fighting now':run.started?'Retry':'Up next';
+    const rows=window.VersusRulebook.cupSchedule(kind,entry,{run,current,stageName,stockLabel,record:settled && cupRecord});
+    showDialog('cup-schedule','Cup schedule','<div class="cup-route-board">'+rows+'</div><div class="dialog-actions">'+
+      '<button class="primary" data-do="'+(settled?'cup-return':'cup-resume')+'">'+(settled?'Back to results':'Resume fight')+'</button></div>');
+    $('dialog-body').querySelector('.primary').focus();
+  }
+  function returnFromCupSchedule(){
+    if(cupAttempt.settled)cupResult(world.mode==='adventure'?world.finished==='exit':world.end===0);
+    else showPause(false);
+    $('dialog-body').querySelector('[data-do=cup-sheet]').focus();
   }
   function cupFinish(title,kind,coat,headline,line,primary,details=''){
     const attempt=cupAttempt, open=!!attempt.detailsOpen;
@@ -2367,10 +2386,17 @@
     const reviewButton=(!online.match && finishTape?.length?'<button class="utility" data-do="instant-replay">Instant replay</button>':'')+
       (clips.length?stockRetryButton(world)+recoveryButtons(world,clips)+knockoutButton:'');
     if (cupAttempt) {
-      showDialog('pause','Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+(cupAttempt.round+1)+
-        ' of 4. Leaving now restarts this round on your next attempt.'+'</p><div class="dialog-actions">'+
-        '<button class="primary" data-do="resume">Resume</button>'+reviewButton+'<button class="utility" data-do="moves">Move list</button>'+
-        '<button class="utility" data-do="controls">Controls</button><button class="utility" data-do="cup-sheet">Cup schedule</button></div>');
+      const round=cupAttempt.round+1;
+      const toolsOpen=$('dialog').open && cupAttempt.pauseToolsOpen;
+      showDialog('pause','Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+round+' of '+cup.rounds+'</p><div class="dialog-actions">'+
+        '<button class="primary" data-do="resume">Resume</button><button class="utility" data-do="cup-sheet">Cup schedule</button></div>'+
+        '<details id="cup-pause-tools"'+(toolsOpen?' open':'')+'><summary>More options</summary><div class="dialog-actions">'+
+        '<button class="utility" data-do="moves">Move list</button><button class="utility" data-do="controls">Controls</button>'+reviewButton+'</div>'+
+        '<p id="cup-leave-note">Leaving restarts round '+round+' on your next visit. Cleared rounds stay saved.</p>'+
+        '<button class="utility" data-do="cup-roster" aria-describedby="cup-leave-note">Leave round</button></details>');
+      const tools=$('cup-pause-tools'),attempt=cupAttempt;
+      attempt.pauseToolsOpen=tools.open;
+      tools.ontoggle=()=>{if(tools.isConnected)attempt.pauseToolsOpen=tools.open;};
       document.querySelector('[data-do=resume]').focus();
       return;
     }
@@ -3420,7 +3446,9 @@
     if (action==='school-cup') return cupSheet('pip');
     if (action==='rotation') return rotationBoard(!!matchConfig.tourneyRound);
     if (action==='fighter-classes') return fighterSheet(world?.lesson?.course || settings.p1);
-    if (action === 'cup-sheet') return cupSheet(cupAttempt?.kind || cupChoice,true);
+    if (action === 'cup-sheet' && cupAttempt) return showCupSchedule();
+    if (action === 'cup-return') return returnFromCupSchedule();
+    if (action === 'cup-resume' || (action==='resume' && dialogType==='pause' && cupAttempt)) return dismiss();
     if (action === 'cup-roster') return cupSheet(cupAttempt?.kind || cupChoice);
     if (action === 'cup-start' || action === 'cup-next') return startCupRound(cupAttempt?.kind || cupChoice);
     if (action === 'match-card') return showMatchCard();
@@ -4253,7 +4281,7 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=cup-roster-3',
+    VersusRulebook:'versus-rules.js?v=cup-schedule-1',
     PackRelay:'pack-relay.js?v=versus-2',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
     ComboLab:'combo-lab.js?v=held-aerial-1', FinishTools:'finish-tools.js?v=second-chance-1',
@@ -4270,7 +4298,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=cup-roster-3';
+        link.href='./versus-select.css?v=cup-schedule-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
