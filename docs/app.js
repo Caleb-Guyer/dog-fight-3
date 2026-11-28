@@ -1166,7 +1166,7 @@
   },true);
   $('dialog').addEventListener('cancel', (e) => {
     e.preventDefault();
-    exitDialog();
+    menuBack();
   });
   $('dialog').addEventListener('click', (e) => {
     if (e.target === $('dialog')) exitDialog();
@@ -4267,7 +4267,7 @@
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
     DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=stock-share-1', DispatchView:'dispatch-view.js?v=cup-counter-1',
-    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=dash-smash-1',
+    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=training-topics-1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -6067,6 +6067,7 @@
   window.addEventListener('keydown',nativeMenuInput,true);
   function menuBack() {
     if ($('dialog').open) {
+      if(dialogType==='practice' && !$('practice-back').hidden)return $('practice-back').click();
       exitDialog();
       return;
     }

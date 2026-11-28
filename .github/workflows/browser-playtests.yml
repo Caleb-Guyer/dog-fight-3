@@ -360,6 +360,13 @@ jobs:
           server_pid=$!
           trap 'kill "$server_pid"' EXIT
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/combo-browser.cjs "${{ matrix.device }}"
+      - name: Keep the Training finder screen
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: drill-finder-${{ matrix.device }}
+          path: drill-finder-*.png
+          retention-days: 3
   stock-sets:
     runs-on: ubuntu-24.04
     timeout-minutes: 6

@@ -31,6 +31,8 @@
       'footwork-armor':'Brisket Haymaker armor', 'footwork-armorGrab':'Brisket armor grab',
       'footwork-cancelDash':'attack cancel', 'footwork-cancelTurn':'attack cancel',
       'spacing-landing':'short hop full jump flick', 'spacing-fastfall':'fast fall shield',
+      'platform-below':'drop through platform falling down air aerial attack stick right stick',
+      'platform-top':'crouch down tilt grounded attack',
       'platform-layers':'fall through platform drop fast fall aerial landing',
       'escape-tip':'SDI smash directional influence', 'escape-close':'SDI smash directional influence',
       'launch-survival':'directional influence DI knockout', 'launch-breakaway':'hitstun cancel tumble combo escape',
@@ -56,63 +58,110 @@
     function searchWords(value) {
       return value.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
     }
-    const lanes = ['All', ...new Set(practiceGroups.map(group => group[0]))];
+    const topics = {
+      Movement: 'Footwork, platforms and wavedashes',
+      Attack: 'Combos, aerials and knockdowns',
+      Defense: 'Shields, dodges and combo escapes',
+      Recovery: 'Ledges, edgeguards and wall jumps',
+    };
+    const groups = practiceGroups.map(([topic, family, prefix, names]) => ({
+      topic, family, drills: names.map(name => {
+        const id = prefix ? prefix + '-' + name : name;
+        const label = practiceTitles[id] || $(id).textContent.trim();
+        const keywords = searchWords([topic, family, label, practiceAliases[id] || '', id].join(' '));
+        return {id, label, keywords};
+      }),
+    }));
     showDialog('practice', 'Find a drill',
-      '<label class="practice-search">Search drills<input id="practice-query" type="search" placeholder="Try jab lock, crawl, or parry" autocomplete="off"></label>' +
-      '<div class="practice-lanes" aria-label="Drill categories" role="group">' +
-      lanes.map(lane => '<button type="button" class="utility" data-lane="' + lane + '">' + lane + '</button>').join('') +
-      '</div><div id="practice-count" role="status"></div><div id="practice-results"></div>');
-    const query = $('practice-query'), results = $('practice-results');
-    let lane = 'All';
+      '<label class="practice-search">Search all drills<input id="practice-query" type="search" placeholder="Try down air, crawl, or parry" autocomplete="off"></label>' +
+      '<button id="practice-back" type="button" class="utility" hidden></button>' +
+      '<div id="practice-count" role="status"></div><div id="practice-results"></div>');
+    const query = $('practice-query'), results = $('practice-results'), back = $('practice-back');
+    let topic = '', family = '';
+    function choice(container, key, value, label) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset[key] = value;
+      button.textContent = label;
+      container.append(button);
+      return button;
+    }
     function refresh() {
       const words = searchWords(query.value).split(' ').filter(Boolean);
-      let count = 0;
+      const searching = words.length > 0;
+      $('dialog-title').textContent = searching ? 'Drill search' : family || topic || 'Find a drill';
+      back.hidden = !(searching || topic);
+      back.textContent = '‹ ' + (searching ? family || topic || 'All topics' : family ? topic : 'All topics');
       results.replaceChildren();
-      for (const [category, family, prefix, names] of practiceGroups) {
-        if (lane !== 'All' && lane !== category) continue;
-        const section = document.createElement('section');
-        const title = document.createElement('h3');
-        title.textContent = family;
-        section.append(title);
-        for (const name of names) {
-          const id = prefix ? prefix + '-' + name : name;
-          const label = practiceTitles[id] || $(id).textContent.trim();
-          const searchable = searchWords([category, family, label, practiceAliases[id] || '', id].join(' '));
-          if (!words.every(word => searchable.includes(word))) continue;
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.dataset.exercise = id;
-          button.textContent = label;
-          section.append(button);
-          count++;
+      const status = $('practice-count');
+      status.textContent = '';
+      if (searching) {
+        let count = 0;
+        for (const group of groups) {
+          const found = group.drills.filter(d => words.every(word => d.keywords.includes(word)));
+          if (!found.length) continue;
+          const section = document.createElement('section'), title = document.createElement('h3');
+          title.textContent = group.family;
+          section.append(title);
+          for (const d of found) choice(section,'exercise',d.id,d.label);
+          results.append(section);
+          count += found.length;
         }
-        if (section.children.length > 1) results.append(section);
+        status.textContent = count ? count + (count === 1 ? ' drill' : ' drills') : 'No drills found.';
+        if (!count) choice(results,'clear','','Clear search');
+      } else if (!topic) {
+        for (const [name,hint] of Object.entries(topics)) {
+          const button = choice(results,'lane',name,name);
+          const description = document.createElement('small');
+          description.textContent = hint;
+          button.append(description);
+        }
+      } else if (!family) {
+        for (const g of groups.filter(g => g.topic === topic)) choice(results,'family',g.family,g.family);
+      } else {
+        const group = groups.find(g => g.topic === topic && g.family === family);
+        for (const d of group.drills) choice(results,'exercise',d.id,d.label);
       }
-      $('practice-count').textContent = count ? count + (count === 1 ? ' drill' : ' drills') : 'No drills found.';
-      if (!count) {
-        const reset = document.createElement('button');
-        reset.className = 'utility'; reset.textContent = 'Show all drills';
-        reset.onclick = () => { lane = 'All'; query.value = ''; refresh(); document.querySelector('[data-lane="All"]').focus(); };
-        results.append(reset);
-      }
-      for (const button of document.querySelectorAll('[data-lane]')) button.setAttribute('aria-pressed', String(lane === button.dataset.lane));
       results.scrollTop = 0;
     }
+    function clearSearch() {
+      query.value = '';
+      refresh();
+      query.focus();
+    }
+    back.onclick = () => {
+      if (searchWords(query.value)) return clearSearch();
+      const last = family || topic;
+      if (family) family = '';
+      else topic = '';
+      refresh();
+      [...results.querySelectorAll('button')].find(b => b.dataset.family === last || b.dataset.lane === last)?.focus();
+    };
     query.oninput = refresh;
     query.onkeydown = e => {
-      if (e.isComposing || !['ArrowDown','Enter'].includes(e.key)) return;
-      e.preventDefault();
-      const first = results.querySelector('button');
-      if (e.key === 'ArrowDown') first?.focus();
-      else first?.click();
+      if (e.isComposing) return;
+      if (e.key === 'Escape' && !back.hidden) {
+        e.preventDefault();
+        back.click();
+      } else if (['ArrowDown','Enter'].includes(e.key)) {
+        e.preventDefault();
+        const first = results.querySelector('button');
+        if (e.key === 'ArrowDown') first?.focus();
+        else if (!e.repeat) first?.click();
+      }
     };
-    for (const button of document.querySelectorAll('[data-lane]')) button.onclick = () => { lane = button.dataset.lane; refresh(); };
     results.onclick = e => {
-      const entry = e.target.closest('[data-exercise]');
-      if (entry) startExercise(entry.dataset.exercise);
+      const button = e.target.closest('button');
+      if (!button) return;
+      if (button.dataset.exercise) return startExercise(button.dataset.exercise);
+      if ('clear' in button.dataset) return clearSearch();
+      if (button.dataset.lane) topic = button.dataset.lane;
+      else family = button.dataset.family;
+      refresh();
+      results.querySelector('button')?.focus();
     };
     refresh();
-    document.querySelector('[data-lane="All"]').focus();
+    results.querySelector('button').focus();
   }
   function footworkFeedback(world,e) {
     const status = $('footwork-status');

@@ -188,7 +188,7 @@ For a **best-of-three set**, open **Rules** on Fighter select, choose **Best of 
 
 In a Solo fight, pause as Brisket closes in and choose **Practice this position**. Try shielding his approach, then choose **Pause → Retry position** and jump instead. Each attempt starts on the same frame with the same CPU, damage, stocks and stage. **Back to fight** resumes the original exchange. During a best-of-three, only the original fight counts toward the set. [Try Pip against Brisket’s Shoulder Charge](https://caleb-guyer.github.io/dog-fight-3/#solo/shoulder-charge)
 
-Choose **Find a drill** in Training or from a paused Solo fight. Search for a situation such as “jab lock,” “crawl,” or “parry,” or browse by category with the D-pad. Choose a drill to play it. When you enter from Solo, **Back to fight** returns you to your paused stock. [Open the drill list](https://caleb-guyer.github.io/dog-fight-3/#training/practice)
+Choose **Find a drill** in Training or from a paused Solo fight. Pick Movement, Attack, Defense, or Recovery, then a family of drills. For example, Movement → Platforms → Rival below starts you above a sparring partner. You can also search all drills from any topic. Try “down air,” “crawl,” or “parry.” When you enter from Solo, **Back to fight** returns you to your paused stock. [Find a drill](https://caleb-guyer.github.io/dog-fight-3/#training/practice)
 
 Hold a direction during the opening countdown to start moving on **GO!**. A button tapped and released before the bell leaves your dog free to act.
 

@@ -2012,10 +2012,58 @@ async function testPracticeRoom(page,mobile) {
   const action = name => press('[data-do="' + name + '"]');
   const query = page.locator('#practice-query');
   await page.goto(root + '?drill-list#training/practice');
-  const entries = await page.locator('[data-exercise]').evaluateAll(items => items.map(el => el.dataset.exercise));
-  assert(entries.length >= 85 && new Set(entries).size === entries.length);
+  const results = page.locator('#practice-results');
+  await results.locator('[data-lane]').first().waitFor();
+  const topics = await results.locator('button').evaluateAll(items=>items.map(el=>el.dataset.lane));
+  assert.deepEqual(topics,['Movement','Attack','Defense','Recovery']);
+  assert(await results.evaluate(el=>el.scrollHeight<=el.clientHeight+1));
+  await page.screenshot({path:'drill-finder-'+(mobile?'phone':'desktop')+'.png'});
+  const entries=[];
+  for(const topic of topics){
+    await press('[data-lane="'+topic+'"]');
+    const families=await results.locator('button').allTextContents();
+    for(const family of families){
+      await press('[data-family="'+family+'"]');
+      entries.push(...await results.locator('button').evaluateAll(items=>items.map(b=>b.dataset.exercise)));
+      if(mobile)await press('#practice-back');else await page.keyboard.press('Escape');
+      assert.equal(await page.evaluate(()=>document.activeElement.dataset.family),family);
+    }
+    await press('#practice-back');
+    assert.equal(await page.evaluate(()=>document.activeElement.dataset.lane),topic);
+  }
+  assert(entries.length>=125 && entries.every(Boolean) && new Set(entries).size===entries.length);
+  if(!mobile){
+    await page.evaluate(()=>{
+      const pad={index:0,id:'Training gamepad',mapping:'standard',connected:true,axes:[0,0,0,0],
+        buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
+      Object.defineProperty(navigator,'getGamepads',{configurable:true,value:()=>[pad]});
+      window.drillPad=(n,on)=>Object.assign(pad.buttons[n],{pressed:on,value:Number(on)});
+    });
+    const pressPad=async n=>{
+      for(const on of [true,false]){
+        await page.evaluate(([n,on])=>drillPad(n,on),[n,on]);await page.clock.runFor(64);
+      }
+    };
+    // From Recovery in the lower right, reach the platform drill with just the D-pad and A/B.
+    await pressPad(12);await pressPad(14);
+    assert.equal(await page.evaluate(()=>document.activeElement.dataset.lane),'Movement');
+    await pressPad(0);await pressPad(13);await pressPad(0);
+    assert.equal(await page.evaluate(()=>document.activeElement.dataset.exercise),'platform-below');
+    await pressPad(1);
+    assert.equal(await page.evaluate(()=>document.activeElement.dataset.family),'Platforms');
+    await pressPad(0);await pressPad(0);
+    assert(await page.locator('#dialog').isHidden());
+    assert.equal(await page.locator('#platform-below').getAttribute('aria-pressed'),'true');
+    await page.evaluate(()=>{delete navigator.getGamepads;delete window.drillPad;});
+    await page.clock.runFor(64);
+    await press('#practice-menu');
+  }
   assert(await page.locator('#return-fight').isHidden());
   await press('[data-lane="Defense"]');
+  await query.fill('down air');
+  assert(await page.locator('[data-exercise="platform-below"]').isVisible());
+  await query.press('Escape');
+  assert.equal(await page.locator('#dialog-title').textContent(),'Defense');
   await query.fill('parry');
   assert.deepEqual(await page.locator('[data-exercise]').evaluateAll(items => items.map(el => el.dataset.exercise)), ['shield-strike']);
   await query.fill('xyzzy');
@@ -2035,6 +2083,8 @@ async function testPracticeRoom(page,mobile) {
   await press('[data-exercise="launch-lock"]');
   assert.equal(await page.locator('#launch-lock').getAttribute('aria-pressed'), 'true');
   await press('#practice-menu');
+  await press('[data-lane="Recovery"]');
+  await press('[data-family="Stage techs & wall jumps"]');
   await press('[data-exercise="wall-noodle"]');
   assert.equal(await page.locator('#wall-noodle').getAttribute('aria-pressed'), 'true');
   await page.goto(root + '?branch-stock#solo/best-of-three');
