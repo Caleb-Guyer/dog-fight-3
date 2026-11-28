@@ -1000,7 +1000,7 @@
     if(dialogType==='rumble')window.PadFeedback?.stop();
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=cup-finish-1';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=cup-finish-2';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
@@ -1724,7 +1724,7 @@
       attempt.settled = entry;
     }
     cupShown = attempt.settled;
-    window.VersusRulebook.cupResult(world,attempt,won,{showDialog,announce,stockLabel,tenth,record:cupRecord,cardButton});
+    window.VersusRulebook.cupResult(world,attempt,won,{showDialog,announce,stockLabel,tenth,record:cupRecord,cardButton,hasReplay:finishTape?.length && finishTape.reel});
   }
   const frameLab = {mode:'live', count:0, pending:0, renderTime:0};
   let trainingMoment = null;
@@ -2505,6 +2505,7 @@
     photo.replaceWith(canvas);
     victoryShot={canvas,kind:dog.encounter?.kind || dog.kind,coat:result.coatFor(slot),elapsed:0,cel:-1};
     drawVictory(0);
+    if($('cup-review'))return;
     const stats=document.querySelector('#dialog-body [data-do=match-card]');
     const options=$('result-options'),watch=$('result-watch'),practiceTools=$('result-practice');
     if(stats && result.mode==='local' && !result.relayTeams && !online.match && (!localSet || localSet.champion!==null)){
@@ -2524,7 +2525,7 @@
       (practiceTools || stats).insertAdjacentHTML(practiceTools?'beforeend':'beforebegin',stockRetryButton(result)+recoveryButtons(result,clips));
       if(finishTape.reel){
         (watch || stats).insertAdjacentHTML(watch?'beforeend':'beforebegin','<button class="utility" data-do="watch-match">Watch full match</button>');
-        const winner=$('result-recap') || $('cup-review')?.querySelector('[data-cup-recap]') || canvas.closest('.winner');
+        const winner=$('result-recap') || canvas.closest('.winner');
         const recap=()=>window.MatchReview.resultHighlight(winner,result,()=>watchMatch(null,'highlight'));
         if(window.MatchReview)recap();else loadDispatch('MatchReview').then(recap).catch(()=>{});
       }
@@ -4249,7 +4250,7 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=cup-pause-1',
+    VersusRulebook:'versus-rules.js?v=cup-results-2',
     PackRelay:'pack-relay.js?v=versus-2',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
     ComboLab:'combo-lab.js?v=drop-aerial-1', FinishTools:'finish-tools.js?v=second-chance-1',

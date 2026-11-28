@@ -86,14 +86,13 @@ dialog:is([data-view='finish-stock-film'],[data-view='finish-rematch']) { width:
 .cup-advance .primary { width:100%; min-height:46px; display:flex; align-items:center; justify-content:space-between; gap:16px; }
 .cup-advance .primary::after { content:''; width:8px; height:8px; border:solid currentColor; border-width:3px 3px 0 0; transform:rotate(45deg); margin-right:4px; }
 .cup-links { display:flex; flex-wrap:wrap; justify-content:space-between; gap:0 12px; margin-top:6px; }
-.cup-result .cup-links button,.cup-result #cup-review button { background:transparent; box-shadow:none; border:0; padding:8px 3px; min-height:40px; text-align:left; font:600 14px/1.25 var(--body); }
+.cup-result .cup-links button,.cup-result #cup-review button { background:transparent; box-shadow:none; border:0; padding:8px 3px; min-height:44px; text-align:left; font:600 14px/1.25 var(--body); }
 .cup-result button.utility:hover { text-decoration:underline; }
 .cup-links #cup-more::after { content:' +'; }
 .cup-links #cup-more[aria-expanded=true]::after { content:' −'; }
 #cup-review { border-top:2px solid #beae8f; padding-top:7px; }
 #cup-review .dialog-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; margin:0; }
 #cup-review .dialog-actions button { border-bottom:1px solid #cfbea1; }
-#cup-review #result-highlight { display:block; text-decoration:underline; }
 body:has(#dialog[open] :is(.cup-result,.school-result)) :is(#match .match-top,#hud,#dispatch-hud,#dispatch-orders,#countdown,.topbar,.touch-pad) { visibility:hidden; }
 .school-result .winner { align-items:center; }
 .school-result .winner .victory-shot { width:clamp(92px,23vw,146px); }
