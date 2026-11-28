@@ -70,6 +70,65 @@ test('the windup survives a stock reset and saved Rookie fights replay their ori
   }
 });
 
+function recoverNoodle(bout,side,{gap=152,depth=154,lock=.28,jumps=1,legacy=false,record=false}={}){
+  const {Battle,idleInput,seededRandom,FinishTape}=DogFight;
+  const w=new Battle(bout,undefined,seededRandom(42)),[p,f]=w.dogs;
+  const decks=w.terrain.filter(t=>!t.thin),deck=side<0?decks[0]:decks.at(-1);
+  Object.assign(p,{x:(deck.x1+deck.x2)/2,y:deck.y,ground:w.terrain.indexOf(deck)});
+  Object.assign(f,{x:(side<0?deck.x1:deck.x2)+side*gap,y:deck.y+depth,ground:-1,
+    coyote:0,face:-side,vx:0,vy:140,jumps,usedDodge:true,ledgeLock:lock});
+  if(legacy)delete w.bot.readLasso;
+  const tape=record?new FinishTape(true):null;
+  let cast;
+  for(let frame=0;frame<180 && !f.ledge && f.ground<0 && f.stocks===3;frame++){
+    tape?.record(w,idleInput,idleInput);w.step(1/60,idleInput);
+    if(!cast && f.attack?.moveId==='noodleLasso')
+      cast={frame,anchored:!!f.attack.anchor};
+  }
+  return {w,f,cast,tape};
+}
+test('the Noodle on each Cup route can jump through regrab lock and hook either ledge',()=>{
+  for(const [p1,course] of Object.entries(cup.courses)){
+    const round=course.bouts.findIndex(([kind])=>kind==='noodle');
+    if(round<0)continue;
+    const bout=cup.stockBout(p1,round,0);
+    for(const side of [-1,1]){
+      const {f,cast}=recoverNoodle(bout,side);
+      assert(cast.anchored);assert(cast.frame>=16);assert.equal(f.ledge?.left,side<0);
+      assert.equal(f.stocks,3);
+      const old=recoverNoodle(bout,side,{legacy:true});
+      assert.deepEqual(old.cast,{frame:0,anchored:false});assert.equal(old.f.stocks,2);
+    }
+  }
+});
+test('the CPU uses the same lasso reach as a player and preserves its air jump when drift suffices',()=>{
+  const bout=cup.stockBout('pip',0,0);
+  for(const side of [-1,1]){
+    const fringe=recoverNoodle(bout,side,{gap:188,depth:-35,lock:0});
+    assert.deepEqual(fringe.cast,{frame:0,anchored:true});assert(fringe.f.ledge);
+    const diagonal=recoverNoodle(bout,side,{gap:178,depth:150,lock:0});
+    assert(diagonal.cast.frame>0 && diagonal.cast.anchored);assert(diagonal.f.ledge);
+    for(const jumps of [0,1]){
+      const coast=recoverNoodle(bout,side,{gap:108,depth:90,lock:.12,jumps,record:true});
+      const beforeCast=coast.tape.playback(coast.cast.frame).battle.dogs[1];
+      assert.equal(beforeCast.jumps,jumps);assert(coast.cast.anchored && coast.f.ledge);
+    }
+    const exhausted=recoverNoodle(bout,side,{jumps:0});
+    assert.deepEqual(exhausted.cast,{frame:0,anchored:false});assert.equal(exhausted.f.stocks,2);
+  }
+});
+test('saved Cup replays reproduce the recovery their CPU used, including old misses',()=>{
+  for(const legacy of [false,true]){
+    const {w,tape}=recoverNoodle(cup.stockBout('pip',0,0),1,{legacy,record:true});
+    for(const frame of [0,7,18]){
+      const play=tape.playback(frame);
+      while(play.step()){}
+      assert.deepEqual(play.battle.dogs,w.dogs);assert.equal(play.battle.random.state,w.random.state);
+      play.battle.resetCpu();assert.equal(!!play.battle.bot.readLasso,!legacy);
+    }
+  }
+});
+
 test('every route has all three rivals in three-stock fights on playable arena forms',()=>{
   for (const [p1,course] of Object.entries(cup.courses)) {
     assert.deepEqual(course.bouts.map(b=>b[0]).sort(),Object.keys(DogFight.fighters).filter(k=>k!==p1).sort());

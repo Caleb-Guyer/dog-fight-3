@@ -2,24 +2,24 @@
   'use strict';
   const courses = {
     pip:{name:'Express delivery', bouts:[
-      ['noodle','picnic','original','Slip inside Noodle’s lead and start a jab string.'],
-      ['clover','canal','original','Use the ferry to get above Clover’s returning disc.'],
-      ['brisket','nightmail','flat','Bait the heavy swing on the mail-car roof, then dash in.'],
+      ['noodle','picnic','original'],
+      ['clover','canal','original'],
+      ['brisket','nightmail','flat'],
     ]},
     brisket:{name:'Heavy freight', bouts:[
-      ['pip','nightmail','flat','Face the center and make Pip come through your shield.'],
-      ['noodle','laundry','original','Catch Noodle on a rooftop before he can swing across the gap.'],
-      ['clover','bandstand','trio','Meet Clover on her way down with an up smash.'],
+      ['pip','nightmail','flat'],
+      ['noodle','laundry','original'],
+      ['clover','bandstand','trio'],
     ]},
     noodle:{name:'Over the rooftops', bouts:[
-      ['brisket','laundry','original','Fight across the rooftop gap. Save your lead for the return.'],
-      ['clover','nightmail','trio','Use the perches to pass above Clover’s disc.'],
-      ['pip','canal','original','Hold the lip when Pip chases the ferry.'],
+      ['brisket','laundry','original'],
+      ['clover','nightmail','trio'],
+      ['pip','canal','original'],
     ]},
     clover:{name:'Around the horn', bouts:[
-      ['pip','canal','original','Send a disc along the gate, then cover Pip’s jump.'],
-      ['brisket','picnic','trio','Hop between the perches while your disc returns.'],
-      ['noodle','laundry','flat','Change the distance between throws to keep Noodle outside his grab.'],
+      ['pip','canal','original'],
+      ['brisket','picnic','trio'],
+      ['noodle','laundry','flat'],
     ]},
   };
   const rounds = 4, levels = ['rookie','arcade','rival'];

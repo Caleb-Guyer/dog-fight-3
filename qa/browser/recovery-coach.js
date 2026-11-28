@@ -315,9 +315,49 @@ async function check(browser,device) {
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
+async function savedCupRecovery(browser){
+  const page=await browser.newPage();
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+    await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+    await page.goto('http://127.0.0.1:8080/#arcade/pip');
+    await page.locator('[data-do=cup-start]').waitFor();
+    await page.evaluate(()=>{
+      const draw=DogFightView.FightView.prototype.draw;
+      DogFightView.FightView.prototype.draw=function(canvas,w,...rest){
+        window.cupFight=w;
+        if(w.dogs[1].ledge?.left)window.caughtLeft=true;
+        return draw.call(this,canvas,w,...rest);
+      };
+    });
+    await page.locator('[data-do=cup-start]').click();await page.locator('#pause').waitFor();
+    await page.clock.runFor(2700);
+    await page.evaluate(()=>{
+      const [p,f]=cupFight.dogs,floor=cupFight.terrain[0];
+      Object.assign(p,{x:(floor.x1+floor.x2)/2,y:floor.y,ground:0});
+      Object.assign(f,{x:floor.x1-152,y:floor.y+154,ground:-1,coyote:0,face:1,vx:0,vy:140,
+        jumps:1,usedDodge:true,ledgeLock:.28,attack:null,command:null});
+    });
+    await page.clock.runFor(100);
+    await page.locator('#pause').click();
+    const moment=()=>page.evaluate(()=>{const f=cupFight.dogs[1];
+      return [cupFight.matchFrames,f.x,f.y,f.vy,f.jumps,f.ledgeLock,f.usedUp];});
+    const before=await moment();
+    assert(before[3]<0 && before[4]===0 && before[5]>0 && !before[6],JSON.stringify(before));
+    await page.locator('#cup-pause-tools summary').click();
+    await page.locator('[data-do=cup-save]').click();
+    await page.locator('#home-continue[data-save=pip]').click();
+    await page.getByRole('heading',{name:'Arcade Cup paused'}).waitFor();
+    assert.deepEqual(await moment(),before);
+    await page.locator('[data-do=resume]').click();await page.clock.runFor(750);
+    assert.deepEqual(await page.evaluate(()=>[!!window.caughtLeft,cupFight.dogs[1].stocks]),[true,3]);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{for(const device of ['keyboard','touch','controller']){
+  try{await savedCupRecovery(browser);for(const device of ['keyboard','touch','controller']){
     try{await check(browser,device);}catch(error){throw Error(device+' recovery playtest: '+error.stack);}
   }}
   finally{await browser.close();}

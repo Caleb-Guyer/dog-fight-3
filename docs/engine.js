@@ -2883,6 +2883,7 @@
       }
       // Solo replays reconstruct the CPU. Older checkpoints retain the footwork they recorded.
       if(this.cpuLevel==='rookie')this.bot.rookieWindup=true;
+      if(this.mode==='solo')this.bot.readLasso=true;
       if (this.cpuLevel === 'rival') this.bot.dashBackEnabled = true;
       if(this.cpuLevel==='rival' || this.mode==='training')this.bot.readDashAttacks=true;
       if (this.mode==='solo' && this.cpuLevel==='rival'){
@@ -2921,7 +2922,7 @@
     resetCpu() {
       const memory = this.bot;
       this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
-      if (memory) for (const key of ['rookieWindup','shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','readDashAttacks','liftReadEnabled','returnPerches','readPlatforms','gavePerch','challengedReturn','clockAware','heldCenter','chasedLead'])
+      if (memory) for (const key of ['rookieWindup','shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','readDashAttacks','readLasso','liftReadEnabled','returnPerches','readPlatforms','gavePerch','challengedReturn','clockAware','heldCenter','chasedLead'])
         if (memory[key] !== undefined) this.bot[key] = memory[key];
       if(memory?.landingHabit)this.bot.landingHabit=memory.landingHabit;
       if(memory?.coveredLanding)this.bot.coveredLanding=memory.coveredLanding;
@@ -8293,6 +8294,11 @@
           f.vy>=-125 || f.ledgeLock || f.grip || f.stun || f.impactLag || f.stockLift || a.time+1e-8<a.start)return null;
       return this.nearestLedge(f,f.stats.width+12,4,f.stats.height+6);
     }
+    lassoAnchor(f) {
+      if(f.ledgeLock)return null;
+      const edge=this.nearestLedge(f,188,-35,165);
+      return edge && Math.hypot(edge.x-f.x,edge.y-f.y)<=220 ? edge : null;
+    }
     nearestLedge(f, horizontal, above, below) {
       if (f.ledgeCatches >= maxLedgeCatches) return null;
       let best = null,
@@ -8834,8 +8840,7 @@
           f.vx = f.vy = 0;
           break;
         case 'noodleLasso': {
-          const edge = air && !f.ledgeLock && this.nearestLedge(f, 188, -35, 165);
-          a.anchor = edge && Math.hypot(edge.x - f.x, edge.y - f.y) <= 220 ? edge : null;
+          a.anchor = air ? this.lassoAnchor(f) : null;
           f.ground = -1;
           a.motionLocked = true;
           if (a.anchor) {
@@ -11030,6 +11035,18 @@
             Math.abs(foe.y-f.y) < 35 && !protectionTime(foe)) return dir;
       }
     }
+    lassoAfterLock(f,axis) {
+      const path={x:f.x,y:f.y,ledgeCatches:f.ledgeCatches};
+      const frames=Math.ceil(f.ledgeLock*60);
+      let vx=f.vx,vy=f.vy;
+      for(let i=0;i<frames;i++){
+        vx=airVelocity(f,vx,axis,1/60);
+        vy=fallVelocity(f,vy,1/60,true);
+        path.x+=vx/60;
+        path.y+=vy/60;
+      }
+      return this.lassoAnchor(path);
+    }
     cpuRecoveryInput(f, closest, inside, under, unsafe, result) {
       if (f.attack?.charging) {
         result.x = Math.sign(inside - f.x);
@@ -11059,7 +11076,10 @@
         result.x = Math.sign(inside - f.x);
         if (!f.stun && !f.dodge) {
           const secondHop = f.kind === 'pip' && f.hopWindow > 0 && f.vy > -395;
-          const canHook = f.kind === 'noodle' && !f.usedUp && this.nearestLedge(f, 180, -24, 155);
+          const lasso=f.kind==='noodle' && !f.usedUp;
+          const canHook=lasso && (this.bot.readLasso?this.lassoAnchor(f):this.nearestLedge(f,180,-24,155));
+          if(lasso && this.bot.readLasso && f.ledgeLock && !f.attack && this.lassoAfterLock(f,result.x))
+            return {...idleInput,x:result.x};
           if (!canHook && this.cpuLevel === 'rival' && !f.attack && !f.usedAir && !f.usedUp &&
               !f.command && !f.tumble && !f.airDodge && !f.wallAction && !f.impactLag) {
             const aim = this.crossingSpecial(f, closest, result.x);
