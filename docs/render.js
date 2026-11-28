@@ -3599,7 +3599,7 @@
   }
   function drawPodium(canvas,kind,coat,cel) {
     const ctx=canvas.getContext('2d');
-    const accent=chargeColors[kind];
+    const accent=chargeColors[kind] || gold;
     const rect=(x,y,w,h,color)=>{ctx.fillStyle=color;ctx.fillRect(x,y,w,h);};
     rect(0,0,152,104,'#272b40');
     // Raked stage lights and the yard's string of triangular pennants.
@@ -3617,7 +3617,13 @@
     rect(18,83,116,4,'#f6d58c');rect(20,87,112,12,'#ad754f');rect(24,90,104,7,'#5e4950');
     for(const x of [26,124]) rect(x,92,2,2,'#f4c76a');
     rect(56,80,43,3,'#483d48');
-    window.DogArt.draw(ctx,kind,78,82,{coat,face:1,scale:.8,pose:'win',time:cel/12});
+    if(kind==='conductor'){
+      ctx.save();
+      ctx.translate(80,82);
+      ctx.scale(.5,.5);
+      window.DispatchActors.draw(ctx,kind,0,0,{pose:'idle',time:cel/12});
+      ctx.restore();
+    }else window.DogArt.draw(ctx,kind,78,82,{coat,face:1,scale:.8,pose:'win',time:cel/12});
     // A brass tennis-ball trophy at the front of the rostrum.
     rect(27,79,17,4,ink); rect(29,77,13,3,'#ebb665'); rect(33,73,5,5,'#b57848');
     rect(30,61,11,13,'#805440');rect(28,64,15,7,'#805440');

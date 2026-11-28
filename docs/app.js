@@ -996,7 +996,7 @@
     if(dialogType==='rumble')window.PadFeedback?.stop();
     if((kind.startsWith('finish-') || ['match-card','record-card','records','result','online-result','ko-replays'].includes(kind)) && !$('replay-sheet')){
       const link=document.createElement('link');
-      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=school-result-2';
+      link.id='replay-sheet';link.rel='stylesheet';link.href='./replays.css?v=cup-finish-1';
       link.onerror=()=>link.remove();document.head.append(link);
     }
     movePreview=null;
@@ -1707,20 +1707,6 @@
     else showPause(false);
     $('dialog-body').querySelector('[data-do=cup-sheet]').focus();
   }
-  function cupFinish(title,kind,coat,headline,line,primary,details=''){
-    const attempt=cupAttempt, open=!!attempt.detailsOpen;
-    showDialog('result',title,'<div class="cup-result"><div class="winner"><img alt="" src="'+portrait(kind,coat)+'"><div><h3>'+
-      headline+'</h3><p>'+line+'</p></div></div><div class="cup-advance">'+primary+'</div>'+
-      '<div class="cup-links"><button class="utility" id="cup-more" aria-controls="cup-review" aria-expanded="'+open+'">More options</button></div>'+
-      '<section id="cup-review" aria-label="More options"'+(open?'':' hidden')+'><div class="dialog-actions">'+
-      '<button class="utility" data-do="cup-sheet">Cup schedule</button><button class="utility" data-do="home">Main menu</button></div>'+
-      '<span data-cup-recap hidden></span>'+details+(world.matchCard?'<div class="dialog-actions">'+cardButton+'</div>':'')+'</section></div>',false);
-    $('cup-more').onclick=()=>{
-      attempt.detailsOpen=$('cup-review').hidden;$('cup-review').hidden=!attempt.detailsOpen;
-      $('cup-more').setAttribute('aria-expanded',String(attempt.detailsOpen));
-    };
-    document.querySelector('.cup-advance button').focus();announce(title+'. '+line);
-  }
   async function cupResult(won) {
     const attempt = cupAttempt;
     if (!attempt || attempt.saving) return;
@@ -1733,19 +1719,8 @@
       if (!entry) return cupSheet(attempt.kind);
       attempt.settled = entry;
     }
-    const entry = attempt.settled, kind = attempt.kind, next = attempt.round+1;
-    cupShown = entry;
-    const clear = won && next === cup.rounds;
-    const title = clear ? 'Arcade Cup clear!' : won ? 'Round '+next+' clear' : 'Round '+next+' lost';
-    const nextDog = cup.courses[kind].bouts[next]?.[0];
-    const line = clear ? cupRecord(entry.last) : won ? 'Next up · '+(nextDog ? fighters[nextDog].name : 'Copper Hound') :
-      'Retry this round with three fresh stocks.';
-    const winner=world.mode==='adventure'?world.dogs[0]:world.dogs[world.end];
-    const headline=world.mode==='adventure'?(won?fighters[kind].name+' wins':'Copper Hound wins'):winner.stats.name+' wins';
-    cupFinish(title,winner.kind,world.coatFor(winner.index),headline,line,
-      '<button class="primary" data-do="'+(clear?'cup-roster':'cup-next')+'">'+
-      (clear?'Choose a fighter':won?'Play round '+(next+1):'Retry round '+next)+'</button>',
-      clear?'<p><strong>Personal best</strong> · '+cupRecord(entry.best)+'</p>':'');
+    cupShown = attempt.settled;
+    window.VersusRulebook.cupResult(world,attempt,won,{showDialog,announce,stockLabel,tenth,record:cupRecord,cardButton});
   }
   const frameLab = {mode:'live', count:0, pending:0, renderTime:0};
   let trainingMoment = null;
@@ -2527,10 +2502,10 @@
       }});
   }
   function presentWinner() {
-    const photo=document.querySelector('#dialog-body .winner img');
+    const photo=document.querySelector('#dialog-body .winner :is(img,[data-podium])');
     if (!photo || !world) return;
     const result=online.match?.confirmedWorld || world;
-    const slot=result.mode==='adventure' ? (result.finished==='exit'?0:null) : result.end;
+    const slot=result.mode==='adventure' ? (result.finished==='exit'?0:1) : result.end;
     if (slot===null || !result.dogs[slot]) return;
     const dog=result.dogs[slot], canvas=document.createElement('canvas');
     canvas.width=152; canvas.height=104;
@@ -2538,7 +2513,7 @@
     canvas.setAttribute('role','img');
     canvas.setAttribute('aria-label',dog.stats.name+' on the winner’s podium');
     photo.replaceWith(canvas);
-    victoryShot={canvas,kind:dog.kind,coat:result.coatFor(slot),elapsed:0,cel:-1};
+    victoryShot={canvas,kind:dog.encounter?.kind || dog.kind,coat:result.coatFor(slot),elapsed:0,cel:-1};
     drawVictory(0);
     const stats=document.querySelector('#dialog-body [data-do=match-card]');
     const options=$('result-options'),watch=$('result-watch'),practiceTools=$('result-practice');
@@ -4283,14 +4258,14 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=cup-schedule-1',
+    VersusRulebook:'versus-rules.js?v=cup-finish-1',
     PackRelay:'pack-relay.js?v=versus-2',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
     ComboLab:'combo-lab.js?v=held-aerial-1', FinishTools:'finish-tools.js?v=second-chance-1',
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=stock-share-1', DispatchView:'dispatch-view.js?v=stock-share-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=stock-share-1', DispatchView:'dispatch-view.js?v=cup-counter-1',
     ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=dash-smash-1',
   };
   const dispatchLoads=new Map();

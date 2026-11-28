@@ -35,6 +35,32 @@ test('a stale loss or clear cannot finish a resumed round or overwrite a newer r
   assert.equal(cup.finish(cup.begin(cup.read(null),'two',0),first,true,3,64),null);
   assert.equal(cup.read({active:{...entry.active,wins:[{stocks:4,frames:10}]}}).active,null);
 });
+test('every Cup fighter can defend the stamp, charge and bell using the counter on its retry screen',()=>{
+  for(const kind of Object.keys(DogFight.fighters))for(const move of ['stamp','charge','bell']){
+    for(const defend of [false,true]){
+      const fight=new DispatchRun({room:DispatchScript.lastRoom,cupFighter:kind});
+      const hero=fight.dogs[0],boss=fight.foes[0];
+      const distance={stamp:90,charge:200,bell:165}[move];
+      hero.x=boss.f.x-distance;
+      if(move==='charge')boss.cycle=1;
+      if(move==='bell')boss.hp=28;
+      for(let frame=0;frame<230;frame++){
+        const input={...DogFight.idleInput};
+        if(defend){
+          if(move==='stamp' || (move==='charge' && kind==='brisket'))input.shield=true;
+          else if(move==='charge')input.jump=(boss.phase==='windup' && boss.time>boss.duration-.08) ||
+            (boss.phase==='strike' && boss.time<.2);
+          else input.jump=boss.wavefront?.radius>60 && boss.wavefront.radius<155;
+        }
+        fight.step(1/60,input);
+        if(boss.phase==='stun' && (!boss.wavefront || boss.wavefront.radius>distance+40))break;
+      }
+      assert.equal(boss.phase,'stun');
+      assert.equal(hero.damage===0,defend,kind+' against '+move);
+      assert.equal(fight.lastBossHit,defend?undefined:move);
+    }
+  }
+});
 test('a personal best ranks fewer retries, then stocks kept, then winning time',()=>{
   let entry=cup.read(null);
   function clear(id,retries,stocks,frames) {

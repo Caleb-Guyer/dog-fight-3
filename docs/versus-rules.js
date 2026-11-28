@@ -669,6 +669,42 @@
     return '<ol class="cup-stops" aria-label="Cup schedule">'+rows+'</ol>'+
       (record && entry.clears?'<p>'+entry.clears+(entry.clears===1?' clear':' clears')+(entry.best?' · Personal best · '+record(entry.best):'')+'</p>':'');
   }
+  function cupResult(battle,attempt,won,{showDialog,announce,stockLabel,tenth,record,cardButton}){
+    const cup=window.YardCup,round=attempt.round+1,entry=attempt.settled;
+    const boss=battle.mode==='adventure',clear=won && round===cup.rounds;
+    const winner=battle.dogs[boss?(won?0:1):battle.end];
+    const title=clear?'Arcade Cup clear!':'Round '+round+(won?' clear':' lost');
+    const headline=winner.stats.name+' wins';
+    let line;
+    if(clear)line=record(entry.last);
+    else if(boss)line=window.DispatchView.bossLoss(battle);
+    else{
+      if(battle.endReason==='time')line='Time expired · '+winner.stocks+'–'+battle.dogs[1-battle.end].stocks+' stocks';
+      else if(battle.endReason==='sudden')line='Sudden Death KO';
+      else line=stockLabel(winner.stocks)+' left'+(won?'':' at '+tenth(winner.damage)+'%');
+      if(won){
+        const rival=cup.courses[attempt.kind].bouts[round]?.[0];
+        line+=' · Next up, '+(rival?window.DogFight.fighters[rival].name:'Copper Hound');
+      }
+    }
+    const open=!!attempt.detailsOpen;
+    const action=clear?'Choose a fighter':won?'Play round '+(round+1):'Retry round '+round;
+    showDialog('result',title,'<div class="cup-result"><div class="winner"><span data-podium></span><div><h3>'+
+      headline+'</h3><p>'+line+'</p></div></div><div class="cup-advance"><button class="primary" data-do="'+
+      (clear?'cup-roster':'cup-next')+'">'+action+'</button></div>'+
+      '<div class="cup-links"><button class="utility" id="cup-more" aria-controls="cup-review" aria-expanded="'+open+'">More options</button></div>'+
+      '<section id="cup-review" aria-label="More options"'+(open?'':' hidden')+'><div class="dialog-actions">'+
+      '<button class="utility" data-do="cup-sheet">Cup schedule</button><button class="utility" data-do="home">Main menu</button></div>'+
+      '<span data-cup-recap hidden></span>'+(clear?'<p><strong>Personal best</strong> · '+record(entry.best)+'</p>':'')+
+      (battle.matchCard?'<div class="dialog-actions">'+cardButton+'</div>':'')+'</section></div>',false);
+    const more=document.getElementById('cup-more'),review=document.getElementById('cup-review');
+    more.onclick=()=>{
+      attempt.detailsOpen=review.hidden;review.hidden=!attempt.detailsOpen;
+      more.setAttribute('aria-expanded',String(attempt.detailsOpen));
+    };
+    document.querySelector('.cup-advance button').focus();
+    announce(title+'. '+headline+'. '+line);
+  }
   function cupSelect(root,{kind,route,progress,temporary,coatFor,select,back,start,record,stageName,stockLabel}){
     const {fighters}=window.DogFight,cup=window.YardCup;
     const art={pip:'picnic',brisket:'nightmail',noodle:'laundry',clover:'canal'};
@@ -790,5 +826,5 @@
       if(Math.floor(time*12)!==drawn)paint();
     }};
   }
-  window.VersusRulebook={arenaSelect,cupSelect,cupSchedule,OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
+  window.VersusRulebook={arenaSelect,cupSelect,cupSchedule,cupResult,OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
 })();

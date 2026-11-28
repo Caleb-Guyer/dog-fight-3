@@ -3,9 +3,9 @@
   const { FightView, drawFighter, drawItem, drawEffect, gripLead } = window.DogFightView;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const patterns = {
-    stamp: {name:'Paw stamp', hint:'When the front paw rises, shield or back up. Step in and tap Attack as the lamp opens.'},
-    charge: {name:'Rail charge', hint:'Jump over the rush or block it. Follow the Hound and turn toward the open lamp before you attack.'},
-    bell: {name:'Floor bell', hint:'The bell sends a brass wave along the floor. Jump the crest or block it, then close in and hit the open lamp.'},
+    stamp: {name:'Paw stamp', counter:'Shield when the front paw rises.', hint:'When the front paw rises, shield or back up. Step in and tap Attack as the lamp opens.'},
+    charge: {name:'Rail charge', counter:'Jump over the charge.', hint:'Jump over the rush or block it. Follow the Hound and turn toward the open lamp before you attack.'},
+    bell: {name:'Floor bell', counter:'Jump the bell wave.', hint:'The bell sends a brass wave along the floor. Jump the crest or block it, then close in and hit the open lamp.'},
   };
   function patternButton(move) {
     return '<button class="utility" data-boss-pattern="'+move+'">'+patterns[move].name+'</button>';
@@ -187,6 +187,13 @@
       return '<h3>Practice a boss attack</h3>'+
         (last && patterns[last]?'<p>Last hit · '+patterns[last].name+'. '+patterns[last].hint+'</p>':'')+
         '<div class="dialog-actions">'+Object.keys(patterns).map(patternButton).join('')+'</div>';
+    }
+    static bossLoss(world) {
+      const armor=Math.ceil(world.foes[0].hp);
+      if(!armor)return 'The armor broke as your last stock fell.';
+      const tip=world.lastBossHit==='charge' && world.dogs[0].kind==='brisket'?'Shield the charge.':
+        patterns[world.lastBossHit]?.counter || 'Strike when the lamp opens.';
+      return armor+' armor left. '+tip;
     }
     static lessonPanel(world, parked, showDialog) {
       const move = world.bossLesson.move, outcome = world.finished;

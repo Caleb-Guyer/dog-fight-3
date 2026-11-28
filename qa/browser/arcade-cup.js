@@ -91,12 +91,19 @@ async function playCup(browser) {
     await page.evaluate(()=>delete window.ringOut);
   }
   await assertRound('brisket','rookie');
+  await page.evaluate(()=>{
+    const rival=fight.dogs[1];
+    fight.knockouts([rival]);fight.knockouts([rival]);rival.damage=116.4;
+  });
   await finish(0,'Round 1 lost');await checkResult('Retry round 1');
+  assert.equal(await page.locator('.cup-result .winner p').innerText(),'1 stock left at 116.4%');
+  assert.equal(await page.locator('.cup-result .victory-shot').getAttribute('aria-label'),'Brisket on the winner’s podium');
   await page.locator('#cup-more').click();await tap('cup-sheet');
   assert.match(await page.locator('.cup-stops [aria-current]').innerText(),/Brisket[\s\S]*Retry/);
   await tap('cup-return');await title('Round 1 lost');await tap('cup-next');
   await assertRound('brisket','rookie'); await finish(1,'Round 1 clear');
   await checkResult('Play round 2');
+  assert.match(await page.locator('.cup-result .winner p').innerText(),/^3 stocks left · Next up, Clover$/);
   assert(!(await page.locator('[data-do=match-card]').isVisible()));await page.locator('#cup-more').click();
   await tap('match-card'); await tap('card-back'); await title('Round 1 clear');
   const saved=await record();
@@ -107,8 +114,14 @@ async function playCup(browser) {
   assert.match(await page.locator('[data-do=cup-start]').textContent(),/Start Clover/);
   await page.locator('[data-cup-dog=noodle]').click();
   await tap('cup-start');await assertRound('clover','arcade');
-  await finish(1,'Round 2 clear');await checkResult('Play round 3');await tap('cup-next');
-  await assertRound('pip','rival');await finish(1,'Round 3 clear');
+  await page.evaluate(()=>{fight.knockouts([fight.dogs[1]]);fight.clockFrames=1;});
+  await title('Round 2 clear');await checkResult('Play round 3');
+  assert.match(await page.locator('.winner p').innerText(),/^Time expired · 3–2 stocks · Next up, Pip$/);
+  await tap('cup-next');await assertRound('pip','rival');
+  await page.evaluate(()=>{fight.clockFrames=1;});
+  await page.waitForFunction(()=>fight.suddenDeath && !fight.suddenDeath.intro);
+  await finish(1,'Round 3 clear');
+  assert.equal(await page.locator('.winner p').innerText(),'Sudden Death KO · Next up, Copper Hound');
   const fronts=page.locator('.cup-result button:visible');
   await checkResult('Play round 4');
   assert.equal(await page.locator('#cup-more').getAttribute('aria-expanded'),'false');
@@ -144,10 +157,41 @@ async function playCup(browser) {
   await page.keyboard.press('Enter');await tap('cup-resume');
   await page.waitForFunction(n=>fight.matchFrames>n,atPause[0]);assert.deepEqual(await record(),beforePeek);
   assert.equal(await page.evaluate(()=>fight.foes[0].hp),atPause[1]);
+  // Put the hero on the final stock and let the boss land its real half-armor bell.
+  await page.evaluate(()=>{
+    const hero=fight.dogs[0],boss=fight.foes[0];
+    hero.stocks=1;hero.x=boss.f.x-165;
+    Object.assign(boss,{hp:27.4,phase:'approach',time:0,cycle:3,nextBell:3,wavefront:null});
+  });
+  await page.waitForFunction(()=>fight.lastBossHit==='bell');
+  await finish(0,'Round 4 lost');await checkResult('Retry round 4');
+  const podium=page.locator('.cup-result .victory-shot');
+  assert.equal(await podium.getAttribute('aria-label'),'Copper Hound on the winner’s podium');
+  assert.equal(await page.locator('.cup-result .winner h3').textContent(),'Copper Hound wins');
+  assert.equal(await page.locator('.cup-result .winner p').innerText(),'28 armor left. Jump the bell wave.');
+  assert.equal(await page.locator('#dispatch-hud').isVisible(),false);
+  assert.equal(await page.locator('#dispatch-orders').isVisible(),false);
+  // Compare against the actor drawn in the fight, including a stable cel when motion is reduced.
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.waitForFunction(()=>{
+    const shown=document.querySelector('.cup-result canvas');
+    const reference=document.createElement('canvas');reference.width=152;reference.height=104;
+    DogFightView.drawPodium(reference,'conductor',0,28);
+    return shown.toDataURL()===reference.toDataURL();
+  });
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'cup-boss-loss-phone.png'});
+  const keep=await record();
+  await tap('cup-next');
+  await page.waitForFunction(()=>fight?.mode==='adventure' && fight.foes[0].hp===170 && !fight.finished);
+  assert.deepEqual(await page.evaluate(()=>[fight.dogs[0].kind,fight.dogs[0].stocks]),['noodle',3]);
+  const retry=await record();
+  assert.equal(retry.active.id,keep.active.id);assert.deepEqual(retry.active.wins,keep.active.wins);
+  assert.equal(retry.active.retries,keep.active.retries+1);
   await finish(1,'Arcade Cup clear!');
   await checkResult('Choose a fighter');
+  assert.equal(await podium.getAttribute('aria-label'),'Noodle on the winner’s podium');
   const cleared=await record();
-  assert.equal(cleared.active,null);assert.equal(cleared.clears,1);assert.equal(cleared.best.retries,1);
+  assert.equal(cleared.active,null);assert.equal(cleared.clears,1);assert.equal(cleared.best.retries,2);
   assert.equal(cleared.best.id,saved.active.id);
   assert.equal(cleared.best.wins.length,4);assert(cleared.best.wins.every(w=>w.frames>0));
   assert.equal(await page.evaluate(()=>localStorage.getItem(DispatchScript.saveKey)),null);
