@@ -279,7 +279,7 @@ async function mobileAndFilms(browser){
   const home=page.locator('#home-continue[data-save=clover]');await home.waitFor();
   await page.evaluate(()=>DispatchSuspend.discardCup(JSON.parse(localStorage.getItem('dog-fight-3.cup.clover')).active.saved));
   await home.tap();await page.locator('#cup-save-back').tap();await roster.waitFor();
-  assert.equal(await roster.locator('[data-do=cup-start]').innerText(),'Resume round 1');
+  assert.equal(await roster.locator('[data-do=cup-start]').textContent(),'Resume round 1');
   await roster.locator('[data-do=cup-start]').tap();await page.locator('#cup-save-restart').tap();
   await page.locator('#pause').waitFor();
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.cup.clover')).active.retries),1);
