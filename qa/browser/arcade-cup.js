@@ -337,9 +337,93 @@ async function returningFighter(browser){
     assert.equal(resumed.clover,null);
   } finally {await page.close();}
 }
+async function bossEntrance(browser,device){
+  const phone=device==='phone',pad=device==='pad';
+  const page=await browser.newPage({viewport:phone?{width:390,height:844}:{width:1920,height:800},
+    hasTouch:phone,isMobile:phone,reducedMotion:phone?'reduce':'no-preference'});
+  page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.addInitScript(pad=>{
+      const key='dog-fight-3.cup.clover';
+      if(!localStorage.getItem(key))localStorage.setItem(key,JSON.stringify({active:{id:'boss-entrance',coat:2,retries:0,
+        started:false,wins:[1,2,3].map(stocks=>({stocks,frames:2400}))}}));
+      if(!pad)return;
+      const p={index:0,id:'Hosted pad',mapping:'standard',connected:true,axes:[0,0,0,0],
+        buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
+      Object.defineProperty(navigator,'getGamepads',{value:()=>[p]});
+      window.jump=on=>Object.assign(p.buttons[0],{pressed:on,value:Number(on)});
+    },pad);
+    await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+    await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+    await page.goto(root+'#arcade/clover');
+    const start=page.locator('[data-do=cup-start]'),call=page.locator('#countdown');
+    for(const retry of [false,true]){
+      await start.waitFor();assert.equal(await start.textContent(),retry?'Retry round 4':'Continue to round 4');
+      if(pad){
+        await start.focus();await page.evaluate(()=>jump(true));await page.clock.runFor(48);
+        await page.evaluate(()=>jump(false));
+      }else if(phone)await start.tap();else await start.click();
+      await page.locator('#dispatch-hud').waitFor();
+      assert.equal(await call.textContent(),retry?'1':'3');
+      assert(!(await page.locator('#dispatch-orders').isVisible()));
+      assert.equal(await page.locator('#machine-name').textContent(),'Copper Hound');
+      assert.match(await page.locator('#announce').textContent(),/Clover versus Copper Hound.*Bell Depot/);
+      await page.evaluate(()=>{
+        window.poses=[];window.liveFrames=[];
+        const draw=DispatchView.prototype.draw,step=DispatchRun.prototype.step,actor=DispatchActors.draw;
+        DispatchView.prototype.draw=function(canvas,w,...args){window.depot=w;window.depotView=this;return draw.call(this,canvas,w,...args);};
+        window.DispatchActors={...DispatchActors,draw(ctx,kind,x,y,opts){
+          if(kind==='conductor' && window.depotView?.cupOpening?.remaining){
+            const f=depot.dogs[0],m=ctx.getTransform();
+            const visible=(px,py)=>{const p=new DOMPoint(px,py).matrixTransform(m);
+              return p.x>=0 && p.x<=ctx.canvas.width && p.y>=0 && p.y<=ctx.canvas.height;};
+            if(!visible(x-90,y-140) || !visible(x+85,y) || !visible(f.x-42,f.y-75) || !visible(f.x+42,f.y))
+              throw Error('Finalists cropped during the countdown');
+            poses.push(opts.pose);
+          }
+          return actor(ctx,kind,x,y,opts);
+        }};
+        DispatchRun.prototype.step=function(dt,input,...args){
+          if(!liveFrames.length)liveFrames.push([document.getElementById('countdown').textContent,!!input.tapped?.jump]);
+          return step.call(this,dt,input,...args);
+        };
+      });
+      if(!retry){
+        await page.clock.runFor(900);assert.equal(await call.textContent(),'2');
+        const frozen=()=>page.evaluate(()=>[depot.matchFrames,depot.time,depot.dogs[0].damage,depot.foes[0].hp,
+          depot.foes[0].time,depotView.cupOpening.remaining]);
+        const before=await frozen();
+        assert.deepEqual(before.slice(0,5),[0,0,0,170,0]);
+        await page.locator('#pause').click();await page.clock.runFor(900);assert.deepEqual(await frozen(),before);
+        await page.locator('[data-do=resume]').click();
+        await page.clock.runFor(440);
+        if(!pad)await page.screenshot({path:'cup-boss-arrival-'+device+'.png'});
+      }
+      // Run up to the last five frames. The same released button must reach the first gameplay tick on every device.
+      for(let i=0;i<90;i++){
+        if(await page.evaluate(()=>window.depotView?.cupOpening?.remaining<=.085))break;
+        await page.clock.runFor(16);
+      }
+      assert(await page.evaluate(()=>depotView.cupOpening.remaining>0 && depotView.cupOpening.remaining<=.085));
+      if(pad){await page.evaluate(()=>jump(true));await page.clock.runFor(16);await page.evaluate(()=>jump(false));}
+      else if(phone)await page.locator('[data-touch=jump]').tap();
+      else await page.keyboard.press('Space');
+      await page.clock.runFor(160);
+      assert.deepEqual(await page.evaluate(()=>liveFrames),[['GO!',true]]);
+      assert(await page.evaluate(()=>depot.dogs[0].ground<0 && depot.dogs[0].stocks===3));
+      const poses=await page.evaluate(()=>[...new Set(window.poses)]);
+      assert.deepEqual(poses,phone || retry?['idle']:['walk','windup','strike','idle']);
+      await page.clock.runFor(420);
+      assert.equal(await call.textContent(),'');assert(await page.locator('#dispatch-orders').isVisible());
+      assert(!(await page.locator('#dispatch-marks').isVisible()));
+      if(!retry)await page.reload();
+    }
+  }finally{await page.close();}
+}
 async function main(){
   const browser=await chromium.launch({executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim(),headless:true});
-  try {await playCup(browser);await mobileAndFilms(browser);await returningFighter(browser);assert.deepEqual(errors,[]);}
+  try {await playCup(browser);await mobileAndFilms(browser);await returningFighter(browser);
+    for(const device of ['desktop','phone','pad'])await bossEntrance(browser,device);assert.deepEqual(errors,[]);}
   finally {await browser.close();}
 }
 main().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});

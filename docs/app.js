@@ -1700,7 +1700,7 @@
     if(startingPad)seat.use(startingPad);
     else if(seat.lost || seat.index===null)seat.useOtherInput(getPads(),true);
     if(bout)startMatch(bout,undefined,17+round*31,null,{cupRound:attempt});
-    else beginRun(yardChapter.lastRoom,0,null,attempt);
+    else beginRun(yardChapter.lastRoom,0,null,{...attempt,retry:!!expected.active?.started});
     soloWorld=world;soloSeat=seat;
   }
   function showCupSchedule(){
@@ -4250,7 +4250,7 @@
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=stock-share-1', DispatchView:'dispatch-view.js?v=cup-counter-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=stock-share-1', DispatchView:'dispatch-view.js?v=cup-entrance-1',
     ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=training-topics-1',
   };
   const dispatchLoads=new Map();
@@ -4728,9 +4728,7 @@
     cupAttempt = cupRound;
     music?.restart();
     dismiss();
-    $('pause-label').textContent = 'Pause';
-    $('countdown').classList.remove('net-lag', 'sudden');
-    $('cup-select').replaceChildren();
+    window.DispatchView.enterScreen($);
     page = 'match';
     drillSide = null;
     drillWaiting = false;
@@ -4739,28 +4737,6 @@
     countdown = 0;
     accumulator = 0;
     adventureKey = '';
-    for (const id of [
-      'home',
-      'cup-select',
-      'online-lobby',
-      'match-set',
-      'dispatch-route',
-      'dispatch-story',
-      'lobby',
-      'training-tools',
-      'match-clock',
-      'school-coach',
-      'corner-tip',
-      'recovery-tip',
-      'hud',
-      'grapple-prompt',
-    ])
-      $(id).hidden = true;
-    $('match').hidden = $('dispatch-hud').hidden = $('dispatch-orders').hidden = false;
-    $('countdown').textContent = '';
-    document.body.classList.remove('menu-screen', 'training-active', 'cinema-active', 'with-drill-readout');
-    $('freshness-readout').hidden = $('wave-readout').hidden = $('combo-readout').hidden = true;
-    document.body.classList.add('playing', 'adventure-active');
     const story=!cupRound && !doubles;
     if (story && !sideRoute && !suspended) saveProgress({ room: index, checkpoint, pending: '' });
     if (doubles) {
@@ -4772,6 +4748,11 @@
     $('blast-radar').hidden = true;
     view = new window.DispatchView();
     view.shakeEnabled = settings.shake;
+    if(cupRound){
+      clearInput();
+      lastCount=0;
+      countdown=view.beginCupOpening(cupRound.retry,$);
+    }
     noticeUntil = 0;
     $('dispatch-notice').hidden = true;
     const cues=view.missionCues({tone,sound:fightSound,dispatchNotice,stockLabel,mission,sideRoute,cupRound,
@@ -4794,7 +4775,7 @@
     view.draw($('game'), world, 0, world.time);
     $('game').focus({ preventScroll: true });
     window.scrollTo(0, 0);
-    announce((doubles?'Co-op boss fight · ':cupRound ? 'Arcade Cup final · ' : 'Adventure · ') + world.layout.name);
+    announce((doubles?'Co-op boss fight · ':cupRound ? world.dogs[0].stats.name+' versus Copper Hound · Arcade Cup final · ' : 'Adventure · ') + world.layout.name);
     if(suspended){
       showDialog('pause','Mission ready','<p>'+world.layout.name+' · '+stockLabel(world.dogs[0].stocks)+' · '+tenth(world.dogs[0].damage)+'%</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume fight</button></div>');
       $('dialog-body').querySelector('[data-do=resume]').focus();
@@ -4857,7 +4838,7 @@
       world.team?.[1].stocks,world.team && tenth(world.team[1].damage),...foes.flatMap((e) => [e.f.stocks, tenth(e.f.damage), e.hp])].join('|');
     if (key === adventureKey) return;
     adventureKey = key;
-    const marks=world.bossLesson?'Practice · Avoid the hit, then counter':world.sideRoute?'Noodle / Brisket / Clover':cupAttempt ? 'Arcade Cup · Round 4 / 4' :
+    const marks=world.bossLesson?'Practice · Avoid the hit, then counter':world.sideRoute?'Noodle / Brisket / Clover':cupAttempt ? '' :
       'Postmarks ' + countMarks(world.stamps) + ' / ' + campaign.rooms.length;
     window.DispatchView.updateScoreboard(world,recovery,order,marks,{$,tenth,showPercent,showStocks,recoveryStrip,jump});
   }
@@ -4874,6 +4855,10 @@
     element.title = label;
   }
   function runAdventure(dt, pads) {
+    if(view.cupOpening){
+      if(countdown)dt=tickCountdown(dt,pads);
+      view.advanceCupOpening(countdown,world,tone,$);
+    }
     accumulator += dt;
     while (accumulator >= 1 / 60 && !world.finished) {
       const input = playerInput(0, pads);
