@@ -49,7 +49,7 @@ function measureFight(){
   };
 }
 const percentile=(values,q)=>[...values].sort((a,b)=>a-b)[Math.ceil(values.length*q)-1];
-async function trial(browser,port,resize){
+async function trial(browser,url,resize){
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
   try{
     const page=await context.newPage(),errors=[];
@@ -57,7 +57,7 @@ async function trial(browser,port,resize){
     const cdp=await context.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});
     await page.addInitScript(observeFrames);
-    await page.goto('http://127.0.0.1:'+port+'/#arcade/pip');
+    await page.goto(url+'#arcade/pip');
     await page.locator('#cup-select [data-cup-dog=pip][aria-pressed=true]').waitFor();
     await page.evaluate('('+attachPad.toString()+')('+pipInput.toString()+')');
     await page.evaluate(measureFight);
@@ -87,12 +87,13 @@ async function trial(browser,port,resize){
       callback:percentile(samples.map(s=>s.work),.95),interval:percentile(samples.slice(1).map((s,i)=>s.stamp-samples[i].stamp),.95)};
   }finally{await context.close();}
 }
-(async()=>{
+if(require.main===module)(async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
   try{
     const runs={baseline:[],candidate:[]};
     for(let sample=0;sample<3;sample++)for(const key of sample===1?['candidate','baseline']:['baseline','candidate']){
-      runs[key].push(await trial(browser,key==='baseline'?8081:8080,key==='candidate' && sample===2));
+      const url=key==='baseline'?'http://127.0.0.1:8081/':'http://127.0.0.1:8080/';
+      runs[key].push(await trial(browser,url,key==='candidate' && sample===2));
     }
     const median={};
     for(const [build,rows] of Object.entries(runs))median[build]=Object.fromEntries(Object.keys(rows[0]).map(key=>
@@ -105,3 +106,4 @@ async function trial(browser,port,resize){
     console.log('::notice title=Cup frame times::'+JSON.stringify(median));
   }finally{await browser.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+e.stack.replaceAll('\n','%0A'));process.exitCode=1;});
+module.exports={trial};

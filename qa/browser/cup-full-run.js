@@ -1,5 +1,7 @@
 const assert = require('node:assert/strict');
 const {execFileSync} = require('node:child_process');
+const {readFileSync} = require('node:fs');
+const path = require('node:path');
 if (process.env.GITHUB_ACTIONS !== 'true' || process.env.RUNNER_OS !== 'Linux')
   throw Error('Run browser input on the hosted Linux runner.');
 const {chromium} = require('playwright-core');
@@ -138,7 +140,7 @@ const routes = {
   clover: {opponents:['pip','brisket','noodle'], signature:'cloverLineDrive'},
 };
 
-async function play(browser, kind) {
+async function play(browser, kind, url='http://127.0.0.1:8080/') {
   const route = routes[kind];
   assert(route, 'Unknown Cup fighter: '+kind);
   const page = await browser.newPage({viewport:{width:800,height:450},reducedMotion:'reduce'});
@@ -152,7 +154,10 @@ async function play(browser, kind) {
   const installPad = () => page.evaluate(
     `(pipInput => (${attachPad})(${cupInput}, ${JSON.stringify(route.signature)}))(${pipInput})`
   );
-  await page.goto('http://127.0.0.1:8080/');
+  const entryPage = await page.goto(url);
+  assert(entryPage?.ok() && entryPage.url()===url,'Could not open the expected game URL: '+url);
+  const release = readFileSync(path.join(__dirname,'../../docs/index.html'));
+  assert((await entryPage.body()).equals(release),'The served homepage differs from the release under test');
   await page.locator('#home-cup').click();
   await roster.waitFor();
   await roster.locator('[data-cup-dog='+kind+']').click();
@@ -211,6 +216,7 @@ async function play(browser, kind) {
   const others = Object.keys(routes).filter(id=>id!==kind);
   assert(await page.evaluate(ids=>ids.every(id=>localStorage.getItem('dog-fight-3.cup.'+id)===null),others));
   assert.deepEqual(errors,[]);
+  await page.close();
   console.log('::notice title=Full Cup run::'+kind+' '+JSON.stringify(rounds));
 }
 
@@ -218,4 +224,4 @@ if(require.main===module)(async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
   try {await play(browser,process.argv[2] || 'pip');} finally {await browser.close();}
 })().catch(error=>{console.error(error);console.log('::error::'+String(error.stack).replaceAll('\n','%0A'));process.exitCode=1;});
-module.exports={attachPad,pipInput};
+module.exports={attachPad,pipInput,play};

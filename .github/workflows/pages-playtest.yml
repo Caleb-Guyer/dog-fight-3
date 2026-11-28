@@ -1,0 +1,24 @@
+name: Published Arcade Cup
+on:
+  push:
+    tags: ['qa/pages/*']
+permissions:
+  contents: read
+jobs:
+  live-cup:
+    strategy:
+      fail-fast: false
+      matrix:
+        fighter: [pip, brisket, noodle, clover]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Play the published Cup from the main menu
+        env:
+          CUP_FIGHTER: ${{ matrix.fighter }}
+        run: |
+          npm install --prefix "$RUNNER_TEMP/df3" --no-audit --no-fund --ignore-scripts playwright-core@1.56.1
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/pages-cup.js "$CUP_FIGHTER"
