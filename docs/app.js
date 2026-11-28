@@ -6078,6 +6078,11 @@
     else if (page === 'dispatch-route' || page === 'lobby' || page === 'online-lobby') returnToHome();
   }
   window.addEventListener('keydown', (e) => {
+    if(dialogType==='practice' && e.code==='Escape' && !e.isComposing){
+      e.preventDefault();
+      if(!e.repeat)menuBack();
+      return;
+    }
     if (
       (page === 'match' && !$('dialog').open) ||
       e.altKey ||
