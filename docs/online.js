@@ -15,7 +15,7 @@
   const springFeature='wall-spring-1', catchFeature='rising-catch-1';
   const lightFeature='light-shield-1', impactFeature='impact-tech-1', dashSmashFeature='dash-smash-1';
   const resumeFeature='resume-inputs-1';
-  const aerialFeature='held-aerial-1';
+  const aerialFeature='held-aerial-1', dropAerialFeature='drop-aerial-1';
   const resumeChannel=channel+'-resume';
   const resumeTime=18000;
   function readRoomRules(msg){
@@ -254,7 +254,7 @@
       this.closingHeight=false;
       this.shieldPogo=false;
       this.aimedDrive=false;
-      this.groundSpace=this.wallSpring=this.risingCatch=this.lightGuard=this.impactTech=this.dashSmash=this.heldAerials=false;
+      this.groundSpace=this.wallSpring=this.risingCatch=this.lightGuard=this.impactTech=this.dashSmash=this.heldAerials=this.dropAerials=false;
       this.code = action === 'create' ? roomCode() : code;
       this.attempts = 0;
       this.round = 0;
@@ -319,7 +319,7 @@
       });
     }
     useConnection(peer, conn, host, restoring=false, attempt=0) {
-      if (!host && !restoring) this.itemDrops=this.closingHeight=this.shieldPogo=this.aimedDrive=this.groundSpace=this.wallSpring=this.risingCatch=this.lightGuard=this.impactTech=this.dashSmash=this.heldAerials=false;
+      if (!host && !restoring) this.itemDrops=this.closingHeight=this.shieldPogo=this.aimedDrive=this.groundSpace=this.wallSpring=this.risingCatch=this.lightGuard=this.impactTech=this.dashSmash=this.heldAerials=this.dropAerials=false;
       this.pending.add(conn);
       const timeout = setTimeout(() => {
         if (this.pending.delete(conn)) conn.close();
@@ -335,8 +335,8 @@
           if(this.recovery?.dial!==conn)return conn.close();
           return conn.send(['resume',this.roomTicket,this.round,attempt,this.match.received]);
         }
-        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,resumeFeature,springFeature,catchFeature,lightFeature,impactFeature,dashSmashFeature,aerialFeature] :
-          ['join',this.kind,this.coat,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,springFeature,catchFeature,lightFeature,impactFeature,dashSmashFeature,aerialFeature]);
+        if (!host) conn.send(this.action === 'join' ? ['join',this.kind,this.coat,counterpickFeature,timeFeature,roomFeature,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,resumeFeature,springFeature,catchFeature,lightFeature,impactFeature,dashSmashFeature,aerialFeature,dropAerialFeature] :
+          ['join',this.kind,this.coat,rematchFeature,dropFeature,heightFeature,pogoFeature,driveFeature,spaceFeature,springFeature,catchFeature,lightFeature,impactFeature,dashSmashFeature,aerialFeature,dropAerialFeature]);
       });
       conn.on('data', (data) => {
         if (!current() || !Array.isArray(data)) return;
@@ -387,6 +387,7 @@
           this.lightGuard=data.includes(lightFeature) && window.DogFight.validCoat(data[2]);
           this.dashSmash=data.includes(dashSmashFeature) && window.DogFight.validCoat(data[2]);
           this.heldAerials=data.includes(aerialFeature) && window.DogFight.validCoat(data[2]);
+          this.dropAerials=data.includes(dropAerialFeature) && window.DogFight.validCoat(data[2]);
           this.impactTech=data.includes(impactFeature) && window.DogFight.validCoat(data[2]);
           this.shieldPogo=data.includes(pogoFeature) && window.DogFight.validCoat(data[2]);
           // Ordered delivery puts both players' colors in the opening match configuration.
@@ -404,6 +405,7 @@
             if (this.impactTech) reply.push(impactFeature);
             if (this.dashSmash) reply.push(dashSmashFeature);
             if (this.heldAerials) reply.push(aerialFeature);
+            if (this.dropAerials) reply.push(dropAerialFeature);
             if(this.action==='create' && data.includes(resumeFeature)){
               this.roomTicket=crypto.randomUUID();
               reply.push(resumeFeature,this.roomTicket);
@@ -428,6 +430,7 @@
           this.impactTech=data.includes(impactFeature);
           this.dashSmash=data.includes(dashSmashFeature);
           this.heldAerials=data.includes(aerialFeature);
+          this.dropAerials=data.includes(dropAerialFeature);
           this.shieldPogo=data.includes(pogoFeature);
           const key=data.indexOf(resumeFeature),ticket=data[key+1];
           if(this.action==='join' && key>=0 && typeof ticket==='string' && /^[0-9a-f-]{36}$/i.test(ticket))this.roomTicket=ticket;
@@ -618,6 +621,7 @@
       if (this.impactTech===false) config.impactTech=false;
       if (this.dashSmash===false) config.dashSmash=false;
       if (this.heldAerials===false) config.heldAerials=false;
+      if (this.dropAerials===false) config.dropAerials=false;
       if(rules)Object.assign(config,{stockCount:rules.lives,minutes:rules.minutes,fetch:rules.fetch});
       if (this.timeMinutes) Object.assign(config, {timeBattle:true,minutes:this.timeMinutes});
       this.match = new RollbackMatch(this.side, round, (message) => this.send(message), config, seed,!!this.roomTicket,this.lightGuard);

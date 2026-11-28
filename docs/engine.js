@@ -2686,6 +2686,7 @@
       if(config.risingCatch!==false)this.risingCatch=true;
       if(config.impactTech!==false)this.impactTech=true;
       if(config.heldAerials!==false)this.heldAerials=true;
+      if(config.dropAerials!==false)this.dropAerials=true;
       if(config.dashSmash!==false)this.dashSmash=true;
       this.time = 0;
       this.end = null;
@@ -3258,6 +3259,7 @@
       if (!('risingCatch' in state)) delete this.risingCatch;
       if (!('impactTech' in state)) delete this.impactTech;
       if (!('heldAerials' in state)) delete this.heldAerials;
+      if (!('dropAerials' in state)) delete this.dropAerials;
       if (!('dashSmash' in state)) delete this.dashSmash;
       if (!('closingHeight' in state)) delete this.closingHeight;
       this.random.state = random.state;
@@ -6725,7 +6727,8 @@
           : pressed('aimStick') ? 'aimStick' : pressed('smash') ? 'smash' : pressed('attack') ? 'attack' : null;
       if (button) {
         const stickAerial = button === 'aimStick' && (!f.ledge || f.ledge.dropQueued) &&
-          (f.ground < 0 || f.jumpSquat || f.jumpBuffer > 0 || (this.heldAerials && f.heldRecoveryJump) || f.guardIntent === 'platformDrop');
+          (f.ground < 0 || f.jumpSquat || f.jumpBuffer > 0 || (this.heldAerials && f.heldRecoveryJump) || f.guardIntent === 'platformDrop' ||
+            (this.dropAerials && f.dropPrep?.frames > 0 && f.dropPrep.platform === f.ground && !input.shield && aimFor(input.y) !== 1));
         const stickTilt = button === 'aimStick' && input.tiltMode && f.ground >= 0 && !stickAerial;
         const guardGrab = button === 'attack' && input.shield && (f.shield || (pressed('shield') && !f.parryFlash)) && f.ground >= 0 &&
           Math.abs(input.y) < .45 && f.guardIntent !== 'platformDrop' &&

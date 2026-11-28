@@ -414,7 +414,7 @@
       tilt: 'You landed your low tilt and kept the platform.',
       landed: 'You passed through cleanly. Start your aerial a little earlier.',
       left: below ? 'Flick Down from the platform to set up the falling attack.' : 'Press Down and Attack together to stay on top.',
-      stayed: below ? 'Your swing came out on top. Drop first, then attack below the platform.' : 'Stay within paw’s reach and tap Down + Attack.',
+      stayed: below ? 'Flick Down and release it. As you drop, tap Attack or flick the right stick toward the rival.' : 'Stay within paw’s reach and tap Down + Attack.',
       other: below ? 'Try catching the rival with an aerial on the way down.' : 'Use your down tilt while both dogs are on the platform.',
     }[e.outcome];
     tip.textContent = result + ' Choose ' + (below ? 'Rival below' : 'Rival on top') + ' to retry.';
