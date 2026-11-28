@@ -59,10 +59,10 @@
       return value.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
     }
     const topics = {
-      Movement: 'Footwork, platforms and wavedashes',
-      Attack: 'Combos, aerials and knockdowns',
-      Defense: 'Shields, dodges and combo escapes',
-      Recovery: 'Ledges, edgeguards and wall jumps',
+      Movement: 'Footwork & platforms',
+      Attack: 'Combos & aerials',
+      Defense: 'Shields & dodges',
+      Recovery: 'Ledges & wall jumps',
     };
     const groups = practiceGroups.map(([topic, family, prefix, names]) => ({
       topic, family, drills: names.map(name => {
@@ -140,10 +140,7 @@
     query.oninput = refresh;
     query.onkeydown = e => {
       if (e.isComposing) return;
-      if (e.key === 'Escape' && !back.hidden) {
-        e.preventDefault();
-        back.click();
-      } else if (['ArrowDown','Enter'].includes(e.key)) {
+      if (['ArrowDown','Enter'].includes(e.key)) {
         e.preventDefault();
         const first = results.querySelector('button');
         if (e.key === 'ArrowDown') first?.focus();
