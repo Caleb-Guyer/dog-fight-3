@@ -53,6 +53,7 @@ async function sample(browser,url,build){
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
     const resources=await page.evaluate(()=>performance.getEntriesByType('resource').map(r=>new URL(r.name).pathname));
     if(candidate)await page.waitForFunction(()=>performance.getEntriesByType('resource').some(r=>new URL(r.name).pathname.endsWith('/fight-fx.png')));
+    if(candidate)assert(!resources.some(p=>p.endsWith('/versus.png')),'The matchup badge stays out of the first tutorial');
     assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.woff2')),modern);
     assert.equal(resources.some(p=>p.endsWith('/brawl-pixel.ttf')),!modern);
     if(modern)assert(!resources.some(p=>p.endsWith('/online.css')),'Online room styling stays out of first launch');
@@ -67,6 +68,11 @@ async function optionalModes(browser,url){
   const page=await browser.newPage(),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
   try{
+    await page.goto(url+'?badge#local');
+    const badge=page.locator('.versus-mark');
+    await badge.waitFor();
+    await badge.evaluate(img=>img.decode());
+    assert(await badge.evaluate(img=>img.naturalWidth>0));
     await page.route('**/practice-feedback.js*',route=>route.abort(),{times:1});
     await page.goto(url+'#training/flick-jump');
     await page.locator('#dispatch-load-retry').click();
