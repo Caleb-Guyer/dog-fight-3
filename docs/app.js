@@ -18,6 +18,7 @@
     Battle,
     StockSet,
     idleInput,
+    inputWindow,
     applyFlickJump,
     rageScale,
     isReversalPractice,
@@ -316,11 +317,13 @@
   let walkPointer = null;
   let touchFlick = null, flickAim = null;
   const strikeSticks = [new window.FightControls.StrikeStick(),new window.FightControls.StrikeStick()];
+  const openingInputs=[];
   const strikeAim = [{x:0,y:0},{x:0,y:0}];
   const horizontalInputs=[new window.FightControls.HorizontalInput(),new window.FightControls.HorizontalInput()];
   const shieldTiltLocked = [false, false];
   const flickJumpStates = [{},{}];
   function clearInput() {
+    openingInputs.length=0;
     held.clear();
     taps.clear();
     touches.clear();
@@ -1701,13 +1704,7 @@
     soloWorld=world;soloSeat=seat;
   }
   function showCupSchedule(){
-    const {kind,settled}=cupAttempt;
-    const entry=settled || cupShown,run=entry.active || entry.last;
-    const current=!settled?'Fighting now':run.started?'Retry':'Up next';
-    const rows=window.VersusRulebook.cupSchedule(kind,entry,{run,current,stageName,stockLabel,record:settled && cupRecord});
-    showDialog('cup-schedule','Cup schedule','<div class="cup-route-board">'+rows+'</div><div class="dialog-actions">'+
-      '<button class="primary" data-do="'+(settled?'cup-return':'cup-resume')+'">'+(settled?'Back to results':'Resume fight')+'</button></div>');
-    $('dialog-body').querySelector('.primary').focus();
+    window.VersusRulebook.cupScheduleSheet(cupAttempt,cupShown,{showDialog,stageName,stockLabel,record:cupRecord});
   }
   function returnFromCupSchedule(){
     if(cupAttempt.settled)cupResult(world.mode==='adventure'?world.finished==='exit':world.end===0);
@@ -2369,21 +2366,7 @@
     const clips=!online.match?knockoutClips(world):[];
     const reviewButton=(!online.match && finishTape?.length?'<button class="utility" data-do="instant-replay">Instant replay</button>':'')+
       (clips.length?stockRetryButton(world)+recoveryButtons(world,clips)+knockoutButton:'');
-    if (cupAttempt) {
-      const round=cupAttempt.round+1;
-      const toolsOpen=$('dialog').open && cupAttempt.pauseToolsOpen;
-      showDialog('pause','Arcade Cup paused','<p>'+cup.courses[cupAttempt.kind].name+' · Round '+round+' of '+cup.rounds+'</p><div class="dialog-actions">'+
-        '<button class="primary" data-do="resume">Resume</button><button class="utility" data-do="cup-sheet">Cup schedule</button></div>'+
-        '<details id="cup-pause-tools"'+(toolsOpen?' open':'')+'><summary>More options</summary><div class="dialog-actions">'+
-        '<button class="utility" data-do="moves">Move list</button><button class="utility" data-do="controls">Controls</button>'+reviewButton+'</div>'+
-        '<p id="cup-leave-note">Leaving restarts round '+round+' on your next visit. Cleared rounds stay saved.</p>'+
-        '<button class="utility" data-do="cup-roster" aria-describedby="cup-leave-note">Leave round</button></details>');
-      const tools=$('cup-pause-tools'),attempt=cupAttempt;
-      attempt.pauseToolsOpen=tools.open;
-      tools.ontoggle=()=>{if(tools.isConnected)attempt.pauseToolsOpen=tools.open;};
-      document.querySelector('[data-do=resume]').focus();
-      return;
-    }
+    if(cupAttempt)return window.VersusRulebook.cupPause(cupAttempt,showDialog,reviewButton);
     if (online.match) {
       showDialog('online-menu', 'Match menu',
         '<p id="online-fight-status">'+onlineFightStatus()+'</p><div class="dialog-actions"><button class="primary" data-do="resume">Return to fight</button><button class="utility" data-do="online-leave">Leave match</button></div>');
@@ -4266,7 +4249,7 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=cup-matchup-1',
+    VersusRulebook:'versus-rules.js?v=cup-pause-1',
     PackRelay:'pack-relay.js?v=versus-2',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
     ComboLab:'combo-lab.js?v=drop-aerial-1', FinishTools:'finish-tools.js?v=second-chance-1',
@@ -6238,7 +6221,16 @@
       const gentle = key('walk') || !!fromCenter || (!i && touchTaps.has('gentleUp')) || shieldTiltLocked[i];
       applyFlickJump(flickJumpStates[i],input,y || axis(1),gentle,taps.has(map.up) || (!i && touchTaps.has('flickUp')));
     }
+    if(!countdown && openingInputs[i]){
+      const opening=openingInputs[i];
+      openingInputs[i]=null;
+      return opening.take(input);
+    }
     return input;
+  }
+  function sampleOpening(slot,pads,fighter,remaining){
+    const opening=openingInputs[slot] ??= new controls.OpeningInput();
+    opening.sample(playerInput(slot,pads,fighter),remaining<=inputWindow+1e-8);
   }
   const idlePad={};
   let oldPad = idlePad;
@@ -6496,6 +6488,40 @@
       online.finish(match.confirmedWorld.end);
     }
   }
+  function tickCountdown(dt,pads){
+    const locked=countdown;
+    const remaining=Math.max(0,countdown-dt);
+    // Sample a neutral/held baseline before the seven-frame command window opens.
+    if(remaining<=inputWindow+.1){
+      sampleOpening(0,pads,online.match?online.side:world.trainingPlayerSlot,remaining);
+      if(world.hasSecondPlayer && !online.match)sampleOpening(1,pads,1,remaining);
+    }
+    taps.clear();touchTaps.clear();
+    countdown=remaining;
+    if(view.entrance){
+      const intro=view.entrance;
+      for(const f of world.dogs){
+        const mark=1.96-.40*f.index;
+        if(intro.remaining>mark && countdown<=mark)window.FighterEntrances?.cue(f.kind,tone);
+      }
+      intro.remaining=countdown;
+      if(!countdown)view.entrance=null;
+    }
+    const number = Math.ceil(countdown / 0.8);
+    if (number !== lastCount) {
+      lastCount = number;
+      sound(number ? 'tick' : 'go');
+    }
+    const caption=String(number || 'GO!');
+    if($('countdown').textContent!==caption)$('countdown').textContent=caption;
+    if (!number) {
+      $('countdown').classList.remove('opponent-found');
+      if (online.match) online.match.lastStep = performance.now();
+      announce('Fight!');
+    }
+    // The first simulation step and the GO cue share a rendered frame. Carry any excess time forward.
+    return remaining ? 0 : 1/60+Math.max(0,dt-locked);
+  }
   function frame(timestamp) {
     const now = timestamp / 1000,
       dt = Math.min(0.09, Math.max(0, now - before));
@@ -6523,43 +6549,18 @@
       runAdventure(dt, pads);
     } else if (!paused && world && dialogType!=='finish-film') {
       let steppedFrame = false;
+      const playDt=countdown>0 && !online.recovery ? tickCountdown(dt,pads) : dt;
       if(online.recovery){
         const seconds=Math.max(0,Math.ceil((online.recovery.until-Date.now())/1000));
         const caption='Reconnecting · '+seconds+'s';
         if($('countdown').textContent!==caption)$('countdown').textContent=caption;
-      } else if (countdown > 0) {
-        countdown = Math.max(0, countdown - dt);
-        if(view.entrance){
-          const intro=view.entrance;
-          for(const f of world.dogs){
-            const mark=1.96-.40*f.index;
-            if(intro.remaining>mark && countdown<=mark)window.FighterEntrances?.cue(f.kind,tone);
-          }
-          intro.remaining=countdown;
-          if(!countdown)view.entrance=null;
-        }
-        const number = Math.ceil(countdown / 0.8);
-        if (number !== lastCount) {
-          lastCount = number;
-          sound(number ? 'tick' : 'go');
-        }
-        const caption=String(number || 'GO!');
-        if($('countdown').textContent!==caption)$('countdown').textContent=caption;
-        if (!number) {
-          $('countdown').classList.remove('opponent-found');
-          // Discard released countdown taps. Held keyboard and touch controls start with the stick on GO.
-          taps.clear();
-          touchTaps.clear();
-          if (online.match) online.match.lastStep = performance.now();
-          announce('Fight!');
-        }
-      } else if (online.match && !online.finished) {
-        runOnline(dt, pads);
-      } else if (world.end === null) {
+      } else if (!countdown && online.match && !online.finished) {
+        runOnline(playDt, pads);
+      } else if (!countdown && world.end === null) {
         if (frameLab.mode === 'frozen') {
           accumulator = frameLab.pending > 0 ? 1 / 60 : 0;
           if (frameLab.pending > 0) frameLab.pending--;
-        } else accumulator += world.lesson?.example || world.wallPractice?.heavy || world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.trumpPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow || world.airPractice?.slow ? dt / 2 : dt;
+        } else accumulator += world.lesson?.example || world.wallPractice?.heavy || world.launchPractice?.slow || world.edgePractice?.slow || world.footworkPractice?.slow || world.wavePractice?.slow || world.comboPractice?.slow || world.escapePractice?.slow || world.climbPractice?.slow || world.trumpPractice?.slow || world.platformPractice?.slow || world.spacingPractice?.slow || world.chasePractice?.slow || world.meteorPractice?.slow || world.stockPractice?.slow || world.survivalPractice?.slow || world.shieldPractice?.slow || world.airPractice?.slow ? playDt / 2 : playDt;
         const watchedStocks=corner && settings.stockBreaks && !practiceFight ? world.dogs[0].stocks : 0;
         while (accumulator >= 1 / 60 && world.end === null) {
           const slot = world.trainingPlayerSlot;
@@ -6638,7 +6639,7 @@
         }
         if(spar && settings.cornerTips)spar.coach(world.matchFrames,promptDevice(pads),keyFor,padFor,$('corner-tip'),$('corner-title'),$('corner-line'));
         updateHUD();
-      } else {
+      } else if (!countdown) {
         resultDelay -= dt;
         if (resultDelay <= 0 && (online.match ? !['online-result','room-fighters','set-pick','match-card','finish-picker','finish-film','finish-stock','ko-replays'].includes(dialogType) : !$('dialog').open)) showResult();
       }

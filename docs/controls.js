@@ -124,6 +124,38 @@
     return connected;
   }
   const movementAxis=value=>Math.abs(value)>.23?value:0;
+  const openingMoves=['attack','special','smash','aimStick','shield','grab'];
+  const openingButtons=['jump','shortHop',...openingMoves];
+  class OpeningInput {
+    presses(input){
+      let tapped;
+      for(const key of openingButtons){
+        if(input.tapped?.[key] || input[key] && this.previous && !this.previous[key]){
+          tapped ??= {...input.tapped};
+          tapped[key]=true;
+        }
+      }
+      return tapped;
+    }
+    sample(input,inWindow){
+      const tapped=inWindow && this.presses(input);
+      if(tapped)this.pending={...input,tapped};
+      this.previous=input;
+    }
+    take(input){
+      const pending=this.pending;
+      const tapped=this.presses(input);
+      this.pending=this.previous=null;
+      if(tapped)return {...input,tapped};
+      if(!pending)return input;
+      // Preserve a released move's aim and chords for one tick. A jump alone uses live drift.
+      if(!openingMoves.some(key=>pending[key] || pending.tapped[key])){
+        return {...input,jump:input.jump || pending.jump,shortHop:input.shortHop || pending.shortHop,
+          tapped:{...input.tapped,jump:true}};
+      }
+      return pending;
+    }
+  }
   class StrikeStick {
     constructor(){this.clear();}
     clear(){
@@ -340,5 +372,5 @@
       return true;
     }
   }
-  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,SoloSeat,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat,sticks,readPads,rawPad,stickAxes,tuneAxes,movementAxis,HorizontalInput,StrikeStick};
+  window.FightControls={load,defaults,allowed,occupant,assign,keyName,buttons,names,labelStyles,padLegend,Seats,SoloSeat,FighterShuffle,menuNeighbor,menuDirection,MenuRepeat,sticks,readPads,rawPad,stickAxes,tuneAxes,movementAxis,HorizontalInput,StrikeStick,OpeningInput};
 })();
