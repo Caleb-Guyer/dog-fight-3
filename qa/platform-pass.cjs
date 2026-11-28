@@ -114,13 +114,14 @@ test('a descending Rival attacks through both perches in a three-stock fight',()
 });
 function delayedInput(setup,controls,mispredicted,verify){
   const sample=w=>w.dogs.map(f=>[f.x,f.y,f.vy,f.ground,f.airPassHold,f.dropPlatform,f.fastFall,f.jumps,f.usedUp,f.usedDodge,
-    f.dropPrep?.frames,f.attack?.moveId,f.attack?.time,f.damage]);
+    f.dropPrep?.frames,f.attack?.moveId,f.attack?.time,f.damage,f.stockGuard,f.stockLift?.exit?.option,
+    f.stockLift?.exit?.input.tapped.aimStick,f.stockLift?.exit?.input.smashY]);
   for(const slot of [0,1]){
     const ref=new Battle(config,undefined,seededRandom(42));setup(ref,slot);
     const peers=[0,1].map(side=>{
       let world;const packets=[];
       const session=new window.DogOnline.OnlineSession({start(c,r){world=new Battle(c,undefined,r);}});
-      session.side=side;session.dropAerials=true;session.send=p=>{if(p[0]==='input')packets[p[2]]=p[3];};
+      session.side=side;session.dropAerials=true;session.liftChords=true;session.send=p=>{if(p[0]==='input')packets[p[2]]=p[3];};
       session.beginRound(['start',1,config.p1,config.p2,config.stage,42]);
       for(const w of [world,session.match.confirmedWorld])setup(w,slot);
       return {world,net:session.match,packets};
@@ -154,4 +155,10 @@ test('a late right-stick packet restores the departure frame and fighter-specifi
   delayedInput(onPerch,n=>({y:n===9?1:0,aimStick:n===10,smashY:n===10?1:0}),
     (ref,w,i)=>ref.dogs[i].attack?.moveId===kits[ref.dogs[i].kind].air.down && w.dogs[i].ground===1,
     (ref,i)=>assert(ref.dogs[i].ground>=0));
+});
+test('late jump and attack packets reconstruct the same rising aerial from a respawn lift on either peer',()=>{
+  delayedInput((w,slot)=>w.knockouts([w.dogs[slot]]),
+    n=>({jump:n>=17 && n<30,aimStick:n===22,smashY:n===22?-1:0}),
+    (ref,w,i)=>ref.dogs[i].attack?.moveId===ref.dogs[i].kit.air.up && !w.dogs[i].attack,
+    (w,i)=>{assert.equal(w.dogs[i].stocks,2);assert.equal(w.dogs[i].jumps,1);});
 });

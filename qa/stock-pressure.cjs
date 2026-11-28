@@ -2,12 +2,64 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 global.window={};require('../docs/engine.js');
 const {Battle,kits,arenas,FinishTape,idleInput,seededRandom}=window.DogFight;
+test('both seats can combine a return jump and their own aerial in either order while keeping an air jump',()=>{
+  for(const kind of Object.keys(kits))for(const slot of [0,1])for(const jumpFirst of [false,true]){
+    for(const side of ['neutral','back','up','down']){
+      const w=new Battle({mode:'local',stage:'bandstand',p1:kind,p2:kind,fetch:false},undefined,seededRandom(32));
+      const f=w.dogs[slot];w.knockouts([f]);
+      const tape=new FinishTape(true);
+      for(let n=0;n<24;n++){
+        const jump=n===(jumpFirst?17:22),attack=n===(jumpFirst?22:17);
+        const inputs=[idleInput,idleInput];
+        inputs[slot]={...idleInput,jump,shortHop:jump,attack:attack && side==='neutral',aimStick:attack && side!=='neutral',
+          smashX:attack && side==='back'?-f.face:0,smashY:!attack?0:side==='up'?-1:side==='down'?1:0};
+        tape.record(w,...inputs);w.step(1/60,...inputs);
+      }
+      assert.equal(f.stockLift,null);assert.equal(f.attack.moveId,kits[kind].air[side]);
+      assert(f.shortHopFlight && f.attack.shortHop);assert.equal(f.jumps,1);
+      const replay=tape.playback(19);while(replay.step()){}
+      const again=replay.battle.dogs[slot];
+      assert.deepEqual([again.attack.moveId,again.y,again.vy,again.jumps,again.stockGuard],
+        [f.attack.moveId,f.y,f.vy,1,96/60]);
+    }
+  }
+});
+test('a stock return preserves drop speed and first aim, while archived fights keep their original window',()=>{
+  function exit(liftChords,first,second,third){
+    const w=new Battle({mode:'local',stage:'nightmail',p1:'pip',p2:'brisket',liftChords});
+    const f=w.dogs[0];w.knockouts([f]);
+    for(let n=0;n<24;n++)w.step(1/60,{...idleInput,...(n===17?first:n===20?second:n===22?third:{})},idleInput);
+    return f;
+  }
+  const down=exit(true,{y:1},{aimStick:true,smashY:-1},{special:true});
+  const normal=exit(true,{},{aimStick:true,smashY:-1},{special:true});
+  assert.equal(down.attack.moveId,kits.pip.air.up);assert(down.vy>normal.vy+100);
+  const dodge=exit(true,{x:-1},{shield:true,airDodgeX:1,airDodgeY:0},{});
+  assert.equal(dodge.airDodge.type,'directionalAirDodge');assert.equal(dodge.airDodge.x,1);
+  assert(exit(false,{jump:true},{},{}).stockLift?.ready);
+  const legacy=exit(false,{},{jump:true},{attack:true});
+  assert(!legacy.stockLift && !legacy.attack && legacy.vy<0);
+});
 function fight(kind,extra={}){
   const events=[];
   const w=new Battle({p1:'pip',p2:kind,mode:'solo',cpuLevel:'rival',stage:'picnic',form:'flat',
     stockCount:3,fetch:false,liftOpening:true,...extra},(name,e)=>events.push({name,id:e.moveId}),seededRandom(42));
   return {w,events};
 }
+test('a buffered drop aerial meets the defending dog or its shield on a perch and on a flat stage',()=>{
+  for(const kind of Object.keys(kits))for(const stage of ['bandstand','nightmail'])for(const shield of [false,true]){
+    const hits=[];
+    const w=new Battle({mode:'local',p1:kind,p2:'brisket',stage,form:stage==='nightmail'?'flat':'original',fetch:false},
+      (name,e)=>{if(['hit','block'].includes(name))hits.push([name,e.moveId]);},seededRandom(12));
+    const [hero,guard]=w.dogs;w.knockouts([hero]);
+    const lift=hero.stockLift;
+    Object.assign(guard,{x:lift.x+12,y:w.terrain[lift.landing].y,ground:lift.landing,face:-1});
+    for(let n=0;n<62;n++)w.step(1/60,
+      {...idleInput,y:n===17?1:0,aimStick:n===21,smashY:n===21?1:0},{...idleInput,shield:shield && n>=24});
+    assert.deepEqual(hits,[[shield?'block':'hit',kits[kind].air.down]]);
+    assert.deepEqual(w.dogs.map(f=>f.stocks),[2,3]);
+  }
+});
 test('all sixteen matchups can block the platform aerial or jump free of the committed landing grab',()=>{
   for(const p1 of Object.keys(kits))for(const p2 of Object.keys(kits))for(const choice of ['wait','late','early','jump']){
     const {w,events}=fight(p2,{p1,liftOpening:false,perchApproach:true,form:'original'});

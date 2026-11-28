@@ -164,5 +164,12 @@
     });
     document.querySelector('[data-do=bells-start]').focus({preventScroll:true});
   }
-  window.BellBreak = {Run,courses,formatTime,readBest,draw,preview,bellBest,saveBellTime,courseSheet,courseResult,showResult};
+  function pause(run,dialog){
+    dialog('pause',run.course.name+' paused','<p>'+run.cleared+' of six bells · '+formatTime(run.matchFrames)+
+      '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button>'+
+      '<button class="utility" data-do="bells-start">Restart course</button><button class="utility" data-do="controls">Controls</button>'+
+      '<button class="utility" data-do="moves">Move list</button><button class="utility" data-do="bells-sheet">Choose course</button></div>');
+    document.querySelector('[data-do=resume]').focus();
+  }
+  window.BellBreak = {Run,courses,formatTime,readBest,draw,preview,bellBest,saveBellTime,courseSheet,courseResult,showResult,pause};
 })();

@@ -101,6 +101,13 @@ async function play(browser,device) {
     await choose('[data-do=rematch]');await page.clock.runFor(5400);
     assert.equal(await page.evaluate(()=>live.bot.challengedReturn),true);
     assert((await damage())[0]>0);
+    await choose('#pause');await choose('[data-do=rematch]');
+    await page.evaluate(()=>{window.live=null;});await page.clock.runFor(2050);await advanceTo(17);
+    await hold('hop',true);await advanceTo(19);await hold('hop',false);
+    await hold('attack',true);await advanceTo(22);await hold('attack',false);await advanceTo(25);
+    assert.deepEqual(await page.evaluate(()=>{
+      const f=live.dogs[0];return [f.stockLift,f.attack?.moveId===f.kit.air.neutral,f.shortHopFlight,f.vy<0,f.jumps];
+    }),[null,true,true,true,1],device+' short hop and aerial across separate return frames');
     await choose('#pause');await choose('[data-do=lobby]');await choose('#cpu-level');await choose('[data-do=perch-fight]');
     for(const choice of ['late','early','jump']){
       if(choice!=='late'){await choose('#pause');await choose('[data-do=rematch]');}
