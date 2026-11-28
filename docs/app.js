@@ -1613,7 +1613,7 @@
   }
   const reducedReplays=matchMedia('(prefers-reduced-motion: reduce)');
   const cup = window.YardCup, unsavedCup = new Map();
-  let cupAttempt = null, cupChoice = settings.p1, cupShown;
+  let cupAttempt = null, cupChoice, cupShown;
   function cupEntry(kind) {
     if (unsavedCup.has(kind)) return cup.read(unsavedCup.get(kind));
     try {
@@ -1645,7 +1645,8 @@
     return run.retries + (run.retries === 1 ? ' retry' : ' retries') + ' · ' +
       cup.stocks(run) + '/12 stocks kept · ' + cardTime(cup.frames(run));
   }
-  function cupSheet(kind=cupChoice,route=false,resume=false) {
+  function cupSheet(kind,route=false,resume=false) {
+    kind ??= cupChoice ?? savedGames().find(game=>Object.hasOwn(cup.courses,game.id))?.id ?? settings.p1;
     if (!Object.hasOwn(cup.courses,kind)) return;
     if(!window.VersusRulebook || !versusStyled)return waitForDispatch('Arcade Cup',()=>loadVersusPanel('VersusRulebook'),
       ()=>cupSheet(kind,route,resume),()=>page==='match'?(world?.end!=null?showResult():showPause()):returnToHome());
@@ -6684,7 +6685,7 @@
       showHome(false);cupSheet(arena);
     } else if (hash === '#arcade' || (hash === '#arcade/'+arena && Object.hasOwn(cup.courses,arena))) {
       showHome(false);
-      cupSheet(arena || settings.p1);
+      cupSheet(arena);
     } else if (hash === '#solo/'+arena+'/'+form && Object.hasOwn(arenas,arena) && Object.hasOwn(stageForms,form)) {
       leaveOnline();
       afterStory = null;
