@@ -200,8 +200,9 @@ async function lastStockPractice(browser){
     await page.getByRole('heading',{name:'Round 1 lost'}).waitFor();
     assert.deepEqual(await page.locator('.cup-result button:visible').allTextContents(),['Retry round 1','More options']);
     await action('cup-next').click();await page.locator('#dialog').waitFor({state:'hidden'});
-    await page.keyboard.down('j');await page.clock.runFor(9500);await page.keyboard.up('j');
-    await page.getByRole('heading',{name:'Round 1 clear'}).waitFor();
+    await page.keyboard.down('i');await page.clock.runFor(9500);await page.keyboard.up('i');
+    assert.equal(await page.locator('#dialog-title').textContent(),'Round 1 clear',
+      JSON.stringify(await page.evaluate(()=>[cupGame.end,cupGame.matchFrames,cupGame.dogs.map(f=>[f.kind,f.damage,f.lastMove])])));
     assert.deepEqual(await page.locator('.cup-result button:visible').allTextContents(),['Play round 2','More options']);
     await page.locator('#cup-more').click();await action('match-card').click();await action('card-back').click();
     await action('cup-next').click();await page.locator('#dialog').waitFor({state:'hidden'});
