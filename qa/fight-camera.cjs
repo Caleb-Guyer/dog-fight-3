@@ -5,6 +5,29 @@ const make=(options={})=>new Battle({mode:'solo',stage:'nightmail',p1:'pip',p2:'
   runoffTrump:'left',...options},undefined,seededRandom(42));
 const camera=()=>({cx:600,cy:337.5,zoom:1,pixelRatio:720/390,fixed:false,finishReturn:0});
 const frame=(v,w,width=720,height=1184,snap=true)=>window.FightCamera.frame(v,width,height,1/60,w,snap,null,false);
+test('the fight canvas follows resize notifications, reopens from hidden, and other canvases size independently',()=>{
+  window.matchMedia=()=>({matches:false});
+  require('../docs/render.js');
+  const {FightView}=window.DogFightView,view=Object.create(FightView.prototype);
+  let rect,reads=0,redraws=0,resize;
+  const canvas={width:300,height:150,get clientWidth(){reads++;return rect.width;},get clientHeight(){reads++;return rect.height;}};
+  window.ResizeObserver=class{
+    constructor(callback){this.callback=callback;}
+    observe(node){assert.equal(node,canvas);resize=(width,height)=>this.callback([{contentRect:{width,height}}]);}
+  };
+  FightView.observeDisplay(canvas,()=>redraws++);
+  rect={width:390,height:844};assert(view.fitCanvas(canvas));assert.equal(reads,2);
+  resize(390.3,843.9);assert(!view.fitCanvas(canvas));assert.equal(reads,2);
+  resize(844,390);assert(view.fitCanvas(canvas));assert.deepEqual([view.displayWidth,view.displayHeight],[844,390]);
+  assert.equal(reads,2);
+  rect={width:0,height:0};resize(0,0);assert(!view.fitCanvas(canvas));assert.equal(redraws,3);
+  rect={width:1600,height:720};assert(view.fitCanvas(canvas));assert.equal(view.displayWidth,1600);
+  const film={width:0,height:0,clientWidth:400,clientHeight:300};assert(view.fitCanvas(film));assert.equal(view.displayHeight,300);
+  delete window.ResizeObserver;
+  let fallback;window.addEventListener=(type,callback)=>{assert.equal(type,'resize');fallback=callback;};
+  FightView.observeDisplay(film,()=>redraws++);fallback();assert.equal(redraws,4);
+  film.clientHeight=500;assert(view.fitCanvas(film));assert.equal(view.displayHeight,500);
+});
 function visible(v,width,height,x,y){
   assert(Math.abs(x-v.cx)*v.zoom<width/2 && Math.abs(y-v.cy)*v.zoom<height/2,
     JSON.stringify({v,x,y,width,height}));

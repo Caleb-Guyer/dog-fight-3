@@ -6028,8 +6028,7 @@
     if (page === 'match' && world && view && (paused || frameLab.mode === 'frozen'))
       view.draw($('game'), world, 0, frameLab.mode === 'frozen' ? frameLab.renderTime : world.time, online.match?.confirmedWorld || world);
   };
-  if (window.ResizeObserver) new ResizeObserver(redrawPausedStage).observe($('game'));
-  else window.addEventListener('resize', redrawPausedStage);
+  FightView.observeDisplay($('game'),redrawPausedStage);
   const reframeFilm = () => film?.paint(true);
   if (window.ResizeObserver) {
     const observer = new ResizeObserver(reframeFilm);

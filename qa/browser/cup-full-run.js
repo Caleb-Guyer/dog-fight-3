@@ -131,7 +131,8 @@ async function play(browser) {
   console.log('::notice title=Full Cup run::'+JSON.stringify(rounds));
 }
 
-(async()=>{
+if(require.main===module)(async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
   try {await play(browser);} finally {await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});
+module.exports={attachPad,pipInput};

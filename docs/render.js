@@ -2366,7 +2366,18 @@
     }
     ctx.restore();
   }
+  const displaySizes=new WeakMap();
   class FightView {
+    static observeDisplay(canvas,redraw){
+      if(!window.ResizeObserver){window.addEventListener('resize',redraw);return;}
+      new window.ResizeObserver(([entry])=>{
+        // The game canvas fills its parent with no border or padding. Match clientWidth's integer sizing.
+        const {width,height}=entry.contentRect;
+        if(width && height)displaySizes.set(canvas,{width:Math.round(width),height:Math.round(height)});
+        else displaySizes.delete(canvas);
+        redraw();
+      }).observe(canvas);
+    }
     constructor(radar = null) {
       loadEffects();
       if(!window.FightCamera)FightView.prepare?.();
@@ -2384,7 +2395,10 @@
       this.cy = 337.5;
     }
     fitCanvas(canvas) {
-      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const size=displaySizes.get(canvas);
+      const w=size?.width ?? canvas.clientWidth, h=size?.height ?? canvas.clientHeight;
+      this.displayWidth=w;
+      this.displayHeight=h;
       if (!w || !h) return false;
       // Size the world camera to the display. A single scale keeps the art pixels square.
       const scale = Math.min(Math.max(675 / h, 720 / w), 2880 / Math.max(w, h));
@@ -2628,7 +2642,7 @@
       else this.finishReturn = Math.max(0,this.finishReturn-dt);
       const fixed = reduced.matches || FightView.fixedCamera===true, changed=fixed!==this.fixed;
       this.fixed=fixed;
-      this.pixelRatio = height/(canvas.clientHeight || height);
+      this.pixelRatio = height/(this.displayHeight || height);
       if(window.FightCamera){
         window.FightCamera.frame(this,width,height,dt,world,resized || !this.framed || changed,focus,steady,finishPhase && confirmed.dogs[confirmed.end]);
         this.framed=true;
@@ -2706,7 +2720,7 @@
           ctx.font = '15px "Brawl Pixel", monospace';
           ctx.textBaseline = 'bottom';
           ctx.fillStyle = ink;
-          const at = canvas.clientHeight < 500 && width > height ? left + halfW * 0.6 : left + 14;
+          const at = this.displayHeight < 500 && width > height ? left + halfW * 0.6 : left + 14;
           ctx.fillRect(at, topBlastY - 23, 10 + ctx.measureText('Top blast line').width, 21);
           ctx.fillStyle = cream;
           ctx.fillText('Top blast line', at + 5, topBlastY - 5);
@@ -3009,7 +3023,7 @@
         window.StockCall.draw(ctx,confirmed,confirmed.stockCall.age+this.outroFrames,left,top,this.zoom,steady,!finishPhase);
       if(confirmed.end!==null)this.outroFrames+=dt*60;
       if (this.radar) this.drawRadar(world, left, top, halfW * 2, halfH * 2);
-      if (this.launchTrace) launchKey(ctx, this.launchTrace, canvas.clientWidth);
+      if (this.launchTrace) launchKey(ctx, this.launchTrace, this.displayWidth);
     }
     drawRadar(world, left, top, width, height) {
       const radar = this.radar;
