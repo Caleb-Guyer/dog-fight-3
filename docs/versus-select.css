@@ -218,6 +218,12 @@ dialog[data-view='tournament'] { width:min(790px,calc(100% - 16px)); }
 .cup-ticket-actions { display:flex; gap:12px; flex-wrap:wrap; }
 .cup-ticket-actions .primary { min-height:46px; }
 .cup-route-board { padding:clamp(12px,1.8vw,24px); background:var(--cream); color:var(--ink); }
+dialog .cup-route-board { padding:0; }
+#cup-pause-tools { margin-top:16px; border-top:1px solid #b9ac8c; }
+#cup-pause-tools summary { width:fit-content; padding:12px 2px; min-height:44px; cursor:pointer; font-weight:bold; }
+#cup-pause-tools summary:focus-visible { outline:3px solid var(--ink); }
+#cup-pause-tools .dialog-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin-top:0; }
+#cup-leave-note { margin:16px 0 6px; }
 #cup-select[data-view=route] .cup-select-inner { max-width:900px; }
 @media(max-width:680px) and (orientation:portrait) {
   .cup-select-inner { padding:14px max(12px,var(--left-edge)) 18px; gap:14px; }

@@ -658,8 +658,19 @@
     window.DogArt.draw(ctx,id,x-left,y-top,{...idle,time:0});
     window.DogArt.draw(alt,id,x-left,y-top,{...idle,time:.4});
   }
-  function cupSelect(root,{kind,route,progress,temporary,coatFor,select,back,start,record,stageName,stockLabel}){
+  function cupSchedule(kind,entry,{stageName,stockLabel,record,run=entry.active,current='Up next'}){
     const {fighters,cpuLevels}=window.DogFight,cup=window.YardCup;
+    const round=run?.wins.length || 0;
+    const rows=[...cup.courses[kind].bouts,[null]].map(([dog,stage,form],i)=>{
+      const title=dog?fighters[dog].name:'Copper Hound',venue=dog?stageName(stage,form):'Bell Depot';
+      const state=i<round?stockLabel(run.wins[i].stocks)+' kept':i===round?current:dog?cpuLevels[cup.levels[i]].name:'Boss';
+      return '<li'+(round===i?' aria-current="step"':'')+'><span>'+(i+1)+'</span><div><strong>'+title+'</strong><small>'+venue+'</small></div><b>'+state+'</b></li>';
+    }).join('');
+    return '<ol class="cup-stops" aria-label="Cup schedule">'+rows+'</ol>'+
+      (record && entry.clears?'<p>'+entry.clears+(entry.clears===1?' clear':' clears')+(entry.best?' · Personal best · '+record(entry.best):'')+'</p>':'');
+  }
+  function cupSelect(root,{kind,route,progress,temporary,coatFor,select,back,start,record,stageName,stockLabel}){
+    const {fighters}=window.DogFight,cup=window.YardCup;
     const art={pip:'picnic',brisket:'nightmail',noodle:'laundry',clover:'canal'};
     const cards=route?'':Object.entries(fighters).map(([id,f])=>
       '<button type="button" class="cup-poster" data-cup-dog="'+id+'" style="--dog-color:'+f.color+'">'+
@@ -686,15 +697,7 @@
       root.querySelector('[data-cup-storage]').hidden=!temporary(id);
       startButton.disabled=false;
       startButton.textContent=run?(run.started?'Retry round ':'Continue to round ')+(round+1):'Start '+fighters[id].name+'’s run';
-      if(route){
-        const stops=[...course.bouts,[null]].map(([dog,stage,form],i)=>{
-          const title=dog?fighters[dog].name:'Copper Hound',venue=dog?stageName(stage,form):'Bell Depot';
-          const state=i<round?stockLabel(run.wins[i].stocks)+' kept':i===round?'Up next':dog?cpuLevels[cup.levels[i]].name:'Boss';
-          return '<li'+(round===i?' aria-current="step"':'')+'><span>'+(i+1)+'</span><div><strong>'+title+'</strong><small>'+venue+'</small></div><b>'+state+'</b></li>';
-        }).join('');
-        root.querySelector('.cup-route-board').innerHTML='<ol class="cup-stops" aria-label="Cup schedule">'+stops+'</ol>'+
-          (entry.clears?'<p>'+entry.clears+(entry.clears===1?' clear':' clears')+(entry.best?' · Personal best · '+record(entry.best):'')+'</p>':'');
-      }
+      if(route)root.querySelector('.cup-route-board').innerHTML=cupSchedule(id,entry,{stageName,stockLabel,record});
     }
     startButton.onclick=()=>start(chosen,startButton);
     root.querySelector('#cup-back').onclick=route?()=>select(chosen,false):back;
@@ -787,5 +790,5 @@
       if(Math.floor(time*12)!==drawn)paint();
     }};
   }
-  window.VersusRulebook={arenaSelect,cupSelect,OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
+  window.VersusRulebook={arenaSelect,cupSelect,cupSchedule,OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
 })();
