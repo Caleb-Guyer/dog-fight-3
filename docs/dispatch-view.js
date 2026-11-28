@@ -143,6 +143,18 @@
       $('dispatch-orders').hidden=true;
       return remaining;
     }
+    restoreCup(resume,world,$){
+      const record=resume.checkpoint;
+      Object.assign(world,record.state);
+      world.random.state=record.seed;
+      this.cupOpening=record.opening;
+      $('countdown').textContent=record.call;
+      $('dispatch-orders').hidden=record.countdown>0;
+    }
+    static missionReady(world,showDialog,stockLabel,tenth){
+      showDialog('pause','Mission ready','<p>'+world.layout.name+' · '+stockLabel(world.dogs[0].stocks)+' · '+tenth(world.dogs[0].damage)+'%</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume fight</button></div>');
+      document.querySelector('#dialog-body .primary').focus();
+    }
     advanceCupOpening(remaining,world,tone,$){
       const opening=this.cupOpening;
       if(!opening.retry && opening.remaining>1.12 && remaining<=1.12){

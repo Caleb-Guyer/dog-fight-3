@@ -41,13 +41,11 @@ async function playCup(browser) {
   assert(await roster.isVisible());assert(await roster.locator('[data-do=cup-start]').isEnabled());
   for(const kind of ['pip','clover','brisket','noodle']){
     await page.locator('[data-cup-dog='+kind+']').click();
-    await tap('cup-sheet');
-    const rivals=await page.locator('.cup-stops li strong').allTextContents();
-    assert.equal(rivals.length,4);
-    assert.equal(rivals[3],'Copper Hound');
-    assert(!rivals.map(s=>s.toLowerCase()).includes(kind));
-    assert(!(await page.locator('[data-do=cup-exhibition]').isVisible()));
-    await page.keyboard.press('Escape');await roster.waitFor();
+    assert.equal(await roster.locator('.cup-ticket button').count(),1);
+    assert.equal(await roster.locator('.cup-stops, [data-do=cup-sheet], [data-do=cup-exhibition]').count(),0);
+    assert.doesNotMatch(await roster.innerText(),/detour|relay|exhibition/i);
+    const next={pip:'Pip vs. Noodle',brisket:'Brisket vs. Pip',noodle:'Noodle vs. Brisket',clover:'Clover vs. Pip'};
+    assert.equal(await roster.locator('.cup-ticket p').innerText(),next[kind]);
   }
   await page.locator('[data-cup-dog=pip]').click();
   await page.screenshot({path:'cup-select-desktop.png'});
@@ -231,8 +229,8 @@ async function playCup(browser) {
   assert.equal(await page.locator('.cup-stops [aria-current]').count(),0);
   assert((await page.locator('.cup-stops b').allTextContents()).every(label=>label.includes('kept')));
   await tap('cup-return');await title('Arcade Cup clear!');assert.deepEqual(await record(),cleared);
-  await page.reload();await tap('cup-sheet');
-  assert.match(await page.locator('.cup-route-board').textContent(),/1 clear/);
+  await page.reload();await roster.waitFor();
+  assert.equal((await record()).clears,1);
   await page.close();
 }
 async function mobileAndFilms(browser){
@@ -256,10 +254,35 @@ async function mobileAndFilms(browser){
   assert(button.x>=0 && button.x+button.width<=390 && button.y>=0 && button.y+button.height<=844);
   await page.screenshot({path:'cup-schedule-phone.png'});
   await page.locator('#dialog-close').tap();await page.locator('#cup-pause-tools summary').tap();
-  await page.locator('[data-do=cup-roster]').tap();await roster.waitFor();
-  assert.match(await roster.locator('[data-do=cup-start]').textContent(),/Retry round 1/);
+  const save=page.locator('[data-do=cup-save]');
+  await page.evaluate(()=>{
+    const set=Storage.prototype.setItem;
+    Storage.prototype.setItem=function(k,v){
+      if(k==='dog-fight-3.cup.clover' && JSON.parse(v).active?.saved)throw new DOMException('Full','QuotaExceededError');
+      return set.call(this,k,v);
+    };
+    window.restoreStorage=()=>{Storage.prototype.setItem=set;};
+  });
+  await save.tap();await page.locator('#cup-pause-tools [role=alert]').waitFor();
+  assert(await page.locator('[data-do=cup-roster]').isVisible());
+  await page.evaluate(()=>restoreStorage());
+  await save.tap();await page.locator('#home-continue[data-save=clover]').waitFor();
+  await page.reload();await roster.waitFor();
+  assert.equal(await roster.locator('[data-do=cup-start]').textContent(),'Resume round 1');
   await roster.locator('[data-do=cup-start]').tap();
-  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('dog-fight-3.cup.clover')).active.retries===1);
+  await page.getByRole('heading',{name:'Arcade Cup paused'}).waitFor();
+  assert.equal(await page.evaluate(()=>document.activeElement.dataset.do),'resume');
+  await page.locator('[data-do=resume]').tap();
+  const resumed=await page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.cup.clover')).active);
+  assert.equal(resumed.retries,0);assert.equal(resumed.saved,undefined);
+  await page.locator('#pause').tap();await page.locator('#cup-pause-tools summary').tap();await save.tap();
+  const home=page.locator('#home-continue[data-save=clover]');await home.waitFor();
+  await page.evaluate(()=>DispatchSuspend.discardCup(JSON.parse(localStorage.getItem('dog-fight-3.cup.clover')).active.saved));
+  await home.tap();await page.locator('#cup-save-back').tap();await roster.waitFor();
+  assert.equal(await roster.locator('[data-do=cup-start]').innerText(),'Resume round 1');
+  await roster.locator('[data-do=cup-start]').tap();await page.locator('#cup-save-restart').tap();
+  await page.locator('#pause').waitFor();
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.cup.clover')).active.retries),1);
   await page.goto(root+'?school#tutorial');
   assert(await page.locator('#school-coach').isVisible());
   assert.deepEqual(scripts,[]);
@@ -395,6 +418,15 @@ async function bossEntrance(browser,device){
         const before=await frozen();
         assert.deepEqual(before.slice(0,5),[0,0,0,170,0]);
         await page.locator('#pause').click();await page.clock.runFor(900);assert.deepEqual(await frozen(),before);
+        if(!phone && !pad){
+          await page.locator('#cup-pause-tools summary').click();
+          await page.locator('[data-do=cup-save]').click();
+          await page.locator('#home-continue[data-save=clover]').click();
+          await page.getByRole('heading',{name:'Arcade Cup paused'}).waitFor();
+          await page.clock.runFor(64);assert.deepEqual(await frozen(),before);
+          assert.equal(await call.textContent(),'2');
+          assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('dog-fight-3.cup.clover')).active.retries),0);
+        }
         await page.locator('[data-do=resume]').click();
         await page.clock.runFor(440);
         if(!pad)await page.screenshot({path:'cup-boss-arrival-'+device+'.png'});

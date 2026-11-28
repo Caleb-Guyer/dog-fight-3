@@ -90,3 +90,32 @@ test('saved stock counts describe both dogs and a damaged record cannot start a 
   const r=DispatchSuspend.schoolCapture(p);assert.match(DispatchSuspend.schoolCard(r.header).detail,/Pip 3 stocks · 48% \/ Brisket 2 stocks · 0%/);
   r.state.mode='training';assert.throws(()=>DispatchSuspend.schoolPosition(r));
 });
+require('../docs/arcade.js');
+const cup=window.YardCup;
+for(const [round,kind] of Object.keys(cup.courses).entries())test(kind+' resumes a Cup fight at the exact tick with the same replay',()=>{
+  const run={id:'test-cup',started:true,retries:2,wins:Array.from({length:round},()=>({stocks:2,frames:4321})),coat:1};
+  const bout=cup.stockBout(kind,round,run.coat);
+  const make=()=>bout?new Battle(bout,undefined,seededRandom(37)):
+    new DispatchRun({room:DispatchScript.lastRoom,cupFighter:kind,coat:run.coat});
+  const battle=make(),tape=bout?new FinishTape(true):null;
+  const step=(b,t,a)=>{
+    t?.record(b,a,idleInput);b.step(dt,a,idleInput);t?.captureKnockouts(b);
+  };
+  if(tape){
+    for(let n=0;n<800 && !tape.knockouts.length;n++)step(battle,tape,{...idleInput,x:-1});
+    assert(tape.knockouts.length);
+  }else{
+    battle.foes[0].hp=61;for(let n=0;n<80;n++)step(battle,null,input(n));
+  }
+  const position={battle,tape,view:{},countdown:0,lastCount:0,call:'',cupRound:{kind,round,id:run.id,retries:2,coat:run.coat}};
+  const record=DispatchSuspend.cupCapture(position),restored=DispatchSuspend.cupPosition(kind,run,structuredClone(record));
+  assert.throws(()=>DispatchSuspend.cupPosition(kind,{...run,retries:3},record));
+  assert.throws(()=>DispatchSuspend.cupPosition(kind,{...run,id:'another-run'},record));
+  const copy=make();Object.assign(copy,restored.checkpoint.state);copy.random.state=restored.checkpoint.seed;
+  for(let n=0;n<250;n++){step(battle,tape,input(n));step(copy,restored.tape,input(n));}
+  assert.deepEqual(copy.dogs,battle.dogs);assert.deepEqual(copy.foes,battle.foes);assert.equal(copy.random.state,battle.random.state);
+  if(tape){
+    assert.deepEqual(window.MatchReview.pack(restored.tape),window.MatchReview.pack(tape));
+    assert.deepEqual(copy.matchCard,battle.matchCard);
+  }
+});

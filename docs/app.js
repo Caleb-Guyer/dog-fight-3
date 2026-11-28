@@ -1041,6 +1041,7 @@
     if (page === 'match') $('game').focus({ preventScroll: true });
   }
   function exitDialog() {
+    if(dialogType==='cup-save-recovery')return $('cup-save-back').click();
     if(dialogType==='cup-schedule')return returnFromCupSchedule();
     if(dialogType==='pause' && $('cup-pause-tools')?.open){
       $('cup-pause-tools').open=false;$('cup-pause-tools').querySelector('summary').focus();return;
@@ -1628,7 +1629,7 @@
     } catch {}
     return cup.read(null);
   }
-  function updateCup(kind,change) {
+  function updateCup(kind,change,durable=false) {
     const key = 'dog-fight-3.cup.' + kind;
     const commit = () => {
       const entry = cupEntry(kind), next = change(entry);
@@ -1637,7 +1638,7 @@
         try {
           localStorage.setItem(key,JSON.stringify(next));
           unsavedCup.delete(kind);
-        } catch { unsavedCup.set(kind,next); }
+        } catch(error) { if(durable)throw error;unsavedCup.set(kind,next); }
       }
       return next;
     };
@@ -1651,15 +1652,15 @@
     return run.retries + (run.retries === 1 ? ' retry' : ' retries') + ' · ' +
       cup.stocks(run) + '/12 stocks kept · ' + cardTime(cup.frames(run));
   }
-  function cupSheet(kind,route=false,resume=false,resumePad=menuConfirmPad) {
+  function cupSheet(kind,resume=false,resumePad=menuConfirmPad) {
     kind ??= cupChoice ?? savedGames().find(game=>Object.hasOwn(cup.courses,game.id))?.id ?? settings.p1;
     if (!Object.hasOwn(cup.courses,kind)) return;
     if(!window.VersusRulebook || !versusStyled)return waitForDispatch('Arcade Cup',()=>loadVersusPanel('VersusRulebook'),
-      ()=>cupSheet(kind,route,resume,resumePad),()=>page==='match'?(world?.end!=null?showResult():showPause()):returnToHome());
+      ()=>cupSheet(kind,resume,resumePad),()=>page==='match'?(world?.end!=null?showResult():showPause()):returnToHome());
     if(page!=='cup-select')menuScreen('cup-select');else dismiss();
     $('dialog-body').replaceChildren();
     window.VersusRulebook.cupSelect($('cup-select'),{
-      kind,route,select:cupSheet,back:returnToHome,start:startCupRound,record:cupRecord,stageName,stockLabel,
+      kind,back:returnToHome,start:startCupRound,
       progress:id=>{cupChoice=id;cupShown=cupEntry(id);return cupShown;},
       temporary:id=>unsavedCup.has(id),coatFor:id=>cupEntry(id).active?.coat ?? savedCoat(0,id)
     });
@@ -1673,35 +1674,20 @@
     const expected = cupShown;
     const current = () => cupShown===expected && button.isConnected &&
       ($('cup-select').contains(button)?page==='cup-select' && !$('dialog').open:$('dialog').open);
-    if(expected.active?.wins.length===cup.courses[kind].bouts.length && !missionReady()){
-      button.textContent='Loading Bell Depot…';
-      try { await loadMission(); }
-      catch {
-        if(current()){button.disabled=false;button.textContent='Retry loading Bell Depot';button.focus();}
-        return;
-      }
-      if(!current())return;
-    }
-    const entry = await updateCup(kind,latest=>{
-      const run = latest.active, shown = expected.active;
-      if (!current() || latest.clears!==expected.clears || run?.id!==shown?.id ||
-          run?.retries!==shown?.retries || run?.wins.length!==shown?.wins.length || run?.started!==shown?.started) return null;
-      const id = run?.id || Array.from(crypto.getRandomValues(new Uint32Array(4))).join('-');
-      return cup.begin(latest,id,savedCoat(0,kind));
-    });
-    if (!current()) return;
-    if (!entry) return cupSheet(kind);
-    cupShown=entry;
-    const run = entry.active, round = run.wins.length;
-    const attempt = {kind,id:run.id,retries:run.retries,round,coat:run.coat};
-    const bout = cup.stockBout(kind,round,run.coat);
-    const continuing=cupAttempt?.id===run.id && soloWorld===world;
-    const seat=(continuing && soloSeat) || new controls.SoloSeat();
-    if(startingPad)seat.use(startingPad);
-    else if(seat.lost || seat.index===null)seat.useOtherInput(getPads(),true);
-    if(bout)startMatch(bout,undefined,17+round*31,null,{cupRound:attempt});
-    else beginRun(yardChapter.lastRoom,0,null,{...attempt,retry:!!expected.active?.started});
-    soloWorld=world;soloSeat=seat;
+    return window.VersusRulebook.openCupRound(kind,button,expected,{current,loadBoss:missionReady()?null:loadMission,
+      loadDispatch,updateCup,coat:()=>savedCoat(0,kind),back:()=>cupSheet(kind),showDialog,play(entry,resume){
+        cupShown=entry;
+        const run=entry.active,round=run.wins.length;
+        const attempt={kind,id:run.id,retries:run.retries,round,coat:run.coat};
+        const bout=cup.stockBout(kind,round,run.coat);
+        const seat=(cupAttempt?.id===run.id && soloWorld===world && soloSeat) || new controls.SoloSeat();
+        if(startingPad)seat.use(startingPad);
+        else if(seat.lost || seat.index===null)seat.useOtherInput(getPads(),true);
+        if(bout)startMatch(bout,undefined,17+round*31,null,{cupRound:attempt,resume});
+        else beginRun(yardChapter.lastRoom,0,null,{...attempt,retry:!!expected.active?.started},resume);
+        soloWorld=world;soloSeat=seat;
+        if(resume)showPause(false);
+      }});
   }
   function showCupSchedule(){
     window.VersusRulebook.cupScheduleSheet(cupAttempt,cupShown,{showDialog,stageName,stockLabel,record:cupRecord});
@@ -2297,6 +2283,9 @@
       view.entrance=intro;
       // A late asset can still identify the matchup without starting a walk-in halfway through.
       loadDispatch('FighterEntrances').then(()=>{intro.still=intro.remaining<1.95;}).catch(()=>{});
+    }else if(countdown && resume?.checkpoint?.entrance){
+      view.entrance=resume.checkpoint.entrance;
+      loadDispatch('FighterEntrances').catch(()=>{});
     }else if(!position || !countdown)view.entrance=null;
     lastCount = position?.lastCount || 0;
     resultDelay = 0;
@@ -3409,6 +3398,11 @@
     if (action==='rotation') return rotationBoard(!!matchConfig.tourneyRound);
     if (action==='fighter-classes') return fighterSheet(world?.lesson?.course || settings.p1);
     if (action === 'cup-sheet' && cupAttempt) return showCupSchedule();
+    if(action==='cup-save' && cupAttempt){
+      const fight=world;
+      return window.VersusRulebook.saveCup(pausedFight(),{showDialog,current:()=>world===fight && dialogType==='mission-saving',
+        loadDispatch,updateCup,home:showHome,back:()=>showPause(false)});
+    }
     if (action === 'cup-return') return returnFromCupSchedule();
     if (action === 'cup-resume' || (action==='resume' && dialogType==='pause' && cupAttempt)) return dismiss();
     if (action === 'cup-roster') return cupSheet(cupAttempt?.kind || cupChoice);
@@ -4243,15 +4237,15 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=cup-results-2',
+    VersusRulebook:'versus-rules.js?v=cup-save-1',
     PackRelay:'pack-relay.js?v=versus-2',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
     ComboLab:'combo-lab.js?v=drop-aerial-1', FinishTools:'finish-tools.js?v=second-chance-1',
     MoveGuide:'move-guide.js?v=rising-catch-1', FighterSchool:'fighter-lessons.js?v=field-card-1',
     DispatchCovers:'dispatch-covers.js?v=disc-range-1', DispatchFilm:'dispatch-film.js?v=film-area-1',
     DispatchActors:'dispatch-actors.js?v=missions-1', YardArt:'yard-art.js?v=letter-lift-1',
-    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=stock-share-1', DispatchView:'dispatch-view.js?v=cup-entrance-1',
-    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=depot-practice-1', PracticeDirectory:'practice-directory.js?v=training-topics-1',
+    DispatchBridge:'dispatch-bridge.js?v=missions-1', DispatchRun:'dispatch-run.js?v=stock-share-1', DispatchView:'dispatch-view.js?v=cup-save-1',
+    ParcelPunt:'parcel-punt.js?v=1', DispatchSuspend:'dispatch-suspend.js?v=cup-save-1', PracticeDirectory:'practice-directory.js?v=training-topics-1',
   };
   const dispatchLoads=new Map();
   let versusStylesheet, versusStyled=false;
@@ -4260,7 +4254,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=cup-matchup-1';
+        link.href='./versus-select.css?v=cup-roster-2';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -4526,7 +4520,7 @@
       if (!run) continue;
       const round=run.wins.length, opponent=course.bouts[round]?.[0];
       items.push({id:kind,title:fighters[kind].name+'’s Arcade Cup',kind,coat:run.coat,playedAt:entry.playedAt,
-        detail:'Round '+(round+1)+' of 4 · '+(opponent?fighters[opponent].name:'Copper Hound'),action:run.started?'Retry round':'Continue'});
+        detail:'Round '+(round+1)+' of 4 · '+(opponent?fighters[opponent].name:'Copper Hound'),action:run.saved?'Resume fight':run.started?'Retry round':'Continue'});
     }
     return items.sort((a,b)=>(b.playedAt||0)-(a.playedAt||0));
   }
@@ -4577,7 +4571,7 @@
     }
     if (id==='adventure') { selectChapter(nightUnlocked()?nightChapter:yardChapter); return continueAdventure(); }
     // Use the route card's checked transaction, including its cross-tab retry guard.
-    cupSheet(id,false,true);
+    cupSheet(id,true);
   }
   $('home-continue').onclick=()=>resumeSavedGame($('home-continue').dataset.save);
   $('other-saves').onclick=showSavedGames;
@@ -4749,6 +4743,8 @@
     view = new window.DispatchView();
     view.shakeEnabled = settings.shake;
     if(cupRound){
+      matchConfig={...settings,mode:'adventure',p1:cupRound.kind};
+      practiceFight=null;
       clearInput();
       lastCount=0;
       countdown=view.beginCupOpening(cupRound.retry,$);
@@ -4764,7 +4760,9 @@
       cues(name,e);
     });
     $('match-mode').textContent = world.rally?'Last-stock rally':doubles?'Bell Depot doubles':sideRoute?'Bonus dispatch · Relay':cupRound ? 'Arcade Cup · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
-    if(suspended){
+    if(suspended && cupRound){
+      view.restoreCup(suspended,world,$);countdown=suspended.countdown;lastCount=suspended.lastCount;
+    }else if(suspended){
       window.DispatchSuspend.restore(world,suspended);
       Object.defineProperty(world,'suspendHeader',{value:suspended.header});
     }
@@ -4776,10 +4774,7 @@
     $('game').focus({ preventScroll: true });
     window.scrollTo(0, 0);
     announce((doubles?'Co-op boss fight · ':cupRound ? world.dogs[0].stats.name+' versus Copper Hound · Arcade Cup final · ' : 'Adventure · ') + world.layout.name);
-    if(suspended){
-      showDialog('pause','Mission ready','<p>'+world.layout.name+' · '+stockLabel(world.dogs[0].stocks)+' · '+tenth(world.dogs[0].damage)+'%</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume fight</button></div>');
-      $('dialog-body').querySelector('[data-do=resume]').focus();
-    }
+    if(suspended && !cupRound)window.DispatchView.missionReady(world,showDialog,stockLabel,tenth);
   }
   function startBossPractice(move) {
     if (world?.layout?.rules !== 'boss' || cupAttempt) return;

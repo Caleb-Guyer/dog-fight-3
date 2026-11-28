@@ -154,7 +154,7 @@ Compare the recoveries from below the edge. Pip steers a second hop, Brisket cha
 
 In **Fight School → Recovery clinic**, pick a dog to practice a fall with no air jumps left. Watch the recovery at half speed, then choose **Guide my inputs** to find the timing yourself. Try the opposite ledge or repeat at match speed. After a bottom knockout in a solo or couch fight, **Recover my last fall** checks which inputs would save that stock against the same opponent. [Practice Pip’s second hop](https://caleb-guyer.github.io/dog-fight-3/#tutorial/recovery/pip) · [Charge Brisket’s cannon](https://caleb-guyer.github.io/dog-fight-3/#tutorial/recovery/brisket) · [Catch the edge with Noodle](https://caleb-guyer.github.io/dog-fight-3/#tutorial/recovery/noodle) · [Sail back with Clover](https://caleb-guyer.github.io/dog-fight-3/#tutorial/recovery/clover)
 
-On your next visit, **Continue** opens your most recently played unfinished lesson, story checkpoint, or Arcade Cup round. **Other saves** lists the rest, including separate Cup runs for each dog. An interrupted Cup round is labeled **Retry round** and begins with three fresh stocks. Fight School keeps your place between lesson ten and the first stock match. A win opens a path to Pip’s Arcade Cup.
+On your next visit, **Continue** opens your most recently played unfinished lesson, story checkpoint, or Arcade Cup round. **Other saves** lists the rest, including separate Cup runs for each dog. A Cup fight you saved through the pause menu offers **Resume fight**. Closing an active fight without saving offers **Retry round** with three fresh stocks. Fight School keeps your place between lesson ten and the first stock match. A win opens a path to Pip’s Arcade Cup.
 
 In rematch practice, choose **Try my knockout** or press the right stick on a controller. Watch Pip’s recorded knockout at half speed, then choose **Take over as Pip**. The fight waits for your first input just before the hit, grab, or departure that led to the knockout. Regain your footing past the original fall to save the stock. A save opens **Rematch Brisket** and carries over to **Continue** on your next visit. The recording also works after you close and reopen the game on the same browser.
 
@@ -240,7 +240,7 @@ In that opening, let Brisket approach once to see his Yard Buster. On the rematc
 
 ## Solo opponents
 
-**Arcade Cup** gives each dog a four-round route. Fight the other three dogs in three-stock matches, then take your chosen fighter and coat into Bell Depot against the Copper Hound. The rivals progress from Rookie through Arcade to Rival. Every round starts with three stocks. Cleared rounds save separately for each dog. Retrying a lost round or re-entering an unfinished one adds one retry.
+**Arcade Cup** gives each dog four fights. Face the other three dogs in three-stock matches, then take your chosen fighter and coat into Bell Depot against the Copper Hound. The rivals progress from Rookie through Arcade to Rival. Every new round starts with three stocks. Cleared rounds save separately for each dog. Restarting a round adds one retry.
 
 On your first visit to the final, Copper Hound walks onto the depot floor and stamps the ground during the countdown. Both fighters get control on **GO**. You can tap a move just before GO to use it on the opening frame. A retry starts with a single countdown beat. The Cup clock starts when the fight does.
 
@@ -248,7 +248,7 @@ When your damage reaches 75%, a Rookie may plant their feet and charge a side sm
 
 Win a stock round to see how many stocks you kept and who you face next. Lose your final stock and the result shows your damage and the last move that hit you shortly before the knockout. If you went out without a recent named hit, it shows where you left the stage. If Copper Hound wins, you see its remaining armor and a counter to the last boss attack that hit you on that stock.
 
-Pause a round and open **Cup schedule** to see all four opponents. **Resume fight** returns you to the same moment, including during Copper Hound’s boss fight. To stop playing, choose **More options → Leave round**. Your cleared rounds stay saved. From Results, you can check the schedule and return to the same replays and stats. Personal bests rank fewer retries first, then stocks kept, then time. [Enter Noodle’s Arcade Cup](https://caleb-guyer.github.io/dog-fight-3/#arcade/noodle)
+Pause and open **Cup schedule** to see all four opponents. To take a break mid-fight, choose **More options → Save & quit**. Pick **Resume fight** on the main menu to return with the same stocks, clock, and opponent, including the Copper Hound’s remaining armor. Resuming costs no retry. On round results, **More options** opens the schedule, stats, and available replays. Personal bests rank fewer retries first, then stocks kept, then time. [Enter Noodle’s Arcade Cup](https://caleb-guyer.github.io/dog-fight-3/#arcade/noodle)
 
 Rival can punish a blocked smash or a heavy landing. At close range each dog can grab out of shield. At higher damage it looks for its own up smash. Remaining recovery frames, shield pushback and the reach of the move determine whether it commits. As Brisket, try Haymaker up close against Pip, then back up and make only the tip connect. [Play the three-stock match](https://caleb-guyer.github.io/dog-fight-3/#solo/shield-punish)
 
