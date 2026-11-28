@@ -693,7 +693,19 @@
     tools.ontoggle=()=>{if(tools.isConnected)attempt.pauseToolsOpen=tools.open;};
     document.querySelector('[data-do=resume]').focus();
   }
-  function cupResult(battle,attempt,won,{showDialog,announce,stockLabel,tenth,record,cardButton}){
+  function cupLossLine(battle,tenth){
+    const loss=battle.matchCard?.losses.findLast(l=>l.slot===0);
+    const exits={left:'Out on the left',right:'Out on the right',top:'Out at the top',bottom:'Fell below the stage'};
+    if(!loss || !Object.hasOwn(exits,loss.zone) || loss.frame!==battle.matchFrames)return '';
+    const hit=loss.lastHit,age=hit?loss.frame-hit.frame:Infinity;
+    if(age>=0 && age<=90){
+      const {moves,specials,throws,smashes,pummels}=window.DogFight;
+      const move=[moves,specials,throws,smashes,pummels].find(group=>Object.hasOwn(group,hit.id))?.[hit.id]?.label;
+      if(move)return 'Out at '+tenth(loss.damage)+'% · Last hit was '+move;
+    }
+    return exits[loss.zone]+' at '+tenth(loss.damage)+'%';
+  }
+  function cupResult(battle,attempt,won,{showDialog,announce,stockLabel,tenth,record,cardButton,hasReplay}){
     const cup=window.YardCup,round=attempt.round+1,entry=attempt.settled;
     const boss=battle.mode==='adventure',clear=won && round===cup.rounds;
     const winner=battle.dogs[boss?(won?0:1):battle.end];
@@ -705,7 +717,7 @@
     else{
       if(battle.endReason==='time')line='Time expired · '+winner.stocks+'–'+battle.dogs[1-battle.end].stocks+' stocks';
       else if(battle.endReason==='sudden')line='Sudden Death KO';
-      else line=stockLabel(winner.stocks)+' left'+(won?'':' at '+tenth(winner.damage)+'%');
+      else line=(!won && cupLossLine(battle,tenth)) || stockLabel(winner.stocks)+' left'+(won?'':' at '+tenth(winner.damage)+'%');
       if(won){
         const rival=cup.courses[attempt.kind].bouts[round]?.[0];
         line+=' · Next up, '+(rival?window.DogFight.fighters[rival].name:'Copper Hound');
@@ -718,15 +730,19 @@
       (clear?'cup-roster':'cup-next')+'">'+action+'</button></div>'+
       '<div class="cup-links"><button class="utility" id="cup-more" aria-controls="cup-review" aria-expanded="'+open+'">More options</button></div>'+
       '<section id="cup-review" aria-label="More options"'+(open?'':' hidden')+'><div class="dialog-actions">'+
-      '<button class="utility" data-do="cup-sheet">Cup schedule</button><button class="utility" data-do="home">Main menu</button></div>'+
-      '<span data-cup-recap hidden></span>'+(clear?'<p><strong>Personal best</strong> · '+record(entry.best)+'</p>':'')+
-      (battle.matchCard?'<div class="dialog-actions">'+cardButton+'</div>':'')+'</section></div>',false);
+      '<button class="utility" data-do="cup-sheet">Cup schedule</button>'+
+      (battle.matchCard?cardButton:'')+
+      (hasReplay?'<button class="utility" data-do="watch-match">Watch full match</button>':'')+
+      '<button class="utility" data-do="home">Main menu</button></div></section></div>',false);
     const more=document.getElementById('cup-more'),review=document.getElementById('cup-review');
     more.onclick=()=>{
       attempt.detailsOpen=review.hidden;review.hidden=!attempt.detailsOpen;
+      attempt.reviewAction=null;
       more.setAttribute('aria-expanded',String(attempt.detailsOpen));
     };
-    document.querySelector('.cup-advance button').focus();
+    review.onclick=e=>{attempt.reviewAction=e.target.closest('button')?.dataset.do;};
+    const previous=open && [...review.querySelectorAll('button')].find(b=>b.dataset.do===attempt.reviewAction);
+    (previous || document.querySelector('.cup-advance button')).focus();
     announce(title+'. '+headline+'. '+line);
   }
   function cupSelect(root,{kind,route,progress,temporary,coatFor,select,back,start,record,stageName,stockLabel}){

@@ -63,7 +63,13 @@ async function playCup(browser) {
         // Force ring-outs in this browser fixture to exercise stock transitions and round routing.
         if(window.ringOut!==undefined && this.end===null && !this.finished){
           const target=this.dogs[window.ringOut];
-          if(target?.stocks && (window.koTick=(window.koTick||0)+1)%25===0) this.knockouts([target]);
+          if(target?.stocks && (window.koTick=(window.koTick||0)+1)%25===0){
+            if(window.finalLoss && target.index===0 && target.stocks===1){
+              target.x=this.blastBounds().right+1;target.damage=112.5;
+              this.matchCard.players[0].lastHit={id:'brisketHaymaker',frame:this.matchFrames-18};
+            }
+            this.knockouts([target]);
+          }
         }
         return step.call(this,dt,input,...rest);
       };
@@ -93,12 +99,16 @@ async function playCup(browser) {
   await assertRound('brisket','rookie');
   await page.evaluate(()=>{
     const rival=fight.dogs[1];
-    fight.knockouts([rival]);fight.knockouts([rival]);rival.damage=116.4;
+    fight.knockouts([rival]);fight.knockouts([rival]);rival.damage=116.4;window.finalLoss=true;
   });
   await finish(0,'Round 1 lost');await checkResult('Retry round 1');
-  assert.equal(await page.locator('.cup-result .winner p').innerText(),'1 stock left at 116.4%');
+  assert.equal(await page.locator('.cup-result .winner p').innerText(),'Out at 112.5% · Last hit was Haymaker');
+  await page.evaluate(()=>delete window.finalLoss);
   assert.equal(await page.locator('.cup-result .victory-shot').getAttribute('aria-label'),'Brisket on the winner’s podium');
-  await page.locator('#cup-more').click();await tap('cup-sheet');
+  await page.locator('#cup-more').click();
+  const options=page.locator('#cup-review button:visible');
+  assert.deepEqual(await options.allTextContents(),['Cup schedule','Match stats','Watch full match','Main menu']);
+  await tap('cup-sheet');
   assert.match(await page.locator('.cup-stops [aria-current]').innerText(),/Brisket[\s\S]*Retry/);
   await tap('cup-return');await title('Round 1 lost');await tap('cup-next');
   await assertRound('brisket','rookie'); await finish(1,'Round 1 clear');
@@ -106,6 +116,7 @@ async function playCup(browser) {
   assert.match(await page.locator('.cup-result .winner p').innerText(),/^3 stocks left · Next up, Clover$/);
   assert(!(await page.locator('[data-do=match-card]').isVisible()));await page.locator('#cup-more').click();
   await tap('match-card'); await tap('card-back'); await title('Round 1 clear');
+  assert.equal(await page.evaluate(()=>document.activeElement.dataset.do),'match-card');
   const saved=await record();
   assert.equal(saved.active.retries,1); assert.equal(saved.active.wins.length,1);
   await page.goto(root+'?resume#arcade/noodle'); await observe();
@@ -140,6 +151,12 @@ async function playCup(browser) {
     await page.screenshot({path:'cup-clear-'+name+'.png'});
   }
   await page.locator('#cup-more').click();await page.locator('[data-do=watch-match]').waitFor();
+  assert.deepEqual(await options.allTextContents(),['Cup schedule','Match stats','Watch full match','Main menu']);
+  for(const button of await options.all()){
+    const bounds=await button.boundingBox();
+    assert(bounds.height>=44 && bounds.x>=0 && bounds.y>=0 && bounds.x+bounds.width<=390 && bounds.y+bounds.height<=844);
+  }
+  await page.screenshot({path:'cup-options-phone.png'});
   await page.keyboard.press('Escape');assert.equal(await fronts.count(),2);
   await page.setViewportSize({width:1280,height:720});await tap('cup-next');
   await page.waitForFunction(()=>window.fight?.mode==='adventure');
@@ -207,7 +224,9 @@ async function playCup(browser) {
   assert.equal(cleared.best.id,saved.active.id);
   assert.equal(cleared.best.wins.length,4);assert(cleared.best.wins.every(w=>w.frames>0));
   assert.equal(await page.evaluate(()=>localStorage.getItem(DispatchScript.saveKey)),null);
-  await page.locator('#cup-more').click();await tap('cup-sheet');
+  await page.locator('#cup-more').click();
+  assert.deepEqual(await options.allTextContents(),['Cup schedule','Main menu']);
+  await tap('cup-sheet');
   assert.match(await page.locator('.cup-route-board').textContent(),/Personal best/);
   assert.equal(await page.locator('.cup-stops [aria-current]').count(),0);
   assert((await page.locator('.cup-stops b').allTextContents()).every(label=>label.includes('kept')));

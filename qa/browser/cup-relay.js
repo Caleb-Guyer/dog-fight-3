@@ -152,8 +152,16 @@ async function play(browser,device){
       await page.evaluate(()=>button(0,true,0));await page.clock.runFor(120);
       await page.evaluate(()=>{button(0,false,0);pads[0].axes[0]=.8;});await page.clock.runFor(3200);
       assert(await page.evaluate(()=>liveCup.dogs[1].kind==='brisket' && cupInput.x>.7));
-      await rings(0,3);
+      await page.evaluate(()=>{
+        const hero=liveCup.dogs[0];
+        liveCup.knockouts([hero]);liveCup.knockouts([hero]);
+        liveCup.matchFrames=Math.max(120,liveCup.matchFrames);
+        liveCup.matchCard.players[0].lastHit={id:'brisketHaymaker',frame:liveCup.matchFrames-91};
+        hero.x=liveCup.stageWidth/2;hero.y=liveCup.blastBounds().bottom+1;hero.damage=47;
+      });
+      await rings(0,1);
       assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Retry round 3');
+      assert.equal(await page.locator('.cup-result .winner p').innerText(),'Fell below the stage at 47%');
       await page.evaluate(()=>button(0,true,0));await page.clock.runFor(120);
       await page.evaluate(()=>button(0,false,0));await page.clock.runFor(3200);
       assert(await page.evaluate(()=>liveCup.end===null && liveCup.dogs[0].stocks===3 && cupInput.x>.7));
