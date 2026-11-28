@@ -366,6 +366,8 @@ In **Footwork practice → Run up and shield**, run to the chalk and guard Brisk
 
 In **Options**, switch **Grounded aim stick** to **Tilt** to throw a tilt with one flick, even while holding a run in the opposite direction. This setting also covers the keyboard aim keys and a swipe outward from Smash on touch. In the air these controls aim aerials. The dedicated Smash button still charges smashes.
 
+On keyboard or touch, hold a direction and press Smash to lock in your swing. You can immediately steer back. With the keyboard strike keys, the newest press chooses the attack direction when opposite keys overlap.
+
 Under **Footwork practice**, choose **Clash jabs** to meet a mirror opponent at the tips of your paws. Tap Attack to start the count, then tap it again on the third chalk light. When two grounded strikes meet, comparable attacks recoil. A swing worth at least 9 percentage points more at the point of contact carries through and can still reach the rival. Charge, sweet spots and the late part of a swing all count. Two airborne attacks can trade hits.
 
 In **Break through**, start the count, hold Smash immediately, then release Pip’s Bolt Kick on the third light to beat Brisket’s Body Check. Try the same release with a short charge to see both paws recoil. In **Bat the disc**, time a swing against Clover’s Round Trip. You can swat her Skip Serve and Line Drive in a match, too. A sufficiently strong disc will beat a weak paw. An aerial that clears a disc can keep going. Each exercise has a side switch and a half-speed toggle.

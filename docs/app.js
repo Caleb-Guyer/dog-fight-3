@@ -315,6 +315,7 @@
   let walkPointer = null;
   let touchFlick = null, flickAim = null;
   const rightStickHeld = [false, false];
+  const strikeAim = [{x:0,y:0},{x:0,y:0}];
   const horizontalInputs=[new window.FightControls.HorizontalInput(),new window.FightControls.HorizontalInput()];
   const shieldTiltLocked = [false, false];
   const flickJumpStates = [{},{}];
@@ -5885,6 +5886,12 @@
       rawX: x, y: y > 0 && (active('walk') || soft === 'down') ? 64 / 127 : y,
     };
   }
+  function heldStrikeAxis(negative, positive, last, pressed) {
+    if (pressed === negative) return -1;
+    if (pressed === positive) return 1;
+    const neg = held.has(negative), pos = held.has(positive);
+    return neg && pos ? last : Number(pos) - Number(neg);
+  }
   window.addEventListener('keydown', (e) => {
     if (page !== 'match' || $('dialog').open) return;
     if (!finishTrial && world?.lesson && e.code==='Enter' && !e.repeat && e.target=== $('game')) {
@@ -5928,6 +5935,12 @@
       keys.forEach((map,i)=>{
         if(e.code===map.left)horizontalInputs[i].last=-1;
         if(e.code===map.right)horizontalInputs[i].last=1;
+        if(e.code===map.aimLeft || e.code===map.aimRight || e.code===map.aimUp || e.code===map.aimDown){
+          // Capture the chord at the newest strike press. A released key can still be in taps.
+          const aim=strikeAim[i];
+          aim.x=heldStrikeAxis(map.aimLeft,map.aimRight,aim.x,e.code);
+          aim.y=heldStrikeAxis(map.aimUp,map.aimDown,aim.y,e.code);
+        }
       });
       const slot = keys.findIndex(map => map.attack === e.code);
       if (slot >= 0) attackAim[slot] = buttonAim(slot);
@@ -6140,15 +6153,16 @@
     const up = key('up') || down(pad, 12),
       downAim = key('down') || down(pad, 13);
     const y = Number(downAim) - Number(up);
-    // A quick Smash tap can outlive both direction keys or both thumbs in the input queue.
-    const savedSmash = tapped('smash') && !left && !right && !y && !rawX && !axis(1) ? smashAim[i] : null;
+    // Commit the direction on a keyboard or touch Smash press. A neutral press can still be chorded this tick.
+    const savedSmash = tapped('smash') && (smashAim[i].rawX || smashAim[i].y) ? smashAim[i] : null;
     const digitalAim = left || right || up || downAim || (!i && touches.has('neutral'));
     const rightX = axis(2),
       rightY = axis(3);
     const rightStick = Math.max(Math.abs(rightX), Math.abs(rightY)) > (rightStickHeld[i] ? 0.38 : 0.62);
     rightStickHeld[i] = rightStick;
-    const keyAimX = Number(key('aimRight')) - Number(key('aimLeft'));
-    const keyAimY = Number(key('aimDown')) - Number(key('aimUp'));
+    const strikeTap = tapped('aimLeft') || tapped('aimRight') || tapped('aimUp') || tapped('aimDown');
+    const keyAimX = strikeTap ? strikeAim[i].x : heldStrikeAxis(map.aimLeft,map.aimRight,strikeAim[i].x);
+    const keyAimY = strikeTap ? strikeAim[i].y : heldStrikeAxis(map.aimUp,map.aimDown,strikeAim[i].y);
     const flick = !i && (touchFlick?.fired || touchTaps.has('aimStick')) ? flickAim : null;
     const aimStick = !!(rightStick || keyAimX || keyAimY || flick);
     // With an explicit Up + Jump chord the smash must reach the fighter before takeoff.
@@ -6190,8 +6204,8 @@
       smash: held.has(map.smash) || tapped('smash') || touchSmash || mapped('smash'),
       aimStick,
       tiltMode: settings[i?'tiltStick2':'tiltStick'] && aimStick,
-      smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : rawX || savedSmash?.rawX || 0,
-      smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : y || axis(1) || savedSmash?.y || 0,
+      smashX: aimStick ? (flick?.x ?? (keyAimX || keyAimY ? keyAimX : rightX)) : savedSmash?.rawX ?? rawX,
+      smashY: aimStick ? (flick?.y ?? (keyAimX || keyAimY ? keyAimY : rightY)) : savedSmash?.y ?? (y || axis(1)),
       special: key('special') || mapped('special'),
       shield,
       ...(grounded && shield && (key('walk') || !i && touches.has('neutral') || down(pad,10) ||
@@ -6202,7 +6216,7 @@
         attack: tapped('attack'),
         smash: tapped('smash'),
         aimStick: !!(flick && touchTaps.has('aimStick')) ||
-          ['aimLeft','aimRight','aimUp','aimDown'].some(tapped),
+          strikeTap,
         special: tapped('special'),
         shield: tapped('shield'),
         grab: tapped('grab'),

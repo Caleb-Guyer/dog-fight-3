@@ -337,6 +337,7 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/guided-school.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/fighter-lessons.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/layouts.js
+          NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/strike-order.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/coats.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/couch-select.js
           NODE_PATH="$RUNNER_TEMP/df3/node_modules" node qa/browser/stage-strike.js

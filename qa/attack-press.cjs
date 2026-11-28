@@ -90,9 +90,18 @@ test('rollback reproduces a held first-frame tilt and a held smash with opposite
       return {net:session.match,world,packets};
     });
     const history=[sample(ref)];let early=false,opponentSmash=false;
-    for(let n=0;n<42;n++){
-      const inputs=[0,1].map(s=>input({attack:n>=2 && n<27,y:-1,quickAttack:s===fastSlot}));
+    for(let n=0;n<88;n++){
+      const inputs=[0,1].map(s=>{
+        if(n===75)return input({x:-1,grabX:-1,smashX:1,aimStick:s===fastSlot,tiltMode:s===fastSlot,
+          smash:s!==fastSlot,tapped:s===fastSlot?{aimStick:true}:{smash:true}});
+        return input({attack:n>=2 && n<27,y:n<42?-1:0,quickAttack:s===fastSlot});
+      });
       ref.step(tick,...inputs);history.push(sample(ref));
+      if(n===75){
+        const tilt=ref.dogs[fastSlot], charge=ref.dogs[1-fastSlot];
+        assert.equal(tilt.attack?.tiltSide,'forward');assert.equal(tilt.face,1);
+        assert.equal(charge.smashCharge?.side,'side');assert.equal(charge.smashCharge.face,1);
+      }
       for(const [s,p] of peers.entries()){
         if(n>=5)assert(p.net.receive(n-5,peers[1-s].packets[n-5]));
         p.net.tick(()=>inputs[s],p.world);
