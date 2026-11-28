@@ -524,17 +524,20 @@ dialog[data-view='practice'] #dialog-body {
   color: var(--ink);
   background: #fff6de;
 }
-.practice-lanes { display: flex; flex-wrap: wrap; gap: 4px; margin-block: 8px 4px; }
-.practice-lanes button { min-height: 32px; padding: 3px 7px; }
-.practice-lanes [aria-pressed='true'] { background: var(--gold); color: var(--ink); }
-#practice-count { font-size: 13px; margin-block: 2px 4px; }
+#practice-back { align-self: flex-start; margin-top: 8px; }
+#practice-count:not(:empty) { font-size: 13px; margin-top: 6px; }
 #practice-results {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 6px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-color: var(--edge) var(--paper);
-  padding: 3px 6px 5px 3px;
+  margin-top: 8px;
+  padding: 5px;
 }
 #practice-results section {
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 135px), 1fr));
   gap: 5px;
@@ -547,15 +550,25 @@ dialog[data-view='practice'] #dialog-body {
   border-bottom: 2px solid var(--edge);
   font: 18px var(--pixel);
 }
-#practice-results [data-exercise] {
-  padding: 7px;
-  min-height: 38px;
+#practice-results button {
+  padding: 8px 10px;
+  min-height: 44px;
   border: 1px solid var(--edge);
   background: #fff2cd;
   font: 15px/1.15 var(--body);
   text-align: left;
 }
-#practice-results [data-exercise]:hover, #practice-results [data-exercise]:focus-visible { background: var(--gold); }
+#practice-results [data-lane] {
+  padding: 12px;
+  color: var(--paper);
+  background: var(--ink);
+  font: 22px var(--pixel);
+}
+#practice-results small { display: block; margin-top: 5px; font: 13px/1.3 var(--body); }
+#practice-results button:hover, #practice-results button:focus-visible { background: var(--gold); color: var(--ink); }
+@media (max-width: 340px) {
+  #practice-results { grid-template-columns: 1fr; }
+}
 @media (max-height: 480px) {
   dialog[data-view='practice'] .dialog-inner { max-height: 92dvh; padding: 8px 12px; }
   dialog[data-view='practice'] .dialog-heading { margin-bottom: 4px; padding-bottom: 3px; }
