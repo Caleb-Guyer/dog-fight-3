@@ -123,6 +123,59 @@
     ctx.restore();
   }
   class DispatchView extends FightView {
+    static enterScreen($){
+      $('pause-label').textContent='Pause';
+      const call=$('countdown');
+      call.classList.remove('net-lag','sudden','fight-end','opponent-found');
+      call.textContent='';
+      $('cup-select').replaceChildren();
+      for(const id of ['home','cup-select','online-lobby','match-set','dispatch-route','dispatch-story','lobby',
+        'training-tools','match-clock','school-coach','corner-tip','recovery-tip','hud','grapple-prompt',
+        'freshness-readout','wave-readout','combo-readout'])$(id).hidden=true;
+      $('match').hidden=$('dispatch-hud').hidden=$('dispatch-orders').hidden=false;
+      document.body.classList.remove('menu-screen','training-active','cinema-active','with-drill-readout');
+      document.body.classList.add('playing','adventure-active');
+    }
+    beginCupOpening(retry,$){
+      const remaining=retry ? 0.8 : 2.4;
+      this.cupOpening={remaining,retry};
+      $('countdown').textContent=retry?'1':'3';
+      $('dispatch-orders').hidden=true;
+      return remaining;
+    }
+    advanceCupOpening(remaining,world,tone,$){
+      const opening=this.cupOpening;
+      if(!opening.retry && opening.remaining>1.12 && remaining<=1.12){
+        tone(146,68,.12,0,'triangle',.08);
+        tone(580,420,.16,.025,'sine',.045);
+      }
+      if(opening.remaining && !remaining)$('dispatch-orders').hidden=false;
+      opening.remaining=remaining;
+      if(!remaining && (world.time>=.36 || world.finished)){
+        $('countdown').textContent='';
+        this.cupOpening=null;
+      }
+    }
+    drawCupArrival(ctx,enemy){
+      const f=enemy.f,elapsed=2.4-this.cupOpening.remaining;
+      let x=f.x,pose='idle',phase=0;
+      const still=reduced.matches || this.cupOpening.retry;
+      if(!still && elapsed<.78){
+        const walk=elapsed/.78;
+        x-=f.face*64*(1-walk)**2;
+        pose='walk';
+      }else if(!still && elapsed<1.28){pose='windup';phase=(elapsed-.78)/.5;}
+      else if(!still && elapsed<1.64){pose='strike';phase=(elapsed-1.28)/.36;}
+      window.DispatchActors.draw(ctx,enemy.kind,x,f.y,{face:f.face,pose,phase,time:still?0:elapsed});
+      if(pose==='strike' && phase<.8){
+        const stampX=f.x+f.face*88;
+        ctx.fillStyle='#e5bc79';
+        for(const spread of [-1,1]){
+          const chip=Math.round(stampX+spread*(6+phase*32));
+          ctx.fillRect(chip,Math.round(f.y-4-Math.sin(phase*Math.PI)*8),4,3);
+        }
+      }
+    }
     missionCues({tone,sound,dispatchNotice,stockLabel,mission,sideRoute,cupRound,unlockLift,stored,rivalName}){
       return (name,e)=>{
         this.event(name,e);
@@ -297,6 +350,7 @@
         }
       }
       $('dispatch-marks').textContent = marks;
+      $('dispatch-marks').hidden = !marks;
       if ($('dispatch-objective').textContent !== order) $('dispatch-objective').textContent = order;
     }
     drawEdgePortrait(ctx, f, x, y, time, world) {
@@ -354,7 +408,10 @@
       for (const fx of this.effects) if (fx.behind) drawEffect(ctx, fx);
       const hero = world.dogs[0];
       if (world.foes[0]?.wavefront) drawBellWave(ctx, world.foes[0].wavefront, world.terrain[0]);
-      for (const enemy of world.foes) drawOpponent(ctx, enemy, world, t);
+      for (const enemy of world.foes) {
+        if(this.cupOpening?.remaining && enemy.kind==='conductor')this.drawCupArrival(ctx,enemy);
+        else drawOpponent(ctx,enemy,world,t);
+      }
       if (world.team) {
         for (const [seat,f] of world.team.entries()) {
           if (f.absent) continue;
