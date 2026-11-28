@@ -6711,6 +6711,11 @@
       const stage = openingStages[hash];
       startMatch({ ...settings, p1:'pip', p2:'brisket', mode:'solo', stage,
         cpuLevel:'rival', minutes:7, fetch:false }, undefined, 42);
+    } else if (Object.hasOwn(fighters,form) && hash==='#solo/rookie-smash/'+form) {
+      leaveOnline(); afterStory=null;
+      const p1=form==='pip'?'brisket':'pip';
+      startMatch({mode:'solo',p1,p2:form,coats:[savedCoat(0,p1),savedCoat(1,form)],stage:'nightmail',form:'flat',
+        cpuLevel:'rookie',stockCount:3,minutes:7,fetch:false,spawnDamage:[90,0]},undefined,42);
     } else if (hash === '#solo/intercept-clover') {
       startCloverApproach();
     } else if (hash === '#solo/box-with-pip') {
