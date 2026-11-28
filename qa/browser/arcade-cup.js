@@ -231,6 +231,8 @@ async function returningFighter(browser){
     const modes=page.locator('.mode-rack button');
     for(const size of [{width:800,height:450},{width:390,height:844},{width:1280,height:720}]){
       await page.setViewportSize(size);
+      const list=await page.locator('.mode-rack').evaluate(el=>({used:el.scrollHeight,available:el.clientHeight}));
+      assert(list.used<=list.available+1,JSON.stringify({size,list}));
       for(const button of await modes.all()){
         await button.scrollIntoViewIfNeeded();
         const hit=await button.evaluate(el=>{
