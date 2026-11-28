@@ -2056,6 +2056,7 @@ async function testPracticeRoom(page,mobile) {
     assert.equal(await page.locator('#platform-below').getAttribute('aria-pressed'),'true');
     await page.evaluate(()=>{delete navigator.getGamepads;delete window.drillPad;});
     await page.clock.runFor(64);
+    await page.locator('#solo-pad-backup').press('Enter');
     await press('#practice-menu');
   }
   assert(await page.locator('#return-fight').isHidden());
