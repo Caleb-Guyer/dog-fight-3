@@ -228,6 +228,21 @@ async function returningFighter(browser){
     assert.deepEqual(await saves(),before);
     await page.locator('[data-cup-dog=clover]').click();
     await page.locator('#cup-back').click();
+    const modes=page.locator('.mode-rack button');
+    for(const size of [{width:800,height:450},{width:390,height:844},{width:1280,height:720}]){
+      await page.setViewportSize(size);
+      for(const button of await modes.all()){
+        await button.scrollIntoViewIfNeeded();
+        const hit=await button.evaluate(el=>{
+          const r=el.getBoundingClientRect(), x=r.left+r.width/2, center=r.top+r.height/2;
+          return [r.height,el.contains(document.elementFromPoint(x,center))];
+        });
+        assert(hit[0]>=44 && hit[1],JSON.stringify({size,label:await button.textContent(),hit}));
+      }
+      await modes.first().scrollIntoViewIfNeeded();
+      await page.screenshot({path:'cup-home-'+size.width+'.png'});
+    }
+    await page.setViewportSize({width:800,height:450});
     await page.locator('#home-cup').click();
     await chosen.waitFor();
     assert.equal(await chosen.getAttribute('data-cup-dog'),'clover');
