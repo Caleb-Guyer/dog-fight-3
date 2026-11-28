@@ -240,6 +240,8 @@ In that opening, let Brisket approach once to see his Yard Buster. On the rematc
 
 **Arcade Cup** gives each dog a four-round route. Fight the other three dogs in three-stock matches, then take your chosen fighter and coat into Bell Depot against the Copper Hound. The rivals progress from Rookie through Arcade to Rival. Every round starts with three stocks. Cleared rounds save separately for each dog. Retrying a lost round or re-entering an unfinished one adds one retry.
 
+After a knockout, the round result shows how many stocks the winner kept. On a loss you can also see the rival’s final damage. If Copper Hound wins, you see its remaining armor and a counter to the last boss attack that hit you on that stock.
+
 Pause a round and open **Cup schedule** to see all four opponents. **Resume fight** returns you to the same moment, including during Copper Hound’s boss fight. To stop playing, choose **More options → Leave round**. Your cleared rounds stay saved. From Results, you can check the schedule and return to the same replays and stats. Personal bests rank fewer retries first, then stocks kept, then time. [Enter Noodle’s Arcade Cup](https://caleb-guyer.github.io/dog-fight-3/#arcade/noodle)
 
 Rival can punish a blocked smash or a heavy landing. At close range each dog can grab out of shield. At higher damage it looks for its own up smash. Remaining recovery frames, shield pushback and the reach of the move determine whether it commits. As Brisket, try Haymaker up close against Pip, then back up and make only the tip connect. [Play the three-stock match](https://caleb-guyer.github.io/dog-fight-3/#solo/shield-punish)
