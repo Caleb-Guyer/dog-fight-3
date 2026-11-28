@@ -169,9 +169,58 @@ async function play(browser,device){
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
+async function lastStockPractice(browser){
+  const page=await browser.newPage();
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const ledgers=()=>page.evaluate(()=>Object.fromEntries(Object.keys(localStorage).filter(k=>
+    k.startsWith('dog-fight-3.cup.') || k.startsWith(FightRecords.prefix)).map(k=>[k,localStorage.getItem(k)])));
+  const action=name=>page.locator('[data-do="'+name+'"]');
+  try{
+    await page.addInitScript(()=>{
+      localStorage.setItem('dog-fight-3.cup.clover',JSON.stringify({playedAt:100,active:{id:'real-cup',
+        retries:1,started:false,coat:2,wins:[{stocks:2,frames:900},{stocks:1,frames:1500}]}}));
+    });
+    await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
+    await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
+    await page.goto(root+'#arcade/last-stock');await action('cup-start').waitFor();
+    const before=await ledgers();
+    assert.equal(Object.keys(before).length,1);
+    assert.match(await page.locator('.cup-select-head span').textContent(),/Last-stock practice/);
+    await page.locator('[data-cup-dog=clover]').click();
+    assert.equal(await action('cup-start').textContent(),'Start Clover’s run');
+    await page.locator('[data-cup-dog=pip]').click();
+    await page.evaluate(()=>{
+      const view=DogFightView.FightView.prototype,draw=view.draw;
+      view.draw=function(canvas,w,...args){window.cupGame=w;return draw.call(this,canvas,w,...args);};
+    });
+    const stocks=()=>page.evaluate(()=>cupGame.dogs.map(f=>[f.kind,f.stocks,f.damage]));
+    await action('cup-start').click();await page.locator('#pause').waitFor();
+    assert.deepEqual(await stocks(),[['pip',1,125],['noodle',1,125]]);
+    await page.keyboard.down('a');await page.clock.runFor(6500);await page.keyboard.up('a');
+    await page.getByRole('heading',{name:'Round 1 lost'}).waitFor();
+    assert.deepEqual(await page.locator('.cup-result button:visible').allTextContents(),['Retry round 1','More options']);
+    await action('cup-next').click();await page.locator('#dialog').waitFor({state:'hidden'});
+    await page.keyboard.down('j');await page.clock.runFor(9500);await page.keyboard.up('j');
+    await page.getByRole('heading',{name:'Round 1 clear'}).waitFor();
+    assert.deepEqual(await page.locator('.cup-result button:visible').allTextContents(),['Play round 2','More options']);
+    await page.locator('#cup-more').click();await action('match-card').click();await action('card-back').click();
+    await action('cup-next').click();await page.locator('#dialog').waitFor({state:'hidden'});
+    assert.deepEqual(await stocks(),[['pip',3,0],['clover',3,0]]);
+    await page.locator('#pause').click();await page.locator('#cup-pause-tools summary').click();
+    assert.equal(await action('cup-save').count(),0);
+    await page.getByRole('button',{name:'End practice'}).click();await page.locator('#home-continue[data-save=clover]').waitFor();
+    assert.deepEqual(await ledgers(),before);
+    await page.locator('#home-cup').click();await action('cup-start').waitFor();
+    assert.equal(await page.locator('[data-cup-dog][aria-pressed=true]').getAttribute('data-cup-dog'),'clover');
+    assert.equal(await action('cup-start').textContent(),'Continue to round 3');
+    await page.locator('[data-cup-dog=pip]').click();await action('cup-start').click();await page.locator('#pause').waitFor();
+    assert.deepEqual(await stocks(),[['pip',3,0],['noodle',3,0]]);
+    assert.deepEqual(errors,[]);
+  }finally{await page.close();}
+}
 (async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{for(const device of ['keyboard','touch','controller']){
+  try{await lastStockPractice(browser);for(const device of ['keyboard','touch','controller']){
     try{await play(browser,device);}catch(e){throw Error(device+' Cup singles progression: '+e.stack);}
   }}finally{await browser.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+e.stack.replaceAll('\n','%0A'));process.exitCode=1;});

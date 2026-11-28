@@ -1620,8 +1620,9 @@
   }
   const reducedReplays=matchMedia('(prefers-reduced-motion: reduce)');
   const cup = window.YardCup, unsavedCup = new Map();
-  let cupAttempt = null, cupChoice, cupShown;
-  function cupEntry(kind) {
+  let cupAttempt = null, cupChoice, cupShown, cupPractice;
+  function cupEntry(kind,practice) {
+    if(practice)return cup.read(practice.get(kind));
     if (unsavedCup.has(kind)) return cup.read(unsavedCup.get(kind));
     try {
       const data = localStorage.getItem('dog-fight-3.cup.'+kind);
@@ -1630,11 +1631,12 @@
     return cup.read(null);
   }
   function updateCup(kind,change,durable=false) {
-    const key = 'dog-fight-3.cup.' + kind;
+    const key = 'dog-fight-3.cup.' + kind,practice=cupPractice;
     const commit = () => {
-      const entry = cupEntry(kind), next = change(entry);
+      const entry = cupEntry(kind,practice), next = change(entry);
       if (next && next !== entry) {
         next.playedAt = Date.now();
+        if(practice){practice.set(kind,next);return next;}
         try {
           localStorage.setItem(key,JSON.stringify(next));
           unsavedCup.delete(kind);
@@ -1642,7 +1644,7 @@
       }
       return next;
     };
-    if (!navigator.locks) return Promise.resolve(commit());
+    if (practice || !navigator.locks) return Promise.resolve(commit());
     return navigator.locks.request(key,commit).catch(error=>{
       if (error.name==='SecurityError') return commit();
       throw error;
@@ -1660,9 +1662,9 @@
     if(page!=='cup-select')menuScreen('cup-select');else dismiss();
     $('dialog-body').replaceChildren();
     window.VersusRulebook.cupSelect($('cup-select'),{
-      kind,back:returnToHome,start:startCupRound,
-      progress:id=>{cupChoice=id;cupShown=cupEntry(id);return cupShown;},
-      temporary:id=>unsavedCup.has(id),coatFor:id=>cupEntry(id).active?.coat ?? savedCoat(0,id)
+      kind,practice:!!cupPractice,back:returnToHome,start:startCupRound,
+      progress:id=>{if(!cupPractice)cupChoice=id;cupShown=cupEntry(id,cupPractice);return cupShown;},
+      temporary:id=>!cupPractice && unsavedCup.has(id),coatFor:id=>cupEntry(id,cupPractice).active?.coat ?? savedCoat(0,id)
     });
     if(resume)startCupRound(kind,$('cup-select').querySelector('[data-do=cup-start]'),resumePad);
   }
@@ -1678,8 +1680,9 @@
       loadDispatch,updateCup,coat:()=>savedCoat(0,kind),back:()=>cupSheet(kind),showDialog,play(entry,resume){
         cupShown=entry;
         const run=entry.active,round=run.wins.length;
-        const attempt={kind,id:run.id,retries:run.retries,round,coat:run.coat};
+        const attempt={kind,id:run.id,retries:run.retries,round,coat:run.coat,practice:!!cupPractice};
         const bout=cup.stockBout(kind,round,run.coat);
+        if(bout && !round && cupPractice)bout.lastStockStart=true;
         const seat=(cupAttempt?.id===run.id && soloWorld===world && soloSeat) || new controls.SoloSeat();
         if(startingPad)seat.use(startingPad);
         else if(seat.lost || seat.index===null)seat.useOtherInput(getPads(),true);
@@ -2230,7 +2233,7 @@
     const matchName = world.eventId?world.event.name:world.warmupPartner ? 'Online warm-up' : online.match ? 'Online · You are P' + (online.side + 1) : config.mode === 'solo' ?
       (rehearsal ? 'Practice' : 'Solo') + ' · ' + cpuLevels[world.cpuLevel].name + ' CPU' : world.bells ? 'Bell Break' : modes[config.mode];
     $('match-mode').textContent = rehearsal && visit.returnStart ? 'Stock return · '+(config.mode==='local'?'Local versus':cpuLevels[world.cpuLevel].name+' CPU') :
-      cupAttempt ? 'Arcade Cup · Round '+(cupAttempt.round+1)+'/4' :
+      cupAttempt ? (cupAttempt.practice?'Cup practice':'Arcade Cup')+' · Round '+(cupAttempt.round+1)+'/4' :
       config.rotationRound?(config.tourneyRound || 'Bout '+config.rotationRound)+' · P1 '+config.rotationTags[0]+' / P2 '+config.rotationTags[1]:
       world.lesson ? 'Fight School' : spar?'Sparring · '+world.dogs[0].stats.name:matchName + (world.relayTeams?' · Pack Relay':world.matchCard?.points?' · Time Battle':config.lastStockStart ? ' · Last stock' : '');
     $('match-stage').textContent = stageName(config.stage,world.form);
@@ -3009,6 +3012,7 @@
     return online.match?'online':cupAttempt?'cup':matchConfig?.schoolFinal || spar?'school':world.mode;
   }
   function recordFight(result) {
+    if(cupAttempt?.practice)return;
     if(result?.eventId)return result.save(storage);
     if (!result?.matchCard || result.end===null || practiceFight || matchConfig?.openingDuel || recordedFights.has(result)) return;
     const series=online.series || localSet;
@@ -3398,7 +3402,7 @@
     if (action==='rotation') return rotationBoard(!!matchConfig.tourneyRound);
     if (action==='fighter-classes') return fighterSheet(world?.lesson?.course || settings.p1);
     if (action === 'cup-sheet' && cupAttempt) return showCupSchedule();
-    if(action==='cup-save' && cupAttempt){
+    if(action==='cup-save' && cupAttempt && !cupAttempt.practice){
       const fight=world;
       return window.VersusRulebook.saveCup(pausedFight(),{showDialog,current:()=>world===fight && dialogType==='mission-saving',
         loadDispatch,updateCup,home:showHome,back:()=>showPause(false)});
@@ -4237,7 +4241,7 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=cup-save-1',
+    VersusRulebook:'versus-rules.js?v=cup-practice-1',
     PackRelay:'pack-relay.js?v=versus-2',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
     ComboLab:'combo-lab.js?v=drop-aerial-1', FinishTools:'finish-tools.js?v=second-chance-1',
@@ -4347,6 +4351,7 @@
   }
   const countMarks = (bits) => campaign.rooms.filter((_, i) => bits & (1 << i)).length;
   function menuScreen(id, keepRoom = false) {
+    if(id!=='cup-select')cupPractice=null;
     if(id==='online-lobby' && !$('online-sheet')){
       const link=document.createElement('link');link.id='online-sheet';link.rel='stylesheet';link.href='./online.css?v=lobby-1';
       link.onerror=()=>link.remove();document.head.append(link);
@@ -4759,7 +4764,7 @@
       if(story && name==='dispatchStamp')saveProgress({room:index,stamp:index});
       cues(name,e);
     });
-    $('match-mode').textContent = world.rally?'Last-stock rally':doubles?'Bell Depot doubles':sideRoute?'Bonus dispatch · Relay':cupRound ? 'Arcade Cup · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
+    $('match-mode').textContent = world.rally?'Last-stock rally':doubles?'Bell Depot doubles':sideRoute?'Bonus dispatch · Relay':cupRound ? (cupRound.practice?'Cup practice':'Arcade Cup')+' · Final boss' : 'Mission 0' + (index + 1) + ' · ' + world.layout.type;
     if(suspended && cupRound){
       view.restoreCup(suspended,world,$);countdown=suspended.countdown;lastCount=suspended.lastCount;
     }else if(suspended){
@@ -6685,6 +6690,8 @@
     } else if (hash==='#bells' || (hash==='#bells/'+arena && Object.hasOwn(fighters,arena))) {
       showHome(false);
       bellSheet(arena || 'pip');
+    } else if (hash==='#arcade/last-stock') {
+      showHome(false);cupPractice=new Map();cupSheet('pip');
     } else if (/^#arcade\/(pip|brisket|noodle|clover)\/relay\/[23]$/.test(hash)) {
       showHome(false);cupSheet(arena);
     } else if (hash === '#arcade' || (hash === '#arcade/'+arena && Object.hasOwn(cup.courses,arena))) {

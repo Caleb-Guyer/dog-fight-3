@@ -681,12 +681,13 @@
     const cup=window.YardCup,round=attempt.round+1;
     const open=document.getElementById('dialog').open && attempt.pauseToolsOpen;
     const rival=cup.courses[attempt.kind].bouts[attempt.round]?.[0],dogs=window.DogFight.fighters;
-    showDialog('pause','Arcade Cup paused','<p>Round '+round+' of '+cup.rounds+' · '+dogs[attempt.kind].name+' vs. '+
+    showDialog('pause',attempt.practice?'Cup practice paused':'Arcade Cup paused','<p>Round '+round+' of '+cup.rounds+' · '+dogs[attempt.kind].name+' vs. '+
       (rival?dogs[rival].name:'Copper Hound')+'</p><div class="dialog-actions">'+
       '<button class="primary" data-do="resume">Resume</button><button class="utility" data-do="cup-sheet">Cup schedule</button></div>'+
       '<details id="cup-pause-tools"'+(open?' open':'')+'><summary>More options</summary><div class="dialog-actions">'+
       '<button class="utility" data-do="moves">Move list</button><button class="utility" data-do="controls">Controls</button>'+reviewButton+'</div>'+
-      '<button class="utility" data-do="cup-save">Save &amp; quit</button></details>');
+      (attempt.practice?'<button class="utility" data-do="home">End practice</button>':
+        '<button class="utility" data-do="cup-save">Save &amp; quit</button>')+'</details>');
     const tools=document.getElementById('cup-pause-tools');
     attempt.pauseToolsOpen=tools.open;
     tools.ontoggle=()=>{if(tools.isConnected)attempt.pauseToolsOpen=tools.open;};
@@ -826,7 +827,7 @@
     (previous || document.querySelector('.cup-advance button')).focus();
     announce(title+'. '+headline+'. '+line);
   }
-  function cupSelect(root,{kind,progress,temporary,coatFor,back,start}){
+  function cupSelect(root,{kind,practice,progress,temporary,coatFor,back,start}){
     const {fighters}=window.DogFight,cup=window.YardCup;
     const art={pip:'picnic',brisket:'nightmail',noodle:'laundry',clover:'canal'};
     const cards=Object.entries(fighters).map(([id,f])=>
@@ -834,7 +835,8 @@
       '<span class="cup-portrait" aria-hidden="true"><canvas width="300" height="224"></canvas><canvas width="300" height="224"></canvas></span>'+
       '<span class="cup-name"><strong>'+f.name+'</strong><small>'+f.style+'</small></span></button>').join('');
     root.dataset.view='roster';
-    root.innerHTML='<div class="cup-select-inner"><header class="cup-select-head"><div><span>Arcade Cup</span><h1>Fighter select</h1></div>'+
+    root.innerHTML='<div class="cup-select-inner"><header class="cup-select-head"><div><span>'+
+      (practice?'Arcade Cup · Last-stock practice':'Arcade Cup')+'</span><h1>Fighter select</h1></div>'+
       '<button id="cup-back" class="utility">Main menu</button></header>'+
       '<div class="cup-posters" role="group" aria-label="Choose your fighter">'+cards+'</div>'+
       '<footer class="cup-ticket"><div aria-live="polite" aria-atomic="true"><strong></strong><p></p></div><div class="cup-ticket-actions">'+
