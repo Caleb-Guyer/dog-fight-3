@@ -152,8 +152,10 @@ async function play(browser, kind) {
   const installPad = () => page.evaluate(
     `(pipInput => (${attachPad})(${cupInput}, ${JSON.stringify(route.signature)}))(${pipInput})`
   );
-  await page.goto('http://127.0.0.1:8080/#arcade/'+kind);
+  await page.goto('http://127.0.0.1:8080/');
+  await page.locator('#home-cup').click();
   await roster.waitFor();
+  await roster.locator('[data-cup-dog='+kind+']').click();
   assert.equal(await selected.getAttribute('data-cup-dog'),kind);
   await installPad();
   assert.equal(await save(),null);
@@ -186,9 +188,15 @@ async function play(browser, kind) {
     }
     rounds.push({opponent:round===4?'Copper Hound':fight.opponent,...won});
     if(round===1){
+      await result.locator('#cup-more').click();
+      await result.locator('[data-do=home]').click();
+      await page.locator('#home-continue[data-save='+kind+']').waitFor();
+      assert.match(await page.locator('#continue-detail').textContent(),/Round 2 of 4/);
       await page.reload();
+      await page.locator('#home-cup').click();
       await page.locator('[data-do=cup-start]').waitFor();
       assert.equal(await selected.getAttribute('data-cup-dog'),kind);
+      assert.deepEqual(await save(),entry);
       await installPad();
       assert.equal(await page.locator('[data-do=cup-start]').textContent(),'Continue to round 2');
       await page.keyboard.press('Enter');

@@ -206,9 +206,48 @@ async function mobileAndFilms(browser){
   assert.equal(await page.locator('#runner-name').textContent(),'Pip');
   await page.close();
 }
+async function returningFighter(browser){
+  const page=await browser.newPage({viewport:{width:800,height:450}});
+  page.on('pageerror',e=>errors.push(e.message));
+  const chosen=page.locator('#cup-select [aria-pressed=true]');
+  const start=page.locator('[data-do=cup-start]');
+  const saves=()=>page.evaluate(()=>Object.fromEntries(['brisket','noodle','clover'].map(kind=>
+    [kind,JSON.parse(localStorage.getItem('dog-fight-3.cup.'+kind))])));
+  try {
+    for(const kind of ['brisket','noodle']){
+      await page.goto(root+'?start='+kind+'#arcade/'+kind);
+      await start.click();
+      await page.locator('#pause').waitFor();
+    }
+    const before=await saves();
+    assert(before.noodle.playedAt>before.brisket.playedAt);
+    await page.goto(root+'?open-cup#arcade');
+    await chosen.waitFor();
+    assert.equal(await chosen.getAttribute('data-cup-dog'),'noodle');
+    assert.equal(await start.textContent(),'Retry round 1');
+    assert.deepEqual(await saves(),before);
+    await page.locator('[data-cup-dog=clover]').click();
+    await page.locator('#cup-back').click();
+    await page.locator('#home-cup').click();
+    await chosen.waitFor();
+    assert.equal(await chosen.getAttribute('data-cup-dog'),'clover');
+    await page.goto(root+'?explicit-choice#arcade/brisket');
+    await chosen.waitFor();
+    assert.equal(await chosen.getAttribute('data-cup-dog'),'brisket');
+    assert.deepEqual(await saves(),before);
+    await page.goto(root+'?continue-cup');
+    await page.locator('#home-continue[data-save=noodle]').click();
+    await page.locator('#pause').waitFor();
+    const resumed=await saves();
+    assert.equal(resumed.noodle.active.id,before.noodle.active.id);
+    assert.equal(resumed.noodle.active.retries,before.noodle.active.retries+1);
+    assert.deepEqual(resumed.brisket,before.brisket);
+    assert.equal(resumed.clover,null);
+  } finally {await page.close();}
+}
 async function main(){
   const browser=await chromium.launch({executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim(),headless:true});
-  try {await playCup(browser);await mobileAndFilms(browser);assert.deepEqual(errors,[]);}
+  try {await playCup(browser);await mobileAndFilms(browser);await returningFighter(browser);assert.deepEqual(errors,[]);}
   finally {await browser.close();}
 }
 main().catch(e=>{console.error(e);console.log('::error::'+String(e.stack).replaceAll('\n','%0A'));process.exitCode=1;});
