@@ -282,6 +282,40 @@ async function play(browser,device) {
       assert.deepEqual(await page.evaluate(()=>axes),[1,-1]);
       await page.keyboard.up('d');await page.keyboard.up('ArrowLeft');
     }
+    await page.goto('http://127.0.0.1:8080/?read-the-smash#solo/rookie-smash/brisket');
+    await page.locator('#match').waitFor();
+    await page.evaluate(()=>{
+      const step=DogFight.Battle.prototype.step;
+      DogFight.Battle.prototype.step=function(...args){
+        if(this.mode==='solo' && window.live!==this){
+          window.live=this;window.chargeAt=null;window.openingContacts=[];
+          const emit=this.emit;
+          this.emit=(name,e)=>{
+            if(name==='smashCharge' && e.f.index===1)window.chargeAt??=this.matchFrames;
+            if(name==='hit' || name==='block')openingContacts.push([name,e.owner.index,e.moveId]);
+            emit(name,e);
+          };
+        }
+        return step.apply(this,args);
+      };
+    });
+    for(const answer of ['guard','retreat']){
+      if(answer==='retreat'){await choose('#pause');await choose('[data-do=rematch]');}
+      await page.clock.runFor(4200);
+      for(let n=0;n<95 && await page.evaluate(()=>window.chargeAt==null);n++)await page.clock.runFor(16);
+      const cue=await page.evaluate(()=>window.chargeAt);
+      assert(Number.isInteger(cue) && await page.evaluate(()=>!!live.dogs[1].smashCharge),device+' saw the windup');
+      if(answer==='guard'){
+        await hold('shield',true);await advanceTo(cue+37);await hold('shield',false);
+      }else{
+        await hold('left',true);await advanceTo(cue+15);await hold('left',false);
+        await hold('right',true);await advanceTo(cue+36);await hold('attack',true);
+        await advanceTo(cue+39);await hold('attack',false);await hold('right',false);
+        await advanceTo(cue+50);
+      }
+      assert.deepEqual(await page.evaluate(()=>openingContacts[0]),answer==='guard'?
+        ['block',1,'brisketHaymaker']:['hit',0,'pipGrassSkid'],device+' '+answer);
+    }
     assert.deepEqual(errors,[]);
   } finally { await page.close(); }
 }

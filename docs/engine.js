@@ -318,7 +318,7 @@
   const isReversalPractice = drill => drill?.pattern === 'reverse' || drill?.pattern === 'wavebounce';
   const isFootstoolPractice = drill => drill?.pattern === 'footstool' || drill?.pattern === 'footstoolTech';
   const cpuLevels = {
-    rookie: { name: 'Rookie', tip: 'Leaves a beat between attacks. Practice spacing and whiff punishes.' },
+    rookie: { name: 'Rookie', tip: 'Winds up finishing smashes. Step out, then punish the miss.' },
     arcade: { name: 'Arcade', tip: 'Mixes approaches, combos and defensive counters.' },
     rival: { name: 'Rival', tip: 'Learns repeated spot-dodges after you block. Vary your escape.' },
   };
@@ -2881,6 +2881,7 @@
         this.copyFightFrom(opening);
       }
       // Solo replays reconstruct the CPU. Older checkpoints retain the footwork they recorded.
+      if(this.cpuLevel==='rookie')this.bot.rookieWindup=true;
       if (this.cpuLevel === 'rival') this.bot.dashBackEnabled = true;
       if(this.cpuLevel==='rival' || this.mode==='training')this.bot.readDashAttacks=true;
       if (this.mode==='solo' && this.cpuLevel==='rival'){
@@ -2919,7 +2920,7 @@
     resetCpu() {
       const memory = this.bot;
       this.bot = {timer:0, pulse:{}, hold:0, guard:0, landingGuardUntil:0, jumpHold:0, hop:null, hopDelay:0, smashHold:0};
-      if (memory) for (const key of ['shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','readDashAttacks','liftReadEnabled','returnPerches','readPlatforms','gavePerch','challengedReturn','clockAware','heldCenter','chasedLead'])
+      if (memory) for (const key of ['rookieWindup','shieldHabit','spotReads','spotBaits','spotPunishes','rollReads','rollPunishes','rollHabit','ledgeRollReads','ledgeRollCatches','dashBackEnabled','readDashAttacks','liftReadEnabled','returnPerches','readPlatforms','gavePerch','challengedReturn','clockAware','heldCenter','chasedLead'])
         if (memory[key] !== undefined) this.bot[key] = memory[key];
       if(memory?.landingHabit)this.bot.landingHabit=memory.landingHabit;
       if(memory?.coveredLanding)this.bot.coveredLanding=memory.coveredLanding;
@@ -11514,9 +11515,15 @@
       return { ...idleInput, shield: !foe.stockLift && Math.abs(dx) < 108 && Math.abs(foe.y - f.y) < 89 };
     }
     rookieNeutral(f, foe) {
+      const brain = this.bot;
+      if (brain.rookieWindup && f.ground >= 0 && f.smashCharge?.button === 'smash') {
+        const hold = f.charge + 1e-8 < brain.smashHold;
+        if (!hold) brain.rookieNext = this.time + smashes[f.smashCharge.moveId].end + .28;
+        return {...idleInput, smash:hold};
+      }
       if (f.ground < 0 || f.ground !== foe.ground || f.floorAction || f.ledge || foe.ledge ||
           f.tumble || f.dodge || f.grip || protectionTime(foe)) return null;
-      const brain = this.bot, dx = foe.x - f.x, dir = Math.sign(dx) || f.face;
+      const dx = foe.x - f.x, dir = Math.sign(dx) || f.face;
       if (foe.floorAction) {
         brain.rookieNext = this.time + .28;
         return idleInput;
@@ -11537,7 +11544,10 @@
       }
       if (foe.shield && Math.abs(dx) <= grabs[f.kit.grab].box[0] + grabs[f.kit.grab].box[2] + foe.stats.width &&
           this.random() < .52) return { ...idleInput, tapped:{grab:true} };
-      if (foe.damage >= 75 && this.random() < .44) return { ...idleInput, smashX:dir, tapped:{smash:true} };
+      if (foe.damage >= 75 && this.random() < .44) {
+        if (brain.rookieWindup) brain.smashHold = 18/60;
+        return { ...idleInput, smash:!!brain.rookieWindup, smashX:dir, tapped:{smash:true} };
+      }
       const close = Math.abs(dx) <= jab.box[0] + jab.box[2] + foe.stats.width;
       return close && this.random() < .55 ? { ...idleInput, tapped:{attack:true} } :
         { ...idleInput, aimStick:true, tiltMode:true, smashX:dir };

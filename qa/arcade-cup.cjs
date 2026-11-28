@@ -6,6 +6,70 @@ for (const file of ['engine','arcade','dispatch-script','dispatch-run'])
 const {DogFight,DispatchRun,DispatchScript,YardCup:cup} = window;
 const ticket = ({active}) => ({id:active.id,retries:active.retries,round:active.wins.length});
 
+function rookieFinisher(kind, respond, legacy=false) {
+  const {Battle,FinishTape,idleInput,seededRandom}=DogFight, tape=new FinishTape();
+  const events=[], states=[];
+  let tick=0, cue=-1;
+  const w=new Battle({mode:'solo',cpuLevel:'rookie',p1:kind==='pip'?'brisket':'pip',p2:kind,
+    stage:'nightmail',form:'flat',stockCount:3,spawnDamage:[90,0],fetch:false},(name,e)=>{
+    if(name==='smashCharge' && e.f.index===1 && cue<0)cue=tick;
+    if(['smashCharge','smashRelease','hit','block'].includes(name))
+      events.push({name,tick,slot:e.owner?.index ?? e.f.index,id:e.moveId || e.f.attack?.moveId,power:e.f.attack?.power});
+  },seededRandom(42));
+  if(legacy)delete w.bot.rookieWindup;
+  const sample=b=>[b.random.state,b.bot.rookieNext,b.dogs.map(f=>[f.x,f.y,f.face,f.charge,f.damage,f.attack?.moveId,f.attack?.time])];
+  for(;tick<220;tick++){
+    const input=cue<0?idleInput:{...idleInput,...respond(tick-cue,w)};
+    states.push(sample(w));tape.record(w,input,idleInput);w.step(1/60,input);
+  }
+  states.push(sample(w));
+  return {events,cue,tape,states,sample};
+}
+test('every Rookie commits to a charged finisher that can hit, be blocked, or be interrupted',()=>{
+  for(const kind of Object.keys(DogFight.kits)){
+    const id=DogFight.kits[kind].smashes.side;
+    for(const answer of ['wait','guard','interrupt','jump']){
+      const {events,cue}=rookieFinisher(kind,(age,w)=>{
+        if(answer==='guard')return {shield:age>9 && age<35};
+        if(answer==='interrupt')return {x:age<8?1:0,attack:age===9,quickAttack:true};
+        if(answer==='jump'){
+          const swing=kind==='pip'?24:33,dir=Math.sign(w.dogs[1].x-w.dogs[0].x);
+          return {jump:age<=4,x:age>14 && age<swing?dir*.5:0,aimStick:age===swing,smashY:age===swing?1:0};
+        }
+        return {};
+      });
+      const contact=events.find(e=>e.name==='hit' || e.name==='block'),release=events.find(e=>e.name==='smashRelease');
+      assert(cue>=0 && contact,kind+' '+answer);
+      if(answer==='interrupt'){
+        assert.equal(contact.slot,0);assert(contact.tick<cue+18);assert(!release || release.tick>contact.tick);
+        continue;
+      }
+      assert.equal(release.id,id);assert.equal(release.tick-cue,19);assert(release.power>0);
+      if(answer==='jump'){
+        assert.equal(contact.slot,0);assert(contact.tick>release.tick);
+        assert.equal(contact.id,DogFight.kits[kind==='pip'?'brisket':'pip'].air.down);
+      }else{
+        assert.equal(contact.slot,1);assert.equal(contact.id,id);assert.equal(contact.name,answer==='guard'?'block':'hit');
+      }
+    }
+  }
+});
+test('the windup survives a stock reset and saved Rookie fights replay their original smash timing',()=>{
+  for(const legacy of [false,true]){
+    const {events,cue,tape,states,sample}=rookieFinisher('brisket',()=>({}),legacy);
+    assert.equal(cue<0,legacy);
+    const release=events.find(e=>e.name==='smashRelease');
+    assert.equal(release.power>0,!legacy);
+    for(const offset of [0,120,release.tick-3,release.tick+6]){
+      const replay=tape.playback(offset);
+      assert.deepEqual(sample(replay.battle),states[offset]);
+      while(replay.step()){}
+      assert.deepEqual(sample(replay.battle),states.at(-1));
+      replay.battle.resetCpu();assert.equal(!!replay.battle.bot.rookieWindup,!legacy);
+    }
+  }
+});
+
 test('every route has all three rivals in three-stock fights on playable arena forms',()=>{
   for (const [p1,course] of Object.entries(cup.courses)) {
     assert.deepEqual(course.bouts.map(b=>b[0]).sort(),Object.keys(DogFight.fighters).filter(k=>k!==p1).sort());
