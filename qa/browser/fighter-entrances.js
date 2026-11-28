@@ -24,6 +24,10 @@ async function play(browser,device){
       const draw=FighterEntrances.draw,names=FighterEntrances.names,cue=FighterEntrances.cue,dog=DogArt.draw,step=DogFight.Battle.prototype.step;
       const print=CanvasRenderingContext2D.prototype.fillText;
       window.walks=[];window.plates=[];window.sounds=[];window.stepped=0;let current,onPlate=false;
+      const call=document.querySelector('#countdown');
+      new MutationObserver(()=>{
+        if(call.textContent==='GO!' && window.stepsAtGo===undefined)window.stepsAtGo=stepped;
+      }).observe(call,{childList:true});
       FighterEntrances.draw=function(ctx,f,w,remaining,steady){
         current={kind:f.kind,remaining,steady,frame:w.matchFrames,x:f.x,y:f.y};
         try{draw.call(this,ctx,f,w,remaining,steady);walks.push(current);}finally{current=null;}
@@ -51,20 +55,37 @@ async function play(browser,device){
     await pause.click();const left=await page.evaluate(()=>walks.at(-1).remaining);
     await page.clock.runFor(360);assert.equal(await page.evaluate(()=>walks.at(-1).remaining),left);await resume.click();
     await page.clock.runFor(1020);assert.equal(await page.evaluate(()=>stepped),0);
-    // Tap and release Attack during the count, but hold Right through GO.
+    // An early tap expires. A jump that is already released by GO must still short hop.
     if(phone){
       await page.locator('[data-touch=attack]').tap();
-      const cdp=await page.context().newCDPSession(page),r=await page.locator('[data-touch=right]').boundingBox();
-      await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:r.x+r.width/2,y:r.y+r.height/2}]});
     }else if(pad){
       await page.evaluate(()=>{testPad.buttons[2].pressed=true;});await page.clock.runFor(32);
       await page.evaluate(()=>{testPad.buttons[2].pressed=false;testPad.axes[0]=1;});
     }else{await page.keyboard.press('j');await page.keyboard.down('d');}
-    await page.clock.runFor(980);
+    for(let n=0;n<60 && await page.evaluate(()=>walks.at(-1).remaining>.09);n++)await page.clock.runFor(16);
+    const remaining=await page.evaluate(()=>walks.at(-1).remaining);
+    assert(remaining>.06 && remaining<=.09,String(remaining));
+    if(phone){
+      await page.locator('[data-touch=jump]').tap();
+      const cdp=await page.context().newCDPSession(page),r=await page.locator('[data-touch=right]').boundingBox();
+      await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{id:1,x:r.x+r.width/2,y:r.y+r.height/2}]});
+    }else if(pad){
+      await page.evaluate(()=>testPad.buttons[0].pressed=true);await page.clock.runFor(16);
+      await page.evaluate(()=>testPad.buttons[0].pressed=false);
+    }else{
+      await page.keyboard.down('Space');
+      if(reduced)await page.keyboard.press('j');
+      await page.keyboard.up('Space');
+    }
+    await page.clock.runFor(265);
     const state=await page.evaluate(()=>({input:firstInput,frames:fight.matchFrames,stepped,sounds,
+      atGo:stepsAtGo,short:fight.dogs[0].shortHopFlight,aerial:fight.dogs[0].attack?.airSide,
       motion:walks.some(w=>w.dx || w.dy),introStepped:walks.some(w=>w.frame!==0),closing:walks.at(-1).remaining}));
     assert(state.frames>=8 && state.frames<23,JSON.stringify(state));
-    assert(state.input.x>.7 && !state.input.attack && !state.input.tapped?.attack);assert(!state.introStepped);
+    assert(state.atGo>0 && !state.introStepped && state.short,JSON.stringify(state));
+    assert(state.input.x>.7 && state.input.tapped.jump);
+    assert.equal(!!state.input.tapped.attack,reduced);
+    if(reduced)assert.equal(state.aerial,'forward');
     assert.equal(state.motion,!reduced);assert.deepEqual(state.sounds,pair);assert(state.closing<.05);
     const count=await page.evaluate(()=>walks.length);await page.clock.runFor(140);assert.equal(await page.evaluate(()=>walks.length),count);
     await page.goto(root+'?position#solo/throw-read/perch');await page.clock.runFor(150);

@@ -190,7 +190,7 @@ In a Solo fight, pause as Brisket closes in and choose **Practice this position*
 
 Choose **Find a drill** in Training or from a paused Solo fight. Pick Movement, Attack, Defense, or Recovery, then a family of drills. For example, Movement → Platforms → Rival below starts you above a sparring partner. You can also search all drills from any topic. Try “down air,” “crawl,” or “parry.” When you enter from Solo, **Back to fight** returns you to your paused stock. [Find a drill](https://caleb-guyer.github.io/dog-fight-3/#training/practice)
 
-Hold a direction during the opening countdown to start moving on **GO!**. A button tapped and released before the bell leaves your dog free to act.
+Hold a direction during the opening countdown to move on **GO!**. You can also tap a move in the final seven frames of the count (about a tenth of a second). For example, tap Jump and Attack together just before the bell to open with a short-hop aerial. A fresh button press at GO takes priority.
 
 In Local versus, choose **Pause → Resume with countdown** when both players want time to get ready. The fighters and clock stay exactly where you paused through **3, 2, 1**. Both players regain control on **GO!**. Reconnecting a controller during a fight uses the same count-in.
 

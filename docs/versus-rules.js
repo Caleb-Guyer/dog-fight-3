@@ -669,6 +669,30 @@
     return '<ol class="cup-stops" aria-label="Cup schedule">'+rows+'</ol>'+
       (record && entry.clears?'<p>'+entry.clears+(entry.clears===1?' clear':' clears')+(entry.best?' · Personal best · '+record(entry.best):'')+'</p>':'');
   }
+  function cupScheduleSheet({kind,settled},shown,{showDialog,stageName,stockLabel,record}){
+    const entry=settled || shown,run=entry.active || entry.last;
+    const current=!settled?'Fighting now':run.started?'Retry':'Up next';
+    const rows=cupSchedule(kind,entry,{run,current,stageName,stockLabel,record:settled && record});
+    showDialog('cup-schedule','Cup schedule','<div class="cup-route-board">'+rows+'</div><div class="dialog-actions">'+
+      '<button class="primary" data-do="'+(settled?'cup-return':'cup-resume')+'">'+(settled?'Back to results':'Resume fight')+'</button></div>');
+    document.querySelector('#dialog-body .primary').focus();
+  }
+  function cupPause(attempt,showDialog,reviewButton){
+    const cup=window.YardCup,round=attempt.round+1;
+    const open=document.getElementById('dialog').open && attempt.pauseToolsOpen;
+    const rival=cup.courses[attempt.kind].bouts[attempt.round]?.[0],dogs=window.DogFight.fighters;
+    showDialog('pause','Arcade Cup paused','<p>Round '+round+' of '+cup.rounds+' · '+dogs[attempt.kind].name+' vs. '+
+      (rival?dogs[rival].name:'Copper Hound')+'</p><div class="dialog-actions">'+
+      '<button class="primary" data-do="resume">Resume</button><button class="utility" data-do="cup-sheet">Cup schedule</button></div>'+
+      '<details id="cup-pause-tools"'+(open?' open':'')+'><summary>More options</summary><div class="dialog-actions">'+
+      '<button class="utility" data-do="moves">Move list</button><button class="utility" data-do="controls">Controls</button>'+reviewButton+'</div>'+
+      '<p id="cup-leave-note">Leaving restarts round '+round+' on your next visit. Cleared rounds stay saved.</p>'+
+      '<button class="utility" data-do="cup-roster" aria-describedby="cup-leave-note">Leave round</button></details>');
+    const tools=document.getElementById('cup-pause-tools');
+    attempt.pauseToolsOpen=tools.open;
+    tools.ontoggle=()=>{if(tools.isConnected)attempt.pauseToolsOpen=tools.open;};
+    document.querySelector('[data-do=resume]').focus();
+  }
   function cupResult(battle,attempt,won,{showDialog,announce,stockLabel,tenth,record,cardButton}){
     const cup=window.YardCup,round=attempt.round+1,entry=attempt.settled;
     const boss=battle.mode==='adventure',clear=won && round===cup.rounds;
@@ -826,5 +850,5 @@
       if(Math.floor(time*12)!==drawn)paint();
     }};
   }
-  window.VersusRulebook={arenaSelect,cupSelect,cupSchedule,cupResult,OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
+  window.VersusRulebook={arenaSelect,cupSelect,cupSchedule,cupScheduleSheet,cupPause,cupResult,OpeningDuel,codePad,roomFighters,testInputs,wireLayout,layoutSheet,options,encode,decode,encodeMatchup,decodeMatchup,matchupSheet,quick,open,controlsGuide,controlsTable,cpuSheet};
 })();

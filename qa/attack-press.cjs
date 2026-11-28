@@ -10,6 +10,61 @@ const input = changes => ({...idleInput,...changes});
 const act = (world, changes) => world.step(tick,input(changes),idleInput);
 const {StrikeStick} = window.FightControls;
 
+test('the opening window keeps the last deliberate chord, live jump drift and the direction of a released attack',()=>{
+  const opening=new window.FightControls.OpeningInput();
+  opening.sample(input({attack:true}),false);opening.sample(idleInput,true);
+  assert.equal(opening.take(idleInput),idleInput);
+  for(const key of ['grab','special','smash','attack','aimStick','shield']){
+    const aimed=input({[key]:true,x:-1,grabX:-1,smashY:-1,quickAttack:true,tiltMode:true});
+    opening.sample(idleInput,false);opening.sample(aimed,true);opening.sample(idleInput,true);
+    const go=opening.take(input({x:1}));
+    assert(go.tapped[key]);assert.equal(go.x,-1);assert.equal(go.smashY,-1);
+    assert.equal(opening.take(idleInput),idleInput);
+  }
+  opening.sample(idleInput,false);opening.sample(input({jump:true,x:-1}),true);opening.sample(idleInput,true);
+  const jump=opening.take(input({x:1}));assert(jump.tapped.jump);assert.equal(jump.x,1);
+  opening.sample(idleInput,false);opening.sample(input({grab:true}),true);
+  opening.sample(input({jump:true,attack:true}),true);opening.sample(idleInput,true);
+  const chord=opening.take(idleInput);assert(chord.tapped.jump && chord.tapped.attack && !chord.grab);
+  opening.sample(idleInput,false);opening.sample(input({grab:true}),true);opening.sample(idleInput,true);
+  const override=opening.take(input({special:true,y:1}));assert(override.tapped.special && !override.grab);
+});
+
+test('both seats can open with a first-frame tilt or short-hop aerial and confirm it through late remote inputs',()=>{
+  for(const kind of Object.keys(fighters)){
+    const config={...cfg,p1:kind,p2:kind},ref=new Battle(config,undefined,seededRandom(7));
+    const peers=[0,1].map(side=>{
+      let world;const packets=[];
+      const s=new window.DogOnline.OnlineSession({start(c,r){world=new Battle(c,undefined,r);}});
+      s.side=side;s.send=p=>{if(p[0]==='input')packets[p[2]]=p[3];};
+      s.beginRound(['start',1,kind,kind,cfg.stage,7]);
+      return {net:s.match,world,packets};
+    });
+    const openings=[input({attack:true,y:1,quickAttack:true}),input({jump:true,attack:true,quickAttack:true})].map(chord=>{
+      const buffer=new window.FightControls.OpeningInput();
+      buffer.sample(idleInput,false);buffer.sample(chord,true);buffer.sample(idleInput,true);
+      return buffer.take(idleInput);
+    });
+    for(let frame=0;frame<24;frame++){
+      const pair=frame?[idleInput,idleInput]:openings;
+      ref.step(tick,...pair);
+      if(frame===0)assert.equal(ref.dogs[0].attack.moveId,ref.dogs[0].kit.tilts.down);
+      if(frame===3)assert.equal(ref.dogs[1].attack.airSide,'neutral');
+      for(const [side,p] of peers.entries()){
+        if(frame>=5)assert(p.net.receive(frame-5,peers[1-side].packets[frame-5]));
+        p.net.tick(()=>pair[side],p.world);
+      }
+    }
+    for(const [side,p] of peers.entries()){
+      const remote=peers[1-side].packets;
+      for(let n=p.net.received;n<remote.length;n++)assert(p.net.receive(n,remote[n]));
+      p.net.confirm(p.world);
+      const states=w=>w.dogs.map(f=>[f.x,f.y,f.vx,f.vy,f.attack?.moveId,f.attack?.time,f.shortHopFlight,f.lastMove]);
+      assert.deepEqual(states(ref),states(p.world));assert.deepEqual(states(ref),states(p.net.confirmedWorld));
+    }
+  }
+});
+
 test('the strike stick rearms across center, stays held around the rim and ignores small deflections',()=>{
   const stick=new StrikeStick(),pad={index:0,id:'A',axes:[0,0,0,0]};
   function steer(x,y){pad.axes[2]=x;pad.axes[3]=y;stick.sample(pad,false);return [stick.held,stick.pressed];}
