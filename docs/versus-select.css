@@ -217,6 +217,13 @@ dialog[data-view='tournament'] { width:min(790px,calc(100% - 16px)); }
 .cup-ticket p { margin:6px 0 0; color:#e0d3ba; }
 .cup-ticket-actions { display:flex; gap:12px; flex-wrap:wrap; }
 .cup-ticket-actions .primary { min-height:46px; }
+#cup-select .cup-ticket-actions .utility { border:0; text-decoration:underline; text-underline-offset:3px; }
+.cup-stops { list-style: none; padding: 0; margin: 10px 0; border-top: 2px solid var(--ink); }
+.cup-stops li { display: grid; grid-template-columns: 2ch 1fr auto; gap: 8px; align-items: center; padding: 5px; border-bottom: 1px solid #b9ac8c; }
+.cup-stops li[aria-current] { background: #e3cd9c; }
+.cup-stops li>span { font: 20px var(--pixel); text-align: center; }
+.cup-stops small { display: block; }
+.cup-stops b { font-size: 12px; }
 .cup-route-board { padding:clamp(12px,1.8vw,24px); background:var(--cream); color:var(--ink); }
 dialog .cup-route-board { padding:0; }
 #cup-pause-tools { margin-top:16px; border-top:1px solid #b9ac8c; }

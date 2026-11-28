@@ -460,12 +460,6 @@ dialog[data-view='cup'] { width: min(550px,calc(100% - 20px)); }
   .relay-row .cup-dog strong { font-size:13px; }
   .lives img { width:16px; height:14px; }
 }
-.cup-stops { list-style: none; padding: 0; margin: 10px 0; border-top: 2px solid var(--ink); }
-.cup-stops li { display: grid; grid-template-columns: 2ch 1fr auto; gap: 8px; align-items: center; padding: 5px; border-bottom: 1px solid #b9ac8c; }
-.cup-stops li[aria-current] { background: #e3cd9c; }
-.cup-stops li>span { font: 20px var(--pixel); text-align: center; }
-.cup-stops small { display: block; }
-.cup-stops b { font-size: 12px; }
 .coat-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
 .coat-option {
   display: grid; justify-items: center; align-content: start; gap: 4px;

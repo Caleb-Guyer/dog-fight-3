@@ -714,7 +714,7 @@
       '<span class="cup-name"><strong>'+f.name+'</strong><small>'+f.style+'</small></span></button>').join('');
     root.dataset.view=route?'route':'roster';
     root.innerHTML='<div class="cup-select-inner"><header class="cup-select-head"><div><span>Arcade Cup</span><h1>'+
-      (route?cup.courses[kind].name:'Fighter select')+'</h1></div><button id="cup-back" class="utility">'+(route?'Fighter select':'Main menu')+'</button></header>'+
+      (route?'Cup schedule':'Fighter select')+'</h1></div><button id="cup-back" class="utility">'+(route?'Fighter select':'Main menu')+'</button></header>'+
       (route?'<div class="cup-route-board"></div>':'<div class="cup-posters" role="group" aria-label="Choose your fighter">'+cards+'</div>')+
       '<footer class="cup-ticket"><div aria-live="polite" aria-atomic="true"><strong></strong><p></p></div><div class="cup-ticket-actions">'+
       '<button type="button" class="primary" data-do="cup-start"></button>'+
@@ -728,8 +728,8 @@
       const entry=progress(id), course=cup.courses[id],run=entry.active,round=run?.wins.length || 0;
       const opponent=course.bouts[round]?.[0];
       for(const dog of dogs)dog.setAttribute('aria-pressed',String(dog.dataset.cupDog===id));
-      root.querySelector('.cup-ticket strong').textContent=route?fighters[id].name:course.name;
-      root.querySelector('.cup-ticket p').textContent='Round '+(round+1)+' of 4 · '+(opponent?fighters[opponent].name:'Copper Hound');
+      root.querySelector('.cup-ticket strong').textContent='Round '+(round+1)+' of '+cup.rounds;
+      root.querySelector('.cup-ticket p').textContent=fighters[id].name+' vs. '+(opponent?fighters[opponent].name:'Copper Hound');
       root.querySelector('[data-cup-storage]').hidden=!temporary(id);
       startButton.disabled=false;
       startButton.textContent=run?(run.started?'Retry round ':'Continue to round ')+(round+1):'Start '+fighters[id].name+'’s run';

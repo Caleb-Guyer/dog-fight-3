@@ -10,9 +10,11 @@ async function play(browser,device){
   page.on('pageerror',e=>errors.push(e.message));
   try{
     if(pad)await page.addInitScript(()=>{
-      const g={id:'Hosted pad',index:0,mapping:'standard',connected:true,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({value:0,pressed:false}))};
-      Object.defineProperty(navigator,'getGamepads',{value:()=>[g]});
-      window.button=(i,on)=>Object.assign(g.buttons[i],{value:Number(on),pressed:on});
+      const make=index=>({id:'Hosted pad '+index,index,mapping:'standard',connected:true,axes:[0,0,0,0],buttons:Array.from({length:17},()=>({value:0,pressed:false}))});
+      window.pads=[make(0),null,null,make(3)];
+      Object.defineProperty(navigator,'getGamepads',{value:()=>pads});
+      window.button=(i,on,slot=3)=>Object.assign(pads[slot].buttons[i],{value:Number(on),pressed:on});
+      button(2,true,0); // A lower-index spare is active when the owner confirms fighter select.
     });
     await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
@@ -30,7 +32,7 @@ async function play(browser,device){
     const stored=()=>page.evaluate(()=>localStorage.getItem('dog-fight-3.cup.pip'));
     const observe=()=>page.evaluate(()=>{
       const step=DogFight.Battle.prototype.step;
-      DogFight.Battle.prototype.step=function(...args){window.liveCup=this;return step.apply(this,args);};
+      DogFight.Battle.prototype.step=function(...args){window.liveCup=this;window.cupInput=args[1];return step.apply(this,args);};
     });
     async function rings(slot,count){
       // Advance the scoreboard through the engine's stock transitions, then let the normal UI handle the result.
@@ -50,7 +52,8 @@ async function play(browser,device){
     else if(pad)await padPress(14);
     else await page.keyboard.press('ArrowLeft');
     assert.equal(await pip.getAttribute('aria-pressed'),'true');
-    assert.match(await cards.locator('.cup-ticket p').textContent(),/Noodle/);
+    assert.equal(await cards.locator('.cup-ticket strong').textContent(),'Round 1 of 4');
+    assert.equal(await cards.locator('.cup-ticket p').textContent(),'Pip vs. Noodle');
     assert.equal(await cards.locator('[data-do=cup-start]').textContent(),'Start Pip’s run');
     assert(await Promise.all(posters.map(c=>c.evaluate(node=>node.isConnected))).then(states=>states.every(Boolean)));
     assert.equal(await pip.locator('canvas + canvas').evaluate(c=>getComputedStyle(c).animationName),'cup-idle');
@@ -67,6 +70,11 @@ async function play(browser,device){
     else await page.keyboard.press('Enter');
     await page.clock.runFor(3500);
     assert.deepEqual(await page.evaluate(()=>liveCup.dogs.map(dog=>dog.kind)),['pip','noodle']);
+    if(pad){
+      await page.evaluate(()=>pads[3].axes[0]=.8);await page.clock.runFor(64);
+      assert(await page.evaluate(()=>cupInput.x>.7 && !cupInput.attack));
+      await page.evaluate(()=>pads[3].axes[0]=0);
+    }
     await rings(1,1);
     await choose('#pause');
     assert.deepEqual(await page.locator('#dialog-body button:visible, #dialog-body summary:visible').allTextContents(),
@@ -75,6 +83,10 @@ async function play(browser,device){
       ...liveCup.dogs.map(d=>[d.x,d.y,d.stocks,d.damage])]);
     const paused=await score(),beforePeek=await stored();
     await page.evaluate(()=>{window.pausedCup=liveCup;});
+    if(pad){
+      await page.evaluate(()=>button(0,true,0));await page.clock.runFor(96);
+      assert(await page.locator('[data-do=resume]').isVisible());
+    }
     await choose(action('cup-sheet'));
     const schedule=page.locator('.cup-route-board');
     assert.match(await schedule.locator('[aria-current]').innerText(),/Noodle[\s\S]*Fighting now/);
@@ -88,7 +100,15 @@ async function play(browser,device){
     assert(await page.evaluate(()=>liveCup===pausedCup));
     assert((await score())[0]>paused[0]);assert.equal(await stored(),beforePeek);
     assert.equal(await page.evaluate(()=>liveCup.dogs[1].stocks),2);
+    if(pad){await page.evaluate(()=>button(0,true));await page.clock.runFor(64);}
+    if(device==='keyboard'){await page.keyboard.down('Space');await page.keyboard.down('ArrowDown');}
     await rings(1,2);
+    if(device==='keyboard'){
+      await page.keyboard.down('ArrowDown');await page.keyboard.up('ArrowDown');
+      await page.keyboard.down('Space');await page.keyboard.up('Space');
+    }
+    assert.equal(await page.evaluate(()=>document.activeElement.dataset.do),'cup-next');
+    if(pad){await page.evaluate(()=>button(0,false));await page.clock.runFor(64);}
     assert.deepEqual(await page.locator('.cup-result button:visible').allTextContents(),['Play round 2','More options']);
     await choose('#cup-more');await choose(action('cup-sheet'));
     await schedule.waitFor();
@@ -123,6 +143,21 @@ async function play(browser,device){
     assert.deepEqual(after.active.wins[0],saved.active.wins[0]);
     assert.equal(after.active.wins[1].relayLead,undefined);
     assert.doesNotMatch(await schedule.innerText(),/relay|detour|stamp|exhibition/i);
+    if(pad){
+      await choose(action('cup-return'));await page.locator('.cup-result').waitFor();
+      await page.locator('[data-do=cup-next]').focus();
+      await page.evaluate(()=>{button(0,true,0);pads[3]=null;});await page.clock.runFor(80);
+      assert(await page.locator('.cup-result').isVisible());
+      await page.evaluate(()=>{button(0,false,0);button(2,false,0);});await page.clock.runFor(64);
+      await page.evaluate(()=>button(0,true,0));await page.clock.runFor(120);
+      await page.evaluate(()=>{button(0,false,0);pads[0].axes[0]=.8;});await page.clock.runFor(3200);
+      assert(await page.evaluate(()=>liveCup.dogs[1].kind==='brisket' && cupInput.x>.7));
+      await rings(0,3);
+      assert.equal(await page.evaluate(()=>document.activeElement.textContent),'Retry round 3');
+      await page.evaluate(()=>button(0,true,0));await page.clock.runFor(120);
+      await page.evaluate(()=>button(0,false,0));await page.clock.runFor(3200);
+      assert(await page.evaluate(()=>liveCup.end===null && liveCup.dogs[0].stocks===3 && cupInput.x>.7));
+    }
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }

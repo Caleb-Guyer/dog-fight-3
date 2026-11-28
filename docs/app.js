@@ -308,6 +308,7 @@
     $('announce').textContent = message;
   }
   const held = new Set(),
+    carriedKeys = new Set(),
     taps = new Set(),
     touches = new Set(),
     touchTaps = new Set(),
@@ -1014,6 +1015,7 @@
     if (!$('dialog').open) $('dialog').showModal();
     if (page === 'match') {
       paused = !online.match || online.finished;
+      for(const code of held)carriedKeys.add(code);
       clearInput();
     }
     if (kind==='result' || kind==='online-result') presentWinner();
@@ -1646,11 +1648,11 @@
     return run.retries + (run.retries === 1 ? ' retry' : ' retries') + ' · ' +
       cup.stocks(run) + '/12 stocks kept · ' + cardTime(cup.frames(run));
   }
-  function cupSheet(kind,route=false,resume=false) {
+  function cupSheet(kind,route=false,resume=false,resumePad=menuConfirmPad) {
     kind ??= cupChoice ?? savedGames().find(game=>Object.hasOwn(cup.courses,game.id))?.id ?? settings.p1;
     if (!Object.hasOwn(cup.courses,kind)) return;
     if(!window.VersusRulebook || !versusStyled)return waitForDispatch('Arcade Cup',()=>loadVersusPanel('VersusRulebook'),
-      ()=>cupSheet(kind,route,resume),()=>page==='match'?(world?.end!=null?showResult():showPause()):returnToHome());
+      ()=>cupSheet(kind,route,resume,resumePad),()=>page==='match'?(world?.end!=null?showResult():showPause()):returnToHome());
     if(page!=='cup-select')menuScreen('cup-select');else dismiss();
     $('dialog-body').replaceChildren();
     window.VersusRulebook.cupSelect($('cup-select'),{
@@ -1658,9 +1660,9 @@
       progress:id=>{cupChoice=id;cupShown=cupEntry(id);return cupShown;},
       temporary:id=>unsavedCup.has(id),coatFor:id=>cupEntry(id).active?.coat ?? savedCoat(0,id)
     });
-    if(resume)$('cup-select').querySelector('[data-do=cup-start]').click();
+    if(resume)startCupRound(kind,$('cup-select').querySelector('[data-do=cup-start]'),resumePad);
   }
-  async function startCupRound(kind,button) {
+  async function startCupRound(kind,button,startingPad=menuConfirmPad) {
     button ??= $('dialog').querySelector('[data-do=cup-next]');
     if (!button || button.disabled) return;
     button.disabled = true;
@@ -1690,8 +1692,13 @@
     const run = entry.active, round = run.wins.length;
     const attempt = {kind,id:run.id,retries:run.retries,round,coat:run.coat};
     const bout = cup.stockBout(kind,round,run.coat);
-    if (!bout) return beginRun(yardChapter.lastRoom,0,null,attempt);
-    startMatch(bout,undefined,17+round*31,null,{cupRound:attempt});
+    const continuing=cupAttempt?.id===run.id && soloWorld===world;
+    const seat=(continuing && soloSeat) || new controls.SoloSeat();
+    if(startingPad)seat.use(startingPad);
+    else if(seat.lost || seat.index===null)seat.useOtherInput(getPads(),true);
+    if(bout)startMatch(bout,undefined,17+round*31,null,{cupRound:attempt});
+    else beginRun(yardChapter.lastRoom,0,null,attempt);
+    soloWorld=world;soloSeat=seat;
   }
   function showCupSchedule(){
     const {kind,settled}=cupAttempt;
@@ -4259,7 +4266,7 @@
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',
     PlayerProfiles:'player-profiles.js?v=rumble-1',
-    VersusRulebook:'versus-rules.js?v=cup-finish-1',
+    VersusRulebook:'versus-rules.js?v=cup-matchup-1',
     PackRelay:'pack-relay.js?v=versus-2',
     WinnerStays:'winner-stays.js?v=tourney-1',LocalTournament:'tournament.js?v=set-resume-1', CouchSelect:'couch-select.js?v=shared-roster-1',StageStrike:'stage-strike.js?v=arena-board-1',
     ComboLab:'combo-lab.js?v=drop-aerial-1', FinishTools:'finish-tools.js?v=second-chance-1',
@@ -4276,7 +4283,7 @@
       versusStylesheet=new Promise((resolve,reject)=>{
         const link=document.createElement('link');
         link.rel='stylesheet';
-        link.href='./versus-select.css?v=cup-schedule-1';
+        link.href='./versus-select.css?v=cup-matchup-1';
         link.onload=()=>{versusStyled=true;resolve();};
         link.onerror=()=>{
           link.remove();versusStylesheet=null;
@@ -5726,7 +5733,7 @@
   let matchKeys=new Set(keys.flatMap(map=>Object.values(map)));
   const keyFor=(i,action)=>controls.keyName(keys[i][action]);
   let currentPads=[];
-  let soloSeat=null,soloWorld=null;
+  let soloSeat=null,soloWorld=null,menuConfirmPad=null;
   const labelCache=[{},{}];
   function padNames(i,pad){
     const c=labelCache[i],id=pad?.id,mapping=pad?.mapping,style=labelStyles[i];
@@ -5924,7 +5931,10 @@
       if (smashSlot >= 0) smashAim[smashSlot] = buttonAim(smashSlot);
     }
   });
-  window.addEventListener('keyup', (e) => held.delete(e.code));
+  window.addEventListener('keyup',e=>{
+    held.delete(e.code);
+    if(carriedKeys.delete(e.code))e.preventDefault();
+  });
   const touchButtons = [...document.querySelectorAll('[data-touch]')];
   function setTouch(pointerId, button) {
     const previous = touchPointers.get(pointerId);
@@ -6064,7 +6074,13 @@
     if(document.body.classList.contains('pad-navigation'))document.body.classList.remove('pad-navigation');
   }
   window.addEventListener('pointerdown',()=>{nativeMenuInput();focusLane=null;},{capture:true,passive:true});
-  window.addEventListener('keydown',nativeMenuInput,true);
+  window.addEventListener('keydown',e=>{
+    if(!e.repeat)carriedKeys.delete(e.code);
+    if(carriedKeys.has(e.code)){
+      e.preventDefault();e.stopImmediatePropagation();return;
+    }
+    nativeMenuInput();
+  },true);
   function menuBack() {
     if ($('dialog').open) {
       if(dialogType==='practice' && !$('practice-back').hidden)return $('practice-back').click();
@@ -6228,13 +6244,14 @@
   let oldPad = idlePad;
   const menuPadButtons = new Map();
   function checkSoloPad(pads){
+    const ended=world && (world.end!==null || world.finished);
     const one=page==='match' && world && !online.match && !world.warmupPartner &&
       (finishTrial?!finishTrial.seats && !finishTrial.replySeats && !finishTrial.player.outcome && finishTrial.player.battle.end===null:
-      world.end===null && !world.finished && (!!world.lesson || !world.hasSecondPlayer));
+      (!ended || cupAttempt) && (!!world.lesson || !world.hasSecondPlayer));
     if(!one){soloSeat=soloWorld=null;return;}
     if(soloWorld!==world){soloWorld=world;soloSeat=new controls.SoloSeat();}
-    soloSeat.track(pads,!paused && !dialogType && !document.hidden,layout.pad[0]);
-    if(!soloSeat.lost || (dialogType && dialogType!=='solo-pad-loss'))return;
+    soloSeat.track(pads,(!ended || !!finishTrial) && !paused && !dialogType && !document.hidden,layout.pad[0]);
+    if(!soloSeat.lost || (!finishTrial && ended) || (dialogType && dialogType!=='solo-pad-loss'))return;
     if(dialogType!=='solo-pad-loss'){
       const touch=matchMedia('(pointer:coarse)').matches;
       showDialog('solo-pad-loss','Controller disconnected','<p>Your game is paused.</p><p id="solo-pad-info" role="status"></p>'+
@@ -6325,9 +6342,13 @@
       const names=padNames(edit.slot,seatPad(edit.slot,pads));
       if(names!==edit.legend){drawLayouts();}else if(edit.mode==='test')showTestInputs(pads);
     }
-    if(!dialogType && pads.length>1 && soloSeat?.index!=null && !soloSeat.lost){
-      const owner=soloSeat.get(pads);
-      if(owner)pads=[owner];
+    if(soloSeat?.index!=null && (!dialogType || cupAttempt && !finishTrial && dialogType!=='solo-pad-loss')){
+      if(soloSeat.lost && cupAttempt && !finishTrial){
+        const replacement=soloSeat.confirm(pads);
+        pads=replacement?[replacement]:[];
+      }else if(!soloSeat.lost && pads.length>1){
+        pads=[soloSeat.get(pads)];
+      }
     }
     if (!pads.length) {
       if(dialogType==='solo-pad-loss')soloSeat?.confirm(pads);
@@ -6434,7 +6455,9 @@
       }
       if(confirm){
         const target=items.includes(document.activeElement)?document.activeElement:items[0];
-        if(target===$('online-code'))showCodePad();else target?.click();
+        menuConfirmPad=pads.find(p=>down(p,0));
+        try{if(target===$('online-code'))showCodePad();else target?.click();}
+        finally{menuConfirmPad=null;}
       }
     }
     oldPad = now;
