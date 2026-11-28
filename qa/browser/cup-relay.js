@@ -169,48 +169,116 @@ async function play(browser,device){
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
-async function lastStockPractice(browser){
-  const page=await browser.newPage();
+async function lastStockPractice(browser,device='keyboard',site=root){
+  const touch=device==='touch',pad=device==='controller';
+  const portrait={width:390,height:844},landscape={width:844,height:390};
+  const page=await browser.newPage({isMobile:touch,hasTouch:touch,viewport:touch?portrait:{width:1280,height:720}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   const ledgers=()=>page.evaluate(()=>Object.fromEntries(Object.keys(localStorage).filter(k=>
     k.startsWith('dog-fight-3.cup.') || k.startsWith(FightRecords.prefix)).map(k=>[k,localStorage.getItem(k)])));
   const action=name=>page.locator('[data-do="'+name+'"]');
   try{
+    if(pad)await page.addInitScript(()=>{
+      const gamepad={index:0,id:'Hosted standard controller',connected:true,mapping:'standard',axes:[0,0,0,0],
+        buttons:Array.from({length:17},()=>({pressed:false,value:0}))};
+      Object.defineProperty(navigator,'getGamepads',{value:()=>[gamepad]});
+      window.cupButton=(index,on)=>Object.assign(gamepad.buttons[index],{value:Number(on),pressed:on});
+      window.cupStick=x=>{gamepad.axes[0]=x;};
+    });
+    const client=touch && await page.context().newCDPSession(page);
+    async function press(index){
+      await page.evaluate(i=>cupButton(i,true),index);await page.clock.runFor(48);
+      await page.evaluate(i=>cupButton(i,false),index);await page.clock.runFor(48);
+    }
+    async function confirm(target){
+      if(pad){
+        assert(await target.evaluate(el=>el===document.activeElement),'Expected controller focus on '+await target.textContent());
+        await press(0);
+      }else if(touch)await target.tap();
+      else await target.click();
+    }
+    async function hold(move,ms){
+      if(touch){
+        const point=await page.locator('[data-touch='+move+']').evaluate(el=>{
+          const r=el.getBoundingClientRect(),x=r.x+r.width/2,y=r.y+r.height/2;
+          if(!el.contains(document.elementFromPoint(x,y)))throw Error(el.dataset.touch+' is covered or offscreen');
+          return {x,y,id:1};
+        });
+        await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[point]});
+        await page.clock.runFor(ms);
+        await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+      }else if(pad){
+        await page.evaluate(m=>m==='left'?cupStick(-1):cupButton(7,true),move);
+        await page.clock.runFor(ms);
+        await page.evaluate(()=>{cupStick(0);cupButton(7,false);});
+        await page.clock.runFor(48);
+      }else{
+        const key=move==='left'?'a':'i';
+        await page.keyboard.down(key);await page.clock.runFor(ms);await page.keyboard.up(key);
+      }
+    }
+    async function checkResult(label){
+      const targets=page.locator('.cup-result button:visible');
+      assert.deepEqual(await targets.allTextContents(),[label,'More options']);
+      assert(await action('cup-next').evaluate(el=>el===document.activeElement),'Primary result lost focus');
+      for(const target of await targets.all()){
+        const fits=await target.evaluate(el=>{
+          const r=el.getBoundingClientRect();
+          return r.top>=0 && r.bottom<=innerHeight && r.left>=0 && r.right<=innerWidth &&
+            r.height>=44 && el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));
+        });
+        assert(fits,device+' result action '+await target.textContent());
+      }
+    }
     await page.addInitScript(()=>{
       localStorage.setItem('dog-fight-3.cup.clover',JSON.stringify({playedAt:100,active:{id:'real-cup',
         retries:1,started:false,coat:2,wins:[{stocks:2,frames:900},{stocks:1,frames:1500}]}}));
     });
     await page.clock.install({time:new Date('2030-01-01T00:00:00Z')});
     await page.clock.pauseAt(new Date('2030-01-01T00:00:05Z'));
-    await page.goto(root+'#arcade/last-stock');await action('cup-start').waitFor();
+    await page.goto(site+'#arcade/last-stock');await action('cup-start').waitFor();
     const before=await ledgers();
     assert.equal(Object.keys(before).length,1);
     assert.match(await page.locator('.cup-select-head span').textContent(),/Last-stock practice/);
-    await page.locator('[data-cup-dog=clover]').click();
+    if(pad){for(let i=0;i<3;i++)await press(15);}
+    else await confirm(page.locator('[data-cup-dog=clover]'));
     assert.equal(await action('cup-start').textContent(),'Start Clover’s run');
-    await page.locator('[data-cup-dog=pip]').click();
+    if(pad){for(let i=0;i<3;i++)await press(14);}
+    else await confirm(page.locator('[data-cup-dog=pip]'));
     await page.evaluate(()=>{
       const view=DogFightView.FightView.prototype,draw=view.draw;
       view.draw=function(canvas,w,...args){window.cupGame=w;return draw.call(this,canvas,w,...args);};
     });
     const stocks=()=>page.evaluate(()=>cupGame.dogs.map(f=>[f.kind,f.stocks,f.damage]));
-    await action('cup-start').click();await page.locator('#pause').waitFor();
+    await confirm(pad?page.locator('[data-cup-dog=pip]'):action('cup-start'));await page.locator('#pause').waitFor();
     assert.deepEqual(await stocks(),[['pip',1,125],['noodle',1,125]]);
-    await page.keyboard.down('a');await page.clock.runFor(6500);await page.keyboard.up('a');
+    await hold('left',6500);
     await page.getByRole('heading',{name:'Round 1 lost'}).waitFor();
-    assert.deepEqual(await page.locator('.cup-result button:visible').allTextContents(),['Retry round 1','More options']);
-    await action('cup-next').click();await page.locator('#dialog').waitFor({state:'hidden'});
-    await page.keyboard.down('i');await page.clock.runFor(9500);await page.keyboard.up('i');
+    await checkResult('Retry round 1');
+    if(touch){await page.setViewportSize(landscape);await page.clock.runFor(64);await checkResult('Retry round 1');}
+    await confirm(action('cup-next'));await page.locator('#dialog').waitFor({state:'hidden'});
+    await hold('smash',9500);
     assert.equal(await page.locator('#dialog-title').textContent(),'Round 1 clear',
       JSON.stringify(await page.evaluate(()=>[cupGame.end,cupGame.matchFrames,cupGame.dogs.map(f=>[f.kind,f.damage,f.lastMove])])));
-    assert.deepEqual(await page.locator('.cup-result button:visible').allTextContents(),['Play round 2','More options']);
-    await page.locator('#cup-more').click();await action('match-card').click();await action('card-back').click();
-    await action('cup-next').click();await page.locator('#dialog').waitFor({state:'hidden'});
+    await checkResult('Play round 2');
+    if(touch){await page.setViewportSize(portrait);await page.clock.runFor(64);await checkResult('Play round 2');}
+    if(pad){
+      await press(13);await confirm(page.locator('#cup-more'));
+      assert(await action('match-card').isVisible());
+      await press(1);assert(!(await action('match-card').isVisible()));await press(12);
+    }else{
+      await confirm(page.locator('#cup-more'));await confirm(action('match-card'));await confirm(action('card-back'));
+    }
+    await confirm(action('cup-next'));await page.locator('#dialog').waitFor({state:'hidden'});
     assert.deepEqual(await stocks(),[['pip',3,0],['clover',3,0]]);
-    await page.locator('#pause').click();await page.locator('#cup-pause-tools summary').click();
+    if(pad){await press(9);await press(13);}else await confirm(page.locator('#pause'));
+    await confirm(page.locator('#cup-pause-tools summary'));
     assert.equal(await action('cup-save').count(),0);
-    await page.getByRole('button',{name:'End practice'}).click();await page.locator('#home-continue[data-save=clover]').waitFor();
+    const end=page.getByRole('button',{name:'End practice'});
+    if(pad)for(let i=0;i<5 && !(await end.evaluate(el=>el===document.activeElement));i++)await press(13);
+    await confirm(end);await page.locator('#home-continue[data-save=clover]').waitFor();
     assert.deepEqual(await ledgers(),before);
+    if(device!=='keyboard'){assert.deepEqual(errors,[]);return;}
     await page.locator('#home-cup').click();await action('cup-start').waitFor();
     assert.equal(await page.locator('[data-cup-dog][aria-pressed=true]').getAttribute('data-cup-dog'),'clover');
     assert.equal(await action('cup-start').textContent(),'Continue to round 3');
@@ -219,9 +287,10 @@ async function lastStockPractice(browser){
     assert.deepEqual(errors,[]);
   }finally{await page.close();}
 }
-(async()=>{
+if(require.main===module)(async()=>{
   const browser=await chromium.launch({headless:true,executablePath:execFileSync('which',['google-chrome'],{encoding:'utf8'}).trim()});
-  try{await lastStockPractice(browser);for(const device of ['keyboard','touch','controller']){
-    try{await play(browser,device);}catch(e){throw Error(device+' Cup singles progression: '+e.stack);}
+  try{for(const device of ['keyboard','touch','controller']){
+    try{await lastStockPractice(browser,device);await play(browser,device);}catch(e){throw Error(device+' Cup singles progression: '+e.stack);}
   }}finally{await browser.close();}
 })().catch(e=>{console.error(e);console.log('::error::'+e.stack.replaceAll('\n','%0A'));process.exitCode=1;});
+module.exports={lastStockPractice};

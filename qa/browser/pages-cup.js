@@ -3,6 +3,7 @@ const {execFileSync} = require('node:child_process');
 const {appendFileSync} = require('node:fs');
 const {play} = require('./cup-full-run.js');
 const {trial} = require('./cup-frame-times.js');
+const {lastStockPractice} = require('./cup-relay.js');
 const {chromium} = require('playwright-core');
 
 const site = 'https://caleb-guyer.github.io/dog-fight-3/';
@@ -13,6 +14,10 @@ async function main() {
   try {
     await play(browser,kind,site);
     if (kind !== 'pip') return;
+    for(const device of ['keyboard','touch','controller']){
+      await lastStockPractice(browser,device,site);
+      console.log('::notice title=Published last-stock practice::'+device+' completed fighter select, loss, retry, win and round two.');
+    }
     // Use separate, real-time browser contexts for timing. The route above uses a virtual clock.
     const samples = [];
     for (let i=0;i<3;i++) samples.push(await trial(browser,site,false));
