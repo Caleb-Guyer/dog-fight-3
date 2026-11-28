@@ -2350,14 +2350,7 @@
     if(world.mode==='parcel'){
       window.ParcelPunt.pause(world,showDialog);return;
     }
-    if (world.bells) {
-      showDialog('pause',world.course.name+' paused','<p>'+world.cleared+' of six bells · '+window.BellBreak.formatTime(world.matchFrames)+
-        '</p><div class="dialog-actions"><button class="primary" data-do="resume">Resume</button>'+
-        '<button class="utility" data-do="bells-start">Restart course</button><button class="utility" data-do="controls">Controls</button>'+
-        '<button class="utility" data-do="moves">Move list</button><button class="utility" data-do="bells-sheet">Choose course</button></div>');
-      document.querySelector('[data-do=resume]').focus();
-      return;
-    }
+    if (world.bells) return window.BellBreak.pause(world,showDialog);
     if(matchConfig?.cornerLesson){
       showDialog('pause',matchConfig.fighterCourse?'Sparring practice':'First fight practice','<div class="dialog-actions"><button class="primary" data-do="resume">Resume practice</button><button class="utility" data-do="return-fight">Back to fight</button></div>');
       document.querySelector('[data-do="resume"]').focus();return;
@@ -4240,12 +4233,12 @@
   let campaign = yardChapter;
   const dispatchSources={
     SoloEvents:'solo-events.js?v=impact-tech-1',
-    PracticeFeedback:'practice-feedback.js?v=platform-drop-1', DogOnline:'online.js?v=drop-aerial-1',
+    PracticeFeedback:'practice-feedback.js?v=platform-drop-1', DogOnline:'online.js?v=lift-chords-1',
     LessonGuide:'lesson-guide.js?v=button-check-1',
     YardScore:'score.js?v=stage-music-1',
     StageMusic:'stage-music.js?v=1',
     RecoveryCoach:'recovery-coach.js?v=launch-aim-1', MatchReview:'match-review.js?v=second-chance-1',
-    StockCall:'stock-call.js?v=finish-call-1', BellBreak:'bell-break.js?v=course-result-1',
+    StockCall:'stock-call.js?v=finish-call-1', BellBreak:'bell-break.js?v=course-pause-1',
     FightCamera:'fight-camera.js?v=finish-shot-1',
     FighterEntrances:'fighter-entrances.js?v=1',
     PadFeedback:'pad-feedback.js?v=depot-duo-1',StickCalibration:'stick-calibration.js?v=1',CouchControllers:'couch-controllers.js?v=1',

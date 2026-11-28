@@ -2687,6 +2687,7 @@
       if(config.impactTech!==false)this.impactTech=true;
       if(config.heldAerials!==false)this.heldAerials=true;
       if(config.dropAerials!==false)this.dropAerials=true;
+      if(config.liftChords!==false)this.liftChords=true;
       if(config.dashSmash!==false)this.dashSmash=true;
       this.time = 0;
       this.end = null;
@@ -3025,10 +3026,15 @@
       f.stockLift = null;
       f.respawning = 0;
       f.stockGuard = frames / 60;
-      f.vx = (exit?.input.x || 0) * f.kit.airDrift.speed * 0.72;
+      f.vx = (exit?.drift ?? exit?.input.x ?? 0) * f.kit.airDrift.speed * 0.72;
       f.vy = option === 'jump' ? -f.stats.jump * 0.88 : option === 'drop' ? 285 : 88;
       if (option === 'step') f.face = Math.sign(f.vx);
       f.cutJump = option === 'jump';
+      if(exit?.short){
+        f.vy=-f.stats.jump*.60;
+        f.shortHopFlight=true;
+        f.cutJump=false;
+      }
       if (exit && Object.keys(exit.input.tapped).length) {
         const command = { ...exit.input, jump: false, tapped: { ...exit.input.tapped, jump: false } };
         this.captureInput(f, command);
@@ -3252,17 +3258,10 @@
       const {emit, random, ...state} = source;
       // Copy one graph so both ends of a grab and fighter keys in hit ledgers stay linked.
       Object.assign(this, structuredClone(state));
-      if (!('itemDrops' in state)) delete this.itemDrops;
-      if (!('shieldPogo' in state)) delete this.shieldPogo;
-      if (!('aimedDrive' in state)) delete this.aimedDrive;
-      if (!('groundSpace' in state)) delete this.groundSpace;
-      if (!('wallSpring' in state)) delete this.wallSpring;
-      if (!('risingCatch' in state)) delete this.risingCatch;
-      if (!('impactTech' in state)) delete this.impactTech;
-      if (!('heldAerials' in state)) delete this.heldAerials;
-      if (!('dropAerials' in state)) delete this.dropAerials;
-      if (!('dashSmash' in state)) delete this.dashSmash;
-      if (!('closingHeight' in state)) delete this.closingHeight;
+      for(const rule of ['itemDrops','shieldPogo','aimedDrive','groundSpace','wallSpring','risingCatch',
+        'impactTech','heldAerials','dropAerials','dashSmash','closingHeight','liftChords']){
+        if(!(rule in state))delete this[rule];
+      }
       this.random.state = random.state;
     }
     saveTrainingMoment() {
@@ -6511,17 +6510,27 @@
         f.heldRecoveryJump = false;
       if (f.stockLift) {
         const r = f.stockLift;
-        if (!r.exit && r.time + 1e-8 >= liftArrival - 4 / 60) {
+        const queued=r.exit;
+        if ((!queued || this.liftChords) && r.time + 1e-8 >= liftArrival - (this.liftChords ? inputWindow : 4 / 60)) {
           const side = Math.abs(input.x) >= 0.45 && was.x * Math.sign(input.x) < 0.45;
           const drop = input.y >= 0.45 && was.y < 0.45;
           const action = ['grab','special','aimStick','attack','shield'].find(pressed);
-          const jump = pressed('jump');
+          const jump = pressed('jump') || (this.liftChords && pressed('shortHop'));
           if (side || drop || jump || action) {
             const command = { ...idleInput, x: input.x, y: input.y, grabX,
               smashX: input.smashX, smashY: input.smashY, tiltMode: input.tiltMode, quickAttack: input.quickAttack,
               airDodgeX: input.airDodgeX, airDodgeY: input.airDodgeY, ...(input.lightShield?{lightShield:true}:{}), tapped: {} };
             if (action) { command[action] = !!input[action]; command.tapped[action] = true; }
-            r.exit = { option: jump ? 'jump' : action ? 'action' : drop ? 'drop' : 'step', input: command };
+            // Keep the first aimed move. Jump and drift can arrive on separate frames before takeoff.
+            const savedAction=queued && Object.keys(queued.input.tapped).length;
+            let option=queued?.option || (drop?'drop':'step');
+            if(jump || option==='jump')option='jump';
+            else if((action || savedAction) && queued?.option!=='drop')option='action';
+            r.exit={option,input:savedAction?queued.input:command};
+            if(this.liftChords){
+              r.exit.drift=input.x || queued?.drift || 0;
+              if(queued?.short || (jump && (input.shortHop || input.tapped?.shortHop)))r.exit.short=true;
+            }
           }
         }
         f.prev = { ...input };
